@@ -19,6 +19,34 @@ export const DEFAULT_REEL_VIDEO_BATCH_MAX = 5;
 /** Hard protocol ceiling (abuse guard); the configurable cap lives on the backend. */
 const REEL_VIDEO_BATCH_HARD_MAX = 50;
 
+export const organicUgcReferenceRoleSchema = z.enum(['character', 'product']);
+export type OrganicUgcReferenceRole = z.infer<typeof organicUgcReferenceRoleSchema>;
+
+export const organicUgcReferenceSchema = z
+  .object({
+    assetId: z.string().min(1),
+    role: organicUgcReferenceRoleSchema,
+    source: z.enum(['library', 'generated_anchor']).default('library'),
+  })
+  .strict();
+export type OrganicUgcReference = z.infer<typeof organicUgcReferenceSchema>;
+
+/**
+ * Reviewable UGC generation policy persisted beside the reel storyboard.
+ * Scene prompts remain canonical in `reel.scenes`; references use durable
+ * Library asset ids so signed URLs are never stored as generation inputs.
+ */
+export const organicUgcSpecSchema = z
+  .object({
+    references: z.array(organicUgcReferenceSchema).max(3).default([]),
+    sceneCount: z.number().int().min(3).max(5).default(4),
+    targetDurationSeconds: z.number().min(12).max(30).default(20),
+    captionsEnabled: z.boolean().default(true),
+    characterDescription: z.string().min(1).max(1_000).nullable().optional(),
+  })
+  .strict();
+export type OrganicUgcSpec = z.infer<typeof organicUgcSpecSchema>;
+
 export const reelVideoBatchRequestSchema = z
   .object({
     brandId: z.string().min(1),
@@ -50,6 +78,7 @@ export const reelClipSchema = z
     signedClipUrl: z.string().min(1),
     captionText: z.string().nullable().optional(),
     mimeType: z.string().optional(),
+    assetId: z.string().optional(),
   })
   .strict();
 
@@ -63,6 +92,13 @@ export const reelVideoBatchFrameSchema = z.discriminatedUnion('type', [
       // the FE can cancel via POST /jobs/:jobId/cancel. Optional (graceful
       // degradation if job-row creation fails).
       jobId: z.string().min(1).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('reel_queued'),
+      draftId: z.string().min(1),
+      jobId: z.string().min(1),
     })
     .strict(),
   z

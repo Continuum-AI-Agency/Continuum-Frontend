@@ -11,6 +11,7 @@ export const documentCategorySchema = z.enum([
   "creative_strategy",
   "audience_persona",
   "product_info",
+  "campaign_deliverable",
   "misc",
 ]);
 export type DocumentCategory = z.infer<typeof documentCategorySchema>;
@@ -24,6 +25,7 @@ export const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
   creative_strategy: "Creative strategy",
   audience_persona: "Audience persona",
   product_info: "Product info",
+  campaign_deliverable: "Campaign deliverable",
   misc: "Misc",
 };
 

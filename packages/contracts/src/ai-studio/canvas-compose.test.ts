@@ -74,6 +74,36 @@ describe('canvas composer references', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('accepts bounded browser editor evidence and rejects oversized frames', () => {
+    const base = {
+      brandProfileId: 'brand-1',
+      roomId: 'room-1',
+      prompt: 'Tighten this cut',
+      editorContext: {
+        nodeId: 'editor-1',
+        fingerprint: 'fp-1',
+        frames: [
+          {
+            sourceNodeId: 'clip-1',
+            timestampSec: 0,
+            mediaType: 'image/webp',
+            base64: 'AAAA',
+          },
+        ],
+      },
+    };
+    expect(canvasComposeRequestSchema.parse(base).editorContext?.frames).toHaveLength(1);
+    expect(
+      canvasComposeRequestSchema.safeParse({
+        ...base,
+        editorContext: {
+          ...base.editorContext,
+          frames: [{ ...base.editorContext.frames[0], base64: 'x'.repeat(120_001) }],
+        },
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('canvas composer forensics', () => {

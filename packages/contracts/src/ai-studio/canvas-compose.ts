@@ -59,6 +59,36 @@ export const canvasComposerReferenceSchema = z
 
 export type CanvasComposerReference = z.infer<typeof canvasComposerReferenceSchema>;
 
+export const canvasEditorEvidenceFrameSchema = z
+  .object({
+    sourceNodeId: z.string().min(1),
+    timestampSec: z.number().nonnegative(),
+    label: z.string().min(1).max(160).optional(),
+    mediaType: z.enum(['image/webp', 'image/jpeg']),
+    base64: z.string().min(1).max(120_000),
+  })
+  .strict();
+export type CanvasEditorEvidenceFrame = z.infer<typeof canvasEditorEvidenceFrameSchema>;
+
+export const canvasEditorContextSchema = z
+  .object({
+    nodeId: z.string().min(1),
+    fingerprint: z.string().min(1),
+    frames: z.array(canvasEditorEvidenceFrameSchema).max(8),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const totalBase64Bytes = value.frames.reduce((sum, frame) => sum + frame.base64.length, 0);
+    if (totalBase64Bytes > 750_000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['frames'],
+        message: 'Editor visual evidence exceeds the 750 KB request budget.',
+      });
+    }
+  });
+export type CanvasEditorContext = z.infer<typeof canvasEditorContextSchema>;
+
 export const canvasComposeRequestSchema = z
   .object({
     brandProfileId: z.string().min(1),
@@ -77,6 +107,8 @@ export const canvasComposeRequestSchema = z
       .optional(),
     /** Prior exchanges, most recent last. Absent = the default, memory-less turn. */
     history: z.array(composerHistoryMessageSchema).max(COMPOSER_HISTORY_MAX_MESSAGES).optional(),
+    /** Browser-extracted first/middle/last frames for an inline Video Editor command. */
+    editorContext: canvasEditorContextSchema.optional(),
     /** Present when this turn was initiated by another agent (cross-agent call). */
     provenance: crossAgentProvenanceSchema.optional(),
   })

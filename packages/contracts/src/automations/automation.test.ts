@@ -28,6 +28,11 @@ const validAutomation = {
     externalEmails: ['cfo@example.com'],
   },
   enabled: true,
+  isPublished: true,
+  runAsUserId: 'user-1',
+  workflowStatus: 'published' as const,
+  activeVersionId: 'version-1',
+  draftVersionId: null,
   nextRunAt: '2026-07-13T13:30:00.000Z',
   lastRunId: null,
   lastRunAt: null,
@@ -104,10 +109,19 @@ describe('automationSchema', () => {
   it('rejects an unknown agent', () => {
     expect(automationSchema.safeParse({ ...validAutomation, agent: 'trends' }).success).toBe(false);
   });
+
+  it('requires the database-derived publication state and accepts a cleared run-as identity', () => {
+    expect(automationSchema.safeParse({ ...validAutomation, isPublished: undefined }).success).toBe(
+      false,
+    );
+    expect(
+      automationSchema.safeParse({ ...validAutomation, runAsUserId: null, enabled: false }).success,
+    ).toBe(true);
+  });
 });
 
 describe('request schemas', () => {
-  it('createAutomationRequestSchema defaults enabled to true', () => {
+  it('createAutomationRequestSchema defaults new workflows to an unpublished draft', () => {
     const parsed = createAutomationRequestSchema.safeParse({
       brandId: 'brand-1',
       name: 'Weekly spend report',
@@ -117,11 +131,20 @@ describe('request schemas', () => {
       recipients: { memberUserIds: [], externalEmails: ['a@b.co'] },
     });
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.enabled).toBe(true);
+    if (parsed.success) expect(parsed.data.enabled).toBe(false);
   });
 
   it('updateAutomationRequestSchema rejects an empty patch', () => {
     expect(updateAutomationRequestSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('updateAutomationRequestSchema accepts an explicit run-as assignment or clear', () => {
+    expect(
+      updateAutomationRequestSchema.safeParse({
+        runAsUserId: '83d9c64b-c738-42b8-84a1-7767ca4a3d98',
+      }).success,
+    ).toBe(true);
+    expect(updateAutomationRequestSchema.safeParse({ runAsUserId: null }).success).toBe(true);
   });
 });
 

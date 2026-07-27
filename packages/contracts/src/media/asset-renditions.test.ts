@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   assetPreviewSchema,
+  assetRenditionRoleSchema,
   assetRenditionSchema,
   completeAssetRenditionOperationSchema,
   preferredAssetPreview,
@@ -56,6 +57,30 @@ describe('asset rendition contracts', () => {
     ];
     expect(preferredAssetPreview(renditions, 'card')?.role).toBe('preview_image');
     expect(preferredAssetPreview(renditions, 'detail')?.role).toBe('preview_video');
+  });
+
+  it('accepts continuity frames without surfacing them as Library previews', () => {
+    expect(assetRenditionRoleSchema.parse('first_frame')).toBe('first_frame');
+    expect(assetRenditionRoleSchema.parse('last_frame')).toBe('last_frame');
+    const continuityFrames = [
+      assetRenditionSchema.parse({
+        ...base,
+        id: '55555555-5555-4555-8555-555555555555',
+        role: 'first_frame',
+        storagePath: '222/333/444/first-frame.webp',
+        mimeType: 'image/webp',
+      }),
+      assetRenditionSchema.parse({
+        ...base,
+        id: '66666666-6666-4666-8666-666666666666',
+        role: 'last_frame',
+        storagePath: '222/333/444/last-frame.webp',
+        mimeType: 'image/webp',
+      }),
+    ];
+
+    expect(preferredAssetPreview(continuityFrames, 'card')).toBeNull();
+    expect(preferredAssetPreview(continuityFrames, 'detail')).toBeNull();
   });
 
   const poster = {

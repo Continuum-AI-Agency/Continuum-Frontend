@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   DEFAULT_REEL_VIDEO_BATCH_MAX,
+  organicUgcSpecSchema,
   reelClipSchema,
   reelVideoBatchFrameSchema,
   reelVideoBatchRequestSchema,
@@ -14,6 +15,38 @@ const clip = (index: number) => ({
   bucket: 'brand-profile-assets',
   clipUrl: `reel/9x16/scene-${index}.mp4`,
   signedClipUrl: `https://signed/scene-${index}.mp4`,
+});
+
+describe('organicUgcSpecSchema', () => {
+  it('normalizes locked character and product references with fast defaults', () => {
+    expect(
+      organicUgcSpecSchema.parse({
+        references: [
+          { assetId: 'character-1', role: 'character' },
+          { assetId: 'product-1', role: 'product' },
+        ],
+      }),
+    ).toEqual({
+      references: [
+        { assetId: 'character-1', role: 'character', source: 'library' },
+        { assetId: 'product-1', role: 'product', source: 'library' },
+      ],
+      sceneCount: 4,
+      targetDurationSeconds: 20,
+      captionsEnabled: true,
+    });
+  });
+
+  it('rejects more than three provider asset references', () => {
+    expect(
+      organicUgcSpecSchema.safeParse({
+        references: Array.from({ length: 4 }, (_, index) => ({
+          assetId: `asset-${index}`,
+          role: 'product',
+        })),
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('reelVideoBatchRequestSchema', () => {
@@ -54,6 +87,7 @@ describe('reelVideoBatchFrameSchema', () => {
     const frames = [
       { type: 'batch_started', total: 3 },
       { type: 'reel_started', draftId: 'd1' },
+      { type: 'reel_queued', draftId: 'd1', jobId: 'job-1' },
       { type: 'reel_progress', draftId: 'd1', stage: 'generating_scenes', message: 'scene 2/3' },
       {
         type: 'reel_ready',

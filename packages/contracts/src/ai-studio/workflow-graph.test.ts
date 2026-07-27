@@ -4,6 +4,7 @@ import {
   createNodeData,
   getAllowedSourceHandles,
   getAllowedTargetHandles,
+  getStudioPortMetadata,
   getTargetHandleConnectionLimit,
   getVideoGeneratorReferenceMode,
   getVideoGeneratorReferenceModes,
@@ -25,6 +26,7 @@ import {
   TIMELINE_MEDIA_POOL_LIMIT,
   VIDEO_GENERATOR_MODELS,
   VIDEO_GENERATOR_REFERENCE_MODE_LABELS,
+  validateConnection,
 } from './workflow-graph';
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) => ({
@@ -64,9 +66,10 @@ describe('node type enum + schema', () => {
     expect(STUDIO_NODE_TYPES).toContain('organicPublisher');
     expect(STUDIO_NODE_TYPES).toContain('paidPublisher');
     expect(STUDIO_NODE_TYPES).toContain('hyperframesAgent');
+    expect(STUDIO_NODE_TYPES).toContain('frameExtract');
     expect(STUDIO_NODE_TYPES).not.toContain('videoEditor');
     expect(STUDIO_NODE_TYPES).toContain('omniGen');
-    expect(STUDIO_NODE_TYPES).toHaveLength(16);
+    expect(STUDIO_NODE_TYPES).toHaveLength(17);
   });
 
   it('rejects an unknown node type', () => {
@@ -87,6 +90,53 @@ describe('handle vocabulary', () => {
     expect(getAllowedSourceHandles(node('s', 'string'))).toEqual(['text']);
     expect(getAllowedSourceHandles(node('i', 'image'))).toEqual(['image']);
     expect(getAllowedSourceHandles(node('n', 'nanoGen'))).toEqual(['image']);
+    expect(getAllowedSourceHandles(node('f', 'frameExtract'))).toEqual(['image']);
+    expect(getAllowedTargetHandles(node('f', 'frameExtract'))).toEqual(['video']);
+  });
+
+  it('connects a video to frame extraction and the extracted image to frame/reference inputs', () => {
+    const workflowNodes = [
+      node('clip', 'video'),
+      node('frame', 'frameExtract'),
+      node('next', 'videoGen', { model: 'seedance-2.0' }),
+    ];
+
+    expect(
+      isValidConnection(
+        {
+          source: 'clip',
+          sourceHandle: 'video',
+          target: 'frame',
+          targetHandle: 'video',
+        },
+        [],
+        workflowNodes,
+      ),
+    ).toBe(true);
+    expect(
+      isValidConnection(
+        {
+          source: 'frame',
+          sourceHandle: 'image',
+          target: 'next',
+          targetHandle: 'first-frame',
+        },
+        [],
+        workflowNodes,
+      ),
+    ).toBe(true);
+    expect(
+      isValidConnection(
+        {
+          source: 'frame',
+          sourceHandle: 'image',
+          target: 'next',
+          targetHandle: 'ref-images',
+        },
+        [],
+        workflowNodes,
+      ),
+    ).toBe(true);
   });
 
   it('returns reference-input target handles for nanoGen', () => {
@@ -647,6 +697,79 @@ describe('isValidConnection — connection limits', () => {
   });
 });
 
+describe('validateConnection', () => {
+  it('returns an actionable reason when a target port is full', () => {
+    const edges = [
+      {
+        id: 'e1',
+        source: 'string1',
+        sourceHandle: 'text',
+        target: 'nano1',
+        targetHandle: 'prompt',
+      },
+    ];
+    const result = validateConnection(
+      { source: 'string2', sourceHandle: 'text', target: 'nano1', targetHandle: 'prompt' },
+      edges,
+      nodes,
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.code).toBe('target_at_capacity');
+    expect(result.message).toContain('maximum number');
+  });
+
+  it('rejects duplicate edges and graph cycles without changing the boolean wrapper', () => {
+    const graphNodes = [node('a', 'string'), node('b', 'string')];
+    const edge = {
+      id: 'a-b',
+      source: 'a',
+      sourceHandle: 'text',
+      target: 'b',
+      targetHandle: 'prompt',
+    };
+
+    expect(validateConnection(edge, [edge], graphNodes).code).toBe('duplicate_connection');
+    const cycleConnection = {
+      source: 'b',
+      sourceHandle: 'text',
+      target: 'a',
+      targetHandle: 'prompt',
+    };
+    const cycle = validateConnection(cycleConnection, [edge], graphNodes);
+    expect(cycle.code).toBe('cycle');
+    expect(isValidConnection(cycleConnection, [edge], graphNodes)).toBe(false);
+  });
+
+  it('derives accessible port metadata from the canonical graph vocabulary', () => {
+    const ports = getStudioPortMetadata(node('n', 'nanoGen'), 'input', [
+      {
+        id: 'e1',
+        source: 'string1',
+        sourceHandle: 'text',
+        target: 'n',
+        targetHandle: 'prompt',
+      },
+    ]);
+    const prompt = ports.find((port) => port.id === 'prompt');
+    const references = ports.find((port) => port.id === 'ref-image');
+
+    expect(prompt).toMatchObject({
+      name: 'Prompt',
+      direction: 'input',
+      dataType: 'text',
+      required: true,
+      connectionCount: 1,
+      maxConnections: 1,
+    });
+    expect(references).toMatchObject({
+      name: 'Reference image',
+      dataType: 'image',
+      maxConnections: 14,
+    });
+  });
+});
+
 describe('timelineEditor (Video Editor break-point node)', () => {
   it('identifies the media-in pool handle', () => {
     expect(isTimelineMediaHandle(TIMELINE_MEDIA_INPUT_HANDLE)).toBe(true);
@@ -663,7 +786,7 @@ describe('timelineEditor (Video Editor break-point node)', () => {
     ]);
   });
 
-  it('accepts video, generated-video, and image stills on the pool handle', () => {
+  it('accepts video, generated-video, image stills, and audio beds on the pool handle', () => {
     expect(
       isValidConnection(
         { source: 'video1', sourceHandle: 'video', target: 'timeline1', targetHandle: 'media-in' },
@@ -688,6 +811,13 @@ describe('timelineEditor (Video Editor break-point node)', () => {
     expect(
       isValidConnection(
         { source: 'nano1', sourceHandle: 'image', target: 'timeline1', targetHandle: 'media-in' },
+        [],
+        nodes,
+      ),
+    ).toBe(true);
+    expect(
+      isValidConnection(
+        { source: 'audio1', sourceHandle: 'audio', target: 'timeline1', targetHandle: 'media-in' },
         [],
         nodes,
       ),

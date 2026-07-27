@@ -330,6 +330,20 @@ describe('validateWorkflowGraph', () => {
     });
     expect(result.ok).toBe(false);
   });
+
+  it('reports cycles as edit-time errors with user-facing copy', () => {
+    const result = validateWorkflowGraph({
+      nodes: [node('a', 'string', { value: 'a' }), node('b', 'string', { value: 'b' })],
+      edges: [
+        { id: 'a-b', source: 'a', target: 'b', sourceHandle: 'text', targetHandle: 'prompt' },
+        { id: 'b-a', source: 'b', target: 'a', sourceHandle: 'text', targetHandle: 'prompt' },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((issue) => issue.code === 'cycle')).toBe(true);
+    expect(result.issues.every((issue) => issue.severity === 'error')).toBe(true);
+  });
 });
 
 describe('mergeGraphs', () => {

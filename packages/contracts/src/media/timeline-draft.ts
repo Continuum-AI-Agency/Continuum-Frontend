@@ -15,7 +15,7 @@ import { clipTransitionSchema } from '../ai-studio/workflow-graph';
 
 export const TIMELINE_DRAFT_SCHEMA_VERSION = 1;
 
-export const timelineDraftSourceKindSchema = z.enum(['video', 'image']);
+export const timelineDraftSourceKindSchema = z.enum(['video', 'image', 'audio']);
 export type TimelineDraftSourceKind = z.infer<typeof timelineDraftSourceKindSchema>;
 
 // A member of the editor's media bin. Durable coordinates only — signed URLs
@@ -54,7 +54,7 @@ export type TimelineDraftItem = z.infer<typeof timelineDraftItemSchema>;
 export const timelineDraftTrackSchema = z
   .object({
     id: z.string().min(1),
-    kind: z.enum(['base', 'overlay']),
+    kind: z.enum(['base', 'overlay', 'audio']),
     items: z.array(timelineDraftItemSchema),
   })
   .strict();
@@ -87,6 +87,7 @@ export const timelineDraftDocumentSchema = z
     pool: z.array(timelineDraftPoolSourceSchema).max(24),
     items: z.array(timelineDraftItemSchema),
     overlayTracks: z.array(timelineDraftTrackSchema).optional(),
+    audioTracks: z.array(timelineDraftTrackSchema).optional(),
     exportPresetId: z.string().min(1).optional(),
     markers: z.array(z.number().min(0)).optional(),
     captionsEnabled: z.boolean().optional(),

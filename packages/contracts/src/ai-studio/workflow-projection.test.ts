@@ -218,7 +218,7 @@ describe('timeline projection', () => {
                 sourceNodeId: 'clip-b',
                 trimStartSec: 2,
                 trimEndSec: 7,
-                effects: { filterPreset: 'noir', keyframes: [{ huge: 'payload' }] },
+                effects: { filterPreset: 'noir', keyframes: [{ t: 0.5, huge: 'payload' }] },
               },
             ],
           },
@@ -228,12 +228,24 @@ describe('timeline projection', () => {
     });
 
     const config = projection.nodes[0]?.config;
-    expect(config?.items).toEqual(['0:clip-a', '1:clip-b@2-7s']);
-    // Effect specs and item ids are the editor's business, not the agent's.
+    expect(config?.items).toEqual([
+      { id: 'ti:0', order: 0, sourceNodeId: 'clip-a' },
+      {
+        id: 'ti:1',
+        order: 1,
+        sourceNodeId: 'clip-b',
+        trimStartSec: 2,
+        trimEndSec: 7,
+        effects: { filterPreset: 'noir' },
+        keyframeCount: 1,
+      },
+    ]);
+    expect(config?.documentFingerprint).toEqual(expect.any(String));
+    // The snapshot preserves stable ids and authorable effect settings, while
+    // the dedicated editor inspection owns verbose keyframe payloads.
     expect(JSON.stringify(config)).not.toContain('keyframes');
-    expect(JSON.stringify(config)).not.toContain('noir');
+    expect(JSON.stringify(config)).toContain('noir');
   });
-
 });
 
 describe('scoped projection', () => {
@@ -317,8 +329,8 @@ describe('worst-case projection budget', () => {
     }));
     const edges = Array.from({ length: MAX_PROJECTED_WIRING }, (_, i) => ({
       id: `e${i}`,
-      source: `bench-node-with-a-long-id-${String(i % MAX_PROJECTED_NODES).padStart(3, "0")}`,
-      target: `bench-node-with-a-long-id-${String((i + 1) % MAX_PROJECTED_NODES).padStart(3, "0")}`,
+      source: `bench-node-with-a-long-id-${String(i % MAX_PROJECTED_NODES).padStart(3, '0')}`,
+      target: `bench-node-with-a-long-id-${String((i + 1) % MAX_PROJECTED_NODES).padStart(3, '0')}`,
       sourceHandle: 'text',
       targetHandle: 'image',
     }));

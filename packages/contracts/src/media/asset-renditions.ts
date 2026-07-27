@@ -15,6 +15,8 @@ export const assetRenditionRoleSchema = z.enum([
   'poster',
   'preview_image',
   'preview_video',
+  'first_frame',
+  'last_frame',
 ]);
 export type AssetRenditionRole = z.infer<typeof assetRenditionRoleSchema>;
 

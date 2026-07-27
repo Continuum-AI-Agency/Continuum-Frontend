@@ -5,6 +5,8 @@ import { TIMELINE_MEDIA_INPUT_HANDLE } from './workflow-graph';
 export const CANVAS_RENDER_COMPLETE_ROUTE = '/api/ai-studio/canvas/renders/complete';
 export const CANVAS_RENDER_CONTINUATION_CLAIM_ROUTE =
   '/api/ai-studio/canvas/renders/continuation/claim';
+export const CANVAS_RENDER_CONTINUATION_RENEW_ROUTE =
+  '/api/ai-studio/canvas/renders/continuation/renew';
 export const CANVAS_RENDER_CONTINUATION_FINISH_ROUTE =
   '/api/ai-studio/canvas/renders/continuation/finish';
 
@@ -39,7 +41,10 @@ export const canvasRenderCompleteResponseSchema = z.object({
 });
 export type CanvasRenderCompleteResponse = z.infer<typeof canvasRenderCompleteResponseSchema>;
 
-export const canvasRenderContinuationClaimRequestSchema = renderOriginSchema;
+export const canvasRenderContinuationClaimRequestSchema = renderOriginSchema.extend({
+  claimantId: z.string().uuid(),
+  retryError: z.boolean().optional(),
+});
 export type CanvasRenderContinuationClaimRequest = z.infer<
   typeof canvasRenderContinuationClaimRequestSchema
 >;
@@ -47,13 +52,37 @@ export type CanvasRenderContinuationClaimRequest = z.infer<
 export const canvasRenderContinuationClaimResponseSchema = z.object({
   claimed: z.boolean(),
   downstreamLeafIds: z.array(z.string()),
+  completedLeafIds: z.array(z.string()),
+  claimToken: z.string().uuid().optional(),
+  leaseExpiresAt: z.string().datetime().optional(),
+  attempt: z.number().int().positive().optional(),
 });
 export type CanvasRenderContinuationClaimResponse = z.infer<
   typeof canvasRenderContinuationClaimResponseSchema
 >;
 
+export const canvasRenderContinuationRenewRequestSchema = renderOriginSchema.extend({
+  claimantId: z.string().uuid(),
+  claimToken: z.string().uuid(),
+  completedLeafIds: z.array(z.string()).optional(),
+});
+export type CanvasRenderContinuationRenewRequest = z.infer<
+  typeof canvasRenderContinuationRenewRequestSchema
+>;
+
+export const canvasRenderContinuationRenewResponseSchema = z.object({
+  renewed: z.boolean(),
+  leaseExpiresAt: z.string().datetime().optional(),
+});
+export type CanvasRenderContinuationRenewResponse = z.infer<
+  typeof canvasRenderContinuationRenewResponseSchema
+>;
+
 export const canvasRenderContinuationFinishRequestSchema = renderOriginSchema.extend({
+  claimantId: z.string().uuid(),
+  claimToken: z.string().uuid(),
   status: z.enum(['done', 'error']),
+  completedLeafIds: z.array(z.string()).optional(),
   error: z.string().min(1).optional(),
 });
 export type CanvasRenderContinuationFinishRequest = z.infer<
@@ -69,6 +98,12 @@ export const canvasRenderContinuationSchema = z.object({
   jobId: z.string().uuid(),
   status: z.enum(['pending', 'running', 'done', 'error']),
   downstreamLeafIds: z.array(z.string()),
+  completedLeafIds: z.array(z.string()).default([]),
+  claimantId: z.string().uuid().optional(),
+  claimToken: z.string().uuid().optional(),
+  claimedAt: z.string().datetime().optional(),
+  leaseExpiresAt: z.string().datetime().optional(),
+  attempt: z.number().int().nonnegative().default(0),
   error: z.string().optional(),
 });
 export type CanvasRenderContinuation = z.infer<typeof canvasRenderContinuationSchema>;

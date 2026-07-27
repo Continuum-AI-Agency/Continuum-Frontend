@@ -26,6 +26,7 @@ export const plannerCompositionClipSchema = z
     bucket: z.string().min(1),
     storagePath: z.string().min(1),
     signedUrl: z.string().url().optional(),
+    assetId: z.string().min(1).optional(),
     mimeType: z.string().min(1).optional(),
     captionText: z.string().nullable().optional(),
   })
@@ -134,6 +135,7 @@ export function buildPlannerReelCompositionCluster(
       fileName: `scene-${order + 1}.mp4`,
       bucket: clip.bucket,
       sourcePath: clip.storagePath,
+      sourceAssetId: clip.assetId,
       sourceUrl: clip.signedUrl,
       video: clip.signedUrl,
       durationSec: clip.durationSec,
@@ -197,7 +199,7 @@ export function buildPlannerReelCompositionCluster(
     source: timelineNodeId,
     sourceHandle: 'video',
     target: publishNodeId,
-      targetHandle: PUBLISH_VIDEO_INPUT_HANDLE,
+    targetHandle: PUBLISH_VIDEO_INPUT_HANDLE,
     type: 'dataType',
     data: { dataType: 'video', pathType: 'bezier' },
   };

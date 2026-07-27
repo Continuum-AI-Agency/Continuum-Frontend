@@ -1,4 +1,34 @@
-import { z } from "zod";
+import { z } from 'zod';
+
+import { clipWordSchema } from './clip';
+
+export const reelCaptionStyleSchema = z
+  .object({
+    textColor: z.string().min(1),
+    highlightColor: z.string().min(1),
+    outlineColor: z.string().min(1),
+    fontFamily: z.string().min(1).optional(),
+    fontSizeFrac: z.number().positive().optional(),
+    outlineWidthFrac: z.number().nonnegative().optional(),
+    position: z
+      .object({
+        xFrac: z.number().min(0).max(1),
+        yFrac: z.number().min(0).max(1),
+      })
+      .strict()
+      .optional(),
+    backgroundColor: z.string().min(1).optional(),
+    backgroundOpacity: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+
+export const reelCaptionsSchema = z
+  .object({
+    source: z.literal('google_stt_v2'),
+    words: z.array(clipWordSchema).min(1).max(2_500),
+    style: reelCaptionStyleSchema,
+  })
+  .strict();
 
 /**
  * Contract for the `link-reel-mp4` edge function.
@@ -19,8 +49,10 @@ export const linkReelMp4RequestSchema = z
     draftId: z.string().min(1),
     /** The mediabunny-stitched MP4, base64-encoded. */
     mp4Base64: z.string().min(1),
-    mimeType: z.literal("video/mp4"),
+    mimeType: z.literal('video/mp4'),
     durationSec: z.number().positive(),
+    captions: reelCaptionsSchema.optional(),
+    referenceAssetIds: z.array(z.string().min(1)).max(3).optional(),
   })
   .strict();
 
@@ -28,10 +60,11 @@ export const linkReelMp4ResponseSchema = z
   .object({
     ok: z.literal(true),
     /** `ready` = freshly linked; `exists` = an earlier render already linked it. */
-    status: z.enum(["ready", "exists"]),
+    status: z.enum(['ready', 'exists']),
     bucket: z.string(),
     path: z.string(),
     signedUrl: z.string().nullable(),
+    assetId: z.string().min(1),
   })
   .strict();
 
@@ -39,7 +72,7 @@ export const linkReelMp4ErrorSchema = z
   .object({
     ok: z.literal(false),
     /** `pending` = another render is in flight for this draft. */
-    status: z.enum(["pending", "error"]),
+    status: z.enum(['pending', 'error']),
     message: z.string(),
   })
   .strict();
@@ -47,3 +80,5 @@ export const linkReelMp4ErrorSchema = z
 export type LinkReelMp4Request = z.infer<typeof linkReelMp4RequestSchema>;
 export type LinkReelMp4Response = z.infer<typeof linkReelMp4ResponseSchema>;
 export type LinkReelMp4Error = z.infer<typeof linkReelMp4ErrorSchema>;
+export type ReelCaptionStyle = z.infer<typeof reelCaptionStyleSchema>;
+export type ReelCaptions = z.infer<typeof reelCaptionsSchema>;

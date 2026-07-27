@@ -1,12 +1,12 @@
-// Canonical automation shapes shared by Frontend (in-chat Automations panel,
-// builder Sheet) and Backend (automations CRUD repo, scheduler worker).
+// Canonical automation shapes shared by the standalone Frontend workflow
+// workspace and the Backend automation runtime.
 // DB rows are snake_case; these boundary shapes are camelCase and the API
 // layer maps between them.
 
 import { z } from 'zod';
 
-// The two agents an automation can drive. The chat surface an automation is
-// created from fixes its target: Jaina (paid media) or the Organic agent.
+// The two specialist agents a workflow can invoke: Jaina (paid media) or the
+// Organic agent. Workflows are created independently from either chat surface.
 export const agentTargetSchema = z.enum(['jaina', 'organic']);
 export type AgentTarget = z.infer<typeof agentTargetSchema>;
 
@@ -83,6 +83,11 @@ export const automationSchema = z
     schedule: automationScheduleSchema,
     recipients: automationRecipientsSchema,
     enabled: z.boolean(),
+    isPublished: z.boolean(),
+    runAsUserId: z.string().nullable(),
+    workflowStatus: z.enum(['legacy', 'draft', 'published']).default('legacy'),
+    activeVersionId: z.string().nullable().default(null),
+    draftVersionId: z.string().nullable().default(null),
     nextRunAt: z.string(),
     lastRunId: z.string().nullable().optional(),
     lastRunAt: z.string().nullable().optional(),

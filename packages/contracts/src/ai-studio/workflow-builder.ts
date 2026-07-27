@@ -13,6 +13,7 @@ import {
   TIMELINE_MEDIA_INPUT_HANDLE,
   type TimelineItemSpec,
   timelineItemSpecSchema,
+  validateConnection,
   type WorkflowMediaKind,
 } from './workflow-graph';
 
@@ -655,10 +656,19 @@ function dropKeys(data: Record<string, unknown>, keys: string[]): Record<string,
 // ---------------------------------------------------------------------------
 
 export interface GraphIssue {
-  code: 'unknown_node_type' | 'dangling_edge' | 'invalid_connection' | 'missing_prompt';
+  code:
+    | 'unknown_node_type'
+    | 'dangling_edge'
+    | 'invalid_connection'
+    | 'missing_prompt'
+    | 'cycle'
+    | 'duplicate_connection'
+    | 'target_at_capacity';
   message: string;
   nodeId?: string;
   edgeId?: string;
+  severity: 'error' | 'warning';
+  phase: 'edit' | 'run';
 }
 
 export interface ValidationResult {
@@ -679,6 +689,8 @@ export function validateWorkflowGraph(graph: {
         code: 'unknown_node_type',
         message: `unknown node type "${node.type}"`,
         nodeId: node.id,
+        severity: 'error',
+        phase: 'edit',
       });
       continue;
     }
@@ -687,6 +699,8 @@ export function validateWorkflowGraph(graph: {
         code: 'missing_prompt',
         message: missingPromptMessage(node),
         nodeId: node.id,
+        severity: 'error',
+        phase: 'run',
       });
     }
   }
@@ -698,15 +712,26 @@ export function validateWorkflowGraph(graph: {
         code: 'dangling_edge',
         message: `edge ${edgeId} references a missing node`,
         edgeId,
+        severity: 'error',
+        phase: 'edit',
       });
       return;
     }
     const others = graph.edges.filter((e) => e !== edge);
-    if (!isValidConnection(edge, others, graph.nodes)) {
+    const validation = validateConnection(edge, others, graph.nodes);
+    if (!validation.valid) {
+      const issueCode =
+        validation.code === 'cycle' ||
+        validation.code === 'duplicate_connection' ||
+        validation.code === 'target_at_capacity'
+          ? validation.code
+          : 'invalid_connection';
       issues.push({
-        code: 'invalid_connection',
-        message: `edge ${edgeId} (${edge.source} → ${edge.target}.${edge.targetHandle ?? '?'}) is not a valid connection`,
+        code: issueCode,
+        message: validation.message,
         edgeId,
+        severity: 'error',
+        phase: 'edit',
       });
     }
   });

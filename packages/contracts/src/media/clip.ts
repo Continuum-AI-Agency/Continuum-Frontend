@@ -188,6 +188,21 @@ export const clipUploadTicketSchema = z
   })
   .strict();
 
+export const clipDeleteAudioRequestSchema = z
+  .object({
+    brandId: z.string().min(1),
+    audioBucket: z.string().min(1),
+    audioStoragePath: z.string().min(1),
+  })
+  .strict();
+
+export const clipDeleteAudioResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    status: z.literal('deleted'),
+  })
+  .strict();
+
 export type ClipWord = z.infer<typeof clipWordSchema>;
 export type TimestampedTranscript = z.infer<typeof timestampedTranscriptSchema>;
 export type ClipKeepRange = z.infer<typeof clipKeepRangeSchema>;
@@ -213,3 +228,5 @@ export type RegisterClipResponse = z.infer<typeof registerClipResponseSchema>;
 export type RegisterClipError = z.infer<typeof registerClipErrorSchema>;
 export type ClipSignUploadRequest = z.infer<typeof clipSignUploadRequestSchema>;
 export type ClipUploadTicket = z.infer<typeof clipUploadTicketSchema>;
+export type ClipDeleteAudioRequest = z.infer<typeof clipDeleteAudioRequestSchema>;
+export type ClipDeleteAudioResponse = z.infer<typeof clipDeleteAudioResponseSchema>;

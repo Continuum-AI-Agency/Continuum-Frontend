@@ -15,7 +15,7 @@ export const createAutomationRequestSchema = z
     prompt: z.string().min(1).max(20000),
     schedule: automationScheduleSchema,
     recipients: automationRecipientsSchema,
-    enabled: z.boolean().default(true),
+    enabled: z.boolean().default(false),
   })
   .strict();
 export type CreateAutomationRequest = z.infer<typeof createAutomationRequestSchema>;
@@ -27,6 +27,7 @@ export const updateAutomationRequestSchema = z
     schedule: automationScheduleSchema.optional(),
     recipients: automationRecipientsSchema.optional(),
     enabled: z.boolean().optional(),
+    runAsUserId: z.string().uuid().nullable().optional(),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, {

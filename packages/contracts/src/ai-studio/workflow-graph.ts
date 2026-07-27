@@ -35,6 +35,7 @@ export const STUDIO_NODE_TYPES = [
   'audio',
   'document',
   'videoDecode',
+  'frameExtract',
 ] as const;
 
 export type StudioNodeType = (typeof STUDIO_NODE_TYPES)[number];
@@ -58,6 +59,44 @@ export interface GraphEdgeLike {
   targetHandle?: string | null;
 }
 export type GraphConnectionLike = Omit<GraphEdgeLike, 'id'>;
+
+export const CONNECTION_VALIDATION_CODES = [
+  'valid',
+  'missing_node',
+  'self_connection',
+  'duplicate_connection',
+  'cycle',
+  'unknown_source_port',
+  'unknown_target_port',
+  'source_has_no_output',
+  'target_at_capacity',
+  'incompatible_data_type',
+] as const;
+
+export type ConnectionValidationCode = (typeof CONNECTION_VALIDATION_CODES)[number];
+
+export interface ConnectionValidationResult {
+  valid: boolean;
+  code: ConnectionValidationCode;
+  message: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  sourceHandle: string | null;
+  targetHandle: string | null;
+}
+
+export type StudioPortDirection = 'input' | 'output';
+export type StudioPortDataType = 'text' | 'image' | 'video' | 'audio' | 'document' | 'media';
+
+export interface StudioPortMetadata {
+  id: string;
+  name: string;
+  direction: StudioPortDirection;
+  dataType: StudioPortDataType;
+  required: boolean;
+  connectionCount: number;
+  maxConnections?: number;
+}
 
 const recordSchema = z.record(z.string(), z.unknown());
 
@@ -330,11 +369,15 @@ const isVideoProducingSource = (node: GraphNodeLike): boolean =>
   node.type === 'omniGen' ||
   isVideoGeneratorNodeType(node.type);
 
+const isImageProducingSource = (node: GraphNodeLike): boolean =>
+  node.type === 'image' || node.type === 'nanoGen' || node.type === 'frameExtract';
+
 const isTextProducingSource = (node: GraphNodeLike): boolean =>
   node.type === 'string' || node.type === 'videoDecode';
 
 // Timeline Editor (timelineEditor) input pool: a single multi-connection target
-// handle `media-in` that accepts many video-producing sources and/or images.
+// handle `media-in` that accepts many video-producing sources, images, and
+// audio beds/voiceovers.
 // Connected inputs form a pool the editor's timeline places clips from — each
 // placement references its source node. Legacy per-slot splicer handles are
 // converted to this pool by migrateWorkflowGraph before the graph is consumed.
@@ -430,6 +473,7 @@ export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
     case 'videoDecode':
       return ['text'];
     case 'image':
+    case 'frameExtract':
       return ['image'];
     case 'video':
       return ['video'];
@@ -469,6 +513,8 @@ export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
       return ['image', 'audio', 'document', 'video'];
     case 'videoDecode':
       return ['video'];
+    case 'frameExtract':
+      return ['video'];
     case 'image':
     case 'video':
     case 'audio':
@@ -498,6 +544,7 @@ export function getTargetHandleConnectionLimit(
 
   if (node.type === 'extendVideo' && targetHandle === 'video') return 1;
   if (node.type === 'videoDecode' && targetHandle === 'video') return 1;
+  if (node.type === 'frameExtract' && targetHandle === 'video') return 1;
   if (node.type === 'timelineEditor' && isTimelineMediaHandle(targetHandle))
     return TIMELINE_MEDIA_POOL_LIMIT;
   if (node.type === 'hyperframesAgent' && targetHandle === HYPERFRAMES_PROMPT_INPUT_HANDLE)
@@ -545,7 +592,7 @@ export function getTargetHandleConnectionLimit(
   return undefined;
 }
 
-export function isValidConnection(
+function isConnectionCompatible(
   connection: GraphConnectionLike,
   edges: GraphEdgeLike[],
   nodes: GraphNodeLike[],
@@ -567,8 +614,7 @@ export function isValidConnection(
   if (targetNode.type === 'string') {
     const handle = targetHandle;
     if (!canAcceptSingleTextInput(edges, connection.target, handle)) return false;
-    if (handle === 'image' && (sourceNode.type === 'image' || sourceNode.type === 'nanoGen'))
-      return true;
+    if (handle === 'image' && isImageProducingSource(sourceNode)) return true;
     if (handle === 'audio' && sourceNode.type === 'audio') return true;
     if (handle === 'video' && sourceNode.type === 'video') return true;
     if (handle === 'document' && sourceNode.type === 'document') return true;
@@ -577,7 +623,7 @@ export function isValidConnection(
 
   if (targetNode.type === 'nanoGen') {
     if (isImageReferenceHandle(targetHandle)) {
-      if (sourceNode.type !== 'image' && sourceNode.type !== 'nanoGen') return false;
+      if (!isImageProducingSource(sourceNode)) return false;
     } else if (targetHandle === 'prompt' || targetHandle === 'negative') {
       if (!isTextProducingSource(sourceNode)) return false;
     } else {
@@ -593,13 +639,14 @@ export function isValidConnection(
     }
   } else if (targetNode.type === 'timelineEditor') {
     if (!isTimelineMediaHandle(targetHandle)) return false;
-    const isImageSource = sourceNode.type === 'image' || sourceNode.type === 'nanoGen';
-    if (!isVideoProducingSource(sourceNode) && !isImageSource) return false;
+    const isImageSource = isImageProducingSource(sourceNode);
+    const isAudioSource = sourceNode.type === 'audio';
+    if (!isVideoProducingSource(sourceNode) && !isImageSource && !isAudioSource) return false;
   } else if (targetNode.type === 'hyperframesAgent') {
     if (targetHandle === HYPERFRAMES_PROMPT_INPUT_HANDLE) {
       if (!isTextProducingSource(sourceNode)) return false;
     } else if (targetHandle === HYPERFRAMES_IMAGE_INPUT_HANDLE) {
-      if (sourceNode.type !== 'image' && sourceNode.type !== 'nanoGen') return false;
+      if (!isImageProducingSource(sourceNode)) return false;
     } else if (targetHandle === HYPERFRAMES_VIDEO_INPUT_HANDLE) {
       if (!isVideoProducingSource(sourceNode)) return false;
     } else if (targetHandle === HYPERFRAMES_AUDIO_INPUT_HANDLE) {
@@ -610,10 +657,13 @@ export function isValidConnection(
   } else if (targetNode.type === 'videoDecode') {
     if (targetHandle !== 'video') return false;
     if (!isVideoProducingSource(sourceNode)) return false;
+  } else if (targetNode.type === 'frameExtract') {
+    if (targetHandle !== 'video') return false;
+    if (!isVideoProducingSource(sourceNode)) return false;
   } else if (targetNode.type === 'organicPublisher' || targetNode.type === 'paidPublisher') {
     const format = publisherFormat(targetNode);
     if (!publisherTargetHandles(targetNode).includes(targetHandle)) return false;
-    const isImageSource = sourceNode.type === 'image' || sourceNode.type === 'nanoGen';
+    const isImageSource = isImageProducingSource(sourceNode);
     const isVideoSource = isVideoProducingSource(sourceNode);
     if (format === 'image' && !isImageSource) return false;
     if (format === 'video' && !isVideoSource) return false;
@@ -622,7 +672,7 @@ export function isValidConnection(
     if (targetHandle === 'prompt' || targetHandle === 'prompt-in') {
       if (!isTextProducingSource(sourceNode)) return false;
     } else if (isImageReferenceHandle(targetHandle)) {
-      if (sourceNode.type !== 'image' && sourceNode.type !== 'nanoGen') return false;
+      if (!isImageProducingSource(sourceNode)) return false;
     } else {
       return false;
     }
@@ -630,7 +680,7 @@ export function isValidConnection(
     const model = resolveVideoGeneratorModel(targetNode);
     if (isTextProducingSource(sourceNode)) {
       if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle)) return false;
-    } else if (sourceNode.type === 'image' || sourceNode.type === 'nanoGen') {
+    } else if (isImageProducingSource(sourceNode)) {
       // The node's own allowed set already encodes the model AND the selected
       // reference mode, so it is the single authority here.
       if (!isFrameHandle(targetHandle) && !isImageReferenceHandle(targetHandle)) return false;
@@ -646,7 +696,7 @@ export function isValidConnection(
     }
   } else if (isTextProducingSource(sourceNode)) {
     if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle)) return false;
-  } else if (sourceNode.type === 'image' || sourceNode.type === 'nanoGen') {
+  } else if (isImageProducingSource(sourceNode)) {
     if (!isImageReferenceHandle(targetHandle)) return false;
     if (targetNode.type === 'image' || targetNode.type === 'video') return false;
   } else if (
@@ -672,6 +722,225 @@ export function isValidConnection(
   }
 
   return true;
+}
+
+const PORT_LABELS: Record<string, string> = {
+  text: 'Text',
+  prompt: 'Prompt',
+  'prompt-in': 'Prompt',
+  negative: 'Negative prompt',
+  image: 'Image',
+  'ref-image': 'Reference image',
+  'ref-images': 'Reference images',
+  'first-frame': 'First frame',
+  'last-frame': 'Last frame',
+  video: 'Video',
+  'ref-video': 'Reference video',
+  audio: 'Audio',
+  document: 'Document',
+  'media-in': 'Media',
+};
+
+const portName = (handle: string): string =>
+  PORT_LABELS[handle] ??
+  handle.replace(/[-_]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+
+const portDataType = (handle: string): StudioPortDataType => {
+  const mediaKind = mediaKindForHandle(handle);
+  if (mediaKind) return mediaKind;
+  if (handle === TIMELINE_MEDIA_INPUT_HANDLE || handle.startsWith('clip-')) return 'media';
+  return 'text';
+};
+
+const isRequiredInputPort = (node: GraphNodeLike, handle: string): boolean => {
+  if (handle === 'prompt' || handle === 'prompt-in') return node.type !== 'string';
+  if (handle === 'video') {
+    return (
+      node.type === 'extendVideo' || node.type === 'videoDecode' || node.type === 'frameExtract'
+    );
+  }
+  if (node.type === 'organicPublisher' || node.type === 'paidPublisher') {
+    return publisherTargetHandles(node).includes(handle);
+  }
+  return false;
+};
+
+export function getStudioPortMetadata(
+  node: GraphNodeLike,
+  direction: StudioPortDirection,
+  edges: GraphEdgeLike[] = [],
+): StudioPortMetadata[] {
+  const handles =
+    direction === 'input' ? getAllowedTargetHandles(node) : getAllowedSourceHandles(node);
+
+  return handles.map((handle) => {
+    const connectionCount = edges.filter((edge) =>
+      direction === 'input'
+        ? edge.target === node.id && edge.targetHandle === handle
+        : edge.source === node.id && edge.sourceHandle === handle,
+    ).length;
+    const explicitLimit =
+      direction === 'input' ? getTargetHandleConnectionLimit(node, handle, edges) : undefined;
+    const maxConnections =
+      direction === 'input' && explicitLimit === undefined && isTextInputHandle(handle)
+        ? 1
+        : explicitLimit;
+
+    return {
+      id: handle,
+      name: portName(handle),
+      direction,
+      dataType: portDataType(handle),
+      required: direction === 'input' && isRequiredInputPort(node, handle),
+      connectionCount,
+      ...(maxConnections === undefined ? {} : { maxConnections }),
+    };
+  });
+}
+
+function wouldCreateCycle(connection: GraphConnectionLike, edges: GraphEdgeLike[]): boolean {
+  if (connection.source === connection.target) return true;
+  const outgoing = new Map<string, string[]>();
+  for (const edge of edges) {
+    const targets = outgoing.get(edge.source) ?? [];
+    targets.push(edge.target);
+    outgoing.set(edge.source, targets);
+  }
+
+  const pending = [connection.target];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const nodeId = pending.pop();
+    if (!nodeId || visited.has(nodeId)) continue;
+    if (nodeId === connection.source) return true;
+    visited.add(nodeId);
+    pending.push(...(outgoing.get(nodeId) ?? []));
+  }
+  return false;
+}
+
+const validationResult = (
+  connection: GraphConnectionLike,
+  code: ConnectionValidationCode,
+  message: string,
+): ConnectionValidationResult => ({
+  valid: code === 'valid',
+  code,
+  message,
+  sourceNodeId: connection.source,
+  targetNodeId: connection.target,
+  sourceHandle: connection.sourceHandle ?? null,
+  targetHandle: connection.targetHandle ?? null,
+});
+
+export function validateConnection(
+  connection: GraphConnectionLike,
+  edges: GraphEdgeLike[],
+  nodes: GraphNodeLike[],
+): ConnectionValidationResult {
+  const sourceNode = nodes.find((node) => node.id === connection.source);
+  const targetNode = nodes.find((node) => node.id === connection.target);
+  if (!sourceNode || !targetNode) {
+    return validationResult(
+      connection,
+      'missing_node',
+      'One of these nodes is no longer on the canvas.',
+    );
+  }
+  if (connection.source === connection.target) {
+    return validationResult(connection, 'self_connection', 'A node cannot connect back to itself.');
+  }
+  if (
+    edges.some(
+      (edge) =>
+        edge.source === connection.source &&
+        edge.target === connection.target &&
+        (edge.sourceHandle ?? null) === (connection.sourceHandle ?? null) &&
+        (edge.targetHandle ?? null) === (connection.targetHandle ?? null),
+    )
+  ) {
+    return validationResult(
+      connection,
+      'duplicate_connection',
+      'These ports are already connected.',
+    );
+  }
+  if (wouldCreateCycle(connection, edges)) {
+    return validationResult(
+      connection,
+      'cycle',
+      'This connection would create a loop in the workflow.',
+    );
+  }
+
+  const sourcePorts = getAllowedSourceHandles(sourceNode);
+  const targetPorts = getAllowedTargetHandles(targetNode);
+  const sourceHandle = connection.sourceHandle ?? '';
+  const targetHandle = connection.targetHandle ?? '';
+  if (sourcePorts.length === 0) {
+    return validationResult(
+      connection,
+      'source_has_no_output',
+      `${sourceNode.type ?? 'This node'} does not produce an output.`,
+    );
+  }
+  if (sourceHandle && !sourcePorts.includes(sourceHandle)) {
+    return validationResult(
+      connection,
+      'unknown_source_port',
+      `${portName(sourceHandle)} is not an output of this node.`,
+    );
+  }
+  if (targetHandle && !targetPorts.includes(targetHandle) && !targetHandle.startsWith('clip-')) {
+    return validationResult(
+      connection,
+      'unknown_target_port',
+      `${portName(targetHandle)} is not an input on this node.`,
+    );
+  }
+
+  if (!canAcceptSingleTextInput(edges, connection.target, targetHandle)) {
+    return validationResult(
+      connection,
+      'target_at_capacity',
+      `${portName(targetHandle)} already has the maximum number of connections.`,
+    );
+  }
+
+  const limit = getTargetHandleConnectionLimit(targetNode, targetHandle, edges);
+  if (limit !== undefined) {
+    const countedHandles = getCountedHandles(targetNode, targetHandle);
+    const existingConnections = getEdgeCountForTargetHandles(
+      edges,
+      connection.target,
+      countedHandles,
+    );
+    if (limit <= 0 || existingConnections >= limit) {
+      return validationResult(
+        connection,
+        'target_at_capacity',
+        `${portName(targetHandle)} already has the maximum number of connections.`,
+      );
+    }
+  }
+
+  if (!isConnectionCompatible(connection, edges, nodes)) {
+    return validationResult(
+      connection,
+      'incompatible_data_type',
+      `${portName(sourceHandle || 'output')} cannot feed ${portName(targetHandle || 'input')}.`,
+    );
+  }
+
+  return validationResult(connection, 'valid', 'Connection is valid.');
+}
+
+export function isValidConnection(
+  connection: GraphConnectionLike,
+  edges: GraphEdgeLike[],
+  nodes: GraphNodeLike[],
+): boolean {
+  return validateConnection(connection, edges, nodes).valid;
 }
 
 // ---------------------------------------------------------------------------
@@ -827,6 +1096,11 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
       return { data: { value: '', promptMode: 'enrich' } };
     case 'videoDecode':
       return { data: { value: '' }, style: { width: 360, height: 320 } };
+    case 'frameExtract':
+      return {
+        data: { selector: 'last', timestampSec: null, outputWidth: 1280, quality: 0.9 },
+        style: { width: 280, height: 220 },
+      };
     case 'image':
       return { data: { aspectRatio: '1:1' }, style: { width: 192, height: 192 } };
     case 'audio':

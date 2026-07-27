@@ -65,6 +65,7 @@ export const versionSignUploadRequestSchema = z
     assetId: z.string().min(1),
     fileName: z.string().min(1),
     mimeType: z.string().min(1),
+    baseVersionId: z.string().uuid().optional(),
   })
   .strict();
 export type VersionSignUploadRequest = z.infer<typeof versionSignUploadRequestSchema>;
@@ -93,6 +94,7 @@ export const registerVersionRequestSchema = z
     sizeBytes: z.number().int().nonnegative(),
     note: z.string().max(2000).optional(),
     integrityState: assetIntegrityStateSchema.optional(),
+    baseVersionId: z.string().uuid().optional(),
     idempotencyKey: z.string().min(1).max(200).optional(),
   })
   .strict();

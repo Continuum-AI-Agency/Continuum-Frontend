@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { organicUgcSpecSchema } from '../media/reel-video';
 
 export const organicPipelinePlatformSchema = z.enum([
   'instagram',
@@ -84,6 +85,7 @@ export const organicReelSceneAssetSchema = z
     bucket: z.string().nullable().optional(),
     clipUrl: z.string().nullable().optional(),
     signedClipUrl: z.string().nullable().optional(),
+    assetId: z.string().nullable().optional(),
     error: z.string().nullable().optional(),
   })
   .strict();
@@ -102,6 +104,7 @@ export const organicReelAssetSchema = z
     mimeType: z.string().nullable().optional(),
     durationSec: z.number(),
     scenes: z.array(organicReelSceneAssetSchema),
+    ugc: organicUgcSpecSchema.optional(),
     error: z.string().nullable().optional(),
     qualityIssues: z.array(z.string()).optional(),
     qualityScore: z.number().optional(),
@@ -383,6 +386,7 @@ export const organicMediaSuggestionSchema = z
     // `generationContext` (the realized-blueprint context, which carries finalPrompt).
     checkpointContext: organicMediaCheckpointContextSchema.optional(),
     generationContext: organicMediaGenerationContextSchema.optional(),
+    ugc: organicUgcSpecSchema.optional(),
     assets: z
       .array(
         z

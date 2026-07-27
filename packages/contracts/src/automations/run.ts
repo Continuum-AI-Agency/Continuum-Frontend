@@ -5,8 +5,18 @@
 import { z } from 'zod';
 import { automationRunStatusSchema } from './automation';
 
-export const automationRunTriggerSchema = z.enum(['schedule', 'manual']);
+export const automationRunTriggerSchema = z.enum([
+  'schedule',
+  'manual',
+  'test',
+  'event',
+  'metric',
+  'webhook',
+]);
 export type AutomationRunTrigger = z.infer<typeof automationRunTriggerSchema>;
+
+export const automationExecutionModeSchema = z.enum(['production', 'test']);
+export type AutomationExecutionMode = z.infer<typeof automationExecutionModeSchema>;
 
 export const automationEmailStatusSchema = z.enum([
   'pending',
@@ -35,6 +45,8 @@ export const automationRunSchema = z
     trigger: automationRunTriggerSchema,
     requestedBy: z.string().nullable().optional(),
     status: automationRunStatusSchema,
+    executionMode: automationExecutionModeSchema.default('production'),
+    workflowVersionId: z.string().nullable().default(null),
     scheduledFor: z.string(),
     attempts: z.number().int().min(0),
     output: automationRunOutputSchema.nullable().optional(),

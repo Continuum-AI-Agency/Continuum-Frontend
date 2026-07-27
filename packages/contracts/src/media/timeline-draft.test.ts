@@ -40,6 +40,42 @@ describe('timelineDraftDocumentSchema', () => {
     expect(parsed.pool).toHaveLength(2);
   });
 
+  it('accepts additive audio pool members and absolute-time audio tracks', () => {
+    const parsed = timelineDraftDocumentSchema.parse({
+      ...validDocument(),
+      pool: [
+        ...validDocument().pool,
+        { assetId: BRAND, kind: 'audio', label: 'Voiceover', durationSec: 6 },
+      ],
+      audioTracks: [
+        {
+          id: 'voiceover-lane',
+          kind: 'audio',
+          items: [
+            {
+              id: 'voiceover-1',
+              order: 0,
+              sourceId: BRAND,
+              kind: 'audio',
+              startSec: 1.25,
+              trimStartSec: 0.5,
+              trimEndSec: 4,
+              volume: 0.75,
+              audioFadeInSec: 0.2,
+              audioFadeOutSec: 0.4,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(parsed.audioTracks?.[0]?.items[0]).toMatchObject({
+      kind: 'audio',
+      startSec: 1.25,
+      volume: 0.75,
+    });
+  });
+
   it('rejects a document with no schemaVersion envelope', () => {
     const { schemaVersion: _dropped, ...rest } = validDocument();
     expect(timelineDraftDocumentSchema.safeParse(rest).success).toBe(false);

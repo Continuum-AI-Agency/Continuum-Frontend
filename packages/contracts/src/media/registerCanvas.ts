@@ -57,6 +57,7 @@ export type RegisterCanvasAssetRequest = z.infer<typeof registerCanvasAssetReque
 export const registerCanvasAssetResponseSchema = z
   .object({
     assetId: z.string().nullable(),
+    assetVersionId: z.string().nullable(),
   })
   .strict();
 export type RegisterCanvasAssetResponse = z.infer<typeof registerCanvasAssetResponseSchema>;

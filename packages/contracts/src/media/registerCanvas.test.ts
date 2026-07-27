@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 
-import { registerCanvasAssetRequestSchema } from './registerCanvas';
+import {
+  registerCanvasAssetRequestSchema,
+  registerCanvasAssetResponseSchema,
+} from './registerCanvas';
 
 const BRAND_ID = '11111111-1111-4111-8111-111111111111';
 const ASSET_ID = '22222222-2222-4222-8222-222222222222';
@@ -50,5 +53,17 @@ describe('registerCanvasAssetRequestSchema', () => {
         originRef: { kind: 'canvas', nodeId: 'node-7' },
       }).success,
     ).toBe(false);
+  });
+
+  it('returns both durable asset and exact version identity', () => {
+    expect(
+      registerCanvasAssetResponseSchema.parse({
+        assetId: ASSET_ID,
+        assetVersionId: '33333333-3333-4333-8333-333333333333',
+      }),
+    ).toEqual({
+      assetId: ASSET_ID,
+      assetVersionId: '33333333-3333-4333-8333-333333333333',
+    });
   });
 });

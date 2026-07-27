@@ -49,6 +49,8 @@ const NODE_PURPOSE: Record<StudioNodeType, string> = {
   audio: 'a reference audio file',
   document: 'a reference document (pdf / txt) whose text can be read',
   videoDecode: 'decodes a video into a text description of its frames',
+  frameExtract:
+    'extracts an exact first, last, or timestamped frame from a video in the browser for shot continuity',
 };
 
 const formatHandle = (type: StudioNodeType, handle: string): string => {
@@ -169,7 +171,7 @@ export function describeNodeVocabulary(): string {
     'WIRING RULES',
     '- You never choose a handle. Say `connect A -> B` and, if it helps, name a `role`',
     '  (e.g. "prompt", "first-frame", "ref-images"); the canvas resolves the legal handle.',
-    '- Text flows from `string` / `videoDecode`. Images flow from `image` / `nanoGen`.',
+    '- Text flows from `string` / `videoDecode`. Images flow from `image` / `nanoGen` / `frameExtract`.',
     '  Video flows from `video`, any video generator, `extendVideo`, `timelineEditor`, `omniGen`.',
     '- A prompt handle takes exactly ONE text input. Reference-image handles take many.',
     '- `image` / `video` / `audio` / `document` are SOURCES: they take no inputs. To use a',

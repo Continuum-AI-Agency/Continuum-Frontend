@@ -1,3 +1,4 @@
+import { timelineAuthoringDocumentSchema, timelineDocumentFingerprint } from './timeline-authoring';
 import type {
   GraphEdgeLike,
   GraphNodeLike,
@@ -25,6 +26,7 @@ export const MAX_PROJECTED_WIRING = 120;
 export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   string: ['value'],
   videoDecode: ['value'],
+  frameExtract: ['selector', 'timestampSec', 'outputWidth', 'quality'],
   nanoGen: ['model', 'positivePrompt', 'aspectRatio', 'imageSize'],
   // referenceMode is here because it selects which image handles the node HAS —
   // without it an agent asked for first/last frame would wire to ref-images and
@@ -58,7 +60,15 @@ export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   ],
   omniGen: ['model', 'prompt', 'aspectRatio'],
   extendVideo: ['prompt'],
-  timelineEditor: ['outputFormat', 'items'],
+  timelineEditor: [
+    'outputFormat',
+    'items',
+    'overlayTracks',
+    'exportPresetId',
+    'markers',
+    'captionsEnabled',
+    'agentRenderRequest',
+  ],
   hyperframesAgent: [
     'model',
     'prompt',
@@ -192,25 +202,80 @@ function isEmpty(value: unknown): boolean {
   );
 }
 
-// Raw timeline items / clip slots carry ids, effect specs and keyframes the agent
-// cannot use; compact them to the placement facts it can. Timeline items render as
-// `<order>:<sourceNodeId>[@trimStart-trimEnd s]` — enough to see, verify and re-emit
-// the cut via set_timeline.
+const MAX_PROJECTED_TIMELINE_ITEMS = 40;
+
+function projectTimelineItem(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const item = value as Record<string, unknown>;
+  const projected: Record<string, unknown> = {};
+  for (const key of [
+    'id',
+    'order',
+    'sourceNodeId',
+    'kind',
+    'trimStartSec',
+    'trimEndSec',
+    'durationSec',
+    'muteAudio',
+    'volume',
+    'fadeInSec',
+    'fadeOutSec',
+    'transition',
+    'startSec',
+  ]) {
+    if (!isEmpty(item[key])) projected[key] = item[key];
+  }
+  if (item.effects && typeof item.effects === 'object') {
+    const effects = item.effects as Record<string, unknown>;
+    const compactEffects: Record<string, unknown> = {};
+    for (const key of [
+      'opacity',
+      'adjustments',
+      'filterPreset',
+      'transform',
+      'flipH',
+      'flipV',
+      'blendMode',
+      'kenBurns',
+      'speed',
+    ]) {
+      if (!isEmpty(effects[key])) compactEffects[key] = effects[key];
+    }
+    if (Object.keys(compactEffects).length > 0) projected.effects = compactEffects;
+    if (Array.isArray(effects.keyframes) && effects.keyframes.length > 0) {
+      projected.keyframeCount = effects.keyframes.length;
+    }
+    if (Array.isArray(effects.text) && effects.text.length > 0) {
+      projected.textOverlayCount = effects.text.length;
+    }
+  }
+  return Object.keys(projected).length > 0 ? projected : undefined;
+}
+
+// The initial snapshot carries stable editor ids and exact cut facts, but caps
+// large timelines. Full transcripts and the complete document stay behind
+// inspect_video_editor so ordinary Canvas composition remains token-lean.
 const CONFIG_TRANSFORMS: Record<string, (value: unknown) => unknown> = {
   'timelineEditor.items': (value) => {
     if (!Array.isArray(value)) return undefined;
-    return value.map((item) => {
-      const it = item as {
-        order?: number;
-        sourceNodeId?: string;
-        trimStartSec?: number;
-        trimEndSec?: number;
-      };
-      const trims =
-        it.trimStartSec !== undefined || it.trimEndSec !== undefined
-          ? `@${it.trimStartSec ?? 0}-${it.trimEndSec ?? ''}s`
-          : '';
-      return `${it.order ?? 0}:${it.sourceNodeId ?? '?'}${trims}`;
+    return value
+      .slice(0, MAX_PROJECTED_TIMELINE_ITEMS)
+      .map(projectTimelineItem)
+      .filter((item): item is Record<string, unknown> => Boolean(item));
+  },
+  'timelineEditor.overlayTracks': (value) => {
+    if (!Array.isArray(value)) return undefined;
+    return value.slice(0, 8).flatMap((track) => {
+      if (!track || typeof track !== 'object') return [];
+      const record = track as Record<string, unknown>;
+      if (typeof record.id !== 'string') return [];
+      const items = Array.isArray(record.items)
+        ? record.items
+            .slice(0, MAX_PROJECTED_TIMELINE_ITEMS)
+            .map(projectTimelineItem)
+            .filter((item): item is Record<string, unknown> => Boolean(item))
+        : [];
+      return [{ id: record.id, items }];
     });
   },
 };
@@ -229,6 +294,21 @@ function projectConfig(
     if (transform) value = transform(value);
     if (isEmpty(value)) continue;
     config[key] = value;
+  }
+  if (type === 'timelineEditor') {
+    const document = timelineAuthoringDocumentSchema.safeParse({
+      items: data.items ?? [],
+      ...(data.overlayTracks !== undefined ? { overlayTracks: data.overlayTracks } : {}),
+      ...(data.exportPresetId !== undefined ? { exportPresetId: data.exportPresetId } : {}),
+      ...(data.markers !== undefined ? { markers: data.markers } : {}),
+      ...(data.captionsEnabled !== undefined ? { captionsEnabled: data.captionsEnabled } : {}),
+      ...(data.captionCues !== undefined ? { captionCues: data.captionCues } : {}),
+      ...(data.captionWords !== undefined ? { captionWords: data.captionWords } : {}),
+      ...(data.captionStyle !== undefined ? { captionStyle: data.captionStyle } : {}),
+    });
+    if (document.success) {
+      config.documentFingerprint = timelineDocumentFingerprint(document.data);
+    }
   }
   return Object.keys(config).length > 0 ? config : undefined;
 }

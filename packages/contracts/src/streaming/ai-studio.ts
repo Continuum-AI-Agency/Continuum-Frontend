@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 import { agentDelegatedFrameSchema } from '../agents/cross-agent';
+import { canvasGraphChangeSetSchema } from '../ai-studio/canvas-graph-change';
 import { studioEdgeSchema, studioNodeSchema } from '../ai-studio/workflow-graph';
 import {
   responseDoneSchema,
@@ -121,6 +122,11 @@ const composerPatchSchema = z.object({
   data: z.object({ nodes: z.array(studioNodeSchema), edges: z.array(studioEdgeSchema) }).strict(),
 });
 
+const composerProposalSchema = z.object({
+  type: z.literal('composer.proposal'),
+  data: canvasGraphChangeSetSchema,
+});
+
 // A connection the canvas rules refused, or an op that could not apply. The build
 // still lands — the agent is told what was dropped and may repair it next step.
 const composerWarningSchema = z.object({
@@ -133,6 +139,7 @@ export const aiStudioComposerFrameSchema = z.discriminatedUnion('type', [
   composerStatusSchema,
   composerGraphSchema,
   composerPatchSchema,
+  composerProposalSchema,
   composerWarningSchema,
   agentDelegatedFrameSchema,
   toolCallSchema,

@@ -1,0 +1,858 @@
+import { z } from 'zod';
+import {
+  agentTargetSchema,
+  automationRecipientsSchema,
+  automationScheduleSchema,
+} from './automation';
+import {
+  automationOutputContractRefSchema,
+  automationReportDocumentSchema,
+} from './output-contracts';
+import {
+  automationMetricOperatorSchema,
+  automationMetricWindowSchema,
+  automationNativeEventTypeSchema,
+} from './trigger-bindings';
+
+export const AUTOMATION_WORKFLOW_SCHEMA_VERSION = 3 as const;
+
+// Definitions persisted before the workflow workspace shipped v2 remain
+// readable. Parsing is the compatibility boundary: callers always receive the
+// current shape and the next draft save upgrades the stored JSON naturally.
+export const automationWorkflowSchemaVersionSchema = z
+  .union([z.literal(1), z.literal(2), z.literal(AUTOMATION_WORKFLOW_SCHEMA_VERSION)])
+  .transform(() => AUTOMATION_WORKFLOW_SCHEMA_VERSION);
+
+export const automationPortTypeSchema = z.enum([
+  'any',
+  'artifact',
+  'boolean',
+  'control',
+  'media',
+  'records',
+  'report',
+  'structured',
+  'text',
+]);
+export type AutomationPortType = z.infer<typeof automationPortTypeSchema>;
+
+export const automationNodePositionSchema = z
+  .object({
+    x: z.number().finite(),
+    y: z.number().finite(),
+  })
+  .strict();
+
+const nodeBaseShape = {
+  id: z.string().min(1).max(120),
+  position: automationNodePositionSchema,
+  label: z.string().min(1).max(120),
+  description: z.string().max(500).optional(),
+  disabled: z.boolean().default(false),
+  continueOnError: z.boolean().default(false),
+};
+
+const manualTriggerNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('trigger.manual'),
+    config: z
+      .object({
+        inputSchema: z.record(z.string(), z.unknown()).default({}),
+      })
+      .strict()
+      .default({ inputSchema: {} }),
+  })
+  .strict();
+
+const scheduleTriggerNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('trigger.schedule'),
+    config: z.object({ schedule: automationScheduleSchema }).strict(),
+  })
+  .strict();
+
+const eventTriggerNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('trigger.event'),
+    config: z
+      .object({
+        eventType: automationNativeEventTypeSchema,
+        filters: z.record(z.string(), z.unknown()).default({}),
+      })
+      .strict(),
+  })
+  .strict();
+
+const metricTriggerNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('trigger.metric'),
+    config: z
+      .object({
+        metric: z.string().min(1).max(120),
+        operator: automationMetricOperatorSchema,
+        value: z.number().finite(),
+        window: automationMetricWindowSchema,
+        cooldownMinutes: z.number().int().min(15).max(43_200).default(60),
+      })
+      .strict(),
+  })
+  .strict();
+
+const webhookTriggerNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('trigger.webhook'),
+    config: z
+      .object({
+        hookId: z.string().min(8).max(120).optional(),
+        endpointId: z.string().min(1).max(180).optional(),
+        payloadSchema: z.record(z.string(), z.unknown()).default({}),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const automationSourceKindSchema = z.enum([
+  'brand_knowledge',
+  'library',
+  'saved_prompt',
+  'saved_skill',
+  'paid_analytics',
+  'organic_analytics',
+  'planner',
+  'trends',
+  'competitors',
+  'connected_platform',
+  'live_web',
+  'previous_run',
+]);
+export type AutomationSourceKind = z.infer<typeof automationSourceKindSchema>;
+
+const boundedSourceLimitSchema = z.number().int().min(1).max(100).default(20);
+const sourceTextQuerySchema = z.string().trim().max(500).default('');
+
+export const automationSourceQuerySchemas = {
+  brand_knowledge: z
+    .object({
+      sections: z
+        .array(
+          z.enum([
+            'identity',
+            'positioning',
+            'audience',
+            'voice',
+            'visual',
+            'offers',
+            'competitors',
+          ]),
+        )
+        .default([]),
+      search: sourceTextQuerySchema,
+      limit: boundedSourceLimitSchema,
+    })
+    .strict(),
+  library: z
+    .object({
+      search: sourceTextQuerySchema,
+      kinds: z.array(z.enum(['image', 'video', 'file'])).default([]),
+      tags: z.array(z.string().min(1).max(80)).max(20).default([]),
+      reviewStatus: z.enum(['none', 'draft', 'in_review', 'needs_changes', 'approved']).optional(),
+      limit: boundedSourceLimitSchema,
+    })
+    .strict(),
+  saved_prompt: z
+    .object({
+      search: sourceTextQuerySchema,
+      ids: z.array(z.string().min(1)).max(100).default([]),
+      limit: boundedSourceLimitSchema,
+    })
+    .strict(),
+  saved_skill: z
+    .object({
+      search: sourceTextQuerySchema,
+      ids: z.array(z.string().min(1)).max(100).default([]),
+      limit: boundedSourceLimitSchema,
+    })
+    .strict(),
+  paid_analytics: z
+    .object({
+      provider: z.literal('meta').default('meta'),
+      adAccountId: z.string().min(1).max(120).default('auto'),
+      datePreset: z.enum(['last_7d', 'last_14d', 'last_30d']).default('last_7d'),
+      level: z.enum(['account', 'campaign', 'adset', 'ad']).default('account'),
+      objectId: z.string().min(1).max(120).default('auto'),
+      metrics: z.array(z.string().min(1).max(80)).max(40).default([]),
+      includeTopAds: z.boolean().default(false),
+      topAdsLimit: z.number().int().min(1).max(25).default(5),
+    })
+    .strict(),
+  organic_analytics: z
+    .object({
+      platforms: z
+        .array(z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube']))
+        .default([]),
+      dateRange: z.enum(['7d', '14d', '30d', '90d']).default('30d'),
+      includeInsights: z.boolean().default(true),
+      limit: boundedSourceLimitSchema,
+    })
+    .strict(),
+  planner: z
+    .object({
+      platforms: z
+        .array(z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube']))
+        .default([]),
+      statuses: z.array(z.string().min(1).max(80)).max(20).default([]),
+      limit: boundedSourceLimitSchema,
+    })
+    .strict(),
+  trends: z
+    .object({
+      search: sourceTextQuerySchema,
+      limit: boundedSourceLimitSchema,
+    })
+    .strict(),
+  competitors: z
+    .object({ search: sourceTextQuerySchema, limit: boundedSourceLimitSchema })
+    .strict(),
+  connected_platform: z
+    .object({
+      provider: z.string().trim().max(80).default(''),
+      resource: z.string().trim().max(120).default(''),
+      limit: boundedSourceLimitSchema,
+    })
+    .strict(),
+  live_web: z
+    .object({ search: z.string().trim().min(1).max(500), limit: boundedSourceLimitSchema })
+    .strict(),
+  previous_run: z
+    .object({
+      automationId: z.string().min(1).optional(),
+      selection: z.enum(['latest', 'last_successful']).default('last_successful'),
+      outputPath: z.string().trim().max(240).default('output.text'),
+      limit: z.number().int().min(1).max(20).default(1),
+    })
+    .strict(),
+} satisfies Record<AutomationSourceKind, z.ZodType>;
+
+export type AutomationSourceQuery = {
+  [Kind in AutomationSourceKind]: z.infer<(typeof automationSourceQuerySchemas)[Kind]>;
+};
+
+export const parseAutomationSourceQuery = <Kind extends AutomationSourceKind>(
+  source: Kind,
+  query: unknown,
+): AutomationSourceQuery[Kind] =>
+  automationSourceQuerySchemas[source].parse(query) as AutomationSourceQuery[Kind];
+
+const sourceNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('source'),
+    config: z
+      .object({
+        source: automationSourceKindSchema,
+        mode: z.enum(['live', 'pinned']).default('live'),
+        query: z.record(z.string(), z.unknown()).default({}),
+        pinnedIds: z.array(z.string().min(1)).max(100).default([]),
+      })
+      .strict()
+      .superRefine((value, ctx) => {
+        if (value.mode === 'pinned' && value.pinnedIds.length === 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['pinnedIds'],
+            message: 'Pinned sources require at least one record id.',
+          });
+        }
+        const parsedQuery = automationSourceQuerySchemas[value.source].safeParse(value.query);
+        if (!parsedQuery.success) {
+          for (const issue of parsedQuery.error.issues) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['query', ...issue.path],
+              message: issue.message,
+            });
+          }
+        }
+      }),
+  })
+  .strict();
+
+const integrationQueryNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('integration.query'),
+    config: z
+      .object({
+        provider: z.enum(['meta', 'google', 'linkedin', 'tiktok', 'youtube']),
+        operation: z.string().min(1).max(160),
+        connectionId: z.string().min(1).max(180),
+        parameters: z.record(z.string(), z.unknown()).default({}),
+        schemaHash: z.string().min(16).max(160),
+        timeoutSeconds: z.number().int().min(5).max(300).default(60),
+      })
+      .strict(),
+  })
+  .strict();
+
+const mcpReadNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('mcp.read'),
+    config: z
+      .object({
+        toolName: z.string().min(1).max(160),
+        arguments: z.record(z.string(), z.unknown()).default({}),
+        schemaHash: z.string().min(16).max(160),
+        timeoutSeconds: z.number().int().min(5).max(300).default(60),
+      })
+      .strict(),
+  })
+  .strict();
+
+const instructionNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('instruction'),
+    config: z.object({ text: z.string().min(1).max(20_000) }).strict(),
+  })
+  .strict();
+
+export const automationAgentCapabilitySchema = z.enum([
+  'brand.read',
+  'library.read',
+  'paid.performance_overview',
+  'paid.top_creatives',
+  'paid.competitive_analysis',
+  'organic.performance_overview',
+  'organic.content_planning',
+  'organic.draft_creation',
+  'planner.read',
+  'trends.read',
+  'report.synthesis',
+]);
+export type AutomationAgentCapability = z.infer<typeof automationAgentCapabilitySchema>;
+
+export const automationAgentPolicySchema = z
+  .object({
+    capabilities: z.array(automationAgentCapabilitySchema).max(20).default([]),
+    toolMode: z.enum(['auto', 'required']).default('auto'),
+    requiredTools: z.array(z.string().min(1).max(160)).max(30).default([]),
+    allowedTools: z.array(z.string().min(1).max(160)).max(100).default([]),
+    maxSteps: z.number().int().min(1).max(40).default(8),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.toolMode === 'required' && value.requiredTools.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['requiredTools'],
+        message: 'Required tool mode needs at least one required tool.',
+      });
+    }
+  });
+export type AutomationAgentPolicy = z.infer<typeof automationAgentPolicySchema>;
+
+export const automationOutcomeRequirementsSchema = z
+  .object({
+    requireSchema: z.boolean().default(false),
+    minimumEvidence: z.number().int().min(0).max(100).default(0),
+    requiredTools: z.array(z.string().min(1).max(160)).max(30).default([]),
+    requiredReportSections: z.array(z.string().min(1).max(80)).max(24).default([]),
+    requireActionReceipt: z.boolean().default(false),
+  })
+  .strict();
+export type AutomationOutcomeRequirements = z.infer<typeof automationOutcomeRequirementsSchema>;
+
+const agentNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('agent'),
+    config: z
+      .object({
+        agent: agentTargetSchema,
+        instructions: z.string().max(20_000).default(''),
+        outputFormat: z.enum(['text', 'records', 'report']).default('text'),
+        timeoutSeconds: z.number().int().min(10).max(900).default(300),
+        policy: automationAgentPolicySchema.default({
+          capabilities: [],
+          toolMode: 'auto',
+          requiredTools: [],
+          allowedTools: [],
+          maxSteps: 8,
+        }),
+        validation: automationOutcomeRequirementsSchema.default({
+          requireSchema: false,
+          minimumEvidence: 0,
+          requiredTools: [],
+          requiredReportSections: [],
+          requireActionReceipt: false,
+        }),
+      })
+      .strict(),
+  })
+  .strict();
+
+const reportSectionSchema = z
+  .object({
+    id: z.string().min(1).max(80),
+    heading: z.string().min(1).max(160),
+    guidance: z.string().max(2_000).default(''),
+    required: z.boolean().default(true),
+  })
+  .strict();
+
+export const reportDocumentSchema = automationReportDocumentSchema;
+export type ReportDocument = z.infer<typeof reportDocumentSchema>;
+
+const outputFormatterNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('output.formatter'),
+    config: z
+      .object({
+        contract: automationOutputContractRefSchema,
+        instructions: z.string().max(20_000).default(''),
+        timeoutSeconds: z.number().int().min(10).max(900).default(180),
+        maxAttempts: z.literal(2).default(2),
+      })
+      .strict(),
+  })
+  .strict();
+
+const reportNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('report'),
+    config: z
+      .object({
+        title: z.string().min(1).max(200),
+        objective: z.string().min(1).max(2_000),
+        audience: z.string().min(1).max(500),
+        templateId: z.string().min(1).max(120).default('continuum-report'),
+        sections: z.array(reportSectionSchema).min(1).max(24),
+        frontMatter: z.record(z.string(), z.unknown()).default({}),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const automationConditionSchema = z
+  .object({
+    path: z.string().min(1).max(240),
+    operator: z.enum(['exists', 'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains']),
+    value: z.unknown().optional(),
+  })
+  .strict();
+export type AutomationCondition = z.infer<typeof automationConditionSchema>;
+
+const conditionNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('logic.if'),
+    config: z.object({ condition: automationConditionSchema }).strict(),
+  })
+  .strict();
+
+const switchNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('logic.switch'),
+    config: z
+      .object({
+        path: z.string().min(1).max(240),
+        cases: z
+          .array(
+            z
+              .object({
+                id: z.string().min(1).max(80),
+                label: z.string().min(1).max(120),
+                value: z.union([z.string(), z.number(), z.boolean()]),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(20),
+      })
+      .strict(),
+  })
+  .strict();
+
+const parallelNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('logic.parallel'),
+    config: z.object({}).strict().default({}),
+  })
+  .strict();
+
+const joinNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('logic.join'),
+    config: z.object({ mode: z.enum(['all', 'any']).default('all') }).strict(),
+  })
+  .strict();
+
+const repeatNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('logic.repeat_until'),
+    config: z
+      .union([
+        z.object({ iterations: z.number().int().min(1).max(50) }).strict(),
+        // Compatibility for drafts created while Repeat was a preview-only
+        // condition node. The condition was never executed; retain its bounded
+        // count and normalize the draft to the real fixed-count contract.
+        z
+          .object({
+            condition: automationConditionSchema,
+            maxIterations: z.number().int().min(1).max(50),
+          })
+          .strict(),
+      ])
+      .transform((config) => ({
+        iterations: 'iterations' in config ? config.iterations : config.maxIterations,
+      })),
+  })
+  .strict();
+
+const emailActionNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('action.email'),
+    config: z
+      .object({
+        recipients: automationRecipientsSchema,
+        subject: z.string().min(1).max(300),
+      })
+      .strict(),
+  })
+  .strict();
+
+const libraryActionNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('action.library_save'),
+    config: z
+      .object({
+        folderId: z.string().min(1).nullable().default(null),
+        titleTemplate: z.string().min(1).max(300),
+      })
+      .strict(),
+  })
+  .strict();
+
+const plannerActionNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('action.planner_upsert'),
+    config: z
+      .object({
+        platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube']),
+        scheduledAtPath: z.string().max(240).default('scheduledAt'),
+      })
+      .strict(),
+  })
+  .strict();
+
+const publishActionNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('action.organic_publish'),
+    config: z
+      .object({
+        platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube']),
+        accountId: z.string().min(1),
+      })
+      .strict(),
+  })
+  .strict();
+
+const studioActionNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('action.ai_studio_generate'),
+    config: z
+      .object({
+        roomId: z.string().min(1).nullable().default(null),
+        instructions: z.string().min(1).max(20_000),
+      })
+      .strict(),
+  })
+  .strict();
+
+const optimizerActionNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('action.paid_optimizer'),
+    config: z
+      .object({
+        operation: z.enum(['pause', 'resume', 'set_budget', 'replace_creative']),
+        targetType: z.enum(['campaign', 'adset', 'ad']),
+        targetId: z.string().min(1),
+        maxBudgetDeltaPct: z.number().min(0).max(100).nullable().default(null),
+      })
+      .strict(),
+  })
+  .strict();
+
+const outboundWebhookActionNodeSchema = z
+  .object({
+    ...nodeBaseShape,
+    type: z.literal('action.outbound_webhook'),
+    config: z
+      .object({
+        destinationId: z.string().min(1).max(180).optional(),
+        url: z.string().url().optional(),
+        method: z.enum(['POST', 'PUT', 'PATCH']).default('POST'),
+        secretRef: z.string().min(1).nullable().default(null),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const automationWorkflowNodeSchema = z.discriminatedUnion('type', [
+  manualTriggerNodeSchema,
+  scheduleTriggerNodeSchema,
+  eventTriggerNodeSchema,
+  metricTriggerNodeSchema,
+  webhookTriggerNodeSchema,
+  sourceNodeSchema,
+  integrationQueryNodeSchema,
+  mcpReadNodeSchema,
+  instructionNodeSchema,
+  agentNodeSchema,
+  outputFormatterNodeSchema,
+  reportNodeSchema,
+  conditionNodeSchema,
+  switchNodeSchema,
+  parallelNodeSchema,
+  joinNodeSchema,
+  repeatNodeSchema,
+  emailActionNodeSchema,
+  libraryActionNodeSchema,
+  plannerActionNodeSchema,
+  publishActionNodeSchema,
+  studioActionNodeSchema,
+  optimizerActionNodeSchema,
+  outboundWebhookActionNodeSchema,
+]);
+export type AutomationWorkflowNode = z.infer<typeof automationWorkflowNodeSchema>;
+export type AutomationWorkflowNodeType = AutomationWorkflowNode['type'];
+
+export const automationWorkflowEdgeSchema = z
+  .object({
+    id: z.string().min(1).max(180),
+    source: z.string().min(1),
+    sourceHandle: z.string().min(1).default('output'),
+    target: z.string().min(1),
+    targetHandle: z.string().min(1).default('input'),
+  })
+  .strict();
+export type AutomationWorkflowEdge = z.infer<typeof automationWorkflowEdgeSchema>;
+
+export const automationViewportSchema = z
+  .object({
+    x: z.number().finite(),
+    y: z.number().finite(),
+    zoom: z.number().min(0.1).max(4),
+  })
+  .strict();
+
+export const automationExecutionPolicySchema = z
+  .object({
+    maxRunSeconds: z.number().int().min(60).max(7_200).default(900),
+    maxParallelNodes: z.number().int().min(1).max(12).default(4),
+  })
+  .strict();
+
+export const automationWorkflowDefinitionSchema = z
+  .object({
+    schemaVersion: automationWorkflowSchemaVersionSchema,
+    nodes: z.array(automationWorkflowNodeSchema).min(1).max(250),
+    edges: z.array(automationWorkflowEdgeSchema).max(500),
+    execution: automationExecutionPolicySchema.default({
+      maxRunSeconds: 900,
+      maxParallelNodes: 4,
+    }),
+    viewport: automationViewportSchema.optional(),
+  })
+  .strict();
+export type AutomationWorkflowDefinition = z.infer<typeof automationWorkflowDefinitionSchema>;
+
+export const automationValidationIssueSchema = z
+  .object({
+    severity: z.enum(['error', 'warning']),
+    code: z.enum([
+      'duplicate_node_id',
+      'duplicate_edge_id',
+      'dangling_edge',
+      'self_connection',
+      'incompatible_ports',
+      'cycle',
+      'missing_trigger',
+      'missing_outcome',
+      'unreachable_node',
+      'dead_end',
+      'missing_input',
+      'invalid_branch_handle',
+      'unsafe_webhook',
+      'invalid_action',
+      'contract_mismatch',
+      'invalid_output_schema',
+      'schema_drift',
+      'validation_stale',
+    ]),
+    message: z.string(),
+    nodeId: z.string().optional(),
+    edgeId: z.string().optional(),
+  })
+  .strict();
+export type AutomationValidationIssue = z.infer<typeof automationValidationIssueSchema>;
+
+export const automationWorkflowValidationSchema = z
+  .object({
+    ok: z.boolean(),
+    issues: z.array(automationValidationIssueSchema),
+    topologicalOrder: z.array(z.string()),
+  })
+  .strict();
+export type AutomationWorkflowValidation = z.infer<typeof automationWorkflowValidationSchema>;
+
+export const automationWorkflowStatusSchema = z.enum(['legacy', 'draft', 'published']);
+export type AutomationWorkflowStatus = z.infer<typeof automationWorkflowStatusSchema>;
+
+export const automationWorkflowVersionSchema = z
+  .object({
+    id: z.string().min(1),
+    automationId: z.string().min(1),
+    version: z.number().int().positive(),
+    state: z.enum(['draft', 'published', 'archived']),
+    definition: automationWorkflowDefinitionSchema,
+    definitionHash: z.string().min(1),
+    revision: z.number().int().min(0),
+    createdBy: z.string().nullable(),
+    publishedBy: z.string().nullable(),
+    createdAt: z.string(),
+    publishedAt: z.string().nullable(),
+  })
+  .strict();
+export type AutomationWorkflowVersion = z.infer<typeof automationWorkflowVersionSchema>;
+
+export const automationNodeRunStatusSchema = z.enum([
+  'pending',
+  'running',
+  'completed',
+  'failed',
+  'skipped',
+]);
+export type AutomationNodeRunStatus = z.infer<typeof automationNodeRunStatusSchema>;
+
+export const automationNodeRunSchema = z
+  .object({
+    id: z.string().min(1),
+    runId: z.string().min(1),
+    nodeId: z.string().min(1),
+    nodeType: z.string().min(1),
+    attempt: z.number().int().positive(),
+    status: automationNodeRunStatusSchema,
+    selectedHandle: z.string().min(1).max(120).nullable().default(null),
+    input: z.unknown().nullable(),
+    output: z.unknown().nullable(),
+    errorMessage: z.string().nullable(),
+    durationMs: z.number().int().nonnegative().default(0),
+    startedAt: z.string().nullable(),
+    completedAt: z.string().nullable(),
+  })
+  .strict();
+export type AutomationNodeRun = z.infer<typeof automationNodeRunSchema>;
+
+export const automationEvidenceEventSchema = z
+  .object({
+    seq: z.number().int().positive(),
+    nodeId: z.string().min(1),
+    eventType: z.enum([
+      'source.read',
+      'tool.call',
+      'tool.result',
+      'agent.output',
+      'formatter.output',
+      'mcp.tool.result',
+      'trigger.received',
+      'report.assembled',
+      'validation.check',
+      'delivery.attempt',
+      'action.receipt',
+    ]),
+    status: z.enum(['running', 'completed', 'failed']),
+    toolName: z.string().min(1).max(160).optional(),
+    input: z.unknown().optional(),
+    output: z.unknown().optional(),
+    errorMessage: z.string().nullable().optional(),
+    occurredAt: z.string(),
+    expiresAt: z.string().nullable().optional(),
+    redacted: z.literal(true),
+  })
+  .strict();
+export type AutomationEvidenceEvent = z.infer<typeof automationEvidenceEventSchema>;
+
+export const automationDeterministicCheckSchema = z
+  .object({
+    id: z.string().min(1).max(160),
+    name: z.string().min(1).max(240),
+    status: z.enum(['pass', 'fail']),
+    detail: z.string().max(2_000),
+    nodeId: z.string().optional(),
+  })
+  .strict();
+export type AutomationDeterministicCheck = z.infer<typeof automationDeterministicCheckSchema>;
+
+export const automationActionReceiptSchema = z
+  .object({
+    nodeId: z.string().min(1),
+    actionKind: z.string().min(1),
+    effect: z.enum(['live', 'simulated']),
+    status: z.enum(['completed', 'failed']),
+    summary: z.string().min(1).max(2_000),
+    externalId: z.string().nullable().optional(),
+  })
+  .strict();
+export type AutomationActionReceipt = z.infer<typeof automationActionReceiptSchema>;
+
+export const automationContextEnvelopeSchema = z
+  .object({
+    source: automationSourceKindSchema,
+    resolverId: z.string().min(1).max(160),
+    retrievedAt: z.string(),
+    records: z.array(z.unknown()),
+    recordCount: z.number().int().nonnegative(),
+    truncated: z.boolean(),
+    provenance: z.array(
+      z
+        .object({
+          kind: z.string().min(1).max(80),
+          ref: z.string().min(1).max(500),
+          label: z.string().max(240).nullable().optional(),
+        })
+        .strict(),
+    ),
+    warnings: z.array(z.string().max(500)),
+  })
+  .strict();
+export type AutomationContextEnvelope = z.infer<typeof automationContextEnvelopeSchema>;
+
+export const automationActionGrantSchema = z
+  .object({
+    versionId: z.string().min(1),
+    definitionHash: z.string().min(1),
+    actionNodeIds: z.array(z.string().min(1)),
+    grantedBy: z.string().min(1),
+    grantedAt: z.string(),
+  })
+  .strict();
+export type AutomationActionGrant = z.infer<typeof automationActionGrantSchema>;
