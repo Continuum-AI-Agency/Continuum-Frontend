@@ -101,10 +101,11 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
   }, [activeBrandId]);
 
   useEffect(() => {
+    if (!inboxOpen) return;
     void refresh();
     const interval = window.setInterval(() => void refresh(), POLL_MS);
     return () => window.clearInterval(interval);
-  }, [refresh]);
+  }, [inboxOpen, refresh]);
 
   const readyCount = jobs.filter((job) => job.state === 'ready').length;
   useEffect(() => {
