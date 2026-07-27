@@ -17,6 +17,7 @@ import { CompetitorRail } from '@/components/competitor-spy/CompetitorRail';
 import { competitorHealthChip } from '@/components/competitor-spy/competitorHealth';
 import { SaveToBoardButton } from '@/components/competitor-spy/SaveToBoardButton';
 import {
+  MAX_INSTAGRAM_POSTS,
   useAdCounts,
   useAdTimeline,
   useCompetitorSync,
@@ -203,7 +204,7 @@ export function InspirationBrowser({
   showSync = false,
   variant = 'full',
   gridClassName,
-  feedLimit = 60,
+  feedLimit = MAX_INSTAGRAM_POSTS,
   onManageCompetitors,
 }: {
   brandId: string;

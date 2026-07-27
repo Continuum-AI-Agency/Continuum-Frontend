@@ -112,6 +112,8 @@ export type Database = {
           artifact_type: string
           brand_id: string
           completed_section_ids: Json
+          content_schema_id: string | null
+          content_schema_version: number | null
           contributors: Json
           created_at: string
           evidence_ids: Json
@@ -133,6 +135,7 @@ export type Database = {
           template_artifact_id: string | null
           title: string
           updated_at: string
+          validated_version_id: string | null
           waiver_reason: string | null
           workstream_id: string | null
         }
@@ -143,6 +146,8 @@ export type Database = {
           artifact_type: string
           brand_id: string
           completed_section_ids?: Json
+          content_schema_id?: string | null
+          content_schema_version?: number | null
           contributors?: Json
           created_at?: string
           evidence_ids?: Json
@@ -164,6 +169,7 @@ export type Database = {
           template_artifact_id?: string | null
           title: string
           updated_at?: string
+          validated_version_id?: string | null
           waiver_reason?: string | null
           workstream_id?: string | null
         }
@@ -174,6 +180,8 @@ export type Database = {
           artifact_type?: string
           brand_id?: string
           completed_section_ids?: Json
+          content_schema_id?: string | null
+          content_schema_version?: number | null
           contributors?: Json
           created_at?: string
           evidence_ids?: Json
@@ -195,6 +203,7 @@ export type Database = {
           template_artifact_id?: string | null
           title?: string
           updated_at?: string
+          validated_version_id?: string | null
           waiver_reason?: string | null
           workstream_id?: string | null
         }
@@ -544,6 +553,69 @@ export type Database = {
           },
         ]
       }
+      goal_artifact_validations: {
+        Row: {
+          artifact_id: string
+          artifact_type: string
+          brand_id: string
+          checklist_item_ids: Json
+          content_schema_version: number
+          content_sha256: string
+          errors: Json
+          goal_id: string
+          id: string
+          record: Json
+          valid: boolean
+          validated_at: string
+          version_id: string
+        }
+        Insert: {
+          artifact_id: string
+          artifact_type: string
+          brand_id: string
+          checklist_item_ids?: Json
+          content_schema_version: number
+          content_sha256: string
+          errors?: Json
+          goal_id: string
+          id?: string
+          record: Json
+          valid: boolean
+          validated_at?: string
+          version_id: string
+        }
+        Update: {
+          artifact_id?: string
+          artifact_type?: string
+          brand_id?: string
+          checklist_item_ids?: Json
+          content_schema_version?: number
+          content_sha256?: string
+          errors?: Json
+          goal_id?: string
+          id?: string
+          record?: Json
+          valid?: boolean
+          validated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_artifact_validations_artifact_id_fkey"
+            columns: ["artifact_id"]
+            isOneToOne: false
+            referencedRelation: "artifact_refs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_artifact_validations_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_capability_routes: {
         Row: {
           backup_user_id: string | null
@@ -681,6 +753,75 @@ export type Database = {
           },
         ]
       }
+      goal_checklist_items: {
+        Row: {
+          artifact_id: string
+          blocker: string | null
+          brand_id: string
+          confidence: number | null
+          created_at: string
+          definition: Json
+          definition_id: string
+          evidence_ids: Json
+          goal_id: string
+          id: string
+          provenance: Json | null
+          request_ids: Json
+          resolved_version_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          artifact_id: string
+          blocker?: string | null
+          brand_id: string
+          confidence?: number | null
+          created_at?: string
+          definition: Json
+          definition_id: string
+          evidence_ids?: Json
+          goal_id: string
+          id: string
+          provenance?: Json | null
+          request_ids?: Json
+          resolved_version_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          artifact_id?: string
+          blocker?: string | null
+          brand_id?: string
+          confidence?: number | null
+          created_at?: string
+          definition?: Json
+          definition_id?: string
+          evidence_ids?: Json
+          goal_id?: string
+          id?: string
+          provenance?: Json | null
+          request_ids?: Json
+          resolved_version_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_checklist_items_artifact_id_fkey"
+            columns: ["artifact_id"]
+            isOneToOne: false
+            referencedRelation: "artifact_refs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_checklist_items_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_child_runs: {
         Row: {
           brand_id: string
@@ -690,6 +831,7 @@ export type Database = {
           error_message: string | null
           goal_id: string
           harness_run_id: string
+          parent_run_id: string | null
           request_id: string | null
           result_type: string | null
           session_id: string
@@ -706,6 +848,7 @@ export type Database = {
           error_message?: string | null
           goal_id: string
           harness_run_id: string
+          parent_run_id?: string | null
           request_id?: string | null
           result_type?: string | null
           session_id: string
@@ -722,6 +865,7 @@ export type Database = {
           error_message?: string | null
           goal_id?: string
           harness_run_id?: string
+          parent_run_id?: string | null
           request_id?: string | null
           result_type?: string | null
           session_id?: string
@@ -871,6 +1015,39 @@ export type Database = {
           },
         ]
       }
+      goal_request_checklist_items: {
+        Row: {
+          checklist_item_id: string
+          created_at: string
+          request_id: string
+        }
+        Insert: {
+          checklist_item_id: string
+          created_at?: string
+          request_id: string
+        }
+        Update: {
+          checklist_item_id?: string
+          created_at?: string
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_request_checklist_items_checklist_item_id_fkey"
+            columns: ["checklist_item_id"]
+            isOneToOne: false
+            referencedRelation: "goal_checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_request_checklist_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "input_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_request_target_resolutions: {
         Row: {
           active_user_id: string
@@ -960,6 +1137,7 @@ export type Database = {
           status: string
           trigger_kind: string
           updated_at: string
+          work_node_id: string | null
         }
         Insert: {
           attempts?: number
@@ -980,6 +1158,7 @@ export type Database = {
           status?: string
           trigger_kind: string
           updated_at?: string
+          work_node_id?: string | null
         }
         Update: {
           attempts?: number
@@ -1000,6 +1179,7 @@ export type Database = {
           status?: string
           trigger_kind?: string
           updated_at?: string
+          work_node_id?: string | null
         }
         Relationships: [
           {
@@ -1021,6 +1201,13 @@ export type Database = {
             columns: ["request_id"]
             isOneToOne: false
             referencedRelation: "input_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_run_wakeups_work_node_id_fkey"
+            columns: ["work_node_id"]
+            isOneToOne: false
+            referencedRelation: "goal_work_nodes"
             referencedColumns: ["id"]
           },
         ]
@@ -1147,6 +1334,73 @@ export type Database = {
           },
         ]
       }
+      goal_work_node_results: {
+        Row: {
+          artifact_id: string | null
+          base_version_id: string | null
+          brand_id: string
+          child_run_id: string | null
+          created_at: string
+          goal_id: string
+          id: string
+          outcome: string
+          produced_version_id: string | null
+          rationale: Json
+          work_node_id: string
+          work_product: Json
+        }
+        Insert: {
+          artifact_id?: string | null
+          base_version_id?: string | null
+          brand_id: string
+          child_run_id?: string | null
+          created_at?: string
+          goal_id: string
+          id?: string
+          outcome: string
+          produced_version_id?: string | null
+          rationale: Json
+          work_node_id: string
+          work_product: Json
+        }
+        Update: {
+          artifact_id?: string | null
+          base_version_id?: string | null
+          brand_id?: string
+          child_run_id?: string | null
+          created_at?: string
+          goal_id?: string
+          id?: string
+          outcome?: string
+          produced_version_id?: string | null
+          rationale?: Json
+          work_node_id?: string
+          work_product?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_work_node_results_artifact_id_fkey"
+            columns: ["artifact_id"]
+            isOneToOne: false
+            referencedRelation: "artifact_refs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_work_node_results_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_work_node_results_work_node_id_fkey"
+            columns: ["work_node_id"]
+            isOneToOne: false
+            referencedRelation: "goal_work_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_work_nodes: {
         Row: {
           attempt: number
@@ -1168,7 +1422,7 @@ export type Database = {
           record: Json
           required_capability: string | null
           retry_at: string | null
-          session_id: string
+          session_id: string | null
           status: string
           title: string
           updated_at: string
@@ -1194,7 +1448,7 @@ export type Database = {
           record: Json
           required_capability?: string | null
           retry_at?: string | null
-          session_id: string
+          session_id?: string | null
           status?: string
           title: string
           updated_at?: string
@@ -1220,7 +1474,7 @@ export type Database = {
           record?: Json
           required_capability?: string | null
           retry_at?: string | null
-          session_id?: string
+          session_id?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -1492,6 +1746,7 @@ export type Database = {
           started_at: string
           status: string
           updated_at: string
+          work_node_id: string | null
         }
         Insert: {
           ad_account_id?: string | null
@@ -1515,6 +1770,7 @@ export type Database = {
           started_at?: string
           status: string
           updated_at?: string
+          work_node_id?: string | null
         }
         Update: {
           ad_account_id?: string | null
@@ -1538,6 +1794,7 @@ export type Database = {
           started_at?: string
           status?: string
           updated_at?: string
+          work_node_id?: string | null
         }
         Relationships: [
           {
@@ -1559,6 +1816,13 @@ export type Database = {
             columns: ["goal_id"]
             isOneToOne: false
             referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "run_checkpoints_work_node_id_fkey"
+            columns: ["work_node_id"]
+            isOneToOne: false
+            referencedRelation: "goal_work_nodes"
             referencedColumns: ["id"]
           },
         ]
@@ -1651,6 +1915,7 @@ export type Database = {
           started_at: string
           status: string
           updated_at: string
+          work_node_id: string | null
         }
         SetofOptions: {
           from: "*"
@@ -1749,6 +2014,7 @@ export type Database = {
           status: string
           trigger_kind: string
           updated_at: string
+          work_node_id: string | null
         }
         SetofOptions: {
           from: "*"
@@ -1809,7 +2075,7 @@ export type Database = {
           record: Json
           required_capability: string | null
           retry_at: string | null
-          session_id: string
+          session_id: string | null
           status: string
           title: string
           updated_at: string
@@ -1865,6 +2131,49 @@ export type Database = {
           started_at: string
           status: string
           updated_at: string
+          work_node_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "run_checkpoints"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      ensure_goal_work_node_checkpoint: {
+        Args: {
+          p_ad_account_id?: string
+          p_assignment_id?: string
+          p_execution_user_email: string
+          p_execution_user_id: string
+          p_goal_id: string
+          p_harness_key: string
+          p_jaina_session_id: string
+          p_work_node_id: string
+        }
+        Returns: {
+          ad_account_id: string | null
+          assignment_id: string | null
+          blocked_request_id: string | null
+          brand_id: string
+          checkpoint: Json
+          checkpoint_version: number
+          execution_user_email: string | null
+          execution_user_id: string | null
+          goal_id: string
+          harness_key: string | null
+          id: string
+          jaina_session_id: string | null
+          last_child_run_id: string | null
+          last_goal_sequence: number
+          lease_expires_at: string | null
+          lease_holder: Json | null
+          lease_token: string | null
+          run_id: string
+          started_at: string
+          status: string
+          updated_at: string
+          work_node_id: string | null
         }
         SetofOptions: {
           from: "*"
@@ -1953,7 +2262,7 @@ export type Database = {
           record: Json
           required_capability: string | null
           retry_at: string | null
-          session_id: string
+          session_id: string | null
           status: string
           title: string
           updated_at: string
@@ -1979,6 +2288,11 @@ export type Database = {
         }
         Returns: number
       }
+      record_goal_artifact_validation: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      record_goal_work_node_result: { Args: { p_payload: Json }; Returns: Json }
       sync_goal_work_nodes: {
         Args: { p_goal_id: string; p_nodes: Json }
         Returns: undefined
@@ -2652,44 +2966,94 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_studio_canvas_composer_run_events: {
+        Row: {
+          data: Json
+          event_id: string
+          run_id: string
+          seq: number
+          ts: string
+          type: string
+        }
+        Insert: {
+          data?: Json
+          event_id: string
+          run_id: string
+          seq: number
+          ts?: string
+          type: string
+        }
+        Update: {
+          data?: Json
+          event_id?: string
+          run_id?: string
+          seq?: number
+          ts?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_studio_canvas_composer_run_events_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_studio_canvas_composer_runs"
+            referencedColumns: ["run_id"]
+          },
+        ]
+      }
       ai_studio_canvas_composer_runs: {
         Row: {
           brand_id: string
           created_at: string
+          deadline_at: string
           error_message: string | null
           finished_at: string | null
+          idempotency_key: string | null
           initiator: string
           initiator_agent: string | null
+          last_seq: number | null
+          request: Json
           room_id: string
           run_id: string
           started_at: string | null
           status: string
+          terminal_summary: string | null
           user_id: string
         }
         Insert: {
           brand_id: string
           created_at?: string
+          deadline_at?: string
           error_message?: string | null
           finished_at?: string | null
+          idempotency_key?: string | null
           initiator?: string
           initiator_agent?: string | null
+          last_seq?: number | null
+          request?: Json
           room_id: string
           run_id?: string
           started_at?: string | null
           status?: string
+          terminal_summary?: string | null
           user_id: string
         }
         Update: {
           brand_id?: string
           created_at?: string
+          deadline_at?: string
           error_message?: string | null
           finished_at?: string | null
+          idempotency_key?: string | null
           initiator?: string
           initiator_agent?: string | null
+          last_seq?: number | null
+          request?: Json
           room_id?: string
           run_id?: string
           started_at?: string | null
           status?: string
+          terminal_summary?: string | null
           user_id?: string
         }
         Relationships: []
@@ -4607,6 +4971,142 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_integrations"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_intelligence_jobs: {
+        Row: {
+          attempts: number
+          brand_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          enqueued_at: string
+          error: Json | null
+          heartbeat_at: string | null
+          input_hash: string | null
+          job_id: string
+          origin_env: string | null
+          progress: Json
+          source_versions: Json
+          started_at: string | null
+          status: Database["brand_profiles"]["Enums"]["brand_intelligence_job_status"]
+          trigger: string
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          brand_id: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          enqueued_at?: string
+          error?: Json | null
+          heartbeat_at?: string | null
+          input_hash?: string | null
+          job_id?: string
+          origin_env?: string | null
+          progress?: Json
+          source_versions?: Json
+          started_at?: string | null
+          status?: Database["brand_profiles"]["Enums"]["brand_intelligence_job_status"]
+          trigger: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          brand_id?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          enqueued_at?: string
+          error?: Json | null
+          heartbeat_at?: string | null
+          input_hash?: string | null
+          job_id?: string
+          origin_env?: string | null
+          progress?: Json
+          source_versions?: Json
+          started_at?: string | null
+          status?: Database["brand_profiles"]["Enums"]["brand_intelligence_job_status"]
+          trigger?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_intelligence_jobs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "brand_intelligence_jobs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_intelligence_profiles: {
+        Row: {
+          brand_id: string
+          created_at: string
+          input_hash: string
+          last_error: Json | null
+          last_run_id: string | null
+          profile: Json
+          refreshed_at: string
+          schema_version: number
+          source_versions: Json
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          input_hash: string
+          last_error?: Json | null
+          last_run_id?: string | null
+          profile: Json
+          refreshed_at: string
+          schema_version?: number
+          source_versions?: Json
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          input_hash?: string
+          last_error?: Json | null
+          last_run_id?: string | null
+          profile?: Json
+          refreshed_at?: string
+          schema_version?: number
+          source_versions?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_intelligence_profiles_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "brand_intelligence_profiles_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_intelligence_profiles_last_run_fkey"
+            columns: ["last_run_id"]
+            isOneToOne: false
+            referencedRelation: "brand_intelligence_jobs"
+            referencedColumns: ["job_id"]
           },
         ]
       }
@@ -7047,10 +7547,12 @@ export type Database = {
           goal_harness_run_id: string | null
           goal_id: string | null
           goal_request_id: string | null
+          goal_work_node_id: string | null
           id: number | null
           idempotency_key: string | null
           initiator: string | null
           initiator_agent: string | null
+          parent_run_id: string | null
           query: string | null
           result_payload: Json | null
           result_type: string | null
@@ -7070,10 +7572,12 @@ export type Database = {
           goal_harness_run_id?: string | null
           goal_id?: string | null
           goal_request_id?: string | null
+          goal_work_node_id?: string | null
           id?: number | null
           idempotency_key?: string | null
           initiator?: string | null
           initiator_agent?: string | null
+          parent_run_id?: string | null
           query?: string | null
           result_payload?: Json | null
           result_type?: string | null
@@ -7093,10 +7597,12 @@ export type Database = {
           goal_harness_run_id?: string | null
           goal_id?: string | null
           goal_request_id?: string | null
+          goal_work_node_id?: string | null
           id?: number | null
           idempotency_key?: string | null
           initiator?: string | null
           initiator_agent?: string | null
+          parent_run_id?: string | null
           query?: string | null
           result_payload?: Json | null
           result_type?: string | null
@@ -8346,6 +8852,34 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      claim_next_brand_intelligence_job: {
+        Args: { p_env?: string; p_lease_ttl_sec: number; p_worker_id: string }
+        Returns: {
+          attempts: number
+          brand_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          enqueued_at: string
+          error: Json | null
+          heartbeat_at: string | null
+          input_hash: string | null
+          job_id: string
+          origin_env: string | null
+          progress: Json
+          source_versions: Json
+          started_at: string | null
+          status: Database["brand_profiles"]["Enums"]["brand_intelligence_job_status"]
+          trigger: string
+          updated_at: string
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "brand_intelligence_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       claim_next_brand_report_job: {
         Args: { p_lease_ttl_sec: number; p_worker_id: string }
         Returns: {
@@ -8428,6 +8962,19 @@ export type Database = {
           p_error?: Json
           p_job_id: string
           p_status: Database["brand_profiles"]["Enums"]["brand_guideline_job_status"]
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
+      complete_brand_intelligence_job_owned: {
+        Args: {
+          p_error?: Json
+          p_input_hash?: string
+          p_job_id: string
+          p_profile?: Json
+          p_schema_version?: number
+          p_source_versions?: Json
+          p_status: Database["brand_profiles"]["Enums"]["brand_intelligence_job_status"]
           p_worker_id: string
         }
         Returns: boolean
@@ -8518,6 +9065,14 @@ export type Database = {
       }
       enqueue_brand_guideline_job: {
         Args: { p_brand_id: string; p_payload: Json; p_trigger: string }
+        Returns: string
+      }
+      enqueue_brand_intelligence_job: {
+        Args: {
+          p_brand_id: string
+          p_source_versions?: Json
+          p_trigger?: string
+        }
         Returns: string
       }
       enqueue_brand_report_job: {
@@ -8698,6 +9253,10 @@ export type Database = {
       }
       heartbeat_brand_guideline_job: {
         Args: { p_job_id: string; p_worker_id: string }
+        Returns: boolean
+      }
+      heartbeat_brand_intelligence_job: {
+        Args: { p_job_id: string; p_progress?: Json; p_worker_id: string }
         Returns: boolean
       }
       heartbeat_brand_report_job: {
@@ -8980,6 +9539,11 @@ export type Database = {
       brand_book_status: "assembling" | "ready" | "error"
       brand_deep_job_status: "queued" | "running" | "completed" | "failed"
       brand_guideline_job_status: "queued" | "running" | "completed" | "failed"
+      brand_intelligence_job_status:
+        | "queued"
+        | "running"
+        | "completed"
+        | "failed"
       brand_report_job_status: "queued" | "running" | "completed" | "failed"
       creative_strategy_job_status:
         | "queued"
@@ -11478,10 +12042,12 @@ export type Database = {
           goal_harness_run_id: string | null
           goal_id: string | null
           goal_request_id: string | null
+          goal_work_node_id: string | null
           id: number
           idempotency_key: string | null
           initiator: string
           initiator_agent: string | null
+          parent_run_id: string | null
           query: string | null
           result_payload: Json | null
           result_type: string | null
@@ -11501,10 +12067,12 @@ export type Database = {
           goal_harness_run_id?: string | null
           goal_id?: string | null
           goal_request_id?: string | null
+          goal_work_node_id?: string | null
           id?: never
           idempotency_key?: string | null
           initiator?: string
           initiator_agent?: string | null
+          parent_run_id?: string | null
           query?: string | null
           result_payload?: Json | null
           result_type?: string | null
@@ -11524,10 +12092,12 @@ export type Database = {
           goal_harness_run_id?: string | null
           goal_id?: string | null
           goal_request_id?: string | null
+          goal_work_node_id?: string | null
           id?: never
           idempotency_key?: string | null
           initiator?: string
           initiator_agent?: string | null
+          parent_run_id?: string | null
           query?: string | null
           result_payload?: Json | null
           result_type?: string | null
@@ -13661,6 +14231,7 @@ export type Database = {
           usage_count: number
         }[]
       }
+      library_create_goal_artifact: { Args: { p_payload: Json }; Returns: Json }
       library_create_goal_markdown_artifact: {
         Args: { p_payload: Json }
         Returns: Json
@@ -13676,6 +14247,10 @@ export type Database = {
           score: number
           version_id: string
         }[]
+      }
+      library_register_goal_artifact_version: {
+        Args: { p_payload: Json }
+        Returns: Json
       }
       library_register_goal_markdown_version: {
         Args: { p_payload: Json }
@@ -19940,6 +20515,12 @@ export const Constants = {
       brand_book_status: ["assembling", "ready", "error"],
       brand_deep_job_status: ["queued", "running", "completed", "failed"],
       brand_guideline_job_status: ["queued", "running", "completed", "failed"],
+      brand_intelligence_job_status: [
+        "queued",
+        "running",
+        "completed",
+        "failed",
+      ],
       brand_report_job_status: ["queued", "running", "completed", "failed"],
       creative_strategy_job_status: [
         "queued",

@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 const requestMock = mock((_args: unknown) => Promise.resolve({} as unknown));
 mock.module('@/lib/api/http', () => ({ request: (args: unknown) => requestMock(args) }));
 
-import { dismissRecommendation, listRecommendedCompetitors } from './competitorSpy';
+import {
+  dismissRecommendation,
+  fetchInstagramPosts,
+  listRecommendedCompetitors,
+} from './competitorSpy';
 
 beforeEach(() => requestMock.mockReset());
 
@@ -31,5 +35,25 @@ describe('recommended competitor client calls', () => {
     await dismissRecommendation({ brandId: 'brand-1', name: 'Acme', restore: true });
     const arg = requestMock.mock.calls[0]?.[0] as { body: { restore?: boolean } };
     expect(arg.body.restore).toBe(true);
+  });
+
+  it('caps Instagram feed requests at the route maximum', async () => {
+    requestMock.mockResolvedValue({ items: [] });
+
+    await fetchInstagramPosts({ brandId: 'brand-1', competitorId: 'competitor-1', limit: 60 });
+
+    const arg = requestMock.mock.calls[0]?.[0] as { path: string };
+    expect(arg.path).toBe(
+      '/api/competitor-ad-spy/instagram/posts?brandId=brand-1&competitorId=competitor-1&limit=50',
+    );
+  });
+
+  it('uses the route default for a non-finite Instagram feed limit', async () => {
+    requestMock.mockResolvedValue({ items: [] });
+
+    await fetchInstagramPosts({ brandId: 'brand-1', limit: Number.NaN });
+
+    const arg = requestMock.mock.calls[0]?.[0] as { path: string };
+    expect(arg.path).toBe('/api/competitor-ad-spy/instagram/posts?brandId=brand-1&limit=12');
   });
 });

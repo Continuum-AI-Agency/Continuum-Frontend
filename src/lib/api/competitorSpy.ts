@@ -30,6 +30,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/lib/api/http';
 
 const BASE = '/api/competitor-ad-spy';
+export const MAX_INSTAGRAM_POSTS = 50;
+const DEFAULT_INSTAGRAM_POSTS = 12;
+
+function clampInstagramPostsLimit(limit: number | undefined): number {
+  if (!Number.isFinite(limit)) return DEFAULT_INSTAGRAM_POSTS;
+  return Math.max(1, Math.min(MAX_INSTAGRAM_POSTS, Math.trunc(limit as number)));
+}
 
 export interface TimelineParams {
   brandId: string;
@@ -84,7 +91,7 @@ export async function fetchInstagramPosts(params: {
 }): Promise<CompetitorOrganicPost[]> {
   const qs = new URLSearchParams({ brandId: params.brandId });
   if (params.competitorId) qs.set('competitorId', params.competitorId);
-  qs.set('limit', String(params.limit ?? 12));
+  qs.set('limit', String(clampInstagramPostsLimit(params.limit)));
   const res = await request<{ items: CompetitorOrganicPost[] }>({
     path: `${BASE}/instagram/posts?${qs.toString()}`,
   });
