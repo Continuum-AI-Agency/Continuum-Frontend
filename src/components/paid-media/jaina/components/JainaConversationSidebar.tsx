@@ -3,7 +3,6 @@
 import { PlusIcon } from '@radix-ui/react-icons';
 import { Loader2Icon, Trash2Icon } from 'lucide-react';
 import React from 'react';
-import { AutomationsSidebarPanel } from '@/components/automations/AutomationsSidebarPanel';
 import {
   CollapseConversationsButton,
   CollapsedConversationsRail,
@@ -13,14 +12,12 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { AUTOMATIONS_AVAILABLE } from '@/lib/automations/availability';
-import { useAutomationSheetStore } from '@/lib/automations/sheet-store';
 import { GOALS_PRODUCTION_DISABLED_REASON } from '@/lib/goals/access';
 import type { JainaConversationSession } from '@/lib/jaina/conversations';
 import { cn } from '@/lib/utils';
 import { JainaGoalsSidebarPanel } from './JainaGoalsSidebarPanel';
 
-type SidebarMode = 'chats' | 'automations' | 'goals';
+type SidebarMode = 'chats' | 'goals';
 
 type JainaConversationSidebarProps = {
   sessions: JainaConversationSession[];
@@ -88,7 +85,6 @@ export function JainaConversationSidebar({
   onDeleteConversation,
 }: JainaConversationSidebarProps) {
   const [mode, setMode] = React.useState<SidebarMode>('chats');
-  const openAutomationBuilder = useAutomationSheetStore((state) => state.openBuilder);
 
   if (isCollapsed && onToggleCollapsed) {
     return (
@@ -116,30 +112,6 @@ export function JainaConversationSidebar({
             <ToggleGroupItem value="chats" className="h-6 px-2 text-xs">
               Chats
             </ToggleGroupItem>
-            {AUTOMATIONS_AVAILABLE ? (
-              <ToggleGroupItem value="automations" className="h-6 px-2 text-xs">
-                Automations
-              </ToggleGroupItem>
-            ) : (
-              <TooltipProvider delayDuration={150}>
-                <Tooltip>
-                  {/* Disabled buttons swallow pointer events; the span carries the tooltip. */}
-                  <TooltipTrigger asChild>
-                    <span className="cursor-not-allowed">
-                      <ToggleGroupItem
-                        value="automations"
-                        disabled
-                        aria-disabled="true"
-                        className="pointer-events-none h-6 px-2 text-xs"
-                      >
-                        Automations
-                      </ToggleGroupItem>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Coming soon</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
             {goalsAccessEnabled ? (
               <ToggleGroupItem value="goals" className="h-6 px-2 text-xs">
                 Goals
@@ -178,27 +150,12 @@ export function JainaConversationSidebar({
             <PlusIcon />
             New
           </Button>
-        ) : mode === 'automations' ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={() => openAutomationBuilder({ agent: 'jaina' })}
-            disabled={!brandId}
-            className="gap-1"
-            aria-label="Create new automation"
-          >
-            <PlusIcon />
-            New
-          </Button>
         ) : mode === 'goals' ? (
           <CreateCampaignGoalDialog brandId={brandId} compact />
         ) : null}
       </div>
 
-      {mode === 'automations' ? (
-        <AutomationsSidebarPanel agent="jaina" brandId={brandId} />
-      ) : mode === 'goals' ? (
+      {mode === 'goals' ? (
         <JainaGoalsSidebarPanel brandId={brandId} />
       ) : (
         <ScrollArea className="max-h-44 md:max-h-none md:flex-1 md:min-h-0">

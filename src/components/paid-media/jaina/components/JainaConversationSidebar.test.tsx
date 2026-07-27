@@ -31,7 +31,7 @@ describe('JainaConversationSidebar', () => {
     expect((screen.getByLabelText('Goals (Coming Soon)') as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByText('Start a shared Goal')).toBeNull();
     expect(screen.getByText('Chats')).not.toBeNull();
-    expect(screen.getByText('Automations')).not.toBeNull();
+    expect(screen.queryByText('Automations')).toBeNull();
   });
 
   it('allows the Goals tab in an enabled environment', () => {
