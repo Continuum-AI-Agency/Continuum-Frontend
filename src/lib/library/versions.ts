@@ -128,6 +128,7 @@ export async function uploadNewAssetVersion(
   params: {
     brandId: string;
     assetId: string;
+    baseVersionId?: string;
     file: File;
     note?: string;
     resume?: VersionUploadResumeState | null;
@@ -137,7 +138,7 @@ export async function uploadNewAssetVersion(
   },
   deps: UploadNewAssetVersionDeps = {},
 ): Promise<RegisterVersionResponse> {
-  const { brandId, assetId, file, note } = params;
+  const { brandId, assetId, baseVersionId, file, note } = params;
   const contentType = file.type || 'application/octet-stream';
   const projectFile = isProjectFile(file);
   if (projectFile && file.size > MAX_PROJECT_FILE_BYTES) {
@@ -151,6 +152,7 @@ export async function uploadNewAssetVersion(
       assetId,
       fileName: file.name,
       mimeType: contentType,
+      baseVersionId,
     }));
   params.onResumeState?.({ ticket, uploadUrl: params.resume?.uploadUrl ?? null });
 
@@ -184,6 +186,7 @@ export async function uploadNewAssetVersion(
     sizeBytes: file.size,
     note,
     integrityState: projectFile && file.size > 64 * 1024 * 1024 ? 'skipped_large_file' : 'unknown',
+    baseVersionId,
     idempotencyKey: `version:${assetId}:${ticket.path}`,
   });
   if (registered.versionId) {

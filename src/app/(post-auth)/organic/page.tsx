@@ -41,12 +41,14 @@ async function OrganicContent({
   initialView,
   initialComposeTrendId,
   initialComposePlatform,
+  initialAgentSessionId,
 }: {
   initialSelectedDraftId: string | null;
   initialWeekStart: string | null;
   initialView: 'week' | 'month' | 'list';
   initialComposeTrendId: string | null;
   initialComposePlatform: OrganicPlatformKey | null;
+  initialAgentSessionId: string | null;
 }) {
   const { activeBrandId, brandSummaries } = await getActiveBrandContext();
   if (!activeBrandId) {
@@ -418,6 +420,7 @@ async function OrganicContent({
             brandId={brandProfileId}
             platformAccountIds={platformAccountIds}
             mentionContext={organicAgentMentionContext}
+            initialSessionId={initialAgentSessionId}
           />
         }
       />
@@ -459,6 +462,12 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
     (ORGANIC_MVP_PLATFORM_KEYS as readonly string[]).includes(composePlatformRaw)
       ? (composePlatformRaw as OrganicPlatformKey)
       : null;
+  // Agent deep link (completion toasts emit /organic?tab=agent&sessionId=...).
+  const agentSessionIdRaw = resolvedSearchParams.sessionId;
+  const initialAgentSessionId =
+    typeof agentSessionIdRaw === 'string' && agentSessionIdRaw.trim().length > 0
+      ? agentSessionIdRaw
+      : null;
 
   return (
     <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full min-w-0 overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
@@ -469,6 +478,7 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
           initialView={initialView}
           initialComposeTrendId={initialComposeTrendId}
           initialComposePlatform={initialComposePlatform}
+          initialAgentSessionId={initialAgentSessionId}
         />
       </Suspense>
     </div>

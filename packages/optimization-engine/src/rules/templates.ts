@@ -20,8 +20,6 @@
 // resolved per-portfolio config, so a generated rule inherits the portfolio's
 // objective profile + overrides; the rest keep the DCO's defaults and are the
 // per-portfolio tunable surface (rule.params).
-//
-// STATUS: UNWIRED STUB (see rules/types.ts).
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from '../config';

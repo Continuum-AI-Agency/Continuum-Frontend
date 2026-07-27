@@ -35,6 +35,12 @@ describe('applyDocumentPatch — the committed break-point matrix', () => {
   it('resets committed for an items write (the base-track model)', () => {
     const next = applyDocumentPatch(
       committedData({
+        agentRenderRequest: {
+          requestId: 'request-1',
+          requestedFingerprint: 'old-fingerprint',
+          requestedAt: '2026-07-26T00:00:00.000Z',
+          status: 'completed',
+        },
         renderContinuation: {
           jobId: 'f5f608a9-cbac-49d2-9572-72b0c6f4f80e',
           status: 'pending',
@@ -49,6 +55,7 @@ describe('applyDocumentPatch — the committed break-point matrix', () => {
     expect(next.items).toHaveLength(2);
     expect(next.committed).toBe(false);
     expect(next.renderContinuation).toBeUndefined();
+    expect(next.agentRenderRequest).toBeUndefined();
   });
 
   it('resets committed for an overlay-tracks write (the overlay model)', () => {
@@ -114,12 +121,19 @@ describe('applyDocumentPatch — the committed break-point matrix', () => {
 
 function createCanvasWriter(initial: TimelineEditorNodeData) {
   let node = { id: 'edit-1', type: 'timelineEditor', data: initial } as unknown as StudioNode;
+  const takeSnapshot = mock(() => undefined);
   const triggerSave = mock(() => undefined);
   const updateNode = mock((_id: string, updater: (node: StudioNode) => StudioNode) => {
     node = updater(node);
   });
-  const writer: TimelineCanvasWriter = { updateNode, triggerSave };
-  return { writer, triggerSave, updateNode, data: () => node.data as TimelineEditorNodeData };
+  const writer: TimelineCanvasWriter = { updateNode, takeSnapshot, triggerSave };
+  return {
+    writer,
+    takeSnapshot,
+    triggerSave,
+    updateNode,
+    data: () => node.data as TimelineEditorNodeData,
+  };
 }
 
 describe('patchNodeDocument', () => {
@@ -135,6 +149,7 @@ describe('patchNodeDocument', () => {
     expect(host.updateNode.mock.calls[0][0]).toBe('edit-1');
     expect(host.data().items).toHaveLength(2);
     expect(host.data().committed).toBe(false);
+    expect(host.takeSnapshot).toHaveBeenCalledTimes(1);
     expect(host.triggerSave).toHaveBeenCalledTimes(1);
   });
 
@@ -147,6 +162,7 @@ describe('patchNodeDocument', () => {
 
     expect(host.data().markers).toEqual([2]);
     expect(host.data().committed).toBe(true);
+    expect(host.takeSnapshot).toHaveBeenCalledTimes(1);
     expect(host.triggerSave).toHaveBeenCalledTimes(1);
   });
 
@@ -163,6 +179,7 @@ describe('patchNodeDocument', () => {
     }));
 
     expect(host.data().items.map((entry) => entry.id)).toEqual(['a', 'b', 'c']);
+    expect(host.takeSnapshot).toHaveBeenCalledTimes(2);
     expect(host.triggerSave).toHaveBeenCalledTimes(2);
   });
 });

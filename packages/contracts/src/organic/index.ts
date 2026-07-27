@@ -12,6 +12,7 @@ export * from './metricCatalog';
 export * from './metrics';
 export * from './one-shot';
 export * from './persistedFrames';
+export * from './planner-composition';
 export * from './planner-schedule';
 export * from './publish-body';
 export * from './publishing';

@@ -234,26 +234,6 @@ describe('timeline projection', () => {
     expect(JSON.stringify(config)).not.toContain('noir');
   });
 
-  it("reports a videoEditor's slot count, not its slot objects", () => {
-    const projection = projectGraphForAgent({
-      nodes: [
-        {
-          id: 'splice',
-          type: 'videoEditor',
-          data: {
-            clipSlots: [
-              { id: 's1', order: 0 },
-              { id: 's2', order: 1 },
-              { id: 's3', order: 2 },
-            ],
-          },
-        },
-      ],
-      edges: [],
-    });
-
-    expect(projection.nodes[0]?.config?.clipSlots).toBe(3);
-  });
 });
 
 describe('scoped projection', () => {
@@ -287,7 +267,7 @@ describe('scoped projection', () => {
   it('findNodeIds locates nodes by id, type, label and free text', () => {
     const graph = {
       nodes: [
-        { id: 'n1', type: 'publishToPlanner', data: { label: 'Ship it' } },
+        { id: 'n1', type: 'organicPublisher', data: { label: 'Ship it' } },
         { id: 'n2', type: 'nanoGen', data: { positivePrompt: 'copper espresso machine' } },
         { id: 'hero-3', type: 'string', data: {} },
       ],

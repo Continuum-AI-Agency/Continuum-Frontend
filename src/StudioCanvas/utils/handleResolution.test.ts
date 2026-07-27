@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   getSourceHandleForNodeType,
+  getTargetHandleCandidatesForNodeType,
   getTargetHandleForNodeType,
   type NodeType,
   resolveEdgeDataType,
@@ -21,6 +22,7 @@ describe('getSourceHandleForNodeType', () => {
       audio: 'audio',
       document: 'document',
       videoDecode: 'text',
+      frameExtract: 'image',
     };
 
     for (const [nodeType, handleId] of Object.entries(expected) as Array<[NodeType, string]>) {
@@ -84,7 +86,7 @@ describe('resolveEdgeDataType', () => {
       ['document', 'document'],
       ['trigger', 'text'],
       ['media-in', 'text'],
-      // 'video-in' (publishToPlanner's sink handle) isn't a video/ref-video
+      // 'video-in' (publisher sink handle) isn't a video/ref-video
       // exact match, so it falls to the universal fallback — unchanged from
       // both prior implementations, not a regression introduced here.
       ['video-in', 'text'],
@@ -96,5 +98,44 @@ describe('resolveEdgeDataType', () => {
     for (const [handleId, expected] of cases) {
       expect(resolveEdgeDataType(handleId)).toBe(expected);
     }
+  });
+});
+
+describe('getTargetHandleCandidatesForNodeType — reference-mode aware image drops', () => {
+  it('lands an image on first-frame when the node is in frames mode', () => {
+    expect(
+      getTargetHandleForNodeType('videoGen', 'image', {
+        model: 'veo-3.1',
+        referenceMode: 'frames',
+      }),
+    ).toBe('first-frame');
+  });
+
+  it('lands an image on ref-images when a fast node is in images mode', () => {
+    expect(
+      getTargetHandleForNodeType('videoGen', 'image', {
+        model: 'veo-3.1-fast',
+        referenceMode: 'images',
+      }),
+    ).toBe('ref-images');
+  });
+
+  it('offers last-frame after first-frame so a second image has somewhere to go', () => {
+    const candidates = getTargetHandleCandidatesForNodeType('videoGen', 'image', {
+      model: 'veo-3.1',
+      referenceMode: 'frames',
+    });
+
+    expect(candidates).toEqual(['first-frame', 'last-frame']);
+  });
+
+  it('offers no frame handles at all in images mode', () => {
+    const candidates = getTargetHandleCandidatesForNodeType('videoGen', 'image', {
+      model: 'veo-3.1',
+      referenceMode: 'images',
+    });
+
+    expect(candidates).not.toContain('first-frame');
+    expect(candidates).not.toContain('last-frame');
   });
 });

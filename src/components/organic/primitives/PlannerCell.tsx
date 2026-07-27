@@ -36,6 +36,7 @@ type PlannerCellProps = {
   onClearFailure?: (draftId: string) => void;
   onEnrich?: (draftId: string) => void;
   onRealize?: (draftId: string) => void;
+  onStitch?: (draftId: string) => void;
   onNativeDrop?: (
     dayId: string,
     time: string,
@@ -63,6 +64,7 @@ export const PlannerCell = React.memo(function PlannerCell({
   onClearFailure,
   onEnrich,
   onRealize,
+  onStitch,
   onNativeDrop,
   onCreatePost,
 }: PlannerCellProps) {
@@ -167,6 +169,7 @@ export const PlannerCell = React.memo(function PlannerCell({
               onClearFailure={onClearFailure}
               onEnrich={onEnrich}
               onRealize={onRealize}
+              onStitch={onStitch}
             />
           ) : (
             <PostedContentQuickLook key={`posted-${item.id}`} post={item} compact={compact} />

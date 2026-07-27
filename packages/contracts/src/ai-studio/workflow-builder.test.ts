@@ -74,7 +74,9 @@ describe('buildWorkflowGraph', () => {
       [
         { ref: 'prompt', type: 'string', data: { value: 'a red sneaker' } },
         { ref: 'img', type: 'nanoGen' },
-        { ref: 'vid', type: 'veoFast' },
+        // A generator needs a prompt of its own once nothing feeds its prompt
+        // handle — the image reaches `vid` on first-frame, not on prompt.
+        { ref: 'vid', type: 'veoFast', data: { prompt: 'pan slowly across the sneaker' } },
       ],
       [
         { from_ref: 'prompt', to_ref: 'img' },
@@ -85,6 +87,49 @@ describe('buildWorkflowGraph', () => {
     expect(graph.nodes).toHaveLength(3);
     expect(graph.edges).toHaveLength(2);
     expect(validateWorkflowGraph(graph).ok).toBe(true);
+  });
+
+  it('stamps geometry from the node style so the layout has real boxes to work with', () => {
+    const { graph } = buildWorkflowGraph([
+      { ref: 'img', type: 'nanoGen', data: { positivePrompt: 'a red sneaker' } },
+      { ref: 'vid', type: 'veoFast', data: { prompt: 'pan across it', aspectRatio: '9:16' } },
+    ]);
+    const portrait = graph.nodes.find((n) => n.id === 'vid');
+    expect(portrait?.width).toBeGreaterThan(0);
+    expect(portrait?.height).toBeGreaterThan(0);
+    // 9:16 is taller than it is wide — the geometry must follow the ratio, not a
+    // hardcoded landscape box (the shape bug #230 shipped through this builder).
+    expect(portrait?.height).toBeGreaterThan(portrait?.width ?? 0);
+    expect(portrait?.width).toBe(portrait?.style?.width);
+    expect(portrait?.height).toBe(portrait?.style?.height);
+  });
+
+  it('warns about a generator it left without a prompt', () => {
+    const { warnings, graph } = buildWorkflowGraph([
+      { ref: 'prompt', type: 'string', data: { value: 'a red sneaker' } },
+      { ref: 'img', type: 'nanoGen' },
+    ]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('img');
+    expect(validateWorkflowGraph(graph).ok).toBe(false);
+  });
+
+  it('warns about a prompt node it left empty', () => {
+    const { warnings } = buildWorkflowGraph([{ ref: 'prompt', type: 'string' }]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('prompt');
+  });
+
+  it('stays silent when every generator carries or is wired a prompt', () => {
+    const { warnings } = buildWorkflowGraph(
+      [
+        { ref: 'prompt', type: 'string', data: { value: 'a red sneaker' } },
+        { ref: 'img', type: 'nanoGen' },
+        { ref: 'own', type: 'nanoGen', data: { positivePrompt: 'its own brief' } },
+      ],
+      [{ from_ref: 'prompt', to_ref: 'img' }],
+    );
+    expect(warnings).toHaveLength(0);
   });
 
   it('reports an error for an impossible connection but still builds the nodes', () => {
@@ -251,6 +296,29 @@ describe('validateWorkflowGraph', () => {
     });
     expect(result.ok).toBe(false);
     expect(result.issues.length).toBeGreaterThan(0);
+  });
+
+  it('flags a generator that carries no prompt and has none wired in', () => {
+    const result = validateWorkflowGraph({
+      nodes: [node('n', 'nanoGen')],
+      edges: [],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.issues.map((issue) => issue.code)).toContain('missing_prompt');
+    expect(result.issues[0]?.nodeId).toBe('n');
+  });
+
+  it('accepts a generator whose prompt arrives over an edge', () => {
+    const result = validateWorkflowGraph({
+      nodes: [node('t', 'string', { value: 'a red sneaker' }), node('n', 'nanoGen')],
+      edges: [{ id: 'e1', source: 't', target: 'n', sourceHandle: 'text', targetHandle: 'prompt' }],
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('flags an empty prompt node with nothing feeding it', () => {
+    const result = validateWorkflowGraph({ nodes: [node('t', 'string')], edges: [] });
+    expect(result.issues.map((issue) => issue.code)).toContain('missing_prompt');
   });
 
   it('flags an invalid handle pair', () => {
@@ -487,68 +555,6 @@ describe('set_timeline', () => {
   });
 });
 
-describe('videoEditor clip-slot growth', () => {
-  it('build: a third clip grows a third slot instead of being refused', () => {
-    const { graph, errors } = buildWorkflowGraph(
-      [
-        { ref: 'a', type: 'video' },
-        { ref: 'b', type: 'video' },
-        { ref: 'c', type: 'video' },
-        { ref: 'splice', type: 'videoEditor' },
-      ],
-      [
-        { from_ref: 'a', to_ref: 'splice' },
-        { from_ref: 'b', to_ref: 'splice' },
-        { from_ref: 'c', to_ref: 'splice' },
-      ],
-    );
-
-    expect(errors).toEqual([]);
-    const splice = graph.nodes.find((n) => n.id === 'splice');
-    expect((splice?.data.clipSlots as unknown[]).length).toBe(3);
-    expect(graph.edges.filter((e) => e.target === 'splice')).toHaveLength(3);
-  });
-
-  it('edit: connect grows a slot on an already-full splicer', () => {
-    const base = buildWorkflowGraph(
-      [
-        { ref: 'a', type: 'video' },
-        { ref: 'b', type: 'video' },
-        { ref: 'splice', type: 'videoEditor' },
-      ],
-      [
-        { from_ref: 'a', to_ref: 'splice' },
-        { from_ref: 'b', to_ref: 'splice' },
-      ],
-    ).graph;
-    const withNewClip = {
-      ...base,
-      nodes: [...base.nodes, { id: 'c', type: 'video', position: { x: 0, y: 0 }, data: {} }],
-    };
-
-    const { graph, errors } = applyOps(withNewClip, [{ op: 'connect', from: 'c', to: 'splice' }]);
-
-    expect(errors).toEqual([]);
-    const splice = graph.nodes.find((n) => n.id === 'splice');
-    expect((splice?.data.clipSlots as unknown[]).length).toBe(3);
-    expect(graph.edges.filter((e) => e.target === 'splice')).toHaveLength(3);
-  });
-
-  it('does not grow for a source the splicer cannot take', () => {
-    const { graph, errors } = buildWorkflowGraph(
-      [
-        { ref: 'words', type: 'string' },
-        { ref: 'splice', type: 'videoEditor' },
-      ],
-      [{ from_ref: 'words', to_ref: 'splice' }],
-    );
-
-    expect(errors).toHaveLength(1);
-    const splice = graph.nodes.find((n) => n.id === 'splice');
-    expect((splice?.data.clipSlots as unknown[]).length).toBe(2);
-  });
-});
-
 describe('update_node cannot smuggle timeline items', () => {
   it('rejects items via update_node and points at set_timeline', () => {
     const base = buildWorkflowGraph([{ ref: 'cut', type: 'timelineEditor' }]).graph;
@@ -569,5 +575,53 @@ describe('update_node cannot smuggle timeline items', () => {
     ]);
     expect(errors).toEqual([]);
     expect(graph.nodes[0]?.data.label).toBe('Reel cut');
+  });
+});
+
+describe('update_node coerces video reference modes', () => {
+  it('accepts frames on the full Veo 3.1 and reports nothing', () => {
+    const base = buildWorkflowGraph([{ ref: 'shot', type: 'veoDirector' }]).graph;
+
+    const { graph, errors } = applyOps(base, [
+      { op: 'update_node', id: 'shot', data: { referenceMode: 'frames' } },
+    ]);
+
+    expect(errors).toEqual([]);
+    expect(graph.nodes[0]?.data.referenceMode).toBe('frames');
+  });
+
+  it('coerces a mode the model rejects and warns instead of failing', () => {
+    const base = buildWorkflowGraph([{ ref: 'shot', type: 'videoGen' }]).graph;
+
+    const { graph, errors } = applyOps(base, [
+      { op: 'update_node', id: 'shot', data: { model: 'veo-3.1-lite', referenceMode: 'images' } },
+    ]);
+
+    expect(graph.nodes[0]?.data.referenceMode).toBe('frames');
+    expect(errors.join(' ')).toContain('referenceMode');
+  });
+});
+
+describe('resolveConnection honours the selected reference mode', () => {
+  it('routes an image into first-frame on a frames-mode Veo 3.1 node', () => {
+    const r = resolveConnection(
+      node('img', 'image'),
+      node('shot', 'veoDirector', { model: 'veo-3.1', referenceMode: 'frames' }),
+      { roleHint: 'first-frame' },
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.targetHandle).toBe('first-frame');
+  });
+
+  it('never lands on a frame handle when the node is in images mode', () => {
+    const r = resolveConnection(
+      node('img', 'image'),
+      node('shot', 'veoDirector', { model: 'veo-3.1', referenceMode: 'images' }),
+      { roleHint: 'first-frame' },
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(['ref-image', 'ref-images']).toContain(r.targetHandle);
+    }
   });
 });

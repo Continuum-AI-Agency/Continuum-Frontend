@@ -1,12 +1,6 @@
 import { TIMELINE_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
-import type {
-  ClipSlot,
-  StudioNode,
-  TimelineInputSource,
-  TimelineItem,
-  TimelineTrack,
-} from '../../types';
+import type { StudioNode, TimelineInputSource, TimelineItem, TimelineTrack } from '../../types';
 import type { NodeOutput } from '../../types/execution';
 import { parseDataUrl } from '../dataUrl';
 import { isVideoGeneratorNodeType } from '../videoModel';
@@ -15,13 +9,6 @@ import type {
   TimelineOverlayRenderItem,
   TimelineRenderItem,
 } from './composeTimeline';
-
-export type ResolvedClip = {
-  slotId: string;
-  blob: Blob;
-  trimStartSec?: number;
-  trimEndSec?: number;
-};
 
 function dataUrlToBlob(dataUrl: string): Blob {
   const parsed = parseDataUrl(dataUrl);
@@ -52,14 +39,13 @@ function readVideoFromSourceNode(node: StudioNode | undefined): string | undefin
     return typeof value === 'string' && value.trim() ? value.trim() : undefined;
   }
 
-  // Mirror the contracts' isVideoProducingSource (workflow-graph.ts): both editor
-  // node types emit generatedVideo/generatedVideoUrl. Omitting timelineEditor here
+  // Mirror the contracts' isVideoProducingSource (workflow-graph.ts). The editor
+  // emits generatedVideo/generatedVideoUrl. Omitting timelineEditor here
   // let the canvas connect + place a Video Editor's output but then fail the render
   // with "upstream produced no media".
   if (
     isVideoGeneratorNodeType(node.type) ||
     node.type === 'extendVideo' ||
-    node.type === 'videoEditor' ||
     node.type === 'timelineEditor'
   ) {
     const data = node.data as { generatedVideo?: unknown; generatedVideoUrl?: unknown };
@@ -83,50 +69,6 @@ async function resolveSource(source: string): Promise<Blob> {
     return dataUrlToBlob(source);
   }
   return uriToBlob(source);
-}
-
-export async function resolveClipSources(
-  slots: ClipSlot[],
-  edges: Edge[],
-  nodes: StudioNode[],
-  resolvedOutputs: Map<string, NodeOutput>,
-  targetNodeId: string,
-): Promise<ResolvedClip[]> {
-  const nodeById = new Map(nodes.map((n) => [n.id, n]));
-  const ordered = [...slots].sort((a, b) => a.order - b.order);
-
-  const resolved = await Promise.all(
-    ordered.map(async (slot) => {
-      const handleId = `clip-${slot.id}`;
-      const edge = edges.find((e) => e.target === targetNodeId && e.targetHandle === handleId);
-      if (!edge) {
-        throw new Error(`Clip slot ${slot.order + 1}: no connected source`);
-      }
-
-      const upstream = resolvedOutputs.get(edge.source);
-      let source: string | undefined;
-
-      if (upstream?.type === 'video' && upstream.url) {
-        source = upstream.url;
-      } else {
-        source = readVideoFromSourceNode(nodeById.get(edge.source));
-      }
-
-      if (!source) {
-        throw new Error(`Clip slot ${slot.order + 1}: upstream did not produce a video`);
-      }
-
-      const blob = await resolveSource(source);
-      return {
-        slotId: slot.id,
-        blob,
-        trimStartSec: slot.trimStartSec,
-        trimEndSec: slot.trimEndSec,
-      } satisfies ResolvedClip;
-    }),
-  );
-
-  return resolved;
 }
 
 const isUsableUrl = (value?: string | null): value is string =>
@@ -182,7 +124,6 @@ function deriveSourceLabel(node: StudioNode): string {
       return 'Audio';
     case 'extendVideo':
       return 'Extended video';
-    case 'videoEditor':
     case 'timelineEditor':
       return 'Edited video';
     default:

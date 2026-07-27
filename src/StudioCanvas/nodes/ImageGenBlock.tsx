@@ -206,9 +206,10 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
     if (!data.generatedImageStoragePath || !data.generatedImageBucket) return;
     resignAttemptedRef.current = true;
     try {
-      const [resigned] = await resignCanvasNodes([
-        { id, type: 'nanoGen', position: { x: 0, y: 0 }, data } as unknown as StudioNode,
-      ]);
+      const [resigned] = await resignCanvasNodes(
+        [{ id, type: 'nanoGen', position: { x: 0, y: 0 }, data } as unknown as StudioNode],
+        brandId,
+      );
       const url = (resigned?.data as Record<string, unknown> | undefined)?.generatedImageUrl;
       if (typeof url === 'string' && url) {
         useStudioStore

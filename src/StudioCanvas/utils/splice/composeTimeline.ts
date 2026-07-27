@@ -1,5 +1,10 @@
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
-import { type ClipEffectSpec, speedFor } from '../render/effectSpec';
+import {
+  type ClipEffectSpec,
+  drawTextOverlays,
+  resolveTextOverlays,
+  speedFor,
+} from '../render/effectSpec';
 import {
   type ClipTransition,
   computeOutputPlacements,
@@ -17,7 +22,7 @@ import type { SpliceProgress, SpliceResult } from './spliceClips';
 import { resolveTimelineAudioEnvelope } from './timelineAudioEnvelope';
 
 // Timeline renderer for the Video Editor (timelineEditor) node. Sibling to
-// spliceClips: where the splicer only concatenates video clips, this composes an
+// spliceClips concatenates video clips; this higher-level renderer composes an
 // ordered mix of trimmed video clips and image stills onto one canvas via the
 // same mediabunny/WebCodecs pipeline. Reorder, trim, and split are pure data
 // (ordered items + ranges) so they need no encoder support here. Video items
@@ -423,6 +428,10 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
                 t,
                 1,
               );
+              const textOverlays = resolveTextOverlays(overlay.effects);
+              if (textOverlays.length > 0) {
+                drawTextOverlays(overlayCtx, textOverlays, targetWidth, targetHeight);
+              }
             }
           };
 
@@ -536,6 +545,8 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
           overlapOutputSec: place.outOverlapSec,
           outputStart: place.soloEndSec,
           compositeOverlays,
+          cues: captionCues,
+          captionStyle,
           signal,
         });
         processedDuration += place.outOverlapSec;

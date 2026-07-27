@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  coerceNodeConfig,
   createNodeData,
   type GraphEdgeLike,
   type GraphNodeLike,
@@ -48,7 +49,7 @@ export interface WorkflowGraph {
 
 // Fixed empty space between adjacent node boxes. The columns/rows themselves are
 // sized cumulatively from each node's own width/height (below), so a wide node
-// (videoEditor 460) or tall generator no longer overlaps its neighbours the way a
+// or tall generator no longer overlaps its neighbours the way a
 // flat 360/220 grid did once a node exceeded those constants.
 const LAYOUT_GUTTER = 80;
 // Fallbacks for nodes with no style box — prompt/string nodes carry no default
@@ -129,48 +130,6 @@ export function resolveConnection(
     ok: false,
     reason: `no compatible handle from ${sourceNode.type ?? '?'} to ${targetNode.type ?? '?'}${opts.roleHint ? ` (role ${opts.roleHint})` : ''}`,
   };
-}
-
-type ResolveGrowingResult =
-  | { ok: true; sourceHandle: string; targetHandle: string; grownTarget?: WorkflowNode }
-  | { ok: false; reason: string };
-
-const newClipSlotId = (suffix: number): string => {
-  try {
-    return crypto.randomUUID();
-  } catch {
-    return `slot-${suffix}`;
-  }
-};
-
-/**
- * resolveConnection, plus one growth rule: a videoEditor (Video Splicer) ships with
- * two clip slots and each slot takes exactly one clip, so the THIRD clip an agent
- * wires in would be refused — not because the graph is invalid, but because nobody
- * told the node to grow. The canvas UI grows slots by hand; the agent path grows
- * them here. Any other failure (wrong source kind, etc.) still fails the same way:
- * the retry against the grown node fails too, and the original reason stands.
- */
-function resolveGrowingSlots(
-  sourceNode: WorkflowNode,
-  targetNode: WorkflowNode,
-  opts: { roleHint?: string; edges?: GraphEdgeLike[] },
-): ResolveGrowingResult {
-  const first = resolveConnection(sourceNode, targetNode, opts);
-  if (first.ok || targetNode.type !== 'videoEditor') return first;
-
-  const data = targetNode.data as { clipSlots?: Array<{ id?: string; order?: number }> };
-  const slots = Array.isArray(data.clipSlots) ? data.clipSlots : [];
-  const grown: WorkflowNode = {
-    ...targetNode,
-    data: {
-      ...targetNode.data,
-      clipSlots: [...slots, { id: newClipSlotId(slots.length + 1), order: slots.length }],
-    },
-  };
-  const retry = resolveConnection(sourceNode, grown, opts);
-  if (!retry.ok) return first;
-  return { ...retry, grownTarget: grown };
 }
 
 function makeEdge(
@@ -287,6 +246,58 @@ function makeNode(
   return node;
 }
 
+// ---------------------------------------------------------------------------
+// Prompt presence
+// ---------------------------------------------------------------------------
+//
+// A generator with no prompt — neither its own prompt text nor a wired prompt
+// source — renders as an empty node the user cannot run. The agent has always
+// been *told* to write prompts (prompts.ts), but nothing checked, so a dropped
+// prompt landed silently on the canvas. These predicates are the check.
+
+/** Generator types and the own-data field carrying their prompt. */
+const PROMPT_FIELD_BY_GENERATOR: Record<string, string> = {
+  nanoGen: 'positivePrompt',
+  videoGen: 'prompt',
+  veoDirector: 'prompt',
+  veoFast: 'prompt',
+  omniGen: 'prompt',
+  hyperframesAgent: 'prompt',
+};
+
+const PROMPT_TARGET_HANDLES = new Set(['prompt', 'prompt-in']);
+
+const hasText = (value: unknown): boolean => typeof value === 'string' && value.trim().length > 0;
+
+const hasWiredPrompt = (nodeId: string, edges: GraphEdgeLike[]): boolean =>
+  edges.some(
+    (edge) => edge.target === nodeId && PROMPT_TARGET_HANDLES.has(edge.targetHandle ?? ''),
+  );
+
+/**
+ * True when this node needs a prompt to produce anything and has none.
+ *
+ * A generator is satisfied by either its own prompt field or a wired prompt
+ * source; a `string` node is satisfied by its own `value` or by any incoming
+ * edge (its text is produced upstream).
+ */
+export function nodeIsMissingPrompt(node: GraphNodeLike, edges: GraphEdgeLike[]): boolean {
+  const data = (node.data ?? {}) as Record<string, unknown>;
+  const promptField = PROMPT_FIELD_BY_GENERATOR[node.type ?? ''];
+  if (promptField) {
+    return !hasText(data[promptField]) && !hasWiredPrompt(node.id, edges);
+  }
+  if (node.type === 'string') {
+    return !hasText(data.value) && !edges.some((edge) => edge.target === node.id);
+  }
+  return false;
+}
+
+const missingPromptMessage = (node: GraphNodeLike): string =>
+  node.type === 'string'
+    ? `prompt node "${node.id}" has no text and nothing feeding it`
+    : `${node.type} "${node.id}" has no prompt and no prompt input wired to it`;
+
 export function buildWorkflowGraph(
   nodeSpecs: NodeSpec[],
   connectSpecs: ConnectSpec[] = [],
@@ -320,16 +331,16 @@ export function buildWorkflowGraph(
       errors.push(`connection references missing node: ${spec.from_ref} → ${spec.to_ref}`);
       continue;
     }
-    const resolved = resolveGrowingSlots(from, to, { roleHint: spec.role, edges });
+    const resolved = resolveConnection(from, to, { roleHint: spec.role, edges });
     if (!resolved.ok) {
       errors.push(resolved.reason);
       continue;
     }
-    if (resolved.grownTarget) {
-      nodeById.set(to.id, resolved.grownTarget);
-      nodes[nodes.indexOf(to)] = resolved.grownTarget;
-    }
     edges.push(makeEdge(from.id, resolved.sourceHandle, to.id, resolved.targetHandle));
+  }
+
+  for (const node of nodes) {
+    if (nodeIsMissingPrompt(node, edges)) warnings.push(missingPromptMessage(node));
   }
 
   const graph: WorkflowGraph = { nodes: autoLayout(nodes, edges), edges };
@@ -479,7 +490,13 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
           errors.push(`set "${op.id}" timeline items with the set_timeline op, not update_node`);
           break;
         }
-        if (!replaceNode(op.id, (n) => ({ ...n, data: { ...n.data, ...op.data } }))) {
+        // add_node coerces via createNodeData; without this an update_node was the one
+        // way an illegal enum-shaped config reached the node and sat there until Run.
+        const coerced = target
+          ? coerceNodeConfig(target.type as StudioNodeType, op.data, target.data ?? {})
+          : { data: op.data, changes: [] };
+        errors.push(...coerced.changes.map((change) => `node "${op.id}": ${change}`));
+        if (!replaceNode(op.id, (n) => ({ ...n, data: { ...n.data, ...coerced.data } }))) {
           errors.push(`node "${op.id}" not found`);
         }
         break;
@@ -494,10 +511,6 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
         const result = connectNodes(nodes, edges, op.from, op.to, op.role);
         if (!result.ok) errors.push(result.reason);
         else {
-          if (result.grownTarget) {
-            const grown = result.grownTarget;
-            nodes = nodes.map((n) => (n.id === grown.id ? grown : n));
-          }
           edges = [...edges, result.edge];
         }
         break;
@@ -507,10 +520,6 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
         const result = connectNodes(nodes, edges, op.from, op.to, op.role);
         if (!result.ok) errors.push(result.reason);
         else {
-          if (result.grownTarget) {
-            const grown = result.grownTarget;
-            nodes = nodes.map((n) => (n.id === grown.id ? grown : n));
-          }
           edges = [...edges, result.edge];
         }
         break;
@@ -622,17 +631,16 @@ function connectNodes(
   fromId: string,
   toId: string,
   role?: string,
-): { ok: true; edge: WorkflowEdge; grownTarget?: WorkflowNode } | { ok: false; reason: string } {
+): { ok: true; edge: WorkflowEdge } | { ok: false; reason: string } {
   const from = nodes.find((n) => n.id === fromId);
   const to = nodes.find((n) => n.id === toId);
   if (!from || !to)
     return { ok: false, reason: `connect references missing node: ${fromId} → ${toId}` };
-  const resolved = resolveGrowingSlots(from, to, { roleHint: role, edges });
+  const resolved = resolveConnection(from, to, { roleHint: role, edges });
   if (!resolved.ok) return { ok: false, reason: resolved.reason };
   return {
     ok: true,
     edge: makeEdge(from.id, resolved.sourceHandle, to.id, resolved.targetHandle),
-    ...(resolved.grownTarget ? { grownTarget: resolved.grownTarget } : {}),
   };
 }
 
@@ -647,7 +655,7 @@ function dropKeys(data: Record<string, unknown>, keys: string[]): Record<string,
 // ---------------------------------------------------------------------------
 
 export interface GraphIssue {
-  code: 'unknown_node_type' | 'dangling_edge' | 'invalid_connection';
+  code: 'unknown_node_type' | 'dangling_edge' | 'invalid_connection' | 'missing_prompt';
   message: string;
   nodeId?: string;
   edgeId?: string;
@@ -670,6 +678,14 @@ export function validateWorkflowGraph(graph: {
       issues.push({
         code: 'unknown_node_type',
         message: `unknown node type "${node.type}"`,
+        nodeId: node.id,
+      });
+      continue;
+    }
+    if (nodeIsMissingPrompt(node, graph.edges)) {
+      issues.push({
+        code: 'missing_prompt',
+        message: missingPromptMessage(node),
         nodeId: node.id,
       });
     }

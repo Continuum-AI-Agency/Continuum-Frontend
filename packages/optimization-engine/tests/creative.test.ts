@@ -8,7 +8,12 @@
 
 import { expect, test } from 'bun:test';
 import type { AdSetSnapshot, CreativeStanding, WindowMetrics } from '../src/index';
-import { evaluateCreative, resolveConfig } from '../src/index';
+import {
+  DRAG_SPEND_SHARE,
+  evaluateCreative,
+  LAGGARD_COST_MULTIPLE,
+  resolveConfig,
+} from '../src/index';
 
 const cfg = resolveConfig({ objective: 'conversations' });
 
@@ -332,7 +337,10 @@ const ZERO_CONVERSION: CreativeStanding = {
 };
 
 test('a creative that spent real money and converted NOTHING is the worst laggard, not an absent one', () => {
-  const { recommendations, noRaiseIds } = evaluateCreative([adSet('bonfire', ZERO_CONVERSION)], cfg);
+  const { recommendations, noRaiseIds } = evaluateCreative(
+    [adSet('bonfire', ZERO_CONVERSION)],
+    cfg,
+  );
   const pause = recommendations.find((r) => r.kind === 'pause_ad');
 
   // It must outrank the 2.67x laggard. An ad at 2.67x is expensive; an ad at $612 and no
@@ -353,4 +361,130 @@ test('and its reason states the zero plainly, instead of inventing a multiple', 
   expect(reason).not.toContain('0.00x');
   expect(reason).not.toContain('NaN');
   expect(reason).not.toContain('Infinity');
+});
+
+// --- BOUNDARIES ------------------------------------------------------------------------
+// The constants that decide when a finding is real, exercised right at their edges.
+
+/** A minimal, non-real standing knob for the threshold boundaries — a priced winner and one
+ *  priced laggard, with the two spend-share dials passed in. */
+const standing = (opts: {
+  vsWinner: number;
+  killShare?: number;
+  belowAvgShare?: number;
+  winnerCost?: number;
+  laggardCost?: number;
+}): CreativeStanding => {
+  const winnerCost = opts.winnerCost ?? 20;
+  return {
+    winner: {
+      adId: 'w',
+      adName: 'Winner',
+      qualityRanking: 'AVERAGE',
+      spend: 500,
+      events: Math.round(500 / winnerCost),
+      costPerEvent: winnerCost,
+      labels: { hookArchetype: 'value_stack' },
+    },
+    laggards: [
+      {
+        adId: 'lag',
+        adName: 'Laggard',
+        spend: 300,
+        events: 10,
+        costPerEvent: opts.laggardCost ?? winnerCost * opts.vsWinner,
+        vsWinner: opts.vsWinner,
+      },
+    ],
+    eligibleAds: 2,
+    totalAds: 2,
+    killSpendShare: opts.killShare ?? 0,
+    belowAvgSpendShare: opts.belowAvgShare ?? 0,
+    medianCostPerEvent: winnerCost,
+    flags: [],
+  };
+};
+
+test(`C1 drag fires exactly at the DRAG_SPEND_SHARE threshold (${DRAG_SPEND_SHARE}), not below it`, () => {
+  // belowAvgSpendShare === 0.5 (the threshold) with a real laggard => withhold the raise.
+  const at = evaluateCreative(
+    [adSet('at', standing({ vsWinner: 1.5, belowAvgShare: DRAG_SPEND_SHARE }))],
+    cfg,
+  );
+  expect(at.noRaiseIds.has('at')).toBe(true);
+  expect(at.recommendations.find((r) => r.kind === 'pause_ad')?.trigger).toBe('C1_creative_drag');
+
+  // A hair below the majority => the ad set is still mostly funding un-condemned creatives: no drag.
+  const below = evaluateCreative(
+    [adSet('below', standing({ vsWinner: 1.5, belowAvgShare: DRAG_SPEND_SHARE - 0.01 }))],
+    cfg,
+  );
+  expect(below.noRaiseIds.has('below')).toBe(false);
+  expect(below.recommendations.some((r) => r.kind === 'pause_ad')).toBe(false);
+});
+
+test(`a laggard must reach LAGGARD_COST_MULTIPLE (${LAGGARD_COST_MULTIPLE}x) before it is acted on`, () => {
+  // Drag share is over the line, so the only variable is whether the laggard's multiple clears
+  // the cost-multiple gate. At 1.25x it does — pause the ad and withhold the raise.
+  const at = evaluateCreative(
+    [adSet('at', standing({ vsWinner: LAGGARD_COST_MULTIPLE, killShare: 0.6 }))],
+    cfg,
+  );
+  expect(at.recommendations.find((r) => r.kind === 'pause_ad')?.adId).toBe('lag');
+  expect(at.noRaiseIds.has('at')).toBe(true);
+
+  // Just under 1.25x: no laggard qualifies, so there is nothing to pause AND no winner claim
+  // (C2 needs a laggard to compare against) — the drag share alone withholds nothing.
+  const below = evaluateCreative(
+    [adSet('below', standing({ vsWinner: LAGGARD_COST_MULTIPLE - 0.01, killShare: 0.6 }))],
+    cfg,
+  );
+  expect(below.recommendations.some((r) => r.kind === 'pause_ad')).toBe(false);
+  expect(below.recommendations.some((r) => r.kind === 'variate_creative')).toBe(false);
+  expect(below.noRaiseIds.has('below')).toBe(false);
+});
+
+test('C2 winner severity is high only once the gap reaches 2x, medium below it', () => {
+  // No drag (shares 0), so the winner recommendation stands alone and its severity tracks the gap.
+  const high = evaluateCreative([adSet('high', standing({ vsWinner: 2.0 }))], cfg);
+  expect(high.recommendations.find((r) => r.kind === 'variate_creative')?.severity).toBe('high');
+
+  const medium = evaluateCreative([adSet('medium', standing({ vsWinner: 1.99 }))], cfg);
+  expect(medium.recommendations.find((r) => r.kind === 'variate_creative')?.severity).toBe(
+    'medium',
+  );
+});
+
+test('a single-creative ad set that never spent (totalAds 0) yields no seed_experiment', () => {
+  // C3 only speaks about an ad set actually spending money: one creative AND zero ads run is
+  // silence, not a finding.
+  const empty: CreativeStanding = {
+    winner: null,
+    laggards: [],
+    eligibleAds: 0,
+    totalAds: 0,
+    killSpendShare: null,
+    belowAvgSpendShare: null,
+    medianCostPerEvent: null,
+    flags: ['single_creative'],
+  };
+  expect(evaluateCreative([adSet('empty', empty)], cfg).recommendations).toEqual([]);
+});
+
+// eventLabel() maps the declared KPI to its grounding noun and runs for every evaluable
+// standing (creative.ts:191), before any trigger. Cycling the declared kpiFields lands each
+// switch arm — the grounding noun must never be a generic "conversions" for a lead/click buy.
+test('eventLabel covers every declared kpiField grounding noun', () => {
+  const kpis: Array<NonNullable<AdSetSnapshot['kpiField']>> = [
+    'leads',
+    'purchases',
+    'linkClicks',
+    'landingPageViews',
+    'thruplays',
+    'postEngagement',
+  ];
+  for (const kpiField of kpis) {
+    const s: AdSetSnapshot = { ...adSet('lbl', GENERAL_ENE26), kpiField };
+    expect(() => evaluateCreative([s], cfg)).not.toThrow();
+  }
 });

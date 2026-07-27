@@ -32,7 +32,13 @@ type RunEventSource = {
   eventsUrl: (runId: string, afterSeq: number) => string;
 };
 
-const RUN_EVENT_SOURCES: Record<AgentKind, RunEventSource> = {
+/**
+ * Every long-running agent now carries a durable event log. Canvas still follows
+ * its run row for terminal status, while this shared tail restores missed narration.
+ */
+export type RunEventAgentKind = AgentKind;
+
+const RUN_EVENT_SOURCES: Record<RunEventAgentKind, RunEventSource> = {
   organic: {
     schema: 'organic',
     table: 'organic_agent_run_events',
@@ -44,6 +50,18 @@ const RUN_EVENT_SOURCES: Record<AgentKind, RunEventSource> = {
     table: 'jaina_conversation_run_events',
     eventsUrl: (runId, afterSeq) =>
       `${getApiBaseUrl()}/api/agents/jaina/chat/runs/${runId}/events?after_seq=${afterSeq}`,
+  },
+  hyperframes: {
+    schema: 'brand_profiles',
+    table: 'ai_studio_hyperframe_run_events',
+    eventsUrl: (runId, afterSeq) =>
+      `${getApiBaseUrl()}/api/ai-studio/hyperframes-agent/runs/${runId}/events?after_seq=${afterSeq}`,
+  },
+  canvas: {
+    schema: 'brand_profiles',
+    table: 'ai_studio_canvas_composer_run_events',
+    eventsUrl: (runId, afterSeq) =>
+      `${getApiBaseUrl()}/api/ai-studio/canvas/compose/runs/${runId}/events?after_seq=${afterSeq}`,
   },
 };
 
@@ -62,8 +80,16 @@ const rowToEvent = (row: Record<string, unknown>): AgentRunEventDto | null => {
     seq,
     type,
     eventId: typeof row.event_id === 'string' ? row.event_id : `evt_${seq}`,
-    ts: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
-    data: (row.payload as Record<string, unknown>) ?? {},
+    ts:
+      typeof row.ts === 'string'
+        ? row.ts
+        : typeof row.created_at === 'string'
+          ? row.created_at
+          : new Date().toISOString(),
+    data:
+      (row.data as Record<string, unknown> | undefined) ??
+      (row.payload as Record<string, unknown> | undefined) ??
+      {},
   };
 };
 
@@ -92,7 +118,11 @@ const parseNdjsonEvent = (line: string): AgentRunEventDto | null => {
  * panels project from the store. That separation is what lets a run keep streaming while
  * its panel is unmounted.
  */
-export function useAgentRunStream(runId: string | null, agent: AgentKind, enabled = true): void {
+export function useAgentRunStream(
+  runId: string | null,
+  agent: RunEventAgentKind,
+  enabled = true,
+): void {
   const appendEvents = useAgentRunStore((state) => state.appendEvents);
 
   useEffect(() => {
@@ -132,10 +162,10 @@ export function useAgentRunStream(runId: string | null, agent: AgentKind, enable
           const token = await getBrowserAccessToken();
           if (!token || cancelled) return;
 
-          // Always replay from 0. The store dedupes by seq, so a full backlog fetch is
+          // Always replay from before seq 0. The store dedupes by seq, so a full backlog fetch is
           // idempotent — and it is the only way a client that was never here (a fresh tab,
           // a reload, a navigation back) rebuilds the part of the turn it missed.
-          const response = await fetch(source.eventsUrl(runId, 0), {
+          const response = await fetch(source.eventsUrl(runId, -1), {
             headers: { Accept: 'application/x-ndjson', Authorization: `Bearer ${token}` },
           });
           if (!response.ok || !response.body || cancelled) return;

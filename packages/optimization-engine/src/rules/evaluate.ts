@@ -12,8 +12,6 @@
 //     P/F triggers already flagged are recorded as deduped, and pause/starve
 //     (built-in or rule) suppresses fatigue-kind findings on the same ad set,
 //     mirroring runCycle's skipIds contract.
-//
-// STATUS: UNWIRED STUB (see rules/types.ts).
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from '../config';
@@ -50,7 +48,9 @@ function lookupFact(facts: FactMap, name: string): FactValue | undefined {
 function resolveValue(value: ConditionValue, facts: FactMap): ResolvedValue {
   if (isFactRef(value)) return lookupFact(facts, value.fact);
   if (Array.isArray(value)) return value;
-  if (value !== null && typeof value === 'object') {
+  // A params object ({ pct: 30, of: { fact: 'x' } }) — the proportional operators'
+  // shape. Its values are resolved one level down; nothing nests deeper.
+  if (typeof value === 'object' && value !== null) {
     const resolved: Record<string, FactValue> = {};
     for (const [k, v] of Object.entries(value)) {
       const r = isFactRef(v) ? lookupFact(facts, v.fact) : v;
@@ -58,7 +58,10 @@ function resolveValue(value: ConditionValue, facts: FactMap): ResolvedValue {
     }
     return resolved;
   }
-  return value;
+  // Everything else is a literal. `isFactRef` is a plain boolean predicate rather
+  // than a type guard, so the object arms above do not narrow the union for the
+  // compiler — the runtime checks are exhaustive, the annotation says so.
+  return value as FactValue;
 }
 
 /** Recursive condition evaluation. `all` of [] => true, `any` of [] => false

@@ -21,29 +21,45 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useAgentRunStream } from '@/hooks/useAgentRunStream';
+import { type RunEventAgentKind, useAgentRunStream } from '@/hooks/useAgentRunStream';
 import { selectLiveRuns, useAgentRunStore } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { CanvasComposerRunTail } from './CanvasComposerRunTail';
+import { HyperframesRunWorker } from './HyperframesRunWorker';
+
+function EventLogRunTail({ run, agent }: { run: AgentRunDto; agent: RunEventAgentKind }) {
+  useAgentRunStream(run.runId, agent);
+  return agent === 'hyperframes' ? <HyperframesRunWorker run={run} /> : null;
+}
 
 /**
  * One tail per live run. React forbids calling a hook in a loop, so each run gets its own
  * mounted component — that is the whole reason this renders nothing.
+ *
+ * Canvas uses a specialized tail because it follows both its durable event log and
+ * the run row that drives app-wide terminal status.
  */
 function RunTail({ run }: { run: AgentRunDto }) {
-  useAgentRunStream(run.runId, run.agent);
-  return null;
+  const { agent } = run;
+  if (agent === 'canvas') return <CanvasComposerRunTail run={run} />;
+  return <EventLogRunTail run={run} agent={agent} />;
 }
 
 const AGENT_LABEL: Record<AgentRunDto['agent'], string> = {
   organic: 'Organic',
   jaina: 'Jaina',
+  hyperframes: 'HyperFrames',
+  canvas: 'AI Studio',
 };
 
 /** Where a session lives, so a completion toast can take you back to it. */
 const SESSION_HREF: Record<AgentRunDto['agent'], (sessionId: string) => string> = {
   organic: (sessionId) => `/organic?tab=agent&sessionId=${sessionId}`,
-  jaina: (sessionId) => `/paid-media?sessionId=${sessionId}`,
+  jaina: (sessionId) => `/scale?tab=jaina&sessionId=${sessionId}`,
+  hyperframes: () => '/ai-studio',
+  // A composer run's sessionId IS its canvas room.
+  canvas: (sessionId) => `/ai-studio?roomId=${sessionId}`,
 };
 
 /**
@@ -73,10 +89,17 @@ function useCompletionToasts(): void {
       if (run.sessionId && run.sessionId === viewingSessionId) continue;
 
       const label = AGENT_LABEL[run.agent];
+      // Room-level runs (the composer) carry no nodeId — link to the room alone.
+      const href =
+        run.origin?.surface === 'ai-studio'
+          ? `/ai-studio?roomId=${encodeURIComponent(run.origin.roomId)}${
+              run.origin.nodeId ? `&focusNodeId=${encodeURIComponent(run.origin.nodeId)}` : ''
+            }`
+          : SESSION_HREF[run.agent](run.sessionId);
       const openSession = run.sessionId
         ? {
             label: 'View',
-            onClick: () => router.push(SESSION_HREF[run.agent](run.sessionId)),
+            onClick: () => router.push(href),
           }
         : undefined;
 

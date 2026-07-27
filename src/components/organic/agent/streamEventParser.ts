@@ -1,5 +1,6 @@
 import {
   aeoSnapshotCardSchema,
+  agentDelegatedFrameDataSchema,
   type BulkContentPlan,
   bulkContentPlanSchema,
   type MediaSearchResultsFrame,
@@ -87,7 +88,8 @@ export type ParsedOrganicStreamEvent =
       reason?: string;
     }
   | { kind: 'postList'; posts: UiFetchedPost[] }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; message: string; code?: string; transient?: boolean }
+  | { kind: 'retrying'; attempt: number; reason?: string }
   | { kind: 'complete' }
   | { kind: 'uiCard'; card: UiCard }
   | { kind: 'postCard'; card: UiPostCard }
@@ -761,7 +763,25 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     case 'response.error': {
       const payload = getEventPayload(frame);
       const message = readNonEmptyString(payload.message) ?? 'Unknown stream error';
-      return { kind: 'error', message };
+      return {
+        kind: 'error',
+        message,
+        code: readNonEmptyString(payload.code) ?? undefined,
+        transient: typeof payload.transient === 'boolean' ? payload.transient : undefined,
+      };
+    }
+    // The chat runner is retrying a transient failure before surfacing a terminal
+    // response.error — a subtle reconnecting status, never the red error row.
+    case 'response.retrying': {
+      const payload = getEventPayload(frame);
+      return {
+        kind: 'retrying',
+        attempt:
+          typeof payload.attempt === 'number' && Number.isFinite(payload.attempt)
+            ? payload.attempt
+            : 1,
+        reason: readNonEmptyString(payload.reason) ?? undefined,
+      };
     }
     case 'tool.call':
       return { kind: 'toolCall', event: normalizeToolCallEvent(frame) };
@@ -801,6 +821,14 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
       const card = parseAeoSnapshotCard(frame);
       return card
         ? { kind: 'uiCard', card: { type: 'aeo_snapshot', data: card } }
+        : { kind: 'invalid', type };
+    }
+    // A cross-agent call in this run: rendered as its own transcript card in the
+    // CALLER's stream, with a deep link into the callee conversation.
+    case 'agent.delegated': {
+      const parsed = agentDelegatedFrameDataSchema.safeParse(getEventPayload(frame));
+      return parsed.success
+        ? { kind: 'uiCard', card: { type: 'agent_delegated', data: parsed.data } }
         : { kind: 'invalid', type };
     }
     case 'agent.run_started': {

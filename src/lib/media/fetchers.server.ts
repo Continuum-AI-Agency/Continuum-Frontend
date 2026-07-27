@@ -29,6 +29,7 @@ const PAGE_SIZE = 48;
 export async function fetchMediaAssets(
   brandId: string,
   options: {
+    assetId?: string;
     collectionId?: string;
     limit?: number;
     source?: MediaSource;
@@ -95,6 +96,7 @@ export async function fetchMediaAssets(
     .is('deleted_at', null)
     .not('tags', 'cs', EXCLUDE_CAROUSEL_SLIDES_FILTER);
 
+  if (options.assetId) query = query.eq('id', options.assetId);
   if (effectiveSource) query = query.eq('source', effectiveSource);
   // Row kind OR a cover row's slide kind — mixed carousels surface under both.
   if (effectiveKind) query = query.or(kindMatchOrFilter(effectiveKind));

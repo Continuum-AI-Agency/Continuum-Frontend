@@ -6,6 +6,7 @@ import { DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
 import { uploadCaptionAudio } from '@/lib/clips/clipClientCut';
 import { extractTimelineAudioWav } from '../../utils/clip/extractTimelineAudioWav';
 import { groupWordsIntoCues } from '../../utils/splice/captionCues';
+import type { TimelineInputSource, TimelineItem } from '../../types';
 import type { TimelineEditorAdapter } from './adapter';
 
 // Auto-captions extract the output-time timeline audio, upload the WAV through the
@@ -16,6 +17,20 @@ export interface UseTimelineCaptionsResult {
   generate: () => Promise<boolean>;
   isGenerating: boolean;
   setCaptionsEnabled: (enabled: boolean) => void;
+}
+
+export function resolveCaptionSourceAssetId(
+  scope: TimelineEditorAdapter['scope'],
+  items: TimelineItem[],
+  pool: TimelineInputSource[],
+): string | undefined {
+  for (const item of items) {
+    const source = pool.find((candidate) => candidate.nodeId === item.sourceNodeId);
+    if (!source) continue;
+    if (source.sourceAssetId) return source.sourceAssetId;
+    if (scope === 'library') return source.nodeId;
+  }
+  return undefined;
 }
 
 export function useTimelineCaptions(adapter: TimelineEditorAdapter): UseTimelineCaptionsResult {
@@ -45,11 +60,12 @@ export function useTimelineCaptions(adapter: TimelineEditorAdapter): UseTimeline
     try {
       const resolved = await resolveSources(items);
       const { blob } = await extractTimelineAudioWav(resolved);
-      const sourceAssetId = items[0]?.sourceNodeId;
-      if (adapter.scope !== 'library' || !adapter.brandId || !sourceAssetId) {
+      const sourceAssetId = resolveCaptionSourceAssetId(adapter.scope, items, adapter.pool);
+      if (!adapter.brandId || !sourceAssetId) {
         show({
-          title: 'Captions need a Library video',
-          description: 'Open the Library video editor to generate high-accuracy captions.',
+          title: 'Captions need a saved video',
+          description:
+            'Save or attach at least one timeline source to the Library before generating captions.',
           variant: 'warning',
         });
         return false;
@@ -105,7 +121,15 @@ export function useTimelineCaptions(adapter: TimelineEditorAdapter): UseTimeline
     } finally {
       setIsGenerating(false);
     }
-  }, [adapter.brandId, adapter.scope, getDocument, patchDocument, resolveSources, show]);
+  }, [
+    adapter.brandId,
+    adapter.pool,
+    adapter.scope,
+    getDocument,
+    patchDocument,
+    resolveSources,
+    show,
+  ]);
 
   return { generate, isGenerating, setCaptionsEnabled };
 }

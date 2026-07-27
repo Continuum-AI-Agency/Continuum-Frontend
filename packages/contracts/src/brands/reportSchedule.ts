@@ -85,5 +85,49 @@ export type UpsertReportScheduleRequest = z.infer<typeof upsertReportScheduleReq
 
 export const getReportScheduleResponseSchema = z.object({
   schedule: reportScheduleSchema.nullable(),
+  canManageSchedule: z.boolean(),
 });
 export type GetReportScheduleResponse = z.infer<typeof getReportScheduleResponseSchema>;
+
+export const reportScheduleMutationResponseSchema = z.object({
+  schedule: reportScheduleSchema.nullable(),
+});
+export type ReportScheduleMutationResponse = z.infer<typeof reportScheduleMutationResponseSchema>;
+
+export const sendContinuumReportRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    recipientUserIds: z.array(z.string().uuid()).min(1).max(50).optional(),
+    retryReceiptId: z.string().uuid().optional(),
+  })
+  .strict();
+export type SendContinuumReportRequest = z.infer<typeof sendContinuumReportRequestSchema>;
+
+const reportDeliveryOutcomeSchema = z.discriminatedUnion('status', [
+  z.object({ recipient: z.string().email(), status: z.literal('accepted'), messageId: z.string() }),
+  z.object({
+    recipient: z.string().email(),
+    status: z.literal('failed'),
+    errorCode: z.string(),
+    httpStatus: z.number().int().nullable(),
+  }),
+  z.object({
+    recipient: z.string().email(),
+    status: z.literal('already_delivered'),
+    messageId: z.string().nullable(),
+  }),
+  z.object({ recipient: z.string().email(), status: z.literal('suppressed') }),
+]);
+
+export const sendContinuumReportResponseSchema = z
+  .object({
+    status: z.enum(['sent', 'partial', 'suppressed']),
+    ok: z.boolean(),
+    sent: z.boolean(),
+    recipients: z.array(z.string().email()),
+    resendMessageIds: z.array(z.string()),
+    outcomes: z.array(reportDeliveryOutcomeSchema),
+    receiptId: z.string().uuid(),
+  })
+  .passthrough();
+export type SendContinuumReportResponse = z.infer<typeof sendContinuumReportResponseSchema>;

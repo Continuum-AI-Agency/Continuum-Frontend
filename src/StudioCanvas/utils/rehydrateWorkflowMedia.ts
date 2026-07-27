@@ -104,6 +104,7 @@ async function rehydrateMediaNode(
 export async function rehydrateWorkflowMediaNodes(
   nodes: StudioNode[],
   resolver: Base64Resolver = resolveDroppedBase64,
+  brandProfileId?: string,
 ): Promise<StudioNode[]> {
   const rehydrated = await Promise.all(
     nodes.map(async (node) => {
@@ -127,5 +128,5 @@ export async function rehydrateWorkflowMediaNodes(
 
   // Re-sign durable storage paths on generator nodes (nanoGen, video gen types).
   // Generated image/video URLs are stripped on save; this restores fresh signed URLs.
-  return resignCanvasNodes(rehydrated);
+  return resignCanvasNodes(rehydrated, brandProfileId);
 }

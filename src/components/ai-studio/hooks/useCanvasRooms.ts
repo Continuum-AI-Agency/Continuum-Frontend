@@ -10,6 +10,7 @@ export type CanvasRoom = {
   name: string;
   created_at: string;
   created_by: string | null;
+  kind: 'general' | 'planner';
 };
 
 export function useCanvasRooms(brandProfileId: string) {
@@ -42,7 +43,8 @@ export function useCanvasRooms(brandProfileId: string) {
   }, [fetchRooms]);
 
   const createRoom = async (name: string) => {
-    if (rooms.length >= 3) {
+    const generalRooms = rooms.filter((room) => room.kind !== 'planner');
+    if (generalRooms.length >= 3) {
       toast.error('Maximum 3 workspaces allowed');
       return null;
     }
@@ -53,6 +55,7 @@ export function useCanvasRooms(brandProfileId: string) {
       .insert({
         brand_profile_id: brandProfileId,
         name,
+        kind: 'general',
       })
       .select()
       .single();
@@ -69,7 +72,12 @@ export function useCanvasRooms(brandProfileId: string) {
   };
 
   const deleteRoom = async (roomId: string) => {
-    if (rooms.length <= 1) {
+    const room = rooms.find((candidate) => candidate.id === roomId);
+    if (room?.kind === 'planner') {
+      toast.error('Planner Compositions is a reserved workspace');
+      return false;
+    }
+    if (rooms.filter((candidate) => candidate.kind !== 'planner').length <= 1) {
       toast.error('Cannot delete the last workspace');
       return false;
     }
@@ -92,6 +100,10 @@ export function useCanvasRooms(brandProfileId: string) {
   };
 
   const updateRoomName = async (roomId: string, name: string) => {
+    if (rooms.find((room) => room.id === roomId)?.kind === 'planner') {
+      toast.error('Planner Compositions is a reserved workspace');
+      return false;
+    }
     const { error } = await supabase
       .schema('brand_profiles' as any)
       .from('canvas_rooms' as any)

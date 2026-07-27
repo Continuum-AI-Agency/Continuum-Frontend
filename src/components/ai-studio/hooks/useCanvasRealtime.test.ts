@@ -25,20 +25,28 @@ const mockChannel = {
 };
 
 const createMockQueryBuilder = () => {
+  let isWrite = false;
+  const captureWrite = (payload: any) => {
+    isWrite = true;
+    lastUpsertPayload = Array.isArray(payload) ? payload[0] : payload;
+    return queryBuilder;
+  };
   const queryBuilder: any = {
     select: mock(() => queryBuilder),
     eq: mock(() => queryBuilder),
     order: mock(() => queryBuilder),
     maybeSingle: mock(() => {
+      if (isWrite) {
+        return Promise.resolve({ data: upsertSingleResponse, error: null });
+      }
       maybeSingleCallCount += 1;
       const nextValue = maybeSingleResponses.length > 0 ? maybeSingleResponses.shift() : null;
       return Promise.resolve({ data: nextValue ?? null, error: null });
     }),
     single: mock(() => Promise.resolve({ data: upsertSingleResponse, error: null })),
-    upsert: mock((payload: any) => {
-      lastUpsertPayload = Array.isArray(payload) ? payload[0] : payload;
-      return queryBuilder;
-    }),
+    insert: mock(captureWrite),
+    update: mock(captureWrite),
+    upsert: mock(captureWrite),
   };
   return queryBuilder;
 };
@@ -755,10 +763,9 @@ describe('useCanvasRealtime', () => {
     };
     maybeSingleResponses = [roomOneSession, roomOneSession, null, null];
 
-    const { rerender } = renderHook(
-      ({ roomId }) => useCanvasRealtime('brand-1', roomId),
-      { initialProps: { roomId: 'room-1' } },
-    );
+    const { rerender } = renderHook(({ roomId }) => useCanvasRealtime('brand-1', roomId), {
+      initialProps: { roomId: 'room-1' },
+    });
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 80));
     });

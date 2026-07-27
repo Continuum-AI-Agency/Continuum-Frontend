@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { checkSpliceSupport, resetWebcodecsSupportCache } from './webcodecsSupport';
+import {
+  checkSpliceSupport,
+  resetWebcodecsSupportCache,
+  type TimelineEncodingProbe,
+} from './webcodecsSupport';
 
 type GlobalShape = Record<string, unknown>;
 
@@ -8,6 +12,8 @@ function makeStubEncoder(supported: boolean) {
     isConfigSupported: async () => ({ supported }),
   };
 }
+
+const supportedEncoding: TimelineEncodingProbe = async () => ({ video: true, audio: true });
 
 describe('checkSpliceSupport', () => {
   const scope = globalThis as unknown as GlobalShape;
@@ -39,7 +45,7 @@ describe('checkSpliceSupport', () => {
     scope.AudioDecoder = {};
     scope.OffscreenCanvas = class {};
 
-    const result = await checkSpliceSupport();
+    const result = await checkSpliceSupport(supportedEncoding);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.reason).toMatch(/webcodecs/i);
@@ -53,7 +59,7 @@ describe('checkSpliceSupport', () => {
     scope.AudioDecoder = {};
     scope.OffscreenCanvas = undefined;
 
-    const result = await checkSpliceSupport();
+    const result = await checkSpliceSupport(supportedEncoding);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.reason).toMatch(/offscreencanvas/i);
@@ -67,7 +73,7 @@ describe('checkSpliceSupport', () => {
     scope.AudioDecoder = {};
     scope.OffscreenCanvas = class {};
 
-    const result = await checkSpliceSupport();
+    const result = await checkSpliceSupport(supportedEncoding);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.reason).toMatch(/h\.?264/i);
@@ -81,25 +87,23 @@ describe('checkSpliceSupport', () => {
     scope.AudioDecoder = {};
     scope.OffscreenCanvas = class {};
 
-    const result = await checkSpliceSupport();
+    const result = await checkSpliceSupport(supportedEncoding);
     expect(result.ok).toBe(true);
   });
 
-  it('memoizes the result across calls', async () => {
-    let probeCalls = 0;
-    scope.VideoEncoder = {
-      isConfigSupported: async () => {
-        probeCalls += 1;
-        return { supported: true };
-      },
-    };
+  it('rejects unsupported H.264 or AAC at the actual media-pipeline boundary', async () => {
+    scope.VideoEncoder = makeStubEncoder(true);
     scope.VideoDecoder = {};
     scope.AudioEncoder = {};
     scope.AudioDecoder = {};
     scope.OffscreenCanvas = class {};
 
-    await checkSpliceSupport();
-    await checkSpliceSupport();
-    expect(probeCalls).toBe(1);
+    const noVideo = await checkSpliceSupport(async () => ({ video: false, audio: true }));
+    const noAudio = await checkSpliceSupport(async () => ({ video: true, audio: false }));
+
+    expect(noVideo.ok).toBe(false);
+    expect(noAudio.ok).toBe(false);
+    if (!noVideo.ok) expect(noVideo.reason).toMatch(/h\.?264/i);
+    if (!noAudio.ok) expect(noAudio.reason).toMatch(/aac/i);
   });
 });

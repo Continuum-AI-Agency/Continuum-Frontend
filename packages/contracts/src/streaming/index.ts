@@ -17,4 +17,5 @@ export * from './omni-gen';
 export * from './onboarding-inspirations';
 export * from './organic';
 export * from './organic-pipeline';
+export * from './paid-creative';
 export * from './trends';

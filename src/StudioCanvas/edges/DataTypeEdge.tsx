@@ -7,9 +7,11 @@ import {
   getBezierPath,
   getSmoothStepPath,
   getStraightPath,
+  useReactFlow,
 } from '@xyflow/react';
 import type React from 'react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 /**
  * DataTypeEdge - An edge colored and styled based on the data type it carries
@@ -61,6 +63,10 @@ export function getDataTypeMarkerColor(dataType?: string): string {
 export const DataTypeEdge = memo(
   ({
     style,
+    id,
+    source,
+    target,
+    selected,
     sourceX,
     sourceY,
     targetX,
@@ -70,6 +76,9 @@ export const DataTypeEdge = memo(
     data,
     markerEnd,
   }: EdgeProps) => {
+    const { deleteElements } = useReactFlow();
+    const [showDetails, setShowDetails] = useState(false);
+    const [showReconnectHint, setShowReconnectHint] = useState(false);
     const edgeData = data as DataTypeEdgeData | undefined;
 
     const dataType = edgeData?.dataType || 'text';
@@ -104,6 +113,7 @@ export const DataTypeEdge = memo(
     return (
       <>
         <BaseEdge
+          id={id}
           path={edgePath}
           markerEnd={markerEnd}
           style={mergedStyle}
@@ -114,6 +124,7 @@ export const DataTypeEdge = memo(
           ]
             .filter(Boolean)
             .join(' ')}
+          interactionWidth={20}
         />
         {isActive && (
           <path
@@ -121,9 +132,10 @@ export const DataTypeEdge = memo(
             d={edgePath}
             fill="none"
             style={mergedStyle}
+            aria-hidden
           />
         )}
-        {edgeData?.label && (
+        {(edgeData?.label || selected) && (
           <EdgeLabelRenderer>
             <div
               style={{
@@ -134,8 +146,54 @@ export const DataTypeEdge = memo(
               }}
             >
               <div className="studio-handle-pill rounded-md px-2 py-1 text-2xs font-medium uppercase tracking-tight shadow-sm">
-                {edgeData.label}
+                {edgeData?.label ?? dataType}
               </div>
+              {selected ? (
+                <div
+                  className="nodrag nowheel mt-1 flex min-w-max items-center gap-1 rounded-md border border-border bg-background p-1 text-xs shadow-sm"
+                  role="toolbar"
+                  aria-label={`Connection from ${source} to ${target}`}
+                >
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    aria-expanded={showDetails}
+                    onClick={() => setShowDetails((value) => !value)}
+                  >
+                    Inspect
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setShowReconnectHint(true)}
+                  >
+                    Reconnect
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs text-destructive"
+                    onClick={() => void deleteElements({ edges: [{ id }] })}
+                  >
+                    Delete
+                  </Button>
+                  {showDetails ? (
+                    <span className="px-1 text-muted-foreground">
+                      {source} → {target} · {dataType}
+                    </span>
+                  ) : null}
+                  {showReconnectHint ? (
+                    <span className="px-1 text-muted-foreground" role="status">
+                      Drag either endpoint to a compatible port.
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </EdgeLabelRenderer>
         )}

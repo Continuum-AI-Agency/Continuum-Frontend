@@ -19,7 +19,7 @@
   --popover: #ffffff;
   --popover-foreground: #16162a;
 
-  --primary: #5A48F9; /* electric blue-violet — brand anchor */
+  --primary: #5a48f9; /* electric blue-violet — brand anchor */
   --primary-foreground: #ffffff;
 
   --secondary: #0ea5e9; /* sky-500 — electric cyan complement */
@@ -28,7 +28,7 @@
   --muted: #eeecfc; /* violet-tinted muted bg */
   --muted-foreground: #5c5b7a; /* violet-tinted mid-gray */
 
-  --accent: #7B6BFF; /* lighter blend of primary toward white */
+  --accent: #7b6bff; /* lighter blend of primary toward white */
   --accent-foreground: #0f172a;
 
   --destructive: #ef4444;
@@ -41,7 +41,7 @@
 
   --border: #e4e2f7; /* violet-tinted border */
   --input: #e4e2f7;
-  --ring: #5A48F9; /* unify with primary */
+  --ring: #5a48f9; /* unify with primary */
 
   --radius: 0.5rem;
   --color-background: var(--background);
@@ -71,10 +71,10 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
-  --chart-1: #5A48F9;
+  --chart-1: #5a48f9;
   --chart-2: #22c55e;
   --chart-3: #f59e0b;
-  --chart-4: #7B6BFF;
+  --chart-4: #7b6bff;
   --chart-5: #ec4899;
   --sidebar: #f9f8ff;
   --sidebar-foreground: #16162a;
@@ -111,7 +111,11 @@
   --edge-flow-offset: -10000;
   --edge-handle-border: var(--surface-default);
   --studio-grid-dot: rgba(22, 22, 42, 0.07);
-  --studio-canvas-vignette: radial-gradient(120% 120% at 30% 0%, rgba(15, 23, 42, 0.04), transparent 60%);
+  --studio-canvas-vignette: radial-gradient(
+    120% 120% at 30% 0%,
+    rgba(15, 23, 42, 0.04),
+    transparent 60%
+  );
 
   /* Glass surface tokens (light) */
   --glass-bg: rgba(255, 255, 255, 0.72);
@@ -119,11 +123,11 @@
   --glass-shadow: 0 18px 40px -16px rgba(15, 23, 42, 0.28);
 
   /* Legacy Galaxy background CSS variables for SSR-stable inline styles */
-  --bg-galaxy-c1-light: rgba(255,122,203,0.25);
-  --bg-galaxy-c2-light: rgba(255,255,255,0.22);
-  --bg-galaxy-c3-light: rgba(255,210,238,0.14);
-  --bg-galaxy-vignette-light: rgba(255,255,255,0.06);
-  --bg-galaxy-c1-overlay-light: rgba(255,210,238,0.10);
+  --bg-galaxy-c1-light: rgba(255, 122, 203, 0.25);
+  --bg-galaxy-c2-light: rgba(255, 255, 255, 0.22);
+  --bg-galaxy-c3-light: rgba(255, 210, 238, 0.14);
+  --bg-galaxy-vignette-light: rgba(255, 255, 255, 0.06);
+  --bg-galaxy-c1-overlay-light: rgba(255, 210, 238, 0.1);
 
   /* Layout and viewport density tokens.
      The dashboard is dense by default, then gently compacts on laptop-sized
@@ -269,12 +273,24 @@ html {
 }
 
 /* Semantic theme utilities (align with styleguide) */
-.bg-default { background-color: var(--surface-default); }
-.bg-surface { background-color: var(--surface-accent); }
-.text-primary { color: var(--text-primary); }
-.text-secondary { color: var(--text-secondary); }
-.border-subtle { border-color: var(--border-subtle); }
-.shadow-brand-glow { box-shadow: var(--shadow-brand-glow); }
+.bg-default {
+  background-color: var(--surface-default);
+}
+.bg-surface {
+  background-color: var(--surface-accent);
+}
+.text-primary {
+  color: var(--text-primary);
+}
+.text-secondary {
+  color: var(--text-secondary);
+}
+.border-subtle {
+  border-color: var(--border-subtle);
+}
+.shadow-brand-glow {
+  box-shadow: var(--shadow-brand-glow);
+}
 
 .glass-panel {
   background-color: color-mix(in srgb, var(--surface-accent) 92%, transparent);
@@ -290,45 +306,45 @@ html {
 [data-theme="dark"] {
   color-scheme: dark;
   --background: #020617;
-  --foreground: #E5E7EB;
-  --card: #0B1220;
-  --card-foreground: #E5E7EB;
-  --popover: #0B1220;
-  --popover-foreground: #E5E7EB;
-  --primary: #7C6FFF;
+  --foreground: #e5e7eb;
+  --card: #0b1220;
+  --card-foreground: #e5e7eb;
+  --popover: #0b1220;
+  --popover-foreground: #e5e7eb;
+  --primary: #7c6fff;
   --primary-foreground: #ffffff;
   --secondary: #0ea5e9;
   --secondary-foreground: #0f172a;
-  --muted: #0F172A;
-  --muted-foreground: #94A3B8;
-  --accent: #53A88A;
-  --accent-foreground: #E5E7EB;
-  --destructive: #EF4444;
-  --destructive-foreground: #0B1220;
+  --muted: #0f172a;
+  --muted-foreground: #94a3b8;
+  --accent: #53a88a;
+  --accent-foreground: #e5e7eb;
+  --destructive: #ef4444;
+  --destructive-foreground: #0b1220;
   --success: #34d399; /* emerald-400 */
   --success-foreground: #052e16;
   --warning: #fbbf24; /* amber-400 */
   --warning-foreground: #241a02;
-  --border: rgba(255,255,255,0.10);
-  --input: rgba(255,255,255,0.10);
-  --ring: #7C6FFF;
-  --chart-1: #7C6FFF;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #7c6fff;
+  --chart-1: #7c6fff;
   --chart-2: #34d399;
   --chart-3: #fbbf24;
   --chart-4: #a78bfa;
   --chart-5: #f472b6;
-  --sidebar: #0B1220;
-  --sidebar-foreground: #E5E7EB;
-  --sidebar-primary: #7C6FFF;
+  --sidebar: #0b1220;
+  --sidebar-foreground: #e5e7eb;
+  --sidebar-primary: #7c6fff;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #0f172a;
-  --sidebar-accent-foreground: #E5E7EB;
-  --sidebar-border: rgba(255,255,255,0.10);
-  --sidebar-ring: #7C6FFF;
-  --sidebar-muted: color-mix(in srgb, #E5E7EB 68%, transparent);
-  --sidebar-muted-dim: color-mix(in srgb, #E5E7EB 48%, transparent);
-  --sidebar-hover-bg: color-mix(in srgb, #7C6FFF 10%, transparent);
-  --sidebar-active-bg: color-mix(in srgb, #7C6FFF 14%, transparent);
+  --sidebar-accent-foreground: #e5e7eb;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #7c6fff;
+  --sidebar-muted: color-mix(in srgb, #e5e7eb 68%, transparent);
+  --sidebar-muted-dim: color-mix(in srgb, #e5e7eb 48%, transparent);
+  --sidebar-hover-bg: color-mix(in srgb, #7c6fff 10%, transparent);
+  --sidebar-active-bg: color-mix(in srgb, #7c6fff 14%, transparent);
   --sidebar-destructive-bg: color-mix(in srgb, var(--destructive) 14%, transparent);
   --radius: 0.5rem;
   --surface-default: var(--background);
@@ -337,14 +353,14 @@ html {
   --text-secondary: var(--muted-foreground);
   --border-subtle: var(--border);
   --shadow-brand-glow: 0 18px 48px -18px rgba(124, 111, 255, 0.5);
-  --glass-border: rgba(255, 255, 255, 0.10);
-  --glass-bg: rgba(2, 6, 23, 0.60);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-bg: rgba(2, 6, 23, 0.6);
   --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  --bg-galaxy-c1-dark: rgba(160,140,207,0.24);
-  --bg-galaxy-c2-dark: rgba(93,42,142,0.18);
-  --bg-galaxy-c3-dark: rgba(0,0,0,0.18);
-  --bg-galaxy-vignette-dark: rgba(0,0,0,0.25);
-  --bg-galaxy-c1-overlay-dark: rgba(160,140,207,0.06);
+  --bg-galaxy-c1-dark: rgba(160, 140, 207, 0.24);
+  --bg-galaxy-c2-dark: rgba(93, 42, 142, 0.18);
+  --bg-galaxy-c3-dark: rgba(0, 0, 0, 0.18);
+  --bg-galaxy-vignette-dark: rgba(0, 0, 0, 0.25);
+  --bg-galaxy-c1-overlay-dark: rgba(160, 140, 207, 0.06);
 
   /* Studio Canvas connector tokens (dark) */
   --edge-text: #94a3b8;
@@ -365,7 +381,11 @@ html {
   --edge-flow-offset: -10000;
   --edge-handle-border: var(--surface-default);
   --studio-grid-dot: rgba(226, 232, 240, 0.08);
-  --studio-canvas-vignette: radial-gradient(120% 120% at 30% 0%, rgba(148, 163, 184, 0.06), transparent 60%);
+  --studio-canvas-vignette: radial-gradient(
+    120% 120% at 30% 0%,
+    rgba(148, 163, 184, 0.06),
+    transparent 60%
+  );
 }
 
 /* System preference fallback when no explicit data-theme is set */
@@ -373,41 +393,41 @@ html {
   :root:not([data-theme]) {
     color-scheme: dark;
     --background: #020617;
-    --foreground: #E5E7EB;
-    --card: #0B1220;
-    --card-foreground: #E5E7EB;
-    --popover: #0B1220;
-    --popover-foreground: #E5E7EB;
-    --primary: #7C6FFF;
+    --foreground: #e5e7eb;
+    --card: #0b1220;
+    --card-foreground: #e5e7eb;
+    --popover: #0b1220;
+    --popover-foreground: #e5e7eb;
+    --primary: #7c6fff;
     --primary-foreground: #ffffff;
     --secondary: #0ea5e9;
     --secondary-foreground: #0f172a;
-    --muted: #0F172A;
-    --muted-foreground: #94A3B8;
-    --accent: #53A88A;
-    --accent-foreground: #E5E7EB;
-    --destructive: #EF4444;
-    --destructive-foreground: #0B1220;
+    --muted: #0f172a;
+    --muted-foreground: #94a3b8;
+    --accent: #53a88a;
+    --accent-foreground: #e5e7eb;
+    --destructive: #ef4444;
+    --destructive-foreground: #0b1220;
     --success: #34d399;
     --success-foreground: #052e16;
     --warning: #fbbf24;
     --warning-foreground: #241a02;
-    --border: rgba(255,255,255,0.10);
-    --input: rgba(255,255,255,0.10);
-    --ring: #7C6FFF;
-    --chart-1: #7C6FFF;
+    --border: rgba(255, 255, 255, 0.1);
+    --input: rgba(255, 255, 255, 0.1);
+    --ring: #7c6fff;
+    --chart-1: #7c6fff;
     --chart-2: #34d399;
     --chart-3: #fbbf24;
     --chart-4: #a78bfa;
     --chart-5: #f472b6;
-    --sidebar: #0B1220;
-    --sidebar-foreground: #E5E7EB;
-    --sidebar-primary: #7C6FFF;
+    --sidebar: #0b1220;
+    --sidebar-foreground: #e5e7eb;
+    --sidebar-primary: #7c6fff;
     --sidebar-primary-foreground: #ffffff;
     --sidebar-accent: #0f172a;
-    --sidebar-accent-foreground: #E5E7EB;
-    --sidebar-border: rgba(255,255,255,0.10);
-    --sidebar-ring: #7C6FFF;
+    --sidebar-accent-foreground: #e5e7eb;
+    --sidebar-border: rgba(255, 255, 255, 0.1);
+    --sidebar-ring: #7c6fff;
     --radius: 0.5rem;
   }
 }
@@ -420,21 +440,166 @@ body {
   background-color: var(--surface-default);
   background-image: none;
   background-size: cover;
-  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="rgba(90, 72, 249, 0.2)" /><circle cx="16" cy="16" r="8" fill="rgba(90, 72, 249, 0.4)" /><circle cx="16" cy="16" r="4" fill="rgb(90, 72, 249)" /></svg>') 16 16, auto;
+  cursor:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="rgba(90, 72, 249, 0.2)" /><circle cx="16" cy="16" r="8" fill="rgba(90, 72, 249, 0.4)" /><circle cx="16" cy="16" r="4" fill="rgb(90, 72, 249)" /></svg>')
+    16 16,
+    auto;
+}
+
+/* Automation is one intentionally light technical workspace. The surrounding
+   product can follow system theme without splitting this editor into two themes. */
+.automation-workspace-shell,
+.automation-workflow-popover {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #16162a;
+  --card: #ffffff;
+  --card-foreground: #16162a;
+  --popover: #ffffff;
+  --popover-foreground: #16162a;
+  --muted: #f6f7fb;
+  --muted-foreground: #6b7280;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --primary: #5a48f9;
+  --primary-foreground: #ffffff;
+  --ring: #5a48f9;
+  --surface-default: #ffffff;
+  --surface-accent: #ffffff;
+  --edge-handle-border: #ffffff;
+  --studio-grid-dot: rgba(22, 22, 42, 0.08);
+}
+
+.automation-workflow-popover {
+  background-color: #ffffff;
+  color: #16162a;
+}
+
+.automation-workflow-canvas {
+  background-color: #ffffff;
+  cursor: default;
+}
+
+.automation-prompt-surface {
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.automation-prompt-surface:focus-within {
+  background-color: #ffffff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+/* Automation canvas semantic zoom keeps large graphs legible without turning
+   each node into a miniature form. Detail returns automatically as users zoom. */
+.automation-density-compact .workflow-node-details > p,
+.automation-density-compact .workflow-node-footer > span:last-child {
+  display: none;
+}
+
+.automation-density-overview .workflow-node-details,
+.automation-density-overview .workflow-node-footer,
+.automation-density-overview .workflow-node-shell [data-slot="card-description"] {
+  display: none;
+}
+
+.automation-density-overview .workflow-node-shell .node-container {
+  width: 11rem;
+}
+
+.automation-density-overview .workflow-node-shell [data-slot="card-header"] {
+  border-bottom: 0;
+  padding: 0.625rem !important;
+}
+
+.workflow-node-shell {
+  --workflow-node-accent: var(--border);
+}
+
+.workflow-node-shell[data-category="trigger"] {
+  --workflow-node-accent: var(--success);
+}
+
+.workflow-node-shell[data-category="context"] {
+  --workflow-node-accent: var(--secondary);
+}
+
+.workflow-node-shell[data-category="intelligence"] {
+  --workflow-node-accent: var(--primary);
+}
+
+.workflow-node-shell[data-category="logic"] {
+  --workflow-node-accent: var(--warning);
+}
+
+.workflow-node-shell[data-category="outcome"] {
+  --workflow-node-accent: var(--foreground);
+}
+
+.workflow-node-card {
+  position: relative;
+  box-shadow: 0 12px 28px -22px color-mix(in srgb, #25304a 42%, transparent);
+}
+
+.workflow-node-card::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 1;
+  width: 2px;
+  background-color: var(--workflow-node-accent);
+  content: "";
+}
+
+.workflow-node-shell[data-execution="running"] .node-container {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--primary) 30%, transparent),
+    0 8px 28px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.workflow-node-shell[data-execution="completed"] .node-container {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--success) 22%, transparent);
+}
+
+.workflow-node-shell[data-execution="failed"] .node-container {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--destructive) 34%, transparent),
+    0 8px 28px color-mix(in srgb, var(--destructive) 12%, transparent);
+}
+
+.workflow-edge-path {
+  transition:
+    stroke 180ms ease,
+    stroke-width 180ms ease,
+    opacity 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-edge-path {
+    transition: none;
+  }
 }
 
 /* Glow for nodes selected by other users */
 .react-flow__node.selected-by-other {
-  box-shadow: 0 0 0 2px var(--other-user-color, #a855f7), 0 0 16px var(--other-user-color, #a855f7);
+  box-shadow:
+    0 0 0 2px var(--other-user-color, #a855f7),
+    0 0 16px var(--other-user-color, #a855f7);
   animation: pulse-glow 1.5s ease-in-out infinite;
 }
 
 @keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 0 2px var(--other-user-color, #a855f7), 0 0 16px var(--other-user-color, #a855f7);
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--other-user-color, #a855f7),
+      0 0 16px var(--other-user-color, #a855f7);
   }
   50% {
-    box-shadow: 0 0 0 2px var(--other-user-color, #a855f7), 0 0 24px var(--other-user-color, #a855f7);
+    box-shadow:
+      0 0 0 2px var(--other-user-color, #a855f7),
+      0 0 24px var(--other-user-color, #a855f7);
   }
 }
 
@@ -445,17 +610,23 @@ body {
   stroke-linejoin: round;
   stroke-dasharray: none;
   animation: none;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-color) var(--edge-alpha-base-glow), transparent));
+  filter: drop-shadow(
+    0 0 6px color-mix(in srgb, var(--edge-color) var(--edge-alpha-base-glow), transparent)
+  );
 }
 
 .react-flow__edge.studio-edge:hover .react-flow__edge-path {
   stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-hover), transparent);
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent));
+  filter: drop-shadow(
+    0 0 8px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent)
+  );
 }
 
 .react-flow__edge.studio-edge.selected .react-flow__edge-path {
   stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-selected), transparent);
-  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent));
+  filter: drop-shadow(
+    0 0 10px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent)
+  );
 }
 
 .react-flow__edge.studio-edge--connected .react-flow__edge-path,
@@ -470,7 +641,9 @@ body {
   stroke-linejoin: round;
   stroke-dasharray: none;
   animation: none;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-color) var(--edge-alpha-base-glow), transparent));
+  filter: drop-shadow(
+    0 0 6px color-mix(in srgb, var(--edge-color) var(--edge-alpha-base-glow), transparent)
+  );
 }
 
 .studio-edge-path--active-base {
@@ -485,14 +658,18 @@ body {
   stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-selected), transparent);
   stroke-dasharray: var(--edge-flow-dash) var(--edge-flow-gap);
   animation: studio-edge-flow var(--edge-flow-duration) linear infinite;
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent));
+  filter: drop-shadow(
+    0 0 12px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent)
+  );
 }
 
 .studio-edge-path--active {
   stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-selected), transparent);
   stroke-dasharray: var(--edge-flow-dash) var(--edge-flow-gap);
   animation: studio-edge-flow var(--edge-flow-duration) linear infinite;
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent));
+  filter: drop-shadow(
+    0 0 12px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent)
+  );
 }
 
 .studio-connection-line {
@@ -506,7 +683,9 @@ body {
 .studio-handle {
   background-color: var(--edge-color) !important;
   border-color: var(--edge-handle-border) !important;
-  transition: filter 180ms ease, opacity 180ms ease;
+  transition:
+    filter 180ms ease,
+    opacity 180ms ease;
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--edge-color) 22%, transparent));
   animation: studio-handle-pulse 2.6s ease-in-out infinite;
 }
@@ -542,12 +721,16 @@ body {
   }
   55% {
     stroke-width: calc(var(--edge-stroke-width) + 0.85px);
-    filter: drop-shadow(0 0 11px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent));
+    filter: drop-shadow(
+      0 0 11px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent)
+    );
   }
   100% {
     stroke-dasharray: none;
     stroke-width: var(--edge-stroke-width);
-    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-color) var(--edge-alpha-base-glow), transparent));
+    filter: drop-shadow(
+      0 0 6px color-mix(in srgb, var(--edge-color) var(--edge-alpha-base-glow), transparent)
+    );
   }
 }
 
@@ -589,7 +772,8 @@ body {
 }
 
 @keyframes pulse-glow {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -642,30 +826,48 @@ body {
 @keyframes floatTop {
   0% {
     transform: translateY(-6px);
-    background-position: 0% 0%, 30% 20%, 60% 10%;
+    background-position:
+      0% 0%,
+      30% 20%,
+      60% 10%;
   }
   50% {
     transform: translateY(6px);
-    background-position: 20% 10%, 40% 0%, 70% 15%;
+    background-position:
+      20% 10%,
+      40% 0%,
+      70% 15%;
   }
   100% {
     transform: translateY(-6px);
-    background-position: 0% 0%, 30% 20%, 60% 10%;
+    background-position:
+      0% 0%,
+      30% 20%,
+      60% 10%;
   }
 }
 
 @keyframes floatBottom {
   0% {
     transform: translateY(6px);
-    background-position: 20% 100%, 70% 90%, 50% 96%;
+    background-position:
+      20% 100%,
+      70% 90%,
+      50% 96%;
   }
   50% {
     transform: translateY(-6px);
-    background-position: 30% 92%, 60% 98%, 40% 88%;
+    background-position:
+      30% 92%,
+      60% 98%,
+      40% 88%;
   }
   100% {
     transform: translateY(6px);
-    background-position: 20% 100%, 70% 90%, 50% 96%;
+    background-position:
+      20% 100%,
+      70% 90%,
+      50% 96%;
   }
 }
 
@@ -697,12 +899,12 @@ body {
 [data-theme="light"] [class*="text-white"] {
   color: var(--foreground) !important;
 }
-[data-theme="light"] [class*=\"text-slate-100\"], 
-[data-theme="light"] [class*=\"text-slate-200\"], 
-[data-theme="light"] [class*=\"text-slate-300\"],
-[data-theme="light"] [class*=\"text-gray-100\"],
-[data-theme="light"] [class*=\"text-gray-200\"],
-[data-theme="light"] [class*=\"text-gray-300\"] {
+[data-theme="light"] [class*='"text-slate-100"'],
+[data-theme="light"] [class*='"text-slate-200"'],
+[data-theme="light"] [class*='"text-slate-300"'],
+[data-theme="light"] [class*='"text-gray-100"'],
+[data-theme="light"] [class*='"text-gray-200"'],
+[data-theme="light"] [class*='"text-gray-300"'] {
   color: var(--foreground) !important;
 }
 
@@ -723,12 +925,12 @@ body {
   --waves-overscan: 25%;
 
   /* Light theme wave colors (kept brand-consistent) */
-  --wave-1-a: #EDE6FA; /* soft lavender */
-  --wave-1-b: #DDE6FF; /* pale indigo */
-  --wave-2-a: #F6E9FF; /* light lilac */
-  --wave-2-b: #EDE6FA; /* soft lavender */
-  --wave-3-a: #FFE3EC; /* blush */
-  --wave-3-b: #F3E7FF; /* pastel purple */
+  --wave-1-a: #ede6fa; /* soft lavender */
+  --wave-1-b: #dde6ff; /* pale indigo */
+  --wave-2-a: #f6e9ff; /* light lilac */
+  --wave-2-b: #ede6fa; /* soft lavender */
+  --wave-3-a: #ffe3ec; /* blush */
+  --wave-3-b: #f3e7ff; /* pastel purple */
 
   /* BasedKit chart tokens (light). Sequential --chart-scale-* is a brand violet
      ramp low→high; brand categorical --chart-1..5 stay defined above and are NOT
@@ -758,11 +960,11 @@ body {
 
 [data-theme="dark"] {
   /* Dark theme wave colors (aligned to your palette) */
-  --wave-1-a: #2E2257; /* uses --secondary family */
-  --wave-1-b: #23376B; /* deep indigo */
+  --wave-1-a: #2e2257; /* uses --secondary family */
+  --wave-1-b: #23376b; /* deep indigo */
   --wave-2-a: #462559; /* deep purple */
-  --wave-2-b: #2E2257; /* deep indigo */
-  --wave-3-a: #8A4374; /* muted magenta */
+  --wave-2-b: #2e2257; /* deep indigo */
+  --wave-3-a: #8a4374; /* muted magenta */
   --wave-3-b: #462559; /* deep purple */
 }
 
@@ -806,16 +1008,28 @@ body {
 
 /* Keyframes: slow drift with slight scale */
 @keyframes moveWave1 {
-  0% { transform: translate(-10%, -10%) scale(1.1); }
-  100% { transform: translate(10%, 10%) scale(1.1); }
+  0% {
+    transform: translate(-10%, -10%) scale(1.1);
+  }
+  100% {
+    transform: translate(10%, 10%) scale(1.1);
+  }
 }
 @keyframes moveWave2 {
-  0% { transform: translate(-15%, 10%) scale(1.2); }
-  100% { transform: translate(15%, -10%) scale(1.2); }
+  0% {
+    transform: translate(-15%, 10%) scale(1.2);
+  }
+  100% {
+    transform: translate(15%, -10%) scale(1.2);
+  }
 }
 @keyframes moveWave3 {
-  0% { transform: translate(10%, -15%) scale(1.3); }
-  100% { transform: translate(-10%, 15%) scale(1.3); }
+  0% {
+    transform: translate(10%, -15%) scale(1.3);
+  }
+  100% {
+    transform: translate(-10%, 15%) scale(1.3);
+  }
 }
 
 /* Motion and perf guardrails */
@@ -951,8 +1165,12 @@ body {
 }
 
 @keyframes skeleton-shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @utility live-pulse {
@@ -960,8 +1178,15 @@ body {
 }
 
 @keyframes live-pulse-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.85); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

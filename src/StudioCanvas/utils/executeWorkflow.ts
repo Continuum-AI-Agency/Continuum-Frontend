@@ -1,12 +1,18 @@
 'use client';
 
-import { TIMELINE_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
+import {
+  type RegisterCanvasAssetResponse,
+  TIMELINE_MEDIA_INPUT_HANDLE,
+} from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { registerCanvasOutput } from '@/lib/creative-assets/registerCanvasAsset';
+import { persistAssetRendition } from '@/lib/library/assetPreview';
 import { readServerSentEvents } from '@/lib/sse/readServerSentEvents';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type {
+  FrameExtractNodeData,
   HyperframesAgentNodeData,
   ImageNodeData,
   StudioNode,
@@ -24,6 +30,7 @@ import {
 } from './buildNodePayload';
 import { compositeImages } from './compositeImages';
 import { buildDataUrl, parseDataUrl } from './dataUrl';
+import { extractVideoFrame } from './extractVideoFrame';
 import { computeGenerationSignature, isSignatureTracked, nodeIsStale } from './generationSignature';
 import { hasHydratableMediaReference, rehydrateWorkflowMediaNodes } from './rehydrateWorkflowMedia';
 import { startHyperframesAgentNode } from './startHyperframesAgent';
@@ -41,6 +48,7 @@ const MEDIA_NODE_TYPES = new Set([
   'extendVideo',
   'hyperframesAgent',
   'timelineEditor',
+  'frameExtract',
 ]);
 
 const isMediaNodeType = (nodeType: string | undefined): nodeType is string =>
@@ -446,6 +454,19 @@ const getNodeReadiness = (
     return { ready: true };
   }
 
+  if (node.type === 'frameExtract') {
+    const videoEdges = incomingEdges.filter((edge) => edge.targetHandle === 'video');
+    if (videoEdges.length === 0) {
+      return { ready: false, reason: 'Missing required video input' };
+    }
+    const hasVideo = videoEdges.some((edge) =>
+      resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }),
+    );
+    return hasVideo
+      ? { ready: true }
+      : { ready: false, reason: 'Missing connected input for video' };
+  }
+
   if (node.type === 'extendVideo') {
     const videoEdges = incomingEdges.filter((edge) => edge.targetHandle === 'video');
     if (videoEdges.length === 0) {
@@ -659,7 +680,7 @@ const buildOptimisticPreflightOutputs = (
   for (const node of executableNodes) {
     if (node.type === 'string' || node.type === 'videoDecode') {
       outputs.set(node.id, { type: 'text', value: 'preflight-ready' });
-    } else if (node.type === 'nanoGen') {
+    } else if (node.type === 'nanoGen' || node.type === 'frameExtract') {
       outputs.set(node.id, { type: 'image', base64: 'preflight-ready', mimeType: 'image/png' });
     } else if (isMediaNodeType(node.type)) {
       outputs.set(node.id, { type: 'video', url: 'data:video/mp4;base64,preflight-ready' });
@@ -813,6 +834,7 @@ async function ensureReferenceMediaHydrated(
   nodes: StudioNode[],
   edges: Edge[],
   executableNodeIds: Set<string>,
+  brandProfileId?: string,
 ): Promise<void> {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const candidateIds = new Set<string>();
@@ -831,7 +853,7 @@ async function ensureReferenceMediaHydrated(
   );
   if (candidates.length === 0) return;
 
-  const hydrated = await rehydrateWorkflowMediaNodes(candidates);
+  const hydrated = await rehydrateWorkflowMediaNodes(candidates, undefined, brandProfileId);
   for (const node of hydrated) {
     const original = nodeById.get(node.id);
     if (original && original.data !== node.data) {
@@ -899,7 +921,12 @@ export async function executeWorkflow(
       surfacePreflightIssue(controls, snapshot.nodes, preflightIssue);
       return;
     }
-    await ensureReferenceMediaHydrated(snapshot.nodes, snapshot.edges, new Set(scopeNodeIds));
+    await ensureReferenceMediaHydrated(
+      snapshot.nodes,
+      snapshot.edges,
+      new Set(scopeNodeIds),
+      options.brandId,
+    );
   }
 
   const { nodes, edges } = useStudioStore.getState();
@@ -1087,7 +1114,7 @@ export async function executeWorkflow(
     // Reuse a node's existing output (feed it to downstream consumers) when the
     // node is not slated to regenerate and already holds usable content.
     if (!mustRegenerate.has(node.id) && nodeHasUsableOutput(node)) {
-      if (node.type === 'nanoGen') {
+      if (node.type === 'nanoGen' || node.type === 'frameExtract') {
         const genImage = (node.data as any).generatedImage as string | undefined;
         const genImageUrl = (node.data as any).generatedImageUrl as string | undefined;
         const durableImageUrl = isHttpUrl(genImage) ? genImage : genImageUrl;
@@ -1137,6 +1164,7 @@ export async function executeWorkflow(
             storagePath: (node.data as any).generatedVideoStoragePath,
             storageBucket: (node.data as any).generatedVideoBucket,
             assetId: (node.data as any).renderOutputAssetId,
+            assetVersionId: (node.data as any).renderOutputAssetVersionId,
           });
         }
       } else if (node.type === 'string') {
@@ -1184,6 +1212,8 @@ export async function executeWorkflow(
   // Auto-register a durable canvas creation into the media library (source=
   // "canvas") with provenance. Fire-and-forget: never blocks or throws into the
   // generation flow. Skips base64-only / in-memory results and anonymous brands.
+  const registrationPromises = new Map<string, Promise<RegisterCanvasAssetResponse | null>>();
+
   const registerCanvasIfDurable = (
     nodeId: string,
     asset: {
@@ -1194,14 +1224,16 @@ export async function executeWorkflow(
       mimeType: string;
       sizeBytes?: number;
     },
-  ) => {
+  ): Promise<RegisterCanvasAssetResponse | null> => {
     const brandProfileId = options.brandId;
-    if (!brandProfileId || brandProfileId === 'default-brand') return;
-    if (!asset.url || asset.url.startsWith('data:') || !asset.bucket || !asset.storagePath) return;
+    if (!brandProfileId || brandProfileId === 'default-brand') return Promise.resolve(null);
+    if (!asset.url || asset.url.startsWith('data:') || !asset.bucket || !asset.storagePath) {
+      return Promise.resolve(null);
+    }
     const node = nodeById.get(nodeId);
     const data = (node?.data ?? {}) as { prompt?: unknown; model?: unknown };
     const fileName = asset.storagePath.split('/').pop() || `canvas-${asset.kind}`;
-    void registerCanvasOutput(
+    const pending = registerCanvasOutput(
       {
         brandProfileId,
         kind: asset.kind,
@@ -1220,11 +1252,17 @@ export async function executeWorkflow(
         },
       },
       asset.kind === 'video' ? { videoSource: asset.url } : undefined,
-    ).then((assetId) => {
-      if (!assetId) return;
-      useStudioStore.getState().updateNodeData(nodeId, { renderOutputAssetId: assetId });
+    ).then((registered) => {
+      if (!registered?.assetId) return registered;
+      useStudioStore.getState().updateNodeData(nodeId, {
+        renderOutputAssetId: registered.assetId,
+        renderOutputAssetVersionId: registered.assetVersionId ?? undefined,
+      });
       useStudioStore.getState().triggerSave();
+      return registered;
     });
+    registrationPromises.set(nodeId, pending);
+    return pending;
   };
 
   // Stamp the signature of the inputs that produced this output so a later run
@@ -1262,6 +1300,7 @@ export async function executeWorkflow(
         generatedImageStoragePath: output.storagePath,
         generatedImageBucket: output.storageBucket,
         renderOutputAssetId: output.assetId,
+        renderOutputAssetVersionId: output.assetVersionId,
         generationSignature: generationSignatureFor(nodeId),
         isComplete: true,
         isExecuting: false,
@@ -1295,6 +1334,7 @@ export async function executeWorkflow(
         generatedVideoStoragePath: output.storagePath,
         generatedVideoBucket: output.storageBucket,
         renderOutputAssetId: output.assetId,
+        renderOutputAssetVersionId: output.assetVersionId,
         generationSignature: generationSignatureFor(nodeId),
         isComplete: true,
         isExecuting: false,
@@ -1476,6 +1516,100 @@ export async function executeWorkflow(
         return true;
       }
 
+      if (node.type === 'frameExtract') {
+        const incoming = getIncomingEdges(edges, nodeId);
+        const videoEdge = incoming.find((edge) => edge.targetHandle === 'video');
+        const sourceOutput = videoEdge ? resolvedOutputs.get(videoEdge.source) : undefined;
+        const sourceNode = videoEdge ? nodeById.get(videoEdge.source) : undefined;
+        const sourceData = (sourceNode?.data ?? {}) as Record<string, unknown>;
+        const source =
+          sourceOutput?.type === 'video'
+            ? sourceOutput.url
+            : sourceNode?.type === 'video'
+              ? ((sourceData.video ?? sourceData.sourceUrl) as string | Blob | undefined)
+              : ((sourceData.generatedVideo ?? sourceData.generatedVideoUrl) as
+                  | string
+                  | Blob
+                  | undefined);
+        if (!videoEdge || !source) {
+          updateNodeStatus(nodeId, 'failed', 'Missing connected video input');
+          return false;
+        }
+
+        const data = node.data as FrameExtractNodeData;
+        const selector =
+          data.selector === 'first' || data.selector === 'timestamp' ? data.selector : 'last';
+        const frame = await extractVideoFrame({
+          source,
+          selector,
+          timestampSec: data.timestampSec,
+          outputWidth: data.outputWidth,
+          quality: data.quality,
+        });
+        if (!frame) {
+          updateNodeStatus(nodeId, 'failed', 'This browser could not decode the selected frame');
+          return false;
+        }
+
+        const registration = await registrationPromises.get(videoEdge.source);
+        const sourceAssetId =
+          registration?.assetId ??
+          (sourceOutput?.type === 'video' ? sourceOutput.assetId : undefined) ??
+          (typeof sourceData.renderOutputAssetId === 'string'
+            ? sourceData.renderOutputAssetId
+            : undefined);
+        const sourceAssetVersionId =
+          registration?.assetVersionId ??
+          (sourceOutput?.type === 'video' ? sourceOutput.assetVersionId : undefined) ??
+          (typeof sourceData.renderOutputAssetVersionId === 'string'
+            ? sourceData.renderOutputAssetVersionId
+            : undefined);
+        const sourceTimestampMs = Math.round(frame.timestampSec * 1000);
+
+        const parsedFrame = parseDataUrl(frame.dataUrl);
+        setNodeOutput(nodeId, {
+          type: 'image',
+          base64: parsedFrame?.base64 ?? frame.dataUrl,
+          mimeType: frame.mimeType,
+        });
+        useStudioStore.getState().updateNodeData(nodeId, {
+          sourceTimestampMs,
+          sourceAssetId,
+          sourceAssetVersionId,
+        });
+
+        if (
+          selector !== 'timestamp' &&
+          options.brandId &&
+          options.brandId !== 'default-brand' &&
+          sourceAssetId &&
+          sourceAssetVersionId
+        ) {
+          try {
+            await persistAssetRendition({
+              client: createSupabaseBrowserClient(),
+              brandId: options.brandId,
+              assetId: sourceAssetId,
+              assetVersionId: sourceAssetVersionId,
+              role: selector === 'first' ? 'first_frame' : 'last_frame',
+              blob: frame.blob,
+              mimeType: frame.mimeType === 'image/jpeg' ? 'image/jpeg' : 'image/webp',
+              width: frame.width,
+              height: frame.height,
+              renderer: 'mediabunny-canvas-frame-extract',
+              sourceTimestampMs,
+            });
+          } catch (error) {
+            // The extracted frame still feeds the next shot. Persistence is a
+            // durability enhancement and must not invalidate the local workflow.
+            console.warn('[studio] continuity frame persistence failed', error);
+          }
+        }
+
+        updateNodeStatus(nodeId, 'completed');
+        return true;
+      }
+
       if (node.type === 'videoDecode') {
         const incoming = getIncomingEdges(edges, nodeId);
         const videoEdge = incoming.find((edge) => edge.targetHandle === 'video');
@@ -1652,6 +1786,7 @@ export async function executeWorkflow(
             storagePath: data.generatedVideoStoragePath,
             storageBucket: data.generatedVideoBucket,
             assetId: data.renderOutputAssetId,
+            assetVersionId: data.renderOutputAssetVersionId,
           });
           updateNodeStatus(nodeId, 'completed');
           return true;

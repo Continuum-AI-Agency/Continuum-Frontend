@@ -1,5 +1,6 @@
 'use client';
 
+import type { CanvasGraphChangeDecision, CanvasGraphChangeSet } from '@continuum/contracts';
 import {
   ChatBubbleIcon,
   Cross2Icon,
@@ -10,6 +11,13 @@ import {
 } from '@radix-ui/react-icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
+import {
+  Confirmation,
+  ConfirmationAction,
+  ConfirmationActions,
+  ConfirmationRequest,
+  ConfirmationTitle,
+} from '@/components/ai-elements/confirmation';
 import {
   Conversation,
   ConversationContent,
@@ -72,10 +80,8 @@ export function CanvasComposer({
   const [expanded, setExpanded] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [queuedText, setQueuedText] = useState<string | null>(null);
-  const { state, turns, submit, cancel, clear, dismiss } = useCanvasComposer(
-    brandProfileId,
-    roomId,
-  );
+  const { state, turns, submit, cancel, clear, dismiss, decideProposal, decidingProposalId } =
+    useCanvasComposer(brandProfileId, roomId);
 
   // Pressing Run hands the graph to the canvas executor, which then owns the
   // feedback (node spinners, or a preflight toast naming the blocked node). The
@@ -225,6 +231,8 @@ export function CanvasComposer({
                       isLast={index === turns.length - 1}
                       onRun={runAndRetireCard}
                       onCancel={cancel}
+                      onDecide={decideProposal}
+                      decidingProposalId={decidingProposalId}
                     />
                   ))
                 )}
@@ -236,7 +244,13 @@ export function CanvasComposer({
           </div>
         ) : (
           <>
-            <ComposerProgress state={state} onDismiss={dismiss} onRun={runAndRetireCard} />
+            <ComposerProgress
+              state={state}
+              onDismiss={dismiss}
+              onRun={runAndRetireCard}
+              onDecide={decideProposal}
+              decidingProposalId={decidingProposalId}
+            />
             {inputRow}
           </>
         )}
@@ -265,11 +279,15 @@ function TurnMessages({
   isLast,
   onRun,
   onCancel,
+  onDecide,
+  decidingProposalId,
 }: {
   turn: ComposerTurn;
   isLast: boolean;
   onRun: () => void;
   onCancel: () => void;
+  onDecide: (proposal: CanvasGraphChangeSet, decision: CanvasGraphChangeDecision) => Promise<void>;
+  decidingProposalId: string | null;
 }) {
   const { state } = turn;
   const latestStep = state.steps.at(-1);
@@ -327,6 +345,12 @@ function TurnMessages({
             </div>
           ) : null}
 
+          <ProposalReviews
+            proposals={state.proposals}
+            onDecide={onDecide}
+            decidingProposalId={decidingProposalId}
+          />
+
           {state.graph ? (
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">
@@ -359,10 +383,14 @@ function ComposerProgress({
   state,
   onDismiss,
   onRun,
+  onDecide,
+  decidingProposalId,
 }: {
   state: CanvasComposerState;
   onDismiss: () => void;
   onRun: () => void;
+  onDecide: (proposal: CanvasGraphChangeSet, decision: CanvasGraphChangeDecision) => Promise<void>;
+  decidingProposalId: string | null;
 }) {
   if (state.status === 'idle') return null;
 
@@ -407,6 +435,12 @@ function ComposerProgress({
               ))}
             </ul>
           ) : null}
+
+          <ProposalReviews
+            proposals={state.proposals}
+            onDecide={onDecide}
+            decidingProposalId={decidingProposalId}
+          />
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
@@ -429,6 +463,71 @@ function ComposerProgress({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProposalReviews({
+  proposals,
+  onDecide,
+  decidingProposalId,
+}: {
+  proposals: CanvasGraphChangeSet[];
+  onDecide: (proposal: CanvasGraphChangeSet, decision: CanvasGraphChangeDecision) => Promise<void>;
+  decidingProposalId: string | null;
+}) {
+  if (proposals.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      {proposals.map((proposal) => {
+        const pending = proposal.status === 'pending';
+        const nodeChanges = proposal.operations.filter((operation) => 'nodeId' in operation).length;
+        const edgeChanges = proposal.operations.filter((operation) => 'edgeId' in operation).length;
+        if (!pending) {
+          return (
+            <div
+              key={proposal.id}
+              className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs"
+              role="status"
+            >
+              {proposal.status === 'accepted' ? 'Applied' : 'Dismissed'}: {proposal.summary}
+            </div>
+          );
+        }
+        return (
+          <Confirmation
+            key={proposal.id}
+            approval={{ id: proposal.id }}
+            state="approval-requested"
+            className="rounded-md border-border bg-background"
+          >
+            <ConfirmationRequest>
+              <ConfirmationTitle>
+                <span className="font-medium">Review Canvas change</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {proposal.summary} {nodeChanges} node change{nodeChanges === 1 ? '' : 's'} ·{' '}
+                  {edgeChanges} connection change{edgeChanges === 1 ? '' : 's'}
+                </span>
+              </ConfirmationTitle>
+              <ConfirmationActions>
+                <ConfirmationAction
+                  variant="ghost"
+                  disabled={decidingProposalId === proposal.id}
+                  onClick={() => void onDecide(proposal, 'reject')}
+                >
+                  Dismiss
+                </ConfirmationAction>
+                <ConfirmationAction
+                  disabled={decidingProposalId === proposal.id}
+                  onClick={() => void onDecide(proposal, 'accept')}
+                >
+                  Apply changes
+                </ConfirmationAction>
+              </ConfirmationActions>
+            </ConfirmationRequest>
+          </Confirmation>
+        );
+      })}
     </div>
   );
 }

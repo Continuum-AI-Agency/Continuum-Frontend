@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import {
   attachVideoPoster,
+  evidenceFrameTimestamps,
   isVideoMimeType,
   persistVideoPoster,
   posterTimestampSec,
   resolvePosterTimestamp,
+  resolveVideoFrameTimestamp,
   seekVideoPreviewFrame,
   type VideoPoster,
 } from './videoPoster';
@@ -70,6 +72,22 @@ describe('resolvePosterTimestamp', () => {
     expect(resolvePosterTimestamp(null, 5)).toBe(5);
     expect(resolvePosterTimestamp(Number.POSITIVE_INFINITY, 5)).toBe(5);
     expect(resolvePosterTimestamp(null, -2)).toBe(0);
+  });
+});
+
+describe('resolveVideoFrameTimestamp', () => {
+  it('selects exact continuity boundaries inside the decodable interval', () => {
+    expect(resolveVideoFrameTimestamp(8, 'first')).toBe(0);
+    expect(resolveVideoFrameTimestamp(8, 'last')).toBeCloseTo(8 - 1 / 30);
+    expect(resolveVideoFrameTimestamp(8, 'timestamp', 2.5)).toBe(2.5);
+  });
+});
+
+describe('evidenceFrameTimestamps', () => {
+  it('selects bounded first, middle, and last frames for visual grounding', () => {
+    expect(evidenceFrameTimestamps(9)).toEqual([0, 4.5, 8.967]);
+    expect(evidenceFrameTimestamps(9, 2)).toEqual([0, 8.967]);
+    expect(evidenceFrameTimestamps(undefined)).toEqual([0]);
   });
 });
 

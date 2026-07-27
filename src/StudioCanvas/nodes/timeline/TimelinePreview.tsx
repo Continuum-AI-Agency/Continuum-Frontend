@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { type CaptionStyle, resolveCaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
 import type { CaptionCue } from '../../utils/splice/captionCues';
+import type { OverlayPreviewLayer } from './overlayPreview';
+import { TimelineOverlayPreviewLayers } from './TimelineOverlayPreviewLayers';
 
 function formatTime(sec: number): string {
   const safe = Number.isFinite(sec) && sec > 0 ? sec : 0;
@@ -34,6 +36,7 @@ export function TimelinePreview({
   textOverlays,
   fadeOverlay,
   crossfade,
+  overlayLayers,
   mediaMuted,
   mediaVolume,
   caption,
@@ -57,6 +60,7 @@ export function TimelinePreview({
   fadeOverlay?: { color: string; alpha: number } | null;
   // Incoming clip's frame faded in over the current one during a cross-dissolve.
   crossfade?: { url: string; kind: 'video' | 'image'; opacity: number };
+  overlayLayers?: OverlayPreviewLayer[];
   mediaMuted?: boolean;
   mediaVolume?: number;
   caption?: CaptionCue;
@@ -139,6 +143,8 @@ export function TimelinePreview({
             {overlay.text}
           </div>
         ))}
+
+        <TimelineOverlayPreviewLayers layers={overlayLayers ?? []} isPlaying={isPlaying} />
 
         {fadeOverlay && fadeOverlay.alpha > 0 ? (
           <div

@@ -1,9 +1,10 @@
 'use client';
 
-import { ArrowDown, ArrowUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronsUpDown, Search } from 'lucide-react';
 import { Fragment, type ReactNode, useMemo, useState } from 'react';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -49,6 +50,11 @@ export type InsightDataTableProps<T> = {
   // Cap the table height and scroll the body vertically (header stays pinned).
   // Omit to let the table grow with its rows.
   maxHeight?: number | string;
+  // Show a search box that filters rows against searchValue(row). Both must be
+  // set for filtering to run.
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  searchValue?: (row: T) => string;
 };
 
 const ROW_CLASS =
@@ -82,19 +88,31 @@ export function InsightDataTable<T>({
   emptyState,
   className,
   maxHeight,
+  searchable = false,
+  searchPlaceholder = 'Search…',
+  searchValue,
 }: InsightDataTableProps<T>) {
   const [sort, setSort] = useState<SortState | null>(defaultSort ?? null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+
+  const canSearch = searchable && Boolean(searchValue);
+
+  const filteredRows = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!canSearch || !searchValue || term.length === 0) return rows;
+    return rows.filter((row) => searchValue(row).toLowerCase().includes(term));
+  }, [rows, query, canSearch, searchValue]);
 
   const sortedRows = useMemo(() => {
-    if (!sort) return rows;
+    if (!sort) return filteredRows;
     const column = columns.find((col) => col.id === sort.columnId);
-    if (!column?.sortValue) return rows;
+    if (!column?.sortValue) return filteredRows;
     const direction = sort.direction === 'asc' ? 1 : -1;
-    return [...rows].sort(
+    return [...filteredRows].sort(
       (a, b) => compare(column.sortValue!(a), column.sortValue!(b)) * direction,
     );
-  }, [rows, columns, sort]);
+  }, [filteredRows, columns, sort]);
 
   const totalColumns = columns.length + (rowActions ? 1 : 0) + (expandedContent ? 1 : 0);
 
@@ -116,6 +134,24 @@ export function InsightDataTable<T>({
         }
         action={headerAction}
       />
+
+      {canSearch ? (
+        <div className="border-border/60 border-b px-3 py-2">
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={searchPlaceholder}
+              className="h-8 pl-8 text-xs"
+              aria-label={searchPlaceholder}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <Table
         containerClassName={cn(maxHeight != null && 'overflow-y-auto')}
@@ -176,7 +212,9 @@ export function InsightDataTable<T>({
                 colSpan={totalColumns}
                 className="px-3 py-6 text-center text-xs text-muted-foreground"
               >
-                {emptyState ?? 'Nothing here yet.'}
+                {canSearch && query.trim().length > 0
+                  ? `No matches for “${query.trim()}”.`
+                  : (emptyState ?? 'Nothing here yet.')}
               </TableCell>
             </TableRow>
           ) : (

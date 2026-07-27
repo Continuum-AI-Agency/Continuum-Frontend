@@ -20,6 +20,23 @@ export interface TimelineKeymapParams {
   onSplitAtPlayhead: () => void;
   onDuplicateSelected: () => void;
   onToggleMarker: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+}
+
+type TimelineHistoryKey = Pick<
+  KeyboardEvent,
+  'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'
+>;
+
+export function resolveTimelineHistoryShortcut(
+  event: TimelineHistoryKey,
+): 'undo' | 'redo' | null {
+  if (event.altKey || (!event.metaKey && !event.ctrlKey)) return null;
+  const key = event.key.toLowerCase();
+  if (key === 'z') return event.shiftKey ? 'redo' : 'undo';
+  if (key === 'y' && !event.shiftKey) return 'redo';
+  return null;
 }
 
 function isTextEntryTarget(target: EventTarget | null): boolean {
@@ -42,7 +59,14 @@ export function useTimelineKeymap(params: TimelineKeymapParams): void {
       if (!current.enabled) return;
       // Never hijack typing in the inspector's numeric fields.
       if (isTextEntryTarget(event.target)) return;
-      // Leave OS/browser combos (undo, save, etc.) alone.
+      const historyCommand = resolveTimelineHistoryShortcut(event);
+      if (historyCommand) {
+        event.preventDefault();
+        if (historyCommand === 'undo') current.onUndo();
+        else current.onRedo();
+        return;
+      }
+      // Leave other OS/browser combos alone.
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
       const clamp = (sec: number) => Math.max(0, Math.min(current.totalSec, sec));

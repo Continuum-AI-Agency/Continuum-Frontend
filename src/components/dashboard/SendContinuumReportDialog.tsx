@@ -33,7 +33,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useRecipientCandidates } from '@/lib/automations/automations';
 import {
   cancelReportSchedule,
-  getReportSchedule,
+  getReportScheduleAccess,
   sendContinuumReport,
   summarizeReportRecipients,
   upsertReportSchedule,
@@ -85,8 +85,10 @@ export function SendContinuumReportDialog({
   const [timezone, setTimezone] = useState(resolveDefaultTimezone);
   const [externalEmails, setExternalEmails] = useState<string[]>([]);
   const [hasEnabledSchedule, setHasEnabledSchedule] = useState(false);
+  const [canManageSchedule, setCanManageSchedule] = useState(false);
   const [prefilledFromSchedule, setPrefilledFromSchedule] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [retryReceiptId, setRetryReceiptId] = useState<string | null>(null);
 
   // Load the brand's existing schedule on open — prefills the recurring fields and
   // flips the primary control to its cadence. Missing schedule is not an error.
@@ -95,12 +97,16 @@ export function SendContinuumReportDialog({
     let cancelled = false;
     setPrefilledFromSchedule(false);
     setHasEnabledSchedule(false);
+    setCanManageSchedule(false);
     setExternalEmails([]);
     setMode('one_off');
+    setRetryReceiptId(null);
 
-    getReportSchedule(brandId)
-      .then((schedule) => {
-        if (cancelled || !schedule) return;
+    getReportScheduleAccess(brandId)
+      .then(({ schedule, canManageSchedule: canManage }) => {
+        if (cancelled) return;
+        setCanManageSchedule(canManage);
+        if (!schedule) return;
         setMode(schedule.cadence);
         setDayOfWeek(schedule.dayOfWeek ?? 1);
         setDayOfMonth(schedule.dayOfMonth ?? 1);
@@ -111,14 +117,19 @@ export function SendContinuumReportDialog({
         setHasEnabledSchedule(schedule.enabled);
         setPrefilledFromSchedule(true);
       })
-      .catch(() => {
-        /* schedule is optional; fall back to the one-off default */
+      .catch((error) => {
+        if (cancelled) return;
+        show({
+          title: 'Could not load report schedule',
+          description: error instanceof Error ? error.message : 'Unknown error.',
+          variant: 'error',
+        });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [open, brandId]);
+  }, [open, brandId, show]);
 
   // Fresh open with no schedule: pre-select every member with an email so the user
   // only deselects. A schedule prefill owns the selection, so skip then.
@@ -131,7 +142,7 @@ export function SendContinuumReportDialog({
   const isRecurring = mode !== 'one_off';
   const hasAnyRecipient = selectedCount > 0 || externalEmails.length > 0;
   const canSend = mode === 'one_off' && selectedCount > 0 && !isBusy && !isLoading;
-  const canSave = isRecurring && hasAnyRecipient && !isBusy && !isLoading;
+  const canSave = isRecurring && canManageSchedule && hasAnyRecipient && !isBusy && !isLoading;
 
   const selectedEmails = useMemo(() => {
     if (!candidates) return [];
@@ -140,6 +151,7 @@ export function SendContinuumReportDialog({
   }, [candidates, selectedUserIds]);
 
   const toggle = (userId: string, next: boolean) => {
+    setRetryReceiptId(null);
     setSelectedUserIds((current) =>
       next ? [...current, userId] : current.filter((id) => id !== userId),
     );
@@ -149,10 +161,30 @@ export function SendContinuumReportDialog({
     if (selectedUserIds.length === 0) return;
     setIsBusy(true);
     try {
-      const { recipients } = await sendContinuumReport({
+      const { recipients, status, receiptId } = await sendContinuumReport({
         brandId,
         recipientUserIds: selectedUserIds,
+        ...(retryReceiptId ? { retryReceiptId } : {}),
       });
+      if (status === 'partial') {
+        setRetryReceiptId(receiptId);
+        show({
+          title: 'Some recipients still need delivery',
+          description: 'Retry to send only to recipients whose delivery failed.',
+          variant: 'error',
+        });
+        return;
+      }
+      if (status === 'suppressed') {
+        setRetryReceiptId(null);
+        show({
+          title: 'No report email was sent',
+          description: 'The selected recipients have opted out of this report email.',
+          variant: 'error',
+        });
+        return;
+      }
+      setRetryReceiptId(null);
       show({
         title: 'Continuum Report sent',
         description: summarizeReportRecipients(recipients.length > 0 ? recipients : selectedEmails),
@@ -235,11 +267,15 @@ export function SendContinuumReportDialog({
           onValueChange={(next) => {
             if (next) setMode(next as Mode);
           }}
-          className="grid grid-cols-3 gap-1"
+          className={`grid gap-1 ${canManageSchedule ? 'grid-cols-3' : 'grid-cols-1'}`}
         >
           <ToggleGroupItem value="one_off">One-off</ToggleGroupItem>
-          <ToggleGroupItem value="weekly">Weekly</ToggleGroupItem>
-          <ToggleGroupItem value="monthly">Monthly</ToggleGroupItem>
+          {canManageSchedule ? (
+            <>
+              <ToggleGroupItem value="weekly">Weekly</ToggleGroupItem>
+              <ToggleGroupItem value="monthly">Monthly</ToggleGroupItem>
+            </>
+          ) : null}
         </ToggleGroup>
 
         {isRecurring && (
@@ -362,7 +398,9 @@ export function SendContinuumReportDialog({
                 ? 'Sending…'
                 : selectedCount === 0
                   ? 'Select recipients'
-                  : `Send to ${selectedCount}`}
+                  : retryReceiptId
+                    ? 'Retry failed recipients'
+                    : `Send to ${selectedCount}`}
             </Button>
           )}
         </DialogFooter>

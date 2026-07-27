@@ -15,6 +15,7 @@ type OrganicAgentPanelLazyProps = {
   brandId: string;
   platformAccountIds: Record<string, string>;
   mentionContext?: OrganicAgentMentionContext;
+  initialSessionId?: string | null;
 };
 
 export function OrganicAgentPanelLazy(props: OrganicAgentPanelLazyProps) {

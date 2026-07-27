@@ -240,7 +240,7 @@ export function WorkflowLibrary() {
   const [activeTag, setActiveTag] = React.useState<string | null>(null);
 
   const { items, isLoading, isError, refetch } = useWorkflowLibrary({ enabled: isOpen });
-  const { setNodes, setEdges, takeSnapshot, defaultEdgeType } = useStudioStore();
+  const { setNodes, setEdges, takeSnapshot, defaultEdgeType, brandId } = useStudioStore();
   const { fitView } = useReactFlow();
   const { show } = useToast();
 
@@ -265,7 +265,7 @@ export function WorkflowLibrary() {
       },
       defaultEdgeType,
     );
-    const hydratedNodes = await rehydrateWorkflowMediaNodes(snapshot.nodes);
+    const hydratedNodes = await rehydrateWorkflowMediaNodes(snapshot.nodes, undefined, brandId);
 
     takeSnapshot();
     setNodes(hydratedNodes);

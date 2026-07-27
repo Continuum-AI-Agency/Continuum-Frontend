@@ -2,6 +2,7 @@ import { describe, expect, it, mock } from 'bun:test';
 import type {
   CanvasRenderContinuationClaimRequest,
   CanvasRenderContinuationFinishRequest,
+  CanvasRenderContinuationRenewRequest,
 } from '@continuum/contracts';
 import { resumeTimelineRenderContinuation } from './useTimelineRenderContinuations';
 
@@ -10,6 +11,7 @@ const request: CanvasRenderContinuationClaimRequest = {
   brandProfileId: 'f8cf8a04-2920-4ce8-a60b-36675ef9f379',
   roomId: '999dad2e-64a0-4eb3-aefb-c10afdcc93df',
   nodeId: 'timeline-1',
+  claimantId: 'dc77a29f-299b-4d82-8c28-5a655584f427',
 };
 
 describe('resumeTimelineRenderContinuation', () => {
@@ -21,16 +23,30 @@ describe('resumeTimelineRenderContinuation', () => {
 
     await expect(
       resumeTimelineRenderContinuation(request, {
-        claim: async () => ({ claimed: true, downstreamLeafIds: ['leaf-a', 'leaf-b'] }),
+        claim: async () => ({
+          claimed: true,
+          downstreamLeafIds: ['leaf-a', 'leaf-b'],
+          completedLeafIds: [],
+          claimToken: '55446d22-ab20-469f-996f-a2e7d325bcdf',
+        }),
         executeTarget: async (nodeId) => {
           executed.push(nodeId);
         },
         finish,
+        renew: async (_body: CanvasRenderContinuationRenewRequest) => ({
+          renewed: true,
+          leaseExpiresAt: '2026-07-26T12:01:00.000Z',
+        }),
       }),
     ).resolves.toBe(true);
 
     expect(executed).toEqual(['leaf-a', 'leaf-b']);
-    expect(finish).toHaveBeenCalledWith({ ...request, status: 'done' });
+    expect(finish).toHaveBeenCalledWith({
+      ...request,
+      claimToken: '55446d22-ab20-469f-996f-a2e7d325bcdf',
+      completedLeafIds: ['leaf-a', 'leaf-b'],
+      status: 'done',
+    });
   });
 
   it('records a claimed downstream failure before surfacing it', async () => {
@@ -40,16 +56,24 @@ describe('resumeTimelineRenderContinuation', () => {
 
     await expect(
       resumeTimelineRenderContinuation(request, {
-        claim: async () => ({ claimed: true, downstreamLeafIds: ['leaf-a'] }),
+        claim: async () => ({
+          claimed: true,
+          downstreamLeafIds: ['leaf-a'],
+          completedLeafIds: [],
+          claimToken: '55446d22-ab20-469f-996f-a2e7d325bcdf',
+        }),
         executeTarget: async () => {
           throw new Error('generation failed');
         },
         finish,
+        renew: async () => ({ renewed: true }),
       }),
     ).rejects.toThrow('generation failed');
 
     expect(finish).toHaveBeenCalledWith({
       ...request,
+      claimToken: '55446d22-ab20-469f-996f-a2e7d325bcdf',
+      completedLeafIds: [],
       status: 'error',
       error: 'generation failed',
     });
@@ -63,9 +87,10 @@ describe('resumeTimelineRenderContinuation', () => {
 
     await expect(
       resumeTimelineRenderContinuation(request, {
-        claim: async () => ({ claimed: false, downstreamLeafIds: [] }),
+        claim: async () => ({ claimed: false, downstreamLeafIds: [], completedLeafIds: [] }),
         executeTarget,
         finish,
+        renew: async () => ({ renewed: false }),
       }),
     ).resolves.toBe(false);
 

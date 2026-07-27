@@ -31,7 +31,6 @@ import {
   RecommendationStatusSchema,
   RenewalTaskSchema,
   RenewalTaskStatusSchema,
-  RunCycleRequestSchema,
   RunCycleResponseSchema,
   SuggestResultSchema,
   UpdatePortfolioPatchSchema,
@@ -186,26 +185,60 @@ export const OptimizerManageActionSchema = z.enum([
 export type OptimizerManageAction = z.infer<typeof OptimizerManageActionSchema>;
 
 /** Set a recommendation's status (approve / reject an engine recommendation).
- *  Approving a fatigue recommendation opens a renewal task server-side. */
+ *  Approving a fatigue recommendation opens a renewal task server-side.
+ *
+ *  NO preview/confirm ceremony, deliberately (plan 054 Optimizer item 3): the
+ *  PENDING RECOMMENDATION ROW *is* the durable preview — it is readable through
+ *  `optimizer_query action='pending_recs'` / `'insight'` and survives restarts —
+ *  and approval is itself the human confirmation act. Wrapping a human approval
+ *  in a second machine-minted confirmation would add a round trip and prove
+ *  nothing new.
+ *
+ *  What it carries instead:
+ *   - `portfolio_id`: the row's home. Required so the tool can READ the row back
+ *     (via the portfolio's performance report) before writing — that read is what
+ *     makes the precondition and the receipt possible at all.
+ *   - `expected_status`: the state the caller believes the row is in. The write is
+ *     refused with a stale-state conflict when the row has already moved, so an
+ *     agent acting on a minutes-old `pending_recs` read cannot silently re-decide
+ *     something a human just decided in the dashboard. An exact replay — the row
+ *     already carries the requested status — returns the same receipt, no error. */
+/** How an approved CREATIVE recommendation is fulfilled: `task` opens a request a
+ *  human makes, `generate` enqueues a headless job. Absent = follow the portfolio's
+ *  autogen config server-side. Ignored for non-creative kinds. */
+export const RecommendationRouteSchema = z.enum(['task', 'generate']);
+export type RecommendationRoute = z.infer<typeof RecommendationRouteSchema>;
+
 export const SetRecommendationStatusRequestSchema = z.object({
+  portfolio_id: z.string().uuid(),
   recommendation_id: z.string().uuid(),
   status: RecommendationStatusSchema,
+  expected_status: RecommendationStatusSchema.default('pending'),
+  route: RecommendationRouteSchema.optional(),
 });
 export type SetRecommendationStatusRequest = z.infer<typeof SetRecommendationStatusRequestSchema>;
 
-/** Approve / reject MANY recommendations in one call (optimizer_set_recommendation_statuses). */
+/** Approve / reject MANY recommendations in one call. Same portfolio, same target
+ *  status, same stale-state precondition — applied PER ID, so one bad id skips
+ *  instead of aborting the batch. */
 export const SetRecommendationStatusesRequestSchema = z.object({
-  recommendation_ids: z.array(z.string().uuid()).min(1),
+  portfolio_id: z.string().uuid(),
+  recommendation_ids: z.array(z.string().uuid()).min(1).max(100),
   status: RecommendationStatusSchema,
+  expected_status: RecommendationStatusSchema.default('pending'),
 });
 export type SetRecommendationStatusesRequest = z.infer<
   typeof SetRecommendationStatusesRequestSchema
 >;
 
-/** Close out a renewal work item (creative_refresh / audience_expand). */
+/** Close out a renewal work item (creative_refresh / audience_expand). Carries the
+ *  same stale-state precondition as `set_recommendation_status`, for symmetry: a
+ *  task another operator already closed is a conflict, not a silent re-close. */
 export const SetRenewalTaskStatusRequestSchema = z.object({
+  brand_id: z.string().uuid(),
   task_id: z.string().uuid(),
   status: RenewalTaskStatusSchema,
+  expected_status: RenewalTaskStatusSchema.default('open'),
 });
 export type SetRenewalTaskStatusRequest = z.infer<typeof SetRenewalTaskStatusRequestSchema>;
 
@@ -263,7 +296,16 @@ export const CreateFromSuggestionRequestSchema = z.object({
 });
 export type CreateFromSuggestionRequest = z.infer<typeof CreateFromSuggestionRequestSchema>;
 
-/** Whitelisted portfolio update — reuses the FE settings patch. */
+/** Whitelisted portfolio update — reuses the FE settings patch.
+ *
+ *  PAUSE FENCE NOTE (plan 054 Optimizer item 1): `UpdatePortfolioPatchSchema`
+ *  admits no pause-equivalent AD field. Its `status` is the PORTFOLIO's lifecycle
+ *  (active | paused | archived) and `optimizer_update_portfolio` writes only
+ *  `optimizer.portfolios` columns — pausing a portfolio stops optimization cycles
+ *  and never touches Meta ad delivery. Ad pause stays HUMAN-ONLY and is exposed
+ *  nowhere on the MCP surface. The one escalation the patch DOES admit is
+ *  `apply_mode:'autopilot'` (arming autonomous budget writes); the MCP tool
+ *  refuses that value — arming autonomy is a dashboard act. */
 export const UpdatePortfolioRequestSchema = z.object({
   portfolio_id: z.string().uuid(),
   patch: UpdatePortfolioPatchSchema,
@@ -282,6 +324,21 @@ export const UnenrollAdsetsRequestSchema = z.object({
   adset_ids: z.array(z.string()).min(1),
 });
 export type UnenrollAdsetsRequest = z.infer<typeof UnenrollAdsetsRequestSchema>;
+
+/** The ONLY run_now shape the MCP surface accepts.
+ *
+ *  `RunCycleRequestSchema` (service.ts) is a union whose second arm runs an ad-hoc
+ *  cycle from a bare list of ad-set ids. The `optimizer-run` EDGE — the single path
+ *  `optimizerClient.run` takes — parses only `{ portfolio_id }` and 400s on that arm,
+ *  so advertising it here would be an action the agent can select and never complete.
+ *  Narrowed rather than left as a dead branch. The service and cron keep the full
+ *  union; this is the agent-facing subset. */
+export const RunCycleMcpRequestSchema = z.object({
+  portfolio_id: z.string().uuid(),
+  brandId: z.string().uuid().optional(),
+  accountId: z.string().optional(),
+});
+export type RunCycleMcpRequest = z.infer<typeof RunCycleMcpRequestSchema>;
 
 /** optimizer_manage input — a discriminated union keyed on `action`, each arm
  *  reusing the canonical service request schema for its payload. */
@@ -328,21 +385,24 @@ export const OptimizerManageInputSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('run_now'),
-    payload: RunCycleRequestSchema,
+    payload: RunCycleMcpRequestSchema,
   }),
 ]);
 export type OptimizerManageInput = z.infer<typeof OptimizerManageInputSchema>;
 
-/** Result of setting a recommendation's status. The RPC returns void, so the tool echoes
- *  the id + new status (approving a fatigue rec also opens a renewal task — read it with
- *  optimizer_query action='renewal_tasks'). */
+/** What the RPC layer can say on its own: the id and the status it was asked to set
+ *  (`optimizer_set_recommendation_status` returns void). This is the CLIENT return
+ *  type — the agent-facing umbrella returns the richer receipt below, which needs a
+ *  read the client does not do. */
 export const SetRecommendationStatusResponseSchema = z.object({
   recommendation_id: z.string().uuid(),
   status: RecommendationStatusSchema,
 });
 export type SetRecommendationStatusResponse = z.infer<typeof SetRecommendationStatusResponseSchema>;
 
-/** Result of a bulk approve/reject — how many rows changed. */
+/** Bulk RPC echo — the changed-row count `optimizer_set_recommendation_statuses`
+ *  returns. Retained for the non-MCP callers that still drive that RPC directly;
+ *  the MCP umbrella returns the itemized receipt below instead. */
 export const SetRecommendationStatusesResponseSchema = z.object({
   updated: z.number().int().nonnegative(),
   status: RecommendationStatusSchema,
@@ -351,12 +411,69 @@ export type SetRecommendationStatusesResponse = z.infer<
   typeof SetRecommendationStatusesResponseSchema
 >;
 
-/** Result of closing a renewal work item. */
+/** Renewal-task RPC echo. */
 export const SetRenewalTaskStatusResponseSchema = z.object({
   task_id: z.string().uuid(),
   status: RenewalTaskStatusSchema,
 });
 export type SetRenewalTaskStatusResponse = z.infer<typeof SetRenewalTaskStatusResponseSchema>;
+
+/** A real approval RECEIPT, not an echo of the request (plan 054 Optimizer item 3).
+ *  The umbrella used to return exactly what the caller sent, which proves nothing:
+ *  it could not distinguish "approved" from "was already approved", named no ad set,
+ *  named no actor, and hid the renewal task the approval opened. */
+export const SetRecommendationStatusReceiptSchema = z.object({
+  recommendation_id: z.string().uuid(),
+  portfolio_id: z.string().uuid(),
+  /** The ad set this recommendation is about (and the ad, on creative-level kinds). */
+  adset_ids: z.array(z.string()),
+  ad_id: z.string().nullable().optional(),
+  kind: z.string(),
+  before_status: RecommendationStatusSchema,
+  status: RecommendationStatusSchema,
+  /** MCP caller identity. NOTE: the RPC stamps `decided_by` from auth.uid(), which is
+   *  null under the service-role client — this field is the honest attribution. */
+  actor: z.string(),
+  decided_at: z.string(),
+  /** The renewal work item approval opened, when the kind opens one. */
+  opened_renewal_task_id: z.string().uuid().nullable(),
+  /** true when the row was already in the requested status — replay, not a re-write. */
+  replayed: z.boolean(),
+});
+export type SetRecommendationStatusReceipt = z.infer<typeof SetRecommendationStatusReceiptSchema>;
+
+/** Result of a bulk approve/reject — ITEMIZED, never a bare count.
+ *
+ *  `{updated: n}` hid partial failure twice over: the caller could not tell WHICH
+ *  ids landed, and the underlying RPC loops `optimizer_set_recommendation_status`
+ *  in one transaction, so a single unknown id aborted the whole batch while the
+ *  count implied a clean partial. Every id now reports its own outcome. */
+export const SetRecommendationStatusesReceiptSchema = z.object({
+  applied: z.array(z.string().uuid()),
+  skipped: z.array(
+    z.object({
+      id: z.string(),
+      reason: z.string(),
+    }),
+  ),
+  status: RecommendationStatusSchema,
+});
+export type SetRecommendationStatusesReceipt = z.infer<
+  typeof SetRecommendationStatusesReceiptSchema
+>;
+
+/** Receipt for closing a renewal work item. */
+export const SetRenewalTaskStatusReceiptSchema = z.object({
+  task_id: z.string().uuid(),
+  portfolio_id: z.string().uuid(),
+  adset_id: z.string(),
+  before_status: z.string(),
+  status: RenewalTaskStatusSchema,
+  actor: z.string(),
+  decided_at: z.string(),
+  replayed: z.boolean(),
+});
+export type SetRenewalTaskStatusReceipt = z.infer<typeof SetRenewalTaskStatusReceiptSchema>;
 
 /** Result of create_from_suggestion — the new portfolio id + how many entities enrolled. */
 export const CreateFromSuggestionResponseSchema = z.object({
@@ -398,15 +515,15 @@ export const OptimizerManageOutputSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('set_recommendation_status'),
-    result: SetRecommendationStatusResponseSchema,
+    result: SetRecommendationStatusReceiptSchema,
   }),
   z.object({
     action: z.literal('set_recommendation_statuses'),
-    result: SetRecommendationStatusesResponseSchema,
+    result: SetRecommendationStatusesReceiptSchema,
   }),
   z.object({
     action: z.literal('set_renewal_task_status'),
-    result: SetRenewalTaskStatusResponseSchema,
+    result: SetRenewalTaskStatusReceiptSchema,
   }),
   z.object({
     action: z.literal('update_portfolio'),

@@ -17,7 +17,7 @@
 // Meta CDN URL re-resolves through the recovery hook; a letter tile is a failure,
 // not a graceful degrade.
 
-import type { AdsetAd, PaidAdAngle } from '@continuum/contracts';
+import type { AdDailyTrend, AdsetAd, PaidAdAngle } from '@continuum/contracts';
 import { useMemo } from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromPaidVerdict } from '@/components/chat/media/media';
@@ -29,8 +29,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { usePaidCreativeRecovery } from '@/hooks/usePaidCreativeRecovery';
 import { usePaidCreativeReport } from '@/hooks/usePaidCreativeReport';
 import { cn } from '@/lib/utils';
+import { CreativeHoverCard } from '../charts/CreativeHoverCard';
 import { formatCpa, humanize } from '../format';
-import { useOptimizerAdAngles, useOptimizerAdsetAds } from '../useOptimizerData';
+import {
+  useOptimizerAdAngles,
+  useOptimizerAdDailyTrends,
+  useOptimizerAdsetAds,
+} from '../useOptimizerData';
 import {
   type AdsetCreativeVerdictRow,
   joinAdsetCreativeRows,
@@ -72,7 +77,10 @@ type AdsetCreativeVerdictsProps = {
 type CreativeRowProps = {
   row: AdsetCreativeVerdictRow;
   angle?: PaidAdAngle | null;
+  trend?: AdDailyTrend | null;
   currency?: string | null;
+  brandId: string;
+  accountId: string | null;
   freshUrl: string | null;
   onRecover: (adId: string) => void;
 };
@@ -81,7 +89,16 @@ function adLabel(ad: AdsetAd): string {
   return ad.name || ad.id;
 }
 
-function CreativeRow({ row, angle, currency, freshUrl, onRecover }: CreativeRowProps) {
+function CreativeRow({
+  row,
+  angle,
+  trend,
+  currency,
+  brandId,
+  accountId,
+  freshUrl,
+  onRecover,
+}: CreativeRowProps) {
   const { ad, verdict, thinEvidence } = row;
   const label = adLabel(ad);
   const media = mediaFromPaidVerdict({
@@ -92,22 +109,22 @@ function CreativeRow({ row, angle, currency, freshUrl, onRecover }: CreativeRowP
   });
 
   const body = (
-    <div className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-muted/40">
+    <div className="flex w-full items-center gap-2.5 rounded px-1 py-1.5 text-left hover:bg-muted/40">
       {media ? (
-        <span className="relative block size-6 shrink-0 overflow-hidden rounded-sm">
+        <span className="relative block size-10 shrink-0 overflow-hidden rounded">
           <ChatMediaThumb
-            className="rounded-sm"
+            className="rounded"
             fallbackSeed={label}
             media={media}
             onRecover={() => onRecover(ad.id)}
           />
         </span>
       ) : (
-        <span className="grid size-6 shrink-0 place-items-center rounded-sm bg-muted text-3xs text-muted-foreground">
+        <span className="grid size-10 shrink-0 place-items-center rounded bg-muted text-3xs text-muted-foreground">
           AD
         </span>
       )}
-      <span className="min-w-0 flex-1 truncate text-2xs text-foreground">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-xs text-foreground">{label}</span>
       {angle ? <AngleChip angle={angle} /> : null}
       {verdict ? (
         <>
@@ -133,13 +150,33 @@ function CreativeRow({ row, angle, currency, freshUrl, onRecover }: CreativeRowP
     </div>
   );
 
-  if (!verdict) return <li>{body}</li>;
+  // Every row gets a hover reveal. With a verdict, the kill/scale/iterate card
+  // (figure-bearing reason + spend/CPA). Without one, the creative deep-look card
+  // (angle, hook, confidence, spend sparkline) so an unlabeled ad is never a dead
+  // row — the operator can still see what the creative is.
+  if (verdict) {
+    return (
+      <li>
+        <VerdictHoverCard freshUrl={freshUrl} onRecover={onRecover} verdict={verdict}>
+          {body}
+        </VerdictHoverCard>
+      </li>
+    );
+  }
 
   return (
     <li>
-      <VerdictHoverCard freshUrl={freshUrl} onRecover={onRecover} verdict={verdict}>
+      <CreativeHoverCard
+        accountId={accountId}
+        ad={ad}
+        angle={angle}
+        brandId={brandId}
+        currency={currency}
+        posterUrl={freshUrl ?? ad.thumbnailUrl ?? null}
+        trend={trend}
+      >
         {body}
-      </VerdictHoverCard>
+      </CreativeHoverCard>
     </li>
   );
 }
@@ -152,11 +189,16 @@ export function AdsetCreativeVerdicts({
 }: AdsetCreativeVerdictsProps) {
   const adsQuery = useOptimizerAdsetAds(brandId, accountId, adsetId);
   const anglesQuery = useOptimizerAdAngles(brandId, accountId, adsetId);
+  const trendsQuery = useOptimizerAdDailyTrends(brandId, accountId, adsetId);
   const { report, isLoading: isReportLoading } = usePaidCreativeReport(brandId);
   const { freshUrlById, recover } = usePaidCreativeRecovery({ brandId, adAccountId: accountId });
   const angleByAd = useMemo(
     () => new Map(anglesQuery.data.map((angle) => [angle.ad_id, angle])),
     [anglesQuery.data],
+  );
+  const trendByAd = useMemo(
+    () => new Map(trendsQuery.data.map((trend) => [trend.ad_id, trend])),
+    [trendsQuery.data],
   );
 
   if (adsQuery.isLoading || isReportLoading) {
@@ -191,12 +233,15 @@ export function AdsetCreativeVerdicts({
       <ul className="space-y-0.5">
         {rows.map((row) => (
           <CreativeRow
+            accountId={accountId}
             angle={angleByAd.get(row.ad.id) ?? null}
+            brandId={brandId}
             currency={currency}
             freshUrl={freshUrlById[row.ad.id] ?? null}
             key={row.ad.id}
             onRecover={recover}
             row={row}
+            trend={trendByAd.get(row.ad.id) ?? null}
           />
         ))}
       </ul>

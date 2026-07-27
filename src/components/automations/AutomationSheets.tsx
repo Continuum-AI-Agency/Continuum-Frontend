@@ -8,7 +8,6 @@
 import type { AgentTarget } from '@continuum/contracts';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
-import { AUTOMATIONS_AVAILABLE } from '@/lib/automations/availability';
 import { useAutomationSheetStore } from '@/lib/automations/sheet-store';
 import { AutomationBuilderSheet } from './AutomationBuilderSheet';
 import { AutomationDetailSheet } from './AutomationDetailSheet';
@@ -19,7 +18,6 @@ type AutomationSheetsProps = {
 };
 
 export function AutomationSheets(props: AutomationSheetsProps) {
-  if (!AUTOMATIONS_AVAILABLE) return null;
   return <AutomationSheetsInner {...props} />;
 }
 

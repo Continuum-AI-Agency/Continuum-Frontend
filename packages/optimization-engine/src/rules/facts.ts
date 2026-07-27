@@ -12,9 +12,7 @@
 // aggregate recipe as triggers.ts / fatigue.ts, so a DSL rule and its native
 // counterpart see identical numbers. The percentile function below is a
 // byte-for-byte copy of the private one in triggers.ts (kept private there on
-// purpose — this stub must not modify shipped engine files).
-//
-// STATUS: UNWIRED STUB (see rules/types.ts).
+// purpose — this module must not modify shipped engine files).
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from '../config';

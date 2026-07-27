@@ -32,6 +32,11 @@ import {
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  AUTOMATIONS_PRODUCTION_DISABLED_REASON,
+  type AutomationDeploymentEnvironment,
+  canAccessAutomations,
+} from '@/lib/automations/access';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
 import { cn } from '@/lib/utils';
 import { BrandSwitcher } from './BrandSwitcher';
@@ -111,7 +116,11 @@ function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
 }
 
-function AppSidebarInner() {
+function AppSidebarInner({
+  automationEnvironment,
+}: {
+  automationEnvironment: AutomationDeploymentEnvironment;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -122,6 +131,10 @@ function AppSidebarInner() {
   const { setOpen: openPalette } = useCommandPalette();
   const reduce = useReducedMotion();
   const isAdmin = isAdminUser(user);
+  const hasAutomationAccess = canAccessAutomations({
+    isAdmin,
+    environment: automationEnvironment,
+  });
   const userDisplayName =
     readString(user?.user_metadata?.full_name) ??
     readString(user?.user_metadata?.name) ??
@@ -465,7 +478,18 @@ function AppSidebarInner() {
                 ) : null}
                 <SidebarGroupContent>
                   <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
-                    {group.items.map(renderNavItem)}
+                    {group.items.map((item) =>
+                      renderNavItem(
+                        item.href === '/automations' && !hasAutomationAccess
+                          ? {
+                              ...item,
+                              disabled: true,
+                              locked: true,
+                              disabledReason: AUTOMATIONS_PRODUCTION_DISABLED_REASON,
+                            }
+                          : item,
+                      ),
+                    )}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
@@ -582,10 +606,14 @@ function AppSidebarInner() {
   );
 }
 
-export function AppSidebar() {
+export function AppSidebar({
+  automationEnvironment,
+}: {
+  automationEnvironment: AutomationDeploymentEnvironment;
+}) {
   return (
     <Suspense fallback={null}>
-      <AppSidebarInner />
+      <AppSidebarInner automationEnvironment={automationEnvironment} />
     </Suspense>
   );
 }

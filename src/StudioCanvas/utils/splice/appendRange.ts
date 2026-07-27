@@ -8,6 +8,7 @@ import {
 import { type FadeOverlay, transitionOverlayAt } from '../render/transitions';
 import { type CaptionCue, findActiveCue } from './captionCues';
 import { drawActiveCaption } from './drawCaptions';
+import { drawFrameComposition } from './frameComposition';
 import { drawClipFrame, drawFadeOverlay } from './frameDraw';
 
 // Shared per-range concat mechanics for the mediabunny splice engines. Both
@@ -63,7 +64,7 @@ export type AppendRangeParams = {
   ) => Promise<void>;
   // When true, this range emits NO audio (no inline samples, no silence fill): the
   // Video Editor render handles all audio in a single PCM mixdown pass (audioMix).
-  // The Video Splicer leaves this false and keeps inline per-range audio.
+  // Other compositor callers leave this false and keep inline per-range audio.
   skipAudio?: boolean;
   signal?: AbortSignal;
   // Reports processed seconds WITHIN this range after each video frame, so the
@@ -116,25 +117,36 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
     const outputTimestamp = cumulativeOffset + localTimestamp / speed;
     const localOut = localTimestamp / speed;
     const clipT = sourceSpan > 0 ? localTimestamp / sourceSpan : 0;
-    drawClipFrame(
-      ctx,
-      wrapped.canvas,
-      sourceWidth,
-      sourceHeight,
-      targetWidth,
-      targetHeight,
-      effects,
-      clipT,
-    );
-    if (cues && cues.length > 0) {
-      const cue = findActiveCue(cues, outputTimestamp);
-      if (cue)
-        drawActiveCaption(ctx, cue, outputTimestamp, targetWidth, targetHeight, captionStyle);
-    }
-    if (overlays.length > 0) drawTextOverlays(ctx, overlays, targetWidth, targetHeight);
-    if (compositeOverlays) await compositeOverlays(ctx, outputTimestamp);
     const fade = transitionOverlayAt(localOut, outputDurationSec, headFade, tailFade);
-    if (fade) drawFadeOverlay(ctx, fade.color, fade.alpha, targetWidth, targetHeight);
+    const cue = cues?.length ? findActiveCue(cues, outputTimestamp) : null;
+    await drawFrameComposition({
+      drawBase: () => {
+        drawClipFrame(
+          ctx,
+          wrapped.canvas,
+          sourceWidth,
+          sourceHeight,
+          targetWidth,
+          targetHeight,
+          effects,
+          clipT,
+        );
+        if (overlays.length > 0) drawTextOverlays(ctx, overlays, targetWidth, targetHeight);
+      },
+      ...(compositeOverlays ? { drawOverlays: () => compositeOverlays(ctx, outputTimestamp) } : {}),
+      ...(fade
+        ? {
+            drawColorTransition: () =>
+              drawFadeOverlay(ctx, fade.color, fade.alpha, targetWidth, targetHeight),
+          }
+        : {}),
+      ...(cue
+        ? {
+            drawCaption: () =>
+              drawActiveCaption(ctx, cue, outputTimestamp, targetWidth, targetHeight, captionStyle),
+          }
+        : {}),
+    });
     await videoSource.add(outputTimestamp, outputDuration);
     params.onRangeProgress?.((localTimestamp + wrapped.duration) / speed);
   }
@@ -244,6 +256,7 @@ export async function appendStill(params: AppendStillParams): Promise<void> {
   // P-frames). Base frame + text first, then overlays, then the fade wash.
   const perFrame =
     Boolean(effects?.kenBurns) ||
+    Boolean(effects?.keyframes && effects.keyframes.length >= 2) ||
     Boolean(headFade) ||
     Boolean(tailFade) ||
     Boolean(compositeOverlays) ||
@@ -260,15 +273,26 @@ export async function appendStill(params: AppendStillParams): Promise<void> {
     throwIfAborted(signal);
     const duration = Math.min(frameDuration, durationSec - elapsed);
     const outputTimestamp = cumulativeOffset + elapsed;
-    if (perFrame) drawBase(durationSec > 0 ? elapsed / durationSec : 0);
-    if (compositeOverlays) await compositeOverlays(ctx, outputTimestamp);
-    if (hasCaptions && cues) {
-      const cue = findActiveCue(cues, outputTimestamp);
-      if (cue)
-        drawActiveCaption(ctx, cue, outputTimestamp, targetWidth, targetHeight, captionStyle);
-    }
     const fade = transitionOverlayAt(elapsed, durationSec, headFade, tailFade);
-    if (fade) drawFadeOverlay(ctx, fade.color, fade.alpha, targetWidth, targetHeight);
+    const cue = hasCaptions && cues ? findActiveCue(cues, outputTimestamp) : null;
+    await drawFrameComposition({
+      drawBase: () => {
+        if (perFrame) drawBase(durationSec > 0 ? elapsed / durationSec : 0);
+      },
+      ...(compositeOverlays ? { drawOverlays: () => compositeOverlays(ctx, outputTimestamp) } : {}),
+      ...(fade
+        ? {
+            drawColorTransition: () =>
+              drawFadeOverlay(ctx, fade.color, fade.alpha, targetWidth, targetHeight),
+          }
+        : {}),
+      ...(cue
+        ? {
+            drawCaption: () =>
+              drawActiveCaption(ctx, cue, outputTimestamp, targetWidth, targetHeight, captionStyle),
+          }
+        : {}),
+    });
     await videoSource.add(outputTimestamp, duration);
     elapsed += duration;
     params.onRangeProgress?.(elapsed);

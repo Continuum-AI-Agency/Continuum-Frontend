@@ -6,6 +6,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "scripts": {
+    "test:optimization:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir coverage src/optimization"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./streaming": "./src/streaming/index.ts",
@@ -23,7 +26,8 @@
     "./organic": "./src/organic/index.ts",
     "./brands": "./src/brands/index.ts",
     "./mcp": "./src/mcp/index.ts",
-    "./ai-studio": "./src/ai-studio/index.ts"
+    "./ai-studio": "./src/ai-studio/index.ts",
+    "./whats-new": "./src/whats-new/index.ts"
   },
   "peerDependencies": {
     "zod": "^3.22.0 || ^4.0.0"

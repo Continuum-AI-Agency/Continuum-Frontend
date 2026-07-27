@@ -1,7 +1,7 @@
 'use client';
 
 // "What's Working — Ads", dashboard half: the kill / scale / iterate calls only.
-// The win-rate category table moved out to WhatsWorkingExplorerSheet so the
+// The win-rate category table moved out to WhatsWorkingExplorerPopover so the
 // dashboard keeps its vertical budget for charts.
 //
 // Rows are deliberately one line — identity plus efficiency. The figure-bearing

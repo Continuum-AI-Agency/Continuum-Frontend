@@ -23,6 +23,7 @@ export type NodeOutput =
       storageBucket?: string;
       sizeBytes?: number;
       assetId?: string;
+      assetVersionId?: string;
     }
   | {
       type: 'video';
@@ -31,6 +32,8 @@ export type NodeOutput =
       storagePath?: string;
       storageBucket?: string;
       sizeBytes?: number;
+      assetId?: string;
+      assetVersionId?: string;
     };
 
 export interface WorkflowExecutionContext {

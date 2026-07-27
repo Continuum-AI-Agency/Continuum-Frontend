@@ -8,9 +8,11 @@
 // the audited optimizer-apply-adset-status drain. The app makes the Meta call; the user
 // never opens Business Manager.
 //
-// Ad-LEVEL kinds (pause_ad / variate_creative / seed_experiment) are FOUND but not yet
-// executable, so they render as a read-only row with a danger tooltip — never selectable,
-// never counted, never a button that lies about acting.
+// Creative kinds (variate_creative / seed_experiment) are approvable: approving one opens a
+// creative request — a tracked task, or a generation job when the portfolio has autogen on —
+// and its brief renders inline from the recommendation's seed. pause_ad is still FOUND but not
+// executable (no single-ad pause drain yet), so it renders read-only with a danger tooltip —
+// never a button that lies about acting.
 //
 // Approve is optimistic (a spinner while in flight, rolled back on error); an APPLIED state
 // is never assumed from a mutation — it is read back from the drain's per-item results and
@@ -47,6 +49,7 @@ import { formatCurrency } from '../format';
 import {
   actionRoute,
   applyModeExplainer,
+  creativeBriefForRec,
   notImplementedMessage,
   parseReport,
   recommendationLabel,
@@ -75,10 +78,11 @@ export type BudgetQueueRow = {
 };
 
 /** A recommendation needing a decision. `route` is where an approval drains to:
- *  'pause' (audited Meta pause), 'fatigue' (renewal task), 'hidden' (found, not executable). */
+ *  'pause' (audited Meta pause), 'creative' (a creative request — task or generation job),
+ *  'fatigue' (renewal task), 'hidden' (found, not executable). */
 export type RecQueueRow = {
   key: string;
-  route: 'pause' | 'fatigue' | 'hidden';
+  route: 'pause' | 'creative' | 'fatigue' | 'hidden';
   adsetId: string;
   name: string | null;
   rec: RecommendationRow;
@@ -229,7 +233,12 @@ export function OptimizerActionsPortfolioGroup({
     const pauseIds = rowsToApprove
       .filter((row): row is RecQueueRow => row.route === 'pause')
       .map((row) => row.rec.id);
-    const fatigueRecs = rowsToApprove.filter((row): row is RecQueueRow => row.route === 'fatigue');
+    // Fatigue and creative approvals both open a tracked task server-side (the fan-out RPC
+    // decides task-vs-generation-job from the portfolio's autogen config); the FE flips the
+    // status the same way for both and lets the backend route.
+    const taskRecs = rowsToApprove.filter(
+      (row): row is RecQueueRow => row.route === 'fatigue' || row.route === 'creative',
+    );
 
     setExecuteNote(null);
     setApproving(new Set(rowsToApprove.map((row) => row.key)));
@@ -252,11 +261,12 @@ export function OptimizerActionsPortfolioGroup({
         { onError: onFail('pauses'), onSettled: onDone },
       );
     }
-    // Fatigue approvals open a renewal task one at a time — the existing single-rec path.
-    for (const row of fatigueRecs) {
+    // Creative + fatigue approvals open a request one at a time — the single-rec path. Route
+    // is left unset so the backend follows the portfolio's autogen config.
+    for (const row of taskRecs) {
       setStatus.mutate(
         { recommendation_id: row.rec.id, status: 'approved' },
-        { onError: onFail('renewals'), onSettled: onDone },
+        { onError: onFail('creative requests'), onSettled: onDone },
       );
     }
     setSelected(new Set());
@@ -502,6 +512,7 @@ function recordFailures(
 const ROUTE_FILTERS: { route: QueueRow['route']; label: string }[] = [
   { route: 'budget', label: 'Budget' },
   { route: 'pause', label: 'Pause' },
+  { route: 'creative', label: 'Creative' },
   { route: 'fatigue', label: 'Fatigue' },
   { route: 'hidden', label: 'Ad-level' },
 ];
@@ -781,9 +792,38 @@ function RowDetail({ row, currency }: { row: QueueRow; currency: string | null }
         <BudgetDetail item={row.item} currency={currency} />
       ) : row.route === 'hidden' ? (
         <p>{notImplementedMessage(row.rec.kind)}</p>
+      ) : row.route === 'creative' ? (
+        <CreativeBriefDetail rec={row.rec} />
       ) : (
         <RecDetail rec={row.rec} />
       )}
+    </div>
+  );
+}
+
+/** The creative request as a person reads it: what to make, what to keep, and the measured
+ *  combinations it is grounded on. Rendered from the recommendation's seed by the shared
+ *  builder — the same brief the request email and the swap worker receive. Falls back to the
+ *  plain reason for an older rec that carries no seed. */
+function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
+  const brief = creativeBriefForRec(rec);
+  if (!brief) return <RecDetail rec={rec} />;
+  return (
+    <div className="space-y-1.5">
+      <p className="font-medium text-foreground">{brief.title}</p>
+      <p className="leading-relaxed">{brief.brief}</p>
+      {brief.groundedOn.length > 0 ? (
+        <p>
+          <span className="font-medium text-foreground">Grounded on:</span>{' '}
+          {brief.groundedOn.join(' · ')}
+        </p>
+      ) : null}
+      {rec.ad_id ? (
+        <p>
+          <span className="font-medium text-foreground">Winning ad:</span>{' '}
+          <code className="text-3xs">{rec.ad_id}</code>
+        </p>
+      ) : null}
     </div>
   );
 }

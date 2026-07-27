@@ -1,45 +1,53 @@
+import {
+  CANVAS_MEDIA_BUCKETS,
+  CANVAS_MEDIA_SIGN_MAX_ITEMS,
+  CANVAS_MEDIA_SIGN_ROUTE,
+  type CanvasMediaCoordinate,
+  type CanvasMediaSignResponse,
+} from '@continuum/contracts';
 import { request } from '@/lib/api/http';
 import type { CanvasDocument, StudioNode } from '../types';
-
-type SignItem = { bucket: string; path: string };
-type SignResult = { bucket?: string; path: string; signedUrl: string };
 
 function signKey(bucket: string, path: string): string {
   return `${bucket}\n${path}`;
 }
 
-function collectSignItems(nodes: StudioNode[]): SignItem[] {
-  const items: SignItem[] = [];
+function addSignItem(items: CanvasMediaCoordinate[], bucket: unknown, path: unknown): void {
+  if (
+    typeof bucket === 'string' &&
+    typeof path === 'string' &&
+    (CANVAS_MEDIA_BUCKETS as readonly string[]).includes(bucket)
+  ) {
+    items.push({ bucket: bucket as CanvasMediaCoordinate['bucket'], path });
+  }
+}
+
+function collectSignItems(nodes: StudioNode[]): CanvasMediaCoordinate[] {
+  const items: CanvasMediaCoordinate[] = [];
   for (const node of nodes) {
     const data = node.data as Record<string, unknown>;
 
     // Generated outputs (nanoGen / video generators).
     const imgPath = data.generatedImageStoragePath;
     const imgBucket = data.generatedImageBucket;
-    if (typeof imgPath === 'string' && typeof imgBucket === 'string') {
-      items.push({ bucket: imgBucket, path: imgPath });
-    }
+    addSignItem(items, imgBucket, imgPath);
     const vidPath = data.generatedVideoStoragePath;
     const vidBucket = data.generatedVideoBucket;
-    if (typeof vidPath === 'string' && typeof vidBucket === 'string') {
-      items.push({ bucket: vidBucket, path: vidPath });
-    }
+    addSignItem(items, vidBucket, vidPath);
 
     // Uploaded reference nodes (image/video). sourcePath + bucket re-sign into the
     // node's media value so a saved/broadcast reference renders after its signed
     // URL has expired.
     const refPath = data.sourcePath;
     const refBucket = data.bucket;
-    if (typeof refPath === 'string' && typeof refBucket === 'string') {
-      items.push({ bucket: refBucket, path: refPath });
-    }
+    addSignItem(items, refBucket, refPath);
 
     // Document nodes: each CanvasDocument with a storagePath + bucket needs re-signing.
     if (node.type === 'document') {
       const docs = (data.documents ?? []) as CanvasDocument[];
       for (const doc of docs) {
         if (typeof doc.storagePath === 'string' && typeof doc.bucket === 'string') {
-          items.push({ bucket: doc.bucket, path: doc.storagePath });
+          addSignItem(items, doc.bucket, doc.storagePath);
         }
       }
     }
@@ -53,7 +61,7 @@ function collectSignItems(nodes: StudioNode[]): SignItem[] {
       }>;
       for (const variation of variations) {
         if (typeof variation.storagePath === 'string' && typeof variation.bucket === 'string') {
-          items.push({ bucket: variation.bucket, path: variation.storagePath });
+          addSignItem(items, variation.bucket, variation.storagePath);
         }
       }
     }
@@ -151,19 +159,34 @@ function applySignedUrls(nodes: StudioNode[], urlMap: Map<string, string>): Stud
   });
 }
 
-export async function resignCanvasNodes(nodes: StudioNode[]): Promise<StudioNode[]> {
-  const items = collectSignItems(nodes);
-  if (items.length === 0) return nodes;
+export async function resignCanvasNodes(
+  nodes: StudioNode[],
+  brandProfileId?: string,
+): Promise<StudioNode[]> {
+  if (!brandProfileId) return nodes;
+  const uniqueItems = [
+    ...new Map(
+      collectSignItems(nodes).map((item) => [signKey(item.bucket, item.path), item]),
+    ).values(),
+  ];
+  if (uniqueItems.length === 0) return nodes;
 
   try {
-    const results = await request<SignResult[]>({
-      path: '/api/ai-studio/sign',
-      method: 'POST',
-      body: { items },
-    });
+    const results: CanvasMediaSignResponse['items'] = [];
+    for (let index = 0; index < uniqueItems.length; index += CANVAS_MEDIA_SIGN_MAX_ITEMS) {
+      const response = await request<CanvasMediaSignResponse>({
+        path: CANVAS_MEDIA_SIGN_ROUTE,
+        method: 'POST',
+        body: {
+          brandProfileId,
+          items: uniqueItems.slice(index, index + CANVAS_MEDIA_SIGN_MAX_ITEMS),
+        },
+      });
+      results.push(...response.items);
+    }
 
     const urlMap = new Map<string, string>(
-      results.map((r) => [r.bucket ? signKey(r.bucket, r.path) : r.path, r.signedUrl]),
+      results.map((result) => [signKey(result.bucket, result.path), result.signedUrl]),
     );
     return applySignedUrls(nodes, urlMap);
   } catch (err) {

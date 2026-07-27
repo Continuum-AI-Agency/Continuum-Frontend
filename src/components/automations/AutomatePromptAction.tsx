@@ -8,7 +8,6 @@ import type { AgentTarget } from '@continuum/contracts';
 import { CalendarClockIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { AUTOMATIONS_AVAILABLE } from '@/lib/automations/availability';
 import { useAutomationSheetStore } from '@/lib/automations/sheet-store';
 
 type AutomatePromptActionProps = {
@@ -19,7 +18,7 @@ type AutomatePromptActionProps = {
 
 export function AutomatePromptAction({ agent, prompt, className }: AutomatePromptActionProps) {
   const openBuilder = useAutomationSheetStore((state) => state.openBuilder);
-  if (!AUTOMATIONS_AVAILABLE || !prompt.trim()) return null;
+  if (!prompt.trim()) return null;
 
   return (
     <TooltipProvider delayDuration={150}>

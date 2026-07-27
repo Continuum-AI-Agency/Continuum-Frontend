@@ -12,6 +12,11 @@ export type StitchPlannerReelParams = {
   draftId: string;
   sourceRevision: string;
   durationSec: number;
+  captions?: {
+    enabled: boolean;
+    sourceAssetId?: string;
+    referenceAssetIds?: string[];
+  };
   signal?: AbortSignal;
   onStage?: (label: string) => void;
 };
@@ -36,6 +41,7 @@ export function toReelClip(clip: SignedPlannerCompositionClip): ReelClip {
     signedClipUrl: clip.signedUrl,
     captionText: clip.captionText,
     mimeType: clip.mimeType,
+    assetId: clip.assetId,
   });
 }
 
@@ -74,6 +80,7 @@ export async function stitchPlannerReel(
     draftId: params.draftId,
     clips: prepared.clips.map(toReelClip),
     durationSec: params.durationSec,
+    captions: params.captions,
     signal: params.signal,
     onStage: params.onStage,
   });

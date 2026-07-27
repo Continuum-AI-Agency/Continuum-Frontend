@@ -2,6 +2,8 @@ import {
   deriveOrganicMediaStage,
   type OrganicMediaStage,
   organicMediaStageSchema,
+  organicUgcSpecSchema,
+  plannerCompositionSchema,
 } from '@continuum/contracts';
 import {
   makeCalendarDay,
@@ -78,10 +80,14 @@ function restoreReel(value: unknown): ReelMediaSuggestion | undefined {
         prompt: readString(scene.prompt) ?? null,
         captionText: readString(scene.captionText) ?? null,
         durationSec: readNumber(scene.durationSec) ?? null,
+        bucket: readString(scene.bucket) ?? null,
         clipUrl: readString(scene.clipUrl) ?? null,
         signedClipUrl: readString(scene.signedClipUrl) ?? null,
+        assetId: readString(scene.assetId) ?? null,
         error: readString(scene.error) ?? null,
       })),
+    composition: plannerCompositionSchema.safeParse(obj.composition).data ?? null,
+    ugc: organicUgcSpecSchema.safeParse(obj.ugc).data ?? null,
     error: readString(obj.error) ?? null,
   };
 }
@@ -126,6 +132,7 @@ function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft['mediaSugg
     textReady: typeof obj.textReady === 'boolean' ? obj.textReady : null,
     blueprintReady: typeof obj.blueprintReady === 'boolean' ? obj.blueprintReady : null,
     previewRevision: readString(obj.previewRevision) ?? null,
+    ugc: organicUgcSpecSchema.safeParse(obj.ugc).data ?? null,
     alt: readString(obj.alt) ?? null,
     hyperframe: restoreHyperframe(obj.hyperframe) ?? null,
     reel: restoreReel(obj.reel) ?? null,
@@ -157,7 +164,10 @@ function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft['mediaSugg
   };
 }
 
-function restorePublishingAssets(value: unknown): OrganicCalendarDraft['publishingAssets'] {
+function restorePublishingAssets(
+  value: unknown,
+  fallbackBucket: string | null,
+): OrganicCalendarDraft['publishingAssets'] {
   const arr = asArray(value).filter((a): a is Record<string, unknown> =>
     Boolean(a && typeof a === 'object' && !Array.isArray(a)),
   );
@@ -167,7 +177,10 @@ function restorePublishingAssets(value: unknown): OrganicCalendarDraft['publishi
     kind: readString(item.kind) === 'video' ? ('video' as const) : ('image' as const),
     slideIndex: readNumber(item.slideIndex) ?? undefined,
     assetId: readString(item.assetId) ?? null,
-    bucket: readString(item.bucket) ?? null,
+    // Rows persisted without their own bucket (legacy single-image realizes,
+    // restored with storageUrl: '') inherit the draft's durable mediaSuggestion
+    // bucket so they can still enter the preview's re-sign filter.
+    bucket: readString(item.bucket) ?? fallbackBucket,
     storagePath: readString(item.storagePath) ?? '',
     storageUrl: readString(item.storageUrl) ?? '',
     mimeType: readString(item.mimeType) ?? undefined,
@@ -538,6 +551,12 @@ export function mapPersistedRowToCalendarEntry(
 
   const draftId = mapSlotDataDraftId(slotData, row.id);
 
+  const mediaSuggestion = restoreMediaSuggestion(
+    Object.keys(asRecord(snapshot.mediaSuggestion)).length > 0
+      ? snapshot.mediaSuggestion
+      : placementCreative.mediaSuggestion,
+  );
+
   const draft: OrganicCalendarDraft = {
     id: draftId,
     backendDraftId: row.id,
@@ -565,10 +584,13 @@ export function mapPersistedRowToCalendarEntry(
     contentPlanId: readString(row.content_plan_id) ?? null,
     format: readString(snapshot.format) ?? readString(placementContent.format) ?? 'Post',
     objective: readString(snapshot.objective) ?? readString(placementContent.objective) ?? 'Draft',
+    // content_json-first: it is canonical for copy — the publisher and the
+    // scheduled worker read it, and planner manual edits persist there. The
+    // snapshot/slot values are older echoes kept only as fallbacks.
     captionPreview:
+      readString(placementCopy.caption) ??
       readString(snapshot.captionPreview) ??
       readString(slotData.caption) ??
-      readString(placementCopy.caption) ??
       '',
     tags: readStringArray(snapshot.tags),
     mediaCount: readNumber(snapshot.mediaCount) ?? 1,
@@ -590,15 +612,12 @@ export function mapPersistedRowToCalendarEntry(
     slideCount: readNumber(snapshot.slideCount) ?? undefined,
     adjusted: typeof snapshot.adjusted === 'boolean' ? snapshot.adjusted : undefined,
     generationAttempts: readNumber(snapshot.generationAttempts) ?? undefined,
-    mediaSuggestion: restoreMediaSuggestion(
-      Object.keys(asRecord(snapshot.mediaSuggestion)).length > 0
-        ? snapshot.mediaSuggestion
-        : placementCreative.mediaSuggestion,
-    ),
+    mediaSuggestion,
     publishingAssets: restorePublishingAssets(
       asArray(snapshot.publishingAssets).length > 0
         ? snapshot.publishingAssets
         : placement.publishingAssets,
+      mediaSuggestion?.bucket ?? null,
     ),
     // Agent drafts have no draftSnapshot — their copy lives in content_json. Reading only the
     // snapshot is why they published with a caption but no hashtag block.

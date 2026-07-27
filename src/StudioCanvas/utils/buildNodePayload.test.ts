@@ -378,6 +378,114 @@ describe('buildNodePayload', () => {
       expect(payload?.lastFrame?.data).toBe('last_base64');
     });
 
+    it('builds a full Veo 3.1 first-frame → last-frame payload', () => {
+      const node: StudioNode = {
+        id: 'veo',
+        type: 'veoDirector',
+        position: { x: 0, y: 0 },
+        data: { model: 'veo-3.1', prompt: 'a slow push in', referenceMode: 'frames' },
+      };
+
+      const edges: Edge[] = [
+        {
+          id: 'e1',
+          source: 'f1',
+          target: 'veo',
+          sourceHandle: 'image',
+          targetHandle: 'first-frame',
+        },
+        {
+          id: 'e2',
+          source: 'f2',
+          target: 'veo',
+          sourceHandle: 'image',
+          targetHandle: 'last-frame',
+        },
+      ];
+
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('f1', { type: 'image', base64: 'open_frame', mimeType: 'image/png' });
+      resolvedData.set('f2', { type: 'image', base64: 'close_frame', mimeType: 'image/png' });
+
+      const payload = buildVeoPayload(node, resolvedData, [], edges);
+      expect(payload?.model).toBe('veo-3.1-generate-preview');
+      expect(payload?.firstFrame?.data).toBe('open_frame');
+      expect(payload?.lastFrame?.data).toBe('close_frame');
+      expect(payload?.referenceImages).toBeUndefined();
+    });
+
+    it('builds a veo-3.1-fast reference-image payload — the mirror mode', () => {
+      const node: StudioNode = {
+        id: 'veo',
+        type: 'veoFast',
+        position: { x: 0, y: 0 },
+        data: { model: 'veo-3.1-fast', prompt: 'moodboard shot', referenceMode: 'images' },
+      };
+
+      const edges: Edge[] = [
+        {
+          id: 'e1',
+          source: 'r1',
+          target: 'veo',
+          sourceHandle: 'image',
+          targetHandle: 'ref-images',
+        },
+        {
+          id: 'e2',
+          source: 'r2',
+          target: 'veo',
+          sourceHandle: 'image',
+          targetHandle: 'ref-images',
+        },
+      ];
+
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('r1', { type: 'image', base64: 'ref_one', mimeType: 'image/png' });
+      resolvedData.set('r2', { type: 'image', base64: 'ref_two', mimeType: 'image/png' });
+
+      const payload = buildVeoPayload(node, resolvedData, [], edges);
+      expect(payload?.model).toBe('veo-3.1-fast-generate-preview');
+      expect(payload?.referenceImages).toHaveLength(2);
+      expect(payload?.firstFrame).toBeUndefined();
+      expect(payload?.lastFrame).toBeUndefined();
+    });
+
+    it('never leaks the other mode when the node mode contradicts its edges', () => {
+      // A frames edge on an images-mode node must not become a firstFrame — Veo would
+      // reject the combination and the Backend now 400s on it.
+      const node: StudioNode = {
+        id: 'veo',
+        type: 'veoDirector',
+        position: { x: 0, y: 0 },
+        data: { model: 'veo-3.1', prompt: 'contradiction', referenceMode: 'images' },
+      };
+
+      const edges: Edge[] = [
+        {
+          id: 'e1',
+          source: 'f1',
+          target: 'veo',
+          sourceHandle: 'image',
+          targetHandle: 'first-frame',
+        },
+        {
+          id: 'e2',
+          source: 'r1',
+          target: 'veo',
+          sourceHandle: 'image',
+          targetHandle: 'ref-images',
+        },
+      ];
+
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('f1', { type: 'image', base64: 'frame', mimeType: 'image/png' });
+      resolvedData.set('r1', { type: 'image', base64: 'ref', mimeType: 'image/png' });
+
+      const payload = buildVeoPayload(node, resolvedData, [], edges);
+      expect(payload?.firstFrame).toBeUndefined();
+      expect(payload?.referenceImages).toHaveLength(1);
+    });
+
     it('should include Kling Omni reference video with image references', () => {
       const node: StudioNode = {
         id: 'kling',

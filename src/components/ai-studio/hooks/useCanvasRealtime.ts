@@ -1,5 +1,6 @@
 'use client';
 
+import { migrateStudioWorkflowGraph } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from '@/hooks/useSession';
@@ -174,8 +175,9 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         return;
       }
 
-      const remoteNodes = payload.nodes as StudioNode[];
-      const remoteEdges = payload.edges as Edge[];
+      const migrated = migrateStudioWorkflowGraph({ nodes: payload.nodes, edges: payload.edges });
+      const remoteNodes = migrated.graph.nodes as StudioNode[];
+      const remoteEdges = migrated.graph.edges as Edge[];
       const remoteDeletedNodeIds = toStringArray(payload.deleted_node_ids);
       const remoteDeletedEdgeIds = toStringArray(payload.deleted_edge_ids);
 
@@ -331,36 +333,39 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   // Re-sign generated/reference media that arrived from a sync merge with its
   // signed URL stripped. Batched (one POST) and de-duped per durable pointer so
   // repeated catch-ups never trigger a re-sign storm.
-  const refillMissingMediaUrls = useCallback(async (mergedNodes: StudioNode[]) => {
-    const pending = mergedNodes.filter((node) => {
-      if (!nodeNeedsResign(node)) return false;
-      const key = resignKey(node);
-      return key ? !resignedPathsRef.current.has(key) : false;
-    });
-    if (pending.length === 0) return;
+  const refillMissingMediaUrls = useCallback(
+    async (mergedNodes: StudioNode[]) => {
+      const pending = mergedNodes.filter((node) => {
+        if (!nodeNeedsResign(node)) return false;
+        const key = resignKey(node);
+        return key ? !resignedPathsRef.current.has(key) : false;
+      });
+      if (pending.length === 0) return;
 
-    const resigned = await resignCanvasNodes(pending);
-    const resignedById = new Map(resigned.map((node) => [node.id, node]));
+      const resigned = await resignCanvasNodes(pending, brandProfileId);
+      const resignedById = new Map(resigned.map((node) => [node.id, node]));
 
-    let changed = false;
-    const next = mergedNodes.map((node) => {
-      const updated = resignedById.get(node.id);
-      // resignCanvasNodes returns a new node object only when a URL was applied;
-      // an unchanged reference means the sign failed — leave it for a later retry.
-      if (!updated || updated.data === node.data) return node;
-      const key = resignKey(updated);
-      if (key) resignedPathsRef.current.add(key);
-      changed = true;
-      return updated;
-    });
-    if (!changed) return;
+      let changed = false;
+      const next = mergedNodes.map((node) => {
+        const updated = resignedById.get(node.id);
+        // resignCanvasNodes returns a new node object only when a URL was applied;
+        // an unchanged reference means the sign failed — leave it for a later retry.
+        if (!updated || updated.data === node.data) return node;
+        const key = resignKey(updated);
+        if (key) resignedPathsRef.current.add(key);
+        changed = true;
+        return updated;
+      });
+      if (!changed) return;
 
-    isRemoteChangeRef.current = true;
-    useStudioStore.getState().setNodes(next);
-    setTimeout(() => {
-      isRemoteChangeRef.current = false;
-    }, 100);
-  }, []);
+      isRemoteChangeRef.current = true;
+      useStudioStore.getState().setNodes(next);
+      setTimeout(() => {
+        isRemoteChangeRef.current = false;
+      }, 100);
+    },
+    [brandProfileId],
+  );
 
   useEffect(() => {
     refillMediaRef.current = refillMissingMediaUrls;
@@ -428,8 +433,14 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         isRemoteChangeRef.current = true;
         hasLoadedInitialDataRef.current = true;
 
-        const rawNodes = (session.nodes || []) as StudioNode[];
-        const resignedNodes = reconcileStaleExecutingNodes(await resignCanvasNodes(rawNodes));
+        const migrated = migrateStudioWorkflowGraph({
+          nodes: session.nodes || [],
+          edges: session.edges || [],
+        });
+        const rawNodes = migrated.graph.nodes as StudioNode[];
+        const resignedNodes = reconcileStaleExecutingNodes(
+          await resignCanvasNodes(rawNodes, brandProfileId),
+        );
 
         const store = useStudioStore.getState();
         if (hadLocalContent) {
@@ -439,20 +450,20 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
           store.setEdges(
             mergeEdges(
               store.edges,
-              (session.edges || []) as Edge[],
+              migrated.graph.edges as Edge[],
               [],
               lastRemoteEdgeIdsRef.current,
             ),
           );
         } else {
           store.setNodes(resignedNodes);
-          store.setEdges((session.edges || []) as Edge[]);
+          store.setEdges(migrated.graph.edges as Edge[]);
         }
         lastUpdateRef.current = session.updated_at;
         lastRevisionRef.current = toFiniteNumber(session.revision);
 
-        lastRemoteNodeIdsRef.current = new Set((session.nodes || []).map((n: any) => n.id));
-        lastRemoteEdgeIdsRef.current = new Set((session.edges || []).map((e: any) => e.id));
+        lastRemoteNodeIdsRef.current = new Set(migrated.graph.nodes.map((node) => node.id));
+        lastRemoteEdgeIdsRef.current = new Set(migrated.graph.edges.map((edge) => edge.id));
 
         setTimeout(() => {
           isRemoteChangeRef.current = false;
@@ -637,38 +648,94 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
     saveInFlightRef.current = true;
     setIsSaving(true);
     try {
-      const state = useStudioStore.getState();
-      const currentNodes = state.nodes;
-      const currentEdges = state.edges;
-      const defaultEdgeType = state.defaultEdgeType;
-      const deletedNodeIds = state.getDeletedNodeIds();
-      const deletedEdgeIds = state.getDeletedEdgeIds();
+      const maxAttempts = 4;
+      let saved:
+        | {
+            data: Record<string, unknown>;
+            state: ReturnType<typeof useStudioStore.getState>;
+            nodes: StudioNode[];
+            edges: Edge[];
+            defaultEdgeType: ReturnType<typeof useStudioStore.getState>['defaultEdgeType'];
+            deletedNodeIds: string[];
+            deletedEdgeIds: string[];
+            serialized: ReturnType<typeof serializeWorkflowSnapshot>;
+          }
+        | undefined;
 
-      // Persist: base64 + expiring signed URLs stripped (re-signed on load).
-      const serialized = serializeWorkflowSnapshot(currentNodes, currentEdges, defaultEdgeType);
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const state = useStudioStore.getState();
+        const currentNodes = state.nodes;
+        const currentEdges = state.edges;
+        const defaultEdgeType = state.defaultEdgeType;
+        const deletedNodeIds = state.getDeletedNodeIds();
+        const deletedEdgeIds = state.getDeletedEdgeIds();
+        const serialized = serializeWorkflowSnapshot(currentNodes, currentEdges, defaultEdgeType);
+        const payload = {
+          brand_profile_id: brandProfileId,
+          room_id: roomId,
+          nodes: serialized.nodes as any,
+          edges: serialized.edges as any,
+          deleted_node_ids: deletedNodeIds,
+          deleted_edge_ids: deletedEdgeIds,
+          editor_session_id: localSessionIdRef.current,
+          editor_user_id: user?.id ?? null,
+        };
+        const expectedRevision = lastRevisionRef.current;
+        const table = supabase.schema('brand_profiles' as any).from('canvas_sessions' as any);
+        const result =
+          expectedRevision === null
+            ? await table
+                .insert(payload)
+                .select('updated_at, revision, editor_session_id')
+                .maybeSingle()
+            : await table
+                .update(payload)
+                .eq('brand_profile_id', brandProfileId)
+                .eq('room_id', roomId)
+                .eq('revision', expectedRevision)
+                .select('updated_at, revision, editor_session_id')
+                .maybeSingle();
 
-      const { data, error } = await supabase
-        .schema('brand_profiles' as any)
-        .from('canvas_sessions' as any)
-        .upsert(
-          {
-            brand_profile_id: brandProfileId,
-            room_id: roomId,
-            nodes: serialized.nodes as any,
-            edges: serialized.edges as any,
-            deleted_node_ids: deletedNodeIds,
-            deleted_edge_ids: deletedEdgeIds,
-            editor_session_id: localSessionIdRef.current,
-            editor_user_id: user?.id ?? null,
-          },
-          { onConflict: 'brand_profile_id,room_id' },
-        )
-        .select('updated_at, revision, editor_session_id')
-        .single();
+        if (result.error && (result.error as { code?: string }).code !== '23505') {
+          console.error('[Canvas Sync] Save failed', formatDbError(result.error));
+          return;
+        }
+        if (result.data) {
+          saved = {
+            data: result.data as Record<string, unknown>,
+            state,
+            nodes: currentNodes,
+            edges: currentEdges,
+            defaultEdgeType,
+            deletedNodeIds,
+            deletedEdgeIds,
+            serialized,
+          };
+          break;
+        }
 
-      if (error) {
-        console.error('[Canvas Sync] Save failed', formatDbError(error));
-      } else if (data) {
+        // A missing UPDATE row or duplicate INSERT means another writer won the
+        // revision. Reconcile that row into the store, then serialize and retry
+        // against its new revision instead of overwriting it with stale state.
+        await syncLatestCanvasSessionRef.current?.();
+      }
+
+      if (!saved) {
+        console.warn('[Canvas Sync] Save deferred after repeated revision conflicts');
+        return;
+      }
+
+      {
+        const {
+          data,
+          state,
+          nodes: currentNodes,
+          edges: currentEdges,
+          defaultEdgeType,
+          deletedNodeIds,
+          deletedEdgeIds,
+          serialized,
+        } = saved;
         const resolvedTimestamp = (data as any).updated_at as string;
         const resolvedRevision = toFiniteNumber((data as any).revision);
         const resolvedEditorSessionId = ((data as any).editor_session_id ??

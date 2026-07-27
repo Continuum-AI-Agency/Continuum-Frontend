@@ -18,6 +18,8 @@ const CommandPalette = dynamic(
 );
 
 import type { AuthIdentity } from '@/lib/auth/identity';
+import type { AutomationDeploymentEnvironment } from '@/lib/automations/access';
+import type { ChangelogEntry } from '@/lib/changelog/schema';
 
 export type BrandSummary = {
   id: string;
@@ -44,6 +46,8 @@ type DashboardLayoutShellProps = {
   brandSummaries: BrandSummary[];
   user: AuthIdentity | null;
   permissions: BrandPermission[];
+  changelogEntries: ChangelogEntry[];
+  automationEnvironment: AutomationDeploymentEnvironment;
 };
 
 export default function DashboardLayoutShell({
@@ -52,6 +56,8 @@ export default function DashboardLayoutShell({
   brandSummaries,
   user,
   permissions,
+  changelogEntries,
+  automationEnvironment,
 }: DashboardLayoutShellProps) {
   return (
     <ActiveBrandProvider
@@ -69,9 +75,9 @@ export default function DashboardLayoutShell({
             <div className="particle-layer bottom" aria-hidden="true" />
 
             <SidebarProvider defaultOpen={false}>
-              <AppSidebar />
+              <AppSidebar automationEnvironment={automationEnvironment} />
               <SidebarInset className="flex h-dvh flex-col overflow-hidden bg-transparent">
-                <DashboardHeader />
+                <DashboardHeader changelogEntries={changelogEntries} />
                 <main className="@container/app-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-[var(--shell-gutter)] pb-[var(--shell-stack-gap)]">
                   <BrandWelcomeBanner />
                   <div className="min-h-full w-full min-w-0">{children}</div>
@@ -79,7 +85,7 @@ export default function DashboardLayoutShell({
               </SidebarInset>
             </SidebarProvider>
           </div>
-          <CommandPalette />
+          <CommandPalette automationEnvironment={automationEnvironment} />
         </CommandPaletteProvider>
       </ClientRenderProvider>
     </ActiveBrandProvider>

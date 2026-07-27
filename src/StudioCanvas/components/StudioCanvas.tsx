@@ -3,13 +3,19 @@ import {
   MiniMap,
   type Connection as ReactFlowConnection,
   ReactFlowProvider,
+  reconnectEdge,
   SelectionMode,
   useReactFlow,
 } from '@xyflow/react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
-import { createNodeData, type UnfurlMediaItem } from '@continuum/contracts';
+import {
+  createNodeData,
+  type GraphIssue,
+  type UnfurlMediaItem,
+  validateWorkflowGraph,
+} from '@continuum/contracts';
 import {
   AtSign,
   FolderOpen,
@@ -19,7 +25,6 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
-  X,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
@@ -87,6 +92,7 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { AudioNode } from '../nodes/AudioNode';
 import { DocumentNode } from '../nodes/DocumentNode';
 import { ExtendVideoBlock } from '../nodes/ExtendVideoBlock';
+import { FrameExtractBlock } from '../nodes/FrameExtractBlock';
 import { HyperframesAgentBlock } from '../nodes/HyperframesAgentBlock';
 import { ImageGenBlock } from '../nodes/ImageGenBlock';
 import { ImageNode } from '../nodes/ImageNode';
@@ -121,6 +127,7 @@ import {
   VIDEO_GENERATOR_MODELS,
   type VideoGeneratorModel,
 } from '../utils/videoModel';
+import { CanvasFloatingPanel } from './CanvasFloatingPanel';
 import { InstagramMediaBrowser } from './InstagramMediaBrowser';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
@@ -149,7 +156,8 @@ type StudioCanvasNodeType =
   | 'audio'
   | 'document'
   | 'video'
-  | 'videoDecode';
+  | 'videoDecode'
+  | 'frameExtract';
 
 type LibraryItem = {
   type: StudioCanvasNodeType;
@@ -232,6 +240,12 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
         desc: 'Frame-by-frame creative breakdown',
         tag: 'Intelligence',
       },
+      {
+        type: 'frameExtract',
+        label: 'Continuity Frame',
+        desc: 'Extract a first, last, or exact video frame',
+        tag: 'Editing',
+      },
     ],
   },
   {
@@ -302,6 +316,7 @@ const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'document',
   'video',
   'videoDecode',
+  'frameExtract',
 ]);
 
 const isStudioCanvasNodeType = (value: string): value is StudioCanvasNodeType =>
@@ -375,6 +390,10 @@ const createNodeConfig = (
     return { data: { value: '' }, style: { width: 360, height: 320 } };
   }
 
+  if (type === 'frameExtract') {
+    return createNodeData('frameExtract');
+  }
+
   if (type === 'omniGen') {
     return createNodeData('omniGen');
   }
@@ -424,6 +443,7 @@ const nodeTypes = {
   document: DocumentNode,
   video: VideoReferenceNode,
   videoDecode: VideoDecoderBlock,
+  frameExtract: FrameExtractBlock,
 };
 
 const edgeTypes = {
@@ -653,9 +673,10 @@ function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
         id: videoNodeId,
         type: 'videoGen',
         position: { x: 620, y: 160 },
+        // The mode is left to createNodeData so it tracks whatever defaultModel is,
+        // rather than pinning 'frames' and going stale if that model changes.
         ...createNodeData('videoGen', {
           model: workflowSpec.defaultModel,
-          referenceMode: 'frames',
           aspectRatio: seedAspectRatio,
         }),
       } as StudioNode,
@@ -943,9 +964,9 @@ function Flow({
       });
       return;
     }
-    targets.forEach((node) =>
-      updateNodeData(node.id, { brandBookPieces: DEFAULT_BRAND_BOOK_PIECES }),
-    );
+    targets.forEach((node) => {
+      updateNodeData(node.id, { brandBookPieces: DEFAULT_BRAND_BOOK_PIECES });
+    });
     triggerSave();
     show({
       title: 'Brand book enforced',
@@ -1435,6 +1456,29 @@ function Flow({
     },
     [edges, nodes],
   );
+  const validationIssues = useMemo(
+    () => validateWorkflowGraph({ nodes, edges }).issues,
+    [edges, nodes],
+  );
+
+  const onReconnect = useCallback(
+    (oldEdge: Edge, connection: ReactFlowConnection) => {
+      const normalized = connection as ReactFlowConnection;
+      const remainingEdges = edges.filter((edge) => edge.id !== oldEdge.id);
+      if (!isValidConnection(normalized, remainingEdges, nodes)) {
+        show({
+          title: 'That connection does not fit',
+          description: 'Choose a compatible port with available capacity.',
+          variant: 'error',
+        });
+        return;
+      }
+      takeSnapshot();
+      setEdges(reconnectEdge(oldEdge, normalized, edges));
+      triggerSave();
+    },
+    [edges, nodes, setEdges, show, takeSnapshot, triggerSave],
+  );
 
   if (isLoading) {
     return <CanvasMediaLoader />;
@@ -1455,6 +1499,8 @@ function Flow({
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onReconnect={onReconnect}
+            edgesReconnectable
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onDragOver={onDragOver}
@@ -1514,24 +1560,14 @@ function Flow({
             </Panel>
 
             {isLibraryBrowserOpen && (
-              <Panel position="top-left" className="ml-1 mt-14 nodrag nowheel">
-                <div className="flex h-[560px] w-[360px] flex-col overflow-hidden rounded-lg border border-border/60 bg-background/95 shadow-lg backdrop-blur">
-                  <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
-                    <span className="text-sm font-medium">Media Library</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsLibraryBrowserOpen(false)}
-                      aria-label="Close media library"
-                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="min-h-0 flex-1">
-                    <StudioMediaLibraryPanel brandProfileId={brandProfileId || ''} />
-                  </div>
-                </div>
-              </Panel>
+              <CanvasFloatingPanel
+                title="Media Library"
+                icon={<FolderOpen className="size-4" aria-hidden />}
+                onClose={() => setIsLibraryBrowserOpen(false)}
+                className="h-[560px] w-[360px]"
+              >
+                <StudioMediaLibraryPanel brandProfileId={brandProfileId || ''} />
+              </CanvasFloatingPanel>
             )}
 
             {isInstagramBrowserOpen && (
@@ -1541,6 +1577,58 @@ function Flow({
                 onClose={() => setIsInstagramBrowserOpen(false)}
               />
             )}
+
+            {validationIssues.length > 0 ? (
+              <Panel position="top-right" className="border-none bg-transparent p-0 shadow-none">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-2 bg-background/95 text-xs"
+                      aria-label={`${validationIssues.length} workflow validation issue${validationIssues.length === 1 ? '' : 's'}`}
+                    >
+                      <ShieldCheck className="size-3.5" aria-hidden />
+                      {validationIssues.length} to review
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-80 p-2">
+                    <p className="px-2 py-1 text-xs font-medium">Workflow checks</p>
+                    <div className="flex max-h-64 flex-col overflow-y-auto">
+                      {validationIssues.map((issue: GraphIssue, index) => (
+                        <button
+                          key={`${issue.code}:${issue.nodeId ?? issue.edgeId ?? index}`}
+                          type="button"
+                          className="rounded-md px-2 py-2 text-left text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          onClick={() => {
+                            if (!issue.nodeId) return;
+                            setNodes(
+                              nodes.map((node) => ({
+                                ...node,
+                                selected: node.id === issue.nodeId,
+                              })),
+                            );
+                            void fitView({
+                              nodes: [{ id: issue.nodeId }],
+                              duration: 250,
+                              padding: 0.5,
+                            });
+                          }}
+                        >
+                          <span className="block font-medium">
+                            {issue.phase === 'run' ? 'Before running' : 'Connection'}
+                          </span>
+                          <span className="mt-0.5 block text-muted-foreground">
+                            {issue.message}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </Panel>
+            ) : null}
 
             <Controls fitViewOptions={STUDIO_FIT_VIEW_OPTIONS} />
             <MiniMap className="!border !bg-background/95" />

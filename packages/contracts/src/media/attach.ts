@@ -34,6 +34,12 @@ export const creativeRefSchema = z
     height: z.number().optional(),
     signedUrl: z.string().optional(),
     durationSec: z.number().optional(),
+    /**
+     * Poster frame for a video creative (the library's derived thumbnail). Without
+     * it a video preview has nothing to paint before the first frame decodes, which
+     * is why the schema carries it explicitly rather than letting the boundary drop it.
+     */
+    thumbnailUrl: z.string().optional(),
   })
   .strict();
 export type CreativeRef = z.infer<typeof creativeRefSchema>;
@@ -43,8 +49,16 @@ export type CreativeRef = z.infer<typeof creativeRefSchema>;
  * merely sit alongside them — the patch is spread over the existing mediaSuggestion (and, on the
  * backend, merged into content_json), so a key that is merely absent leaves the old generation
  * in place. `null` is what survives JSON, which `undefined` does not.
+ *
+ * Every media slot lives here, including the single-image trio (`url`/`assetUrl`/`signedUrl`):
+ * a video attach that only sets `reel` leaves a previously generated image behind those keys,
+ * and every image resolver in the app reads them — that is a stale creative rendering over the
+ * user's video.
  */
 type ClearedMediaOutputs = {
+  url?: string | null;
+  assetUrl?: string | null;
+  signedUrl?: string | null;
   assets?: OrganicMediaSuggestion['assets'] | null;
   assetBase64?: string | null;
   reel?: OrganicMediaSuggestion['reel'] | null;
@@ -69,7 +83,19 @@ export function creativeRefFromAsset(asset: MediaAsset): CreativeRef {
     height: asset.height ?? undefined,
     signedUrl: asset.signedUrl ?? undefined,
     durationSec: asset.durationMs != null ? Math.round(asset.durationMs / 1000) : undefined,
+    thumbnailUrl: asset.thumbnailUrl ?? undefined,
   };
+}
+
+/**
+ * A post carries at most one video (`reel` is a single slot), so a selection with two
+ * or more videos loses everything past the first. Callers ask before shaping, and the
+ * picker refuses the selection — silently truncating is what made an attach look
+ * successful while discarding the user's other picks.
+ */
+export function findMultiVideoSelectionError(creatives: CreativeRef[]): string | null {
+  const videoCount = creatives.filter((creative) => creative.kind === 'video').length;
+  return videoCount > 1 ? 'Only one video per post' : null;
 }
 
 function imagePublishingAsset(creative: CreativeRef, slideIndex?: number): OrganicPublishingAsset {
@@ -88,14 +114,35 @@ function imagePublishingAsset(creative: CreativeRef, slideIndex?: number): Organ
 }
 
 /**
+ * Every media slot cleared. Each branch below starts from this and re-sets only the
+ * slots it fills, so no branch can forget one: the patch is spread over the existing
+ * mediaSuggestion, and an omitted key leaves the previous generation's media in place.
+ */
+const ALL_MEDIA_SLOTS_CLEARED: Required<ClearedMediaOutputs> = {
+  url: null,
+  assetUrl: null,
+  signedUrl: null,
+  assets: null,
+  assetBase64: null,
+  reel: null,
+  hyperframe: null,
+};
+
+/**
  * Shape one or more library creatives into a publishable media patch. A single
  * image → image slot; multiple images → carousel (selection order = slide
  * order); the first video → reel slot (one video per post).
+ *
+ * Two or more videos is a caller error — ask `findMultiVideoSelectionError` first.
  */
 export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSuppliedMedia {
   const list = creatives.filter(Boolean);
   if (list.length === 0) {
     throw new Error('shapeUserSuppliedMedia: at least one creative is required');
+  }
+  const multiVideo = findMultiVideoSelectionError(list);
+  if (multiVideo) {
+    throw new Error(`shapeUserSuppliedMedia: ${multiVideo}`);
   }
   const primary = list[0];
 
@@ -116,6 +163,7 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
         },
       ],
       mediaSuggestionPatch: {
+        ...ALL_MEDIA_SLOTS_CLEARED,
         kind: 'reel',
         mediaStatus: 'user_supplied',
         mimeType: primary.mimeType,
@@ -124,6 +172,7 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
           url: primary.storagePath,
           bucket: primary.bucket,
           signedUrl: primary.signedUrl ?? null,
+          thumbnailUrl: primary.thumbnailUrl ?? null,
           mimeType: primary.mimeType ?? null,
           durationSec: primary.durationSec ?? 0,
           scenes: [],
@@ -137,6 +186,7 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
     return {
       publishingAssets: list.map((creative, index) => imagePublishingAsset(creative, index)),
       mediaSuggestionPatch: {
+        ...ALL_MEDIA_SLOTS_CLEARED,
         kind: 'carousel',
         mediaStatus: 'user_supplied',
         assets: list.map((creative, index) => ({
@@ -158,6 +208,7 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
   return {
     publishingAssets: [imagePublishingAsset(primary)],
     mediaSuggestionPatch: {
+      ...ALL_MEDIA_SLOTS_CLEARED,
       kind: 'image',
       mediaStatus: 'user_supplied',
       url: primary.storagePath,
@@ -167,14 +218,6 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
       mimeType: primary.mimeType,
       width: primary.width,
       height: primary.height,
-      // The patch is spread over the existing mediaSuggestion, so any media the headless
-      // generation left behind has to be cleared EXPLICITLY — omitting these keys leaves a
-      // generated carousel's slides in place, and the assertPublishable gate (and anything
-      // else reading mediaSuggestion) still sees the old generation as this draft's media.
-      assets: null,
-      assetBase64: null,
-      reel: null,
-      hyperframe: null,
     },
   };
 }

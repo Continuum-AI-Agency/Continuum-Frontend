@@ -247,7 +247,17 @@ export function PortfolioManagePanel({
         await update.mutateAsync({ portfolio_id: portfolio.id, patch });
       }
       if (toAdd.length > 0) {
-        await enroll.mutateAsync({ portfolio_id: portfolio.id, adset_ids: toAdd });
+        const nameById = new Map(snapshotsRead.data.map((s) => [s.id, s.name]));
+        const adset_names: Record<string, string> = {};
+        for (const id of toAdd) {
+          const name = nameById.get(id);
+          if (name && name.trim().length > 0) adset_names[id] = name;
+        }
+        await enroll.mutateAsync({
+          portfolio_id: portfolio.id,
+          adset_ids: toAdd,
+          ...(Object.keys(adset_names).length > 0 ? { adset_names } : {}),
+        });
       }
       await Promise.all(
         toRemove.map((adsetId) =>

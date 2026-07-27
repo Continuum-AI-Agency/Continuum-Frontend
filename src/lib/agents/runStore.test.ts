@@ -89,6 +89,29 @@ describe('appendEvents', () => {
     useAgentRunStore.getState().appendEvents('run_unknown', [event(0, 'agent.run_started')]);
     expect(useAgentRunStore.getState().runs.run_unknown?.events).toHaveLength(1);
   });
+
+  // The placeholder used to hardcode agent 'organic', so a Jaina/canvas run whose frames
+  // beat its row briefly masqueraded as organic — and got tailed through the wrong source.
+  it('derives the pending run identity from the run-identity frame when the log carries one', () => {
+    useAgentRunStore.getState().appendEvents('run_pending', [
+      {
+        eventId: 'evt_0',
+        seq: 0,
+        ts: '2026-07-23T00:00:00.000Z',
+        type: 'agent.chat_started',
+        data: { runId: 'run_pending', sessionId: 'sess_j', agent: 'jaina' },
+      },
+    ]);
+
+    const record = useAgentRunStore.getState().runs.run_pending;
+    expect(record?.run.agent).toBe('jaina');
+    expect(record?.run.sessionId).toBe('sess_j');
+  });
+
+  it('still defaults to organic when no identity frame has arrived', () => {
+    useAgentRunStore.getState().appendEvents('run_bare', [event(3)]);
+    expect(useAgentRunStore.getState().runs.run_bare?.run.agent).toBe('organic');
+  });
 });
 
 describe('selectLiveRuns', () => {
@@ -112,6 +135,36 @@ describe('selectLiveRuns', () => {
 
     expect(selectEventsForSession('sess_o')(useAgentRunStore.getState())).toHaveLength(1);
     expect(selectEventsForSession('sess_j')(useAgentRunStore.getState())).toHaveLength(1);
+  });
+});
+
+describe('canvas composer runs', () => {
+  // Composer runs have no event log — their status arrives via upsertRun alone (the
+  // composer.started fold, the active-runs hydrate, or the run-row Realtime tail).
+  it('is registered, live, and bound to its room like any other run', () => {
+    const store = useAgentRunStore.getState();
+    store.upsertRun(
+      run({
+        runId: 'run_canvas',
+        agent: 'canvas',
+        sessionId: 'room_1',
+        origin: { surface: 'ai-studio', roomId: 'room_1' },
+      }),
+    );
+
+    expect(selectLiveRuns(useAgentRunStore.getState()).map((r) => r.runId)).toEqual(['run_canvas']);
+    expect(isSessionStreaming('room_1')(useAgentRunStore.getState())).toBe(true);
+  });
+
+  it('settles on a status-only upsert, with no terminal frame anywhere', () => {
+    const store = useAgentRunStore.getState();
+    store.upsertRun(run({ runId: 'run_canvas', agent: 'canvas', sessionId: 'room_1' }));
+    store.upsertRun(
+      run({ runId: 'run_canvas', agent: 'canvas', sessionId: 'room_1', status: 'cancelled' }),
+    );
+
+    expect(useAgentRunStore.getState().runs.run_canvas?.run.status).toBe('cancelled');
+    expect(isSessionStreaming('room_1')(useAgentRunStore.getState())).toBe(false);
   });
 });
 

@@ -351,3 +351,107 @@ export const creativeVectorSignalSchema = z.object({
   caveat: z.string(),
 });
 export type CreativeVectorSignal = z.infer<typeof creativeVectorSignalSchema>;
+
+// ---------------------------------------------------------------------------
+// Creative request brief — one wording, four surfaces
+// ---------------------------------------------------------------------------
+
+/** The optimizer's ask when it wants a different creative in an ad set, whether
+ *  the maker is a human, a generation worker, or the render API.
+ *
+ *  Extends the iteration brief with what the optimizer knows and the report does
+ *  not: which Library asset won, what it looked like, and whether the ANGLE is the
+ *  thing to keep (rebuildCraft) or the thing to change. */
+export const creativeRequestBriefSchema = paidIterationBriefSchema.extend({
+  /** The recommendation kind this brief answers: variate_creative | seed_experiment |
+   *  creative_refresh. */
+  kind: z.string(),
+  adSetId: z.string(),
+  /** media.assets id of the winning creative, when it is in the Library at all. On a
+   *  live account most winners are not (they were uploaded straight to Meta). */
+  winnerAssetId: z.string().nullable().default(null),
+  posterUrl: z.string().nullable().default(null),
+  /** True when Meta's quality rankings say the EXECUTION is what's penalized: keep
+   *  the angle that is working, rebuild the craft around it. */
+  rebuildCraft: z.boolean().default(false),
+});
+export type CreativeRequestBrief = z.infer<typeof creativeRequestBriefSchema>;
+
+/** The optimizer's CreativeVariationSeed as it arrives over the wire (jsonb off
+ *  optimizer.recommendations.seed). Mirrored loosely here rather than imported —
+ *  contracts must not depend on the engine package. */
+export type CreativeVariationSeedInput = {
+  adSetId: string;
+  winnerAdId?: string | null;
+  winnerCreativeRowId?: string | null;
+  winnerAssetId?: string | null;
+  labels?: Record<string, unknown> | null;
+  posterUrl?: string | null;
+  rebuildCraft?: boolean;
+  groundedOn?: string[];
+};
+
+const CREATIVE_REQUEST_TITLES: Record<string, string> = {
+  variate_creative: 'Create a variation of the winning creative',
+  seed_experiment: 'Create a first experiment creative for this ad set',
+  creative_refresh: 'Refresh the creative for this ad set',
+};
+
+const labelLine = (labels: Record<string, unknown> | null | undefined): string | null => {
+  if (!labels) return null;
+  const parts = Object.entries(labels)
+    .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    .map(([k, v]) => `${k}=${String(v)}`);
+  return parts.length > 0 ? parts.join(', ') : null;
+};
+
+/** Render the brief from the seed. Deterministic and closed over its inputs: every
+ *  sentence is assembled from seed fields, the recommendation's own reason, and the
+ *  grounded citations. It never introduces a figure or a claim of its own — a model
+ *  downstream may rephrase this, but the facts have to come from here. */
+export function buildCreativeRequestBrief(
+  seed: CreativeVariationSeedInput,
+  kind: string,
+  reason?: string | null,
+): CreativeRequestBrief {
+  const lines: string[] = [];
+
+  if (reason) lines.push(`Why: ${reason}`);
+
+  const labels = labelLine(seed.labels);
+  if (seed.rebuildCraft) {
+    lines.push(
+      labels
+        ? `Keep the angle that is working (${labels}) and rebuild the execution around it — the craft is what is being penalized, not the message.`
+        : 'Keep the angle that is working and rebuild the execution around it — the craft is what is being penalized, not the message.',
+    );
+  } else if (labels) {
+    lines.push(`Keep close to the winning combination: ${labels}.`);
+  }
+
+  if (seed.winnerAdId) lines.push(`Reference ad: ${seed.winnerAdId}.`);
+  if (seed.winnerAssetId) {
+    lines.push(`The winning creative is in the Library as asset ${seed.winnerAssetId}.`);
+  } else if (seed.winnerAdId) {
+    lines.push('The winning creative is not in the Library — work from the reference ad.');
+  }
+  if (seed.posterUrl) lines.push(`Reference frame: ${seed.posterUrl}`);
+
+  if (kind === 'seed_experiment') {
+    lines.push(
+      'This ad set is running a single creative, so nothing can be compared. Make one deliberately different variant to create that comparison.',
+    );
+  }
+
+  return creativeRequestBriefSchema.parse({
+    adId: seed.winnerAdId ?? '',
+    title: CREATIVE_REQUEST_TITLES[kind] ?? 'Create a new creative for this ad set',
+    brief: lines.join(' '),
+    groundedOn: seed.groundedOn ?? [],
+    kind,
+    adSetId: seed.adSetId,
+    winnerAssetId: seed.winnerAssetId ?? null,
+    posterUrl: seed.posterUrl ?? null,
+    rebuildCraft: seed.rebuildCraft ?? false,
+  });
+}

@@ -105,7 +105,8 @@ export async function POST(request: Request) {
 
   const actorName = resolveActorName(user);
   const message = input.message?.trim() ? input.message.trim() : null;
-  const payload = { assetId: asset.id, assetName, message, actorName };
+  const pingId = crypto.randomUUID();
+  const payload = { pingId, assetId: asset.id, assetName, message, actorName };
 
   const { data: inserted, error: insertError } = await admin
     .schema('brand_profiles')
@@ -130,7 +131,9 @@ export async function POST(request: Request) {
     ...new Set(recipients.map((r) => r.email).filter((email): email is string => Boolean(email))),
   ];
   const emailed = await sendPingEmails({
+    pingId,
     brandId: input.brandId,
+    assetId: asset.id,
     assetName,
     recipientEmails,
     actorName,
@@ -152,7 +155,9 @@ function resolveActorName(user: User): string {
 // Fail-soft edge invoke: any failure logs and reports 0 emails sent. Mirrors
 // the register-canvas → analyze_media service-key invocation pattern.
 async function sendPingEmails(params: {
+  pingId: string;
   brandId: string;
+  assetId: string;
   assetName: string;
   recipientEmails: string[];
   actorName: string;
@@ -177,7 +182,9 @@ async function sendPingEmails(params: {
         Authorization: `Bearer ${serviceKey}`,
       },
       body: JSON.stringify({
+        pingId: params.pingId,
         brandId: params.brandId,
+        assetId: params.assetId,
         assetName: params.assetName,
         recipientEmails: params.recipientEmails,
         actorName: params.actorName,

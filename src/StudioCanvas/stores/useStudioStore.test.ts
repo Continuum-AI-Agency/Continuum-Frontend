@@ -516,3 +516,72 @@ describe('normalizeEdges legacy handle remapping', () => {
     expect((edge.data as { dataType?: string } | undefined)?.dataType).toBe('document');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Video reference mode — handle remapping and mode-driven edge pruning
+// ---------------------------------------------------------------------------
+describe('video reference mode edge normalization', () => {
+  beforeEach(() => {
+    useStudioStore.setState({ nodes: [], edges: [] });
+  });
+
+  const seed = (videoData: Record<string, unknown>) => {
+    const nodes: StudioNode[] = [
+      { id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' },
+      { id: 'vid1', position: { x: 0, y: 0 }, data: videoData, type: 'videoGen' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+  };
+
+  const setEdge = (targetHandle: string) => {
+    useStudioStore.getState().setEdges([
+      {
+        id: `e-${targetHandle}`,
+        source: 'img1',
+        sourceHandle: 'image',
+        target: 'vid1',
+        targetHandle,
+        type: 'dataType',
+      },
+    ]);
+  };
+
+  it('remaps a legacy frame-0 handle onto first-frame', () => {
+    seed({ model: 'veo-3.1-fast', referenceMode: 'frames' });
+    setEdge('frame-0');
+
+    const edges = useStudioStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('first-frame');
+  });
+
+  it('remaps any higher legacy frame-N handle onto last-frame', () => {
+    seed({ model: 'veo-3.1-fast', referenceMode: 'frames' });
+    setEdge('frame-3');
+
+    const edges = useStudioStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('last-frame');
+  });
+
+  it('keeps a first-frame edge on a frames-mode veo-3.1 node', () => {
+    seed({ model: 'veo-3.1', referenceMode: 'frames' });
+    setEdge('first-frame');
+
+    expect(useStudioStore.getState().edges).toHaveLength(1);
+  });
+
+  it('prunes a first-frame edge once the node switches to images mode', () => {
+    seed({ model: 'veo-3.1', referenceMode: 'images' });
+    setEdge('first-frame');
+
+    expect(useStudioStore.getState().edges).toHaveLength(0);
+  });
+
+  it('keeps a ref-images edge on an images-mode veo-3.1-fast node — the mirror', () => {
+    seed({ model: 'veo-3.1-fast', referenceMode: 'images' });
+    setEdge('ref-images');
+
+    expect(useStudioStore.getState().edges).toHaveLength(1);
+  });
+});

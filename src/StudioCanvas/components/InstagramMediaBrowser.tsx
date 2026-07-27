@@ -10,16 +10,14 @@ import type {
   InstagramTopMediaResponse,
   UnfurlMediaItem,
 } from '@continuum/contracts';
-import { Panel } from '@xyflow/react';
-import { AtSign, Loader2, X } from 'lucide-react';
+import { AtSign, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchInstagramTopMedia } from '@/lib/api/aiStudioInstagram.client';
 import { type InstagramLookupErrorKind, instagramLookupErrorKind } from '@/lib/api/errors';
-
+import { CanvasFloatingPanel } from './CanvasFloatingPanel';
 import { InstagramPostGrid } from './InstagramPostGrid';
 import { InstagramSlidePicker } from './InstagramSlidePicker';
 
@@ -145,92 +143,75 @@ export function InstagramMediaBrowser({
   const followers = result ? formatCount(result.account.followersCount) : null;
 
   return (
-    <Panel position="top-left" className="nodrag nowheel mt-12">
-      <Card className="w-[380px] gap-3 py-3 shadow-lg">
-        <CardHeader className="px-4">
-          <CardTitle className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2">
-              <AtSign className="h-4 w-4" />
-              Import from Instagram
+    <CanvasFloatingPanel
+      title="Import from Instagram"
+      icon={<AtSign className="size-4" aria-hidden />}
+      onClose={onClose}
+      className="mt-12"
+      bodyClassName="flex flex-col gap-3 p-4"
+    >
+      <form
+        className="flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSearch();
+        }}
+      >
+        <Input
+          aria-label="Instagram username"
+          placeholder="Search another account"
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+          disabled={status === 'loading'}
+        />
+        <Button type="submit" disabled={status === 'loading' || !username.trim()}>
+          {status === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+        </Button>
+      </form>
+
+      {status === 'loading' && (
+        <div className="grid grid-cols-3 gap-2">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="aspect-square rounded-md" />
+          ))}
+        </div>
+      )}
+
+      {status === 'error' && errorKind && (
+        <p className="text-sm text-muted-foreground">{ERROR_COPY[errorKind]}</p>
+      )}
+
+      {status === 'loaded' && result && !selectedPost && (
+        <>
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm font-medium">
+              {result.account.name ?? `@${result.account.username}`}
             </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={onClose}
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="flex flex-col gap-3 px-4">
-          <form
-            className="flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handleSearch();
-            }}
-          >
-            <Input
-              aria-label="Instagram username"
-              placeholder="Search another account"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              disabled={status === 'loading'}
-            />
-            <Button type="submit" disabled={status === 'loading' || !username.trim()}>
-              {status === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
-            </Button>
-          </form>
-
-          {status === 'loading' && (
-            <div className="grid grid-cols-3 gap-2">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <Skeleton key={index} className="aspect-square rounded-md" />
-              ))}
-            </div>
-          )}
-
-          {status === 'error' && errorKind && (
-            <p className="text-sm text-muted-foreground">{ERROR_COPY[errorKind]}</p>
-          )}
-
-          {status === 'loaded' && result && !selectedPost && (
-            <>
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm font-medium">
-                  {result.account.name ?? `@${result.account.username}`}
-                </span>
-                {followers && <span className="text-xs text-muted-foreground">{followers}</span>}
-              </div>
-              {result.posts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No media found for this account.</p>
-              ) : (
-                <InstagramPostGrid
-                  posts={result.posts}
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  onPageChange={setPage}
-                  onSelect={openPost}
-                />
-              )}
-            </>
-          )}
-
-          {selectedPost && (
-            <InstagramSlidePicker
-              post={selectedPost}
-              selected={selectedSlides}
-              onToggle={toggleSlide}
-              onBack={() => setSelectedPost(null)}
-              onAdd={handleAdd}
+            {followers && <span className="text-xs text-muted-foreground">{followers}</span>}
+          </div>
+          {result.posts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No media found for this account.</p>
+          ) : (
+            <InstagramPostGrid
+              posts={result.posts}
+              page={page}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+              onSelect={openPost}
             />
           )}
-        </CardContent>
-      </Card>
-    </Panel>
+        </>
+      )}
+
+      {selectedPost && (
+        <InstagramSlidePicker
+          post={selectedPost}
+          selected={selectedSlides}
+          onToggle={toggleSlide}
+          onBack={() => setSelectedPost(null)}
+          onAdd={handleAdd}
+        />
+      )}
+    </CanvasFloatingPanel>
   );
 }

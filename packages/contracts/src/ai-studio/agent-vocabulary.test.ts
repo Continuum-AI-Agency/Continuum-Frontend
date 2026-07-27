@@ -19,6 +19,13 @@ describe('describeNodeVocabulary', () => {
     expect(block).toMatch(/ref-images \(max \d+\)/);
   });
 
+  it('advertises both Veo 3.1 reference modes and the exclusivity between them', () => {
+    expect(block).toContain('referenceMode "frames"');
+    expect(block).toContain('referenceMode "images"');
+    expect(block).toMatch(/veo-3\.1 .*referenceMode "frames".*first-frame, last-frame/);
+    expect(block).toContain('REJECTS reference images and first/last frames in one request');
+  });
+
   it('marks source nodes as taking no inputs', () => {
     const imageLine = block.split('\n').find((line) => line.startsWith('- image —'));
     expect(imageLine).toBeDefined();
@@ -26,10 +33,12 @@ describe('describeNodeVocabulary', () => {
     expect(inputsLine).toContain('(none — it is a source)');
   });
 
-  it('marks the planner sink as producing no output', () => {
+  it('marks publishing sinks as producing no output', () => {
     const lines = block.split('\n');
-    const index = lines.findIndex((line) => line.startsWith('- publishToPlanner —'));
-    expect(lines[index + 2]).toContain('(none — it is a sink)');
+    for (const type of ['organicPublisher', 'paidPublisher']) {
+      const index = lines.findIndex((line) => line.startsWith(`- ${type} —`));
+      expect(lines[index + 2]).toContain('(none — it is a sink)');
+    }
   });
 });
 

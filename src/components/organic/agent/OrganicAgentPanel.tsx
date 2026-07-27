@@ -5,9 +5,10 @@ import { ArrowRight, RefreshCw } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import { Suggestion } from '@/components/ai-elements/suggestion';
-import { AutomatePromptAction } from '@/components/automations/AutomatePromptAction';
-import { AutomationSheets } from '@/components/automations/AutomationSheets';
+import { ChatProvenanceBanner } from '@/components/chat/AgentInitiatorPill';
 import type { Attachment } from '@/components/chat/attachments';
 import { ChatMarker } from '@/components/chat/ChatMarker';
 import { ChatMessage } from '@/components/chat/ChatMessage';
@@ -56,7 +57,12 @@ import type {
   AgentMentionReference,
   AgentMentionSuggestion,
 } from '@/lib/agent-references';
-import { useAgentRunStore } from '@/lib/agents/runStore';
+import {
+  isSessionStreaming,
+  selectLiveRuns,
+  selectRunForSession,
+  useAgentRunStore,
+} from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import {
@@ -150,6 +156,7 @@ type OrganicAgentPanelProps = {
   brandId: string;
   platformAccountIds: Record<string, string>;
   mentionContext?: OrganicAgentMentionContext;
+  initialSessionId?: string | null;
 };
 
 export type OrganicAgentMentionContext = {
@@ -225,6 +232,8 @@ function cardKey(card: UiCard, index: number): string {
       return `skill_proposal:${card.data.proposalId}`;
     case 'aeo_snapshot':
       return `aeo_snapshot:${card.data.snapshotId}`;
+    case 'agent_delegated':
+      return `agent_delegated:${card.data.callId}`;
     default:
       return String(index);
   }
@@ -304,6 +313,7 @@ export function OrganicAgentPanel({
   brandId,
   platformAccountIds,
   mentionContext,
+  initialSessionId,
 }: OrganicAgentPanelProps) {
   const [state, dispatch] = useReducer(panelReducer, undefined, initialPanelState);
   const { show } = useToast();
@@ -314,10 +324,13 @@ export function OrganicAgentPanel({
     // Fetch-all reload pulls in the new draft wherever it landed.
     requestCalendarRefetch();
   }, [requestCalendarRefetch]);
-  const { start, startControl, cancel, isStreaming, liveRunId } = useOrganicAgentStream(dispatch, {
-    onRunStarted: attachRun,
-    onCalendarDraftSignal: handleCalendarDraftSignal,
-  });
+  const { start, startControl, cancel, detach, isStreaming, liveRunId } = useOrganicAgentStream(
+    dispatch,
+    {
+      onRunStarted: attachRun,
+      onCalendarDraftSignal: handleCalendarDraftSignal,
+    },
+  );
 
   // Render a turn that was already in flight when we got here — you sent a message,
   // navigated away, and came back. The app-level store kept tailing the run the whole time;
@@ -427,9 +440,17 @@ export function OrganicAgentPanel({
     selectSession,
     refreshSessions,
     deleteSession,
-  } = useOrganicSessions(brandId, user?.id ?? null);
+    searchSessions,
+    updateSessionTags,
+  } = useOrganicSessions(brandId, user?.id ?? null, initialSessionId);
 
   const attachments = useChatAttachments({ brandId, sessionId: activeSessionId });
+
+  // Provenance header: an AI-initiated session links back to the run that started it.
+  const activeSession = useMemo(
+    () => sessions.find((session) => session.sessionId === activeSessionId) ?? null,
+    [sessions, activeSessionId],
+  );
 
   const anchors = useMemo(
     () => deriveOrganicAnchors(state.messages, state.pipeline),
@@ -570,7 +591,10 @@ export function OrganicAgentPanel({
 
   const handleSelectSession = useCallback(
     async (sessionId: string) => {
-      if (isStreaming) return;
+      // Release the local reader before switching — the run it was streaming keeps executing
+      // (Backend + app-level store) and useProjectedRun reattaches on return. Not detaching
+      // would let the old session's frames land in the freshly switched transcript.
+      detach();
       clearGenerations();
       dispatch({ type: 'LOAD_MESSAGES_START' });
       const page = await selectSession(sessionId);
@@ -580,7 +604,7 @@ export function OrganicAgentPanel({
       restored.bulkRuns.forEach((run) => dispatch({ type: 'BULK_RUN_START', run }));
       setEarlierCursor(page.nextCursor);
     },
-    [isStreaming, selectSession, clearGenerations],
+    [detach, selectSession, clearGenerations],
   );
 
   const debouncedRefreshSessions = useCallback(() => {
@@ -591,16 +615,20 @@ export function OrganicAgentPanel({
   }, [refreshSessions]);
 
   const handleNewSession = useCallback(() => {
-    if (isStreaming) return;
+    // Detach the local reader (see handleSelectSession): the in-flight run lives on and can be
+    // returned to from its session row.
+    detach();
     clearGenerations();
     const id = startNewSession();
     newSessionIdRef.current = id;
     dispatch({ type: 'SESSION_SWITCH', sessionId: id, messages: [] });
-  }, [isStreaming, startNewSession, clearGenerations]);
+  }, [detach, startNewSession, clearGenerations]);
 
   const handleDeleteSession = useCallback(
     async (sessionId: string) => {
-      if (isStreaming) return;
+      // Only block deleting a conversation whose OWN run is live — other sessions (including
+      // ones streaming elsewhere) delete freely.
+      if (isSessionStreaming(sessionId)(useAgentRunStore.getState())) return;
       if (
         typeof window !== 'undefined' &&
         !window.confirm('Delete this conversation? This cannot be undone.')
@@ -618,7 +646,7 @@ export function OrganicAgentPanel({
       // If the open conversation was removed, reset to a fresh empty session.
       if (wasActive) handleNewSession();
     },
-    [isStreaming, state.sessionId, activeSessionId, deleteSession, handleNewSession],
+    [state.sessionId, activeSessionId, deleteSession, handleNewSession],
   );
 
   const handleSubmit = useCallback(
@@ -628,7 +656,11 @@ export function OrganicAgentPanel({
       references: AgentMentionReference[] = [],
     ) => {
       const currentSessionId = state.sessionId ?? activeSessionId;
-      if (!value.trim() || !currentSessionId || isStreaming) return;
+      // Block a second submit only into a session that is ITSELF running (local reader or a
+      // projected run). The Backend fences one run per session regardless.
+      const sessionBusy =
+        isStreaming || isSessionStreaming(currentSessionId ?? '')(useAgentRunStore.getState());
+      if (!value.trim() || !currentSessionId || sessionBusy) return;
 
       const content = value.trim();
       const messageId = crypto.randomUUID();
@@ -755,15 +787,17 @@ export function OrganicAgentPanel({
     ],
   );
 
-  // Regenerate a turn (used by the per-message action and the error-state Retry):
-  // drop the stale assistant turn and re-run the nearest preceding user message.
+  // Regenerate a turn (used by the per-message action, the error-state Retry, and the
+  // silent auto-retry): drop the stale assistant turn and re-run the nearest preceding
+  // user message. Returns whether the retry actually started, so the silent auto-retry
+  // can fall back to the visible error row when it cannot.
   const handleRetryTurn = useCallback(
-    (assistantMessageId: string) => {
+    (assistantMessageId: string): boolean => {
       const currentSessionId = state.sessionId ?? activeSessionId;
-      if (!currentSessionId || isStreaming) return;
+      if (!currentSessionId || isStreaming) return false;
 
       const idx = state.messages.findIndex((m) => m.id === assistantMessageId);
-      if (idx === -1) return;
+      if (idx === -1) return false;
 
       let userMessage: ConversationMessage | undefined;
       for (let i = idx - 1; i >= 0; i--) {
@@ -772,7 +806,7 @@ export function OrganicAgentPanel({
           break;
         }
       }
-      if (!userMessage) return;
+      if (!userMessage) return false;
 
       dispatch({ type: 'RETRY_FROM_ASSISTANT', assistantMessageId });
 
@@ -795,6 +829,7 @@ export function OrganicAgentPanel({
       })
         .then(() => debouncedRefreshSessions())
         .catch(() => {});
+      return true;
     },
     [
       state.sessionId,
@@ -808,6 +843,18 @@ export function OrganicAgentPanel({
     ],
   );
 
+  // Silent auto-retry, once per turn: a transient STREAM_ERROR queues pendingAutoRetry
+  // instead of painting the red row, and this fires the exact same path as the manual
+  // Retry button. When the retry cannot start, abandon the hold so the error row (and
+  // its Retry button) surfaces instead of failing silently.
+  useEffect(() => {
+    const pendingId = state.pendingAutoRetry;
+    if (!pendingId || isStreaming) return;
+    if (!handleRetryTurn(pendingId)) {
+      dispatch({ type: 'AUTO_RETRY_ABANDON' });
+    }
+  }, [state.pendingAutoRetry, isStreaming, handleRetryTurn]);
+
   const handleViewDraft = useCallback(
     (draftId: string) => {
       router.push(buildPlannerDraftDeepLink(draftId));
@@ -816,18 +863,47 @@ export function OrganicAgentPanel({
   );
 
   const handleStop = useCallback(async () => {
-    const result = await cancel();
-    if (result.ok) return;
-    show({
-      title: 'Could not stop the run',
-      description: result.error,
-      variant: 'error',
-    });
-  }, [cancel, show]);
+    // Stop the run on screen even if this reader doesn't own it — the projected run you
+    // returned to. When it's not the local run, cancel's `reconcileCurrent` won't fire, so
+    // clear the transcript's streaming state here.
+    const viewedSessionId = state.sessionId ?? activeSessionId;
+    const viewedRunId = viewedSessionId
+      ? selectRunForSession(viewedSessionId)(useAgentRunStore.getState())?.run.runId
+      : undefined;
+    const ownsRun = Boolean(isStreaming);
+    const result = await cancel(viewedRunId);
+    if (!result.ok) {
+      show({
+        title: 'Could not stop the run',
+        description: result.error,
+        variant: 'error',
+      });
+      return;
+    }
+    if (!ownsRun) dispatch({ type: 'STREAM_COMPLETE' });
+  }, [cancel, show, state.sessionId, activeSessionId, isStreaming]);
 
   const hasSession = Boolean(state.sessionId || activeSessionId);
-  const inputDisabled = isStreaming || !hasSession;
-  const composerHint = describeComposerBlock({ isStreaming, hasSession });
+  // Per-VIEWED-session streaming, from the app-level store: true whenever the conversation on
+  // screen has a run in flight — whether this reader owns it (local `isStreaming`) or it is a
+  // projected run we returned to after switching away. Only the viewed session's composer
+  // locks; other sessions stay usable while their runs stream elsewhere.
+  const viewedSessionStreaming = useAgentRunStore(isSessionStreaming(state.sessionId ?? ''));
+  const composerBusy = isStreaming || viewedSessionStreaming;
+  const inputDisabled = composerBusy || !hasSession;
+  const composerHint = describeComposerBlock({ isStreaming: composerBusy, hasSession });
+  // Sessions with an organic run in flight — the sidebar marks these "Working" so the user can
+  // see which chat is still generating while they read or start another.
+  const streamingSessionIds = useAgentRunStore(
+    useShallow(
+      (s) =>
+        new Set(
+          selectLiveRuns(s)
+            .filter((run) => run.agent === 'organic')
+            .map((run) => run.sessionId),
+        ),
+    ),
+  );
   type MentionCatalog = {
     brandSkillSuggestions: AgentMentionSuggestion[];
     librarySkillSuggestions: AgentMentionSuggestion[];
@@ -1427,20 +1503,29 @@ export function OrganicAgentPanel({
         sessions={sessions}
         activeSessionId={activeSessionId}
         isLoading={isLoadingSessions}
-        isInteractionDisabled={isStreaming}
-        brandId={brandId}
+        isInteractionDisabled={false}
+        streamingSessionIds={streamingSessionIds}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapsed={toggleSidebarCollapsed}
         onNewSession={handleNewSession}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
+        onSearchSessions={searchSessions}
+        onUpdateSessionTags={updateSessionTags}
       />
-      <AutomationSheets agent="organic" brandId={brandId} />
-
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
+        {activeSession ? (
+          <ChatProvenanceBanner
+            initiator={activeSession.initiator}
+            initiatorAgent={activeSession.initiatorAgent}
+            callerSessionId={activeSession.callerSessionId}
+            callerRunId={activeSession.callerRunId}
+            className="rounded-md border"
+          />
+        ) : null}
         <ChatTranscript
           anchors={anchors}
-          isStreaming={isStreaming}
+          isStreaming={composerBusy}
           hasEarlier={hasEarlier}
           isLoadingEarlier={isLoadingEarlier}
           onLoadEarlier={loadEarlier}
@@ -1501,11 +1586,6 @@ export function OrganicAgentPanel({
                             <MentionifiedText
                               text={msg.content}
                               references={msg.metadata?.references}
-                            />
-                            <AutomatePromptAction
-                              agent="organic"
-                              prompt={msg.content}
-                              className="ml-1 size-6 align-middle opacity-0 transition-opacity group-hover:opacity-100"
                             />
                           </p>
                           <ChatMediaGrid
@@ -1670,6 +1750,18 @@ export function OrganicAgentPanel({
                                   </motion.div>
                                 );
                               }
+                              if (card.type === 'agent_delegated') {
+                                return (
+                                  <motion.div
+                                    key={cardKey(card, i)}
+                                    initial={{ opacity: 0, y: 4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: i * 0.08, duration: 0.18, ease }}
+                                  >
+                                    <AgentDelegatedCard data={card.data} />
+                                  </motion.div>
+                                );
+                              }
                               if (card.type === 'aeo_snapshot') {
                                 return (
                                   <motion.div
@@ -1695,7 +1787,9 @@ export function OrganicAgentPanel({
                           onViewDraft={handleViewDraft}
                         />
                       ) : null}
-                      {msg.role === 'assistant' && msg.error ? (
+                      {msg.role === 'assistant' &&
+                      msg.error &&
+                      state.pendingAutoRetry !== msg.id ? (
                         <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
                           <span className="min-w-0 text-sm text-destructive">{msg.error}</span>
                           <AgentButton
@@ -1736,7 +1830,7 @@ export function OrganicAgentPanel({
                     <ToolApprovalCard
                       key={approval.approvalId}
                       approval={approval}
-                      disabled={isStreaming}
+                      disabled={composerBusy}
                       onApproveAction={() => handleToolApproval(approval, true)}
                       onDenyAction={() => handleToolApproval(approval, false)}
                     />
@@ -1749,7 +1843,14 @@ export function OrganicAgentPanel({
 
         <div className="relative shrink-0">
           <AnimatePresence>
-            {isStreaming ? <AgentWorkingIndicator variant="pinned" /> : null}
+            {composerBusy ? (
+              <AgentWorkingIndicator
+                variant="pinned"
+                // response.retrying: subtle text swap on the existing indicator — the
+                // Backend is retrying a transient hiccup, the turn is still going.
+                label={state.streamRetrying ? 'Hit a snag — retrying…' : undefined}
+              />
+            ) : null}
           </AnimatePresence>
           {state.mediaResolution && state.mediaResolution.failed.length > 0 ? (
             <div
@@ -1792,7 +1893,7 @@ export function OrganicAgentPanel({
             onSubmit={(value, submitted, references) => handleSubmit(value, submitted, references)}
             attachments={attachments}
             disabled={inputDisabled}
-            isStreaming={isStreaming}
+            isStreaming={composerBusy}
             onStop={handleStop}
             ariaLabel="Message the organic agent"
             className="px-0"

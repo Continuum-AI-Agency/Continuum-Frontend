@@ -1,6 +1,11 @@
 'use client';
 
 import {
+  type CanvasEditorContext,
+  timelineAuthoringDocumentSchema,
+  timelineDocumentFingerprint,
+} from '@continuum/contracts';
+import {
   closestCenter,
   DndContext,
   type DragEndEvent,
@@ -10,7 +15,9 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { ChatBubbleIcon, ChevronDownIcon, PlayIcon } from '@radix-ui/react-icons';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Redo2, Undo2 } from 'lucide-react';
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCanvasComposer } from '@/components/ai-studio/composer/useCanvasComposer';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,6 +35,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
+import { generateVideoEvidenceFrames } from '@/lib/library/videoPoster';
 import type { TimelineInputSource } from '../../types';
 import { clipEffectsToCss, resolveTextOverlays, speedFor } from '../../utils/render/effectSpec';
 import { DEFAULT_EXPORT_PRESET_ID, EXPORT_PRESETS } from '../../utils/render/exportPresets';
@@ -49,6 +57,7 @@ import { probeAudioDuration, probeVideoDuration } from './mediaProbe';
 import { resolveOverlayTracks } from './multiTrack';
 import { OVERLAY_DROP_ID, trackIdFromOverlayDrop } from './OverlayTrack';
 import { OverlayTracks } from './OverlayTracks';
+import { resolveOverlayPreviewLayers } from './overlayPreview';
 import { laneItemEdges } from './snapping';
 import { CLIP_DRAG_PREFIX } from './TimelineClipBlock';
 import { TimelineCommentLayer } from './TimelineCommentLayer';
@@ -63,6 +72,108 @@ import { useTimelineKeymap } from './useTimelineKeymap';
 import { useTimelineRender } from './useTimelineRender';
 
 const PX_PER_SEC = 80;
+
+const blobToBase64 = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read extracted frame'));
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const separator = result.indexOf(',');
+      resolve(separator >= 0 ? result.slice(separator + 1) : result);
+    };
+    reader.readAsDataURL(blob);
+  });
+
+function CanvasEditorCommand({ adapter }: { adapter: TimelineEditorAdapter }) {
+  const context = adapter.agentContext;
+  const { state, submit } = useCanvasComposer(adapter.brandId ?? undefined, context?.roomId);
+  const [prompt, setPrompt] = useState('');
+  const [preparing, setPreparing] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  if (!context) return null;
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const command = prompt.trim();
+    if (!command || preparing || state.status === 'running') return;
+    setPreparing(true);
+    setLocalError(null);
+    try {
+      const document = timelineAuthoringDocumentSchema.parse(adapter.getDocument());
+      const videoSources = adapter.pool
+        .filter((source) => source.kind === 'video' && typeof source.previewUrl === 'string')
+        .slice(0, 3);
+      const extracted = await Promise.all(
+        videoSources.map(async (source) => {
+          const response = await fetch(source.previewUrl as string);
+          if (!response.ok) return [];
+          const frames = await generateVideoEvidenceFrames(await response.blob(), {
+            maxFrames: 3,
+            maxWidth: 320,
+            quality: 0.68,
+          });
+          return Promise.all(
+            frames.map(async (frame) => ({
+              sourceNodeId: source.nodeId,
+              timestampSec: frame.timestampSec,
+              label: source.label,
+              mediaType: frame.mimeType as 'image/webp' | 'image/jpeg',
+              base64: await blobToBase64(frame.blob),
+            })),
+          );
+        }),
+      );
+      const editorContext: CanvasEditorContext = {
+        nodeId: context.nodeId,
+        fingerprint: timelineDocumentFingerprint(document),
+        frames: extracted.flat().slice(0, 8),
+      };
+      await submit(command, [context.nodeId], { editorContext });
+      setPrompt('');
+    } catch (error) {
+      setLocalError(
+        error instanceof Error ? error.message : 'Could not prepare the editor command.',
+      );
+    } finally {
+      setPreparing(false);
+    }
+  };
+
+  const busy = preparing || state.status === 'running';
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-4 py-2"
+    >
+      <ChatBubbleIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <input
+        value={prompt}
+        onChange={(event) => setPrompt(event.target.value)}
+        placeholder="Edit with Canvas — tighten pauses, add captions, build a product overlay…"
+        className="h-8 min-w-0 flex-1 rounded-md border border-border/70 bg-background px-3 text-xs outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        disabled={busy}
+        aria-label="Edit this video with the Canvas agent"
+      />
+      <Button type="submit" size="sm" disabled={busy || !prompt.trim()} className="h-8 text-xs">
+        {preparing
+          ? 'Reading frames…'
+          : state.status === 'running'
+            ? 'Editing…'
+            : 'Edit with Canvas'}
+      </Button>
+      {localError || state.error ? (
+        <span
+          className="max-w-56 truncate text-2xs text-destructive"
+          title={localError ?? state.error ?? ''}
+        >
+          {localError ?? state.error}
+        </span>
+      ) : null}
+    </form>
+  );
+}
 
 export function TimelineEditorDialog({
   adapter,
@@ -290,6 +401,8 @@ export function TimelineEditorDialog({
     onSplitAtPlayhead: handleSplitAtPlayhead,
     onDuplicateSelected: handleDuplicateSelected,
     onToggleMarker: handleToggleMarker,
+    onUndo: () => adapter.undoManager?.undo(),
+    onRedo: () => adapter.undoManager?.redo(),
   });
 
   const selectedClip = selectedItemId
@@ -427,6 +540,15 @@ export function TimelineEditorDialog({
       : 0;
   const activeMediaStyle = clipEffectsToCss(activeClip?.item.effects, activeClipT);
   const activeTextOverlays = resolveTextOverlays(activeClip?.item.effects);
+  const activeOverlayLayers = useMemo(() => {
+    const layers = resolveOverlayPreviewLayers({
+      document,
+      pool,
+      playheadSec: playback.playheadSec,
+      sourceDurations,
+    });
+    return audioPreview.active ? layers.map((layer) => ({ ...layer, muted: true })) : layers;
+  }, [audioPreview.active, document, playback.playheadSec, pool, sourceDurations]);
 
   const activeIndex = activeClip
     ? model.layout.clips.findIndex((clip) => clip.item.id === activeClip.item.id)
@@ -505,6 +627,32 @@ export function TimelineEditorDialog({
             <DialogDescription className="text-xs">{adapter.header.description}</DialogDescription>
           </div>
           <div className="flex items-center gap-2">
+            {adapter.undoManager ? (
+              <div className="flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={adapter.undoManager.undo}
+                  disabled={!adapter.undoManager.canUndo || isRendering}
+                  aria-label="Undo timeline edit"
+                  title="Undo (⌘Z)"
+                >
+                  <Undo2 className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={adapter.undoManager.redo}
+                  disabled={!adapter.undoManager.canRedo || isRendering}
+                  aria-label="Redo timeline edit"
+                  title="Redo (⇧⌘Z)"
+                >
+                  <Redo2 className="size-3.5" />
+                </Button>
+              </div>
+            ) : null}
             <Button
               variant="ghost"
               size="sm"
@@ -601,6 +749,8 @@ export function TimelineEditorDialog({
           </div>
         </DialogHeader>
 
+        <CanvasEditorCommand adapter={adapter} />
+
         {support && !support.ok ? (
           <div className="border-b border-destructive/30 bg-destructive/5 px-4 py-1.5 text-xs text-destructive">
             {support.reason}
@@ -636,6 +786,7 @@ export function TimelineEditorDialog({
                   textOverlays={activeTextOverlays}
                   fadeOverlay={activeFadeOverlay}
                   crossfade={activeCrossfade}
+                  overlayLayers={activeOverlayLayers}
                   mediaMuted={audioPreview.active || activeClip?.item.muteAudio}
                   mediaVolume={activeClip?.item.volume}
                   caption={activeCaption}

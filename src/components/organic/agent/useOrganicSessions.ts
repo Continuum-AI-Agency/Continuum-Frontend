@@ -1,18 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import type { AgentSessionListFilters } from '@continuum/contracts';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   deleteOrganicSession,
   fetchOrganicSessionMessagePage,
   fetchOrganicSessions,
   type OrganicMessagePage,
   type OrganicSession,
+  updateOrganicSessionTags,
 } from '@/lib/organic/agent-sessions';
 import { useOrganicSessionStore } from '@/lib/organic/organic-session-store';
 
 export function useOrganicSessions(
   brandId: string,
   userId: string | null,
+  initialSessionId?: string | null,
 ): {
   sessions: OrganicSession[];
   isLoadingSessions: boolean;
@@ -22,20 +25,27 @@ export function useOrganicSessions(
   selectSession: (id: string) => Promise<OrganicMessagePage>;
   refreshSessions: () => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
+  searchSessions: (filters: AgentSessionListFilters) => Promise<OrganicSession[]>;
+  updateSessionTags: (id: string, tags: string[]) => Promise<string[]>;
 } {
   const [sessions, setSessions] = useState<OrganicSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const deepLinkSessionIdRef = useRef(initialSessionId ?? null);
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
 
+    // Deep link (?sessionId=) wins over "most recent" exactly once, on first load.
+    const deepLinkSessionId = deepLinkSessionIdRef.current;
+    deepLinkSessionIdRef.current = null;
+
     const cached = useOrganicSessionStore.getState().getFreshSessions(brandId);
     if (cached) {
       setSessions(cached);
-      setActiveSessionId(cached[0]?.sessionId ?? crypto.randomUUID());
+      setActiveSessionId(deepLinkSessionId ?? cached[0]?.sessionId ?? crypto.randomUUID());
       setIsLoadingSessions(false);
       return;
     }
@@ -45,7 +55,7 @@ export function useOrganicSessions(
       if (cancelled) return;
       useOrganicSessionStore.getState().setSessions(brandId, fetched);
       setSessions(fetched);
-      setActiveSessionId(fetched[0]?.sessionId ?? crypto.randomUUID());
+      setActiveSessionId(deepLinkSessionId ?? fetched[0]?.sessionId ?? crypto.randomUUID());
       setIsLoadingSessions(false);
     });
 
@@ -94,6 +104,30 @@ export function useOrganicSessions(
     [brandId],
   );
 
+  // Search results are deliberately NOT written to the session store: the store
+  // caches the brand's full list, and seeding it with a filtered page would make
+  // the unfiltered sidebar look empty on the next mount.
+  const searchSessions = useCallback(
+    (filters: AgentSessionListFilters): Promise<OrganicSession[]> =>
+      fetchOrganicSessions(brandId, filters),
+    [brandId],
+  );
+
+  const updateSessionTags = useCallback(
+    async (sessionId: string, tags: string[]): Promise<string[]> => {
+      const stored = await updateOrganicSessionTags(sessionId, brandId, tags);
+      setSessions((previous) => {
+        const next = previous.map((session) =>
+          session.sessionId === sessionId ? { ...session, tags: stored } : session,
+        );
+        useOrganicSessionStore.getState().setSessions(brandId, next);
+        return next;
+      });
+      return stored;
+    },
+    [brandId],
+  );
+
   return {
     sessions,
     isLoadingSessions,
@@ -103,5 +137,7 @@ export function useOrganicSessions(
     selectSession,
     refreshSessions,
     deleteSession,
+    searchSessions,
+    updateSessionTags,
   };
 }

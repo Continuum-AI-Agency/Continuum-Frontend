@@ -57,6 +57,7 @@ type Props = {
   brandId: string;
   isPaid: boolean;
   initialAssets: MediaAsset[];
+  initialDetailAsset: MediaAsset | null;
   initialNextCursor: string | null;
   initialBrowseQuery: LibraryBrowseQuery;
   initialCollections: MediaCollection[];
@@ -69,6 +70,7 @@ export function LibraryViewer({
   brandId,
   isPaid,
   initialAssets,
+  initialDetailAsset,
   initialNextCursor,
   initialBrowseQuery,
   initialCollections,
@@ -140,7 +142,7 @@ export function LibraryViewer({
   }, [facetQueryKey, tagRevision]);
 
   const [view, setView] = useState<'media' | 'inspiration'>('media');
-  const [detailAsset, setDetailAsset] = useState<MediaAsset | null>(null);
+  const [detailAsset, setDetailAsset] = useState<MediaAsset | null>(initialDetailAsset);
   const [assetRevision, setAssetRevision] = useState(0);
   const [searchResults, setSearchResults] = useState<MediaSearchResultItem[] | null>(null);
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);

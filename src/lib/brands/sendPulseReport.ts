@@ -4,9 +4,14 @@
 // omitted, the edge falls back to the brand's scheduled Pulse subscription list.
 
 import {
+  type GetReportScheduleResponse,
   getReportScheduleResponseSchema,
   type ReportCadence,
   type ReportSchedule,
+  reportScheduleMutationResponseSchema,
+  sendContinuumReportRequestSchema,
+  sendContinuumReportResponseSchema,
+  upsertReportScheduleRequestSchema,
 } from '@continuum/contracts';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -25,10 +30,14 @@ export type SendContinuumReportInput = {
   brandId: string;
   /** Brand member user ids to email. Must be non-empty when provided. */
   recipientUserIds?: string[];
+  /** Reuses the delivery ledger after a partial result so accepted recipients are skipped. */
+  retryReceiptId?: string;
 };
 
 export type SendContinuumReportResult = {
   recipients: string[];
+  status: 'sent' | 'partial' | 'suppressed';
+  receiptId: string;
 };
 
 export function summarizeReportRecipients(recipients: string[]): string {
@@ -45,13 +54,17 @@ export const summarizePulseRecipients = summarizeReportRecipients;
 export async function sendContinuumReport(
   input: SendContinuumReportInput,
 ): Promise<SendContinuumReportResult> {
+  const request = sendContinuumReportRequestSchema.parse(input);
   const supabase = createSupabaseBrowserClient();
   const body: Record<string, unknown> = {
     action: 'send_now',
-    brandId: input.brandId,
+    brandId: request.brandId,
   };
-  if (input.recipientUserIds) {
-    body.recipientUserIds = input.recipientUserIds;
+  if (request.recipientUserIds) {
+    body.recipientUserIds = request.recipientUserIds;
+  }
+  if (request.retryReceiptId) {
+    body.retryReceiptId = request.retryReceiptId;
   }
 
   const { data, error } = await supabase.functions.invoke('send-first-value-report', {
@@ -62,8 +75,15 @@ export async function sendContinuumReport(
     throw new Error(await edgeErrorMessage(error));
   }
 
-  const recipients = (data as { recipients?: string[] } | null)?.recipients ?? [];
-  return { recipients };
+  const parsed = sendContinuumReportResponseSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error('The report delivery response was malformed.');
+  }
+  return {
+    recipients: parsed.data.recipients,
+    status: parsed.data.status,
+    receiptId: parsed.data.receiptId,
+  };
 }
 
 /** @deprecated Prefer sendContinuumReport */
@@ -88,20 +108,23 @@ export type ReportScheduleInput = {
 };
 
 export async function upsertReportSchedule(input: ReportScheduleInput): Promise<ReportSchedule> {
+  const request = upsertReportScheduleRequestSchema.parse({
+    brandId: input.brandId,
+    cadence: input.cadence,
+    dayOfWeek: input.dayOfWeek,
+    dayOfMonth: input.dayOfMonth,
+    hour: input.hour,
+    timezone: input.timezone,
+    recipients: {
+      memberUserIds: input.memberUserIds,
+      externalEmails: input.externalEmails,
+    },
+  });
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.functions.invoke('send-first-value-report', {
     body: {
       action: 'schedule',
-      brandId: input.brandId,
-      cadence: input.cadence,
-      dayOfWeek: input.dayOfWeek,
-      dayOfMonth: input.dayOfMonth,
-      hour: input.hour,
-      timezone: input.timezone,
-      recipients: {
-        memberUserIds: input.memberUserIds,
-        externalEmails: input.externalEmails,
-      },
+      ...request,
     },
   });
 
@@ -109,14 +132,14 @@ export async function upsertReportSchedule(input: ReportScheduleInput): Promise<
     throw new Error(await edgeErrorMessage(error));
   }
 
-  const parsed = getReportScheduleResponseSchema.safeParse(data);
+  const parsed = reportScheduleMutationResponseSchema.safeParse(data);
   if (!parsed.success || !parsed.data.schedule) {
     throw new Error('The saved schedule response was malformed.');
   }
   return parsed.data.schedule;
 }
 
-export async function getReportSchedule(brandId: string): Promise<ReportSchedule | null> {
+export async function getReportScheduleAccess(brandId: string): Promise<GetReportScheduleResponse> {
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.functions.invoke('send-first-value-report', {
     body: { action: 'get_schedule', brandId },
@@ -130,7 +153,11 @@ export async function getReportSchedule(brandId: string): Promise<ReportSchedule
   if (!parsed.success) {
     throw new Error('The schedule response was malformed.');
   }
-  return parsed.data.schedule;
+  return parsed.data;
+}
+
+export async function getReportSchedule(brandId: string): Promise<ReportSchedule | null> {
+  return (await getReportScheduleAccess(brandId)).schedule;
 }
 
 export async function cancelReportSchedule(brandId: string): Promise<void> {

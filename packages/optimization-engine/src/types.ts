@@ -3,6 +3,8 @@
 // Unit of optimization for v1 = ad set.
 // ---------------------------------------------------------------------------
 
+import type { RuleEvaluation } from './rules/types';
+
 export type AdSetStatus =
   | 'active'
   | 'learning'
@@ -359,9 +361,15 @@ export type Recommendation = {
    *  on: an ad set with five creatives gives you five suspects and no defendant. */
   adId?: string;
   kind: RecommendationKind;
-  trigger: RecommendationTrigger;
+  /** Closed union for the built-in triggers, widened to admit the rules layer's
+   *  `rule:<templateId | ruleId>` strings. `(string & {})` keeps the literals'
+   *  autocomplete while accepting the open form. */
+  trigger: RecommendationTrigger | (string & {});
   severity: 'low' | 'medium' | 'high';
   reason: string;
+  /** Set when a data-driven rule produced this recommendation (trigger is then
+   *  `rule:`-prefixed) — the join key back to the cycle's ruleEvaluations rows. */
+  ruleId?: string;
   /** Everything a generator needs to make the next creative, carried on the recommendation
    *  so the loop closes without a second round-trip. Present on variate_creative /
    *  seed_experiment. */
@@ -426,4 +434,7 @@ export type CycleResult = {
   recommendations: Recommendation[];
   /** Spend-weighted confidence that this cycle's reallocation signal is real. */
   confidence: Confidence;
+  /** Per rule × ad-set evaluation rows from the data-driven rules layer — the
+   *  learning loop's shadow-validation feed. Empty when the cycle ran without rules. */
+  ruleEvaluations: RuleEvaluation[];
 };

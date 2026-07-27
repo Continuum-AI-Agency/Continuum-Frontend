@@ -173,6 +173,7 @@ export function registerAssetVersion(
     sizeBytes: number;
     note?: string;
     integrityState?: 'verified' | 'skipped_large_file' | 'unknown';
+    baseVersionId?: string;
     idempotencyKey?: string;
   },
 ): Promise<RegisterVersionResponse> {

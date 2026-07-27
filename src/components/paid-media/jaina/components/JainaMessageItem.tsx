@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 import * as React from 'react';
-import { AutomatePromptAction } from '@/components/automations/AutomatePromptAction';
+import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
@@ -120,6 +120,9 @@ export function JainaMessageItem({
   const toolCalls = isStreaming ? state.toolCalls : message.toolCalls;
   const toolResults = isStreaming ? state.toolResults : message.toolResults;
   const objectives = isStreaming ? state.objectives : message.objectives;
+  // Cross-agent calls: live from the stream state while the turn runs, then
+  // from the message once it is persisted with the turn.
+  const delegations = isStreaming ? state.delegations : message.delegations;
   const report = isStreaming ? state.report : message.report;
   const reportV2 = isStreaming ? state.reportV2 : message.reportV2;
   const plan = message.plan;
@@ -190,11 +193,6 @@ export function JainaMessageItem({
           <>
             <span className="text-sm font-medium whitespace-pre-wrap">
               <MentionifiedText text={message.content} references={message.metadata?.references} />
-              <AutomatePromptAction
-                agent="jaina"
-                prompt={message.content}
-                className="ml-1 size-6 align-middle opacity-0 transition-opacity group-hover:opacity-100"
-              />
             </span>
             <ChatMediaGrid
               items={mediaFromPersistedAttachments(message.id, message.metadata?.attachments)}
@@ -246,6 +244,14 @@ export function JainaMessageItem({
                   onFocusInput={onFocusInput}
                 />
               </motion.div>
+            ) : null}
+
+            {(delegations ?? []).length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {(delegations ?? []).map((delegation) => (
+                  <AgentDelegatedCard key={delegation.callId} data={delegation} />
+                ))}
+              </div>
             ) : null}
 
             <ObjectivesQueue objectives={objectives ?? []} isStreaming={isStreaming} />

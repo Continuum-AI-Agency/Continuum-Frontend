@@ -47,6 +47,16 @@ export interface TimelinePatchOptions {
   // the canvas this maps to the `committed` break-point flag, which must not be
   // reset by edits that cannot change the output.
   invalidatesRender?: boolean;
+  // Host adapters record one undo boundary per user-authored patch by default.
+  // Render/status plumbing can opt out because it is not an editor command.
+  recordHistory?: boolean;
+}
+
+export interface TimelineUndoManager {
+  canUndo: boolean;
+  canRedo: boolean;
+  undo(): void;
+  redo(): void;
 }
 
 // Where a finished render goes. The canvas has exactly one destination (the
@@ -85,6 +95,8 @@ export type TimelineRenderCompletion = {
 export interface TimelineEditorAdapter {
   scope: 'canvas' | 'library';
   brandId: string | null;
+  /** Present only when an inline command can route back to the Canvas agent. */
+  agentContext?: { roomId: string; nodeId: string };
   header: { title: string; description: string };
 
   // `document` is the reactive snapshot the editor renders from. `getDocument`
@@ -96,6 +108,7 @@ export interface TimelineEditorAdapter {
     updater: (document: TimelineDocument) => TimelineDocument,
     options?: TimelinePatchOptions,
   ): void;
+  undoManager?: TimelineUndoManager;
 
   // The media bin. On the canvas it is derived from the node's incoming edges
   // and is therefore read-only — you add media by wiring a node. In the Library

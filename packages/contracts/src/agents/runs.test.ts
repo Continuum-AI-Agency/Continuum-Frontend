@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import {
-  AGENT_RUN_QUEUED,
   AGENT_CHAT_STARTED,
+  AGENT_RUN_QUEUED,
   type AgentRunEventDto,
+  agentChatStartedFrameSchema,
   agentRunDtoSchema,
   agentRunEventDtoSchema,
   agentRunQueuedFrameSchema,
-  agentChatStartedFrameSchema,
   isTerminalAgentRunStatus,
   mergeAgentRunEvents,
   normalizeAgentRunStatus,
@@ -115,8 +115,8 @@ describe('run lifecycle frames', () => {
 });
 
 describe('agentRunDtoSchema', () => {
-  it('accepts a run from either agent', () => {
-    for (const agent of ['organic', 'jaina'] as const) {
+  it('accepts a run from every durable agent', () => {
+    for (const agent of ['organic', 'jaina', 'hyperframes', 'canvas'] as const) {
       const parsed = agentRunDtoSchema.safeParse({
         runId: 'run_1',
         agent,
@@ -128,6 +128,44 @@ describe('agentRunDtoSchema', () => {
       });
       expect(parsed.success).toBe(true);
     }
+  });
+
+  // Composer runs belong to a ROOM, not a node — the ai-studio origin must be valid
+  // without a nodeId or every composer run DTO fails at the boundary.
+  it('accepts an ai-studio origin without a nodeId for room-level runs', () => {
+    const parsed = agentRunDtoSchema.safeParse({
+      runId: 'run_canvas_1',
+      agent: 'canvas',
+      sessionId: 'room_1',
+      status: 'running',
+      createdAt: '2026-07-12T00:00:00.000Z',
+      origin: { surface: 'ai-studio', roomId: 'room_1' },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('still accepts the per-node ai-studio origin HyperFrames emits', () => {
+    const parsed = agentRunDtoSchema.safeParse({
+      runId: 'run_hf_1',
+      agent: 'hyperframes',
+      sessionId: 'sess_1',
+      status: 'running',
+      createdAt: '2026-07-12T00:00:00.000Z',
+      origin: { surface: 'ai-studio', roomId: 'room_1', nodeId: 'node_1' },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects an ai-studio origin with an empty nodeId — optional, never blank', () => {
+    const parsed = agentRunDtoSchema.safeParse({
+      runId: 'run_1',
+      agent: 'canvas',
+      sessionId: 'room_1',
+      status: 'running',
+      createdAt: '2026-07-12T00:00:00.000Z',
+      origin: { surface: 'ai-studio', roomId: 'room_1', nodeId: '' },
+    });
+    expect(parsed.success).toBe(false);
   });
 });
 

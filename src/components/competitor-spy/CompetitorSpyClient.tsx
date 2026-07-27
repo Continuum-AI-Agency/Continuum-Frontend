@@ -14,19 +14,21 @@ import { useCompetitorScan } from './report/useCompetitorScan';
 type TabId = 'overview' | 'inspiration' | 'boards' | 'competitors';
 
 const TABS: Array<{ id: TabId; label: string }> = [
-  { id: 'overview', label: 'Report' },
   { id: 'inspiration', label: 'Inspiration' },
+  { id: 'overview', label: 'Report' },
   { id: 'boards', label: 'Boards' },
   { id: 'competitors', label: 'Competitors' },
 ];
 
-// Dashboard spy shortcuts deep-link a sub-view via ?tab=; legacy organic|paid
-// links resolve to the unified Inspiration tab. Initial value only — in-page
+// Browsing the competitors' pieces is the primary surface, so Inspiration is the
+// default. Dashboard spy shortcuts deep-link a sub-view via ?tab=; legacy
+// organic|paid links resolve to the unified Inspiration tab, and ?tab=overview|
+// report still lands on the derived Report. Initial value only — in-page
 // switching uses local state.
 function resolveTab(value: string | null): TabId {
   if (value === 'boards' || value === 'competitors') return value;
-  if (value === 'inspiration' || value === 'organic' || value === 'paid') return 'inspiration';
-  return 'overview';
+  if (value === 'overview' || value === 'report') return 'overview';
+  return 'inspiration';
 }
 
 function tabClass(active: boolean): string {
@@ -102,7 +104,7 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
         {tab === 'inspiration' ? (
           <InspirationBrowser
             brandId={brandId}
-            defaultSource="all"
+            defaultSource="organic"
             showRail
             showSync
             onManageCompetitors={() => setTab('competitors')}

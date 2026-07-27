@@ -6,7 +6,15 @@ import {
 } from './canvas-compose';
 
 describe('canvas composer references', () => {
-  it('accepts only skill and media-library references', () => {
+  it('carries trend, event and question grabs through the wire', () => {
+    for (const type of ['trend', 'event', 'question'] as const) {
+      expect(
+        canvasComposerReferenceSchema.parse({ type, id: `${type}-1`, label: 'This week' }),
+      ).toEqual({ type, id: `${type}-1`, label: 'This week' });
+    }
+  });
+
+  it('rejects a reference kind the composer cannot resolve', () => {
     expect(
       canvasComposerReferenceSchema.parse({ type: 'skill', id: 'skill-1', label: 'Bold hooks' }),
     ).toEqual({ type: 'skill', id: 'skill-1', label: 'Bold hooks' });
@@ -41,13 +49,17 @@ describe('canvas composer references', () => {
     const request = canvasComposeRequestSchema.parse({
       brandProfileId: 'brand-1',
       roomId: 'room-1',
+      idempotencyKey: 'turn-1',
       prompt: 'Use these references',
+      thinking: true,
       references: [
         { type: 'skill', id: 'skill-1', label: 'Bold hooks' },
         { type: 'media_asset', id: 'asset-1', label: 'Hero product shot' },
       ],
     });
     expect(request.references).toHaveLength(2);
+    expect(request.thinking).toBe(true);
+    expect(request.idempotencyKey).toBe('turn-1');
 
     expect(
       canvasComposeRequestSchema.safeParse({

@@ -2,6 +2,7 @@ import {
   type ClipPlanSection,
   type ClipScore,
   type ClipUploadTicket,
+  clipDeleteAudioResponseSchema,
   clipUploadTicketSchema,
   registerClipErrorSchema,
   registerClipRequestSchema,
@@ -95,6 +96,19 @@ export async function uploadCaptionAudio(params: {
   });
   await uploadToTicket(supabase, ticket, params.audioBlob);
   return { audioBucket: ticket.bucket, audioStoragePath: ticket.path };
+}
+
+export async function cleanupCaptionAudio(params: {
+  brandId: string;
+  audioBucket: string;
+  audioStoragePath: string;
+}): Promise<void> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.functions.invoke('clip-asset', {
+    body: { action: 'delete_audio', ...params },
+  });
+  if (error) throw new Error(`clip-asset delete_audio failed: ${error.message}`);
+  clipDeleteAudioResponseSchema.parse(data);
 }
 
 export async function extractAndUploadAudio(

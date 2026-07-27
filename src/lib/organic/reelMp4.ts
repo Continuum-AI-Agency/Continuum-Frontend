@@ -1,4 +1,8 @@
-import { type LinkReelMp4Response, linkReelMp4ResponseSchema } from '@continuum/contracts';
+import {
+  type LinkReelMp4Response,
+  linkReelMp4ResponseSchema,
+  type ReelCaptions,
+} from '@continuum/contracts';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -8,6 +12,8 @@ export type FinalizeReelMp4Params = {
   /** The mediabunny-stitched MP4, base64-encoded. */
   mp4Base64: string;
   durationSec: number;
+  captions?: ReelCaptions;
+  referenceAssetIds?: string[];
 };
 
 /**
@@ -25,6 +31,8 @@ export async function finalizeReelMp4(params: FinalizeReelMp4Params): Promise<Li
       mp4Base64: params.mp4Base64,
       mimeType: 'video/mp4',
       durationSec: params.durationSec,
+      captions: params.captions,
+      referenceAssetIds: params.referenceAssetIds,
     },
   });
   if (error) throw error;

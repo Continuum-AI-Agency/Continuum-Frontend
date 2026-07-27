@@ -1,7 +1,7 @@
 'use client';
 
 // The dense ad-set label — the single name chokepoint for every optimizer table
-// and chart (kpiColumns, ReallocationFlow, PortfolioPreview, CpaConfidenceBar).
+// and chart (kpiColumns, ReallocationFlow, AdsetExplorerList, CpaConfidenceBar).
 // Name-first: when a human ad-set name is known it reads in normal text; absent a
 // name it falls back to the mono raw id (the debug-looking but honest default).
 //

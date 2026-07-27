@@ -3,6 +3,22 @@
 import { useAdTimeline } from '@/lib/api/competitorSpy';
 import { AdSnapshotCard } from './AdSnapshotCard';
 
+// Paid ads come from Meta's Ad Library, which requires a one-time identity/location
+// enrollment on the token behind the request (separate from OAuth ad-account
+// permissions). Until that lands, the paid source has no creatives to show — frame
+// it as a known gap, not a failure, and point users back to the working organic feed.
+function PaidUnavailableNotice() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border p-10 text-center">
+      <p className="text-sm font-medium">Ad Library access needs Meta enrollment</p>
+      <p className="text-xs text-muted-foreground">
+        Paid creatives are unavailable until Ad Library enrollment completes — organic tracking is
+        unaffected.
+      </p>
+    </div>
+  );
+}
+
 export function AdSnapshotGrid({
   brandId,
   competitorId,
@@ -30,13 +46,16 @@ export function AdSnapshotGrid({
     );
   }
 
+  const searching = Boolean(q && q.trim());
+
   if (isError) {
+    if (inspiration && !searching) return <PaidUnavailableNotice />;
     return <p className="p-6 text-sm text-muted-foreground">Failed to load competitor ads.</p>;
   }
 
   const items = data ?? [];
   if (items.length === 0) {
-    const searching = Boolean(q && q.trim());
+    if (inspiration && !searching) return <PaidUnavailableNotice />;
     return (
       <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border p-10 text-center">
         <p className="text-sm font-medium">

@@ -110,10 +110,20 @@ describe('upsertReportScheduleRequestSchema', () => {
 
 describe('getReportScheduleResponseSchema', () => {
   it('accepts a null schedule (none configured)', () => {
-    expect(getReportScheduleResponseSchema.safeParse({ schedule: null }).success).toBe(true);
+    expect(
+      getReportScheduleResponseSchema.safeParse({
+        schedule: null,
+        canManageSchedule: false,
+      }).success,
+    ).toBe(true);
   });
 
   it('accepts a present schedule', () => {
-    expect(getReportScheduleResponseSchema.safeParse({ schedule: validWeekly }).success).toBe(true);
+    expect(
+      getReportScheduleResponseSchema.safeParse({
+        schedule: validWeekly,
+        canManageSchedule: true,
+      }).success,
+    ).toBe(true);
   });
 });

@@ -23,17 +23,43 @@ export interface NodeDimensions {
   height: number;
 }
 
-/** Sizing envelope for the generator nodes (nanoGen). 16:9 lands on the classic 400x225. */
-export const GENERATOR_NODE_BOUNDS = {
+/**
+ * The sizing envelope of one generator family. `area` is the 16:9 box that family
+ * has always drawn: every other ratio keeps that AREA, so a portrait node reads as a
+ * portrait of the same weight rather than a tower. The minimums match the family's
+ * own CSS `min-w`/`min-h` — a style below them would render at a size that no longer
+ * carries the ratio, which is the bug this whole module exists to prevent.
+ */
+export interface GeneratorNodeBounds {
+  minWidth: number;
+  minHeight: number;
+  fallbackWidth: number;
+  area: NodeDimensions;
+}
+
+/** nanoGen. 16:9 lands on the classic 400x225. */
+export const IMAGE_GENERATOR_NODE_BOUNDS: GeneratorNodeBounds = {
   minWidth: 200,
   minHeight: 200,
   fallbackWidth: 400,
-} as const;
+  area: { width: 400, height: 225 },
+};
 
-// Every freshly created generator node covers the same canvas AREA, whatever its
-// shape — so a portrait node reads as a portrait of the same weight rather than a
-// tower. 400x225 is the 16:9 node the canvas has always drawn.
-const GENERATOR_NODE_AREA = { width: 400, height: 225 } as const;
+/** videoGen / veoDirector / veoFast. 16:9 lands on the classic 512x288. */
+export const VIDEO_GENERATOR_NODE_BOUNDS: GeneratorNodeBounds = {
+  minWidth: 300,
+  minHeight: 170,
+  fallbackWidth: 512,
+  area: { width: 512, height: 288 },
+};
+
+/** omniGen. Taller than the video family because the node carries a chat strip. */
+export const OMNI_GENERATOR_NODE_BOUNDS: GeneratorNodeBounds = {
+  minWidth: 320,
+  minHeight: 260,
+  fallbackWidth: 512,
+  area: { width: 512, height: 360 },
+};
 
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -85,7 +111,7 @@ export function getAspectRatioValue(aspectRatio?: string): number {
   return width / height;
 }
 
-export function snapNodeDimensionsToAspectRatio({
+function snapOnce({
   aspectRatio,
   currentWidth,
   currentHeight,
@@ -123,15 +149,49 @@ export function snapNodeDimensionsToAspectRatio({
 }
 
 /**
- * The style a generator node is BORN with: its aspect ratio, at the canvas's default
- * scale. The three copies of `{ width: 400, height: 225 }` that used to be stamped at
- * node creation are all this function now.
+ * The node box for `aspectRatio` that preserves the area of the box it came from.
+ *
+ * Rounding to whole pixels moves the area slightly, so snapping the RESULT could land
+ * a pixel away from the input. An aspect-locked NodeResizer re-snaps on every drag and
+ * on every ratio change, so a one-pixel drift compounds — the function must be a fixed
+ * point. It iterates until it repeats itself, which it does within two passes for every
+ * ratio and envelope the canvas ships (asserted in node-sizing.test.ts).
  */
-export function generatorNodeStyle(aspectRatio?: string): NodeDimensions {
+export function snapNodeDimensionsToAspectRatio(
+  options: SnapNodeDimensionsOptions,
+): NodeDimensions {
+  let dimensions = snapOnce(options);
+
+  for (let pass = 0; pass < 3; pass += 1) {
+    const next = snapOnce({
+      ...options,
+      currentWidth: dimensions.width,
+      currentHeight: dimensions.height,
+    });
+    if (next.width === dimensions.width && next.height === dimensions.height) break;
+    dimensions = next;
+  }
+
+  return dimensions;
+}
+
+/**
+ * The style a generator node is BORN with: its aspect ratio, at the canvas's default
+ * scale. Every hardcoded `{ width: 400, height: 225 }` / `{ width: 512, height: 288 }`
+ * / `{ width: 512, height: 360 }` that used to be stamped at node creation is this
+ * function now — the canvas menu, the edge-drop menu, the planner starter flow and the
+ * agent write path all size a node here.
+ */
+export function generatorNodeStyle(
+  aspectRatio?: string,
+  bounds: GeneratorNodeBounds = IMAGE_GENERATOR_NODE_BOUNDS,
+): NodeDimensions {
   return snapNodeDimensionsToAspectRatio({
     aspectRatio,
-    currentWidth: GENERATOR_NODE_AREA.width,
-    currentHeight: GENERATOR_NODE_AREA.height,
-    ...GENERATOR_NODE_BOUNDS,
+    currentWidth: bounds.area.width,
+    currentHeight: bounds.area.height,
+    minWidth: bounds.minWidth,
+    minHeight: bounds.minHeight,
+    fallbackWidth: bounds.fallbackWidth,
   });
 }

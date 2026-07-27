@@ -4,7 +4,13 @@ import {
   DEFAULT_IMAGE_GENERATOR_MODEL,
   isImageGeneratorModel,
 } from './image-size';
-import { generatorNodeStyle } from './node-sizing';
+import {
+  type GeneratorNodeBounds,
+  generatorNodeStyle,
+  IMAGE_GENERATOR_NODE_BOUNDS,
+  OMNI_GENERATOR_NODE_BOUNDS,
+  VIDEO_GENERATOR_NODE_BOUNDS,
+} from './node-sizing';
 
 // Canonical AI Studio canvas graph rules — node-type vocabulary, handle
 // compatibility, connection limits, and media↔handle compatibility. Ported from
@@ -19,9 +25,10 @@ export const STUDIO_NODE_TYPES = [
   'veoDirector',
   'veoFast',
   'extendVideo',
-  'videoEditor',
   'timelineEditor',
-  'publishToPlanner',
+  'hyperframesAgent',
+  'organicPublisher',
+  'paidPublisher',
   'omniGen',
   'image',
   'video',
@@ -118,6 +125,44 @@ export const VIDEO_REFERENCE_VIDEO_HANDLE = 'ref-video' as const;
 
 export type VideoGeneratorNodeType = 'videoGen' | 'veoDirector' | 'veoFast';
 
+/**
+ * How a video node takes its image inputs. Veo REJECTS a request carrying both
+ * `referenceImages` and `image`/`lastFrame` — it is one or the other per request —
+ * so on the two toggleable Veo models this is a user-visible mode that swaps the
+ * node's target handles, not a hint.
+ *
+ * Seedance is why this cannot be derived from the two `supports*` predicates: it
+ * sends `images_list` AND `first_image_url`/`last_image_url` in ONE request, so it
+ * has a single mode carrying both handle families. An explicit table is the honest
+ * model of what each provider accepts.
+ */
+export type VideoGeneratorReferenceMode = 'images' | 'frames' | 'omni';
+
+/** Entry [0] is the model's default mode. A new model cannot compile until its modes are declared. */
+const REFERENCE_MODES_BY_MODEL: Record<
+  VideoGeneratorModel,
+  readonly [VideoGeneratorReferenceMode, ...VideoGeneratorReferenceMode[]]
+> = {
+  'veo-3.1': ['images', 'frames'],
+  'veo-3.1-fast': ['frames', 'images'],
+  'veo-3.1-lite': ['frames'],
+  'kling-omni': ['omni'],
+  'pixverse-v6': ['images'],
+  'seedance-2.0': ['images'],
+};
+
+export const VIDEO_GENERATOR_REFERENCE_MODE_LABELS: Record<VideoGeneratorReferenceMode, string> = {
+  images: 'Reference Images',
+  frames: 'First / Last Frame',
+  omni: 'Omni References',
+};
+
+export function getVideoGeneratorReferenceModes(
+  model: VideoGeneratorModel,
+): readonly VideoGeneratorReferenceMode[] {
+  return REFERENCE_MODES_BY_MODEL[model];
+}
+
 const isVideoGeneratorModel = (value: unknown): value is VideoGeneratorModel =>
   typeof value === 'string' && (VIDEO_GENERATOR_MODELS as readonly string[]).includes(value);
 
@@ -135,60 +180,87 @@ export function resolveVideoGeneratorModel(node: {
   return DEFAULT_VIDEO_GENERATOR_MODEL;
 }
 
+/** The model's DEFAULT mode. Use `resolveVideoGeneratorReferenceMode` when you hold a node. */
 export function getVideoGeneratorReferenceMode(
   model: VideoGeneratorModel,
-): 'images' | 'frames' | 'omni' {
-  if (model === 'veo-3.1-fast' || model === 'veo-3.1-lite') return 'frames';
-  if (model === 'kling-omni') return 'omni';
-  return 'images';
+): VideoGeneratorReferenceMode {
+  return REFERENCE_MODES_BY_MODEL[model][0];
 }
 
-export function supportsVideoGeneratorFrameInputs(model: VideoGeneratorModel): boolean {
-  return model === 'veo-3.1-fast' || model === 'veo-3.1-lite' || model === 'seedance-2.0';
+/**
+ * The node's EFFECTIVE mode: what the user picked, validated against what the model
+ * actually accepts, falling back to the model default. Validation-with-fallback is
+ * what makes an absent or stale `referenceMode` on a saved canvas behave exactly as
+ * it did before modes existed.
+ */
+export function resolveVideoGeneratorReferenceMode(node: {
+  type?: string;
+  data?: Record<string, unknown>;
+}): VideoGeneratorReferenceMode {
+  const model = resolveVideoGeneratorModel(node);
+  const legal = REFERENCE_MODES_BY_MODEL[model];
+  const requested = node.data?.referenceMode;
+  return legal.includes(requested as VideoGeneratorReferenceMode)
+    ? (requested as VideoGeneratorReferenceMode)
+    : legal[0];
+}
+
+const TEXT_TARGET_HANDLES = ['prompt-in', 'prompt', 'negative'] as const;
+
+export function getVideoGeneratorTargetHandles(
+  model: VideoGeneratorModel,
+  mode: VideoGeneratorReferenceMode = getVideoGeneratorReferenceMode(model),
+): string[] {
+  if (model === 'veo-3.1-lite') {
+    return [...TEXT_TARGET_HANDLES, ...VIDEO_FRAME_HANDLES];
+  }
+  if (model === 'veo-3.1' || model === 'veo-3.1-fast') {
+    return mode === 'frames'
+      ? [...TEXT_TARGET_HANDLES, ...VIDEO_FRAME_HANDLES]
+      : [...TEXT_TARGET_HANDLES, ...VIDEO_IMAGE_REFERENCE_HANDLES];
+  }
+  if (model === 'kling-omni') {
+    return [...TEXT_TARGET_HANDLES, ...VIDEO_IMAGE_REFERENCE_HANDLES, VIDEO_REFERENCE_VIDEO_HANDLE];
+  }
+  if (model === 'pixverse-v6') {
+    return [...TEXT_TARGET_HANDLES, VIDEO_IMAGE_REFERENCE_HANDLES[0]];
+  }
+  if (model === 'seedance-2.0') {
+    return [
+      ...TEXT_TARGET_HANDLES,
+      ...VIDEO_IMAGE_REFERENCE_HANDLES,
+      ...VIDEO_FRAME_HANDLES,
+      VIDEO_REFERENCE_VIDEO_HANDLE,
+    ];
+  }
+  return [...TEXT_TARGET_HANDLES, ...VIDEO_IMAGE_REFERENCE_HANDLES];
+}
+
+// Derived from the handle table so a capability can never disagree with the handles
+// the node actually renders. Omitting `mode` answers for the model's DEFAULT mode.
+export function supportsVideoGeneratorFrameInputs(
+  model: VideoGeneratorModel,
+  mode?: VideoGeneratorReferenceMode,
+): boolean {
+  return getVideoGeneratorTargetHandles(model, mode).some(isFrameHandle);
+}
+
+export function supportsVideoGeneratorReferenceImages(
+  model: VideoGeneratorModel,
+  mode?: VideoGeneratorReferenceMode,
+): boolean {
+  return getVideoGeneratorTargetHandles(model, mode).some(isImageReferenceHandle);
 }
 
 export function supportsVideoGeneratorReferenceVideo(model: VideoGeneratorModel): boolean {
   return model === 'kling-omni' || model === 'seedance-2.0';
 }
 
-export function supportsVideoGeneratorReferenceImages(model: VideoGeneratorModel): boolean {
-  return model !== 'veo-3.1-fast' && model !== 'veo-3.1-lite';
-}
-
-export function getVideoGeneratorTargetHandles(model: VideoGeneratorModel): string[] {
-  if (model === 'veo-3.1-fast' || model === 'veo-3.1-lite') {
-    return ['prompt-in', 'prompt', 'negative', ...VIDEO_FRAME_HANDLES];
-  }
-  if (model === 'kling-omni') {
-    return [
-      'prompt-in',
-      'prompt',
-      'negative',
-      ...VIDEO_IMAGE_REFERENCE_HANDLES,
-      VIDEO_REFERENCE_VIDEO_HANDLE,
-    ];
-  }
-  if (model === 'pixverse-v6') {
-    return ['prompt-in', 'prompt', 'negative', VIDEO_IMAGE_REFERENCE_HANDLES[0]];
-  }
-  if (model === 'seedance-2.0') {
-    return [
-      'prompt-in',
-      'prompt',
-      'negative',
-      ...VIDEO_IMAGE_REFERENCE_HANDLES,
-      ...VIDEO_FRAME_HANDLES,
-      VIDEO_REFERENCE_VIDEO_HANDLE,
-    ];
-  }
-  return ['prompt-in', 'prompt', 'negative', ...VIDEO_IMAGE_REFERENCE_HANDLES];
-}
-
 export function getVideoGeneratorImageLimit(
   model: VideoGeneratorModel,
   hasReferenceVideo: boolean,
 ): number | undefined {
-  if (model === 'veo-3.1') return 3;
+  if (model === 'veo-3.1' || model === 'veo-3.1-fast') return 3;
   if (model === 'kling-omni') return hasReferenceVideo ? 4 : 7;
   if (model === 'pixverse-v6') return 1;
   if (model === 'seedance-2.0') return 9;
@@ -253,33 +325,67 @@ const isVideoGeneratorNode = (node: GraphNodeLike): boolean => isVideoGeneratorN
 const isVideoProducingSource = (node: GraphNodeLike): boolean =>
   node.type === 'video' ||
   node.type === 'extendVideo' ||
-  node.type === 'videoEditor' ||
   node.type === 'timelineEditor' ||
+  node.type === 'hyperframesAgent' ||
   node.type === 'omniGen' ||
   isVideoGeneratorNodeType(node.type);
 
 const isTextProducingSource = (node: GraphNodeLike): boolean =>
   node.type === 'string' || node.type === 'videoDecode';
 
-export const isClipSlotHandle = (handleId?: string | null): boolean =>
-  typeof handleId === 'string' && handleId.startsWith('clip-');
-
 // Timeline Editor (timelineEditor) input pool: a single multi-connection target
 // handle `media-in` that accepts many video-producing sources and/or images.
 // Connected inputs form a pool the editor's timeline places clips from — each
-// placement references its source node. Distinct from the Video Splicer's
-// per-slot `clip-<slotId>` vocabulary so both nodes coexist.
+// placement references its source node. Legacy per-slot splicer handles are
+// converted to this pool by migrateWorkflowGraph before the graph is consumed.
 export const TIMELINE_MEDIA_INPUT_HANDLE = 'media-in';
 export const TIMELINE_MEDIA_POOL_LIMIT = 20;
 export const isTimelineMediaHandle = (handleId?: string | null): boolean =>
   handleId === TIMELINE_MEDIA_INPUT_HANDLE;
 
-// Publish-to-Planner sink node: a single video-producing input it attaches to an
-// organic Planner draft. One video in, no source output (terminal node), so it is
-// deliberately absent from isVideoProducingSource.
+export const HYPERFRAMES_PROMPT_INPUT_HANDLE = 'prompt-in';
+export const HYPERFRAMES_IMAGE_INPUT_HANDLE = 'image-in';
+export const HYPERFRAMES_VIDEO_INPUT_HANDLE = 'video-in';
+export const HYPERFRAMES_AUDIO_INPUT_HANDLE = 'audio-in';
+export const HYPERFRAMES_VIDEO_OUTPUT_HANDLE = 'video';
+export const HYPERFRAMES_MEDIA_INPUT_HANDLES = [
+  HYPERFRAMES_IMAGE_INPUT_HANDLE,
+  HYPERFRAMES_VIDEO_INPUT_HANDLE,
+  HYPERFRAMES_AUDIO_INPUT_HANDLE,
+] as const;
+export const HYPERFRAMES_MEDIA_POOL_LIMIT = 20;
+
+// Publishing sinks accept a format-specific single input or explicit ordered
+// carousel slots. They have no source output, so they are deliberately absent
+// from the media-producing source predicates.
+export const PUBLISH_IMAGE_INPUT_HANDLE = 'image-in';
 export const PUBLISH_VIDEO_INPUT_HANDLE = 'video-in';
-export const isPublishVideoHandle = (handleId?: string | null): boolean =>
-  handleId === PUBLISH_VIDEO_INPUT_HANDLE;
+export const PUBLISH_ASSET_INPUT_PREFIX = 'asset-';
+export const isPublishAssetHandle = (handleId?: string | null): boolean =>
+  typeof handleId === 'string' && handleId.startsWith(PUBLISH_ASSET_INPUT_PREFIX);
+
+type PublisherFormat = 'image' | 'carousel' | 'video';
+
+const publisherFormat = (node: GraphNodeLike): PublisherFormat => {
+  const value = node.data?.format;
+  return value === 'carousel' || value === 'video' ? value : 'image';
+};
+
+const publisherSlots = (node: GraphNodeLike): Array<{ id: string }> => {
+  const slots = (node.data as { assetSlots?: unknown } | undefined)?.assetSlots;
+  if (!Array.isArray(slots)) return [];
+  return slots.flatMap((slot) => {
+    const id = (slot as { id?: unknown })?.id;
+    return typeof id === 'string' && id ? [{ id }] : [];
+  });
+};
+
+const publisherTargetHandles = (node: GraphNodeLike): string[] => {
+  const format = publisherFormat(node);
+  if (format === 'image') return [PUBLISH_IMAGE_INPUT_HANDLE];
+  if (format === 'video') return [PUBLISH_VIDEO_INPUT_HANDLE];
+  return publisherSlots(node).map((slot) => `${PUBLISH_ASSET_INPUT_PREFIX}${slot.id}`);
+};
 
 const isImageReferenceHandle = (handleId?: string | null): boolean =>
   typeof handleId === 'string' && IMAGE_REFERENCE_HANDLE_SET.has(handleId);
@@ -304,6 +410,13 @@ const getEdgeCountForTargetHandle = (
   edges.filter((edge) => edge.target === targetId && edge.targetHandle === targetHandle).length;
 
 const getCountedHandles = (node: GraphNodeLike, targetHandle: string): readonly string[] => {
+  if (
+    node.type === 'hyperframesAgent' &&
+    HYPERFRAMES_MEDIA_INPUT_HANDLES.includes(
+      targetHandle as (typeof HYPERFRAMES_MEDIA_INPUT_HANDLES)[number],
+    )
+  )
+    return HYPERFRAMES_MEDIA_INPUT_HANDLES;
   if (node.type === 'nanoGen' && isImageReferenceHandle(targetHandle))
     return VIDEO_IMAGE_REFERENCE_HANDLES;
   if (isVideoGeneratorNode(node) && isImageReferenceHandle(targetHandle))
@@ -327,8 +440,8 @@ export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
     case 'nanoGen':
       return ['image'];
     case 'extendVideo':
-    case 'videoEditor':
     case 'timelineEditor':
+    case 'hyperframesAgent':
       return ['video'];
     case 'omniGen':
       return ['video'];
@@ -343,17 +456,13 @@ export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
       return ['prompt', 'negative', ...VIDEO_IMAGE_REFERENCE_HANDLES, 'trigger'];
     case 'extendVideo':
       return ['prompt', 'video'];
-    case 'videoEditor': {
-      const slots =
-        (node.data as { clipSlots?: Array<{ id?: string }> } | undefined)?.clipSlots ?? [];
-      return slots
-        .map((slot) => (typeof slot?.id === 'string' ? `clip-${slot.id}` : null))
-        .filter((handle): handle is string => Boolean(handle));
-    }
     case 'timelineEditor':
       return [TIMELINE_MEDIA_INPUT_HANDLE];
-    case 'publishToPlanner':
-      return [PUBLISH_VIDEO_INPUT_HANDLE];
+    case 'hyperframesAgent':
+      return [HYPERFRAMES_PROMPT_INPUT_HANDLE, ...HYPERFRAMES_MEDIA_INPUT_HANDLES];
+    case 'organicPublisher':
+    case 'paidPublisher':
+      return publisherTargetHandles(node);
     case 'omniGen':
       return ['prompt-in', 'prompt', 'ref-images'];
     case 'string':
@@ -367,7 +476,10 @@ export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
       return [];
     default:
       return isVideoGeneratorNode(node)
-        ? getVideoGeneratorTargetHandles(resolveVideoGeneratorModel(node))
+        ? getVideoGeneratorTargetHandles(
+            resolveVideoGeneratorModel(node),
+            resolveVideoGeneratorReferenceMode(node),
+          )
         : [];
   }
 };
@@ -386,35 +498,48 @@ export function getTargetHandleConnectionLimit(
 
   if (node.type === 'extendVideo' && targetHandle === 'video') return 1;
   if (node.type === 'videoDecode' && targetHandle === 'video') return 1;
-  if (node.type === 'videoEditor' && isClipSlotHandle(targetHandle)) return 1;
   if (node.type === 'timelineEditor' && isTimelineMediaHandle(targetHandle))
     return TIMELINE_MEDIA_POOL_LIMIT;
-  if (node.type === 'publishToPlanner' && isPublishVideoHandle(targetHandle)) return 1;
+  if (node.type === 'hyperframesAgent' && targetHandle === HYPERFRAMES_PROMPT_INPUT_HANDLE)
+    return 1;
+  if (
+    node.type === 'hyperframesAgent' &&
+    HYPERFRAMES_MEDIA_INPUT_HANDLES.includes(
+      targetHandle as (typeof HYPERFRAMES_MEDIA_INPUT_HANDLES)[number],
+    )
+  ) {
+    return HYPERFRAMES_MEDIA_POOL_LIMIT;
+  }
+  if (
+    (node.type === 'organicPublisher' || node.type === 'paidPublisher') &&
+    publisherTargetHandles(node).includes(targetHandle)
+  )
+    return 1;
   if (node.type === 'omniGen' && isImageReferenceHandle(targetHandle)) return 3;
 
   if (!isVideoGeneratorNode(node)) return undefined;
 
   const model = resolveVideoGeneratorModel(node);
-  if (model === 'veo-3.1-fast' || model === 'veo-3.1-lite') {
-    return targetHandle === 'first-frame' || targetHandle === 'last-frame' ? 1 : undefined;
+
+  // Handle-driven, not model-driven: a frame is one image by definition on every
+  // provider, and an image-reference cap is whatever the provider's validator says.
+  // The old per-model branches left seedance frames, seedance ref-images and
+  // pixverse ref-image unbounded here while the Backend rejected them at Run.
+  if (isFrameHandle(targetHandle)) return 1;
+
+  if (model === 'kling-omni' && targetHandle === VIDEO_REFERENCE_VIDEO_HANDLE) {
+    const currentImageCount = getEdgeCountForTargetHandles(
+      edges,
+      node.id,
+      VIDEO_IMAGE_REFERENCE_HANDLES,
+    );
+    return currentImageCount > 4 ? 0 : 1;
   }
-  if (model === 'veo-3.1') {
-    return isImageReferenceHandle(targetHandle) ? 3 : undefined;
-  }
-  if (model === 'kling-omni') {
-    if (targetHandle === VIDEO_REFERENCE_VIDEO_HANDLE) {
-      const currentImageCount = getEdgeCountForTargetHandles(
-        edges,
-        node.id,
-        VIDEO_IMAGE_REFERENCE_HANDLES,
-      );
-      return currentImageCount > 4 ? 0 : 1;
-    }
-    if (isImageReferenceHandle(targetHandle)) {
-      const hasReferenceVideo =
-        getEdgeCountForTargetHandle(edges, node.id, VIDEO_REFERENCE_VIDEO_HANDLE) > 0;
-      return getVideoGeneratorImageLimit(model, hasReferenceVideo);
-    }
+
+  if (isImageReferenceHandle(targetHandle)) {
+    const hasReferenceVideo =
+      getEdgeCountForTargetHandle(edges, node.id, VIDEO_REFERENCE_VIDEO_HANDLE) > 0;
+    return getVideoGeneratorImageLimit(model, hasReferenceVideo);
   }
 
   return undefined;
@@ -466,19 +591,33 @@ export function isValidConnection(
     } else {
       return false;
     }
-  } else if (targetNode.type === 'videoEditor') {
-    if (!isClipSlotHandle(targetHandle)) return false;
-    if (!isVideoProducingSource(sourceNode)) return false;
   } else if (targetNode.type === 'timelineEditor') {
     if (!isTimelineMediaHandle(targetHandle)) return false;
     const isImageSource = sourceNode.type === 'image' || sourceNode.type === 'nanoGen';
     if (!isVideoProducingSource(sourceNode) && !isImageSource) return false;
+  } else if (targetNode.type === 'hyperframesAgent') {
+    if (targetHandle === HYPERFRAMES_PROMPT_INPUT_HANDLE) {
+      if (!isTextProducingSource(sourceNode)) return false;
+    } else if (targetHandle === HYPERFRAMES_IMAGE_INPUT_HANDLE) {
+      if (sourceNode.type !== 'image' && sourceNode.type !== 'nanoGen') return false;
+    } else if (targetHandle === HYPERFRAMES_VIDEO_INPUT_HANDLE) {
+      if (!isVideoProducingSource(sourceNode)) return false;
+    } else if (targetHandle === HYPERFRAMES_AUDIO_INPUT_HANDLE) {
+      if (sourceNode.type !== 'audio') return false;
+    } else {
+      return false;
+    }
   } else if (targetNode.type === 'videoDecode') {
     if (targetHandle !== 'video') return false;
     if (!isVideoProducingSource(sourceNode)) return false;
-  } else if (targetNode.type === 'publishToPlanner') {
-    if (!isPublishVideoHandle(targetHandle)) return false;
-    if (!isVideoProducingSource(sourceNode)) return false;
+  } else if (targetNode.type === 'organicPublisher' || targetNode.type === 'paidPublisher') {
+    const format = publisherFormat(targetNode);
+    if (!publisherTargetHandles(targetNode).includes(targetHandle)) return false;
+    const isImageSource = sourceNode.type === 'image' || sourceNode.type === 'nanoGen';
+    const isVideoSource = isVideoProducingSource(sourceNode);
+    if (format === 'image' && !isImageSource) return false;
+    if (format === 'video' && !isVideoSource) return false;
+    if (format === 'carousel' && !isImageSource && !isVideoSource) return false;
   } else if (targetNode.type === 'omniGen') {
     if (targetHandle === 'prompt' || targetHandle === 'prompt-in') {
       if (!isTextProducingSource(sourceNode)) return false;
@@ -492,11 +631,10 @@ export function isValidConnection(
     if (isTextProducingSource(sourceNode)) {
       if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle)) return false;
     } else if (sourceNode.type === 'image' || sourceNode.type === 'nanoGen') {
-      if (model === 'veo-3.1-fast' || model === 'veo-3.1-lite') {
-        if (!isFrameHandle(targetHandle)) return false;
-      } else if (!isImageReferenceHandle(targetHandle)) {
-        return false;
-      }
+      // The node's own allowed set already encodes the model AND the selected
+      // reference mode, so it is the single authority here.
+      if (!isFrameHandle(targetHandle) && !isImageReferenceHandle(targetHandle)) return false;
+      if (!getAllowedTargetHandles(targetNode).includes(targetHandle)) return false;
     } else if (
       sourceNode.type === 'video' ||
       isVideoGeneratorNode(sourceNode) ||
@@ -546,14 +684,21 @@ const IMAGE_MEDIA_HANDLES = new Set<string>([
   ...VIDEO_IMAGE_REFERENCE_HANDLES,
   ...VIDEO_FRAME_HANDLES,
   'image',
+  HYPERFRAMES_IMAGE_INPUT_HANDLE,
+  PUBLISH_IMAGE_INPUT_HANDLE,
 ]);
-const VIDEO_MEDIA_HANDLES = new Set<string>([VIDEO_REFERENCE_VIDEO_HANDLE, 'video']);
+const VIDEO_MEDIA_HANDLES = new Set<string>([
+  VIDEO_REFERENCE_VIDEO_HANDLE,
+  'video',
+  HYPERFRAMES_VIDEO_INPUT_HANDLE,
+  PUBLISH_VIDEO_INPUT_HANDLE,
+]);
 
 export function mediaKindForHandle(handle?: string | null): WorkflowMediaKind | undefined {
   if (!handle) return undefined;
   if (IMAGE_MEDIA_HANDLES.has(handle)) return 'image';
   if (VIDEO_MEDIA_HANDLES.has(handle)) return 'video';
-  if (handle === 'audio') return 'audio';
+  if (handle === 'audio' || handle === HYPERFRAMES_AUDIO_INPUT_HANDLE) return 'audio';
   if (handle === 'document') return 'document';
   return undefined;
 }
@@ -617,38 +762,24 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
     case 'videoGen':
     case 'veoDirector':
     case 'veoFast': {
-      const model =
-        type === 'veoDirector'
-          ? 'veo-3.1'
-          : type === 'veoFast'
-            ? 'veo-3.1-fast'
-            : DEFAULT_VIDEO_GENERATOR_MODEL;
       return {
         data: {
-          model,
+          model: defaultModelForVideoNodeType(type),
           prompt: '',
           negativePrompt: '',
           enhancePrompt: false,
-          referenceMode: getVideoGeneratorReferenceMode(model),
+          // referenceMode is deliberately NOT seeded here: `overrides` merge on top of
+          // this base, so a seeded mode would outlive a model override that invalidates
+          // it. coerceNodeConfig derives it from the EFFECTIVE model instead.
+          // The blocks READ data.aspectRatio (footer label, preview box, resize lock)
+          // but the family never carried it, so a video node was born ratio-less and
+          // sized by a hardcoded 16:9 style. Style is derived from it by nodeStyleFor.
+          aspectRatio: '16:9',
         },
-        style: { width: 512, height: 288 },
       };
     }
     case 'extendVideo':
       return { data: { prompt: '' }, style: { width: 360, height: 200 } };
-    case 'videoEditor':
-      return {
-        data: {
-          clipSlots: [
-            { id: newSlotId(1), order: 0 },
-            { id: newSlotId(2), order: 1 },
-          ],
-          outputFormat: 'mp4',
-          videoCodec: 'avc',
-          audioCodec: 'aac',
-        },
-        style: { width: 380, height: 460 },
-      };
     case 'timelineEditor':
       return {
         data: {
@@ -660,15 +791,37 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
         },
         style: { width: 320, height: 260 },
       };
-    case 'publishToPlanner':
+    case 'hyperframesAgent':
       return {
-        data: { clientKey: newSlotId(1), status: 'draft' },
-        style: { width: 300, height: 220 },
+        data: {
+          label: 'HyperFrames Agent',
+          model: 'gemini-3.5-flash-lite',
+          prompt: '',
+          aspectRatio: '16:9',
+          durationSeconds: 10,
+          fps: 30,
+          resolution: '1080p',
+          status: 'idle',
+        },
+        style: { width: 420, height: 360 },
+      };
+    case 'organicPublisher':
+    case 'paidPublisher':
+      return {
+        data: {
+          format: 'image',
+          assetSlots: [
+            { id: newSlotId(1), order: 0 },
+            { id: newSlotId(2), order: 1 },
+          ],
+        },
+        style: { width: 320, height: 300 },
       };
     case 'omniGen':
+      // Style is derived from the aspect ratio by createNodeData (nodeStyleFor);
+      // 16:9 lands on the historical 512x360.
       return {
         data: { model: 'gemini-omni-flash', prompt: '', aspectRatio: '16:9', variations: [] },
-        style: { width: 512, height: 360 },
       };
     case 'string':
       return { data: { value: '', promptMode: 'enrich' } };
@@ -762,11 +915,63 @@ export interface NodeConfigCoercion {
   changes: string[];
 }
 
+const defaultModelForVideoNodeType = (type: VideoGeneratorNodeType): VideoGeneratorModel =>
+  type === 'veoDirector'
+    ? 'veo-3.1'
+    : type === 'veoFast'
+      ? 'veo-3.1-fast'
+      : DEFAULT_VIDEO_GENERATOR_MODEL;
+
+/**
+ * `referenceMode` selects which image inputs the node exposes, so a mode the model
+ * does not accept is not a cosmetic error — it silently changes which edges survive
+ * the next load. A model change can invalidate a mode that was legal for the previous
+ * model, so the mode is re-checked whenever either field is written.
+ */
+function coerceVideoGeneratorConfig(
+  type: VideoGeneratorNodeType,
+  patch: Record<string, unknown>,
+  current: Record<string, unknown>,
+): NodeConfigCoercion {
+  const changes: string[] = [];
+  const next: Record<string, unknown> = { ...patch };
+
+  if ('model' in next && !isVideoGeneratorModel(next.model)) {
+    const fallback = defaultModelForVideoNodeType(type);
+    changes.push(`"${String(next.model)}" is not a video generator model — using ${fallback}`);
+    next.model = fallback;
+  }
+
+  const model = isVideoGeneratorModel(next.model)
+    ? next.model
+    : isVideoGeneratorModel(current.model)
+      ? current.model
+      : defaultModelForVideoNodeType(type);
+
+  if ('referenceMode' in next || 'model' in next) {
+    const requested = 'referenceMode' in next ? next.referenceMode : current.referenceMode;
+    const legal = getVideoGeneratorReferenceModes(model);
+    const mode = legal.includes(requested as VideoGeneratorReferenceMode)
+      ? (requested as VideoGeneratorReferenceMode)
+      : legal[0];
+
+    if (requested !== undefined && requested !== mode) {
+      changes.push(
+        `referenceMode "${String(requested)}" is not valid for ${model} — using "${mode}"`,
+      );
+    }
+    next.referenceMode = mode;
+  }
+
+  return { data: next, changes };
+}
+
 export function coerceNodeConfig(
   type: StudioNodeType,
   patch: Record<string, unknown>,
   current: Record<string, unknown> = {},
 ): NodeConfigCoercion {
+  if (isVideoGeneratorNodeType(type)) return coerceVideoGeneratorConfig(type, patch, current);
   if (type !== 'nanoGen') return { data: patch, changes: [] };
 
   const changes: string[] = [];
@@ -808,13 +1013,29 @@ export function coerceNodeConfig(
   return { data: next, changes };
 }
 
-/** The style a nanoGen node carries for the aspect ratio in `data`. */
+// Which sizing envelope a generator type is born in. A type absent from this map is
+// not a generator and keeps whatever fixed style baseNodeData gives it.
+const GENERATOR_NODE_BOUNDS_BY_TYPE: Partial<Record<StudioNodeType, GeneratorNodeBounds>> = {
+  nanoGen: IMAGE_GENERATOR_NODE_BOUNDS,
+  videoGen: VIDEO_GENERATOR_NODE_BOUNDS,
+  veoDirector: VIDEO_GENERATOR_NODE_BOUNDS,
+  veoFast: VIDEO_GENERATOR_NODE_BOUNDS,
+  omniGen: OMNI_GENERATOR_NODE_BOUNDS,
+};
+
+/**
+ * The style a generator node carries for the aspect ratio in `data` — the whole
+ * family, not just nanoGen. While this covered nanoGen alone, every video node fell
+ * back to a hardcoded 16:9 box, so a 9:16 selection produced a landscape node whose
+ * footer read "9:16" (Airtable #230).
+ */
 export function nodeStyleFor(
   type: StudioNodeType,
   data: Record<string, unknown>,
 ): Record<string, number> | undefined {
-  if (type !== 'nanoGen') return undefined;
+  const bounds = GENERATOR_NODE_BOUNDS_BY_TYPE[type];
+  if (!bounds) return undefined;
   const aspectRatio = typeof data.aspectRatio === 'string' ? data.aspectRatio : '16:9';
-  const { width, height } = generatorNodeStyle(aspectRatio);
+  const { width, height } = generatorNodeStyle(aspectRatio, bounds);
   return { width, height };
 }

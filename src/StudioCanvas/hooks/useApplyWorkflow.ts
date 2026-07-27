@@ -5,6 +5,7 @@
 // two never drift on how a saved recipe is rehydrated — edge normalization, media
 // URL re-signing, undo snapshot, and fit-to-view.
 
+import { mergeGraphs, type WorkflowGraph } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { useReactFlow } from '@xyflow/react';
 import { useCallback } from 'react';
@@ -13,6 +14,7 @@ import type { AiStudioWorkflow } from '@/lib/schemas/aiStudio';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
 import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
+import { namespaceWorkflowSnapshot } from '../utils/namespaceWorkflowSnapshot';
 import { rehydrateWorkflowMediaNodes } from '../utils/rehydrateWorkflowMedia';
 import { normalizeWorkflowSnapshot } from '../utils/workflowSerialization';
 
@@ -30,18 +32,45 @@ export function useApplyWorkflow() {
         },
         defaultEdgeType,
       );
-      const hydratedNodes = await rehydrateWorkflowMediaNodes(snapshot.nodes);
+      const hydratedNodes = await rehydrateWorkflowMediaNodes(
+        snapshot.nodes,
+        undefined,
+        useStudioStore.getState().brandId,
+      );
+      const namespaced = namespaceWorkflowSnapshot(
+        { nodes: hydratedNodes, edges: snapshot.edges },
+        `module:${crypto.randomUUID()}`,
+      );
+      const current = useStudioStore.getState();
+      const merged = mergeGraphs(
+        {
+          nodes: current.nodes,
+          edges: current.edges,
+        } as WorkflowGraph,
+        {
+          nodes: namespaced.nodes,
+          edges: namespaced.edges,
+          metadata: {
+            workflowModule: {
+              version: 1,
+              sourceWorkflowId: workflow.id,
+              label: workflow.name,
+              nodeIds: namespaced.nodes.map((node) => node.id),
+            },
+          },
+        } as WorkflowGraph,
+      );
 
       takeSnapshot();
-      setNodes(hydratedNodes);
-      setEdges(snapshot.edges);
+      setNodes(merged.nodes as StudioNode[]);
+      setEdges(merged.edges as Edge[]);
       requestAnimationFrame(() => {
         fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 300 });
       });
 
       show({
-        title: options?.toastTitle ?? 'Workflow loaded',
-        description: workflow.name,
+        title: options?.toastTitle ?? 'Workflow module added',
+        description: `${workflow.name} was expanded into ${namespaced.nodes.length} editable nodes.`,
         variant: 'success',
       });
     },

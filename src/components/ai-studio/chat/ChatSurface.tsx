@@ -211,6 +211,15 @@ export function ChatSurface({
         });
         return;
       }
+      if (medium === 'video' && refs.length > 0 && (firstFrame || lastFrame)) {
+        show({
+          title: 'Pick one reference mode',
+          description:
+            'Veo takes either reference images or a first/last frame — not both in one shot. Clear one of them.',
+          variant: 'error',
+        });
+        return;
+      }
       const aspectRatio = form.aspectRatio ?? '1:1';
 
       const payload: ChatImageRequestPayload = {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentMentionReference } from '@/lib/agent-references';
+import { useAgentRunStore } from '@/lib/agents/runStore';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import {
   type JainaChatStreamRequest,
@@ -50,6 +51,13 @@ export function useJainaChatStream() {
   const abortRef = useRef<AbortController | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The run THIS reader owns, as reactive state so the projection can skip it (exactly one
+  // folder per run — the same invariant as organic's `liveRunId`).
+  const [liveRunId, setLiveRunId] = useState<string | null>(null);
+  // Which run we've already registered into the app-level store, and the session/brand it
+  // belongs to (captured at start; the run's own frames confirm the session id).
+  const registeredRunRef = useRef<string | null>(null);
+  const runContextRef = useRef<{ sessionId?: string; brandId?: string }>({});
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -61,23 +69,88 @@ export function useJainaChatStream() {
     }
   }, []);
 
+  // Register the durable run into the app-level store the moment its runId is known. This is
+  // what makes AgentRunsProvider tail it live (RunTail) and what lets useProjectedJainaRun
+  // reattach after the user navigates away — the run outlives this reader.
+  useEffect(() => {
+    const runId = state.runId;
+    if (!runId || registeredRunRef.current === runId) return;
+    if (state.status !== 'streaming' && state.status !== 'starting') return;
+    registeredRunRef.current = runId;
+    setLiveRunId(runId);
+    const ctx = runContextRef.current;
+    useAgentRunStore.getState().upsertRun({
+      runId,
+      agent: 'jaina',
+      sessionId: ctx.sessionId ?? state.runSessionId ?? '',
+      brandId: ctx.brandId,
+      status: 'running',
+      createdAt: new Date().toISOString(),
+    });
+  }, [state.runId, state.status, state.runSessionId]);
+
   const reset = useCallback(() => {
     clearWatchdog();
     abortRef.current?.abort();
     readerRef.current?.cancel().catch(() => {});
     abortRef.current = null;
     readerRef.current = null;
+    registeredRunRef.current = null;
+    setLiveRunId(null);
     setState(createInitialJainaStreamState());
   }, [clearWatchdog]);
 
-  const cancel = useCallback(() => {
+  // Release the LOCAL view without stopping the run — the session-switch / unmount path. The
+  // run keeps executing (Backend) and the store keeps tailing it (RunTail), so the projection
+  // takes over rendering it when the user returns. Mirrors organic's detach.
+  const detach = useCallback(() => {
     clearWatchdog();
     abortRef.current?.abort();
     readerRef.current?.cancel().catch(() => {});
+    abortRef.current = null;
+    readerRef.current = null;
+    registeredRunRef.current = null;
+    setLiveRunId(null);
     setState((prev) => ({ ...prev, status: 'idle' }));
   }, [clearWatchdog]);
 
-  useEffect(() => () => cancel(), [cancel]);
+  // Actually STOP the run — Backend row flipped to `cancelled` so it can't keep burning tokens
+  // or be resurrected by the projection. `targetRunId` lets the caller stop a run this reader
+  // does not own (the projected run you returned to); it defaults to the owned run.
+  const cancel = useCallback(
+    async (targetRunId?: string) => {
+      const runId = targetRunId ?? stateRef.current.runId;
+      clearWatchdog();
+      abortRef.current?.abort();
+      readerRef.current?.cancel().catch(() => {});
+      setLiveRunId(null);
+      registeredRunRef.current = null;
+      setState((prev) => ({ ...prev, status: 'idle' }));
+
+      if (!runId) return;
+      // Optimistically mark the store terminal so the projection stops rendering it as live and
+      // AgentRunsProvider fires no false completion toast; the Backend call makes it durable.
+      const record = useAgentRunStore.getState().runs[runId];
+      if (record) {
+        useAgentRunStore.getState().upsertRun({ ...record.run, status: 'cancelled' });
+      }
+      try {
+        const token = await getBrowserAccessToken();
+        if (!token) return;
+        await fetch(`/api/agents/jaina/chat/runs/${encodeURIComponent(runId)}/cancel`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch {
+        // Best-effort: the row may already be terminal (a 409), which is fine.
+      }
+    },
+    [clearWatchdog],
+  );
+
+  // Unmount releases the view but does NOT stop the run — leaving /paid-media must not kill a
+  // turn mid-sentence. (It used to call cancel, which is why Jaina turns died on navigation.)
+  useEffect(() => () => detach(), [detach]);
 
   const getAccessToken = useCallback(async () => {
     const token = await getBrowserAccessToken();
@@ -109,6 +182,9 @@ export function useJainaChatStream() {
   const start = useCallback(
     async (input: JainaChatInput): Promise<StartResult> => {
       reset();
+      // Remember which conversation/brand this run belongs to, so the registration effect can
+      // bind the store run to the right session for the projection to find later.
+      runContextRef.current = { sessionId: input.sessionId, brandId: input.brandId };
       setState((prev) => ({ ...prev, status: 'starting' }));
 
       const controller = new AbortController();
@@ -292,7 +368,9 @@ export function useJainaChatStream() {
     state,
     start,
     cancel,
+    detach,
     reset,
     clearMemory,
+    liveRunId,
   };
 }

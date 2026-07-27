@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { crossAgentProvenanceSchema } from '../agents/cross-agent';
 
 // Request envelope for the in-app Canvas Composer — POST /api/ai-studio/canvas/compose.
 // The response is an NDJSON stream of aiStudioComposerFrameSchema frames.
@@ -29,9 +30,28 @@ export type ComposerHistoryMessage = z.infer<typeof composerHistoryMessageSchema
 export const COMPOSER_HISTORY_MAX_MESSAGES = 12;
 export const CANVAS_COMPOSER_MAX_REFERENCES = 20;
 
+/**
+ * Reference kinds the canvas `@` grabber can send.
+ *
+ * A subset of `agentMentionReferenceTypeSchema` — the canvas composer resolves
+ * exactly these server-side, so widening the wire without a resolver would
+ * silently drop the grab. Signals (trend / event / question) are here because
+ * "compose a canvas from this week's trend" is the same grounding move the
+ * organic agent already supports.
+ */
+export const canvasComposerReferenceTypeSchema = z.enum([
+  'skill',
+  'media_asset',
+  'trend',
+  'event',
+  'question',
+]);
+
+export type CanvasComposerReferenceType = z.infer<typeof canvasComposerReferenceTypeSchema>;
+
 export const canvasComposerReferenceSchema = z
   .object({
-    type: z.enum(['skill', 'media_asset']),
+    type: canvasComposerReferenceTypeSchema,
     id: z.string().min(1),
     label: z.string().min(1).max(160),
   })
@@ -43,7 +63,11 @@ export const canvasComposeRequestSchema = z
   .object({
     brandProfileId: z.string().min(1),
     roomId: z.string().min(1),
+    /** Stable per submitted turn; retries must reuse it instead of starting duplicate work. */
+    idempotencyKey: z.string().min(1).max(128).optional(),
     prompt: z.string().min(1).max(4000),
+    /** Enables the model's maximum supported thinking level for this turn. */
+    thinking: z.boolean().optional(),
     /** Nodes the user had selected — the composer treats them as the subject of the ask. */
     selectedNodeIds: z.array(z.string()).max(50).optional(),
     /** Exact skill/media selections from the canvas context grabber. */
@@ -53,6 +77,8 @@ export const canvasComposeRequestSchema = z
       .optional(),
     /** Prior exchanges, most recent last. Absent = the default, memory-less turn. */
     history: z.array(composerHistoryMessageSchema).max(COMPOSER_HISTORY_MAX_MESSAGES).optional(),
+    /** Present when this turn was initiated by another agent (cross-agent call). */
+    provenance: crossAgentProvenanceSchema.optional(),
   })
   .strict();
 

@@ -1,4 +1,5 @@
 import {
+  agentDelegatedFrameSchema,
   checkpointBlockV2LenientSchema,
   blockBaseSchema as contractBlockBaseSchema,
   chartBlockBaseSchema as contractChartBlockBaseSchema,
@@ -1084,6 +1085,7 @@ export type JainaStreamEvent =
   | z.infer<typeof handoffStartSchema>
   | z.infer<typeof handoffCompleteSchema>
   | z.infer<typeof agentEnvelopeSchema>
+  | z.infer<typeof agentDelegatedFrameSchema>
   | { type: 'agent.spawn'; data: AgentSpawnEventData }
   | { type: 'agent.complete'; data: AgentCompleteEventData }
   | { type: 'canvas.context.loaded'; data: Record<string, unknown> }
@@ -1117,6 +1119,7 @@ export const jainaStreamEventSchema = z.union([
   handoffStartSchema,
   handoffCompleteSchema,
   agentEnvelopeSchema,
+  agentDelegatedFrameSchema,
   z.object({ type: z.literal('agent.spawn'), data: agentSpawnEventSchema }),
   z.object({ type: z.literal('agent.complete'), data: agentCompleteEventSchema }),
   z.object({ type: z.literal('canvas.context.loaded'), data: z.record(z.string(), z.unknown()) }),

@@ -7,7 +7,8 @@ import {
 } from '@continuum/contracts';
 import type { OrganicCalendarDraft } from '../primitives/types';
 import { patchUnlessUserSupplied } from './attachWinsGuard';
-import { friendlyReelError } from './useGenerateDraftMedia';
+import { formatMediaReadyToast } from './mediaToastCopy';
+import { friendlyReelError, reelProgressLabel } from './useGenerateDraftMedia';
 
 // Unit test: verify that the NDJSON schemas correctly parse frames that
 // useGenerateDraftMedia would receive from each endpoint.
@@ -174,6 +175,57 @@ describe('useGenerateDraftMedia — contract schema coverage', () => {
     });
   });
 
+  describe('reel_progress heartbeat telemetry', () => {
+    const parseProgress = (extra: Record<string, unknown>) => {
+      const parsed = reelVideoBatchFrameSchema.safeParse({
+        type: 'reel_progress',
+        draftId: 'd-reel-1',
+        stage: 'generating_scenes',
+        ...extra,
+      });
+      expect(parsed.success).toBe(true);
+      if (!parsed.success || parsed.data.type !== 'reel_progress') {
+        throw new Error('expected a reel_progress frame');
+      }
+      return parsed.data;
+    };
+
+    it('parses a heartbeat frame carrying elapsed/eta/budget telemetry', () => {
+      const frame = parseProgress({
+        message: 'Rendering 3 scene clips — 20s elapsed, ~115s remaining',
+        elapsedSec: 20,
+        etaSec: 115,
+        budgetSec: 300,
+        sceneCount: 3,
+      });
+      expect(frame.elapsedSec).toBe(20);
+      expect(frame.etaSec).toBe(115);
+      expect(frame.budgetSec).toBe(300);
+      expect(frame.sceneCount).toBe(3);
+    });
+
+    it('shows the backend heartbeat message instead of a silent spinner label', () => {
+      const frame = parseProgress({
+        message: 'Rendering 3 scene clips — 20s elapsed, ~115s remaining',
+        elapsedSec: 20,
+        etaSec: 115,
+      });
+      expect(reelProgressLabel(frame)).toBe(
+        'Rendering 3 scene clips — 20s elapsed, ~115s remaining',
+      );
+    });
+
+    it('composes elapsed/eta onto the stage label when the frame carries no message', () => {
+      const frame = parseProgress({ elapsedSec: 40, etaSec: 95 });
+      expect(reelProgressLabel(frame)).toBe('Generating clips… — 40s elapsed, ~95s remaining');
+    });
+
+    it('keeps the plain stage label for a stage-only progress frame', () => {
+      expect(reelProgressLabel(parseProgress({}))).toBe('Generating clips…');
+      expect(reelProgressLabel(parseProgress({ stage: 'persisting' }))).toBe('Saving composition…');
+    });
+  });
+
   describe('reel preflight error mapping', () => {
     it('maps reel_scenes_missing_enrich_first to an Enrich-first message', () => {
       expect(friendlyReelError('reel_scenes_missing_enrich_first')).toContain('Enrich');
@@ -328,5 +380,40 @@ describe('useGenerateDraftMedia — realize_ready mounts generated media', () =>
     expect(result.mediaSuggestion?.mediaStatus).toBe('user_supplied');
     expect(result.mediaSuggestion?.assetUrl).toBe('mine.jpg');
     expect(result.publishingAssets).toBeUndefined();
+  });
+});
+
+// The realize_batch_completed toast delegates its copy to formatMediaReadyToast,
+// so the frame counts and the rendered grammar stay in agreement ('1 draft has',
+// never '1 draft have').
+describe('useGenerateDraftMedia — realize_batch_completed toast copy', () => {
+  it('feeds the batch frame counts through the shared copy helper', () => {
+    const parsed = mediaRealizeFrameSchema.safeParse({
+      type: 'realize_batch_completed',
+      ready: 1,
+      failed: 0,
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success && parsed.data.type === 'realize_batch_completed') {
+      expect(formatMediaReadyToast(parsed.data.ready, parsed.data.failed)).toEqual({
+        title: 'Media generated',
+        description: '1 draft has media ready.',
+      });
+    }
+  });
+
+  it('reports a failure-only batch with the failure title', () => {
+    const parsed = mediaRealizeFrameSchema.safeParse({
+      type: 'realize_batch_completed',
+      ready: 0,
+      failed: 2,
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success && parsed.data.type === 'realize_batch_completed') {
+      expect(formatMediaReadyToast(parsed.data.ready, parsed.data.failed)).toEqual({
+        title: 'Media generation failed',
+        description: '2 drafts failed.',
+      });
+    }
   });
 });

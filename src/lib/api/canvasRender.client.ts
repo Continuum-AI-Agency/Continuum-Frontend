@@ -2,15 +2,19 @@ import {
   CANVAS_RENDER_COMPLETE_ROUTE,
   CANVAS_RENDER_CONTINUATION_CLAIM_ROUTE,
   CANVAS_RENDER_CONTINUATION_FINISH_ROUTE,
+  CANVAS_RENDER_CONTINUATION_RENEW_ROUTE,
   type CanvasRenderCompleteRequest,
   type CanvasRenderCompleteResponse,
   type CanvasRenderContinuationClaimRequest,
   type CanvasRenderContinuationClaimResponse,
   type CanvasRenderContinuationFinishRequest,
   type CanvasRenderContinuationFinishResponse,
+  type CanvasRenderContinuationRenewRequest,
+  type CanvasRenderContinuationRenewResponse,
   canvasRenderCompleteResponseSchema,
   canvasRenderContinuationClaimResponseSchema,
   canvasRenderContinuationFinishResponseSchema,
+  canvasRenderContinuationRenewResponseSchema,
 } from '@continuum/contracts';
 import { http } from './http';
 
@@ -48,6 +52,18 @@ export function finishCanvasRenderContinuation(
     method: 'POST',
     body,
     schema: canvasRenderContinuationFinishResponseSchema,
+    cache: 'no-store',
+  });
+}
+
+export function renewCanvasRenderContinuation(
+  body: CanvasRenderContinuationRenewRequest,
+): Promise<CanvasRenderContinuationRenewResponse> {
+  return http.request({
+    path: CANVAS_RENDER_CONTINUATION_RENEW_ROUTE,
+    method: 'POST',
+    body,
+    schema: canvasRenderContinuationRenewResponseSchema,
     cache: 'no-store',
   });
 }

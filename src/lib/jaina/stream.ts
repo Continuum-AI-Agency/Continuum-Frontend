@@ -1,3 +1,5 @@
+import type { AgentDelegatedFrameData } from '@continuum/contracts';
+import { agentDelegatedFrameDataSchema } from '@continuum/contracts';
 import { z } from 'zod';
 import type { JainaPlan } from '@/components/paid-media/jaina/types';
 import type { CampaignCanvasActionsEnvelope } from '@/lib/campaign-canvas/agent-actions';
@@ -174,6 +176,11 @@ export type JainaStreamState = {
     block: CheckpointBlockV2;
   }>;
   reportArtifactJob: ResponseReportArtifactJobStartedEventData | null;
+  /**
+   * Cross-agent calls made during this turn, latest state per callId. Jaina is
+   * the CALLER here: each entry renders as an "⇄ Asked Organic" transcript card.
+   */
+  delegations: AgentDelegatedFrameData[];
 };
 
 export function createInitialJainaStreamState(): JainaStreamState {
@@ -205,6 +212,7 @@ export function createInitialJainaStreamState(): JainaStreamState {
     reportV2: null,
     blockDeltasV2: [],
     reportArtifactJob: null,
+    delegations: [],
   };
 }
 
@@ -1081,26 +1089,45 @@ function looksLikeStructuredReportDelta(delta: string): boolean {
   );
 }
 
+function parseJainaStreamEventValue(json: unknown): ParsedJainaStreamEvent | null {
+  const parsed = jainaStreamEventSchema.safeParse(json);
+  if (parsed.success) {
+    return parsed.data;
+  }
+  const compatibilityEvent = compatibilityStreamEventSchema.safeParse(json);
+  if (compatibilityEvent.success) {
+    return compatibilityEvent.data;
+  }
+  const rawType =
+    json && typeof json === 'object' && 'type' in json
+      ? String((json as { type?: unknown }).type ?? '')
+      : 'unknown';
+  console.warn('Invalid Jaina stream event schema for type:', rawType);
+  return null;
+}
+
+/**
+ * Object-path twin of `parseJainaStreamEvent` for frames that are already objects — the
+ * durable run-event DTOs the app-level agent-run store tails (`AgentRunEventDto` is
+ * `{eventId, seq, ts, type, data}`, the same envelope the NDJSON line carries). Shares the
+ * exact post-`JSON.parse` code path, so for the same frame both producers feed
+ * `reduceJainaStreamEvent` identically by construction.
+ */
+export function toParsedJainaStreamEvent(dto: {
+  type: string;
+  data?: Record<string, unknown>;
+  seq?: number;
+}): ParsedJainaStreamEvent | null {
+  return parseJainaStreamEventValue(dto);
+}
+
 export function parseJainaStreamEvent(line: string): ParsedJainaStreamEvent | null {
   try {
-    const json = JSON.parse(line);
-    const parsed = jainaStreamEventSchema.safeParse(json);
-    if (parsed.success) {
-      return parsed.data;
-    }
-    const compatibilityEvent = compatibilityStreamEventSchema.safeParse(json);
-    if (compatibilityEvent.success) {
-      return compatibilityEvent.data;
-    }
-    const rawType =
-      json && typeof json === 'object' && 'type' in json
-        ? String((json as { type?: unknown }).type ?? '')
-        : 'unknown';
-    console.warn('Invalid Jaina stream event schema for type:', rawType);
+    return parseJainaStreamEventValue(JSON.parse(line));
   } catch (error) {
     console.error('Failed to parse Jaina stream event JSON:', error, 'Line:', line);
+    return null;
   }
-  return null;
 }
 
 function parsePlanFromAccumulatedDelta(
@@ -2593,6 +2620,29 @@ export function reduceJainaStreamEvent(
             },
           },
         ],
+      };
+    }
+    // One cross-agent call, folded by callId so the running frame and its
+    // terminal follow-up are ONE card that changes status — not two cards.
+    case 'agent.delegated': {
+      const parsed = agentDelegatedFrameDataSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success) {
+        return nextBase;
+      }
+      const delegation = parsed.data;
+      const existingIndex = state.delegations.findIndex(
+        (entry) => entry.callId === delegation.callId,
+      );
+      return {
+        ...nextBase,
+        delegations:
+          existingIndex === -1
+            ? [...state.delegations, delegation]
+            : state.delegations.map((entry, index) =>
+                index === existingIndex ? delegation : entry,
+              ),
       };
     }
     case 'agent.spawn': {

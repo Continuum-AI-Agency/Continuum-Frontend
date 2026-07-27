@@ -120,6 +120,8 @@ export function getDefaultNodeData(type: NodeType): {
         },
         style: { width: 360, height: 320 },
       };
+    case 'frameExtract':
+      return createNodeData('frameExtract', { label: 'Continuity Frame' });
     case 'string':
     default:
       return {
@@ -154,6 +156,7 @@ export const SOURCE_DROP_CANDIDATES: Record<EdgeDataType, SourceDropCandidate[]>
   ],
   video: [
     { nodeType: 'extendVideo', label: 'Extend Video' },
+    { nodeType: 'frameExtract', label: 'Continuity Frame' },
     { nodeType: 'videoDecode', label: 'Video Decoder' },
     { nodeType: 'string', label: 'Text Block' },
   ],

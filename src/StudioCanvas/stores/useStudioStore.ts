@@ -20,7 +20,7 @@ import {
   getAllowedSourceHandles,
   getAllowedTargetHandles,
   getTargetHandleConnectionLimit,
-  isValidConnection,
+  validateConnection,
 } from '../utils/isValidConnection';
 import { resolveCollisions } from '../utils/nodeCollisions';
 import { isVideoGeneratorNodeType } from '../utils/videoModel';
@@ -154,6 +154,13 @@ const remapLegacyTargetHandle = (
     return 'ref-images';
   }
 
+  // 'frame-N' came from a per-slot frame strip that no longer exists. The payload
+  // builder used to prefer frame-0 as the first frame and the HIGHEST frame-N as the
+  // last, so that preference order is reproduced here rather than left to chance.
+  if (/^frame-\d+$/.test(handle) && isVideoGeneratorNodeType(targetNodeType)) {
+    return handle === 'frame-0' ? 'first-frame' : 'last-frame';
+  }
+
   // 'input' was an early alias for the string node's image slot.
   if (handle === 'input' && targetNodeType === 'string') return 'image';
 
@@ -180,9 +187,11 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
     const targetHandle = remapped;
 
     const allowedTargets = getAllowedTargetHandles(targetNode);
-    // frame-N handles are dynamic (clip slots, frame references) — accept any
-    // that start with known prefixes rather than enumerating every possible id.
-    const isDynamicHandle = targetHandle.startsWith('frame-') || targetHandle.startsWith('clip-');
+    // clip-<slotId> handles are genuinely dynamic (one per timeline clip slot) and
+    // migrateSplicer still reads them, so they cannot be enumerated. 'frame-N' used
+    // to ride this escape hatch too; it is now remapped above to the contract
+    // vocabulary, so it must face the allowed set like every other handle.
+    const isDynamicHandle = targetHandle.startsWith('clip-');
     const isValidTarget = allowedTargets.includes(targetHandle) || isDynamicHandle;
 
     if (!isValidTarget) {
@@ -332,8 +341,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   onConnect: (connection: Connection) => {
     const normalized = normalizeFrameConnection(connection, get().nodes);
 
-    if (!isValidConnection(normalized, get().edges, get().nodes)) {
-      toast.error("Can't connect those nodes — incompatible handles or connection limit reached.");
+    const validation = validateConnection(normalized, get().edges, get().nodes);
+    if (!validation.valid) {
+      toast.error(validation.message);
       return;
     }
 
@@ -499,10 +509,21 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
       const previous = state.history.past[state.history.past.length - 1];
       const newPast = state.history.past.slice(0, -1);
+      const previousNodeIds = new Set(previous.nodes.map((node) => node.id));
+      const previousEdgeIds = new Set(previous.edges.map((edge) => edge.id));
 
       return {
         nodes: previous.nodes,
         edges: previous.edges,
+        deletedNodeIds: [
+          ...state.deletedNodeIds.filter((id) => !previousNodeIds.has(id)),
+          ...state.nodes.filter((node) => !previousNodeIds.has(node.id)).map((node) => node.id),
+        ],
+        deletedEdgeIds: [
+          ...state.deletedEdgeIds.filter((id) => !previousEdgeIds.has(id)),
+          ...state.edges.filter((edge) => !previousEdgeIds.has(edge.id)).map((edge) => edge.id),
+        ],
+        saveTrigger: state.saveTrigger + 1,
         history: {
           past: newPast,
           future: [{ nodes: state.nodes, edges: state.edges }, ...state.history.future],
@@ -517,10 +538,21 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
       const next = state.history.future[0];
       const newFuture = state.history.future.slice(1);
+      const nextNodeIds = new Set(next.nodes.map((node) => node.id));
+      const nextEdgeIds = new Set(next.edges.map((edge) => edge.id));
 
       return {
         nodes: next.nodes,
         edges: next.edges,
+        deletedNodeIds: [
+          ...state.deletedNodeIds.filter((id) => !nextNodeIds.has(id)),
+          ...state.nodes.filter((node) => !nextNodeIds.has(node.id)).map((node) => node.id),
+        ],
+        deletedEdgeIds: [
+          ...state.deletedEdgeIds.filter((id) => !nextEdgeIds.has(id)),
+          ...state.edges.filter((edge) => !nextEdgeIds.has(edge.id)).map((edge) => edge.id),
+        ],
+        saveTrigger: state.saveTrigger + 1,
         history: {
           past: [...state.history.past, { nodes: state.nodes, edges: state.edges }],
           future: newFuture,

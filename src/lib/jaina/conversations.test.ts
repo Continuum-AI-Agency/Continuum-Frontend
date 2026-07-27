@@ -46,6 +46,40 @@ describe('conversation row mapping', () => {
       lastMessageAt: '2026-03-06T10:00:00.000Z',
       createdAt: '2026-03-06T09:00:00.000Z',
       updatedAt: '2026-03-06T10:00:00.000Z',
+      // A row without provenance columns reads as human-initiated, untagged.
+      initiator: 'user',
+      initiatorAgent: null,
+      callerRunId: null,
+      callerSessionId: null,
+      crossCallId: null,
+      tags: [],
+      preview: null,
+    });
+  });
+
+  it('maps AI-initiated provenance, tags and the search preview', () => {
+    const mapped = mapConversationSessionRow({
+      session_id: 'xagent_organic_brand-1',
+      user_email: 'analyst@example.com',
+      created_at: '2026-03-06T09:00:00.000Z',
+      updated_at: '2026-03-06T10:00:00.000Z',
+      initiator: 'agent',
+      initiator_agent: 'organic',
+      caller_run_id: 'run_caller',
+      caller_session_id: 'sess_caller',
+      cross_call_id: 'call-1',
+      tags: ['q4'],
+      preview: 'How did paid perform last week?',
+    });
+
+    expect(mapped).toMatchObject({
+      initiator: 'agent',
+      initiatorAgent: 'organic',
+      callerRunId: 'run_caller',
+      callerSessionId: 'sess_caller',
+      crossCallId: 'call-1',
+      tags: ['q4'],
+      preview: 'How did paid perform last week?',
     });
   });
 

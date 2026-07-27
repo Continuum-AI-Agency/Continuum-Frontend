@@ -47,6 +47,20 @@ const CANVAS_HEADER = {
     'Place clips & stills, trim, split, then render. The clip is saved to your library and the workflow continues.',
 };
 
+function reportPlannerCompositionStatus(
+  brandId: string | undefined,
+  compositionId: string | undefined,
+  status: 'editing' | 'rendering' | 'failed',
+  error?: string,
+) {
+  if (!brandId || !compositionId) return;
+  void fetch('/api/organic/ai-studio/compositions', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ brandId, compositionId, status, ...(error ? { error } : {}) }),
+  });
+}
+
 function documentFromNodeData(data: TimelineEditorNodeData): TimelineDocument {
   return {
     items: data.items ?? EMPTY_ITEMS,
@@ -86,6 +100,7 @@ export function applyDocumentPatch(
   if (options?.invalidatesRender ?? true) {
     patched.committed = false;
     patched.renderContinuation = undefined;
+    patched.agentRenderRequest = undefined;
   }
   return patched;
 }
@@ -95,6 +110,7 @@ export function applyDocumentPatch(
 // exercisable without React or a live store.
 export interface TimelineCanvasWriter {
   updateNode: (id: string, updater: (node: StudioNode) => StudioNode) => void;
+  takeSnapshot?: () => void;
   triggerSave: () => void;
 }
 
@@ -104,6 +120,7 @@ export function patchNodeDocument(
   updater: (document: TimelineDocument) => TimelineDocument,
   options?: TimelinePatchOptions,
 ): void {
+  if (options?.recordHistory ?? true) writer.takeSnapshot?.();
   writer.updateNode(nodeId, (node) => ({
     ...node,
     data: applyDocumentPatch(node.data as TimelineEditorNodeData, updater, options),
@@ -117,6 +134,11 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
   const brandId = useStudioStore((state) => state.brandId);
   const updateNode = useStudioStore((state) => state.updateNode);
   const triggerSave = useStudioStore((state) => state.triggerSave);
+  const takeSnapshot = useStudioStore((state) => state.takeSnapshot);
+  const undo = useStudioStore((state) => state.undo);
+  const redo = useStudioStore((state) => state.redo);
+  const canUndo = useStudioStore((state) => state.history.past.length > 0);
+  const canRedo = useStudioStore((state) => state.history.future.length > 0);
   const setKeyboardScope = useStudioStore((state) => state.setKeyboardScope);
   const runtime = useCanvasRuntime();
 
@@ -141,9 +163,25 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
 
   const patchDocument = useCallback(
     (updater: (document: TimelineDocument) => TimelineDocument, options?: TimelinePatchOptions) => {
-      patchNodeDocument({ updateNode, triggerSave }, nodeId, updater, options);
+      patchNodeDocument({ updateNode, takeSnapshot, triggerSave }, nodeId, updater, options);
     },
-    [nodeId, triggerSave, updateNode],
+    [nodeId, takeSnapshot, triggerSave, updateNode],
+  );
+
+  const undoManager = useMemo(
+    () => ({
+      canUndo,
+      canRedo,
+      undo: () => {
+        undo();
+        triggerSave();
+      },
+      redo: () => {
+        redo();
+        triggerSave();
+      },
+    }),
+    [canRedo, canUndo, redo, triggerSave, undo],
   );
 
   const resolveSources = useCallback(
@@ -197,16 +235,40 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
 
   const reportRenderState = useCallback(
     (state: { isExecuting: boolean; error?: string }) => {
+      const current = (useStudioStore.getState().nodes as StudioNode[]).find(
+        (node) => node.id === nodeId,
+      );
+      const compositionId = (current?.data as TimelineEditorNodeData | undefined)
+        ?.plannerCompositionId;
+      if (state.isExecuting) {
+        reportPlannerCompositionStatus(brandId, compositionId, 'rendering');
+      } else if (state.error) {
+        reportPlannerCompositionStatus(brandId, compositionId, 'failed', state.error);
+      }
       updateNode(nodeId, (node) => ({
         ...node,
-        data: {
-          ...(node.data as TimelineEditorNodeData),
-          isExecuting: state.isExecuting,
-          error: state.error,
-        },
+        data: (() => {
+          const data = node.data as TimelineEditorNodeData;
+          const request = data.agentRenderRequest;
+          return {
+            ...data,
+            isExecuting: state.isExecuting,
+            error: state.error,
+            ...(request
+              ? {
+                  agentRenderRequest: state.error
+                    ? { ...request, status: 'error' as const, error: state.error }
+                    : state.isExecuting && request.status === 'pending'
+                      ? { ...request, status: 'accepted' as const, error: undefined }
+                      : request,
+                }
+              : {}),
+          };
+        })(),
       }));
+      triggerSave();
     },
-    [nodeId, updateNode],
+    [brandId, nodeId, triggerSave, updateNode],
   );
 
   const renderOrigin = useMemo(
@@ -310,6 +372,9 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
         currentState.activeRoomId === runtime.roomId &&
         currentState.nodes.some((node) => node.id === nodeId);
       if (isOriginOpen) {
+        const currentNode = (currentState.nodes as StudioNode[]).find((node) => node.id === nodeId);
+        const request = (currentNode?.data as TimelineEditorNodeData | undefined)
+          ?.agentRenderRequest;
         currentState.updateNodeData(nodeId, {
           ...(response.outcome === 'committed'
             ? {
@@ -336,9 +401,26 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
                     ? 'Timeline changed while this render was running. Render again to apply it.'
                     : 'The Video Editor node was removed before the render finished.',
               }),
+          ...(request
+            ? {
+                agentRenderRequest: {
+                  ...request,
+                  jobId: context.jobId,
+                  status:
+                    response.outcome === 'committed' ? ('completed' as const) : ('stale' as const),
+                  error:
+                    response.outcome === 'committed'
+                      ? undefined
+                      : response.outcome === 'stale'
+                        ? 'Timeline changed while this render was running.'
+                        : 'The Video Editor node was removed before the render finished.',
+                },
+              }
+            : {}),
           isExecuting: false,
           progress: 1,
         } as Partial<StudioNode['data']>);
+        currentState.triggerSave();
       }
 
       return { outcome: response.outcome };
@@ -350,18 +432,32 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
   // undo handlers stand down (see useStudioStore.keyboardScope + the canvas key
   // handler).
   const onEditorOpenChange = useCallback(
-    (open: boolean) => setKeyboardScope(open ? 'modal' : 'canvas'),
-    [setKeyboardScope],
+    (open: boolean) => {
+      setKeyboardScope(open ? 'modal' : 'canvas');
+      if (open) {
+        const current = (useStudioStore.getState().nodes as StudioNode[]).find(
+          (node) => node.id === nodeId,
+        );
+        reportPlannerCompositionStatus(
+          brandId,
+          (current?.data as TimelineEditorNodeData | undefined)?.plannerCompositionId,
+          'editing',
+        );
+      }
+    },
+    [brandId, nodeId, setKeyboardScope],
   );
 
   return useMemo(
     () => ({
       scope: 'canvas',
       brandId: brandId ?? null,
+      agentContext: runtime ? { roomId: runtime.roomId, nodeId } : undefined,
       header: CANVAS_HEADER,
       document,
       getDocument,
       patchDocument,
+      undoManager,
       pool,
       resolveSources,
       resolveOverlays,
@@ -384,6 +480,7 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
       getDocument,
       onEditorOpenChange,
       patchDocument,
+      undoManager,
       pool,
       reportRenderProgress,
       reportRenderState,
@@ -391,6 +488,7 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
       resolveOverlays,
       resolveAudioTracks,
       resolveSources,
+      runtime,
     ],
   );
 }

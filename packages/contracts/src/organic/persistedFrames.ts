@@ -35,6 +35,10 @@ export const PERSISTED_CARD_FRAME_TYPES = [
   "ui.readiness_scorecard",
   "ui.brand_book_proposal",
   "ui.brand_book_applied",
+  // A cross-agent delegation is part of the turn's record, so the "⇄ Asked
+  // Jaina" card must survive reload. Keyed by callId, so the running frame and
+  // its terminal follow-up collapse to the final status instead of stacking.
+  "agent.delegated",
 ] as const;
 
 /**
@@ -108,6 +112,8 @@ export const persistedCardKey = (type: string, data: Record<string, unknown>): s
       return `brandbook_proposal:${readString(data, "proposalId")}`;
     case "ui.brand_book_applied":
       return `brandbook_applied:${readString(data, "brandId")}`;
+    case "agent.delegated":
+      return `xcall:${readString(data, "callId")}`;
     default:
       return `${type}:${readString(data, "id")}`;
   }

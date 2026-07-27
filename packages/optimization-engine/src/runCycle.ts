@@ -16,6 +16,8 @@ import { reallocate } from './engine';
 import { evaluateFatigue } from './fatigue';
 import { sum } from './internal/math';
 import { computePacing } from './pacing';
+import { evaluateRules } from './rules/evaluate';
+import type { AlreadyFlagged, RuleActionKind, RuleDefinition, RuleEvaluation } from './rules/types';
 import { kpiEvents } from './scoring';
 import { evaluateTriggers } from './triggers';
 import type {
@@ -25,6 +27,7 @@ import type {
   OptimizationObjective,
   PacingResult,
   PacingState,
+  Recommendation,
 } from './types';
 
 export type CycleOptions = {
@@ -37,6 +40,14 @@ export type CycleOptions = {
   /** Prior smoothed composite per ad set id (EWMA state from the last cycle). */
   priorComposites?: Record<string, number>;
   config?: DeepPartial<EngineConfig>;
+  /** Data-driven rules to evaluate alongside the built-in triggers (see src/rules/).
+   *  Empty/absent => the rules layer is inert and the cycle behaves exactly as
+   *  it did without it — the current production posture. */
+  rules?: RuleDefinition[];
+  /** Cutover flag: skip the built-in trigger/fatigue/creative stages and rely on
+   *  `rules` alone. The seeded parity rules reproduce the built-ins exactly
+   *  (tests/rules-parity.test.ts); default false. */
+  suppressBuiltinTriggers?: boolean;
 };
 
 export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleResult {
@@ -114,27 +125,88 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
 
   // --- Classify, then run triggers, then mark starved -------------------
   const classified = classifyPortfolio(eligibilityChecked, baseCfg);
-  const { recommendations: pauseRecs, starveIds } = evaluateTriggers(classified, baseCfg);
-  // Fatigue is independent of pauses: it never starves, and skips ad sets a pause
-  // trigger already flagged (avoid double-noise on the same ad set).
-  const fatigueRecs = evaluateFatigue(classified, baseCfg, starveIds);
 
-  // Stage C — the creative triggers. An ad set is a budget and an audience; the thing that
-  // works or doesn't is the creative inside it. Two creatives in the SAME ad set (same
-  // audience, same budget) measured 2.22x apart on cost per result — a gap no budget
-  // decision can close, because the money was already in the right ad set and on the wrong
-  // ad. Skips ad sets a pause trigger already condemned: no point proposing a creative
-  // experiment inside a set we are about to shut off.
-  const creative = evaluateCreative(classified, baseCfg, starveIds);
-  const recommendations = [...pauseRecs, ...fatigueRecs, ...creative.recommendations];
+  let recommendations: Recommendation[] = [];
+  let starveIds = new Set<string>();
+  let noRaiseIds: ReadonlySet<string> = new Set<string>();
+  const alreadyFlagged: AlreadyFlagged = new Map();
+
+  // `suppressBuiltinTriggers` skips the three built-in stages entirely — the
+  // future cutover posture where the seeded parity rules are the only trigger
+  // source (their equivalence is proven by tests/rules-parity.test.ts).
+  if (!opts.suppressBuiltinTriggers) {
+    const triggers = evaluateTriggers(classified, baseCfg);
+    starveIds = triggers.starveIds;
+    // Fatigue is independent of pauses: it never starves, and skips ad sets a pause
+    // trigger already flagged (avoid double-noise on the same ad set).
+    const fatigueRecs = evaluateFatigue(classified, baseCfg, starveIds);
+
+    // Stage C — the creative triggers. An ad set is a budget and an audience; the thing that
+    // works or doesn't is the creative inside it. Two creatives in the SAME ad set (same
+    // audience, same budget) measured 2.22x apart on cost per result — a gap no budget
+    // decision can close, because the money was already in the right ad set and on the wrong
+    // ad. Skips ad sets a pause trigger already condemned: no point proposing a creative
+    // experiment inside a set we are about to shut off.
+    const creative = evaluateCreative(classified, baseCfg, starveIds);
+    noRaiseIds = creative.noRaiseIds;
+    recommendations = [...triggers.recommendations, ...fatigueRecs, ...creative.recommendations];
+
+    // Tell the rules layer what the built-ins already flagged: built-ins win the
+    // per-(adSetId, kind) dedup, and a built-in pause/starve suppresses rule
+    // fatigue-kind findings on the same ad set (evaluate.ts precedence contract).
+    const flag = (adSetId: string, kind: RuleActionKind) => {
+      const kinds = alreadyFlagged.get(adSetId) ?? new Set<RuleActionKind>();
+      kinds.add(kind);
+      alreadyFlagged.set(adSetId, kinds);
+    };
+    for (const r of recommendations) {
+      if (r.kind === 'pause' || r.kind === 'creative_refresh' || r.kind === 'audience_expand') {
+        flag(r.adSetId, r.kind);
+      }
+    }
+    for (const id of starveIds) flag(id, 'starve');
+  }
+
+  // --- Data-driven rules (opt-in) ----------------------------------------
+  // Evaluated AFTER the built-in stages (so their output dedupes against the
+  // built-ins) but BEFORE the starve/freeze mapping and the solver, so a
+  // rule-driven starve or freeze shapes this cycle's reallocation exactly like
+  // a built-in one. No rules => no evaluations, behavior identical to before.
+  let ruleEvaluations: RuleEvaluation[] = [];
+  let ruleFreezeIds: ReadonlySet<string> = new Set<string>();
+  if (opts.rules && opts.rules.length > 0) {
+    const ruleOut = evaluateRules(classified, opts.rules, baseCfg, alreadyFlagged);
+    ruleEvaluations = ruleOut.evaluations;
+    ruleFreezeIds = ruleOut.freezeIds;
+    for (const id of ruleOut.starveIds) starveIds.add(id);
+    recommendations = [
+      ...recommendations,
+      ...ruleOut.findings.map(
+        (f): Recommendation => ({
+          adSetId: f.adSetId,
+          kind: f.kind,
+          trigger: f.trigger,
+          severity: f.severity,
+          reason: f.reason,
+          needsApproval: true,
+          ruleId: f.ruleId,
+        }),
+      ),
+    ];
+  }
 
   const starved = classified.map((s) => {
-    const next =
+    let next: AdSetSnapshot =
       starveIds.has(s.id) && s.status !== 'frozen' ? { ...s, status: 'starved' as const } : s;
     // Withhold the RAISE (not the budget) from an ad set whose spend sits on a creative we
     // have already judged. Implemented as an upper bound of currentBudget in the solver, so
     // conservation still holds and the headroom flows to ad sets that can use it.
-    return creative.noRaiseIds.has(next.id) ? { ...next, noRaise: true as const } : next;
+    if (noRaiseIds.has(next.id)) next = { ...next, noRaise: true as const };
+    // A rule freeze is the abstain lever as data: hold the budget at its current
+    // value. No freezeReason — that union describes ingest-side abstains; a rule
+    // freeze reads like an operator hold, and the evaluation row carries the why.
+    if (ruleFreezeIds.has(next.id) && !next.freeze) next = { ...next, freeze: true as const };
+    return next;
   });
 
   // Abstain (D5): an established ACTIVE ad set that is spending but has ZERO KPI
@@ -186,5 +258,5 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
 
   const confidence = portfolioConfidence(prepared, baseCfg);
 
-  return { mode, pacing, reallocation, recommendations, confidence };
+  return { mode, pacing, reallocation, recommendations, confidence, ruleEvaluations };
 }

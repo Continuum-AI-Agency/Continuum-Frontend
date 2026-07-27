@@ -5,6 +5,9 @@ import type {
   AgentMentionReference,
   AiStudioComposerFrame,
   CanvasComposerReference,
+  CanvasEditorContext,
+  CanvasGraphChangeDecision,
+  CanvasGraphChangeSet,
   ComposerHistoryMessage,
 } from '@continuum/contracts';
 import {
@@ -16,6 +19,10 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { selectRunForSession, useAgentRunStore } from '@/lib/agents/runStore';
 import { streamCanvasComposer } from '@/lib/ai-studio/composer/streamCanvasComposer';
+import {
+  decideCanvasGraphChange,
+  listCanvasGraphChanges,
+} from '@/lib/api/canvasGraphChanges.client';
 import { http } from '@/lib/api/http';
 import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
 import type { StudioNode } from '@/StudioCanvas/types';
@@ -50,6 +57,8 @@ export interface CanvasComposerState {
   summary: string;
   /** Set once at least one write has landed — this is what enables Run. */
   graph: ComposerGraphSummary | null;
+  /** Durable, revision-bound graph changes waiting for or carrying a decision. */
+  proposals: CanvasGraphChangeSet[];
   error: string | null;
 }
 
@@ -67,6 +76,7 @@ export const IDLE_COMPOSER_STATE: CanvasComposerState = {
   delegations: [],
   summary: '',
   graph: null,
+  proposals: [],
   error: null,
 };
 
@@ -102,6 +112,14 @@ export function applyComposerFrame(
       return { ...previous, warnings: [...previous.warnings, frame.data.message] };
     case 'composer.graph':
       return { ...previous, graph: foldGraph(previous.graph, frame.data) };
+    case 'composer.proposal':
+      return {
+        ...previous,
+        proposals: [
+          ...previous.proposals.filter((proposal) => proposal.id !== frame.data.id),
+          frame.data,
+        ],
+      };
     // Folded by callId so a delegation that reports running and then completed
     // is ONE card whose status changes, not two.
     case 'agent.delegated':
@@ -204,6 +222,8 @@ const upsertComposerStoreRun = (
 
 export function useCanvasComposer(brandProfileId: string | undefined, roomId: string | undefined) {
   const [turns, setTurns] = useState<ComposerTurn[]>([]);
+  const [recoveredProposals, setRecoveredProposals] = useState<CanvasGraphChangeSet[]>([]);
+  const [decidingProposalId, setDecidingProposalId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const activeRunRef = useRef<ActiveComposerRun | null>(null);
   const turnsRef = useRef<ComposerTurn[]>([]);
@@ -212,6 +232,22 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
   // Unmount/navigation is a DETACH, not a cancel: the fetch dies, the server-side run
   // keeps executing, and AgentRunsProvider's tail follows the run row to its end.
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  useEffect(() => {
+    let active = true;
+    if (!brandProfileId || !roomId) {
+      setRecoveredProposals([]);
+      return;
+    }
+    void listCanvasGraphChanges(brandProfileId, roomId)
+      .then(({ changeSets }) => {
+        if (active) setRecoveredProposals(Array.isArray(changeSets) ? changeSets : []);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [brandProfileId, roomId]);
 
   const updateLastTurn = useCallback(
     (update: (state: CanvasComposerState) => CanvasComposerState) => {
@@ -277,6 +313,7 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
         remember?: boolean;
         references?: AgentMentionReference[];
         thinking?: boolean;
+        editorContext?: CanvasEditorContext;
       },
     ) => {
       if (!brandProfileId || !roomId || !prompt.trim()) return;
@@ -292,6 +329,7 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
       // the expanded chat asked to remember.
       const history = options?.remember ? buildHistoryPayload(turnsRef.current) : [];
       const references = toCanvasComposerReferences(options?.references ?? []);
+      const idempotencyKey = newTurnId();
       setTurns((previous) => [
         ...previous,
         {
@@ -307,11 +345,13 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
           request: {
             brandProfileId,
             roomId,
+            idempotencyKey,
             prompt: prompt.trim(),
             ...(options?.thinking ? { thinking: true } : {}),
             ...(selectedNodeIds?.length ? { selectedNodeIds } : {}),
             ...(references.length ? { references } : {}),
             ...(history.length ? { history } : {}),
+            ...(options?.editorContext ? { editorContext: options.editorContext } : {}),
           },
           onFrame: (frame) => {
             // composer.started names the durable run this stream is a view of; that is
@@ -334,6 +374,9 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
             }
             if (frame.type === 'composer.patch') {
               const store = useStudioStore.getState();
+              // One undo checkpoint per streamed agent mutation. The authoritative
+              // patch still replaces the graph, but the user can roll it back.
+              store.takeSnapshot();
               store.setNodes(frame.data.nodes as StudioNode[]);
               store.setEdges(frame.data.edges);
             }
@@ -364,7 +407,97 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
     [brandProfileId, roomId, updateLastTurn, cancel],
   );
 
-  const state = turns.at(-1)?.state ?? IDLE_COMPOSER_STATE;
+  const decideProposal = useCallback(
+    async (proposal: CanvasGraphChangeSet, decision: CanvasGraphChangeDecision) => {
+      if (!brandProfileId || !roomId || decidingProposalId) return;
+      setDecidingProposalId(proposal.id);
+      try {
+        const result = await decideCanvasGraphChange(proposal.id, {
+          brandProfileId,
+          roomId,
+          decision,
+        });
+        const decided = result.changeSet;
+        const updateProposalState = (state: CanvasComposerState): CanvasComposerState => {
+          const proposals = state.proposals.map((candidate) =>
+            candidate.id === proposal.id
+              ? (decided ?? {
+                  ...candidate,
+                  status: result.outcome === 'missing' ? 'stale' : result.outcome,
+                })
+              : candidate,
+          );
+          if (result.outcome === 'accepted' && decided) {
+            return {
+              ...state,
+              proposals,
+              graph: {
+                nodeCount: decided.proposedNodes.length,
+                edgeCount: decided.proposedEdges.length,
+                addedNodeIds: decided.operations.flatMap((operation) =>
+                  operation.kind === 'add_node' ? [operation.nodeId] : [],
+                ),
+              },
+            };
+          }
+          if (result.outcome === 'stale') {
+            return {
+              ...state,
+              proposals,
+              warnings: [
+                ...state.warnings,
+                'This proposal is stale because the canvas changed. Ask Composer to try again.',
+              ],
+            };
+          }
+          return { ...state, proposals };
+        };
+        setTurns((previous) =>
+          previous.map((turn) => ({ ...turn, state: updateProposalState(turn.state) })),
+        );
+        setRecoveredProposals((previous) =>
+          previous.map((candidate) =>
+            candidate.id === proposal.id
+              ? (decided ?? { ...candidate, status: 'stale' as const })
+              : candidate,
+          ),
+        );
+        if (result.outcome === 'accepted' && decided) {
+          const store = useStudioStore.getState();
+          store.takeSnapshot();
+          store.setNodes(decided.proposedNodes as StudioNode[]);
+          store.setEdges(decided.proposedEdges);
+        }
+      } finally {
+        setDecidingProposalId(null);
+      }
+    },
+    [brandProfileId, decidingProposalId, roomId],
+  );
 
-  return { state, turns, submit, cancel, clear, dismiss };
+  const turnState = turns.at(-1)?.state ?? IDLE_COMPOSER_STATE;
+  const streamedIds = new Set(turnState.proposals.map((proposal) => proposal.id));
+  const recovered = recoveredProposals.filter((proposal) => !streamedIds.has(proposal.id));
+  const state =
+    recovered.length > 0
+      ? {
+          ...turnState,
+          status: turnState.status === 'idle' ? ('done' as const) : turnState.status,
+          summary:
+            turnState.summary ||
+            `${recovered.length} Canvas proposal${recovered.length === 1 ? '' : 's'} waiting for review.`,
+          proposals: [...turnState.proposals, ...recovered],
+        }
+      : turnState;
+
+  return {
+    state,
+    turns,
+    submit,
+    cancel,
+    clear,
+    dismiss,
+    decideProposal,
+    decidingProposalId,
+  };
 }

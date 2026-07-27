@@ -1,3 +1,8 @@
+import {
+  type AgentInitiator,
+  agentInitiatorSchema,
+  agentSessionProvenanceSchema,
+} from '@continuum/contracts';
 import { z } from 'zod';
 import { agentMentionMetadataSchema } from '@/lib/agent-references';
 import {
@@ -19,6 +24,7 @@ export const jainaConversationSessionSchema = z.object({
   lastMessageAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  ...agentSessionProvenanceSchema.shape,
 });
 export type JainaConversationSession = z.infer<typeof jainaConversationSessionSchema>;
 
@@ -65,6 +71,11 @@ export const jainaConversationListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   messagesLimit: z.coerce.number().int().min(1).max(500).default(150),
   before: z.string().min(1).optional(),
+  // Chat-history search/filters, forwarded verbatim to the Backend list route.
+  q: z.string().trim().min(1).optional(),
+  initiator: agentInitiatorSchema.optional(),
+  initiatorAgent: z.string().trim().min(1).optional(),
+  tags: z.string().trim().min(1).optional(),
 });
 export type JainaConversationListQuery = z.infer<typeof jainaConversationListQuerySchema>;
 
@@ -100,6 +111,13 @@ export const backendConversationSessionSchema = z.object({
   last_message_at: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
+  initiator: agentInitiatorSchema.nullable().optional(),
+  initiator_agent: z.string().nullable().optional(),
+  caller_run_id: z.string().nullable().optional(),
+  caller_session_id: z.string().nullable().optional(),
+  cross_call_id: z.string().nullable().optional(),
+  tags: z.array(z.string()).nullable().optional(),
+  preview: z.string().nullable().optional(),
 });
 export type BackendConversationSession = z.infer<typeof backendConversationSessionSchema>;
 
@@ -281,6 +299,13 @@ export function mapConversationSessionRow(
     lastMessageAt: row.last_message_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    initiator: (row.initiator ?? 'user') as AgentInitiator,
+    initiatorAgent: row.initiator_agent ?? null,
+    callerRunId: row.caller_run_id ?? null,
+    callerSessionId: row.caller_session_id ?? null,
+    crossCallId: row.cross_call_id ?? null,
+    tags: row.tags ?? [],
+    preview: row.preview ?? null,
   };
 }
 

@@ -317,6 +317,29 @@ describe('mapPersistedRowToCalendarEntry — generated drafts (content_json shap
     expect(entry?.draft.mediaSuggestion?.assetUrl).toBe('https://signed/legacy.png');
   });
 
+  it('preserves locked UGC character and product references for review', () => {
+    const row = generatedRow();
+    (row.content_json as Record<string, unknown>).creative = {
+      mediaSuggestion: {
+        kind: 'video',
+        ugc: {
+          references: [
+            { assetId: 'character-1', role: 'character', source: 'generated_anchor' },
+            { assetId: 'product-1', role: 'product', source: 'library' },
+          ],
+          sceneCount: 4,
+          targetDurationSeconds: 20,
+          captionsEnabled: true,
+        },
+      },
+    };
+    const entry = mapPersistedRowToCalendarEntry(row, days);
+    expect(entry?.draft.mediaSuggestion?.ugc?.references).toEqual([
+      { assetId: 'character-1', role: 'character', source: 'generated_anchor' },
+      { assetId: 'product-1', role: 'product', source: 'library' },
+    ]);
+  });
+
   it('carries the hyperframe sub-object through from content_json', () => {
     const row = generatedRow();
     (row.content_json as Record<string, unknown>).content = {
@@ -353,6 +376,32 @@ describe('mapPersistedRowToCalendarEntry — generated drafts (content_json shap
     expect(entry?.draft.mediaSuggestion?.hyperframe?.generated).toBe(true);
   });
 
+  it('threads the mediaSuggestion bucket onto restored publishing assets lacking bucket/assetId', () => {
+    const row = generatedRow();
+    (row.content_json as Record<string, unknown>).creative = {
+      mediaSuggestion: {
+        kind: 'static',
+        bucket: 'brand-profile-assets',
+        url: 'organic/d/final.png',
+      },
+    };
+    (row.content_json as Record<string, unknown>).publishingAssets = [
+      { role: 'primary', kind: 'image', storagePath: 'organic/d/final.png', storageUrl: '' },
+      {
+        role: 'slide_2',
+        kind: 'image',
+        bucket: 'other-bucket',
+        storagePath: 'organic/d/2.png',
+        storageUrl: '',
+      },
+    ];
+    const entry = mapPersistedRowToCalendarEntry(row, days);
+    // The bucketless row inherits the draft's durable mediaSuggestion bucket so it
+    // can enter the preview's re-sign filter; rows naming their own bucket keep it.
+    expect(entry?.draft.publishingAssets?.[0].bucket).toBe('brand-profile-assets');
+    expect(entry?.draft.publishingAssets?.[1].bucket).toBe('other-bucket');
+  });
+
   it('restores the persisted storyboard preview frames from content_json', () => {
     const row = generatedRow();
     (row.content_json as Record<string, unknown>).creative = {
@@ -378,5 +427,58 @@ describe('mapPersistedRowToCalendarEntry — generated drafts (content_json shap
       'organic/d/preview/1.png',
     );
     expect(entry?.draft.mediaSuggestion?.storyboard?.[0].bucket).toBe('brand-profile-assets');
+  });
+});
+
+// content_json is canonical for copy — it is what the publisher and the scheduled
+// worker read, and planner manual edits persist there. The captionPreview shown on
+// the grid must agree with what will actually publish.
+describe('mapPersistedRowToCalendarEntry — captionPreview precedence', () => {
+  const days = buildWeekDays(new Date('2026-04-20T12:00:00'));
+
+  const rowWith = (parts: {
+    placementCaption?: string;
+    snapshotCaption?: string;
+    slotCaption?: string;
+  }): PersistedOrganicDraftRow => ({
+    id: 'caption-1',
+    status: 'draft',
+    scheduled_date: '2026-04-21',
+    platform_account_id: 'acct-1',
+    slot_data: {
+      dayId: '2026-04-21',
+      ...(parts.slotCaption ? { caption: parts.slotCaption } : {}),
+      ...(parts.snapshotCaption
+        ? { draftSnapshot: makeDraft({ captionPreview: parts.snapshotCaption }) }
+        : {}),
+    },
+    ...(parts.placementCaption
+      ? { content_json: { copy: { caption: parts.placementCaption } } }
+      : {}),
+  });
+
+  it('prefers refined content_json copy over a stale snapshot', () => {
+    const entry = mapPersistedRowToCalendarEntry(
+      rowWith({
+        placementCaption: 'Refined caption',
+        snapshotCaption: 'Stale caption',
+        slotCaption: 'Slot caption',
+      }),
+      days,
+    );
+    expect(entry?.draft.captionPreview).toBe('Refined caption');
+  });
+
+  it('falls back to the snapshot when content_json carries no copy', () => {
+    const entry = mapPersistedRowToCalendarEntry(
+      rowWith({ snapshotCaption: 'Snapshot caption', slotCaption: 'Slot caption' }),
+      days,
+    );
+    expect(entry?.draft.captionPreview).toBe('Snapshot caption');
+  });
+
+  it('falls back to slot_data.caption when neither refined copy nor snapshot exists', () => {
+    const entry = mapPersistedRowToCalendarEntry(rowWith({ slotCaption: 'Slot caption' }), days);
+    expect(entry?.draft.captionPreview).toBe('Slot caption');
   });
 });

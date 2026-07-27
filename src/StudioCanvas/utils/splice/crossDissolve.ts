@@ -1,10 +1,15 @@
+import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../render/effectSpec';
+import { drawTextOverlays, resolveTextOverlays } from '../render/effectSpec';
 import {
   type ClipTransitionType,
   type OverlapLayerXform,
   overlapTransitionAt,
 } from '../render/transitions';
 import { throwIfAborted } from './appendRange';
+import { type CaptionCue, findActiveCue } from './captionCues';
+import { drawActiveCaption } from './drawCaptions';
+import { drawFrameComposition } from './frameComposition';
 import { drawEffectFrame } from './frameDraw';
 
 // Renders the overlap window of an OVERLAP transition (crossDissolve, slide, wipe,
@@ -59,6 +64,11 @@ function drawOverlapLayer(
     clipT,
     xform.alpha,
   );
+  const textOverlays = resolveTextOverlays(effects);
+  if (textOverlays.length > 0) {
+    ctx.globalAlpha *= xform.alpha;
+    drawTextOverlays(ctx, textOverlays, targetWidth, targetHeight);
+  }
   ctx.restore();
 }
 
@@ -119,6 +129,8 @@ export async function appendOverlapTransition(params: {
     ctx: OffscreenCanvasRenderingContext2D,
     outputTimestampSec: number,
   ) => Promise<void>;
+  cues?: CaptionCue[] | null;
+  captionStyle?: CaptionStyle;
   signal?: AbortSignal;
   onFrameProgress?: (processedSec: number) => void;
 }): Promise<void> {
@@ -134,6 +146,8 @@ export async function appendOverlapTransition(params: {
     overlapOutputSec: overlap,
     outputStart,
     compositeOverlays,
+    cues,
+    captionStyle,
     signal,
   } = params;
 
@@ -163,33 +177,47 @@ export async function appendOverlapTransition(params: {
     const outT = outDuration > 0 ? (outDuration - overlap + u) / outDuration : 0;
     const inT = inDuration > 0 ? u / inDuration : 0;
 
-    ctx.filter = 'none';
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, targetWidth, targetHeight);
     const xform = overlapTransitionAt(type, t, targetWidth, targetHeight);
-    if (outFrame)
-      drawOverlapLayer(
-        ctx,
-        outFrame,
-        outgoing.effects,
-        outT,
-        xform.outgoing,
-        targetWidth,
-        targetHeight,
-      );
-    if (inFrame)
-      drawOverlapLayer(
-        ctx,
-        inFrame,
-        incoming.effects,
-        inT,
-        xform.incoming,
-        targetWidth,
-        targetHeight,
-      );
-    if (compositeOverlays) await compositeOverlays(ctx, outputStart + u);
+    const outputTimestamp = outputStart + u;
+    const cue = cues?.length ? findActiveCue(cues, outputTimestamp) : null;
+    await drawFrameComposition({
+      drawBase: () => {
+        ctx.filter = 'none';
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+        if (outFrame) {
+          drawOverlapLayer(
+            ctx,
+            outFrame,
+            outgoing.effects,
+            outT,
+            xform.outgoing,
+            targetWidth,
+            targetHeight,
+          );
+        }
+        if (inFrame) {
+          drawOverlapLayer(
+            ctx,
+            inFrame,
+            incoming.effects,
+            inT,
+            xform.incoming,
+            targetWidth,
+            targetHeight,
+          );
+        }
+      },
+      ...(compositeOverlays ? { drawOverlays: () => compositeOverlays(ctx, outputTimestamp) } : {}),
+      ...(cue
+        ? {
+            drawCaption: () =>
+              drawActiveCaption(ctx, cue, outputTimestamp, targetWidth, targetHeight, captionStyle),
+          }
+        : {}),
+    });
     await videoSource.add(outputStart + u, frameDuration);
     params.onFrameProgress?.(u);
   }

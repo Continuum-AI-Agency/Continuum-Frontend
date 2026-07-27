@@ -7,8 +7,6 @@
 //   isGreaterThanRatio(cpp, { compareValue: robust_best_cpp, ratio: 2.5 })
 // is false when robust_best_cpp is 0, reproducing the built-in triggers'
 // explicit `robustBestCpp > 0` precondition without an extra condition line.
-//
-// STATUS: UNWIRED STUB (see rules/types.ts).
 // ---------------------------------------------------------------------------
 
 import type { FactValue } from './types';

@@ -16,6 +16,10 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from '@/components/ui/command';
+import {
+  type AutomationDeploymentEnvironment,
+  canAccessAutomations,
+} from '@/lib/automations/access';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
 import { getLocalStorageJSON, setLocalStorageJSON } from '@/lib/storage';
 import {
@@ -40,7 +44,11 @@ function saveRecent(brandId: string, pages: RecentPage[]) {
   setLocalStorageJSON(brandStorageKeyRecentPages(brandId), pages);
 }
 
-export function CommandPalette() {
+export function CommandPalette({
+  automationEnvironment = 'development',
+}: {
+  automationEnvironment?: AutomationDeploymentEnvironment;
+}) {
   const { open, setOpen } = useCommandPalette();
   const router = useRouter();
   const pathname = usePathname();
@@ -48,6 +56,10 @@ export function CommandPalette() {
   const { user, brandSummaries, activeBrandId, selectBrand, isSwitching, switchingToBrandId } =
     useActiveBrandContext();
   const isAdmin = isAdminUser(user);
+  const hasAutomationAccess = canAccessAutomations({
+    isAdmin,
+    environment: automationEnvironment,
+  });
 
   // Page-specific suggestions, resolved from the current route (static map, no
   // backend). Teaches the user what is worth doing from where they already are.
@@ -74,6 +86,15 @@ export function CommandPalette() {
   }
 
   const footerItems = APP_NAVIGATION_FOOTER.filter((item) => !item.adminOnly || isAdmin);
+  const visibleRecentPages = recentPages.filter(
+    (page) => hasAutomationAccess || !page.href.startsWith('/automations'),
+  );
+  const visibleSuggestions = suggestions.filter(
+    (suggestion) => hasAutomationAccess || !suggestion.href.startsWith('/automations'),
+  );
+  const navigationItems = APP_NAVIGATION.filter(
+    (item) => hasAutomationAccess || item.href !== '/automations',
+  );
   const switchableBrands = brandSummaries.filter((b) => b.id !== activeBrandId && !b.isPending);
 
   return (
@@ -88,10 +109,10 @@ export function CommandPalette() {
         >
           <CommandEmpty>No results found.</CommandEmpty>
 
-          {recentPages.length > 0 && (
+          {visibleRecentPages.length > 0 && (
             <>
               <CommandGroup heading="Recent">
-                {recentPages.map((page) => (
+                {visibleRecentPages.map((page) => (
                   <CommandItem
                     key={page.href}
                     value={`recent ${page.label} ${page.href}`}
@@ -106,10 +127,10 @@ export function CommandPalette() {
             </>
           )}
 
-          {suggestions.length > 0 && (
+          {visibleSuggestions.length > 0 && (
             <>
               <CommandGroup heading="Suggested for this page">
-                {suggestions.map((suggestion) => {
+                {visibleSuggestions.map((suggestion) => {
                   const Icon = suggestion.icon;
                   return (
                     <CommandItem
@@ -133,7 +154,7 @@ export function CommandPalette() {
           )}
 
           <CommandGroup heading="Navigation">
-            {APP_NAVIGATION.map((item) => {
+            {navigationItems.map((item) => {
               const Icon = item.icon;
               return (
                 <CommandItem

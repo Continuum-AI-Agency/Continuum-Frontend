@@ -5,6 +5,7 @@ import {
   actionRoute,
   applyModePill,
   confidenceBand,
+  creativeBriefForRec,
   freezeLabel,
   isExecutable,
   notImplementedMessage,
@@ -46,10 +47,13 @@ describe('actionRoute — which drain a rec kind executes through', () => {
     expect(actionRoute('some_future_kind')).toBe('fatigue');
   });
 
-  it('hides the three ad-level kinds — found, but no drain surfaced yet', () => {
-    for (const kind of ['pause_ad', 'variate_creative', 'seed_experiment']) {
-      expect(actionRoute(kind)).toBe('hidden');
-    }
+  it('routes the creative-request kinds to the creative path', () => {
+    expect(actionRoute('variate_creative')).toBe('creative');
+    expect(actionRoute('seed_experiment')).toBe('creative');
+  });
+
+  it('still hides pause_ad — found, but no single-ad pause drain yet', () => {
+    expect(actionRoute('pause_ad')).toBe('hidden');
   });
 });
 
@@ -224,20 +228,27 @@ describe('partitionHeldItems', () => {
   });
 });
 
-describe('creative-level recommendations — shown, but honestly not actionable yet', () => {
+describe('creative-level recommendations', () => {
   it('labels each creative kind as being about ONE AD, not the ad set', () => {
     expect(recommendationLabel('pause_ad').label).toBe('Pause this ad');
     expect(recommendationLabel('variate_creative').label).toBe('Make variations of the winner');
     expect(recommendationLabel('seed_experiment').label).toContain('add variants');
   });
 
-  it('marks the creative kinds NOT executable — nothing drains them yet', () => {
-    // The engine emits them and the DB stores them, but no drain and no autopilot path exist.
-    // Approving one would set a status, do nothing, and leave a burning ad running while the
-    // queue looked handled.
+  it('makes the creative-request kinds executable — approving opens a request', () => {
+    // variate_creative / seed_experiment now graduate: approving one opens a creative
+    // request (a tracked task, or a generation job when autogen is on).
+    expect(isExecutable('variate_creative')).toBe(true);
+    expect(isExecutable('seed_experiment')).toBe(true);
+    expect(actionRoute('variate_creative')).toBe('creative');
+    expect(actionRoute('seed_experiment')).toBe('creative');
+  });
+
+  it('keeps pause_ad NOT executable — there is no single-ad pause drain yet', () => {
+    // Pausing ONE ad (not the whole ad set) has no drain, so approving it would do nothing
+    // and leave a burning ad running while the queue looked handled.
     expect(isExecutable('pause_ad')).toBe(false);
-    expect(isExecutable('variate_creative')).toBe(false);
-    expect(isExecutable('seed_experiment')).toBe(false);
+    expect(actionRoute('pause_ad')).toBe('hidden');
   });
 
   it('keeps the kinds that DO work executable — this guard must not over-reach', () => {
@@ -246,21 +257,38 @@ describe('creative-level recommendations — shown, but honestly not actionable 
     expect(isExecutable('pause')).toBe(true); // the ad-set pause is a real, audited Meta write
   });
 
-  it('says out loud that it cannot act, instead of implying it did', () => {
-    for (const kind of ['pause_ad', 'variate_creative', 'seed_experiment']) {
-      const { advisory } = recommendationActionCopy(kind);
-      // ONE phrasing for this state. The row advisory and the click-time toast are
-      // read seconds apart by the same person; "not wired up" in one and "not built
-      // yet" in the other read as two different problems. "Wired up" also described
-      // our backlog in words that sound like a setting the user failed to switch on.
-      expect(advisory).toContain('Not built yet');
-      expect(advisory).not.toMatch(/wired up/i);
-      expect(notImplementedMessage(kind)).toMatch(/not built yet/i);
-      expect(notImplementedMessage(kind)).not.toMatch(/wired up/i);
-    }
-    // And it still tells the operator what they CAN do about it right now.
+  it('pause_ad still says out loud that it cannot act, instead of implying it did', () => {
+    const { advisory } = recommendationActionCopy('pause_ad');
+    expect(advisory).toContain('Not built yet');
+    expect(advisory).not.toMatch(/wired up/i);
+    expect(notImplementedMessage('pause_ad')).toMatch(/not built yet/i);
     expect(notImplementedMessage('pause_ad')).toContain('pause it in Meta');
-    expect(notImplementedMessage('variate_creative')).toContain('AI Studio');
-    expect(recommendationActionCopy('pause_ad').advisory).toContain('Pause it in Meta');
+    expect(advisory).toContain('Pause it in Meta');
+  });
+
+  it('the creative-request kinds describe what approving does — a request, not a dead end', () => {
+    for (const kind of ['variate_creative', 'seed_experiment']) {
+      const { approveLabel, advisory } = recommendationActionCopy(kind);
+      expect(approveLabel).toBe('Request creative');
+      expect(advisory).toContain('creative request');
+      expect(advisory).not.toMatch(/not built yet/i);
+    }
+  });
+
+  it('renders a brief from the recommendation seed, and falls back to null without one', () => {
+    const seed = {
+      adSetId: '2385',
+      winnerAdId: 'ad_9',
+      labels: { hookArchetype: 'social_proof' },
+      rebuildCraft: true,
+      groundedOn: ['hook_archetype=social_proof @ tof'],
+    };
+    const brief = creativeBriefForRec({ kind: 'variate_creative', reason: 'winner wins', seed });
+    expect(brief).not.toBeNull();
+    expect(brief?.title.length).toBeGreaterThan(0);
+    expect(brief?.groundedOn).toEqual(seed.groundedOn);
+    // An older rec with no seed has no brief to render — the caller shows the plain reason.
+    expect(creativeBriefForRec({ kind: 'variate_creative', reason: 'x', seed: null })).toBeNull();
+    expect(creativeBriefForRec({ kind: 'variate_creative', reason: 'x', seed: {} })).toBeNull();
   });
 });

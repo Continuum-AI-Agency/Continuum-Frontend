@@ -13,7 +13,10 @@ import {
   fetchOrganicSessionMessages,
   fetchOrganicSessions,
   invalidateMessageCache,
+  updateOrganicSessionTags,
 } from './agent-sessions';
+
+const lastRequestPath = (): string => String(requestMock.mock.calls.at(-1)?.[0]?.path ?? '');
 
 describe('fetchOrganicSessions', () => {
   beforeEach(() => {
@@ -72,6 +75,92 @@ describe('fetchOrganicSessions', () => {
     requestMock.mockRejectedValueOnce(new Error('401 Unauthorized'));
     const sessions = await fetchOrganicSessions('brand_1');
     expect(sessions).toEqual([]);
+  });
+
+  it('defaults provenance fields so a legacy row still renders as human-initiated', async () => {
+    requestMock.mockResolvedValueOnce({
+      sessions: [{ sessionId: 'sess_1', createdAt: '2026-06-12T04:26:00Z' }],
+    });
+
+    const [session] = await fetchOrganicSessions('brand_1');
+    expect(session).toMatchObject({
+      initiator: 'user',
+      initiatorAgent: null,
+      callerRunId: null,
+      callerSessionId: null,
+      tags: [],
+      preview: null,
+    });
+  });
+
+  it('carries AI-initiated provenance and tags through', async () => {
+    requestMock.mockResolvedValueOnce({
+      sessions: [
+        {
+          sessionId: 'xagent_jaina_brand_1',
+          createdAt: '2026-06-12T04:26:00Z',
+          initiator: 'agent',
+          initiatorAgent: 'jaina',
+          callerRunId: 'run_caller',
+          callerSessionId: 'sess_caller',
+          tags: ['q4'],
+          preview: 'What is going on in organic?',
+        },
+      ],
+    });
+
+    const [session] = await fetchOrganicSessions('brand_1');
+    expect(session).toMatchObject({
+      initiator: 'agent',
+      initiatorAgent: 'jaina',
+      callerRunId: 'run_caller',
+      tags: ['q4'],
+    });
+  });
+
+  it('sends the search/filter params on the wire', async () => {
+    requestMock.mockResolvedValueOnce({ sessions: [] });
+    await fetchOrganicSessions('brand_1', {
+      q: 'launch',
+      initiator: 'agent',
+      initiatorAgent: 'jaina',
+      tags: ['q4', 'budget'],
+    });
+
+    const path = lastRequestPath();
+    expect(path).toContain('q=launch');
+    expect(path).toContain('initiator=agent');
+    expect(path).toContain('initiator_agent=jaina');
+    expect(path).toContain('tags=q4%2Cbudget');
+  });
+
+  it('omits filter params entirely when no filters are given', async () => {
+    requestMock.mockResolvedValueOnce({ sessions: [] });
+    await fetchOrganicSessions('brand_1');
+    expect(lastRequestPath()).toBe('/api/organic/agent/sessions?brand_id=brand_1');
+  });
+});
+
+describe('updateOrganicSessionTags', () => {
+  beforeEach(() => {
+    requestMock.mockReset();
+  });
+
+  it('PATCHes the session and returns the tags as stored', async () => {
+    requestMock.mockResolvedValueOnce({ sessionId: 'sess_1', tags: ['q4'] });
+
+    const tags = await updateOrganicSessionTags('sess_1', 'brand_1', [' Q4 ']);
+
+    const call = requestMock.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(call.method).toBe('PATCH');
+    expect(String(call.path)).toBe('/api/organic/agent/sessions/sess_1?brand_id=brand_1');
+    expect(call.body).toEqual({ tags: [' Q4 '] });
+    expect(tags).toEqual(['q4']);
+  });
+
+  it('falls back to the requested tags when the response is unparseable', async () => {
+    requestMock.mockResolvedValueOnce({ unexpected: true });
+    expect(await updateOrganicSessionTags('sess_1', 'brand_1', ['q4'])).toEqual(['q4']);
   });
 });
 

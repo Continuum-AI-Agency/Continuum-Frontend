@@ -15,9 +15,14 @@ import { Suspense } from 'react';
 import { LibraryViewer } from '@/components/library/LibraryViewer';
 import { fetchBrandStyle } from '@/lib/ai-studio/brandStyle.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { setActiveBrandPreference } from '@/lib/brands/preferences';
 import { buildCaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { fetchLibraryBrowsePage } from '@/lib/media/browse.server';
-import { fetchMediaCollections, fetchStorageUsedBytes } from '@/lib/media/fetchers.server';
+import {
+  fetchMediaAssets,
+  fetchMediaCollections,
+  fetchStorageUsedBytes,
+} from '@/lib/media/fetchers.server';
 import { kindToMediaType, parseTagsParam } from '@/lib/media/filters';
 import { fetchLibrarySavedViews } from '@/lib/media/saved-views.server';
 import { isPaidTier } from '@/lib/media/tier';
@@ -120,21 +125,51 @@ function parseBrowseQuery(brandId: string, params: LibrarySearchParams) {
 }
 
 async function LibraryContent({ searchParams }: { searchParams: LibrarySearchParams }) {
-  const { activeBrandId, activeBrandTier } = await getActiveBrandContext();
+  const context = await getActiveBrandContext();
+  let activeBrandId = context.activeBrandId;
+  let activeBrandTier = context.activeBrandTier;
 
   if (!activeBrandId) {
     redirect('/onboarding');
   }
 
-  const browseQuery = parseBrowseQuery(activeBrandId, searchParams);
   const supabase = await createSupabaseServerClient();
-  const [page, collections, savedViews, storageUsedBytes, brandStyle] = await Promise.all([
-    fetchLibraryBrowsePage(supabase, browseQuery),
-    fetchMediaCollections(activeBrandId),
-    fetchLibrarySavedViews(supabase, activeBrandId),
-    fetchStorageUsedBytes(activeBrandId),
-    fetchBrandStyle(activeBrandId),
-  ]);
+  const requestedBrandId = first(searchParams.brandId);
+  const canUseRequestedBrand =
+    isUuid(requestedBrandId) &&
+    context.permissions.some((permission) => permission.brand_profile_id === requestedBrandId);
+  if (canUseRequestedBrand && requestedBrandId !== activeBrandId) {
+    const { data: requestedBrand } = await supabase
+      .schema('brand_profiles')
+      .from('brand_profiles')
+      .select('tier')
+      .eq('id', requestedBrandId)
+      .eq('active', true)
+      .maybeSingle();
+    if (requestedBrand) {
+      activeBrandId = requestedBrandId;
+      activeBrandTier = requestedBrand.tier;
+      try {
+        await setActiveBrandPreference(requestedBrandId);
+      } catch (error) {
+        console.error('[library] Could not persist email-linked brand selection', error);
+      }
+    }
+  }
+
+  const browseQuery = parseBrowseQuery(activeBrandId, searchParams);
+  const requestedAssetId = first(searchParams.assetId);
+  const [page, collections, savedViews, storageUsedBytes, brandStyle, requestedAssets] =
+    await Promise.all([
+      fetchLibraryBrowsePage(supabase, browseQuery),
+      fetchMediaCollections(activeBrandId),
+      fetchLibrarySavedViews(supabase, activeBrandId),
+      fetchStorageUsedBytes(activeBrandId),
+      fetchBrandStyle(activeBrandId),
+      isUuid(requestedAssetId)
+        ? fetchMediaAssets(activeBrandId, { assetId: requestedAssetId, limit: 1 })
+        : Promise.resolve([]),
+    ]);
 
   return (
     <LibraryViewer
@@ -147,6 +182,7 @@ async function LibraryContent({ searchParams }: { searchParams: LibrarySearchPar
       storageUsedBytes={storageUsedBytes}
       captionStyle={buildCaptionStyle(brandStyle)}
       initialBrowseQuery={browseQuery}
+      initialDetailAsset={requestedAssets[0] ?? null}
     />
   );
 }

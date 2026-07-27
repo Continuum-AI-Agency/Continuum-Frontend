@@ -112,4 +112,43 @@ describe('InsightDataTable', () => {
     expect(scrollContainer?.className).not.toContain('overflow-y-auto');
     expect(scrollContainer?.style.maxHeight).toBe('');
   });
+
+  it('filters rows against searchValue when searchable', () => {
+    render(
+      <InsightDataTable
+        rows={rows}
+        columns={columns}
+        getRowId={(row) => row.id}
+        searchable
+        searchPlaceholder="Search posts…"
+        searchValue={(row) => row.name}
+      />,
+    );
+
+    expect(renderedOrder()).toEqual(['Alpha', 'Bravo', 'Charlie']);
+    fireEvent.change(screen.getByPlaceholderText('Search posts…'), {
+      target: { value: 'brav' },
+    });
+    expect(renderedOrder()).toEqual(['Bravo']);
+  });
+
+  it('shows a no-matches message when the search excludes every row', () => {
+    render(
+      <InsightDataTable
+        rows={rows}
+        columns={columns}
+        getRowId={(row) => row.id}
+        searchable
+        searchValue={(row) => row.name}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'zzz' } });
+    expect(screen.getByText(/No matches for/)).toBeDefined();
+  });
+
+  it('does not render a search box without the searchable flag', () => {
+    render(<InsightDataTable rows={rows} columns={columns} getRowId={(row) => row.id} />);
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
 });

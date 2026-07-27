@@ -10,6 +10,10 @@ import {
 import { useMemo } from 'react';
 
 export interface ConnectionLimitHandleProps extends Omit<HandleProps, 'isConnectable'> {
+  /** Human-readable port name. Defaults to the handle id. */
+  name?: string;
+  /** Data carried by this port. Defaults from the canonical handle vocabulary. */
+  dataType?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'media';
   /**
    * Maximum number of connections allowed (undefined = unlimited)
    */
@@ -44,15 +48,18 @@ export interface ConnectionLimitHandleProps extends Omit<HandleProps, 'isConnect
  */
 export function CustomHandle({
   maxConnections,
-  connectionType = 'target',
+  connectionType,
   className,
+  name,
+  dataType,
   ...props
 }: ConnectionLimitHandleProps) {
   const nodeId = useNodeId();
   const resolvedNodeId = nodeId ?? '__detached_custom_handle__';
+  const resolvedConnectionType = connectionType ?? props.type;
   const connections = useNodeConnections({
     id: resolvedNodeId,
-    handleType: connectionType,
+    handleType: resolvedConnectionType,
     handleId: props.id ?? undefined,
   });
 
@@ -84,21 +91,45 @@ export function CustomHandle({
   // Add visual indicator for limited handles
   const indicatorClassName = useMemo(() => {
     if (maxConnections === undefined) return '';
-    if (isAtLimit) return 'ring-2 ring-red-500 ring-offset-1';
-    if (connections.length > 0) return 'ring-2 ring-amber-500 ring-offset-1';
+    if (isAtLimit) return 'ring-2 ring-border ring-offset-1';
+    if (connections.length > 0) return 'ring-2 ring-primary/40 ring-offset-1';
     return '';
   }, [maxConnections, isAtLimit, connections.length]);
+
+  const handleName = name ?? (props.id || 'port').replaceAll('-', ' ');
+  const inferredDataType =
+    dataType ??
+    (props.id?.includes('image') || props.id?.includes('frame')
+      ? 'image'
+      : props.id?.includes('video')
+        ? 'video'
+        : props.id?.includes('audio')
+          ? 'audio'
+          : props.id?.includes('document')
+            ? 'document'
+            : 'text');
+  const direction = props.type === 'source' ? 'output' : 'input';
+  const capacity =
+    maxConnections === undefined
+      ? `${connections.length} connected`
+      : `${connections.length} of ${maxConnections} connected`;
+  const accessibleLabel = `${handleName}, ${direction}, ${inferredDataType}, ${capacity}`;
 
   return (
     <div className="relative">
       <Handle
         {...props}
+        aria-label={accessibleLabel}
+        title={accessibleLabel}
         isConnectable={isConnectable}
         style={handleStyle}
-        className={`${className || ''} ${indicatorClassName}`}
+        className={`${className || ''} ${indicatorClassName} after:absolute after:-inset-1 after:content-['']`}
       />
-      {maxConnections !== undefined && (
-        <span className="absolute -top-3 -right-3 text-3xs font-mono text-muted-foreground bg-background px-0.5 rounded">
+      {maxConnections !== undefined && connections.length > 0 && (
+        <span
+          className="absolute -right-3 -top-3 rounded bg-background px-0.5 font-mono text-3xs text-muted-foreground"
+          aria-hidden
+        >
           {connections.length}/{maxConnections}
         </span>
       )}

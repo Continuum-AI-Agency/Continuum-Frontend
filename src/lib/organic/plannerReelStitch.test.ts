@@ -9,6 +9,7 @@ const clip = {
   bucket: 'brand-profile-assets',
   storagePath: 'brand-1/canvas-creations/reel/draft-1/scene-0.mp4',
   signedUrl: 'https://cdn.example/scene-0.mp4',
+  assetId: '00000000-0000-4000-8000-000000000010',
   mimeType: 'video/mp4',
   captionText: 'Start here',
 };
@@ -39,6 +40,7 @@ describe('Planner reel stitch', () => {
       bucket: 'brand-profile-assets',
       clipUrl: clip.storagePath,
       signedClipUrl: clip.signedUrl,
+      assetId: clip.assetId,
       mimeType: 'video/mp4',
       captionText: 'Start here',
     });
@@ -53,6 +55,7 @@ describe('Planner reel stitch', () => {
       path: 'brand-1/reels/final.mp4',
       signedUrl: 'https://cdn.example/final.mp4',
       durationSec: 4,
+      assetId: '00000000-0000-4000-8000-000000000020',
     }));
 
     const result = await stitchPlannerReel(
@@ -61,6 +64,11 @@ describe('Planner reel stitch', () => {
         draftId: 'draft-1',
         sourceRevision: composition.sourceFingerprint,
         durationSec: 4,
+        captions: {
+          enabled: true,
+          sourceAssetId: clip.assetId,
+          referenceAssetIds: ['character-asset'],
+        },
       },
       { fetcher: fetcher as typeof fetch, stitcher },
     );
@@ -71,6 +79,11 @@ describe('Planner reel stitch', () => {
         brandId: 'brand-1',
         draftId: 'draft-1',
         clips: [expect.objectContaining({ signedClipUrl: clip.signedUrl })],
+        captions: {
+          enabled: true,
+          sourceAssetId: clip.assetId,
+          referenceAssetIds: ['character-asset'],
+        },
       }),
     );
     expect(result.composition.id).toBe('composition-1');
@@ -86,6 +99,7 @@ describe('Planner reel stitch', () => {
       path: 'brand-1/reels/final.mp4',
       signedUrl: 'https://cdn.example/final.mp4',
       durationSec: 4,
+      assetId: '00000000-0000-4000-8000-000000000020',
     }));
 
     await expect(

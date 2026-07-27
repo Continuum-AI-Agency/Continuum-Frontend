@@ -57,6 +57,7 @@ type PoolAssetRow = {
   duration_ms: number | null;
   file_name: string;
   title: string | null;
+  mime_type?: string;
 };
 
 type Caller = { supabase: SupabaseClient; userId: string };
@@ -105,7 +106,7 @@ async function loadPoolMedia(
 
   const { data, error } = await mediaSchema(supabase)
     .from('assets')
-    .select('id, kind, bucket, storage_path, duration_ms, file_name, title')
+    .select('id, kind, bucket, storage_path, duration_ms, file_name, title, mime_type')
     .in('id', assetIds)
     .eq('brand_id', brandId)
     .is('deleted_at', null);
@@ -128,7 +129,13 @@ async function loadPoolMedia(
     return {
       assetId,
       signedUrl: signedUrlMap.get(row.storage_path) ?? null,
-      kind: row.kind === 'image' ? 'image' : row.kind === 'video' ? 'video' : null,
+      kind: row.mime_type?.toLowerCase().startsWith('audio/')
+        ? 'audio'
+        : row.kind === 'image'
+          ? 'image'
+          : row.kind === 'video'
+            ? 'video'
+            : null,
       durationMs: row.duration_ms,
       label: row.title ?? row.file_name,
     };

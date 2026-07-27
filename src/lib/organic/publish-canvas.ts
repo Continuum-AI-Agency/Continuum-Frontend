@@ -1,9 +1,7 @@
-// Contract + pure helpers for the Studio Canvas "Publish to Planner" flow: a
-// terminal canvas node attaches an edited MP4 to an organic Planner draft, either
-// LINKING an existing draft (the seed the canvas was launched from, or one already
-// bound to the node) or CREATING a new draft. The impure parts (auth, storage
-// signing, Supabase writes) live in the route; everything here is pure so it is
-// unit-testable and shared by the node hook + the route.
+// Legacy contract + pure helpers for Planner-originated composition handoffs.
+// The current Organic Publisher canvas node uses the backend's searchable,
+// existing-draft-only publishing API instead. This route remains for older
+// composition lifecycle callers that still finalize an already-bound render.
 
 import { z } from 'zod';
 import { formatDayId, startOfWeek } from '@/components/organic/primitives/calendar-utils';
@@ -22,6 +20,10 @@ export const publishCanvasRequestSchema = z
     // Present → attach to this existing draft. Absent → create a new draft and
     // return its id.
     draftId: z.string().min(1).optional(),
+    // Present for Planner-seeded compositions. The publish route closes the
+    // composition lifecycle after attaching the rendered video to its draft.
+    compositionId: z.string().min(1).optional(),
+    resultAssetId: z.string().min(1).optional(),
     // Stable key for the node-owned draft, so a re-publish UPSERTs the same row
     // instead of spawning duplicates.
     clientKey: z.string().min(1).optional(),
@@ -46,6 +48,7 @@ export const publishCanvasResponseSchema = z
     storagePath: z.string(),
     signedUrl: z.string(),
     createdDraft: z.boolean(),
+    compositionId: z.string().min(1).optional(),
   })
   .strict();
 export type PublishCanvasResponse = z.infer<typeof publishCanvasResponseSchema>;

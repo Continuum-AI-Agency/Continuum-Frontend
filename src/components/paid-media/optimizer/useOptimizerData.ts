@@ -649,12 +649,23 @@ async function applyApprovedBudgets(request: ApplyRunRequest): Promise<ApplyRunR
   return parsed.success ? parsed.data : null;
 }
 
-async function setRecommendationStatus(request: SetRecommendationStatusRequest): Promise<void> {
+/** The single-rec status flip. Only the rec id, the target status, and (for creative kinds)
+ *  the fulfilment route reach the RPC — portfolio_id / expected_status on the full request
+ *  schema are for the MCP surface, not this write. `route` chooses task vs generation for an
+ *  approved creative recommendation; omit it to let the backend follow the portfolio's autogen
+ *  config. */
+type SetRecommendationStatusInput = Pick<
+  SetRecommendationStatusRequest,
+  'recommendation_id' | 'status' | 'route'
+>;
+
+async function setRecommendationStatus(request: SetRecommendationStatusInput): Promise<void> {
   // The RPC parameter is p_rec_id — p_recommendation_id does not exist and PostgREST
   // rejects the call with PGRST202 (function not found in the schema cache).
   const { error } = await getClient().rpc('optimizer_set_recommendation_status', {
     p_rec_id: request.recommendation_id,
     p_status: request.status,
+    ...(request.route ? { p_route: request.route } : {}),
   });
   if (error) throw new Error('Failed to update recommendation');
 }
@@ -692,6 +703,22 @@ async function unenrollAdset(input: { portfolio_id: string; adset_id: string }):
     p_adset_id: input.adset_id,
   });
   if (error) throw new Error('Failed to remove ad set from the portfolio');
+}
+
+/** Persist plain-text ad-set names onto the enrolled roster, filling blanks only
+ *  (the RPC never clobbers a real name). Used by the workspace self-heal: rows
+ *  enrolled before names were forwarded render raw Meta ids until this fills them
+ *  from the account-snapshot read the workspace already loads. Returns rows filled. */
+async function backfillAdsetNames(input: {
+  portfolio_id: string;
+  names: Record<string, string>;
+}): Promise<number> {
+  const { data, error } = await getClient().rpc('optimizer_backfill_adset_names', {
+    p_portfolio_id: input.portfolio_id,
+    p_names: input.names,
+  });
+  if (error) throw new Error('Failed to backfill ad-set names');
+  return Number(data ?? 0);
 }
 
 /** The autopilot kill-switch — instantly halt (or resume) this portfolio's autonomous
@@ -1057,6 +1084,24 @@ export function useOptimizerEnrolledAdsets(portfolioId: string | null) {
     empty: EMPTY_ENROLLED,
     enabled: Boolean(portfolioId),
     staleTime: TEN_MINUTES,
+  });
+}
+
+/** Self-heal for missing ad-set names: fills blank roster names from the names the
+ *  caller already has (the account-snapshot read), then re-reads the roster so the
+ *  labels update. No-ops when nothing was filled. */
+export function useOptimizerBackfillAdsetNames(portfolioId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (names: Record<string, string>) =>
+      backfillAdsetNames({ portfolio_id: portfolioId, names }),
+    onSuccess: (filled) => {
+      if (filled > 0) {
+        queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.enrolledAdsets(portfolioId),
+        });
+      }
+    },
   });
 }
 

@@ -21,8 +21,13 @@
 import { z } from 'zod';
 import { streamEnvelopeSchema } from '../streaming/envelope';
 
-/** Which agent produced a run. The FE uses this to pick the replay endpoint and Realtime table. */
-export const agentKindSchema = z.enum(['organic', 'jaina']);
+/**
+ * Which agent produced a run. The FE uses this to pick the replay endpoint and Realtime
+ * table. `canvas` (the AI Studio canvas composer) is the exception: it keeps NO durable
+ * event log — only a run row — so its tail is the run row's Realtime status, never a
+ * replay endpoint.
+ */
+export const agentKindSchema = z.enum(['organic', 'jaina', 'hyperframes', 'canvas']);
 export type AgentKind = z.infer<typeof agentKindSchema>;
 
 /**
@@ -78,6 +83,27 @@ export const agentRunDtoSchema = z.object({
   lastSeq: z.number().int().nonnegative().nullable().optional(),
   /** Session title, carried so a completion toast can name the conversation it came from. */
   title: z.string().nullable().optional(),
+  /**
+   * Who started the run. The FE suppresses completion toasts for `agent`-initiated
+   * callee runs — otherwise every cross-agent call completion toasts at the user.
+   * Loose string on `initiatorAgent`: usually an AgentKind, but external MCP
+   * clients stamp their client id.
+   */
+  initiator: z.enum(['user', 'agent']).nullable().optional(),
+  initiatorAgent: z.string().nullable().optional(),
+  /** Optional product surface that owns this run, used for background work and "View" links. */
+  origin: z
+    .discriminatedUnion('surface', [
+      z
+        .object({
+          surface: z.literal('ai-studio'),
+          roomId: z.string().min(1),
+          /** Absent for room-level runs (the canvas composer); present for per-node runs (HyperFrames). */
+          nodeId: z.string().min(1).optional(),
+        })
+        .strict(),
+    ])
+    .optional(),
 });
 export type AgentRunDto = z.infer<typeof agentRunDtoSchema>;
 

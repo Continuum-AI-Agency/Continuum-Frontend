@@ -105,10 +105,10 @@ const JainaChatSurface = dynamic(
 
 // The win-rate explorer is a pop-out, not a tab: it needs full height, and the
 // dashboard keeps only the compact kill/scale/iterate calls.
-const WhatsWorkingExplorerSheet = dynamic(
+const WhatsWorkingExplorerPopover = dynamic(
   () =>
-    import('@/components/paid-media/dashboard/whats-working/WhatsWorkingExplorerSheet').then(
-      (mod) => mod.WhatsWorkingExplorerSheet,
+    import('@/components/paid-media/dashboard/whats-working/WhatsWorkingExplorerPopover').then(
+      (mod) => mod.WhatsWorkingExplorerPopover,
     ),
   { ssr: false },
 );
@@ -153,6 +153,9 @@ export default function PaidMediaClientPage({
   const router = useRouter();
   const tabParam = searchParams.get('tab');
   const normalizedTabParam = normalizePaidMediaTab(tabParam);
+  // Deep link from completion toasts (/scale?tab=jaina&sessionId=...): a session id
+  // implies the Jaina tab even when the tab param is missing or invalid.
+  const jainaSessionIdParam = searchParams.get('sessionId');
   const { user } = useSession();
   const goalsAccessEnabled = canAccessGoals({
     isAdmin: isAdminUser(user),
@@ -201,7 +204,9 @@ export default function PaidMediaClientPage({
     },
     [setSelectedAdAccount],
   );
-  const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(normalizedTabParam ?? 'dashboard');
+  const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(
+    normalizedTabParam ?? (jainaSessionIdParam ? 'jaina' : 'dashboard'),
+  );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
   const [isJainaFullscreen, setIsJainaFullscreen] = React.useState(false);
   const [canvasWidthPx, setCanvasWidthPx] = React.useState(540);
@@ -438,7 +443,7 @@ export default function PaidMediaClientPage({
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             {platform === 'meta' && selectedAdAccount ? (
-              <WhatsWorkingExplorerSheet brandId={brandProfileId} />
+              <WhatsWorkingExplorerPopover brandId={brandProfileId} />
             ) : null}
             <ReportJobsBell brandProfileId={brandProfileId} />
             {activeTab === 'jaina' ? (
@@ -560,8 +565,9 @@ export default function PaidMediaClientPage({
                 adAccountId={selectedAdAccount}
                 campaignId={selectedCampaign}
                 userId={user?.id ?? null}
-                goalsAccessEnabled={goalsAccessEnabled}
+                initialSessionId={jainaSessionIdParam}
                 onCanvasActionApplied={handleCanvasActionApplied}
+                goalsAccessEnabled={goalsAccessEnabled}
                 className="rounded-none border-none bg-transparent backdrop-blur-none"
               />
             </div>

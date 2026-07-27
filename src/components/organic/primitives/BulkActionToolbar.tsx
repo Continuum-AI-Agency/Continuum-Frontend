@@ -110,7 +110,7 @@ export function BulkActionToolbar({
               <VideoIcon className="w-4 h-4" />
               {isGeneratingReels
                 ? 'Generating…'
-                : `Generate ${reelCount} video${reelCount === 1 ? '' : 's'}`}
+                : `Prepare ${reelCount} reel${reelCount === 1 ? '' : 's'}`}
             </Button>
           ) : null}
           {onApprove ? (

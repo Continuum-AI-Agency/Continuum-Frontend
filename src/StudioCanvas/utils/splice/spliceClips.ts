@@ -1,5 +1,12 @@
 import { appendRange, loadMediabunny, throwIfAborted } from './appendRange';
-import type { ResolvedClip } from './resolveClipSources';
+
+export type ResolvedClip = {
+  slotId: string;
+  blob: Blob;
+  trimStartSec?: number;
+  trimEndSec?: number;
+  muteAudio?: boolean;
+};
 
 const TARGET_SAMPLE_RATE = 48_000;
 const TARGET_CHANNEL_COUNT = 2;

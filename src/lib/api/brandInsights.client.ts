@@ -5,8 +5,10 @@ import {
   parseFrame,
   type TrendsInsightReadyPayload,
   type TrendsReadFrame,
+  type TrendsRecentRun,
   trendsInsightReadyPayloadSchema,
   trendsReadFrameSchema,
+  trendsRecentRunsResponseSchema,
   trendsSseMessageDataSchema,
   trendsSseSnapshotDataSchema,
 } from '@continuum/contracts';
@@ -170,6 +172,20 @@ export async function fetchBrandInsightsStatus(
   });
 
   return mapBackendStatusResponse(response);
+}
+
+/** Recent Trends generations for a brand with grounding latency (ops surface). */
+export async function fetchRecentTrendsRuns(
+  brandId: string,
+  limit = 20,
+): Promise<TrendsRecentRun[]> {
+  const response = await request({
+    path: `/api/trends/runs/recent?brand_id=${encodeURIComponent(brandId)}&limit=${limit}`,
+    method: 'GET',
+    cache: 'no-store',
+  });
+  const parsed = trendsRecentRunsResponseSchema.safeParse(response);
+  return parsed.success ? (parsed.data.data?.runs ?? []) : [];
 }
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'error', 'not_found']);

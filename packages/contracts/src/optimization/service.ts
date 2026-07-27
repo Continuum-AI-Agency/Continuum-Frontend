@@ -174,7 +174,16 @@ export function getOptimizationMetricDefinition(
   return OPTIMIZATION_METRIC_DEFINITIONS[parsed.success ? parsed.data : 'purchase'];
 }
 
-export const RecommendationStatusSchema = z.enum(['pending', 'approved', 'rejected', 'applied']);
+/** `expired` is terminal-by-staleness: pending recommendations are re-derived every
+ *  cycle, so an untouched one ages out rather than lingering as a stale suggestion.
+ *  Recs a human already turned into open work are never expired. */
+export const RecommendationStatusSchema = z.enum([
+  'pending',
+  'approved',
+  'rejected',
+  'applied',
+  'expired',
+]);
 export type RecommendationStatus = z.infer<typeof RecommendationStatusSchema>;
 
 /** Input to create a portfolio (maps to optimizer_create_portfolio's p_config). */
@@ -250,12 +259,15 @@ export const UpdatePortfolioResponseSchema = z.object({
 export type UpdatePortfolioResponse = z.infer<typeof UpdatePortfolioResponseSchema>;
 
 /** Enroll ad sets into a portfolio. Exactly one of adset_ids | campaign_id
- *  (campaign_id is expanded to its ad sets service-side). */
+ *  (campaign_id is expanded to its ad sets service-side). `adset_names` is an
+ *  optional id→name map the client supplies so the plain-text ad-set name is
+ *  persisted at enroll time (the dashboard otherwise renders raw Meta ids). */
 export const EnrollRequestSchema = z
   .object({
     portfolio_id: z.string().uuid(),
     adset_ids: z.array(z.string()).min(1).optional(),
     campaign_id: z.string().optional(),
+    adset_names: z.record(z.string(), z.string()).optional(),
   })
   .refine((d) => Boolean(d.adset_ids) !== Boolean(d.campaign_id), {
     message: 'Provide exactly one of adset_ids or campaign_id',
@@ -449,6 +461,10 @@ export const RecommendationRowSchema = z
     /** The generation seed on a variate_creative / seed_experiment: the winning creative's
      *  labels, its Library asset, and the deterministic citations the brief is grounded on. */
     seed: z.record(z.string(), z.unknown()).nullable().optional(),
+    /** Set when a data-driven rule produced this row — the join key to its evaluation. */
+    rule_id: z.string().nullable().optional(),
+    /** Which channel decided it: a human verdict, or a human-granted standing rule. */
+    decided_via: z.string().nullable().optional(),
     created_at: z.string().optional(),
   })
   .loose();
@@ -565,12 +581,27 @@ export type RenewalTaskStatus = z.infer<typeof RenewalTaskStatusSchema>;
 
 export const RenewalTaskSchema = z.object({
   id: z.string().uuid(),
+  /** The approval that opened this task. `optimizer_list_renewal_tasks` has always
+   *  returned it; it was undeclared here, so z.object STRIPPED it and no caller could
+   *  link a task back to the recommendation — which is exactly what an approval
+   *  receipt has to report (plan 054 Optimizer item 3). */
+  recommendation_id: z.string().uuid().nullable().optional(),
   portfolio_id: z.string().uuid(),
   portfolio_name: z.string(),
   adset_id: z.string(),
-  kind: z.string(), // creative_refresh | audience_expand
+  /** The specific AD this request is about, on the creative kinds. Null on the
+   *  ad-set-level ones (creative_refresh / audience_expand). */
+  ad_id: z.string().nullable().optional(),
+  kind: z.string(), // creative_refresh | audience_expand | variate_creative | seed_experiment
   reason: z.string().nullable(),
+  /** The generation seed the brief renders from — the winning creative, its Library
+   *  asset, the labels to keep, and the grounded citations. Present on creative kinds. */
+  seed: z.record(z.string(), z.unknown()).nullable().optional(),
   status: z.string(),
+  /** Set once the request has been emailed to the brand team. */
+  notified_at: z.string().nullable().optional(),
+  /** The media.assets id a human attached to satisfy the request. */
+  fulfilled_asset_id: z.string().nullable().optional(),
   created_at: z.string(),
 });
 export type RenewalTask = z.infer<typeof RenewalTaskSchema>;
@@ -1110,3 +1141,165 @@ export const OptimizerLogsResponseSchema = z.object({
   logs: z.array(OptimizerLogRowSchema),
 });
 export type OptimizerLogsResponse = z.infer<typeof OptimizerLogsResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Rules engine (optimizer.rules) — rules-as-data, and rules-as-permissions
+// ---------------------------------------------------------------------------
+
+/** One rule version. `conditions`/`action`/`params` are the engine's JSONB wire
+ *  format (see packages/optimization-engine/src/rules) and stay opaque here — the
+ *  engine owns their shape, contracts only carries the row.
+ *
+ *  `execution_mode` is the permission: 'suggest' means findings only ever become
+ *  pending recommendations; 'granted' means the user has given the optimizer a
+ *  standing instruction to act on them. Only reversible action kinds can ever be
+ *  granted (enforced by a DB CHECK, the set-rule RPC, and GRANTABLE_ACTION_KINDS
+ *  in the engine) — scale, spend increases, and ad activation always need a fresh
+ *  human verdict. */
+export const RuleRowSchema = z
+  .object({
+    id: z.string(),
+    portfolio_id: z.string(),
+    template_id: z.string().nullable().optional(),
+    version: z.number().int(),
+    name: z.string(),
+    enabled: z.boolean(),
+    priority: z.number().int(),
+    conditions: z.unknown(),
+    action: z.unknown(),
+    params: z.unknown().optional(),
+    origin: z.string(),
+    execution_mode: z.string(),
+    /** Binds a grant to a still-native trigger (e.g. 'C1_creative_drag') before that
+     *  trigger has a DSL expression. Such rows carry empty conditions and never evaluate. */
+    trigger_binding: z.string().nullable().optional(),
+    max_executions_per_day: z.number().int().nullable().optional(),
+    granted_by: z.string().nullable().optional(),
+    granted_at: z.string().nullable().optional(),
+    created_at: z.string().optional(),
+    updated_at: z.string().optional(),
+  })
+  .loose();
+export type RuleRow = z.infer<typeof RuleRowSchema>;
+
+/** One rule × ad-set evaluation from a cycle. `facts` is the threshold/metric
+ *  snapshot the match was made on — populated on matched rows only (storage bound),
+ *  and the reason a fired rule can be audited months later. */
+export const RuleEvaluationRowSchema = z
+  .object({
+    id: z.coerce.number().int(),
+    rule_id: z.string(),
+    run_id: z.string(),
+    portfolio_id: z.string(),
+    adset_id: z.string(),
+    matched: z.boolean(),
+    /** True when the rule matched but a built-in trigger (or a higher-priority rule)
+     *  already owned this (ad set, kind). */
+    deduped: z.boolean(),
+    facts: z.record(z.string(), z.unknown()).nullable().optional(),
+    error: z.string().nullable().optional(),
+    created_at: z.string().optional(),
+  })
+  .loose();
+export type RuleEvaluationRow = z.infer<typeof RuleEvaluationRowSchema>;
+
+/** A standing-rule proposal mined from the user's OWN approval history — "you
+ *  approved this 9 times out of 9 in this portfolio; make it a rule?". Computed at
+ *  read time from human decisions only (grant-executed approvals are excluded, or a
+ *  single grant would keep re-justifying itself). */
+export const RuleSuggestionRowSchema = z
+  .object({
+    portfolio_id: z.string(),
+    kind: z.string(),
+    trigger: z.string(),
+    n_approved: z.number().int().nonnegative(),
+    n_rejected: z.number().int().nonnegative(),
+    last_decided_at: z.string().nullable().optional(),
+  })
+  .loose();
+export type RuleSuggestionRow = z.infer<typeof RuleSuggestionRowSchema>;
+
+/** Per-rule outcome record. `win_rate` is empirical-Bayes shrunk on read, so a
+ *  2-for-2 rule does not outrank a 40-for-50 one. Directional evidence about
+ *  whether a rule's decisions helped — never causal proof. */
+export const RuleStatsRowSchema = z
+  .object({
+    rule_id: z.string(),
+    n: z.number().int().nonnegative(),
+    win_rate: z.number().nullable().optional(),
+  })
+  .loose();
+export type RuleStatsRow = z.infer<typeof RuleStatsRowSchema>;
+
+/** Patch accepted by optimizer_set_rule. `executionMode: 'granted'` is the
+ *  permission ceremony — it stamps the grantor and writes an audit row. */
+export const UpdateRulePatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  priority: z.number().int().optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
+  maxExecutionsPerDay: z.number().int().positive().optional(),
+  executionMode: z.enum(['suggest', 'granted']).optional(),
+});
+export type UpdateRulePatch = z.infer<typeof UpdateRulePatchSchema>;
+
+// ---------------------------------------------------------------------------
+// Creative swap — the optimizer asking for the next creative
+// ---------------------------------------------------------------------------
+
+/** How the replacement creative gets made.
+ *  generate       — headless model generation from the seed + brand grounding.
+ *  render_template — the external After Effects render API (adapter seam).
+ *  use_asset      — a creative a human (or the canvas) already produced. */
+export const CreativeSwapModeSchema = z.enum(['generate', 'render_template', 'use_asset']);
+export type CreativeSwapMode = z.infer<typeof CreativeSwapModeSchema>;
+
+export const CreativeSwapSourceSchema = z.enum(['optimizer', 'jaina', 'human']);
+export type CreativeSwapSource = z.infer<typeof CreativeSwapSourceSchema>;
+
+/** The swap request: a prompt plus the destination it is going up into. The
+ *  campaign/ad-set/ad ids are what make this a *swap* rather than a generation —
+ *  the endpoint knows where the result lands, so the whole loop closes without a
+ *  human copying an asset id between two screens. */
+export const CreativeSwapRequestSchema = z.object({
+  brandId: z.string(),
+  campaignId: z.string(),
+  adsetId: z.string(),
+  /** The ad being iterated on / replaced. */
+  adId: z.string(),
+  mode: CreativeSwapModeSchema,
+  prompt: z.string().optional(),
+  /** CreativeVariationSeed passthrough from the recommendation. */
+  seed: z.record(z.string(), z.unknown()).optional(),
+  /** Required for mode: 'use_asset' — the media.assets row to publish. */
+  assetId: z.string().optional(),
+  source: CreativeSwapSourceSchema,
+  recommendationId: z.string().optional(),
+});
+export type CreativeSwapRequest = z.infer<typeof CreativeSwapRequestSchema>;
+
+/** A durable swap job. `brief` is FROZEN at enqueue: what the worker executes must
+ *  not drift under it if the recommendation is later re-derived. */
+export const CreativeSwapJobRowSchema = z
+  .object({
+    id: z.string(),
+    portfolio_id: z.string().nullable().optional(),
+    brand_id: z.string(),
+    recommendation_id: z.string().nullable().optional(),
+    campaign_id: z.string(),
+    adset_id: z.string(),
+    ad_id: z.string().nullable().optional(),
+    mode: z.string(),
+    seed: z.record(z.string(), z.unknown()).nullable().optional(),
+    brief: z.record(z.string(), z.unknown()).nullable().optional(),
+    asset_id: z.string().nullable().optional(),
+    // queued | generating | generated | publishing | published | failed | cancelled
+    status: z.string(),
+    attempts: z.number().int().nonnegative().optional(),
+    result: z.record(z.string(), z.unknown()).nullable().optional(),
+    error: z.record(z.string(), z.unknown()).nullable().optional(),
+    enqueued_via: z.string().optional(),
+    created_at: z.string().optional(),
+    updated_at: z.string().optional(),
+  })
+  .loose();
+export type CreativeSwapJobRow = z.infer<typeof CreativeSwapJobRowSchema>;

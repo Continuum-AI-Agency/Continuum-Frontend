@@ -25,6 +25,7 @@ export type StudioRenderTaskResult = {
   title: string;
   description?: string;
   variant?: 'success' | 'warning';
+  silent?: boolean;
 };
 
 export type StudioRenderTaskContext = {
@@ -44,6 +45,7 @@ type QueuedTask = { jobId: string; task: StudioRenderTask };
 
 type StudioRenderContextValue = {
   enqueue(task: StudioRenderTask): { accepted: boolean; jobId: string };
+  cancel(jobId: string): boolean;
 };
 
 const StudioRenderContext = createContext<StudioRenderContextValue | null>(null);
@@ -93,14 +95,16 @@ export function StudioRenderProvider({ children }: { children: ReactNode }) {
           patchJob(next.jobId, { progress: Math.max(0, Math.min(1, progress)) }),
       });
       patchJob(next.jobId, { status: result.status, progress: 1 });
-      show({
-        title: result.title,
-        description: result.description,
-        variant: result.variant ?? (result.status === 'completed' ? 'success' : 'warning'),
-        durationMs: Infinity,
-        dedupeKey: `studio-render:${next.jobId}`,
-        action: { label: 'View', onClick: () => openOrigin(next.task.origin) },
-      });
+      if (!result.silent) {
+        show({
+          title: result.title,
+          description: result.description,
+          variant: result.variant ?? (result.status === 'completed' ? 'success' : 'warning'),
+          durationMs: Infinity,
+          dedupeKey: `studio-render:${next.jobId}`,
+          action: { label: 'View', onClick: () => openOrigin(next.task.origin) },
+        });
+      }
     } catch (cause) {
       const error = cause instanceof Error ? cause : new Error('Render failed');
       patchJob(next.jobId, { status: 'failed', error: error.message });
@@ -141,6 +145,24 @@ export function StudioRenderProvider({ children }: { children: ReactNode }) {
     return { accepted: true, jobId };
   }, []);
 
+  const cancel = useCallback((jobId: string): boolean => {
+    const queuedIndex = queueRef.current.findIndex((entry) => entry.jobId === jobId);
+    if (queuedIndex >= 0) {
+      queueRef.current.splice(queuedIndex, 1);
+      useStudioRenderStore.getState().patchJob(jobId, {
+        status: 'failed',
+        error: 'Stopped by the operator.',
+      });
+      return true;
+    }
+    const active = useStudioRenderStore.getState().jobs[jobId];
+    if (active && !isTerminalStudioRenderStatus(active.status)) {
+      activeControllerRef.current?.abort();
+      return true;
+    }
+    return false;
+  }, []);
+
   const jobs = useStudioRenderStore((state) => state.jobs);
   const hasPendingWork = Object.values(jobs).some(
     (job) => !isTerminalStudioRenderStatus(job.status),
@@ -164,7 +186,7 @@ export function StudioRenderProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const contextValue = useMemo(() => ({ enqueue }), [enqueue]);
+  const contextValue = useMemo(() => ({ enqueue, cancel }), [cancel, enqueue]);
   return (
     <StudioRenderContext.Provider value={contextValue}>{children}</StudioRenderContext.Provider>
   );

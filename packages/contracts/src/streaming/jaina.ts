@@ -34,6 +34,7 @@ export type JainaForwardableType =
   | 'agent.envelope'
   | 'agent.spawn'
   | 'agent.complete'
+  | 'agent.delegated'
   | 'response.objectives'
   | 'response.objective.updated'
   | 'response.report_artifact_job.started'
@@ -73,7 +74,11 @@ export type JainaResponseType =
 
 export type JainaCanvasType = 'canvas.actions.proposed' | 'canvas.context.loaded';
 
-export type JainaAgentType = 'agent.spawn' | 'agent.complete' | 'agent.envelope';
+export type JainaAgentType =
+  | 'agent.spawn'
+  | 'agent.complete'
+  | 'agent.envelope'
+  | 'agent.delegated';
 
 export type JainaToolType = 'tool.call' | 'tool.result' | 'tool.batch';
 

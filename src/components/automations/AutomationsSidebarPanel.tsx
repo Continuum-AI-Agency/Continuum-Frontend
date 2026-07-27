@@ -7,6 +7,7 @@
 
 import type { AgentTarget, AutomationRunStatus } from '@continuum/contracts';
 import { CalendarClockIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import {
@@ -20,7 +21,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAutomations } from '@/lib/automations/automations';
 import { describeSchedule, formatInTimezone } from '@/lib/automations/schedule';
-import { useAutomationSheetStore } from '@/lib/automations/sheet-store';
 import { cn } from '@/lib/utils';
 
 const STATUS_INDICATOR: Record<AutomationRunStatus, 'success' | 'error' | 'warning' | 'info'> = {
@@ -37,7 +37,7 @@ type AutomationsSidebarPanelProps = {
 
 export function AutomationsSidebarPanel({ agent, brandId }: AutomationsSidebarPanelProps) {
   const { data, isLoading } = useAutomations(brandId ?? undefined);
-  const openDetail = useAutomationSheetStore((state) => state.openDetail);
+  const router = useRouter();
 
   const automations = useMemo(
     () => (data ?? []).filter((automation) => automation.agent === agent),
@@ -74,7 +74,7 @@ export function AutomationsSidebarPanel({ agent, brandId }: AutomationsSidebarPa
                     'w-full rounded-md border border-transparent px-2.5 py-2 text-left transition-colors',
                     'hover:border-border/70 hover:bg-muted/40',
                   )}
-                  onClick={() => openDetail(automation.id)}
+                  onClick={() => router.push(`/automations/${automation.id}`)}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-sm font-medium">{automation.name}</span>

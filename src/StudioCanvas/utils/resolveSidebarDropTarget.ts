@@ -1,7 +1,7 @@
 import type { StudioNodeType } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import type { StudioNode } from '../types';
-import { getTargetHandleForNodeType } from './handleResolution';
+import { getTargetHandleCandidatesForNodeType } from './handleResolution';
 import { isValidConnection } from './isValidConnection';
 
 export interface SidebarDropTarget {
@@ -60,12 +60,16 @@ export function resolveSidebarDropTarget(
     const nodeId = nodeElement.dataset.id;
     const node = nodes.find((n) => n.id === nodeId);
     if (nodeId && node?.type) {
-      const handleId = getTargetHandleForNodeType(
+      // Walk the ranked candidates, not just the head: on a frames-mode video node
+      // a second image must fall through a full first-frame onto last-frame instead
+      // of dropping the connection entirely.
+      const candidates = getTargetHandleCandidatesForNodeType(
         node.type as StudioNodeType,
         assetNodeType,
         node.data,
       );
-      if (handleId && isValidTarget(nodeId, handleId)) {
+      const handleId = candidates.find((candidate) => isValidTarget(nodeId, candidate));
+      if (handleId) {
         return { nodeId, handleId };
       }
     }

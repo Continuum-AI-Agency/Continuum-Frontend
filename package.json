@@ -24,6 +24,7 @@
     "test:e2e": "playwright test",
     "goals:orchestrator:e2e:bench": "set -a; . ./.env.local; set +a; GOALS_BENCH_BACKEND_PORT=4401 NEXT_PUBLIC_API_URL=http://127.0.0.1:4401 PORT=3108 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3108 NEXT_DIST_DIR=.next/goals-orchestrator-e2e playwright test e2e/goals-orchestrator.bench.spec.ts --workers=1",
     "optimizer:viz:bench": "bun run src/components/paid-media/optimizer/charts/optimizer-viz.bench.ts",
+    "optimizer:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir coverage src/components/paid-media/optimizer",
     "optimizer:e2e:bench": "playwright test --config playwright.optimizer.config.ts --workers=1",
     "organic:metrics:compare:bench": "bun run src/lib/organic/organic-metrics-compare.bench.ts",
     "posthog:logs:bench": "NODE_ENV=production bun run src/lib/observability/posthog-logs.bench.ts",
@@ -52,6 +53,7 @@
     "jaina:runs:bench": "set -a; . ./.env.local; set +a; bun run e2e/jaina-runs.bench.ts",
     "videoeditor:e2e:bench": "playwright test e2e/video-editor-playback.spec.ts --workers=1",
     "planner:status:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/organic-planner-status.spec.ts --workers=1",
+    "planner:composition:bench": "bun run e2e/planner-composition.bench.ts",
     "changelog:e2e:bench": "bun test src/components/changelog/WhatsNewBell.bench.test.tsx"
   },
   "dependencies": {
@@ -62,6 +64,8 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@heroicons/react": "^2.2.0",
     "@hookform/resolvers": "^5.2.2",
+    "@hyperframes/core": "0.7.68",
+    "@hyperframes/player": "0.7.68",
     "@number-flow/react": "^0.6.1",
     "@onboardjs/core": "^1.0.0-rc.3",
     "@onboardjs/react": "^1.0.0-rc.3",
@@ -189,6 +193,7 @@
     "three": "^0.182.0",
     "tokenlens": "^1.3.1",
     "topojson-client": "^3.1.0",
+    "use-stick-to-bottom": "^1.1.6",
     "uuid": "^13.0.0",
     "world-atlas": "^2.0.2",
     "zod": "^4.3.6",

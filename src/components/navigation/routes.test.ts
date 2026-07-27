@@ -17,6 +17,7 @@ describe('navigation structure', () => {
     expect(APP_NAVIGATION.map((i) => i.label)).toEqual([
       'Home',
       'Canvas',
+      'Automations',
       'Organic',
       'Scale',
       'Library',
@@ -25,6 +26,7 @@ describe('navigation structure', () => {
     expect(APP_NAVIGATION.map((i) => i.href)).toEqual([
       '/dashboard',
       '/ai-studio',
+      '/automations',
       '/organic',
       '/scale',
       '/library',
@@ -43,10 +45,13 @@ describe('navigation structure', () => {
     ]);
   });
 
-  it('puts Home + Canvas in the unlabeled lead group', () => {
+  it('keeps Goals out of the global sidebar lead group', () => {
     const lead = APP_NAVIGATION_GROUPS[0];
     expect(lead.label).toBeNull();
-    expect(lead.items.map((i) => i.href)).toEqual(['/dashboard', '/ai-studio']);
+    expect(lead.items.map((i) => i.href)).toEqual(['/dashboard', '/ai-studio', '/automations']);
+    expect(
+      APP_NAVIGATION_GROUPS.flatMap((group) => group.items).some((i) => i.href === '/goals'),
+    ).toBe(false);
   });
 
   it('nests Organic sub-routes with area-qualified labels', () => {

@@ -748,3 +748,38 @@ export function BrandBookView({
     </BrandMdDirtyProvider>
   );
 }
+
+export function BrandDnaPanel({ brandBook }: { brandBook: BrandBookResponse }) {
+  const composite = brandBook.composite ?? null;
+  const tokens = brandBook.brand_tokens ?? null;
+  return (
+    <BrandMdDirtyProvider>
+      <div className="flex flex-col gap-4">
+        <IdentityTab tokens={tokens} composite={composite} />
+        <StrategyTab composite={composite} />
+        <SectionCard
+          icon={FileText}
+          title="Authoritative brand document"
+          description="Edit the brand.md source agents must follow. Derived intelligence never overwrites it."
+        >
+          <BrandMdEditor
+            brandId={brandBook.brand_id}
+            initialBrandMd={brandBook.brand_md}
+            isEdited={brandBook.brand_md_is_edited}
+          />
+        </SectionCard>
+      </div>
+    </BrandMdDirtyProvider>
+  );
+}
+
+export function BrandReadinessPanel({ brandBook }: { brandBook: BrandBookResponse }) {
+  const composite = brandBook.composite ?? null;
+  const readiness = composite?.readiness ?? brandBook.assembled?.report?.readiness ?? null;
+  return <ReadinessTab composite={composite} readiness={readiness} brandId={brandBook.brand_id} />;
+}
+
+export function BrandSourcesPanel({ brandBook }: { brandBook: BrandBookResponse }) {
+  const documents = (brandBook.assembled?.documents ?? brandBook.documents) as BookDocument[];
+  return <SourcesTab documents={documents} onboarding={brandBook.assembled?.onboarding ?? null} />;
+}

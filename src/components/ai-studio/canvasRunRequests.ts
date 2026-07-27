@@ -21,7 +21,6 @@ const RUNNABLE_NODE_TYPES = new Set([
   'veoDirector',
   'veoFast',
   'extendVideo',
-  'videoEditor',
   'timelineEditor',
   'string',
   'videoDecode',

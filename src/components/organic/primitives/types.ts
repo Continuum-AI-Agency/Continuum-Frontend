@@ -1,4 +1,4 @@
-import type { OrganicMediaStage, PlannerComposition } from '@continuum/contracts';
+import type { OrganicMediaStage, OrganicUgcSpec, PlannerComposition } from '@continuum/contracts';
 import type { CalendarGenerationEvent } from '@/lib/organic/calendar-generation';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 
@@ -82,6 +82,8 @@ export type OrganicCalendarDraft = {
     blueprintReady?: boolean | null;
     /** Exact persisted storyboard revision required for final-media approval. */
     previewRevision?: string | null;
+    /** Locked casting/product references reviewed before UGC scene generation. */
+    ugc?: OrganicUgcSpec | null;
     audioConcept?: {
       audioMode?: string | null;
       trackSuggestion?: string | null;
@@ -133,9 +135,11 @@ export type OrganicCalendarDraft = {
         bucket?: string | null;
         clipUrl?: string | null;
         signedClipUrl?: string | null;
+        assetId?: string | null;
         error?: string | null;
       }> | null;
       composition?: PlannerComposition | null;
+      ugc?: OrganicUgcSpec | null;
       error?: string | null;
     } | null;
     assets?: Array<{

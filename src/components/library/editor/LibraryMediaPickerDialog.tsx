@@ -7,7 +7,7 @@
 
 import type { MediaAsset } from '@continuum/contracts';
 import { mediaSearchResponseSchema } from '@continuum/contracts';
-import { ImageIcon, Loader2, Plus, Search, Trash2, Video } from 'lucide-react';
+import { ImageIcon, Loader2, Music2, Plus, Search, Trash2, Video } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,13 +33,22 @@ export type LibraryMediaPickerDialogProps = {
 };
 
 function isPlaceable(asset: MediaAsset): boolean {
-  return asset.kind === 'image' || asset.kind === 'video';
+  return (
+    asset.kind === 'image' ||
+    asset.kind === 'video' ||
+    asset.mimeType.toLowerCase().startsWith('audio/')
+  );
 }
 
 export function assetToPoolSource(asset: MediaAsset): LibraryPoolSource {
   return {
     nodeId: asset.id,
-    kind: asset.kind === 'image' ? 'image' : 'video',
+    sourceAssetId: asset.id,
+    kind: asset.mimeType.toLowerCase().startsWith('audio/')
+      ? 'audio'
+      : asset.kind === 'image'
+        ? 'image'
+        : 'video',
     label: asset.title ?? asset.fileName,
     ...(asset.signedUrl ? { previewUrl: asset.signedUrl } : {}),
     ...(asset.durationMs != null ? { durationSec: asset.durationMs / 1000 } : {}),
@@ -117,7 +126,9 @@ function MediaTile({
           />
         ) : (
           <span className="flex size-full items-center justify-center text-muted-foreground">
-            {asset.kind === 'video' ? (
+            {asset.mimeType.toLowerCase().startsWith('audio/') ? (
+              <Music2 className="size-5" aria-hidden />
+            ) : asset.kind === 'video' ? (
               <Video className="size-5" aria-hidden />
             ) : (
               <ImageIcon className="size-5" aria-hidden />
@@ -125,7 +136,7 @@ function MediaTile({
           </span>
         )}
         <span className="absolute bottom-1 left-1 rounded bg-background/80 px-1 text-2xs uppercase text-muted-foreground">
-          {asset.kind}
+          {asset.mimeType.toLowerCase().startsWith('audio/') ? 'audio' : asset.kind}
         </span>
         {duration ? (
           <span className="absolute right-1 bottom-1 rounded bg-background/80 px-1 text-2xs tabular-nums text-muted-foreground">
@@ -227,7 +238,7 @@ export function LibraryMediaPickerDialog({
           <DialogHeader className="shrink-0 border-b border-border px-4 py-3">
             <DialogTitle className="text-sm font-medium">Add media from the Library</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Pick images or videos to place on the timeline.
+              Pick images, videos, or audio to place on the timeline.
             </DialogDescription>
           </DialogHeader>
 

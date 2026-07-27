@@ -166,7 +166,6 @@ export async function createMagicLinkAction(
     data: { session },
   } = await supabase.auth.getSession();
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
   const { data, error } = await supabase.functions.invoke<{
     link: string;
     inviteId: string | null;
@@ -182,7 +181,6 @@ export async function createMagicLinkAction(
       brandId,
       email: email.trim(),
       role,
-      siteUrl,
       forceResend: true,
     },
     headers: session?.access_token

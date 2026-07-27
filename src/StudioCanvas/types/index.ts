@@ -1,6 +1,10 @@
 import type {
   BrandBookPieceKind,
+  CanvasPublishingFormat,
+  CanvasPublishingSlot,
   CanvasRenderContinuation,
+  CanvasTimelineRenderRequest,
+  HyperframesAgentNodeData as ContractHyperframesAgentNodeData,
   ImageGeneratorModel,
   ImageSize,
 } from '@continuum/contracts';
@@ -97,6 +101,8 @@ export interface NanoGenNodeData extends BaseNodeData {
   generatedImageUrl?: string;
   generatedImageStoragePath?: string;
   generatedImageBucket?: string;
+  renderOutputAssetId?: string;
+  renderOutputAssetVersionId?: string;
 }
 
 export interface StringNodeData extends BaseNodeData {
@@ -211,36 +217,23 @@ export interface ExtendVideoNodeData extends BaseNodeData {
   generatedVideoBucket?: string;
 }
 
-export interface ClipSlot {
-  id: string;
-  order: number;
-  trimStartSec?: number;
-  trimEndSec?: number;
-  muteAudio?: boolean;
-}
-
-export interface VideoEditorNodeData extends BaseNodeData {
-  clipSlots: ClipSlot[];
-  outputFormat?: 'mp4';
-  videoCodec?: 'avc';
-  audioCodec?: 'aac';
-  progress?: number;
-  generatedVideo?: string;
-  generatedVideoUrl?: string;
-  generatedVideoStoragePath?: string;
-  generatedVideoBucket?: string;
-  renderOutputAssetId?: string;
-  renderOutputDurationSec?: number;
-  renderOutputWidth?: number;
-  renderOutputHeight?: number;
-  lastRenderJobId?: string;
-  renderContinuation?: CanvasRenderContinuation;
-  unsupportedReason?: string;
-}
-
 export interface VideoDecodeNodeData extends BaseNodeData {
   value: string;
 }
+
+export interface FrameExtractNodeData extends BaseNodeData {
+  selector: 'first' | 'last' | 'timestamp';
+  timestampSec?: number | null;
+  outputWidth?: number;
+  quality?: number;
+  generatedImage?: string;
+  generatedImageUrl?: string;
+  sourceTimestampMs?: number;
+  sourceAssetId?: string;
+  sourceAssetVersionId?: string;
+}
+
+export type HyperframesAgentNodeData = BaseNodeData & ContractHyperframesAgentNodeData;
 
 // One placement on the Video Editor (timelineEditor) timeline. `sourceNodeId`
 // references a member of the input pool (an image/video node wired into the
@@ -302,6 +295,7 @@ export interface TimelineInputSource {
 }
 
 export interface TimelineEditorNodeData extends BaseNodeData {
+  plannerCompositionId?: string;
   items: TimelineItem[];
   // Overlay layers composited over the base `items` track. Optional/additive so
   // existing single-track timelines keep working unchanged.
@@ -332,34 +326,33 @@ export interface TimelineEditorNodeData extends BaseNodeData {
   generatedVideoUrl?: string;
   generatedVideoStoragePath?: string;
   generatedVideoBucket?: string;
+  renderOutputAssetId?: string;
+  renderOutputAssetVersionId?: string;
+  /** Durable handoff from the Canvas agent to the browser-only renderer. */
+  agentRenderRequest?: CanvasTimelineRenderRequest;
   unsupportedReason?: string;
 }
 
-export type PublishTargetStatus = 'draft' | 'approved' | 'scheduled';
-
-// Terminal "Publish to Planner" node. Takes one upstream video (the edited MP4)
-// and attaches it to an organic Planner draft — linking the seed draft the canvas
-// was launched from, or creating a new one. Emits no downstream media (a sink).
-export interface PublishToPlannerNodeData extends BaseNodeData {
-  // Stable identity minted at creation; also the draft's `client_key`, so a
-  // re-publish updates the same draft rather than spawning duplicates. Survives
-  // canvas persistence (UUID has dashes, not stripped as a base64-like token).
-  clientKey?: string;
-  // The draft this node is bound to: pre-seeded when the canvas was launched from
-  // a Planner draft, otherwise set after the first publish. Enables the
-  // "Open in Planner" deep-link.
-  draftId?: string;
+export interface PublisherNodeData extends BaseNodeData {
+  format: CanvasPublishingFormat;
+  assetSlots?: CanvasPublishingSlot[];
+  targetDraftId?: string;
+  targetUpdatedAt?: string;
+  targetTitle?: string;
   weekStartId?: string;
-  platform?: string;
-  // Full ISO timestamptz for the target slot (never date-only).
-  scheduledAt?: string;
-  status?: PublishTargetStatus;
-  // Optional caption the node applies to the draft (else left for the Planner).
-  caption?: string;
-  // Durable, re-signable coords of the published video (base64-safe to persist).
-  publishedStoragePath?: string;
-  publishedBucket?: string;
-  publishedUrl?: string;
+  adAccountId?: string;
+  campaignId?: string;
+  campaignName?: string;
+  adsetId?: string;
+  adsetName?: string;
+  targetAdId?: string;
+  targetAdName?: string;
+  expectedCreativeId?: string;
+  confirmToken?: string;
+  confirmationExpiresAt?: string;
+  appliedCreativeId?: string;
+  previousCreativeId?: string;
+  replacementId?: string;
   publishedAt?: string;
 }
 
@@ -408,14 +401,15 @@ export type StudioNodeData =
   | VideoGenNodeData
   | OmniGenNodeData
   | ExtendVideoNodeData
-  | VideoEditorNodeData
   | TimelineEditorNodeData
-  | PublishToPlannerNodeData
+  | PublisherNodeData
   | ImageNodeData
   | VideoNodeData
   | AudioNodeData
   | DocumentNodeData
-  | VideoDecodeNodeData;
+  | VideoDecodeNodeData
+  | FrameExtractNodeData
+  | HyperframesAgentNodeData;
 export type StudioNode = Node & { data: StudioNodeData };
 
 export type ExecutionStatus = 'idle' | 'running' | 'awaiting' | 'completed' | 'failed';

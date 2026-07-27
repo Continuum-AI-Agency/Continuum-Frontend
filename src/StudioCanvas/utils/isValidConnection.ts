@@ -9,6 +9,6 @@ export {
   getAllowedSourceHandles,
   getAllowedTargetHandles,
   getTargetHandleConnectionLimit,
-  isClipSlotHandle,
   isValidConnection,
+  validateConnection,
 } from '@continuum/contracts';

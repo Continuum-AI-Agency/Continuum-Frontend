@@ -3,9 +3,8 @@
 // DCO rule engine (rules-as-data: JSONB condition trees + tunable params),
 // re-expressed for this engine's ad-set/portfolio grain.
 //
-// STATUS: UNWIRED STUB. Nothing in runCycle() consumes this module yet — it is
-// staged for the wiring pass described in Continuum-Optimizer/docs/dco-salvage/.
-// Deliberately NOT exported from src/index.ts until then.
+// STATUS: WIRED. runCycle() consumes this module via CycleOptions.rules (opt-in;
+// no live portfolio carries rules yet), and it is exported from src/index.ts.
 //
 // The condition wire format is kept compatible with the DCO's json-rules-engine
 // shape ({ conditions: { all|any: [{ fact, operator, value }] } }) so the DCO's
@@ -100,10 +99,10 @@ export type RuleDefinition = {
   params: Record<string, FactValue>;
 };
 
-/** A matched recommendation-kind rule, shaped to map 1:1 onto the engine's
- *  Recommendation at wiring time. `trigger` is a free string (`rule:<templateId>`)
- *  because the engine's Recommendation.trigger union is closed — widening it is
- *  a wiring-pass change, kept out of this stub on purpose. */
+/** A matched recommendation-kind rule, mapped 1:1 onto the engine's
+ *  Recommendation at the runCycle boundary. `trigger` is a free string
+ *  (`rule:<templateId | ruleId>`) — Recommendation.trigger admits it via its
+ *  `RecommendationTrigger | (string & {})` widening. */
 export type RuleFinding = {
   adSetId: string;
   kind: 'pause' | 'creative_refresh' | 'audience_expand';
@@ -149,3 +148,21 @@ export type RuleEngineOutput = {
  *  native P/F triggers this cycle. Built-ins win; rule matches against an
  *  already-flagged (adSetId, kind) are recorded as deduped. */
 export type AlreadyFlagged = Map<string, Set<RuleActionKind>>;
+
+/** The action kinds an autopilot grant may ever cover: strictly risk-reducing
+ *  moves (stop, hold, or experiment on a creative). Scale/raise/budget kinds
+ *  are deliberately absent — growing spend stays a human decision — and the
+ *  denylist is enforced by tests/grantable-kinds.test.ts. `stock_pause` is
+ *  forward-declared for the stock-signal pause lever; it is not yet a member
+ *  of any kind vocabulary. */
+export const GRANTABLE_ACTION_KINDS = [
+  'pause',
+  'pause_ad',
+  'creative_refresh',
+  'audience_expand',
+  'variate_creative',
+  'seed_experiment',
+  'stock_pause',
+] as const;
+
+export type GrantableActionKind = (typeof GRANTABLE_ACTION_KINDS)[number];

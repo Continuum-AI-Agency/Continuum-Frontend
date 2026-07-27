@@ -469,3 +469,191 @@ test.describe('organic planner status + agent chat speakers', () => {
       .toBe('scheduled');
   });
 });
+
+// ── R2 render proof: durable media renders when the snapshot signed URL is dead ──
+//
+// Seeds a bench-tagged single-image draft whose slot_data.draftSnapshot carries a
+// DEAD signed URL while content_json.creative.mediaSuggestion keeps the durable
+// bucket+path pair valid — the exact decay a draft suffers once its upload-time
+// signed URL expires. The proof is rendered pixel truth: the preview's
+// storage-backed <img> reaches naturalWidth > 0, which only happens if the planner
+// re-resolves media from the durable pair instead of trusting the dead signed URL.
+
+const R2_CLIENT_KEY_PREFIX = 'bench-r2media-';
+const R2_TITLE = 'R2 Media — durable path renders when the signed URL is dead';
+const R2_BUCKET = 'brand-profile-assets';
+const R2_PNG_1PX =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+// Same env gate the rest of this file relies on (admin() throws without it) —
+// expressed as a loud conditional skip so runs without the stack say so.
+const HAS_LOCAL_STACK = Boolean(
+  /127\.0\.0\.1|localhost/.test(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+);
+
+test.describe('organic planner R2 media render proof', () => {
+  test.skip(
+    !HAS_LOCAL_STACK,
+    'needs the local Supabase stack — bun run supabase:start && bun run supabase:hydrate && bun run supabase:env:local',
+  );
+  test.describe.configure({ mode: 'serial', timeout: 240_000 });
+
+  let context: BrowserContext | null = null;
+  let page: Page;
+  let storagePath: string | null = null;
+  let previousBrandId: string | null = null;
+
+  async function purgeR2Rows(supabase: SupabaseClient): Promise<void> {
+    await supabase
+      .schema('organic')
+      .from('organic_calendar_drafts')
+      .delete()
+      .eq('brand_id', brandId)
+      .like('client_key', `${R2_CLIENT_KEY_PREFIX}%`);
+  }
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(180_000);
+    const state = await mintSessionWithPassword(LOCAL_OWNER_EMAIL, LOCAL_OWNER_PASSWORD);
+    context = await browser.newContext({ viewport: { width: 1600, height: 950 } });
+    await context.addCookies(state.cookies);
+    page = await context.newPage();
+
+    const supabase = admin();
+    const { data: pref } = await supabase
+      .schema('brand_profiles')
+      .from('user_brand_preferences')
+      .select('active_brand_id')
+      .eq('user_id', OWNER_ID)
+      .maybeSingle();
+    previousBrandId = (pref?.active_brand_id as string | undefined) ?? null;
+
+    await setActiveBrand(supabase, brandId);
+    await repairOnboarding(supabase);
+    await purgeR2Rows(supabase);
+
+    // Real bytes in the real private bucket — the durable pair must be re-signable.
+    const { error: bucketError } = await supabase.storage.createBucket(R2_BUCKET, {
+      public: false,
+    });
+    if (bucketError && !/already exists/i.test(bucketError.message)) {
+      throw new Error(`[planner:status:e2e:bench] bucket ${R2_BUCKET}: ${bucketError.message}`);
+    }
+    storagePath = `${brandId}/organic/bench/r2-media-${Date.now()}.png`;
+    const { error: uploadError } = await supabase.storage
+      .from(R2_BUCKET)
+      .upload(storagePath, Buffer.from(R2_PNG_1PX, 'base64'), { contentType: 'image/png' });
+    if (uploadError) {
+      throw new Error(`[planner:status:e2e:bench] fixture upload failed: ${uploadError.message}`);
+    }
+
+    const dayId = dayIdOffsetFromToday(1);
+    const clientKey = `${R2_CLIENT_KEY_PREFIX}${Date.now()}`;
+    const deadSignedUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/sign/${R2_BUCKET}/${storagePath}?token=bench-expired-token`;
+
+    await supabase
+      .schema('organic')
+      .from('organic_calendar_drafts')
+      .insert({
+        brand_id: brandId,
+        user_id: OWNER_ID,
+        platform: 'instagram',
+        platform_account_id: 'unassigned',
+        status: 'draft',
+        scheduled_date: `${dayId}T12:00:00.000Z`,
+        client_key: clientKey,
+        media_stage: 'realized',
+        slot_data: {
+          placementId: clientKey,
+          dayId,
+          weekStart: dayId,
+          timeLabel: '10:00 AM',
+          platform: 'instagram',
+          trendId: null,
+          title: R2_TITLE,
+          caption: 'R2 bench caption — the durable pair must win over the dead signed URL.',
+          draftSnapshot: {
+            id: clientKey,
+            clientKey,
+            title: R2_TITLE,
+            summary: '',
+            timeLabel: '10:00 AM',
+            dateLabel: dayId,
+            status: 'draft',
+            platforms: ['instagram'],
+            format: 'Post',
+            objective: 'Engagement',
+            creativeIdea: R2_TITLE,
+            captionPreview:
+              'R2 bench caption — the durable pair must win over the dead signed URL.',
+            tags: [],
+            mediaCount: 1,
+            // The decayed snapshot: a signed URL that no longer resolves.
+            mediaSuggestion: { kind: 'image', signedUrl: deadSignedUrl, mimeType: 'image/png' },
+          },
+        },
+        content_json: {
+          content: { type: 'post', format: 'FeedPost' },
+          copy: {
+            caption: 'R2 bench caption — the durable pair must win over the dead signed URL.',
+            hashtags: { high: [], medium: [], low: [] },
+            claims: [],
+          },
+          creative: {
+            // The durable truth: valid bucket + storage path, no live signed URL.
+            mediaSuggestion: {
+              kind: 'image',
+              mediaStatus: 'ready',
+              url: storagePath,
+              bucket: R2_BUCKET,
+              mimeType: 'image/png',
+              alt: 'R2 bench media',
+            },
+          },
+          quality: { passed: true },
+        },
+      })
+      .throwOnError();
+  });
+
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright hook signature
+  test.afterAll(async ({}, testInfo) => {
+    testInfo.setTimeout(60_000);
+    await context?.close();
+    const supabase = admin();
+    await purgeR2Rows(supabase);
+    if (storagePath) await supabase.storage.from(R2_BUCKET).remove([storagePath]);
+    if (previousBrandId) await setActiveBrand(supabase, previousBrandId);
+  });
+
+  test('#R2 the preview <img> decodes from the durable bucket+path when the snapshot URL is dead', async () => {
+    await openWeekPlanner(page);
+
+    const card = page.locator('button[aria-pressed]').filter({ hasText: 'R2 Media' }).first();
+    await expect(card).toBeVisible({ timeout: 90_000 });
+    await card.click();
+
+    const preview = page.getByRole('complementary', { name: 'Draft preview' });
+    await expect(preview).toBeVisible({ timeout: 30_000 });
+
+    // Pixel truth: a storage-backed image in the preview actually decodes. The dead
+    // signed URL can never reach naturalWidth > 0, so a green here proves the
+    // planner minted a fresh URL from the durable bucket+path.
+    await expect
+      .poll(
+        async () =>
+          preview
+            .locator('img')
+            .evaluateAll((imgs) =>
+              imgs
+                .filter((img) => (img.getAttribute('src') ?? '').includes('/storage/v1/object'))
+                .some((img) => (img as HTMLImageElement).naturalWidth > 0),
+            ),
+        { timeout: 60_000, intervals: [1000, 2000, 3000] },
+      )
+      .toBe(true);
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/planner-r2-durable-media.png` });
+  });
+});

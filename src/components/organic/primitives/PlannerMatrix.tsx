@@ -32,6 +32,7 @@ type PlannerMatrixProps = {
   onClearFailure?: (draftId: string) => void;
   onEnrich?: (draftId: string) => void;
   onRealize?: (draftId: string) => void;
+  onStitch?: (draftId: string) => void;
   onNativeDrop?: (
     dayId: string,
     time: string,
@@ -100,6 +101,7 @@ export function PlannerMatrix({
   onClearFailure,
   onEnrich,
   onRealize,
+  onStitch,
   onNativeDrop,
   onCreatePost,
 }: PlannerMatrixProps) {
@@ -273,6 +275,7 @@ export function PlannerMatrix({
                       onClearFailure={onClearFailure}
                       onEnrich={onEnrich}
                       onRealize={onRealize}
+                      onStitch={onStitch}
                       onNativeDrop={onNativeDrop}
                       onCreatePost={onCreatePost}
                     />
@@ -304,6 +307,7 @@ export function PlannerMatrix({
                     onClearFailure={onClearFailure}
                     onEnrich={onEnrich}
                     onRealize={onRealize}
+                    onStitch={onStitch}
                     onNativeDrop={onNativeDrop}
                     onCreatePost={onCreatePost}
                   />

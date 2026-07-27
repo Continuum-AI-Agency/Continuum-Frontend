@@ -149,6 +149,20 @@ function buildListQueryString(query: JainaConversationListQuery) {
   if (query.adAccountId) {
     params.set('ad_account_id', query.adAccountId);
   }
+  // Chat-history search/filters go to the Backend, which owns the trgm search
+  // and tag containment — never filtered client-side off a truncated page.
+  if (query.q) {
+    params.set('q', query.q);
+  }
+  if (query.initiator) {
+    params.set('initiator', query.initiator);
+  }
+  if (query.initiatorAgent) {
+    params.set('initiator_agent', query.initiatorAgent);
+  }
+  if (query.tags) {
+    params.set('tags', query.tags);
+  }
   return params.toString();
 }
 
@@ -182,6 +196,11 @@ export async function GET(request: Request) {
       undefined,
     messagesLimit:
       searchParams.get('messagesLimit') ?? searchParams.get('messages_limit') ?? undefined,
+    q: searchParams.get('q') ?? undefined,
+    initiator: searchParams.get('initiator') ?? undefined,
+    initiatorAgent:
+      searchParams.get('initiatorAgent') ?? searchParams.get('initiator_agent') ?? undefined,
+    tags: searchParams.get('tags') ?? undefined,
   });
 
   if (!parsedQuery.success) {

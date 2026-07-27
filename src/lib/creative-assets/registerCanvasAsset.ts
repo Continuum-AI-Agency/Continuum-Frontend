@@ -1,4 +1,8 @@
-import type { RegisterCanvasAssetRequest } from '@continuum/contracts';
+import {
+  type RegisterCanvasAssetRequest,
+  type RegisterCanvasAssetResponse,
+  registerCanvasAssetResponseSchema,
+} from '@continuum/contracts';
 import { attachVideoPoster } from '@/lib/library/videoPoster';
 
 type RegisterCanvasOutputOptions = {
@@ -9,13 +13,13 @@ type RegisterCanvasOutputOptions = {
 
 // Fire-and-forget registration of a canvas creation into the media library.
 // Swallows errors: a failed registration must never disrupt the generation
-// flow. Returns the new (or existing) media.assets id, or null.
+// flow. Returns the new (or existing) asset + exact version identity, or null.
 export async function registerCanvasOutput(
   input: RegisterCanvasAssetRequest,
   options: RegisterCanvasOutputOptions = {},
-): Promise<string | null> {
+): Promise<RegisterCanvasAssetResponse | null> {
   const fetchImpl = options.fetchImpl ?? fetch;
-  let assetId: string | null;
+  let registered: RegisterCanvasAssetResponse;
   try {
     const resp = await fetchImpl('/api/library/register-canvas', {
       method: 'POST',
@@ -23,14 +27,13 @@ export async function registerCanvasOutput(
       body: JSON.stringify(input),
     });
     if (!resp.ok) return null;
-    const data = (await resp.json()) as { assetId?: string | null };
-    assetId = data.assetId ?? null;
+    registered = registerCanvasAssetResponseSchema.parse(await resp.json());
   } catch (err) {
     console.warn('[registerCanvasOutput] failed', err);
     return null;
   }
 
-  if (!assetId || input.kind !== 'video' || !options.videoSource) return assetId;
+  if (!registered.assetId || input.kind !== 'video' || !options.videoSource) return registered;
 
   try {
     const file =
@@ -44,7 +47,7 @@ export async function registerCanvasOutput(
       file,
       mimeType: input.mimeType,
       brandId: input.brandProfileId,
-      assetId,
+      assetId: registered.assetId,
     });
   } catch (err) {
     // Registration already succeeded. Poster extraction is a browser-only,
@@ -52,5 +55,5 @@ export async function registerCanvasOutput(
     console.warn('[registerCanvasOutput] poster backfill failed', err);
   }
 
-  return assetId;
+  return registered;
 }

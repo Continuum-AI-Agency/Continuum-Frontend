@@ -20,6 +20,7 @@ export * from './library-upload';
 export * from './metadataSearch';
 export * from './notifications';
 export * from './preview';
+export * from './preview-approval';
 export * from './realize';
 export * from './reel-finalize';
 export * from './reel-video';

@@ -34,6 +34,12 @@ function buildReelContentJson(params: {
   durationSec?: number;
   caption?: string;
 }): Record<string, unknown> {
+  const existingCreative =
+    (params.existingContentJson?.creative as Record<string, unknown> | undefined) ?? {};
+  const existingSuggestion =
+    (existingCreative.mediaSuggestion as Record<string, unknown> | undefined) ?? {};
+  const existingReel = (existingSuggestion.reel as Record<string, unknown> | undefined) ?? {};
+  const plannerComposition = existingReel.composition;
   const contentJson = buildUserSuppliedContentJson({
     existingContentJson: params.existingContentJson,
     bucket: params.bucket,
@@ -49,12 +55,54 @@ function buildReelContentJson(params: {
     ],
   });
 
+  if (plannerComposition) {
+    const creative = (contentJson.creative as Record<string, unknown> | undefined) ?? {};
+    const suggestion = (creative.mediaSuggestion as Record<string, unknown> | undefined) ?? {};
+    const reel = (suggestion.reel as Record<string, unknown> | undefined) ?? {};
+    contentJson.creative = {
+      ...creative,
+      mediaSuggestion: {
+        ...suggestion,
+        reel: { ...reel, composition: plannerComposition },
+      },
+    };
+  }
+
   const caption = params.caption?.trim();
   if (caption) {
     const creative = (contentJson.creative as Record<string, unknown> | undefined) ?? {};
     contentJson.creative = { ...creative, caption };
   }
   return contentJson;
+}
+
+function markPlannerCompositionReady(
+  contentJson: Record<string, unknown>,
+  compositionId: string,
+  resultAssetId: string | undefined,
+  nowIso: string,
+) {
+  const creative = (contentJson.creative as Record<string, unknown> | undefined) ?? {};
+  const suggestion = (creative.mediaSuggestion as Record<string, unknown> | undefined) ?? {};
+  const reel = (suggestion.reel as Record<string, unknown> | undefined) ?? {};
+  const composition = (reel.composition as Record<string, unknown> | undefined) ?? {};
+  if (composition.id !== compositionId) return;
+  contentJson.creative = {
+    ...creative,
+    mediaSuggestion: {
+      ...suggestion,
+      reel: {
+        ...reel,
+        composition: {
+          ...composition,
+          status: 'ready',
+          resultAssetId: resultAssetId ?? null,
+          error: null,
+          updatedAt: nowIso,
+        },
+      },
+    },
+  };
 }
 
 export async function POST(request: Request) {
@@ -87,6 +135,22 @@ export async function POST(request: Request) {
   try {
     const admin = createSupabaseAdminClient();
     const organic = (admin as unknown as SupabaseClient).schema('organic');
+    const media = (admin as unknown as SupabaseClient).schema('media');
+
+    const ownedAsset = await media
+      .from('assets')
+      .select('id')
+      .eq('brand_id', payload.brandId)
+      .eq('bucket', payload.bucket)
+      .eq('storage_path', payload.storagePath)
+      .maybeSingle();
+    if (ownedAsset.error || !ownedAsset.data?.id) {
+      throw new Error('The rendered video is not registered to this brand.');
+    }
+    const resultAssetId = ownedAsset.data.id as string;
+    if (payload.resultAssetId && payload.resultAssetId !== resultAssetId) {
+      throw new Error('The rendered asset does not match its storage location.');
+    }
 
     // Re-sign the durable MP4 for immediate render; brand access was verified above.
     const { data: signed, error: signError } = await admin.storage
@@ -120,6 +184,9 @@ export async function POST(request: Request) {
         durationSec: payload.durationSec,
         caption: payload.caption,
       });
+      if (payload.compositionId) {
+        markPlannerCompositionReady(contentJson, payload.compositionId, resultAssetId, nowIso);
+      }
 
       const { error: updateError } = await organic
         .from('organic_calendar_drafts')
@@ -134,6 +201,24 @@ export async function POST(request: Request) {
         throw new Error(`Failed to attach video to draft: ${updateError.message}`);
       }
 
+      if (payload.compositionId) {
+        const { error: compositionError } = await organic
+          .from('planner_canvas_compositions')
+          .update({
+            status: 'ready',
+            result_asset_id: resultAssetId,
+            error: null,
+            is_current: true,
+            updated_at: nowIso,
+          })
+          .eq('id', payload.compositionId)
+          .eq('draft_id', payload.draftId)
+          .eq('brand_id', payload.brandId);
+        if (compositionError) {
+          throw new Error(`Failed to finish composition: ${compositionError.message}`);
+        }
+      }
+
       const weekStartId = computeWeekStartId(existing.scheduled_date ?? nowIso);
       const response = publishCanvasResponseSchema.parse({
         draftId: payload.draftId,
@@ -142,6 +227,7 @@ export async function POST(request: Request) {
         storagePath: payload.storagePath,
         signedUrl,
         createdDraft: false,
+        ...(payload.compositionId ? { compositionId: payload.compositionId } : {}),
       });
       return NextResponse.json(response, { status: 200 });
     }

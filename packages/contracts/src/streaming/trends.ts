@@ -129,6 +129,16 @@ export const trendsGenerationTelemetrySchema = z.object({
     queries: z.array(z.string()),
     provider_outcomes: z.array(z.unknown()),
     warnings: z.array(z.string()),
+    /** Proof + speed of the GOOGLE_SEARCH grounding call (absent when it did not run). */
+    grounding: z
+      .object({
+        status: z.enum(['ok', 'no_sources', 'timeout', 'error']),
+        ms: z.number().nonnegative(),
+        sources: z.number().int().nonnegative(),
+        queries: z.array(z.string()),
+        model: z.string(),
+      })
+      .optional(),
   }),
 });
 export type TrendsGenerationTelemetry = z.infer<typeof trendsGenerationTelemetrySchema>;
@@ -248,3 +258,27 @@ export const trendsJobStartResponseSchema = z
   })
   .loose();
 export type TrendsJobStartResponse = z.infer<typeof trendsJobStartResponseSchema>;
+
+// GET /api/trends/runs/recent — recent generations with grounding latency, the
+// "are runs happening and how fast" ops surface. Matches listRecentTrendsRuns.
+export const trendsRecentRunSchema = z.object({
+  generation_id: z.string(),
+  week_start_date: z.string().nullable(),
+  status: z.string(),
+  started_at: z.string().nullable(),
+  completed_at: z.string().nullable(),
+  total_duration_ms: z.number().nullable(),
+  evidence_mode: z.string().nullable(),
+  grounding_ms: z.number().nullable(),
+  grounding_sources: z.number().nullable(),
+  grounding_status: z.string().nullable(),
+});
+export type TrendsRecentRun = z.infer<typeof trendsRecentRunSchema>;
+
+export const trendsRecentRunsResponseSchema = z
+  .object({
+    status: z.string(),
+    data: z.object({ runs: z.array(trendsRecentRunSchema) }).optional(),
+  })
+  .loose();
+export type TrendsRecentRunsResponse = z.infer<typeof trendsRecentRunsResponseSchema>;

@@ -75,8 +75,19 @@ export function applyOrganicFrame(
       break;
     }
     case 'error':
-      if (mode === 'chat') dispatch({ type: 'STREAM_ERROR', error: parsed.message });
+      if (mode === 'chat') {
+        dispatch({
+          type: 'STREAM_ERROR',
+          error: parsed.message,
+          code: parsed.code,
+          transient: parsed.transient,
+        });
+      }
       return true;
+    case 'retrying':
+      if (mode === 'control') break;
+      dispatch({ type: 'STREAM_RETRYING', attempt: parsed.attempt, reason: parsed.reason });
+      break;
     case 'complete':
       if (mode === 'chat') dispatch({ type: 'STREAM_COMPLETE' });
       return true;

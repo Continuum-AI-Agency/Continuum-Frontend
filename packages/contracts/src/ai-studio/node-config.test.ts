@@ -54,9 +54,55 @@ describe('coerceNodeConfig — the agent write-time guard', () => {
     expect(result.changes).toEqual([]);
   });
 
-  it('leaves non-image node types alone', () => {
-    const patch = { prompt: 'x', resolution: '1080p' };
-    expect(coerceNodeConfig('videoGen', patch).data).toBe(patch);
+  it('leaves node types with no config guard alone', () => {
+    const patch = { value: 'x' };
+    expect(coerceNodeConfig('string', patch).data).toBe(patch);
+  });
+
+  it('coerces an illegal video model to the node type default', () => {
+    const result = coerceNodeConfig('veoDirector', { model: 'nano-banana-2' });
+
+    expect(result.data.model).toBe('veo-3.1');
+    expect(result.changes.join(' ')).toContain('not a video generator');
+  });
+
+  it('coerces a referenceMode the model does not accept', () => {
+    const result = coerceNodeConfig('videoGen', {
+      model: 'veo-3.1-lite',
+      referenceMode: 'images',
+    });
+
+    expect(result.data.referenceMode).toBe('frames');
+    expect(result.changes.join(' ')).toContain('referenceMode');
+  });
+
+  it('honours a legal referenceMode — first/last frame on the full Veo 3.1', () => {
+    const result = coerceNodeConfig('videoGen', { model: 'veo-3.1', referenceMode: 'frames' });
+
+    expect(result.data.referenceMode).toBe('frames');
+    expect(result.changes).toEqual([]);
+  });
+
+  it('re-checks the mode against the current node when only the model is patched', () => {
+    const result = coerceNodeConfig(
+      'videoGen',
+      { model: 'veo-3.1-lite' },
+      { model: 'veo-3.1', referenceMode: 'images' },
+    );
+
+    expect(result.data.referenceMode).toBe('frames');
+    expect(result.changes.join(' ')).toContain('referenceMode');
+  });
+
+  it('is patch-safe on video nodes: a prompt-only update injects nothing', () => {
+    const result = coerceNodeConfig(
+      'videoGen',
+      { prompt: 'a slow dolly in' },
+      { model: 'veo-3.1', referenceMode: 'frames' },
+    );
+
+    expect(result.data).toEqual({ prompt: 'a slow dolly in' });
+    expect(result.changes).toEqual([]);
   });
 });
 
@@ -64,6 +110,15 @@ describe('createNodeData — every agent add_node / build_canvas goes through he
   it('coerces an illegal imageSize at creation', () => {
     const { data } = createNodeData('nanoGen', { imageSize: '1024px' });
     expect(data.imageSize).toBe('1K');
+  });
+
+  it('mints a video node whose referenceMode agrees with its overridden model', () => {
+    // baseNodeData seeds the mode from the node type's model, then `overrides` merge
+    // on top — so a model override used to leave a mode the model does not accept.
+    expect(createNodeData('videoGen', { model: 'veo-3.1' }).data.referenceMode).toBe('images');
+    expect(createNodeData('videoGen', { model: 'kling-omni' }).data.referenceMode).toBe('omni');
+    expect(createNodeData('veoDirector').data.referenceMode).toBe('images');
+    expect(createNodeData('veoFast').data.referenceMode).toBe('frames');
   });
 
   it('creates a nanoGen with no imageSize for a model that takes none', () => {
@@ -80,6 +135,48 @@ describe('createNodeData — every agent add_node / build_canvas goes through he
     expect(createNodeData('nanoGen', { aspectRatio: '9:16' }).style).toEqual({
       width: 225,
       height: 400,
+    });
+  });
+
+  // Only nanoGen had style assertions here, which is exactly how a hardcoded 16:9 box
+  // shipped for every video generator (Airtable #230): the node's footer said "9:16"
+  // while the box stayed landscape. The whole family is asserted now.
+  describe('the whole generator family is sized from its aspect ratio', () => {
+    const VIDEO_TYPES = ['videoGen', 'veoDirector', 'veoFast'] as const;
+
+    it('gives every video generator a 16:9 default it actually carries in data', () => {
+      for (const type of VIDEO_TYPES) {
+        const { data, style } = createNodeData(type);
+        expect(data.aspectRatio).toBe('16:9');
+        expect(style).toEqual({ width: 512, height: 288 });
+      }
+    });
+
+    it('makes a 9:16 video node PORTRAIT', () => {
+      for (const type of VIDEO_TYPES) {
+        const { style } = createNodeData(type, { aspectRatio: '9:16' });
+        expect(style).toEqual({ width: 300, height: 533 });
+      }
+    });
+
+    it('makes a 1:1 video node square', () => {
+      for (const type of VIDEO_TYPES) {
+        expect(createNodeData(type, { aspectRatio: '1:1' }).style).toEqual({
+          width: 384,
+          height: 384,
+        });
+      }
+    });
+
+    it('sizes omniGen from its own taller envelope', () => {
+      expect(createNodeData('omniGen').style).toEqual({ width: 572, height: 322 });
+      const portrait = createNodeData('omniGen', { aspectRatio: '9:16' }).style;
+      expect(portrait).toEqual({ width: 322, height: 572 });
+    });
+
+    it('leaves a non-generator node on its fixed box', () => {
+      expect(createNodeData('timelineEditor').style).toEqual({ width: 320, height: 260 });
+      expect(createNodeData('image').style).toEqual({ width: 192, height: 192 });
     });
   });
 });

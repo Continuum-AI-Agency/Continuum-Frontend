@@ -1,4 +1,5 @@
-import { z } from "zod";
+import { z } from 'zod';
+import { mediaPreviewApprovalSchema } from './preview-approval';
 
 /**
  * Contract for the reel-video batch endpoint
@@ -7,9 +8,9 @@ import { z } from "zod";
  * Bulk reels are persisted as an ungenerated storyboard
  * (`mediaSuggestion.reel.scenes`). The user tags the reels they want and
  * approves a gated batch; the backend renders each tagged reel's stored
- * storyboard (Veo clips + stitch), writes the MP4 back onto the draft, and
- * streams per-draft progress as SSE frames. Selection is the "tag" — there is
- * no persisted tag column.
+ * storyboard into durable Veo clips, seeds an editable AI Studio composition,
+ * and streams per-draft progress as SSE frames. The browser may either stitch
+ * those clips directly in Planner or edit/render the composition in AI Studio.
  */
 
 /** Default cap on reels per batch. Backend may override via env; FE uses it to gate selection. */
@@ -21,16 +22,16 @@ const REEL_VIDEO_BATCH_HARD_MAX = 50;
 export const reelVideoBatchRequestSchema = z
   .object({
     brandId: z.string().min(1),
-    draftIds: z.array(z.string().min(1)).min(1).max(REEL_VIDEO_BATCH_HARD_MAX),
+    approvals: z.array(mediaPreviewApprovalSchema).min(1).max(REEL_VIDEO_BATCH_HARD_MAX),
   })
   .strict();
 
 /** Coarse stage a single reel is in, for progress UI. */
 export const reelVideoStageEnum = z.enum([
-  "planning",
-  "generating_scenes",
-  "stitching",
-  "persisting",
+  'planning',
+  'generating_scenes',
+  'stitching',
+  'persisting',
 ]);
 
 /**
@@ -41,8 +42,10 @@ export const reelVideoStageEnum = z.enum([
 export const reelClipSchema = z
   .object({
     index: z.number().int().min(0),
-    role: z.enum(["hook", "body", "cta"]),
+    role: z.enum(['hook', 'body', 'cta']),
     durationSec: z.number().nonnegative(),
+    /** Durable storage bucket; signedClipUrl is preview-only and may expire. */
+    bucket: z.string().min(1),
     clipUrl: z.string(),
     signedClipUrl: z.string().min(1),
     captionText: z.string().nullable().optional(),
@@ -50,11 +53,11 @@ export const reelClipSchema = z
   })
   .strict();
 
-export const reelVideoBatchFrameSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("batch_started"), total: z.number().int().nonnegative() }).strict(),
+export const reelVideoBatchFrameSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('batch_started'), total: z.number().int().nonnegative() }).strict(),
   z
     .object({
-      type: z.literal("reel_started"),
+      type: z.literal('reel_started'),
       draftId: z.string().min(1),
       // Real organic.post_generation_jobs uuid backing this inline reel batch, so
       // the FE can cancel via POST /jobs/:jobId/cancel. Optional (graceful
@@ -64,15 +67,22 @@ export const reelVideoBatchFrameSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      type: z.literal("reel_progress"),
+      type: z.literal('reel_progress'),
       draftId: z.string().min(1),
       stage: reelVideoStageEnum,
       message: z.string().nullable().optional(),
+      // Heartbeat telemetry (seconds), emitted periodically while multi-minute
+      // Veo scene generation runs so the UI never reads as stuck.
+      elapsedSec: z.number().nonnegative().optional(),
+      etaSec: z.number().nonnegative().optional(),
+      budgetSec: z.number().positive().optional(),
+      sceneIndex: z.number().int().nonnegative().optional(),
+      sceneCount: z.number().int().nonnegative().optional(),
     })
     .strict(),
   z
     .object({
-      type: z.literal("reel_ready"),
+      type: z.literal('reel_ready'),
       draftId: z.string().min(1),
       mp4Url: z.string().nullable(),
       mp4Path: z.string(),
@@ -82,7 +92,7 @@ export const reelVideoBatchFrameSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      type: z.literal("reel_clips_ready"),
+      type: z.literal('reel_clips_ready'),
       draftId: z.string().min(1),
       aspectRatio: z.string().min(1),
       durationSec: z.number().nonnegative(),
@@ -93,14 +103,14 @@ export const reelVideoBatchFrameSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      type: z.literal("reel_failed"),
+      type: z.literal('reel_failed'),
       draftId: z.string().min(1),
       error: z.string(),
     })
     .strict(),
   z
     .object({
-      type: z.literal("batch_completed"),
+      type: z.literal('batch_completed'),
       ready: z.number().int().nonnegative(),
       failed: z.number().int().nonnegative(),
     })

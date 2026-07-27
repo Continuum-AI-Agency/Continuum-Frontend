@@ -6,12 +6,15 @@ import {
   type CanvasRenderContinuationClaimResponse,
   type CanvasRenderContinuationFinishRequest,
   type CanvasRenderContinuationFinishResponse,
+  type CanvasRenderContinuationRenewRequest,
+  type CanvasRenderContinuationRenewResponse,
   canvasRenderContinuationSchema,
 } from '@continuum/contracts';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   claimCanvasRenderContinuation,
   finishCanvasRenderContinuation,
+  renewCanvasRenderContinuation,
 } from '@/lib/api/canvasRender.client';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
@@ -27,7 +30,12 @@ function readPendingContinuations(nodes: StudioNode[]): PendingContinuation[] {
   return nodes.flatMap((node) => {
     if (node.type !== 'timelineEditor') return [];
     const parsed = canvasRenderContinuationSchema.safeParse(node.data.renderContinuation);
-    if (!parsed.success || parsed.data.status !== 'pending') return [];
+    if (!parsed.success) return [];
+    const leaseExpired =
+      parsed.data.status === 'running' &&
+      parsed.data.leaseExpiresAt !== undefined &&
+      new Date(parsed.data.leaseExpiresAt).getTime() <= Date.now();
+    if (parsed.data.status !== 'pending' && !leaseExpired) return [];
     return [{ nodeId: node.id, continuation: parsed.data }];
   });
 }
@@ -44,32 +52,63 @@ type ResumeContinuationDependencies = {
   finish(
     request: CanvasRenderContinuationFinishRequest,
   ): Promise<CanvasRenderContinuationFinishResponse>;
+  renew(
+    request: CanvasRenderContinuationRenewRequest,
+  ): Promise<CanvasRenderContinuationRenewResponse>;
 };
 
 export async function resumeTimelineRenderContinuation(
   request: CanvasRenderContinuationClaimRequest,
   dependencies: ResumeContinuationDependencies,
 ): Promise<boolean> {
-  let claimed = false;
+  let claimToken: string | undefined;
+  let completedLeafIds: string[] = [];
+  let renewalTimer: ReturnType<typeof setInterval> | undefined;
   try {
     const claim = await dependencies.claim(request);
-    claimed = claim.claimed;
     if (!claim.claimed) return false;
+    if (!claim.claimToken) throw new Error('Continuation claim did not return a lease token');
+    claimToken = claim.claimToken;
+    completedLeafIds = [...claim.completedLeafIds];
+    const leaseRequest = () => ({
+      ...request,
+      claimToken: claim.claimToken as string,
+      completedLeafIds,
+    });
+    renewalTimer = setInterval(() => {
+      void dependencies.renew(leaseRequest()).catch(() => undefined);
+    }, 20_000);
 
     for (const targetNodeId of claim.downstreamLeafIds) {
+      if (completedLeafIds.includes(targetNodeId)) continue;
       await dependencies.executeTarget(targetNodeId);
+      completedLeafIds = [...completedLeafIds, targetNodeId];
+      await dependencies.renew(leaseRequest());
     }
 
-    await dependencies.finish({ ...request, status: 'done' });
+    await dependencies.finish({
+      ...request,
+      claimToken,
+      completedLeafIds,
+      status: 'done',
+    });
     return true;
   } catch (cause) {
     const error = cause instanceof Error ? cause : new Error('Downstream workflow failed');
-    if (claimed) {
+    if (claimToken) {
       await dependencies
-        .finish({ ...request, status: 'error', error: error.message })
+        .finish({
+          ...request,
+          claimToken,
+          completedLeafIds,
+          status: 'error',
+          error: error.message,
+        })
         .catch(() => undefined);
     }
     throw error;
+  } finally {
+    if (renewalTimer) clearInterval(renewalTimer);
   }
 }
 
@@ -79,11 +118,12 @@ export function useTimelineRenderContinuations(
 ): void {
   const controls = useWorkflowExecution();
   const nodes = useStudioStore((state) => state.nodes) as StudioNode[];
-  const pending = useMemo(() => readPendingContinuations(nodes), [nodes]);
   const attemptedRef = useRef(new Set<string>());
   const runningRef = useRef(false);
   const mountedRef = useRef(true);
-  const [resumePass, setResumePass] = useState(0);
+  const [, requestResumePass] = useState(0);
+  const pending = readPendingContinuations(nodes);
+  const claimantIdRef = useRef(crypto.randomUUID());
 
   useEffect(
     () => () => {
@@ -113,10 +153,12 @@ export function useTimelineRenderContinuations(
             brandProfileId,
             roomId,
             nodeId: next.nodeId,
+            claimantId: claimantIdRef.current,
           },
           {
             claim: claimCanvasRenderContinuation,
             finish: finishCanvasRenderContinuation,
+            renew: renewCanvasRenderContinuation,
             executeTarget: async (targetNodeId) => {
               await executeWorkflow(controls, {
                 targetNodeId,
@@ -145,11 +187,11 @@ export function useTimelineRenderContinuations(
         runningRef.current = false;
         window.setTimeout(
           () => {
-            if (mountedRef.current) setResumePass((current) => current + 1);
+            if (mountedRef.current) requestResumePass((current) => current + 1);
           },
           retry ? 2_000 : 0,
         );
       }
     })();
-  }, [brandProfileId, controls, pending, resumePass, roomId]);
+  }, [brandProfileId, controls, pending, roomId]);
 }

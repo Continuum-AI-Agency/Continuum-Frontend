@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { BrandGrantsSection } from '@/components/integrations/BrandGrantsSection';
 import { MyConnectionsSharingSection } from '@/components/integrations/MyConnectionsSharingSection';
+import { ChatConnectionsSection } from '@/components/settings/account/ChatConnectionsSection';
 import { McpActivityTable } from '@/components/settings/account/McpActivityTable';
 import { McpConnectionsSection } from '@/components/settings/account/McpConnectionsSection';
 import { UserBrandsPanel } from '@/components/settings/account/UserBrandsPanel';
@@ -17,6 +18,7 @@ import { BrandDangerZone } from '@/components/settings/brand/BrandDangerZone';
 import { BrandIdentityHeader } from '@/components/settings/brand/BrandIdentityHeader';
 import { BrandIdentitySection } from '@/components/settings/brand/BrandIdentitySection';
 import { BrandIntegrationsSwitcher } from '@/components/settings/brand/BrandIntegrationsSwitcher';
+import { BrandIntelligenceWorkspace } from '@/components/settings/brand/BrandIntelligenceWorkspace';
 import { BrandInvitesSection } from '@/components/settings/brand/BrandInvitesSection';
 import { BrandPulseSection } from '@/components/settings/brand/BrandPulseSection';
 import { PromptsSettingsSection } from '@/components/settings/brand/PromptsSettingsSection';
@@ -32,6 +34,7 @@ import { RunStrategicAnalysisButton } from '@/components/strategic-analyses/RunS
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandAdNamingSchema } from '@/lib/brands/adNaming';
 import { fetchBrandBook } from '@/lib/brands/brandBook';
+import { fetchBrandIntelligenceOverview } from '@/lib/brands/brandIntelligence.server';
 import { fetchBrandDocuments } from '@/lib/brands/documents';
 import { fetchBrandProfileDetails } from '@/lib/brands/profile';
 import { fetchPulseRecipients } from '@/lib/brands/pulseRecipients';
@@ -176,8 +179,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </SettingsSection>
       </>
     );
-  } else if (initialSection === 'brand-book') {
-    const brandBook = await fetchBrandBook(activeBrandId);
+  } else if (initialSection === 'brand-intelligence') {
+    const [brandBook, brandIntelligence] = await Promise.all([
+      fetchBrandBook(activeBrandId),
+      fetchBrandIntelligenceOverview(activeBrandId),
+    ]);
 
     // Not ready yet (absent, assembling, or errored) → let the empty state kick
     // off a first-time report run. Build the same payload onboarding sends from
@@ -200,17 +206,27 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       <>
         {createBrandHeader(defaultBrandName)}
         <SettingsSection
-          title="Brand Book"
-          description="Your living brand identity — shown shallow during onboarding, deepened automatically over time."
+          title="Brand Intelligence"
+          description="A living, evidence-backed view of your Brand DNA, competitive position, and visibility."
         >
-          <BrandBookSection
+          <BrandIntelligenceWorkspace
+            brandId={activeBrandId}
+            brandName={defaultBrandName}
             brandBook={brandBook}
-            generation={{
-              brandId: activeBrandId,
-              brandName: defaultBrandName,
-              payload: generationPayload,
-            }}
+            initialOverview={brandIntelligence}
           />
+          {!brandBook?.present && generationPayload ? (
+            <div className="mt-6 border-t border-white/10 pt-6">
+              <BrandBookSection
+                brandBook={brandBook}
+                generation={{
+                  brandId: activeBrandId,
+                  brandName: defaultBrandName,
+                  payload: generationPayload,
+                }}
+              />
+            </div>
+          ) : null}
         </SettingsSection>
       </>
     );
@@ -328,6 +344,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           description="OAuth providers tied to your account. Assign these to brands from the brand integrations panel."
         >
           <UserConnectionsSwitcher integrations={userIntegrationSummary} />
+        </SettingsSection>
+        <SettingsSection
+          title="Chat request delivery"
+          description="Slack and Microsoft Teams identities that can receive Goal questions. Choose the preferred route for this brand."
+        >
+          <ChatConnectionsSection brandId={activeBrandId} brandName={defaultBrandName} />
         </SettingsSection>
         <SettingsSection
           title="Connected apps"

@@ -355,6 +355,56 @@ describe('CalendarDraftCard', () => {
     expect(screen.queryByText('Text only — no media yet')).toBeNull();
   });
 
+  it('offers both the render queue and AI Studio editing for prepared reel clips', () => {
+    const preparedReel: OrganicCalendarDraft = {
+      ...draft,
+      id: 'draft-reel-ready',
+      backendDraftId: 'backend-draft-1',
+      mediaStage: 'storyboard_ready',
+      mediaSuggestion: {
+        mediaStatus: 'pending',
+        reel: {
+          generated: false,
+          composition: {
+            id: 'composition-1',
+            brandId: 'brand-1',
+            draftId: 'backend-draft-1',
+            roomId: 'room-1',
+            timelineNodeId: 'timeline-1',
+            publishNodeId: 'publish-1',
+            revision: 1,
+            status: 'clips_ready',
+            isCurrent: true,
+            sourceFingerprint: 'sha256:abc',
+            openHref: '/ai-studio?roomId=room-1&focusNodeId=timeline-1',
+            returnHref: '/organic?tab=planner&draftId=backend-draft-1',
+            createdAt: '2026-07-22T12:00:00.000Z',
+            updatedAt: '2026-07-22T12:00:00.000Z',
+          },
+        },
+      },
+    };
+    const onStitch = mock();
+    const onRealize = mock();
+
+    render(
+      <CalendarDraftCard
+        draft={preparedReel}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+        onStitch={onStitch}
+        onRealize={onRealize}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Ready to render'));
+    fireEvent.click(screen.getByText('Edit in AI Studio'));
+    expect(onStitch).toHaveBeenCalledWith('draft-reel-ready');
+    expect(onRealize).toHaveBeenCalledWith('draft-reel-ready');
+  });
+
   it('shows a generating indicator while media is generating', () => {
     const generating: OrganicCalendarDraft = {
       ...draft,

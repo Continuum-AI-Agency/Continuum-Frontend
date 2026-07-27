@@ -10,13 +10,14 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useToastContext } from '@/components/ui/ToastProvider';
 import { useSession } from '@/hooks/useSession';
+import type { ChangelogEntry } from '@/lib/changelog/schema';
 import {
   createDashboardWelcomeToastOptions,
   shouldShowDashboardWelcomeToast,
 } from '@/lib/ui/dashboardWelcomeToast';
 import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from './navigation/routes';
 
-function DashboardHeaderInner() {
+function DashboardHeaderInner({ changelogEntries }: { changelogEntries: ChangelogEntry[] }) {
   useDashboardWelcomeToast();
   useInviteToast();
   const pathname = usePathname();
@@ -56,21 +57,21 @@ function DashboardHeaderInner() {
 
       <div className="ml-auto flex items-center gap-3">
         <ClientRenderInbox />
-        <WhatsNewBell />
+        <WhatsNewBell entries={changelogEntries} />
         <NotificationsBell />
       </div>
     </header>
   );
 }
 
-export function DashboardHeader() {
+export function DashboardHeader({ changelogEntries }: { changelogEntries: ChangelogEntry[] }) {
   return (
     <Suspense
       fallback={
         <header className="flex h-[var(--app-header-h)] shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4" />
       }
     >
-      <DashboardHeaderInner />
+      <DashboardHeaderInner changelogEntries={changelogEntries} />
     </Suspense>
   );
 }

@@ -1,3 +1,4 @@
+import type { AgentInitiator, AgentSessionListFilters } from '@continuum/contracts';
 import {
   type OrganicChatMessageDto,
   type OrganicChatSessionDto,
@@ -5,6 +6,7 @@ import {
   organicChatSessionDtoSchema,
   type PersistedOrganicFrame,
   persistedOrganicFrameSchema,
+  updateAgentSessionTagsResponseSchema,
 } from '@continuum/contracts';
 import { type AgentMentionMetadata, agentMentionMetadataSchema } from '@/lib/agent-references';
 import { request } from '@/lib/api/http';
@@ -18,6 +20,15 @@ export type OrganicSession = {
   lastMessageAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Who started the conversation: a human, or another agent delegating to Organic. */
+  initiator: AgentInitiator;
+  initiatorAgent: string | null;
+  /** Set on AI-initiated sessions — the originating run/session to link back to. */
+  callerRunId: string | null;
+  callerSessionId: string | null;
+  tags: string[];
+  /** First user message, truncated — what server-side search matches on. */
+  preview: string | null;
 };
 
 export type OrganicSessionMessage = {
@@ -80,6 +91,12 @@ function mapSession(row: OrganicChatSessionDto): OrganicSession {
     lastMessageAt: row.lastMessageAt ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt ?? row.lastMessageAt ?? row.createdAt,
+    initiator: row.initiator ?? 'user',
+    initiatorAgent: row.initiatorAgent ?? null,
+    callerRunId: row.callerRunId ?? null,
+    callerSessionId: row.callerSessionId ?? null,
+    tags: row.tags ?? [],
+    preview: row.preview ?? null,
   };
 }
 
@@ -117,10 +134,19 @@ function mapMessage(
   };
 }
 
-export async function fetchOrganicSessions(brandId: string): Promise<OrganicSession[]> {
+export async function fetchOrganicSessions(
+  brandId: string,
+  filters?: AgentSessionListFilters,
+): Promise<OrganicSession[]> {
   try {
+    const query = new URLSearchParams({ brand_id: brandId });
+    if (filters?.q) query.set('q', filters.q);
+    if (filters?.initiator) query.set('initiator', filters.initiator);
+    if (filters?.initiatorAgent) query.set('initiator_agent', filters.initiatorAgent);
+    if (filters?.tags && filters.tags.length > 0) query.set('tags', filters.tags.join(','));
+
     const raw = await request({
-      path: `/api/organic/agent/sessions?brand_id=${encodeURIComponent(brandId)}`,
+      path: `/api/organic/agent/sessions?${query.toString()}`,
     });
     return extractSessions(raw)
       .map((row) => organicChatSessionDtoSchema.safeParse(row))
@@ -200,6 +226,25 @@ export async function fetchOrganicSessionMessages(
 ): Promise<OrganicSessionMessage[]> {
   const { messages } = await fetchOrganicSessionMessagePage(sessionId, brandId);
   return messages;
+}
+
+/**
+ * Replaces a conversation's tags. Throws on failure so the caller can keep the
+ * previous chips; returns the tags as STORED (normalized server-side), which is
+ * what the sidebar must render — not the raw input.
+ */
+export async function updateOrganicSessionTags(
+  sessionId: string,
+  brandId: string,
+  tags: string[],
+): Promise<string[]> {
+  const raw = await request({
+    path: `/api/organic/agent/sessions/${encodeURIComponent(sessionId)}?brand_id=${encodeURIComponent(brandId)}`,
+    method: 'PATCH',
+    body: { tags },
+  });
+  const parsed = updateAgentSessionTagsResponseSchema.safeParse(raw);
+  return parsed.success ? parsed.data.tags : tags;
 }
 
 /**

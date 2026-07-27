@@ -7,31 +7,28 @@
  * `reelVideoBatchFrameSchema` — this covers image + carousel only.)
  */
 
-import { z } from "zod";
-import { organicPublishingAssetSchema } from "../streaming/organic-pipeline";
+import { z } from 'zod';
+import { organicPublishingAssetSchema } from '../streaming/organic-pipeline';
+import { mediaPreviewApprovalSchema } from './preview-approval';
 
 export const DEFAULT_MEDIA_REALIZE_BATCH_MAX = 10;
 
 export const mediaRealizeRequestSchema = z
   .object({
     brandId: z.string().min(1),
-    draftIds: z.array(z.string().min(1)).min(1).max(50),
+    approvals: z.array(mediaPreviewApprovalSchema).min(1).max(50),
   })
   .strict();
 export type MediaRealizeRequest = z.infer<typeof mediaRealizeRequestSchema>;
 
-export const mediaRealizeStageEnum = z.enum([
-  "loading",
-  "generating",
-  "persisting",
-]);
+export const mediaRealizeStageEnum = z.enum(['loading', 'generating', 'persisting']);
 export type MediaRealizeStage = z.infer<typeof mediaRealizeStageEnum>;
 
-export const mediaRealizeFrameSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("realize_batch_started"), total: z.number().int().min(0) }).strict(),
+export const mediaRealizeFrameSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('realize_batch_started'), total: z.number().int().min(0) }).strict(),
   z
     .object({
-      type: z.literal("realize_started"),
+      type: z.literal('realize_started'),
       draftId: z.string().min(1),
       // Real organic.post_generation_jobs uuid backing this inline realize, so the
       // FE can cancel via POST /jobs/:jobId/cancel. Optional: if job-row creation
@@ -41,7 +38,7 @@ export const mediaRealizeFrameSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      type: z.literal("realize_progress"),
+      type: z.literal('realize_progress'),
       draftId: z.string().min(1),
       stage: mediaRealizeStageEnum,
       message: z.string().optional(),
@@ -49,9 +46,9 @@ export const mediaRealizeFrameSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      type: z.literal("realize_ready"),
+      type: z.literal('realize_ready'),
       draftId: z.string().min(1),
-      kind: z.enum(["image", "carousel"]),
+      kind: z.enum(['image', 'carousel']),
       // Durable, render-ready assets persisted on the draft so the FE mounts the
       // generated creative immediately (no refetch/reload). publishingAssets is the
       // shape every card resolver reads (incl. the carousel-only detail preview);
@@ -63,14 +60,14 @@ export const mediaRealizeFrameSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      type: z.literal("realize_failed"),
+      type: z.literal('realize_failed'),
       draftId: z.string().min(1),
       error: z.string().min(1),
     })
     .strict(),
   z
     .object({
-      type: z.literal("realize_batch_completed"),
+      type: z.literal('realize_batch_completed'),
       ready: z.number().int().min(0),
       failed: z.number().int().min(0),
     })

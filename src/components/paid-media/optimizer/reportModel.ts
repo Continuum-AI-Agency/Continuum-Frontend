@@ -5,6 +5,9 @@
 // columns pass through untouched.
 
 import {
+  buildCreativeRequestBrief,
+  type CreativeRequestBrief,
+  type CreativeVariationSeedInput,
   type CycleRunReport,
   type ParsedCycleRunReport,
   ParsedCycleRunReportSchema,
@@ -137,20 +140,19 @@ export const CREATIVE_RECOMMENDATION_KINDS = new Set([
 
 /** Kinds the optimizer generates but CANNOT yet execute or track.
  *
- *  The engine emits these, `optimizer.recommendations` stores them (with the ad id and the
- *  generation seed), and the Meta pause/unpause writer exists and is tested — but nothing yet
- *  DRAINS an approved one into it, and no renewal task is opened for them. So approving one
- *  would set a status, do nothing, and leave a burning ad running while the queue looked
- *  handled. That is worse than not offering the button.
+ *  `pause_ad` is the last one here: pausing ONE ad (not the whole ad set) has no drain yet,
+ *  so approving it would set a status, do nothing, and leave a burning ad running while the
+ *  queue looked handled — worse than not offering the button.
  *
- *  Until the drain + autopilot path land, they are SHOWN (the finding is real and useful on its
- *  own) and their action is disabled with an honest message. Delete an entry from this set in
- *  the PR that makes it executable — not before. */
-export const NOT_YET_EXECUTABLE_KINDS = new Set([
-  'pause_ad',
-  'variate_creative',
-  'seed_experiment',
-]);
+ *  `variate_creative` and `seed_experiment` graduated: approving one now opens a creative
+ *  request (a tracked task, or a generation job when autogen is on), so they route to
+ *  'creative' rather than 'hidden'. Delete an entry here in the PR that makes it executable —
+ *  not before. */
+export const NOT_YET_EXECUTABLE_KINDS = new Set(['pause_ad']);
+
+/** Creative kinds whose approval opens a creative request (task or generation job). These
+ *  carry the generation seed the brief is rendered from. */
+export const CREATIVE_REQUEST_KINDS = new Set(['variate_creative', 'seed_experiment']);
 
 export function isExecutable(kind: string): boolean {
   return !NOT_YET_EXECUTABLE_KINDS.has(kind);
@@ -158,13 +160,15 @@ export function isExecutable(kind: string): boolean {
 
 /** Which write path a recommendation kind drains into once approved. Budget moves do NOT
  *  come from recommendations (they are cycle_items), so this covers rec kinds only:
- *    - 'pause'                         → the audited ad-set status drain (real Meta pause)
- *    - 'creative_refresh' / expand …   → a tracked renewal task (no auto Meta write)
- *    - the three ad-level kinds        → hidden (found, but no drain surfaced yet)
+ *    - 'pause'                             → the audited ad-set status drain (real Meta pause)
+ *    - 'variate_creative'/'seed_experiment'→ a creative request (task, or a generation job)
+ *    - 'creative_refresh' / expand …       → a tracked renewal task (no auto Meta write)
+ *    - 'pause_ad'                          → hidden (found, but no single-ad drain yet)
  *  Unknown kinds route to the renewal path — the conservative default that never writes. */
-export function actionRoute(kind: string): 'budget' | 'pause' | 'fatigue' | 'hidden' {
+export function actionRoute(kind: string): 'budget' | 'pause' | 'creative' | 'fatigue' | 'hidden' {
   if (NOT_YET_EXECUTABLE_KINDS.has(kind)) return 'hidden';
   if (kind === 'pause') return 'pause';
+  if (CREATIVE_REQUEST_KINDS.has(kind)) return 'creative';
   return 'fatigue';
 }
 
@@ -192,12 +196,34 @@ export function recommendationActionCopy(kind: string): {
   }
   if (kind === 'variate_creative' || kind === 'seed_experiment') {
     return {
-      approveLabel: 'Open in Studio',
+      approveLabel: 'Request creative',
       advisory:
-        'Not built yet — the brief below is real, but you take it into AI Studio yourself for now.',
+        'Approving opens a creative request with the brief below — a task your team fills, or a generation job when this portfolio has autogen on.',
     };
   }
   return { approveLabel: 'Approve', advisory: null };
+}
+
+/** Render the creative brief for a recommendation from its generation seed. Deterministic
+ *  and offline — the same builder the request email and the swap worker use, so the brief a
+ *  person reads here is the brief the maker gets. Returns null when the rec carries no usable
+ *  seed (older rows), so the caller falls back to the plain reason. */
+export function creativeBriefForRec(rec: {
+  kind: string;
+  reason?: string | null;
+  seed?: Record<string, unknown> | null;
+}): CreativeRequestBrief | null {
+  const seed = rec.seed;
+  if (!seed || typeof seed.adSetId !== 'string') return null;
+  try {
+    return buildCreativeRequestBrief(
+      seed as unknown as CreativeVariationSeedInput,
+      rec.kind,
+      rec.reason ?? undefined,
+    );
+  } catch {
+    return null;
+  }
 }
 
 /** The reason a not-yet-executable action is refused, shown to the user verbatim. */

@@ -368,6 +368,25 @@ async function realizeReels(
         }
         break;
       }
+      case 'reel_queued': {
+        const feId = feIdFor(frame.draftId);
+        if (!feId) break;
+        setStage(frame.draftId, 'Generating UGC clips in the background…');
+        upsertGeneration({
+          jobId: realizeJobId(feId),
+          draftId: feId,
+          status: 'queued',
+          backendJobId: frame.jobId,
+          stage: 'Generating UGC clips in the background…',
+        });
+        show({
+          title: 'UGC generation queued',
+          description:
+            'The locked-character clips will generate in the background. The render inbox will receive them when they are ready.',
+          variant: 'success',
+        });
+        break;
+      }
       case 'reel_progress':
         setStage(frame.draftId, reelProgressLabel(frame));
         break;

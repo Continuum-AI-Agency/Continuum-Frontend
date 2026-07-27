@@ -11,13 +11,14 @@ import { SparklesIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import type { ChangelogEntry } from '@/lib/changelog/schema';
 import { useChangelog } from './useChangelog';
 import { WhatsNewPanel } from './WhatsNewPanel';
 
-export function WhatsNewBell() {
+export function WhatsNewBell({ entries: sourceEntries }: { entries: ChangelogEntry[] }) {
   const [open, setOpen] = useState(false);
   const [snapshotLastSeenId, setSnapshotLastSeenId] = useState<string | null>(null);
-  const { entries, unreadCount, lastSeenId, markAllSeen } = useChangelog();
+  const { entries, unreadCount, lastSeenId, markAllSeen } = useChangelog(sourceEntries);
 
   const handleOpenChange = (next: boolean) => {
     if (next) {

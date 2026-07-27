@@ -24,9 +24,9 @@ import { compositeImages } from './compositeImages';
 import { parseDataUrl } from './dataUrl';
 import {
   getVideoGeneratorBackendModel,
-  getVideoGeneratorReferenceMode,
   isVideoGeneratorNodeType,
   resolveVideoGeneratorModel,
+  resolveVideoGeneratorReferenceMode,
   supportsVideoGeneratorFrameInputs,
   supportsVideoGeneratorReferenceVideo,
 } from './videoModel';
@@ -620,7 +620,7 @@ export function buildVeoPayload(
 ): GenerationPayload | null {
   const data = node.data as VideoGenNodeData;
   const model = resolveVideoGeneratorModel(node);
-  const referenceMode = getVideoGeneratorReferenceMode(model);
+  const referenceMode = resolveVideoGeneratorReferenceMode(node);
 
   let prompt = data.prompt || '';
   const promptInput =
@@ -660,59 +660,15 @@ export function buildVeoPayload(
     return undefined;
   };
 
-  const frameFromValue = (
-    value: string | undefined,
-    filename: string,
-  ): GenerationPayload['firstFrame'] | undefined => {
-    const ref = imageRefFromValue(value);
-    if (!ref) return undefined;
-    return { data: ref.data, imageUrl: ref.imageUrl, mimeType: 'image/png', filename };
-  };
-
-  if (supportsVideoGeneratorFrameInputs(model)) {
-    const frame0Input = resolveInputValue(node.id, 'frame-0', resolvedData, allNodes, allEdges);
-    firstFrame = frameFromInput(frame0Input, 'frame-0.png');
-
-    if (!firstFrame) {
-      const legacyFirst = resolveInputValue(
-        node.id,
-        'first-frame',
-        resolvedData,
-        allNodes,
-        allEdges,
-      );
-      firstFrame = frameFromInput(legacyFirst, 'frame-0.png');
-    }
-
-    const frameList = (data as any).frameList || [];
-    if (!firstFrame && frameList[0]?.src) {
-      firstFrame = frameFromValue(frameList[0].src, 'frame-0.png') ?? undefined;
-    }
-
-    const legacyLast = resolveInputValue(node.id, 'last-frame', resolvedData, allNodes, allEdges);
-    const legacyLastFrame = frameFromInput(legacyLast, 'frame-last.png');
-    if (legacyLastFrame) {
-      lastFrame = legacyLastFrame;
-    } else {
-      for (let i = 8; i > 0; i--) {
-        const frameInput = resolveInputValue(
-          node.id,
-          `frame-${i}`,
-          resolvedData,
-          allNodes,
-          allEdges,
-        );
-        const frameFrame = frameFromInput(frameInput, `frame-${i}.png`);
-        if (frameFrame) {
-          lastFrame = frameFrame;
-          break;
-        }
-        if (frameList[i]?.src) {
-          lastFrame = frameFromValue(frameList[i].src, `frame-${i}.png`) ?? undefined;
-          break;
-        }
-      }
-    }
+  if (supportsVideoGeneratorFrameInputs(model, referenceMode)) {
+    firstFrame = frameFromInput(
+      resolveInputValue(node.id, 'first-frame', resolvedData, allNodes, allEdges),
+      'first-frame.png',
+    );
+    lastFrame = frameFromInput(
+      resolveInputValue(node.id, 'last-frame', resolvedData, allNodes, allEdges),
+      'last-frame.png',
+    );
   }
 
   if (supportsVideoGeneratorReferenceVideo(model)) {
@@ -794,6 +750,17 @@ export function buildVeoPayload(
   }
 
   const backendModel = getVideoGeneratorBackendModel(model);
+
+  // Veo refuses both families in one request and the Backend now 400s on it. The
+  // reference mode is supposed to make that unreachable, so arriving here means the
+  // builder disagreed with the handle table — fail loudly rather than ship a request
+  // whose references would be discarded.
+  const isVeoModel = model.startsWith('veo-');
+  if (isVeoModel && (firstFrame || lastFrame) && referenceImages && referenceImages.length > 0) {
+    throw new Error(
+      `video node ${node.id}: resolved both frames and reference images for ${model} — Veo accepts only one reference mode per request`,
+    );
+  }
 
   return {
     brandId,

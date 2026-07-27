@@ -40,6 +40,7 @@ const PAGE_SIZE = 48;
 
 const querySchema = z.object({
   brandId: z.string().uuid(),
+  assetId: z.string().uuid().optional(),
   collectionId: z.string().uuid().optional(),
   source: mediaSourceSchema.optional(),
   kind: mediaKindSchema.optional(),
@@ -65,6 +66,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const parsed = querySchema.safeParse({
     brandId: url.searchParams.get('brandId'),
+    assetId: url.searchParams.get('assetId') ?? undefined,
     collectionId: url.searchParams.get('collectionId') ?? undefined,
     source: url.searchParams.get('source') ?? undefined,
     kind: url.searchParams.get('kind') ?? undefined,
@@ -77,7 +79,8 @@ export async function GET(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 });
   }
-  const { brandId, collectionId, source, kind, reviewStatus, sort, offset, limit } = parsed.data;
+  const { brandId, assetId, collectionId, source, kind, reviewStatus, sort, offset, limit } =
+    parsed.data;
   const tags = parseTagsParam(parsed.data.tags);
 
   // A malformed filter must fail loudly: dropping it would widen the result set,
@@ -188,6 +191,7 @@ export async function GET(request: Request) {
     .not('tags', 'cs', EXCLUDE_CAROUSEL_SLIDES_FILTER);
 
   if (restrictIds) query = query.in('id', restrictIds);
+  if (assetId) query = query.eq('id', assetId);
   if (excludeIds.length > 0) query = query.not('id', 'in', `(${excludeIds.join(',')})`);
   if (effectiveSource) query = query.eq('source', effectiveSource);
   // Kind matches the row itself OR a slide inside a cover row's origin_ref, so

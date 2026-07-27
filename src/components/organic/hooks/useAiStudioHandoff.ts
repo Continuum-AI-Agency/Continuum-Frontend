@@ -340,6 +340,11 @@ export function useAiStudioHandoff({
         });
         return;
       }
+      const compositionHref = draft.mediaSuggestion?.reel?.composition?.openHref;
+      if (compositionHref) {
+        router.push(compositionHref);
+        return;
+      }
       router.push(
         `/ai-studio?mode=canvas&source=organic-planner&draftId=${encodeURIComponent(draft.id)}`,
       );

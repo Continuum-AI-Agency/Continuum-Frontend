@@ -107,11 +107,96 @@ async function canvasToBlob(canvas: CanvasLike, mimeType: string, quality: numbe
 // WebP is universally encodable in the browsers we support, but a runtime that
 // silently ignores the requested type hands back a PNG — which is 4-6x heavier.
 // Detect that by the produced blob's own type and fall back to JPEG explicitly.
-async function encodePoster(canvas: CanvasLike): Promise<{ blob: Blob; mimeType: string }> {
-  const webp = await canvasToBlob(canvas, POSTER_WEBP_MIME, POSTER_WEBP_QUALITY);
+async function encodePoster(
+  canvas: CanvasLike,
+  quality = POSTER_WEBP_QUALITY,
+): Promise<{ blob: Blob; mimeType: string }> {
+  const webp = await canvasToBlob(canvas, POSTER_WEBP_MIME, quality);
   if (webp.type === POSTER_WEBP_MIME) return { blob: webp, mimeType: POSTER_WEBP_MIME };
-  const jpeg = await canvasToBlob(canvas, POSTER_JPEG_MIME, POSTER_WEBP_QUALITY);
+  const jpeg = await canvasToBlob(canvas, POSTER_JPEG_MIME, quality);
   return { blob: jpeg, mimeType: POSTER_JPEG_MIME };
+}
+
+export type VideoFrameSelector = 'first' | 'last' | 'timestamp';
+
+export function resolveVideoFrameTimestamp(
+  durationSec: number | null | undefined,
+  selector: VideoFrameSelector,
+  requestedSec?: number | null,
+): number {
+  if (selector === 'first') return 0;
+  if (selector === 'timestamp') return resolvePosterTimestamp(durationSec, requestedSec);
+  if (typeof durationSec !== 'number' || !Number.isFinite(durationSec) || durationSec <= 0) {
+    return 0;
+  }
+  // Seeking to duration itself is outside the media interval. One 30fps frame
+  // inside the boundary reliably resolves the visible last frame.
+  return Math.max(0, durationSec - 1 / 30);
+}
+
+export function evidenceFrameTimestamps(
+  durationSec: number | null | undefined,
+  maxFrames = 3,
+): number[] {
+  const limit = Math.max(1, Math.min(3, Math.floor(maxFrames)));
+  if (typeof durationSec !== 'number' || !Number.isFinite(durationSec) || durationSec <= 0) {
+    return [0];
+  }
+  const last = resolveVideoFrameTimestamp(durationSec, 'last');
+  const candidates = limit === 1 ? [0] : limit === 2 ? [0, last] : [0, durationSec / 2, last];
+  return [...new Set(candidates.map((value) => Math.max(0, Number(value.toFixed(3)))))];
+}
+
+export type VideoEvidenceFrame = Pick<
+  VideoPoster,
+  'blob' | 'mimeType' | 'width' | 'height' | 'timestampSec'
+>;
+
+/**
+ * Decode first/middle/last visual evidence in one Mediabunny input session.
+ * This is the bounded browser perception path for Canvas editor commands; it
+ * never runs on the Backend and never uploads the source video.
+ */
+export async function generateVideoEvidenceFrames(
+  file: Blob,
+  options?: { maxFrames?: number; maxWidth?: number; quality?: number },
+): Promise<VideoEvidenceFrame[]> {
+  try {
+    const { Input, BlobSource, ALL_FORMATS, CanvasSink } = await import('mediabunny');
+    const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+    try {
+      const track = await input.getPrimaryVideoTrack();
+      if (!track) return [];
+      const durationSec = await track.computeDuration().catch(() => null);
+      const timestamps = evidenceFrameTimestamps(durationSec, options?.maxFrames ?? 3);
+      const sink = new CanvasSink(track, {
+        width: Math.max(64, Math.min(640, Math.round(options?.maxWidth ?? 320))),
+        fit: 'contain',
+        poolSize: 1,
+      });
+      const frames: VideoEvidenceFrame[] = [];
+      for await (const wrapped of sink.canvasesAtTimestamps(timestamps)) {
+        if (!wrapped) continue;
+        const { blob, mimeType } = await encodePoster(
+          wrapped.canvas,
+          Math.max(0.1, Math.min(1, options?.quality ?? 0.68)),
+        );
+        frames.push({
+          blob,
+          mimeType,
+          width: wrapped.canvas.width,
+          height: wrapped.canvas.height,
+          timestampSec: wrapped.timestamp,
+        });
+      }
+      return frames;
+    } finally {
+      input.dispose();
+    }
+  } catch (error) {
+    console.warn('[library/videoPoster] evidence extraction failed', error);
+    return [];
+  }
 }
 
 // Decodes one frame of `file` and returns it as an encoded still. Null on any
@@ -120,7 +205,12 @@ async function encodePoster(canvas: CanvasLike): Promise<{ blob: Blob; mimeType:
 // picker's chosen frame); omitted, the automatic offset is used.
 export async function generateVideoPoster(
   file: Blob,
-  options?: { timestampSec?: number },
+  options?: {
+    timestampSec?: number;
+    selector?: VideoFrameSelector;
+    maxWidth?: number;
+    quality?: number;
+  },
 ): Promise<VideoPoster | null> {
   try {
     const { Input, BlobSource, ALL_FORMATS, CanvasSink } = await import('mediabunny');
@@ -131,7 +221,9 @@ export async function generateVideoPoster(
       if (!track) return null;
 
       const durationSec = await track.computeDuration().catch(() => null);
-      const wanted = resolvePosterTimestamp(durationSec, options?.timestampSec);
+      const wanted = options?.selector
+        ? resolveVideoFrameTimestamp(durationSec, options.selector, options.timestampSec)
+        : resolvePosterTimestamp(durationSec, options?.timestampSec);
 
       // Source metadata off the already-open track. getDisplayWidth/Height are
       // rotation- and aspect-corrected, so a 1920x1080 file shot vertical reports
@@ -147,13 +239,19 @@ export async function generateVideoPoster(
           ? Math.round(durationSec * 1000)
           : null;
 
-      const sink = new CanvasSink(track, { width: POSTER_MAX_WIDTH, fit: 'contain' });
+      const sink = new CanvasSink(track, {
+        width: Math.max(64, Math.min(4096, Math.round(options?.maxWidth ?? POSTER_MAX_WIDTH))),
+        fit: 'contain',
+      });
       // A seek past the last keyframe-decodable moment yields null; frame 0
       // always exists, so it is the floor rather than a failure.
       const wrapped = (await sink.getCanvas(wanted)) ?? (await sink.getCanvas(0));
       if (!wrapped) return null;
 
-      const { blob, mimeType } = await encodePoster(wrapped.canvas);
+      const { blob, mimeType } = await encodePoster(
+        wrapped.canvas,
+        Math.max(0.1, Math.min(1, options?.quality ?? POSTER_WEBP_QUALITY)),
+      );
       return {
         blob,
         mimeType,

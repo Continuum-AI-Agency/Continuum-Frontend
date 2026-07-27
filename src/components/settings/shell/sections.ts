@@ -24,7 +24,7 @@ export type SectionDef = {
 export const BRAND_SECTIONS = [
   { key: 'activation', label: 'Activation', icon: Rocket, scope: 'brand' },
   { key: 'general', label: 'General', icon: IdCard, scope: 'brand' },
-  { key: 'brand-book', label: 'Brand Book', icon: Library, scope: 'brand' },
+  { key: 'brand-intelligence', label: 'Brand Intelligence', icon: Library, scope: 'brand' },
   { key: 'skills', label: 'Skills', icon: Sparkles, scope: 'brand' },
   { key: 'prompts', label: 'Prompts', icon: BookText, scope: 'brand' },
   { key: 'integrations', label: 'Integrations', icon: Plug, scope: 'brand' },
@@ -42,7 +42,7 @@ export const ACCOUNT_SECTIONS = [
 export const ALL_SECTION_KEYS = [
   'activation',
   'general',
-  'brand-book',
+  'brand-intelligence',
   'skills',
   'prompts',
   'integrations',
@@ -65,5 +65,6 @@ export function isSectionKey(value: string | undefined | null): value is Section
 
 export function resolveSection(value: string | string[] | undefined | null): SectionKey {
   const candidate = Array.isArray(value) ? value[0] : value;
+  if (candidate === 'brand-book') return 'brand-intelligence';
   return isSectionKey(candidate) ? candidate : DEFAULT_SECTION;
 }

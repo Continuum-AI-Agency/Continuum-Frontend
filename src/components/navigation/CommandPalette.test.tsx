@@ -132,4 +132,13 @@ describe('CommandPalette contextual suggestions', () => {
     // Baseline groups still render so the palette is never empty.
     expect(container.textContent).toContain('Navigation');
   });
+
+  it('hides Automations from production non-admin users without hiding it in preview', () => {
+    const production = render(<CommandPalette automationEnvironment="production" />);
+    expect(production.container.textContent).not.toContain('Automations');
+    production.unmount();
+
+    const preview = render(<CommandPalette automationEnvironment="preview" />);
+    expect(preview.container.textContent).toContain('Automations');
+  });
 });

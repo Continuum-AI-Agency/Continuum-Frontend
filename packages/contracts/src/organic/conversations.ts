@@ -12,6 +12,7 @@
 // optional/nullable so a partial row never drops the whole record at the boundary.
 
 import { z } from 'zod';
+import { agentSessionProvenanceSchema } from '../agents/cross-agent';
 
 export const organicChatRoleSchema = z.enum(['user', 'assistant']);
 export type OrganicChatRole = z.infer<typeof organicChatRoleSchema>;
@@ -32,6 +33,7 @@ export const organicChatSessionDtoSchema = z.object({
   lastMessageAt: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string().nullable().optional(),
+  ...agentSessionProvenanceSchema.shape,
 });
 export type OrganicChatSessionDto = z.infer<typeof organicChatSessionDtoSchema>;
 

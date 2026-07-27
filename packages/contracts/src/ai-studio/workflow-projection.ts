@@ -26,7 +26,18 @@ export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   string: ['value'],
   videoDecode: ['value'],
   nanoGen: ['model', 'positivePrompt', 'aspectRatio', 'imageSize'],
-  videoGen: ['model', 'prompt', 'negativePrompt', 'aspectRatio', 'durationSeconds', 'resolution'],
+  // referenceMode is here because it selects which image handles the node HAS —
+  // without it an agent asked for first/last frame would wire to ref-images and
+  // silently build the wrong shot.
+  videoGen: [
+    'model',
+    'prompt',
+    'negativePrompt',
+    'aspectRatio',
+    'durationSeconds',
+    'resolution',
+    'referenceMode',
+  ],
   veoDirector: [
     'model',
     'prompt',
@@ -34,13 +45,31 @@ export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
     'aspectRatio',
     'durationSeconds',
     'resolution',
+    'referenceMode',
   ],
-  veoFast: ['model', 'prompt', 'negativePrompt', 'aspectRatio', 'durationSeconds', 'resolution'],
+  veoFast: [
+    'model',
+    'prompt',
+    'negativePrompt',
+    'aspectRatio',
+    'durationSeconds',
+    'resolution',
+    'referenceMode',
+  ],
   omniGen: ['model', 'prompt', 'aspectRatio'],
   extendVideo: ['prompt'],
-  videoEditor: ['outputFormat', 'clipSlots'],
   timelineEditor: ['outputFormat', 'items'],
-  publishToPlanner: ['platform', 'status', 'scheduledAt'],
+  hyperframesAgent: [
+    'model',
+    'prompt',
+    'aspectRatio',
+    'durationSeconds',
+    'resolution',
+    'status',
+    'revisionNumber',
+  ],
+  organicPublisher: ['format', 'targetDraftId'],
+  paidPublisher: ['format', 'adAccountId', 'campaignId', 'adsetId', 'targetAdId'],
   image: ['fileName', 'referenceType', 'aspectRatio'],
   video: ['fileName'],
   audio: ['fileName'],
@@ -184,7 +213,6 @@ const CONFIG_TRANSFORMS: Record<string, (value: unknown) => unknown> = {
       return `${it.order ?? 0}:${it.sourceNodeId ?? '?'}${trims}`;
     });
   },
-  'videoEditor.clipSlots': (value) => (Array.isArray(value) ? value.length : undefined),
 };
 
 function projectConfig(
@@ -211,8 +239,8 @@ const OUTPUT_VIDEO_TYPES = new Set([
   'veoDirector',
   'veoFast',
   'extendVideo',
-  'videoEditor',
   'timelineEditor',
+  'hyperframesAgent',
 ]);
 
 function attachmentFor(

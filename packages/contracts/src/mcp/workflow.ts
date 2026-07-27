@@ -32,7 +32,7 @@ const projectedAttachmentSchema = z
 
 const graphIssueSchema = z
   .object({
-    code: z.enum(['unknown_node_type', 'dangling_edge', 'invalid_connection']),
+    code: z.enum(['unknown_node_type', 'dangling_edge', 'invalid_connection', 'missing_prompt']),
     message: z.string(),
     nodeId: z.string().optional(),
     edgeId: z.string().optional(),

@@ -21,10 +21,12 @@
 // once correct.
 
 import {
+  AGENT_CHAT_STARTED,
   type AgentKind,
   type AgentRunDto,
   type AgentRunEventDto,
   type AgentRunStatus,
+  agentKindSchema,
   isTerminalAgentRunStatus,
   mergeAgentRunEvents,
   runStatusFromFrameType,
@@ -113,7 +115,7 @@ export const useAgentRunStore = create<AgentRunStoreState>()((set) => ({
       if (existing && events === existing.events) return state;
 
       const lastSeq = events.length > 0 ? (events[events.length - 1]?.seq ?? -1) : -1;
-      const run = existing?.run ?? pendingRun(runId);
+      const run = existing?.run ?? pendingRun(runId, events);
 
       // The LOG is the only thing a detached client is subscribed to, so the run's ENDING
       // has to be readable from it. Without this, a run you navigated away from never
@@ -146,18 +148,39 @@ export const useAgentRunStore = create<AgentRunStoreState>()((set) => ({
   reset: () => set(emptyState),
 }));
 
+/** What the seq-0 `agent.chat_started` frame says about who the run belongs to, if present. */
+const runIdentityFromEvents = (
+  events: readonly AgentRunEventDto[],
+): { agent?: AgentKind; sessionId?: string } => {
+  for (const event of events) {
+    if (event.type !== AGENT_CHAT_STARTED) continue;
+    const agent = agentKindSchema.safeParse(event.data.agent);
+    const sessionId = typeof event.data.sessionId === 'string' ? event.data.sessionId : undefined;
+    return {
+      ...(agent.success ? { agent: agent.data } : {}),
+      ...(sessionId ? { sessionId } : {}),
+    };
+  }
+  return {};
+};
+
 /**
  * Placeholder for a run whose frames arrived before its row did. It is replaced the
  * moment `upsertRun` hears about the real run — from the seq-0 frame, the active-runs
- * hydrate, or the Realtime status channel.
+ * hydrate, or the Realtime status channel. The identity is read off the run-identity
+ * frame when the log carries one, so a Jaina or canvas run never masquerades as
+ * organic while the row is still in flight.
  */
-const pendingRun = (runId: string): AgentRunDto => ({
-  runId,
-  agent: 'organic',
-  sessionId: '',
-  status: 'running',
-  createdAt: new Date().toISOString(),
-});
+const pendingRun = (runId: string, events: readonly AgentRunEventDto[]): AgentRunDto => {
+  const identity = runIdentityFromEvents(events);
+  return {
+    runId,
+    agent: identity.agent ?? 'organic',
+    sessionId: identity.sessionId ?? '',
+    status: 'running',
+    createdAt: new Date().toISOString(),
+  };
+};
 
 // --- Selectors -------------------------------------------------------------------
 

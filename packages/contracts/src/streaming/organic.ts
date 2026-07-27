@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { agentDelegatedFrameSchema } from '../agents/cross-agent';
 import { aeoSnapshotCardSchema } from '../organic/aeo';
 import {
   uiBrandBookAppliedFrameSchema,
@@ -509,7 +510,29 @@ const responseDoneSchema = z.object({
 
 const responseErrorSchema = z.object({
   type: z.literal('response.error'),
-  data: z.object({ message: z.string() }).loose(),
+  data: z
+    .object({
+      message: z.string(),
+      // Optional retry metadata (chat retry R1): a stable machine-readable
+      // failure code and whether the failure is transient (retryable). Additive
+      // only — older peers that omit them keep parsing.
+      code: z.string().optional(),
+      transient: z.boolean().optional(),
+    })
+    .loose(),
+});
+
+// Emitted when the chat runner retries a transient response failure (chat
+// retry R1) before surfacing a terminal response.error. `attempt` is the
+// retry attempt number; `reason` optionally carries the machine cause.
+const responseRetryingSchema = z.object({
+  type: z.literal('response.retrying'),
+  data: z
+    .object({
+      attempt: z.number(),
+      reason: z.string().optional(),
+    })
+    .loose(),
 });
 
 const responseSourceSchema = z.object({
@@ -733,10 +756,18 @@ const draftStoryboardPreviewFrameSchema = z
   })
   .loose();
 
+// `previewRevision` is the media-approval TOKEN, not a rendering detail: the realize
+// path re-reads the draft's stamped revision and refuses a mismatch
+// (approvePreviewOrThrow -> preview_approval_required / preview_changed). It is
+// therefore REQUIRED here and independent of `previews`, which is optional because
+// preview signing can fail while the blueprint itself succeeded. A consumer must never
+// treat `previews` as the carrier for the token and drop the frame when it is empty —
+// that is what strands a draft on "awaiting media choice" with nothing to click.
 const draftBlueprintReadySchema = z.object({
   type: z.literal('draft.blueprint_ready'),
   data: jobEventDataSchema.extend({
-    draftId: z.string().min(1).optional(),
+    draftId: z.string().min(1),
+    previewRevision: z.string().min(1),
     previews: z.array(draftStoryboardPreviewFrameSchema).optional(),
   }),
 });
@@ -769,6 +800,45 @@ const pipelineQualitySchema = z
   })
   .loose();
 
+/**
+ * Three-step checkpoint state for the run-progress steppers: step 1 (text) =
+ * textReady, step 2 (creative director / blueprint) = blueprintReady, step 3
+ * (headless media generation) = mediaStatus. `awaitingMediaChoice` is true once
+ * text+blueprint are done and the token-heavy generation is opt-in.
+ *
+ * ONE named shape, because both the live `ui.pipeline_card` frame and the FE's
+ * restored/durable-hydrated card state carry it — a second hand-rolled copy is how
+ * `previewRevision` came to exist on one side and not the other.
+ *
+ * INVARIANT: `awaitingMediaChoice: true` is a promise that the user has an action to
+ * take, and `previewRevision` is the token that action needs. It is optional here
+ * (the checkpoint exists before the blueprint does), so a consumer that renders the
+ * awaiting state MUST use `hasApprovablePreview` to decide whether to offer approval
+ * or the re-expand recovery — never assume the token is present.
+ */
+export const organicMediaCheckpointSchema = z
+  .object({
+    textReady: z.boolean().optional(),
+    blueprintReady: z.boolean().optional(),
+    mediaStatus: z.enum(['pending', 'generating', 'ready', 'user_supplied', 'skipped']).optional(),
+    awaitingMediaChoice: z.boolean().optional(),
+    previewRevision: z.string().min(1).optional(),
+  })
+  .loose();
+
+export type OrganicMediaCheckpoint = z.infer<typeof organicMediaCheckpointSchema>;
+
+/**
+ * Whether a checkpoint carries the approval token the realize path requires. The
+ * single canonical gate for "can this card offer Generate media?" — the Backend
+ * rejects a realize whose revision is absent or stale, so a button rendered without
+ * this returns preview_approval_required / preview_changed instead of media.
+ */
+export const hasApprovablePreview = (
+  checkpoint: { previewRevision?: string | null } | null | undefined,
+): boolean =>
+  typeof checkpoint?.previewRevision === 'string' && checkpoint.previewRevision.length > 0;
+
 const uiPipelineCardSchema = z.object({
   type: z.literal('ui.pipeline_card'),
   data: z
@@ -791,21 +861,7 @@ const uiPipelineCardSchema = z.object({
         .optional(),
       quality: pipelineQualitySchema.nullable().optional(),
       draftId: z.string().nullable().optional(),
-      // Three-step checkpoint state for the run-progress steppers: step 1 (text) =
-      // textReady, step 2 (creative director / blueprint) = blueprintReady, step 3
-      // (headless media generation) = mediaStatus. `awaitingMediaChoice` is true
-      // once text+blueprint are done and the token-heavy generation is opt-in.
-      checkpoint: z
-        .object({
-          textReady: z.boolean().optional(),
-          blueprintReady: z.boolean().optional(),
-          mediaStatus: z
-            .enum(['pending', 'generating', 'ready', 'user_supplied', 'skipped'])
-            .optional(),
-          awaitingMediaChoice: z.boolean().optional(),
-        })
-        .loose()
-        .optional(),
+      checkpoint: organicMediaCheckpointSchema.optional(),
     })
     .loose(),
 });
@@ -845,6 +901,7 @@ export const organicStreamFrameSchema = z.discriminatedUnion('type', [
   responseOutputTextDoneSchema,
   responseDoneSchema,
   responseErrorSchema,
+  responseRetryingSchema,
   responseSourceSchema,
   toolCallSchema,
   toolResultSchema,
@@ -861,6 +918,7 @@ export const organicStreamFrameSchema = z.discriminatedUnion('type', [
   uiAeoSnapshotCardSchema,
   agentRunStartedSchema,
   agentChatStartedSchema,
+  agentDelegatedFrameSchema,
   jobEnqueuedSchema,
   jobProgressSchema,
   jobCompletedSchema,
@@ -899,12 +957,18 @@ export type OrganicUiBulkRunFrame = z.infer<typeof uiBulkRunSchema>;
 
 export type OrganicUiAeoSnapshotCardFrame = z.infer<typeof uiAeoSnapshotCardSchema>;
 
+export type OrganicResponseRetryingFrame = z.infer<typeof responseRetryingSchema>;
+
+export type OrganicResponseErrorFrame = z.infer<typeof responseErrorSchema>;
+
 /**
  * Normalized display shape for a post fetched by any of the organic agent's
  * content-retrieval tools (listDrafts, getTopPosts, listOwnInstagramMedia,
  * getCalendarPostedContent). Consumed by PostContentCard.
  */
 export type UiFetchedPost = {
+  /** Composite renderer identity; platform/source prevents cross-feed post-id collisions. */
+  contentKey: string;
   postId: string;
   source: 'draft' | 'instagram' | 'facebook' | 'tiktok';
   platform: string | null;
@@ -920,6 +984,12 @@ export type UiFetchedPost = {
   rank: number | null;
   quality: { passed: boolean; score?: number } | null;
 };
+
+export const organicFetchedPostContentKey = (
+  source: UiFetchedPost['source'],
+  platform: string | null,
+  postId: string,
+): string => `${source}:${platform ?? 'unknown'}:${postId}`;
 
 export const POST_FETCHING_TOOL_NAMES = [
   'listDrafts',

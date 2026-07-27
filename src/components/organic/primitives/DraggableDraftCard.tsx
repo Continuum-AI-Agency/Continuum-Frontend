@@ -17,6 +17,7 @@ interface DraggableDraftCardProps {
   onClearFailure?: (draftId: string) => void;
   onEnrich?: (draftId: string) => void;
   onRealize?: (draftId: string) => void;
+  onStitch?: (draftId: string) => void;
   onPreview?: (draft: OrganicCalendarDraft | null) => void;
 }
 
@@ -30,6 +31,7 @@ function DraggableDraftCardComponent({
   onClearFailure,
   onEnrich,
   onRealize,
+  onStitch,
   onPreview,
 }: DraggableDraftCardProps) {
   const reduceMotion = useReducedMotion();
@@ -75,6 +77,7 @@ function DraggableDraftCardComponent({
         onClearFailure={onClearFailure}
         onEnrich={onEnrich}
         onRealize={onRealize}
+        onStitch={onStitch}
         onMouseEnter={() => onPreview?.(draft)}
         onMouseLeave={() => onPreview?.(null)}
       />

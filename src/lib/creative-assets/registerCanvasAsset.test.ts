@@ -25,7 +25,7 @@ describe('registerCanvasOutput video posters', () => {
     const videoBytes = new Blob(['video-bytes'], { type: 'video/mp4' });
     const fetchImpl = mock(async (input: string | URL | Request) => {
       if (String(input) === '/api/library/register-canvas') {
-        return Response.json({ assetId: 'asset-1' });
+        return Response.json({ assetId: 'asset-1', assetVersionId: 'version-1' });
       }
       return new Response(videoBytes, { status: 200 });
     });
@@ -37,7 +37,7 @@ describe('registerCanvasOutput video posters', () => {
         fetchImpl: fetchImpl as typeof fetch,
         attachPoster,
       }),
-    ).resolves.toBe('asset-1');
+    ).resolves.toEqual({ assetId: 'asset-1', assetVersionId: 'version-1' });
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(attachPoster).toHaveBeenCalledTimes(1);
@@ -51,7 +51,7 @@ describe('registerCanvasOutput video posters', () => {
   test('keeps the registered asset when poster download fails', async () => {
     const fetchImpl = mock(async (input: string | URL | Request) =>
       String(input) === '/api/library/register-canvas'
-        ? Response.json({ assetId: 'asset-1' })
+        ? Response.json({ assetId: 'asset-1', assetVersionId: 'version-1' })
         : new Response('expired signed URL', { status: 403 }),
     );
     const attachPoster = mock(async () => 'must-not-run');
@@ -62,7 +62,7 @@ describe('registerCanvasOutput video posters', () => {
         fetchImpl: fetchImpl as typeof fetch,
         attachPoster,
       }),
-    ).resolves.toBe('asset-1');
+    ).resolves.toEqual({ assetId: 'asset-1', assetVersionId: 'version-1' });
     expect(attachPoster).not.toHaveBeenCalled();
   });
 });

@@ -105,6 +105,43 @@ describe('Jaina conversations proxy route', () => {
     globalThis.fetch = originalFetch;
   });
 
+  it('forwards chat-history search and filter params to the Backend', async () => {
+    const request = new Request(
+      'http://localhost/api/agents/jaina/chat/conversations?brandId=brand-1&q=launch&initiator=agent&initiator_agent=organic&tags=q4,budget',
+      { method: 'GET' },
+    );
+
+    const response = await GET(request);
+    expect(response.status).toBe(200);
+
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof mock>;
+    const [sessionsUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(sessionsUrl).toContain('q=launch');
+    expect(sessionsUrl).toContain('initiator=agent');
+    expect(sessionsUrl).toContain('initiator_agent=organic');
+    expect(sessionsUrl).toContain('tags=q4%2Cbudget');
+  });
+
+  it('rejects an unknown initiator before touching the Backend', async () => {
+    const request = new Request(
+      'http://localhost/api/agents/jaina/chat/conversations?brandId=brand-1&initiator=automation',
+      { method: 'GET' },
+    );
+
+    const response = await GET(request);
+    expect(response.status).toBe(400);
+    expect((globalThis.fetch as unknown as ReturnType<typeof mock>).mock.calls.length).toBe(0);
+  });
+
+  it('maps session provenance and tags into the client DTO', async () => {
+    const request = new Request(
+      'http://localhost/api/agents/jaina/chat/conversations?brandId=brand-1',
+      { method: 'GET' },
+    );
+    const payload = await (await GET(request)).json();
+    expect(payload.sessions[0]).toMatchObject({ initiator: 'user', tags: [] });
+  });
+
   it('proxies conversation GET list and session messages using bearer token', async () => {
     const request = new Request(
       'http://localhost/api/agents/jaina/chat/conversations?brandId=brand-1&adAccountId=act-1&sessionId=chat_abc123&limit=20&messagesLimit=150',

@@ -1,4 +1,9 @@
-import { TIMELINE_MEDIA_INPUT_HANDLE, TIMELINE_MEDIA_POOL_LIMIT } from '@continuum/contracts';
+import {
+  TIMELINE_MEDIA_INPUT_HANDLE,
+  TIMELINE_MEDIA_POOL_LIMIT,
+  timelineAuthoringDocumentSchema,
+  timelineDocumentFingerprint,
+} from '@continuum/contracts';
 import {
   CopyIcon,
   DownloadIcon,
@@ -18,7 +23,7 @@ import {
   useNodeId,
 } from '@xyflow/react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
 import { Button } from '@/components/ui/button';
@@ -77,6 +82,7 @@ export function TimelineEditorBlock({
   selected,
 }: NodeProps<ReactFlowNode<TimelineEditorNodeData>>) {
   const updateNode = useStudioStore((state) => state.updateNode);
+  const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const { show } = useToast();
@@ -94,6 +100,7 @@ export function TimelineEditorBlock({
 
   const [isHovered, setIsHovered] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  const handledRenderRequests = useRef(new Set<string>());
 
   const edges = useEdges();
 
@@ -111,6 +118,51 @@ export function TimelineEditorBlock({
       }));
     }
   }, [support, data.unsupportedReason, id, updateNode]);
+
+  useEffect(() => {
+    const request = data.agentRenderRequest;
+    if (
+      !request ||
+      request.status !== 'pending' ||
+      !support ||
+      handledRenderRequests.current.has(request.requestId)
+    ) {
+      return;
+    }
+    handledRenderRequests.current.add(request.requestId);
+
+    const settle = (status: 'accepted' | 'stale' | 'error', error?: string): void => {
+      updateNode(id, (node) => ({
+        ...node,
+        data: {
+          ...(node.data as TimelineEditorNodeData),
+          agentRenderRequest: { ...request, status, error },
+        },
+      }));
+      triggerSave();
+    };
+
+    if (!support.ok) {
+      settle('error', support.reason);
+      return;
+    }
+    const document = timelineAuthoringDocumentSchema.safeParse(adapter.getDocument());
+    if (!document.success) {
+      settle('error', 'The Video Editor document is invalid and cannot be rendered.');
+      return;
+    }
+    if (timelineDocumentFingerprint(document.data) !== request.requestedFingerprint) {
+      settle('stale', 'The timeline changed before the browser accepted this render.');
+      return;
+    }
+
+    settle('accepted');
+    void render().then((accepted) => {
+      if (!accepted) {
+        settle('error', 'The browser render queue could not accept this request.');
+      }
+    });
+  }, [adapter, data.agentRenderRequest, id, render, support, triggerSave, updateNode]);
 
   const inputCount = useMemo(
     () =>

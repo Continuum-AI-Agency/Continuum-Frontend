@@ -29,6 +29,37 @@ export type {
   SnapshotsToSeriesOptions,
 } from './realdata';
 export { backtestSnapshots, KPI_FIELD_TO_OBJECTIVE, snapshotsToSeries } from './realdata';
+export { evalCondition, evaluateRules, interpolateReason } from './rules/evaluate';
+export { buildAdsetFacts, buildPortfolioFacts } from './rules/facts';
+export type { ResolvedValue } from './rules/operators';
+export { OPERATORS } from './rules/operators';
+export type { RuleTemplate } from './rules/templates';
+export {
+  ALL_TEMPLATES,
+  BUILTIN_PARITY_TEMPLATES,
+  DCO_ADAPTED_TEMPLATES,
+  instantiateTemplate,
+  seedParityRules,
+} from './rules/templates';
+export type {
+  AlreadyFlagged,
+  ConditionValue,
+  FactMap,
+  FactRef,
+  FactValue,
+  GrantableActionKind,
+  RuleAction,
+  RuleActionKind,
+  RuleCondition,
+  RuleConditionLeaf,
+  RuleDefinition,
+  RuleEngineOutput,
+  RuleEvaluation,
+  RuleFinding,
+  RuleOperator,
+  RuleSeverity,
+} from './rules/types';
+export { GRANTABLE_ACTION_KINDS } from './rules/types';
 export type { CycleOptions } from './runCycle';
 export { runCycle } from './runCycle';
 export { scoreAdSet, windowScore } from './scoring';
@@ -43,6 +74,9 @@ export type {
   AudienceType,
   Confidence,
   CpaInterval,
+  CreativeStanding,
+  CreativeStandingAd,
+  CreativeStandingFlag,
   CycleResult,
   ItemDiagnostics,
   OptimizationMode,
@@ -51,6 +85,8 @@ export type {
   PacingState,
   ReallocationResult,
   Recommendation,
+  RecommendationKind,
+  RecommendationTrigger,
   TrajectoryState,
   WindowMetrics,
 } from './types';

@@ -10,6 +10,7 @@ import {
   getAllowedSourceHandles,
   getAllowedTargetHandles,
   getTargetHandleConnectionLimit,
+  getVideoGeneratorReferenceModes,
   getVideoGeneratorTargetHandles,
   STUDIO_NODE_TYPES,
   type StudioNodeType,
@@ -35,10 +36,14 @@ const NODE_PURPOSE: Record<StudioNodeType, string> = {
   veoFast: 'video generator pinned to Veo 3.1 Fast (first/last frame driven)',
   omniGen: 'Gemini Omni video generator, conversational variations',
   extendVideo: 'extends an existing video by a few more seconds',
-  videoEditor: 'Video Splicer — concatenates clips, one per slot, in order',
   timelineEditor:
     'Video Editor — the real timeline. Wire clips into its `media-in` pool, then place them as timeline items',
-  publishToPlanner: 'terminal sink — attaches the finished video to an organic Planner draft',
+  hyperframesAgent:
+    'agentic HTML-to-video composer — accepts a prompt plus image, video, and audio references, then renders a video',
+  organicPublisher:
+    'terminal sink — attaches image, carousel, or video creative to an existing organic Planner draft',
+  paidPublisher:
+    'terminal sink — replaces image, carousel, or video creative on an existing Meta ad',
   image: 'a reference image already in the brand library or uploaded',
   video: 'a reference video already in the brand library or uploaded',
   audio: 'a reference audio file',
@@ -63,6 +68,8 @@ const CONFIG_FIELD_HINTS: Record<string, string> = {
   resolution: '720p|1080p',
   outputFormat: 'mp4',
   items: 'READ-ONLY here — place clips with the set_timeline op, never update_node',
+  referenceMode:
+    'images|frames — Veo takes ONE or the other per request; it CHANGES the node handles',
 };
 
 const formatConfigField = (field: string): string => {
@@ -86,13 +93,21 @@ function describeNode(type: StudioNodeType): string {
 }
 
 function describeVideoModels(): string {
-  const rows = VIDEO_GENERATOR_MODELS.map((model) => {
-    const handles = getVideoGeneratorTargetHandles(model);
-    return `- ${model} (${VIDEO_GENERATOR_MODEL_LABELS[model]}) — accepts: ${handles.join(', ')}`;
+  const rows = VIDEO_GENERATOR_MODELS.flatMap((model) => {
+    const modes = getVideoGeneratorReferenceModes(model);
+    return modes.map((mode) => {
+      const handles = getVideoGeneratorTargetHandles(model, mode);
+      const label = `${model} (${VIDEO_GENERATOR_MODEL_LABELS[model]})`;
+      const modeSuffix =
+        modes.length > 1 ? ` + referenceMode "${mode}"` : ` [referenceMode "${mode}"]`;
+      return `- ${label}${modeSuffix} — accepts: ${handles.join(', ')}`;
+    });
   });
   return [
     'VIDEO GENERATOR MODELS — a videoGen/veoDirector/veoFast node CHANGES ITS INPUT HANDLES',
-    'with `data.model`. Pick the model first, then wire to the handles it actually has:',
+    'with `data.model` AND `data.referenceMode`. Pick both first, then wire to the handles',
+    'it actually has. Veo REJECTS reference images and first/last frames in one request —',
+    'set referenceMode "frames" for a first-frame→last-frame shot, "images" for a moodboard:',
     ...rows,
     '',
     `IMAGE GENERATOR MODELS — the ONLY values a nanoGen \`data.model\` accepts: ${IMAGE_GENERATOR_MODELS.join(', ')}.`,
@@ -155,8 +170,7 @@ export function describeNodeVocabulary(): string {
     '- You never choose a handle. Say `connect A -> B` and, if it helps, name a `role`',
     '  (e.g. "prompt", "first-frame", "ref-images"); the canvas resolves the legal handle.',
     '- Text flows from `string` / `videoDecode`. Images flow from `image` / `nanoGen`.',
-    '  Video flows from `video`, any video generator, `extendVideo`, `videoEditor`,',
-    '  `timelineEditor`, `omniGen`.',
+    '  Video flows from `video`, any video generator, `extendVideo`, `timelineEditor`, `omniGen`.',
     '- A prompt handle takes exactly ONE text input. Reference-image handles take many.',
     '- `image` / `video` / `audio` / `document` are SOURCES: they take no inputs. To use a',
     '  library asset, add the node and `attach_media` its storage coordinates to it.',

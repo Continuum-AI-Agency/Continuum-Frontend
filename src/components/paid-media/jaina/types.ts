@@ -1,3 +1,4 @@
+import type { AgentDelegatedFrameData } from '@continuum/contracts';
 import type { PlanStatus } from '@/components/ai-elements/plan';
 import type { AgentMentionMetadata } from '@/lib/agent-references';
 import type {
@@ -50,5 +51,7 @@ export type JainaChatMessage = {
     question: string;
   };
   objectives?: JainaObjective[];
+  /** Cross-agent calls made during this turn, latest state per callId. */
+  delegations?: AgentDelegatedFrameData[];
   metadata?: AgentMentionMetadata;
 };

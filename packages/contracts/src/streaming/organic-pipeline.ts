@@ -81,6 +81,7 @@ export const organicReelSceneAssetSchema = z
     prompt: z.string(),
     captionText: z.string().nullable().optional(),
     durationSec: z.number(),
+    bucket: z.string().nullable().optional(),
     clipUrl: z.string().nullable().optional(),
     signedClipUrl: z.string().nullable().optional(),
     error: z.string().nullable().optional(),
@@ -94,6 +95,10 @@ export const organicReelAssetSchema = z
     url: z.string().nullable().optional(),
     bucket: z.string().nullable().optional(),
     signedUrl: z.string().nullable().optional(),
+    // Poster frame for the video. A user-attached reel carries the library's derived
+    // thumbnail; without a slot for it the poster is lost at the attach boundary and
+    // the preview has nothing to paint until the first frame decodes.
+    thumbnailUrl: z.string().nullable().optional(),
     mimeType: z.string().nullable().optional(),
     durationSec: z.number(),
     scenes: z.array(organicReelSceneAssetSchema),
@@ -365,6 +370,9 @@ export const organicMediaSuggestionSchema = z
     mediaStatus: organicDraftMediaStatusSchema.optional(),
     textReady: z.boolean().optional(),
     blueprintReady: z.boolean().optional(),
+    // Opaque revision of the exact persisted storyboard the user reviewed.
+    // Realization requests must echo it so stale or implicit approvals fail closed.
+    previewRevision: z.string().min(1).optional(),
     // Contextual brand grounding for media generation, decided by the blueprint
     // (Stage 2). Drives whether the logo / prior on-brand creatives are seeded as
     // references; palette + voice/vision/guideline text ground every concept.

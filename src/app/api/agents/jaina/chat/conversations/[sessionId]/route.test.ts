@@ -28,7 +28,7 @@ mock.module('@/lib/api/config', () => ({
   getApiBaseUrl: () => 'https://api.example.com',
 }));
 
-import { DELETE } from './route';
+import { DELETE, PATCH } from './route';
 
 describe('Jaina conversation delete proxy route', () => {
   const originalFetch = globalThis.fetch;
@@ -127,5 +127,64 @@ describe('Jaina conversation delete proxy route', () => {
     });
 
     expect(response.status).toBe(401);
+  });
+});
+
+
+describe('Jaina conversation tags proxy route', () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    getUserMock.mockClear();
+    getSessionMock.mockClear();
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ sessionId: 'chat_abc123', tags: ['q4'] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    ) as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const patch = (url: string, body: unknown) =>
+    PATCH(new Request(url, { method: 'PATCH', body: JSON.stringify(body) }), {
+      params: Promise.resolve({ sessionId: 'chat_abc123' }),
+    });
+
+  it('forwards normalized tags with the bearer token and brand scope', async () => {
+    const response = await patch(
+      'http://localhost/api/agents/jaina/chat/conversations/chat_abc123?brandId=brand-1',
+      { tags: [' Q4 ', 'q4'] },
+    );
+
+    expect(response.status).toBe(200);
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof mock>;
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/agents/jaina/chat/conversations/chat_abc123?brand_id=brand-1');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(String(init.body))).toEqual({ tags: ['q4'] });
+    expect(await response.json()).toEqual({ sessionId: 'chat_abc123', tags: ['q4'] });
+  });
+
+  it('requires a brand id', async () => {
+    const response = await patch(
+      'http://localhost/api/agents/jaina/chat/conversations/chat_abc123',
+      { tags: [] },
+    );
+    expect(response.status).toBe(400);
+    expect((globalThis.fetch as unknown as ReturnType<typeof mock>).mock.calls.length).toBe(0);
+  });
+
+  it('rejects a non-array tags payload', async () => {
+    const response = await patch(
+      'http://localhost/api/agents/jaina/chat/conversations/chat_abc123?brandId=brand-1',
+      { tags: 'q4' },
+    );
+    expect(response.status).toBe(400);
   });
 });

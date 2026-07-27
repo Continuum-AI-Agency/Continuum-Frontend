@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Sprout,
   TrendingUp,
+  Workflow,
 } from 'lucide-react';
 
 export type AppNavigationItem = {
@@ -103,6 +104,13 @@ const CANVAS: AppNavigationItem = {
   icon: Frame,
   accentColor: 'text-violet-500',
 };
+const AUTOMATIONS: AppNavigationItem = {
+  label: 'Automations',
+  href: '/automations',
+  icon: Workflow,
+  accentColor: 'text-violet-500',
+  description: 'Build and operate agent workflows.',
+};
 const LIBRARY: AppNavigationItem = {
   label: 'Library',
   href: '/library',
@@ -151,7 +159,7 @@ const DEVELOPERS: AppNavigationItem = {
 // The canonical sidebar IA: an unlabeled lead group, then one labeled section
 // per product area, Storage, and the locked Developers section.
 export const APP_NAVIGATION_GROUPS: AppNavigationGroup[] = [
-  { label: null, items: [HOME, CANVAS] },
+  { label: null, items: [HOME, CANVAS, AUTOMATIONS] },
   { label: 'Organic', items: ORGANIC_ITEMS },
   { label: 'Scale', items: SCALE_ITEMS },
   { label: 'Intelligence', items: [BRAND_SPY] },
@@ -164,6 +172,7 @@ export const APP_NAVIGATION_GROUPS: AppNavigationGroup[] = [
 export const APP_NAVIGATION: AppNavigationItem[] = [
   HOME,
   CANVAS,
+  AUTOMATIONS,
   ORGANIC,
   SCALE,
   LIBRARY,
@@ -234,6 +243,10 @@ const CONTEXTUAL_SUGGESTIONS: Record<string, CommandSuggestion[]> = {
     { label: 'Connect Meta', href: '/settings?section=integrations', icon: Plug },
     { label: 'Create reel plan', href: '/organic?tab=planner', icon: CalendarDays },
     { label: 'Analyze ROAS drop', href: '/scale?tab=dashboard', icon: Activity },
+  ],
+  '/goals': [
+    { label: 'Ask Jaina', href: '/scale?tab=jaina', icon: Bot },
+    { label: 'Open media Library', href: '/library', icon: Images },
   ],
   '/organic': [
     { label: 'Create reel plan', href: '/organic?tab=planner', icon: CalendarDays },

@@ -9,6 +9,7 @@
 //   `path` after persistence. Inline bytes are emergency fallback only.
 
 import { z } from 'zod';
+import { agentDelegatedFrameSchema } from '../agents/cross-agent';
 import { studioEdgeSchema, studioNodeSchema } from '../ai-studio/workflow-graph';
 import {
   responseDoneSchema,
@@ -133,6 +134,7 @@ export const aiStudioComposerFrameSchema = z.discriminatedUnion('type', [
   composerGraphSchema,
   composerPatchSchema,
   composerWarningSchema,
+  agentDelegatedFrameSchema,
   toolCallSchema,
   toolResultSchema,
   responseDoneSchema,

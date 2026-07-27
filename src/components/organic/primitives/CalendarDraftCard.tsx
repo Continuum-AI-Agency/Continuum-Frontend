@@ -120,6 +120,7 @@ export function CalendarDraftCard({
   onClearFailure,
   onEnrich,
   onRealize,
+  onStitch,
   onMouseEnter,
   onMouseLeave,
 }: {
@@ -135,6 +136,8 @@ export function CalendarDraftCard({
   onEnrich?: (draftId: string) => void;
   /** Stage-3 "Generate final media" for a storyboard-ready draft. */
   onRealize?: (draftId: string) => void;
+  /** Opens the shared render inbox for already-generated reel clips. */
+  onStitch?: (draftId: string) => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }) {
@@ -186,6 +189,11 @@ export function CalendarDraftCard({
   });
   const storyboardFrames =
     draft.mediaSuggestion?.storyboard?.filter((frame) => hasTextValue(frame?.storageUrl)) ?? [];
+  const ugc = draft.mediaSuggestion?.ugc ?? draft.mediaSuggestion?.reel?.ugc;
+  const characterReferenceCount =
+    ugc?.references.filter((reference) => reference.role === 'character').length ?? 0;
+  const productReferenceCount =
+    ugc?.references.filter((reference) => reference.role === 'product').length ?? 0;
   const mediaStage = resolveDraftMediaStage(draft);
   const isMediaGenerating = mediaStage === 'realizing';
   const hasRealizedMedia = mediaStage === 'realized';
@@ -497,11 +505,33 @@ export function CalendarDraftCard({
                   </p>
                 ) : isStoryboardReady ? (
                   <div className="mt-2 space-y-1">
-                    <span className="flex items-center gap-1.5">
+                    {ugc ? (
+                      <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/5 px-2 py-0.5 text-2xs font-medium text-primary">
+                        UGC · {characterReferenceCount} character
+                        {characterReferenceCount === 1 ? '' : 's'} locked
+                        {productReferenceCount > 0
+                          ? ` · ${productReferenceCount} product${productReferenceCount === 1 ? '' : 's'}`
+                          : ''}
+                      </span>
+                    ) : null}
+                    <span className="flex flex-wrap items-center gap-1.5">
                       <MediaStagePill mediaStage="storyboard_ready" />
+                      {draft.mediaSuggestion?.reel?.composition &&
+                      onStitch &&
+                      draft.backendDraftId &&
+                      !isStreaming ? (
+                        <CardStageAction
+                          label="Ready to render"
+                          onActivate={() => onStitch(draft.id)}
+                        />
+                      ) : null}
                       {onRealize && draft.backendDraftId && !isStreaming ? (
                         <CardStageAction
-                          label="Generate final media"
+                          label={
+                            draft.mediaSuggestion?.reel?.composition
+                              ? 'Edit in AI Studio'
+                              : 'Generate final media'
+                          }
                           onActivate={() => onRealize(draft.id)}
                         />
                       ) : null}
@@ -683,7 +713,7 @@ export function CalendarDraftCard({
           ) : null}
           {openInStudio && draft.status !== 'streaming' && draft.status !== 'placeholder' ? (
             <ContextMenuItem onSelect={() => openInStudio(draft.id)}>
-              Open in AI Studio
+              {draft.mediaSuggestion?.reel?.composition ? 'Edit composition' : 'Open in AI Studio'}
             </ContextMenuItem>
           ) : null}
           <ContextMenuItem

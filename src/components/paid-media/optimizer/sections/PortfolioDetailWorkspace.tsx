@@ -21,6 +21,7 @@ import {
   type PortfolioListItem,
 } from '@continuum/contracts';
 import { ArrowLeftIcon, LineChartIcon, RefreshCwIcon } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { InsightDataTable } from '@/components/dashboard/datatable/InsightDataTable';
 import { MetricStrip } from '@/components/shared/MetricStrip';
 import { DataState } from '@/components/shared/state/DataState';
@@ -59,6 +60,7 @@ import {
   useOptimizerAdDailyTrends,
   useOptimizerAdsetAds,
   useOptimizerAngleMatrix,
+  useOptimizerBackfillAdsetNames,
   useOptimizerCpaSeries,
   useOptimizerEnrolledAdsets,
   useOptimizerFirstRunPoll,
@@ -149,6 +151,36 @@ export function PortfolioDetailWorkspace({
   const adsetNameById = new Map(
     enrolledQuery.data.map((adset) => [adset.adset_id, adset.adset_name ?? '']),
   );
+
+  // Self-heal missing names: ad sets enrolled before the enroll path forwarded
+  // names have a blank roster name and render as raw Meta ids. The account-snapshot
+  // read carries the plain-text name, so fill the blanks once (per name signature)
+  // and the RPC persists them — no raw id survives a second visit.
+  const backfillNames = useOptimizerBackfillAdsetNames(portfolio.id);
+  const healedSignatureRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (enrolledQuery.isLoading || snapshotsQuery.isLoading) return;
+    const snapshotNameById = new Map(snapshotsQuery.data.map((s) => [s.id, s.name]));
+    const missing: Record<string, string> = {};
+    for (const adset of enrolledQuery.data) {
+      if ((adset.adset_name ?? '').trim().length > 0) continue;
+      const name = snapshotNameById.get(adset.adset_id);
+      if (name && name.trim().length > 0) missing[adset.adset_id] = name;
+    }
+    const ids = Object.keys(missing);
+    if (ids.length === 0) return;
+    const signature = `${portfolio.id}:${ids.sort().join(',')}`;
+    if (healedSignatureRef.current === signature) return;
+    healedSignatureRef.current = signature;
+    backfillNames.mutate(missing);
+  }, [
+    portfolio.id,
+    enrolledQuery.data,
+    enrolledQuery.isLoading,
+    snapshotsQuery.data,
+    snapshotsQuery.isLoading,
+    backfillNames,
+  ]);
 
   const funnelWindow = sumFunnelWindow(
     snapshotsQuery.data,
@@ -488,6 +520,9 @@ export function PortfolioDetailWorkspace({
               columns={adsetColumns}
               defaultSort={{ columnId: 'cost', direction: 'desc' }}
               emptyState="No scored ad sets in the latest cycle."
+              searchable
+              searchPlaceholder="Search ad sets by name or ID…"
+              searchValue={(row) => `${row.name ?? ''} ${row.adsetId}`}
               expandedContent={(row) => (
                 <AdsetCreativeVerdicts
                   accountId={adAccountId}

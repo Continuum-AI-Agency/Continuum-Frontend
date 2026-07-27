@@ -89,7 +89,7 @@ export function AIStudioChat({
           variant="default"
           onClick={() => setOpen(true)}
           aria-label="Open team chat"
-          className="size-12 rounded-full shadow-2xl hover:scale-105 transition-transform"
+          className="size-11 rounded-full shadow-md transition-colors"
         >
           <ChatBubbleIcon width="24" height="24" />
         </Button>
@@ -107,14 +107,13 @@ export function AIStudioChat({
   return (
     <div
       className={cn(
-        'flex flex-col shadow-2xl overflow-hidden transition-all duration-300 w-96 h-[500px] rounded-xl p-3',
-        'border border-border bg-popover text-popover-foreground',
+        'flex h-[500px] w-96 flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-md',
         className,
       )}
     >
-      <div className="flex flex-col h-full">
+      <div className="flex h-full flex-col">
         {/* Header */}
-        <div className="flex justify-between items-center p-3 border-b border-border/10 bg-surface shadow-sm">
+        <div className="flex min-h-12 items-center justify-between border-b border-border px-3 py-2">
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <ChatBubbleIcon />
@@ -135,8 +134,13 @@ export function AIStudioChat({
         </div>
 
         {/* Message List */}
-        <ScrollArea className="flex-1 p-4" type="always">
-          <div ref={scrollRef} className="flex flex-col gap-3 min-h-full justify-end">
+        <ScrollArea
+          className="min-h-0 flex-1"
+          viewportClassName="p-4"
+          viewportRef={scrollRef}
+          type="always"
+        >
+          <div className="flex min-h-full flex-col justify-end gap-3">
             {isLoading && (
               <div className="flex justify-center p-4">
                 <span className="text-xs text-gray-400">Loading history...</span>
@@ -166,10 +170,10 @@ export function AIStudioChat({
                   )}
                   <div
                     className={cn(
-                      'px-3 py-2 rounded-2xl text-sm max-w-[90%] break-words shadow-sm',
+                      'max-w-[90%] break-words rounded-lg px-3 py-2 text-sm',
                       isMe
-                        ? 'bg-blue-600 text-white rounded-br-none'
-                        : 'bg-gray-700 text-gray-100 rounded-bl-none',
+                        ? 'bg-primary text-primary-foreground'
+                        : 'border border-border bg-muted text-foreground',
                     )}
                   >
                     {msg.content}
@@ -187,10 +191,10 @@ export function AIStudioChat({
         </ScrollArea>
 
         {/* Input Area */}
-        <div className="p-3 border-t border-border/10 bg-surface">
+        <div className="border-t border-border p-3">
           <div className="flex gap-2">
             <Input
-              className="flex-1 rounded-full"
+              className="flex-1"
               inputSize="md"
               placeholder="Message your team…"
               value={inputValue}
@@ -203,7 +207,6 @@ export function AIStudioChat({
               disabled={!inputValue.trim() || isSending}
               size="icon"
               variant="default"
-              className="rounded-full"
               aria-label="Send message"
             >
               <PaperPlaneIcon />

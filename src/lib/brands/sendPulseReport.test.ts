@@ -7,9 +7,8 @@ mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({ functions: { invoke } }),
 }));
 
-const { summarizeReportRecipients, upsertReportSchedule, getReportSchedule } = await import(
-  './sendPulseReport'
-);
+const { getReportSchedule, sendContinuumReport, summarizeReportRecipients, upsertReportSchedule } =
+  await import('./sendPulseReport');
 
 const scheduleContract = {
   brandId: 'brand-1',
@@ -47,6 +46,58 @@ describe('summarizeReportRecipients', () => {
     expect(summarizeReportRecipients(['a@x.com', 'b@x.com', 'c@x.com'])).toBe(
       'Sent to a@x.com and 2 other recipients.',
     );
+  });
+});
+
+describe('sendContinuumReport', () => {
+  beforeEach(() => {
+    invoke.mockClear();
+    invokeResult = { data: null, error: null };
+  });
+
+  it('returns a partial receipt and sends it back for a failure-only retry', async () => {
+    const brandId = '00000000-0000-4000-8000-000000000001';
+    const userId = '00000000-0000-4000-8000-000000000002';
+    const receiptId = '00000000-0000-4000-8000-000000000003';
+    invokeResult = {
+      data: {
+        status: 'partial',
+        ok: false,
+        sent: false,
+        recipients: ['duane@trycontinuum.ai'],
+        resendMessageIds: [],
+        outcomes: [
+          {
+            recipient: 'duane@trycontinuum.ai',
+            status: 'failed',
+            errorCode: 'network_error',
+            httpStatus: null,
+          },
+        ],
+        receiptId,
+      },
+      error: null,
+    };
+
+    const first = await sendContinuumReport({ brandId, recipientUserIds: [userId] });
+    expect(first).toEqual({
+      recipients: ['duane@trycontinuum.ai'],
+      status: 'partial',
+      receiptId,
+    });
+
+    await sendContinuumReport({
+      brandId,
+      recipientUserIds: [userId],
+      retryReceiptId: receiptId,
+    });
+    const [, retryArgs] = invoke.mock.calls[1];
+    expect(retryArgs.body).toEqual({
+      action: 'send_now',
+      brandId,
+      recipientUserIds: [userId],
+      retryReceiptId: receiptId,
+    });
   });
 });
 
@@ -102,7 +153,7 @@ describe('upsertReportSchedule', () => {
         brandId: 'brand-1',
         cadence: 'monthly',
         dayOfWeek: null,
-        dayOfMonth: null,
+        dayOfMonth: 1,
         hour: 8,
         timezone: 'UTC',
         memberUserIds: [],
@@ -135,14 +186,17 @@ describe('getReportSchedule', () => {
   });
 
   it('returns null when no schedule is configured', async () => {
-    invokeResult = { data: { schedule: null }, error: null };
+    invokeResult = { data: { schedule: null, canManageSchedule: true }, error: null };
     expect(await getReportSchedule('brand-1')).toBeNull();
     const [, args] = invoke.mock.calls[0];
     expect(args.body).toEqual({ action: 'get_schedule', brandId: 'brand-1' });
   });
 
   it('returns the parsed schedule when present', async () => {
-    invokeResult = { data: { schedule: scheduleContract }, error: null };
+    invokeResult = {
+      data: { schedule: scheduleContract, canManageSchedule: true },
+      error: null,
+    };
     expect(await getReportSchedule('brand-1')).toEqual(scheduleContract);
   });
 });

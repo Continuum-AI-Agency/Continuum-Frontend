@@ -54,13 +54,15 @@ import { executeWorkflow } from '../utils/executeWorkflow';
 import {
   getVideoGeneratorImageLimit,
   getVideoGeneratorReferenceMode,
+  getVideoGeneratorReferenceModes,
+  getVideoGeneratorTargetHandles,
   resolveVideoGeneratorModel,
-  supportsVideoGeneratorFrameInputs,
-  supportsVideoGeneratorReferenceImages,
-  supportsVideoGeneratorReferenceVideo,
+  resolveVideoGeneratorReferenceMode,
   VIDEO_GENERATOR_MODEL_LABELS,
   VIDEO_GENERATOR_MODELS,
+  VIDEO_GENERATOR_REFERENCE_MODE_LABELS,
   type VideoGeneratorModel,
+  type VideoGeneratorReferenceMode,
 } from '../utils/videoModel';
 
 const LimitedHandle = ({
@@ -99,6 +101,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
   const updateNode = useStudioStore((state) => state.updateNode);
   const setEdges = useStudioStore((state) => state.setEdges);
   const triggerSave = useStudioStore((state) => state.triggerSave);
+  const takeSnapshot = useStudioStore((state) => state.takeSnapshot);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const brandId = useStudioStore((state) => state.brandId);
@@ -112,9 +115,20 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
     data: data as unknown as Record<string, unknown>,
   });
   const modelLabel = VIDEO_GENERATOR_MODEL_LABELS[model];
-  const supportsFrameInputs = supportsVideoGeneratorFrameInputs(model);
-  const supportsReferenceVideo = supportsVideoGeneratorReferenceVideo(model);
-  const supportsReferenceImages = supportsVideoGeneratorReferenceImages(model);
+  const referenceMode = resolveVideoGeneratorReferenceMode({
+    type: 'videoGen',
+    data: data as unknown as Record<string, unknown>,
+  });
+  const availableReferenceModes = getVideoGeneratorReferenceModes(model);
+
+  // Derived from the contract's handle list rather than a parallel set of booleans,
+  // so the rail can never render a handle the graph would refuse to connect.
+  const targetHandles = getVideoGeneratorTargetHandles(model, referenceMode);
+  const supportsFrameInputs = targetHandles.includes('first-frame');
+  const supportsReferenceVideo = targetHandles.includes('ref-video');
+  const referenceImageHandle = targetHandles.find(
+    (handle) => handle === 'ref-images' || handle === 'ref-image',
+  );
 
   const [isHovered, setIsHovered] = useState(false);
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
@@ -143,20 +157,54 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
 
   const imageLimit = getVideoGeneratorImageLimit(model, referenceVideoConnections > 0);
 
-  const handleModelChange = useCallback(
-    (nextModel: VideoGeneratorModel) => {
+  // Switching model or mode changes which handles exist, so setEdges → normalizeEdges
+  // prunes the connections the new shape cannot hold. That is destructive, hence the
+  // undo point and the count in the toast.
+  const applyHandleShapeChange = useCallback(
+    (patch: Partial<VideoGenNodeData>, title: string) => {
+      const before = flowEdges.filter((edge) => edge.target === id).length;
+      takeSnapshot();
       updateNode(id, (node) => ({
         ...node,
-        data: {
-          ...(node.data as VideoGenNodeData),
-          model: nextModel,
-          referenceMode: getVideoGeneratorReferenceMode(nextModel),
-        },
+        data: { ...(node.data as VideoGenNodeData), ...patch },
       }));
       setEdges(flowEdges);
       triggerSave();
+
+      const remaining = useStudioStore.getState().edges.filter((edge) => edge.target === id).length;
+      const dropped = before - remaining;
+      if (dropped > 0) {
+        show({
+          title,
+          description: `${dropped} incompatible connection${dropped === 1 ? '' : 's'} removed. Undo to restore.`,
+          variant: 'warning',
+        });
+      }
     },
-    [flowEdges, id, setEdges, triggerSave, updateNode],
+    [flowEdges, id, setEdges, show, takeSnapshot, triggerSave, updateNode],
+  );
+
+  const handleModelChange = useCallback(
+    (nextModel: VideoGeneratorModel) => {
+      applyHandleShapeChange(
+        {
+          model: nextModel,
+          referenceMode: getVideoGeneratorReferenceMode(nextModel),
+        },
+        `Switched to ${VIDEO_GENERATOR_MODEL_LABELS[nextModel]}`,
+      );
+    },
+    [applyHandleShapeChange],
+  );
+
+  const handleReferenceModeChange = useCallback(
+    (nextMode: VideoGeneratorReferenceMode) => {
+      applyHandleShapeChange(
+        { referenceMode: nextMode },
+        `Switched to ${VIDEO_GENERATOR_REFERENCE_MODE_LABELS[nextMode]}`,
+      );
+    },
+    [applyHandleShapeChange],
   );
 
   const handleAspectRatioChange = useCallback(
@@ -488,7 +536,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                 </>
               )}
 
-              {supportsReferenceImages && (
+              {referenceImageHandle && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div
@@ -498,7 +546,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                       <LimitedHandle
                         type="target"
                         position={Position.Left}
-                        id={model === 'pixverse-v6' ? 'ref-image' : 'ref-images'}
+                        id={referenceImageHandle}
                         maxConnections={imageLimit}
                         className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                       />
@@ -568,6 +616,21 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                   onClick={() => handleModelChange(option)}
                 >
                   {VIDEO_GENERATOR_MODEL_LABELS[option]}
+                </ContextMenuCheckboxItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>Reference Mode</ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-48">
+              {availableReferenceModes.map((option) => (
+                <ContextMenuCheckboxItem
+                  key={option}
+                  checked={referenceMode === option}
+                  disabled={availableReferenceModes.length === 1}
+                  onClick={() => handleReferenceModeChange(option)}
+                >
+                  {VIDEO_GENERATOR_REFERENCE_MODE_LABELS[option]}
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>

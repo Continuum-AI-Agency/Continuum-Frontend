@@ -6,7 +6,9 @@ import { MixpanelInit } from '@/components/analytics/MixpanelInit';
 import { GalaxyBackgroundLazy } from '@/components/ui/GalaxyBackgroundLazy';
 import { NavigationTransition } from '@/components/ui/NavigationTransition';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { resolveAutomationDeploymentEnvironment } from '@/lib/automations/access';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { getServerChangelog } from '@/lib/changelog/server';
 import { ReactQueryProvider } from '@/lib/react-query/provider';
 import { StudioRenderProvider } from '@/lib/studio-render/StudioRenderProvider';
 import DashboardLayoutShell from '../../components/DashboardLayoutShell';
@@ -29,12 +31,21 @@ async function DashboardLayoutContent({ children }: { children: React.ReactNode 
     redirect(`/onboarding?brand=${activeBrandId}`);
   }
 
+  const changelogEntries = await getServerChangelog();
+  const automationEnvironment = resolveAutomationDeploymentEnvironment({
+    nodeEnv: process.env.NODE_ENV,
+    vercelEnv: process.env.VERCEL_ENV,
+    siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+  });
+
   return (
     <DashboardLayoutShell
       activeBrandId={activeBrandId}
       brandSummaries={brandSummaries}
       user={user}
       permissions={permissions}
+      changelogEntries={changelogEntries}
+      automationEnvironment={automationEnvironment}
     >
       <NavigationTransition>{children}</NavigationTransition>
     </DashboardLayoutShell>
@@ -51,8 +62,8 @@ export default function DashboardLayout({
       <ToastProvider>
         {/* Above the router on purpose: an agent run registered here keeps streaming
             while you navigate away, open another session, or close the chat panel. */}
-        <AgentRunsProvider>
-          <StudioRenderProvider>
+        <StudioRenderProvider>
+          <AgentRunsProvider>
             <GalaxyBackgroundLazy intensity={1} speed="glacial" />
             <div
               className="min-h-dvh overflow-hidden"
@@ -66,8 +77,8 @@ export default function DashboardLayout({
                 <DashboardLayoutContent>{children}</DashboardLayoutContent>
               </Suspense>
             </div>
-          </StudioRenderProvider>
-        </AgentRunsProvider>
+          </AgentRunsProvider>
+        </StudioRenderProvider>
       </ToastProvider>
     </ReactQueryProvider>
   );

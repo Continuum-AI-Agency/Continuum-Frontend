@@ -7,26 +7,101 @@
 
 import {
   type Automation,
+  type AutomationCapabilitiesResponse,
   type AutomationResponse,
   type AutomationRun,
-  type AutomationRunResponse,
+  type AutomationRunDetailResponse,
+  type AutomationWebhookDestination,
+  type AutomationWebhookEndpoint,
+  type AutomationWorkflowDefinition,
+  type AutomationWorkflowResponse,
+  type AutomationWorkflowValidation,
+  automationCapabilitiesResponseSchema,
   automationResponseSchema,
-  automationRunResponseSchema,
+  automationRunDetailResponseSchema,
+  automationWorkflowResponseSchema,
+  automationWorkflowValidationSchema,
   type CreateAutomationRequest,
+  type CreateWorkflowAutomationRequest,
+  createAutomationWebhookDestinationResponseSchema,
+  createAutomationWebhookEndpointResponseSchema,
   type ListAutomationRunsResponse,
   type ListAutomationsResponse,
+  type ListAutomationTemplatesResponse,
   type ListRecipientCandidatesResponse,
   listAutomationRunsResponseSchema,
   listAutomationsResponseSchema,
+  listAutomationTemplatesResponseSchema,
+  listAutomationWebhookResourcesResponseSchema,
   listRecipientCandidatesResponseSchema,
+  type PublishAutomationWorkflowResponse,
+  publishAutomationWorkflowResponseSchema,
   type RecipientCandidate,
   type RunAutomationNowResponse,
   runAutomationNowResponseSchema,
+  type SaveAutomationDraftRequest,
+  type TestAutomationWorkflowResponse,
+  testAutomationWorkflowResponseSchema,
   type UpdateAutomationRequest,
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { http } from '@/lib/api/http';
+
+export async function fetchAutomationCapabilities(
+  brandId: string,
+): Promise<AutomationCapabilitiesResponse> {
+  return http.request({
+    path: `/api/automations/capabilities?brandId=${encodeURIComponent(brandId)}`,
+    method: 'GET',
+    schema: automationCapabilitiesResponseSchema,
+  });
+}
+
+export async function fetchAutomationWebhookResources(brandId: string): Promise<{
+  endpoints: AutomationWebhookEndpoint[];
+  destinations: AutomationWebhookDestination[];
+}> {
+  return http.request({
+    path: `/api/automations/webhooks?brandId=${encodeURIComponent(brandId)}`,
+    method: 'GET',
+    schema: listAutomationWebhookResourcesResponseSchema,
+  });
+}
+
+export async function createAutomationWebhookEndpoint(input: {
+  automationId: string;
+  workflowVersionId: string;
+  nodeId: string;
+  name: string;
+  payloadSchema: Record<string, unknown>;
+}): Promise<z.infer<typeof createAutomationWebhookEndpointResponseSchema>> {
+  return http.request({
+    path: `/api/automations/${encodeURIComponent(input.automationId)}/webhook-endpoints`,
+    method: 'POST',
+    body: {
+      workflowVersionId: input.workflowVersionId,
+      nodeId: input.nodeId,
+      name: input.name,
+      payloadSchema: input.payloadSchema,
+    },
+    schema: createAutomationWebhookEndpointResponseSchema,
+  });
+}
+
+export async function createAutomationWebhookDestination(input: {
+  brandId: string;
+  name: string;
+  url: string;
+  method: 'POST' | 'PUT' | 'PATCH';
+}): Promise<z.infer<typeof createAutomationWebhookDestinationResponseSchema>> {
+  return http.request({
+    path: '/api/automations/webhook-destinations',
+    method: 'POST',
+    body: input,
+    schema: createAutomationWebhookDestinationResponseSchema,
+  });
+}
 
 export async function fetchAutomations(brandId: string): Promise<Automation[]> {
   const result = await http.request<ListAutomationsResponse>({
@@ -54,6 +129,29 @@ export async function createAutomation(input: CreateAutomationRequest): Promise<
     schema: automationResponseSchema,
   });
   return result.automation;
+}
+
+export async function createWorkflowAutomation(
+  input: CreateWorkflowAutomationRequest,
+): Promise<Automation> {
+  const result = await http.request<AutomationResponse>({
+    path: '/api/automations/workflows',
+    method: 'POST',
+    body: input,
+    schema: automationResponseSchema,
+  });
+  return result.automation;
+}
+
+export async function fetchAutomationTemplates(
+  brandId: string,
+): Promise<ListAutomationTemplatesResponse['templates']> {
+  const result = await http.request<ListAutomationTemplatesResponse>({
+    path: `/api/automations/templates?brandId=${encodeURIComponent(brandId)}`,
+    method: 'GET',
+    schema: listAutomationTemplatesResponseSchema,
+  });
+  return result.templates;
 }
 
 export async function updateAutomation(
@@ -96,12 +194,18 @@ export async function fetchAutomationRuns(automationId: string): Promise<Automat
 }
 
 export async function fetchAutomationRun(runId: string): Promise<AutomationRun> {
-  const result = await http.request<AutomationRunResponse>({
+  const result = await fetchAutomationRunDetail(runId);
+  return result.run;
+}
+
+export async function fetchAutomationRunDetail(
+  runId: string,
+): Promise<AutomationRunDetailResponse> {
+  return http.request<AutomationRunDetailResponse>({
     path: `/api/automations/runs/${encodeURIComponent(runId)}`,
     method: 'GET',
-    schema: automationRunResponseSchema,
+    schema: automationRunDetailResponseSchema,
   });
-  return result.run;
 }
 
 export async function fetchRecipientCandidates(brandId: string): Promise<RecipientCandidate[]> {
@@ -113,11 +217,88 @@ export async function fetchRecipientCandidates(brandId: string): Promise<Recipie
   return result.candidates;
 }
 
+export async function fetchAutomationWorkflow(
+  automationId: string,
+): Promise<AutomationWorkflowResponse> {
+  return http.request({
+    path: `/api/automations/${encodeURIComponent(automationId)}/workflow`,
+    method: 'GET',
+    schema: automationWorkflowResponseSchema,
+  });
+}
+
+export async function saveAutomationWorkflowDraft(
+  automationId: string,
+  input: SaveAutomationDraftRequest,
+): Promise<AutomationWorkflowResponse> {
+  return http.request({
+    path: `/api/automations/${encodeURIComponent(automationId)}/workflow/draft`,
+    method: 'PUT',
+    body: input,
+    schema: automationWorkflowResponseSchema,
+  });
+}
+
+export async function validateAutomationWorkflowForPublish(
+  automationId: string,
+  definition: AutomationWorkflowDefinition,
+): Promise<AutomationWorkflowValidation> {
+  return http.request({
+    path: `/api/automations/${encodeURIComponent(automationId)}/workflow/validate`,
+    method: 'POST',
+    body: { definition },
+    schema: automationWorkflowValidationSchema,
+  });
+}
+
+export async function unpublishAutomationWorkflow(
+  automationId: string,
+): Promise<AutomationWorkflowResponse> {
+  return http.request({
+    path: `/api/automations/${encodeURIComponent(automationId)}/workflow/unpublish`,
+    method: 'POST',
+    schema: automationWorkflowResponseSchema,
+  });
+}
+
+export async function publishAutomationWorkflow(
+  automationId: string,
+): Promise<AutomationWorkflowResponse> {
+  const result = await http.request<PublishAutomationWorkflowResponse>({
+    path: `/api/automations/${encodeURIComponent(automationId)}/workflow/publish`,
+    method: 'POST',
+    schema: publishAutomationWorkflowResponseSchema,
+  });
+  return { version: result.version, validation: result.validation };
+}
+
+export async function testAutomationWorkflow(
+  automationId: string,
+  definition: AutomationWorkflowDefinition,
+  triggerNodeId?: string,
+): Promise<TestAutomationWorkflowResponse> {
+  return http.request({
+    path: `/api/automations/${encodeURIComponent(automationId)}/workflow/test`,
+    method: 'POST',
+    body: {
+      definition,
+      triggerPayload: {
+        source: 'workspace-test',
+        trigger: 'test',
+        ...(triggerNodeId ? { triggerNodeId } : {}),
+      },
+    },
+    schema: testAutomationWorkflowResponseSchema,
+  });
+}
+
 export const automationsQueryKey = (brandId?: string) => ['automations', brandId] as const;
 export const automationQueryKey = (automationId?: string) => ['automation', automationId] as const;
 export const automationRunsQueryKey = (automationId?: string) =>
   ['automation-runs', automationId] as const;
 export const automationRunQueryKey = (runId?: string) => ['automation-run', runId] as const;
+export const automationRunDetailQueryKey = (runId?: string) =>
+  ['automation-run-detail', runId] as const;
 export const recipientCandidatesQueryKey = (brandId?: string) =>
   ['automation-recipient-candidates', brandId] as const;
 
@@ -158,6 +339,18 @@ export function useAutomationRun(runId?: string, enabled = true) {
     queryKey: automationRunQueryKey(runId),
     queryFn: () => fetchAutomationRun(runId as string),
     enabled: Boolean(runId) && enabled,
+  });
+}
+
+export function useAutomationRunDetail(runId?: string) {
+  return useQuery({
+    queryKey: automationRunDetailQueryKey(runId),
+    queryFn: () => fetchAutomationRunDetail(runId as string),
+    enabled: Boolean(runId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.run.status;
+      return status === 'queued' || status === 'running' ? 750 : false;
+    },
   });
 }
 

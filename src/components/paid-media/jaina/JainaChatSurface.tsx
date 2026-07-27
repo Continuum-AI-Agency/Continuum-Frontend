@@ -24,6 +24,8 @@ const AnimatedShaderBackground = dynamic(
   { ssr: false },
 );
 
+import type { AgentSessionListFilters } from '@continuum/contracts';
+import { updateAgentSessionTagsResponseSchema } from '@continuum/contracts';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useCampaignAI } from '@/CampaignCanvas/hooks/useCampaignAI';
 import {
@@ -40,6 +42,7 @@ import {
   QueueSectionTrigger,
 } from '@/components/ai-elements/queue';
 import { AutomationSheets } from '@/components/automations/AutomationSheets';
+import { ChatProvenanceBanner } from '@/components/chat/AgentInitiatorPill';
 import type { Attachment } from '@/components/chat/attachments';
 import { ChatMarker } from '@/components/chat/ChatMarker';
 import { ChatTranscript } from '@/components/chat/ChatTranscript';
@@ -60,6 +63,7 @@ import type {
   AgentMentionReference,
   AgentMentionSuggestion,
 } from '@/lib/agent-references';
+import { isSessionStreaming, selectRunForSession, useAgentRunStore } from '@/lib/agents/runStore';
 import { http } from '@/lib/api/http';
 import { extractCampaignCanvasActionsEnvelope } from '@/lib/campaign-canvas/agent-actions';
 import type { CampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
@@ -108,6 +112,7 @@ import {
   updateQueuedMessageContent,
 } from './queueing';
 import type { JainaChatMessage } from './types';
+import { useProjectedJainaRun } from './useProjectedJainaRun';
 
 export { parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
 
@@ -142,6 +147,9 @@ type JainaChatSurfaceProps = {
   campaignId?: string | null;
   campaignCanvasPayload?: CampaignCanvasPayload | null;
   userId?: string | null;
+  initialSessionId?: string | null;
+  initialPrompt?: string | null;
+  onInitialPromptConsumed?: () => void;
   onCanvasActionApplied?: () => void;
   goalsAccessEnabled?: boolean;
   className?: string;
@@ -1088,6 +1096,9 @@ export function JainaChatSurface({
   campaignId,
   campaignCanvasPayload,
   userId,
+  initialSessionId,
+  initialPrompt,
+  onInitialPromptConsumed,
   onCanvasActionApplied,
   goalsAccessEnabled = process.env.NODE_ENV !== 'production',
   className,
@@ -1100,7 +1111,7 @@ export function JainaChatSurface({
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
   const prefersReducedMotion = useReducedMotion();
 
-  const { state, start, cancel, reset, clearMemory } = useJainaChatStream();
+  const { state, start, cancel, detach, reset, clearMemory, liveRunId } = useJainaChatStream();
   const isStreaming = state.status === 'streaming' || state.status === 'starting';
 
   const [isJainaProMode, setIsJainaProMode] = React.useState(false);
@@ -1116,6 +1127,22 @@ export function JainaChatSurface({
   const [sessionId, setSessionId] = React.useState<string>(() => createJainaSessionId());
   const attachments = useChatAttachments({ brandId: brandProfileId, sessionId });
   const pendingClarificationId = state.pendingClarification?.id;
+
+  // Per-viewed-session streaming from the app-level store: true when the conversation on screen
+  // has a run in flight — whether this reader owns it (local `isStreaming`) or it is a detached
+  // run still executing after the user switched away and came back. Drives the Stop control and
+  // guards the queue so a returned-to running session doesn't dispatch a second turn.
+  const viewedSessionStreaming = useAgentRunStore(isSessionStreaming(sessionId));
+  const isViewedStreaming = isStreaming || viewedSessionStreaming;
+
+  // Mid-run transcript resume: when this surface does NOT own the live reader (the user
+  // navigated away and came back), fold the app-level store's frame log for this session
+  // into a JainaStreamState and render it as a placeholder assistant message (see the
+  // projection effects below refreshConversationSnapshot).
+  const { projectedState, projectedRunId, projectedSessionId } = useProjectedJainaRun({
+    sessionId,
+    liveRunId,
+  });
 
   const [messages, setMessages] = React.useState<JainaChatMessage[]>([]);
   const anchors = React.useMemo(() => deriveJainaAnchors(messages), [messages]);
@@ -1143,6 +1170,8 @@ export function JainaChatSurface({
   const persistedAssistantResponseIdsRef = React.useRef<Set<string>>(new Set());
   const conversationChannelRef = React.useRef<RealtimeChannel | null>(null);
   const activeSessionIdRef = React.useRef(sessionId);
+  // Deep link (?sessionId=) wins over "most recent" exactly once, on first bootstrap.
+  const deepLinkSessionIdRef = React.useRef(initialSessionId ?? null);
   const activeResponseIdRef = React.useRef<string | null>(null);
   const activeRunIdRef = React.useRef<string | undefined>(undefined);
   const streamBusyRef = React.useRef(false);
@@ -1284,6 +1313,15 @@ export function JainaChatSurface({
 
   React.useEffect(() => {
     activeSessionIdRef.current = sessionId;
+  }, [sessionId]);
+
+  // Tell the app-level run store which session is on screen so completion toasts are
+  // suppressed for work the user is already watching finish.
+  React.useEffect(() => {
+    useAgentRunStore.getState().setViewingSession(sessionId);
+    return () => {
+      useAgentRunStore.getState().setViewingSession(null);
+    };
   }, [sessionId]);
 
   React.useEffect(() => {
@@ -1481,6 +1519,72 @@ export function JainaChatSurface({
       return parsed.data;
     },
     [adAccountId, brandProfileId],
+  );
+
+  // Server-side chat-history search. Filtered results are returned to the sidebar
+  // and deliberately NOT written into conversationSessions/the sidebar cache: the
+  // cache holds the brand's full list, and seeding it with a filtered page would
+  // leave the unfiltered sidebar looking empty.
+  // Provenance header: an AI-initiated conversation links back to its caller run.
+  const activeConversationSession = React.useMemo(
+    () => conversationSessions.find((session) => session.sessionId === sessionId) ?? null,
+    [conversationSessions, sessionId],
+  );
+
+  const searchConversations = React.useCallback(
+    async (filters: AgentSessionListFilters): Promise<JainaConversationSession[]> => {
+      const searchParams = new URLSearchParams({ brandId: brandProfileId, sessionsLimit: '40' });
+      if (adAccountId) searchParams.set('adAccountId', adAccountId);
+      if (filters.q) searchParams.set('q', filters.q);
+      if (filters.initiator) searchParams.set('initiator', filters.initiator);
+      if (filters.initiatorAgent) searchParams.set('initiator_agent', filters.initiatorAgent);
+      if (filters.tags && filters.tags.length > 0) {
+        searchParams.set('tags', filters.tags.join(','));
+      }
+
+      const response = await fetch(
+        `/api/agents/jaina/chat/conversations?${searchParams.toString()}`,
+        { method: 'GET', cache: 'no-store' },
+      );
+      if (!response.ok) {
+        throw new Error('Failed to search conversations.');
+      }
+      const parsed = jainaConversationListResponseSchema.safeParse(
+        await response.json().catch(() => null),
+      );
+      if (!parsed.success) {
+        throw new Error('Invalid conversation search payload.');
+      }
+      return parsed.data.sessions;
+    },
+    [adAccountId, brandProfileId],
+  );
+
+  const updateConversationTags = React.useCallback(
+    async (targetSessionId: string, tags: string[]): Promise<string[]> => {
+      const response = await fetch(
+        `/api/agents/jaina/chat/conversations/${encodeURIComponent(targetSessionId)}?brandId=${encodeURIComponent(brandProfileId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tags }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error('Failed to update tags.');
+      }
+      const parsed = updateAgentSessionTagsResponseSchema.safeParse(
+        await response.json().catch(() => null),
+      );
+      const stored = parsed.success ? parsed.data.tags : tags;
+      setConversationSessionsWithCache((previous) =>
+        previous.map((session) =>
+          session.sessionId === targetSessionId ? { ...session, tags: stored } : session,
+        ),
+      );
+      return stored;
+    },
+    [brandProfileId, setConversationSessionsWithCache],
   );
 
   const hydrateConversationMessagesFromRuns = React.useCallback(
@@ -1724,6 +1828,93 @@ export function JainaChatSurface({
     ],
   );
 
+  // ---- Mid-run transcript projection. The store's frame log IS the mid-run transcript:
+  // useProjectedJainaRun folds it into a JainaStreamState, and this effect renders it as a
+  // placeholder assistant message the same way the live path renders its streaming turn.
+  // The session guard drops the one-render echo that follows a session switch.
+  const projectedMessageId =
+    projectedRunId && projectedSessionId === sessionId ? `projected-${projectedRunId}` : null;
+  const projectionHandoffRef = React.useRef<{ sessionId: string; messageId: string } | null>(null);
+
+  React.useEffect(() => {
+    if (!projectedMessageId || !projectedState) return;
+    if (activeResponseId || isHistoryLoading || isConversationSwitching) return;
+
+    const content = pickRenderableContent({
+      sessionTitle: currentSessionTitle,
+      pendingClarification: projectedState.pendingClarification,
+      responseText: projectedState.responseText,
+      report: projectedState.report,
+      reportV2: projectedState.reportV2,
+      latestCheckpointSummary: projectedState.latestCheckpointSummary,
+      checkpointSummarySource: projectedState.checkpointSummarySource,
+      plan: projectedState.plan ?? undefined,
+      progress: projectedState.progress,
+    });
+    const patch: Partial<JainaChatMessage> = {
+      content: content || 'Thinking through your request…',
+      status: 'streaming',
+      objectives: projectedState.objectives,
+      delegations: projectedState.delegations,
+      plan: projectedState.plan ?? undefined,
+      report: projectedState.report ?? undefined,
+      reportV2: projectedState.reportV2 ?? undefined,
+      reportAssembly: projectedState.reportAssembly ?? undefined,
+      reasoning: projectedState.progress,
+      toolCalls: projectedState.toolCalls,
+      toolResults: projectedState.toolResults,
+      pendingClarification: projectedState.pendingClarification ?? undefined,
+    };
+
+    setMessages((previous) => {
+      const index = previous.findIndex((message) => message.id === projectedMessageId);
+      if (index === -1) {
+        const placeholder: JainaChatMessage = {
+          id: projectedMessageId,
+          role: 'assistant',
+          content: 'Thinking through your request…',
+          createdAt: new Date().toISOString(),
+          title: 'Jaina Analyst',
+          ...patch,
+        };
+        return [...previous, placeholder];
+      }
+      const nextMessages = [...previous];
+      nextMessages[index] = { ...nextMessages[index], ...patch };
+      return nextMessages;
+    });
+  }, [
+    projectedMessageId,
+    projectedState,
+    activeResponseId,
+    isHistoryLoading,
+    isConversationSwitching,
+    currentSessionTitle,
+  ]);
+
+  // When the projected run ends (terminal frame, realtime row, or Stop), the hook declines
+  // it. Drop the placeholder and let the persisted snapshot render the finished turn — the
+  // SAME persistedAssistantResponseIdsRef + refreshConversationSnapshot reconciliation the
+  // live path uses. No second reconciliation mechanism.
+  React.useEffect(() => {
+    if (projectedMessageId && projectedSessionId) {
+      projectionHandoffRef.current = {
+        sessionId: projectedSessionId,
+        messageId: projectedMessageId,
+      };
+      return;
+    }
+    const ended = projectionHandoffRef.current;
+    if (!ended) return;
+    projectionHandoffRef.current = null;
+    // A session switch replaced the transcript wholesale; nothing to reconcile here.
+    if (ended.sessionId !== activeSessionIdRef.current) return;
+    if (persistedAssistantResponseIdsRef.current.has(ended.messageId)) return;
+    persistedAssistantResponseIdsRef.current.add(ended.messageId);
+    setMessages((previous) => previous.filter((message) => message.id !== ended.messageId));
+    void refreshConversationSnapshot(ended.sessionId);
+  }, [projectedMessageId, projectedSessionId, refreshConversationSnapshot]);
+
   React.useEffect(() => {
     if (!activeResponseId) return;
 
@@ -1764,6 +1955,7 @@ export function JainaChatSurface({
       updateMessage(activeResponseId, {
         content: streamingContent,
         objectives: state.objectives,
+        delegations: state.delegations,
         plan: state.plan ?? undefined,
         report: state.report ?? undefined,
         reportV2: state.reportV2 ?? undefined,
@@ -1818,6 +2010,7 @@ export function JainaChatSurface({
         artifacts: state.artifacts,
         pendingClarification: state.pendingClarification ?? undefined,
         objectives: state.objectives,
+        delegations: state.delegations,
       });
 
       persistedAssistantResponseIdsRef.current.add(completedResponseId);
@@ -1869,6 +2062,7 @@ export function JainaChatSurface({
         artifacts: state.artifacts,
         pendingClarification: state.pendingClarification ?? undefined,
         objectives: state.objectives,
+        delegations: state.delegations,
       }));
 
       persistedAssistantResponseIdsRef.current.add(failedResponseId);
@@ -1891,6 +2085,7 @@ export function JainaChatSurface({
     state.finalContentKind,
     state.latestCheckpointSummary,
     state.lastEventType,
+    state.delegations,
     state.objectives,
     state.pendingClarification,
     state.plan,
@@ -1949,9 +2144,12 @@ export function JainaChatSurface({
       }
       void refreshConversationSnapshot(activeSessionIdRef.current);
       setActiveResponseId(null);
-      cancel();
+      // The run already reached a terminal status server-side — just release the local reader.
+      // Using cancel() here would flip the durable status to `cancelled` and mis-record a run
+      // that actually completed.
+      detach();
     },
-    [cancel, refreshConversationSnapshot, updateMessage],
+    [detach, refreshConversationSnapshot, updateMessage],
   );
 
   useJainaRunStatusRealtime({
@@ -2092,8 +2290,10 @@ export function JainaChatSurface({
           return next;
         });
 
-        const mostRecentSessionId = sessions[0]?.sessionId;
-        if (!mostRecentSessionId) {
+        const deepLinkSessionId = deepLinkSessionIdRef.current;
+        deepLinkSessionIdRef.current = null;
+        const targetSessionId = deepLinkSessionId ?? sessions[0]?.sessionId;
+        if (!targetSessionId) {
           setSessionId(createJainaSessionId());
           setMessages([]);
           setQueuedMessages([]);
@@ -2101,8 +2301,8 @@ export function JainaChatSurface({
           return;
         }
 
-        setSessionId(mostRecentSessionId);
-        const conversationPayload = await fetchConversationHistory(mostRecentSessionId);
+        setSessionId(targetSessionId);
+        const conversationPayload = await fetchConversationHistory(targetSessionId);
         if (!conversationPayload || cancelled) return;
         setConversationSessionsWithCache(sortConversationSessions(conversationPayload.sessions));
         setSessionTitleById((previous) => {
@@ -2117,7 +2317,7 @@ export function JainaChatSurface({
         });
         const sessionTitleForTarget =
           normalizeSessionTitle(
-            conversationPayload.sessions?.find((s) => s.sessionId === mostRecentSessionId)?.title ??
+            conversationPayload.sessions?.find((s) => s.sessionId === targetSessionId)?.title ??
               null,
           ) ?? undefined;
         const mappedMessages = (conversationPayload.messages ?? []).map((msg) =>
@@ -2127,7 +2327,7 @@ export function JainaChatSurface({
         setEarlierCursor(conversationPayload.nextCursor ?? null);
         setShaderState(mappedMessages.length > 0 ? 'hidden' : 'visible');
         void hydrateConversationMessagesFromRuns({
-          targetSessionId: mostRecentSessionId,
+          targetSessionId,
           baseMessages: mappedMessages,
         });
       } catch (error) {
@@ -2479,7 +2679,9 @@ export function JainaChatSurface({
 
   React.useEffect(() => {
     if (isHistoryLoading || isConversationSwitching) return;
-    if (isStreaming || activeResponseId) return;
+    // isViewedStreaming (not just local isStreaming) so a detached run still executing on this
+    // session doesn't get a second turn dispatched under it — the Backend fences one per session.
+    if (isViewedStreaming || activeResponseId) return;
     if (queuedMessages.length === 0) return;
     if (queueDispatchInFlightRef.current) return;
 
@@ -2513,7 +2715,7 @@ export function JainaChatSurface({
     editingQueueMessageId,
     isConversationSwitching,
     isHistoryLoading,
-    isStreaming,
+    isViewedStreaming,
     queuedMessages,
   ]);
 
@@ -2542,18 +2744,21 @@ export function JainaChatSurface({
   const handleSelectConversation = React.useCallback(
     async (targetSessionId: string) => {
       if (targetSessionId === sessionId) return;
-      if (isStreaming) {
-        show({
-          title: 'Stop current response first',
-          description: 'Finish or stop the current stream before switching chats.',
-          variant: 'warning',
-        });
-        return;
-      }
+      // Release the local reader before switching — the run keeps executing (Backend + store)
+      // and the run row hydrates the completed result when the user returns.
+      detach();
       await loadConversationSession(targetSessionId);
     },
-    [isStreaming, loadConversationSession, sessionId, show],
+    [detach, loadConversationSession, sessionId],
   );
+
+  // Stop the run on screen even when this reader doesn't own it — the detached run you returned
+  // to. Resolve its id from the store when the local reader isn't the owner.
+  const handleStop = React.useCallback(() => {
+    const ownedRunId = liveRunId ?? undefined;
+    const projectedRunId = selectRunForSession(sessionId)(useAgentRunStore.getState())?.run.runId;
+    void cancel(ownedRunId ?? projectedRunId);
+  }, [cancel, liveRunId, sessionId]);
 
   const handleDeleteConversation = React.useCallback(
     async (targetSessionId: string) => {
@@ -2732,7 +2937,7 @@ export function JainaChatSurface({
   }, [pendingClarificationId]);
 
   const isInputDisabled = isHistoryLoading || isConversationSwitching;
-  const isQueueStreaming = isStreaming || Boolean(activeResponseId);
+  const isQueueStreaming = isViewedStreaming || Boolean(activeResponseId);
   const canStartQueuedNow = !isQueueStreaming && !isHistoryLoading && !isConversationSwitching;
   const hasPendingReportArtifactRequest =
     Boolean(pendingReportArtifactResponseId) &&
@@ -2822,9 +3027,18 @@ export function JainaChatSurface({
         campaignId={campaignId}
         onClearMemory={handleClearMemory}
         onClearConversation={handleClearConversation}
-        onStop={cancel}
-        isStreaming={state.status === 'streaming'}
+        onStop={handleStop}
+        isStreaming={isViewedStreaming}
       />
+
+      {activeConversationSession ? (
+        <ChatProvenanceBanner
+          initiator={activeConversationSession.initiator}
+          initiatorAgent={activeConversationSession.initiatorAgent}
+          callerSessionId={activeConversationSession.callerSessionId}
+          callerRunId={activeConversationSession.callerRunId}
+        />
+      ) : null}
 
       <div className="relative z-0 flex min-h-0 flex-1 flex-col md:flex-row">
         <JainaConversationSidebar
@@ -2833,9 +3047,7 @@ export function JainaChatSurface({
           sessionTitleById={sessionTitleById}
           generatingSessionIds={generatingSessionIdsForSidebar}
           isLoading={isHistoryLoading}
-          isInteractionDisabled={
-            isStreaming || isConversationSwitching || Boolean(deletingSessionId)
-          }
+          isInteractionDisabled={isConversationSwitching || Boolean(deletingSessionId)}
           deletingSessionId={deletingSessionId}
           brandId={brandProfileId}
           goalsAccessEnabled={goalsAccessEnabled}
@@ -2844,14 +3056,15 @@ export function JainaChatSurface({
           onCreateConversation={handleClearConversation}
           onSelectConversation={handleSelectConversation}
           onDeleteConversation={handleDeleteConversation}
+          onSearchConversations={searchConversations}
+          onUpdateConversationTags={updateConversationTags}
         />
-        <AutomationSheets agent="jaina" brandId={brandProfileId ?? null} />
-
+        <AutomationSheets agent="jaina" brandId={brandProfileId} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-hidden">
             <ChatTranscript
               anchors={anchors}
-              isStreaming={Boolean(activeResponseId)}
+              isStreaming={Boolean(activeResponseId) || Boolean(projectedMessageId)}
               hasEarlier={hasEarlier}
               isLoadingEarlier={isLoadingEarlier}
               onLoadEarlier={loadEarlier}
@@ -3021,46 +3234,50 @@ export function JainaChatSurface({
                   ariaLabel="Message Jaina"
                   mentionProvider={jainaMentionProvider}
                   mentionSource="jaina"
+                  queuedText={initialPrompt}
+                  onQueuedTextConsumed={onInitialPromptConsumed}
                   placeholder={
                     pendingClarificationId ? "Reply to Jaina's question…" : 'Ask Jaina anything…'
                   }
                   actions={
                     <TooltipProvider delayDuration={180}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={
-                              reportArtifactJob?.status === 'failed'
-                                ? 'destructive'
-                                : isJainaProMode || reportArtifactJob
-                                  ? 'default'
-                                  : 'secondary'
-                            }
-                            disabled={reportArtifactButtonDisabled}
-                            aria-pressed={isJainaProMode}
-                            aria-label={reportArtifactTooltip}
-                            onClick={handleReportArtifactAction}
-                            className="gap-1.5"
-                          >
-                            <ReportArtifactButtonIcon
-                              className={cn(
-                                'size-3.5',
-                                (hasPendingReportArtifactRequest ||
-                                  reportArtifactJob?.status === 'pending' ||
-                                  reportArtifactJob?.status === 'running' ||
-                                  isReportArtifactDownloading) &&
-                                  'animate-spin',
-                              )}
-                            />
-                            {reportArtifactStatusLabel}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">
-                          {reportArtifactTooltip}
-                        </TooltipContent>
-                      </Tooltip>
+                      <div className="flex items-center gap-1.5">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={
+                                reportArtifactJob?.status === 'failed'
+                                  ? 'destructive'
+                                  : isJainaProMode || reportArtifactJob
+                                    ? 'default'
+                                    : 'secondary'
+                              }
+                              disabled={reportArtifactButtonDisabled}
+                              aria-pressed={isJainaProMode}
+                              aria-label={reportArtifactTooltip}
+                              onClick={handleReportArtifactAction}
+                              className="gap-1.5"
+                            >
+                              <ReportArtifactButtonIcon
+                                className={cn(
+                                  'size-3.5',
+                                  (hasPendingReportArtifactRequest ||
+                                    reportArtifactJob?.status === 'pending' ||
+                                    reportArtifactJob?.status === 'running' ||
+                                    isReportArtifactDownloading) &&
+                                    'animate-spin',
+                                )}
+                              />
+                              {reportArtifactStatusLabel}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            {reportArtifactTooltip}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                     </TooltipProvider>
                   }
                 />

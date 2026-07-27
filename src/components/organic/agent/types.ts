@@ -1,5 +1,6 @@
 import type {
   AeoSnapshotCard,
+  AgentDelegatedFrameData,
   BulkContentPlan,
   MediaSearchResultsFrame,
   OrganicPostCardData,
@@ -81,7 +82,8 @@ export type UiCard =
   | { type: 'bulk_plan_card'; data: BulkContentPlan }
   | { type: 'post_list'; data: UiFetchedPost[]; label?: string }
   | { type: 'skill_proposal'; data: SkillProposalCardData }
-  | { type: 'aeo_snapshot'; data: UiAeoSnapshotCard };
+  | { type: 'aeo_snapshot'; data: UiAeoSnapshotCard }
+  | { type: 'agent_delegated'; data: AgentDelegatedFrameData };
 
 export type BulkRunStatus = 'running' | 'completed' | 'failed';
 

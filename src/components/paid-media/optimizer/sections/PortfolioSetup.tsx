@@ -34,6 +34,7 @@ import {
   SparklesIcon,
   TriangleAlertIcon,
 } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
 import * as React from 'react';
 
@@ -50,6 +51,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import { PAID_SETUP_CONNECT_HREF } from '../../paid-setup-diagnostics';
 import { BudgetHint, SetupAdvisor, TargetHint, useSetupAdvice } from '../advisor/SetupAdvisor';
 import { currencySymbol, deriveEfficiency, formatCpa, formatCurrency, humanize } from '../format';
@@ -64,9 +66,15 @@ import {
   useOptimizerSuggestions,
 } from '../useOptimizerData';
 import { CboCampaigns } from './CboCampaigns';
-import { PortfolioPreview } from './PortfolioPreview';
 import { ProjectedConversions } from './ProjectedConversions';
 import { SignalReadinessCard } from './SignalReadinessCard';
+import { SuggestionExplorer } from './SuggestionExplorer';
+import {
+  CONVERSION_OBJECTIVES,
+  DEFAULT_MODE_BY_OBJECTIVE,
+  MODES,
+  OBJECTIVES,
+} from './suggestionModel';
 
 // Explains an empty suggestion list precisely (Phase C diagnostic reason), so the
 // onboarding never shows a bare "no suggestions yet". In campaign mode the
@@ -112,57 +120,8 @@ type PortfolioSetupProps = {
   showAccountHeader?: boolean;
 };
 
-// `clicks` is deliberately absent: it is the engine's internal fallback, not a thing an
-// advertiser chooses to buy. Everything else a Meta ad set can DECLARE is selectable —
-// without `conversations` here, a messaging account could not create a portfolio that
-// prices what it actually buys, and every one of its ad sets would sit frozen.
-const OBJECTIVES: OptimizationObjective[] = [
-  'purchase',
-  'app_install',
-  'signup',
-  'lead',
-  'conversations',
-  'traffic',
-  'link_clicks',
-  'thruplays',
-  'post_engagement',
-  'awareness',
-];
-const MODES: OptimizationModeDto[] = ['efficiency', 'balanced', 'scale'];
-
-// Per-objective default reallocation mode — mirrors optimizer-suggest's DEFAULT_MODE
-// so changing the objective on a suggestion card re-derives the same mode the server
-// would have chosen for that objective.
-const DEFAULT_MODE_BY_OBJECTIVE: Record<OptimizationObjective, OptimizationModeDto> = {
-  purchase: 'balanced',
-  app_install: 'scale',
-  signup: 'scale',
-  lead: 'efficiency',
-  traffic: 'balanced',
-  awareness: 'efficiency',
-  // The objectives whose engine profiles are UNCALIBRATED (see optimization-engine
-  // objectives.ts). We have no backtest telling us how hard these saturate, so they
-  // default to `efficiency` — the mode that treats the planned total as a ceiling and
-  // never force-spends on inventory it cannot vouch for. Guessing on the cautious side
-  // costs a little reach; guessing on the other side costs someone else's money.
-  conversations: 'efficiency',
-  link_clicks: 'efficiency',
-  thruplays: 'efficiency',
-  post_engagement: 'efficiency',
-  clicks: 'efficiency',
-};
-
-// Conversion objectives need tracked events to score; with 0 tracked conversions the
-// first cycle is pause-all / Low-confidence. The suggestion card nudges toward Traffic.
-const CONVERSION_OBJECTIVES = new Set<OptimizationObjective>([
-  'purchase',
-  'app_install',
-  'signup',
-  'lead',
-  // A messaging thread is a tracked conversion like any other: with none recorded, the
-  // first cycle has nothing to score and the same nudge applies.
-  'conversations',
-]);
+// The objective/mode vocabulary shared with the SuggestionExplorer lives in
+// ./suggestionModel — OBJECTIVES, MODES, DEFAULT_MODE_BY_OBJECTIVE, CONVERSION_OBJECTIVES.
 
 // The single objective to read account-wide signal readiness against, before any
 // portfolio exists: the KPI the plurality of ad sets already declare. Onboarding
@@ -244,6 +203,21 @@ export function PortfolioSetup({
   // only covers the first of the two mutations, so the button re-enabled between
   // them and a second click would create a duplicate portfolio.
   const [pendingKey, setPendingKey] = React.useState<string | null>(null);
+  // Exactly one suggestion's explorer is open at a time — a full-width split pane
+  // rendered below the compact card row, so an expanded suggestion never stretches a
+  // grid cell and leaves its siblings blank.
+  const [activeSuggestionName, setActiveSuggestionName] = React.useState<string | null>(null);
+  const prefersReducedMotion = useReducedMotion();
+
+  // The open suggestion and just its ad-set snapshots — resolved from the live list so a
+  // suggestion that vanishes on refetch closes the explorer instead of dangling.
+  const activeSuggestion =
+    suggestions.find((suggestion) => suggestion.name === activeSuggestionName) ?? null;
+  const activeGroupSnapshots = React.useMemo(() => {
+    if (!activeSuggestion) return [];
+    const groupIds = new Set(activeSuggestion.adset_ids);
+    return snapshots.filter((snapshot) => groupIds.has(snapshot.id));
+  }, [activeSuggestion, snapshots]);
 
   const createFromSuggestion = (
     suggestion: PortfolioSuggestion,
@@ -418,25 +392,66 @@ export function PortfolioSetup({
             ) : null}
           </div>
         ) : (
-          // A grid, not a stack. Three suggestions used to leave ~60% of a full-width row empty.
-          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-            {suggestions.map((suggestion) => {
-              const groupIds = new Set(suggestion.adset_ids);
-              const groupSnapshots = snapshots.filter((snapshot) => groupIds.has(snapshot.id));
-              return (
-                <SuggestionRow
-                  key={suggestion.name}
-                  suggestion={suggestion}
-                  snapshots={groupSnapshots}
-                  currency={resolvedCurrency}
-                  created={createdKeys.has(suggestion.name)}
-                  enrollFailed={enrollFailedKeys.has(suggestion.name)}
-                  busy={pendingKey === suggestion.name}
-                  onCreate={(override) => createFromSuggestion(suggestion, override)}
-                />
-              );
-            })}
-          </div>
+          <>
+            {/* Compact selector row: the cards stay small so an open suggestion never
+                stretches a grid cell and leaves its siblings blank. Exploring one opens
+                the full-width split pane below. */}
+            <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              {suggestions.map((suggestion) => {
+                const groupIds = new Set(suggestion.adset_ids);
+                const canExplore = snapshots.some((snapshot) => groupIds.has(snapshot.id));
+                return (
+                  <SuggestionRow
+                    key={suggestion.name}
+                    suggestion={suggestion}
+                    currency={resolvedCurrency}
+                    created={createdKeys.has(suggestion.name)}
+                    enrollFailed={enrollFailedKeys.has(suggestion.name)}
+                    busy={pendingKey === suggestion.name}
+                    canExplore={canExplore}
+                    active={activeSuggestionName === suggestion.name}
+                    onToggleExplore={() =>
+                      setActiveSuggestionName((prev) =>
+                        prev === suggestion.name ? null : suggestion.name,
+                      )
+                    }
+                    onCreate={(override) => createFromSuggestion(suggestion, override)}
+                  />
+                );
+              })}
+            </div>
+
+            <AnimatePresence initial={false}>
+              {activeSuggestion ? (
+                <motion.div
+                  key={activeSuggestion.name}
+                  initial={prefersReducedMotion ? false : { opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                  transition={{
+                    duration: prefersReducedMotion ? 0 : 0.28,
+                    ease: [0.16, 1, 0.3, 1],
+                  }}
+                  className="overflow-hidden"
+                >
+                  <div className="pt-1">
+                    <SuggestionExplorer
+                      suggestion={activeSuggestion}
+                      snapshots={activeGroupSnapshots}
+                      currency={resolvedCurrency}
+                      brandId={brandId}
+                      accountId={adAccountId}
+                      created={createdKeys.has(activeSuggestion.name)}
+                      busy={pendingKey === activeSuggestion.name}
+                      enrollFailed={enrollFailedKeys.has(activeSuggestion.name)}
+                      onCreate={(override) => createFromSuggestion(activeSuggestion, override)}
+                      onClose={() => setActiveSuggestionName(null)}
+                    />
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </>
         )}
 
         {/* Projected suggestions sit WITH the real ones: on an all-CBO account they are the
@@ -551,15 +566,16 @@ function TrackingGapBanner({
 
 function SuggestionRow({
   suggestion,
-  snapshots,
   currency,
   created,
   busy,
   enrollFailed,
+  canExplore,
+  active,
+  onToggleExplore,
   onCreate,
 }: {
   suggestion: PortfolioSuggestion;
-  snapshots: AdSetSnapshot[];
   currency: string | null;
   created: boolean;
   busy: boolean;
@@ -568,13 +584,16 @@ function SuggestionRow({
    *  a spinner and then reports "nothing to score", which reads as a broken
    *  optimizer instead of a failed enroll the user can simply retry. */
   enrollFailed: boolean;
+  /** There are ad-set snapshots to explore (the explorer needs them). */
+  canExplore: boolean;
+  /** This suggestion's explorer is the one currently open below the row. */
+  active: boolean;
+  onToggleExplore: () => void;
   onCreate: (override: { objective: OptimizationObjective; mode: OptimizationModeDto }) => void;
 }) {
-  const [previewOpen, setPreviewOpen] = React.useState(false);
-  // The objective is the lever: it decides what "good" means for the cycle. Default
-  // to the server's inference but let the operator correct it before creating — the
-  // mode follows the objective (same map the server uses).
-  const [objective, setObjective] = React.useState<OptimizationObjective>(suggestion.objective);
+  // The card commits with the server's inferred objective; the objective lever now
+  // lives in the explorer, where an operator adjusts it beside the ad sets it scores.
+  const objective = suggestion.objective;
   const mode = DEFAULT_MODE_BY_OBJECTIVE[objective];
   const metric = getOptimizationMetricDefinition(objective);
   const cpa = deriveEfficiency(
@@ -582,13 +601,17 @@ function SuggestionRow({
     suggestion.summary.conv14,
     metric.denominatorMultiplier,
   );
-  const canPreview = snapshots.length > 0;
   // Nudge toward Traffic when a conversion objective has no tracked conversions — that
   // combination scores as pause-all / Low confidence and gives the user no value.
   const noConversions = CONVERSION_OBJECTIVES.has(objective) && suggestion.summary.conv14 === 0;
 
   return (
-    <div className="rounded-lg border border-border/70 bg-card">
+    <div
+      className={cn(
+        'rounded-lg border bg-card transition-colors',
+        active ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border/70',
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-sm font-semibold tracking-tight">
@@ -610,34 +633,19 @@ function SuggestionRow({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Select
-            value={objective}
-            onValueChange={(value) => setObjective(value as OptimizationObjective)}
-          >
-            <SelectTrigger className="h-7 w-36 text-xs" aria-label="Optimization objective">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {OBJECTIVES.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {humanize(value)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {canPreview ? (
+          {canExplore ? (
             <Button
               type="button"
               size="sm"
               variant="ghost"
               className="h-7 gap-1 px-2 text-xs"
-              aria-expanded={previewOpen}
-              onClick={() => setPreviewOpen((open) => !open)}
+              aria-expanded={active}
+              onClick={onToggleExplore}
             >
               <ChevronDownIcon
-                className={`size-3.5 transition-transform ${previewOpen ? 'rotate-180' : ''}`}
+                className={`size-3.5 transition-transform ${active ? 'rotate-180' : ''}`}
               />
-              Preview
+              Explore ad sets
             </Button>
           ) : null}
           {created ? (
@@ -669,11 +677,6 @@ function SuggestionRow({
           No conversions tracked in the last 14 days — a conversion objective will score as Low
           confidence. Consider <b>Traffic</b> for a decisive first cycle.
         </p>
-      ) : null}
-      {previewOpen && canPreview ? (
-        <div className="border-t border-border/60 p-3">
-          <PortfolioPreview snapshots={snapshots} objective={objective} currency={currency} />
-        </div>
       ) : null}
     </div>
   );
@@ -763,8 +766,18 @@ export function PortfolioCreateForm({
           // stay put with the error visible rather than navigating to an inert portfolio;
           // create is idempotent (unique name per account), so pressing Create again retries
           // the enroll against the same portfolio.
+          const nameById = new Map(snapshotsRead.data.map((s) => [s.id, s.name]));
+          const adset_names: Record<string, string> = {};
+          for (const id of selectedAdsetIds) {
+            const adsetName = nameById.get(id);
+            if (adsetName && adsetName.trim().length > 0) adset_names[id] = adsetName;
+          }
           enroll.mutate(
-            { portfolio_id, adset_ids: selectedAdsetIds },
+            {
+              portfolio_id,
+              adset_ids: selectedAdsetIds,
+              ...(Object.keys(adset_names).length > 0 ? { adset_names } : {}),
+            },
             {
               onSuccess: () => {
                 run.mutate(portfolio_id);

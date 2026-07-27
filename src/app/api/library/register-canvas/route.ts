@@ -90,7 +90,10 @@ export async function POST(request: Request) {
         fileName: input.fileName,
       });
     }
-    return NextResponse.json({ assetId: registered.assetId });
+    return NextResponse.json({
+      assetId: registered.assetId,
+      assetVersionId: registered.versionId,
+    });
   } catch (error) {
     console.warn('[register-canvas] Creative Operations registration failed', {
       storagePath: input.storagePath,

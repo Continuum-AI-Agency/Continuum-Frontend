@@ -5,18 +5,26 @@ import {
   getAllowedSourceHandles,
   getAllowedTargetHandles,
   getTargetHandleConnectionLimit,
+  getVideoGeneratorReferenceMode,
+  getVideoGeneratorReferenceModes,
   getVideoGeneratorTargetHandles,
   isMediaKindCompatibleWithHandle,
   isTimelineMediaHandle,
   isValidConnection,
   mediaKindForHandle,
+  PUBLISH_IMAGE_INPUT_HANDLE,
   PUBLISH_VIDEO_INPUT_HANDLE,
   resolveVideoGeneratorModel,
+  resolveVideoGeneratorReferenceMode,
   STUDIO_NODE_TYPES,
   studioNodeTypeEnum,
   studioWorkflowGraphSchema,
+  supportsVideoGeneratorFrameInputs,
+  supportsVideoGeneratorReferenceImages,
   TIMELINE_MEDIA_INPUT_HANDLE,
   TIMELINE_MEDIA_POOL_LIMIT,
+  VIDEO_GENERATOR_MODELS,
+  VIDEO_GENERATOR_REFERENCE_MODE_LABELS,
 } from './workflow-graph';
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) => ({
@@ -44,7 +52,8 @@ const nodes = [
       { id: 'b', order: 1 },
     ],
   }),
-  node('publish1', 'publishToPlanner', { status: 'draft' }),
+  node('publish1', 'organicPublisher', { format: 'video' }),
+  node('hyperframes1', 'hyperframesAgent', { prompt: '' }),
 ];
 
 describe('node type enum + schema', () => {
@@ -52,9 +61,12 @@ describe('node type enum + schema', () => {
     expect(STUDIO_NODE_TYPES).toContain('nanoGen');
     expect(STUDIO_NODE_TYPES).toContain('videoDecode');
     expect(STUDIO_NODE_TYPES).toContain('timelineEditor');
-    expect(STUDIO_NODE_TYPES).toContain('publishToPlanner');
+    expect(STUDIO_NODE_TYPES).toContain('organicPublisher');
+    expect(STUDIO_NODE_TYPES).toContain('paidPublisher');
+    expect(STUDIO_NODE_TYPES).toContain('hyperframesAgent');
+    expect(STUDIO_NODE_TYPES).not.toContain('videoEditor');
     expect(STUDIO_NODE_TYPES).toContain('omniGen');
-    expect(STUDIO_NODE_TYPES).toHaveLength(15);
+    expect(STUDIO_NODE_TYPES).toHaveLength(16);
   });
 
   it('rejects an unknown node type', () => {
@@ -84,8 +96,60 @@ describe('handle vocabulary', () => {
     expect(handles).toContain('ref-images');
   });
 
+  it('exposes typed HyperFrames inputs and a video output', () => {
+    expect(getAllowedTargetHandles(node('hf', 'hyperframesAgent'))).toEqual([
+      'prompt-in',
+      'image-in',
+      'video-in',
+      'audio-in',
+    ]);
+    expect(getAllowedSourceHandles(node('hf', 'hyperframesAgent'))).toEqual(['video']);
+  });
+
+  it('accepts prompt, image, video, and audio inputs for HyperFrames', () => {
+    for (const [source, sourceHandle, targetHandle] of [
+      ['string1', 'text', 'prompt-in'],
+      ['image1', 'image', 'image-in'],
+      ['video1', 'video', 'video-in'],
+      ['audio1', 'audio', 'audio-in'],
+    ] as const) {
+      expect(
+        isValidConnection(
+          { source, sourceHandle, target: 'hyperframes1', targetHandle },
+          [],
+          nodes,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('caps HyperFrames media inputs at twenty total connections', () => {
+    const edges = Array.from({ length: 20 }, (_, index) => ({
+      id: `edge_${index}`,
+      source: `image_${index}`,
+      target: 'hyperframes1',
+      sourceHandle: 'image',
+      targetHandle: 'image-in',
+    }));
+    expect(getTargetHandleConnectionLimit(node('hf', 'hyperframesAgent'), 'image-in', edges)).toBe(
+      20,
+    );
+    expect(
+      isValidConnection(
+        {
+          source: 'image1',
+          sourceHandle: 'image',
+          target: 'hyperframes1',
+          targetHandle: 'image-in',
+        },
+        edges,
+        nodes,
+      ),
+    ).toBe(false);
+  });
+
   it('gates video-generator target handles by model', () => {
-    // veo-3.1-fast → frames, no reference images
+    // veo-3.1-fast defaults to frames → no reference images
     expect(getVideoGeneratorTargetHandles('veo-3.1-fast')).toContain('first-frame');
     expect(getVideoGeneratorTargetHandles('veo-3.1-fast')).not.toContain('ref-images');
     // kling-omni → reference video
@@ -98,6 +162,109 @@ describe('handle vocabulary', () => {
     expect(resolveVideoGeneratorModel(node('v', 'videoGen', { model: 'seedance-2.0' }))).toBe(
       'seedance-2.0',
     );
+  });
+});
+
+describe('video generator reference modes', () => {
+  it('keeps every model default byte-identical to the legacy model-derived mode', () => {
+    for (const model of VIDEO_GENERATOR_MODELS) {
+      expect(getVideoGeneratorReferenceMode(model)).toBe(getVideoGeneratorReferenceModes(model)[0]);
+    }
+    expect(getVideoGeneratorReferenceMode('veo-3.1')).toBe('images');
+    expect(getVideoGeneratorReferenceMode('veo-3.1-fast')).toBe('frames');
+    expect(getVideoGeneratorReferenceMode('veo-3.1-lite')).toBe('frames');
+    expect(getVideoGeneratorReferenceMode('kling-omni')).toBe('omni');
+    expect(getVideoGeneratorReferenceMode('pixverse-v6')).toBe('images');
+    expect(getVideoGeneratorReferenceMode('seedance-2.0')).toBe('images');
+  });
+
+  it('offers both modes on the two toggleable Veo models and one everywhere else', () => {
+    expect(getVideoGeneratorReferenceModes('veo-3.1')).toEqual(['images', 'frames']);
+    expect(getVideoGeneratorReferenceModes('veo-3.1-fast')).toEqual(['frames', 'images']);
+    expect(getVideoGeneratorReferenceModes('veo-3.1-lite')).toEqual(['frames']);
+    expect(getVideoGeneratorReferenceModes('kling-omni')).toEqual(['omni']);
+    expect(getVideoGeneratorReferenceModes('pixverse-v6')).toEqual(['images']);
+    expect(getVideoGeneratorReferenceModes('seedance-2.0')).toEqual(['images']);
+  });
+
+  it('swaps veo-3.1 handles with the mode — this is the first/last frame feature', () => {
+    const frames = getVideoGeneratorTargetHandles('veo-3.1', 'frames');
+    expect(frames).toContain('first-frame');
+    expect(frames).toContain('last-frame');
+    expect(frames).not.toContain('ref-images');
+
+    const images = getVideoGeneratorTargetHandles('veo-3.1', 'images');
+    expect(images).toContain('ref-images');
+    expect(images).not.toContain('first-frame');
+  });
+
+  it('swaps veo-3.1-fast handles with the mode — the mirror fix', () => {
+    const images = getVideoGeneratorTargetHandles('veo-3.1-fast', 'images');
+    expect(images).toContain('ref-images');
+    expect(images).not.toContain('first-frame');
+
+    const frames = getVideoGeneratorTargetHandles('veo-3.1-fast', 'frames');
+    expect(frames).toContain('first-frame');
+    expect(frames).not.toContain('ref-images');
+  });
+
+  it('keeps veo-3.1-lite frames-only regardless of a requested mode', () => {
+    expect(getVideoGeneratorTargetHandles('veo-3.1-lite', 'images')).not.toContain('ref-images');
+    expect(getVideoGeneratorTargetHandles('veo-3.1-lite', 'images')).toContain('first-frame');
+  });
+
+  it('derives the supports* predicates from the handle table so they cannot drift', () => {
+    expect(supportsVideoGeneratorFrameInputs('veo-3.1', 'frames')).toBe(true);
+    expect(supportsVideoGeneratorFrameInputs('veo-3.1', 'images')).toBe(false);
+    expect(supportsVideoGeneratorReferenceImages('veo-3.1-fast', 'images')).toBe(true);
+    expect(supportsVideoGeneratorReferenceImages('veo-3.1-fast', 'frames')).toBe(false);
+    // Omitting the mode answers for the model's DEFAULT mode.
+    expect(supportsVideoGeneratorFrameInputs('veo-3.1')).toBe(false);
+    expect(supportsVideoGeneratorFrameInputs('veo-3.1-fast')).toBe(true);
+  });
+
+  it('resolves a node mode: absent → default, illegal → default, legal → honoured', () => {
+    expect(resolveVideoGeneratorReferenceMode(node('v', 'videoGen', { model: 'veo-3.1' }))).toBe(
+      'images',
+    );
+    expect(
+      resolveVideoGeneratorReferenceMode(
+        node('v', 'videoGen', { model: 'veo-3.1', referenceMode: 'video' }),
+      ),
+    ).toBe('images');
+    expect(
+      resolveVideoGeneratorReferenceMode(
+        node('v', 'videoGen', { model: 'veo-3.1-lite', referenceMode: 'images' }),
+      ),
+    ).toBe('frames');
+    expect(
+      resolveVideoGeneratorReferenceMode(
+        node('v', 'videoGen', { model: 'veo-3.1', referenceMode: 'frames' }),
+      ),
+    ).toBe('frames');
+  });
+
+  it('derives the model from the node type when data.model is absent', () => {
+    expect(resolveVideoGeneratorReferenceMode(node('v', 'veoDirector'))).toBe('images');
+    expect(resolveVideoGeneratorReferenceMode(node('v', 'veoFast'))).toBe('frames');
+    expect(
+      resolveVideoGeneratorReferenceMode(node('v', 'veoDirector', { referenceMode: 'frames' })),
+    ).toBe('frames');
+  });
+
+  it('exposes the node allowed-handle set through the resolved mode', () => {
+    expect(
+      getAllowedTargetHandles(node('v', 'veoDirector', { referenceMode: 'frames' })),
+    ).toContain('first-frame');
+    expect(
+      getAllowedTargetHandles(node('v', 'veoDirector', { referenceMode: 'images' })),
+    ).toContain('ref-images');
+  });
+
+  it('labels every mode', () => {
+    expect(VIDEO_GENERATOR_REFERENCE_MODE_LABELS.frames).toBeTruthy();
+    expect(VIDEO_GENERATOR_REFERENCE_MODE_LABELS.images).toBeTruthy();
+    expect(VIDEO_GENERATOR_REFERENCE_MODE_LABELS.omni).toBeTruthy();
   });
 });
 
@@ -197,11 +364,149 @@ describe('isValidConnection — type matrix', () => {
     ).toBe(false);
   });
 
-  it('allows a video-producing source → publishToPlanner but rejects images/text and other handles', () => {
-    expect(getAllowedTargetHandles(node('p', 'publishToPlanner'))).toEqual([
+  it('allows image → veo-3.1 first-frame in frames mode and refuses it in images mode', () => {
+    const framesNodes = [
+      ...nodes,
+      node('veoFull', 'videoGen', { model: 'veo-3.1', referenceMode: 'frames' }),
+    ];
+    expect(
+      isValidConnection(
+        { source: 'image1', sourceHandle: 'image', target: 'veoFull', targetHandle: 'first-frame' },
+        [],
+        framesNodes,
+      ),
+    ).toBe(true);
+    expect(
+      isValidConnection(
+        { source: 'image1', sourceHandle: 'image', target: 'veoFull', targetHandle: 'last-frame' },
+        [],
+        framesNodes,
+      ),
+    ).toBe(true);
+    expect(
+      isValidConnection(
+        { source: 'image1', sourceHandle: 'image', target: 'veoFull', targetHandle: 'ref-images' },
+        [],
+        framesNodes,
+      ),
+    ).toBe(false);
+
+    const imagesNodes = [
+      ...nodes,
+      node('veoFull', 'videoGen', { model: 'veo-3.1', referenceMode: 'images' }),
+    ];
+    expect(
+      isValidConnection(
+        { source: 'image1', sourceHandle: 'image', target: 'veoFull', targetHandle: 'ref-images' },
+        [],
+        imagesNodes,
+      ),
+    ).toBe(true);
+    expect(
+      isValidConnection(
+        { source: 'image1', sourceHandle: 'image', target: 'veoFull', targetHandle: 'first-frame' },
+        [],
+        imagesNodes,
+      ),
+    ).toBe(false);
+  });
+
+  it('allows image → veo-3.1-fast ref-images in images mode — the mirror fix', () => {
+    const fastImages = [
+      ...nodes,
+      node('veoFast1', 'videoGen', { model: 'veo-3.1-fast', referenceMode: 'images' }),
+    ];
+    expect(
+      isValidConnection(
+        { source: 'image1', sourceHandle: 'image', target: 'veoFast1', targetHandle: 'ref-images' },
+        [],
+        fastImages,
+      ),
+    ).toBe(true);
+    expect(
+      isValidConnection(
+        {
+          source: 'image1',
+          sourceHandle: 'image',
+          target: 'veoFast1',
+          targetHandle: 'first-frame',
+        },
+        [],
+        fastImages,
+      ),
+    ).toBe(false);
+  });
+
+  it('caps every frame handle at one connection, including seedance', () => {
+    const framed = [
+      ...nodes,
+      node('veoFull', 'videoGen', { model: 'veo-3.1', referenceMode: 'frames' }),
+      node('seed1', 'videoGen', { model: 'seedance-2.0' }),
+    ];
+    for (const id of ['veoFull', 'seed1']) {
+      const target = framed.find((n) => n.id === id) as (typeof framed)[number];
+      expect(getTargetHandleConnectionLimit(target, 'first-frame', [])).toBe(1);
+      expect(getTargetHandleConnectionLimit(target, 'last-frame', [])).toBe(1);
+    }
+  });
+
+  it('caps reference images per model, matching the backend validators', () => {
+    expect(
+      getTargetHandleConnectionLimit(
+        node('v', 'videoGen', { model: 'veo-3.1', referenceMode: 'images' }),
+        'ref-images',
+        [],
+      ),
+    ).toBe(3);
+    expect(
+      getTargetHandleConnectionLimit(
+        node('v', 'videoGen', { model: 'veo-3.1-fast', referenceMode: 'images' }),
+        'ref-images',
+        [],
+      ),
+    ).toBe(3);
+    expect(
+      getTargetHandleConnectionLimit(
+        node('v', 'videoGen', { model: 'seedance-2.0' }),
+        'ref-images',
+        [],
+      ),
+    ).toBe(9);
+    expect(
+      getTargetHandleConnectionLimit(
+        node('v', 'videoGen', { model: 'pixverse-v6' }),
+        'ref-image',
+        [],
+      ),
+    ).toBe(1);
+  });
+
+  it('leaves the kling-omni image/video exclusion math untouched', () => {
+    const kling = node('k', 'videoGen', { model: 'kling-omni' });
+    expect(getTargetHandleConnectionLimit(kling, 'ref-images', [])).toBe(7);
+    const withVideo = [{ id: 'e1', source: 'video1', target: 'k', targetHandle: 'ref-video' }];
+    expect(getTargetHandleConnectionLimit(kling, 'ref-images', withVideo)).toBe(4);
+  });
+
+  it('uses the selected publishing format to expose contextual media handles', () => {
+    expect(getAllowedTargetHandles(node('p', 'organicPublisher', { format: 'video' }))).toEqual([
       PUBLISH_VIDEO_INPUT_HANDLE,
     ]);
-    expect(getAllowedSourceHandles(node('p', 'publishToPlanner'))).toEqual([]);
+    expect(getAllowedTargetHandles(node('p', 'paidPublisher', { format: 'image' }))).toEqual([
+      PUBLISH_IMAGE_INPUT_HANDLE,
+    ]);
+    expect(
+      getAllowedTargetHandles(
+        node('p', 'organicPublisher', {
+          format: 'carousel',
+          assetSlots: [
+            { id: 'first', order: 0 },
+            { id: 'second', order: 1 },
+          ],
+        }),
+      ),
+    ).toEqual(['asset-first', 'asset-second']);
+    expect(getAllowedSourceHandles(node('p', 'organicPublisher'))).toEqual([]);
     expect(
       isValidConnection(
         {
@@ -235,7 +540,7 @@ describe('isValidConnection — type matrix', () => {
     ).toBe(false);
   });
 
-  it('caps publishToPlanner at a single video input', () => {
+  it('caps publisher inputs at one connection per ordered slot', () => {
     const edges = [
       {
         id: 'e1',
@@ -473,6 +778,20 @@ describe('createNodeData defaults', () => {
   it('derives the video model from the node type', () => {
     expect(createNodeData('veoFast').data.model).toBe('veo-3.1-fast');
     expect(createNodeData('veoDirector').data.model).toBe('veo-3.1');
+  });
+
+  it('gives the video family the aspectRatio its blocks read', () => {
+    for (const type of ['videoGen', 'veoDirector', 'veoFast'] as const) {
+      const { data, style } = createNodeData(type);
+      expect(data.aspectRatio).toBe('16:9');
+      expect(style).toEqual({ width: 512, height: 288 });
+    }
+  });
+
+  it('derives the video box from the ratio an agent writes', () => {
+    const { data, style } = createNodeData('videoGen', { aspectRatio: '9:16' });
+    expect(data.aspectRatio).toBe('9:16');
+    expect(style?.height).toBeGreaterThan(style?.width ?? 0);
   });
 
   it('seeds an empty string node and an aspect-ratioed image node', () => {

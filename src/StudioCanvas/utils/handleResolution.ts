@@ -13,7 +13,8 @@ export type NodeType =
   | 'video'
   | 'audio'
   | 'document'
-  | 'videoDecode';
+  | 'videoDecode'
+  | 'frameExtract';
 
 export type EdgeDataType = 'text' | 'image' | 'video' | 'audio' | 'document';
 
@@ -23,21 +24,33 @@ export type EdgeDataType = 'text' | 'image' | 'video' | 'audio' | 'document';
 // handle that is compatible with the given source handle's data type. Takes
 // the full StudioNodeType (not just NodeType) so it can also resolve handles
 // for nodes the auto-create flows never instantiate themselves (e.g. an
-// existing videoEditor/omniGen node a sidebar drop lands on).
+// existing timelineEditor/omniGen node a sidebar drop lands on).
 export function getTargetHandleForNodeType(
   nodeType: StudioNodeType,
   sourceHandle: string | null,
   nodeData: Record<string, unknown> = {},
 ): string | undefined {
+  return getTargetHandleCandidatesForNodeType(nodeType, sourceHandle, nodeData)[0];
+}
+
+// Every compatible handle, best first. A caller that can retry (a Library drop
+// landing on a node whose first-choice handle is already full) walks the list;
+// getTargetHandleForNodeType is just its head.
+export function getTargetHandleCandidatesForNodeType(
+  nodeType: StudioNodeType,
+  sourceHandle: string | null,
+  nodeData: Record<string, unknown> = {},
+): string[] {
   const syntheticNode = { id: '__new__', type: nodeType, data: nodeData };
   const allowed = getAllowedTargetHandles(syntheticNode);
 
-  if (allowed.length === 0) return undefined;
+  if (allowed.length === 0) return [];
+
+  const ranked = (priority: string[]): string[] => priority.filter((h) => allowed.includes(h));
 
   if (sourceHandle === 'text') {
-    for (const h of ['prompt-in', 'prompt', 'negative']) {
-      if (allowed.includes(h)) return h;
-    }
+    const matches = ranked(['prompt-in', 'prompt', 'negative']);
+    if (matches.length > 0) return matches;
   }
 
   if (sourceHandle === 'image') {
@@ -45,26 +58,26 @@ export function getTargetHandleForNodeType(
     // image-accepting node (video generators, omniGen) renders the plural
     // `ref-images`. The priority order must match the node's actual handle or
     // the resolved id won't exist and the edge silently fails to render.
+    // `last-frame` trails `first-frame` so a SECOND image dropped on a
+    // frames-mode video node has somewhere to land.
     const imagePriority =
       nodeType === 'nanoGen'
-        ? ['ref-image', 'ref-images', 'first-frame', 'image']
-        : ['ref-images', 'ref-image', 'first-frame', 'image'];
-    for (const h of imagePriority) {
-      if (allowed.includes(h)) return h;
-    }
+        ? ['ref-image', 'ref-images', 'first-frame', 'last-frame', 'image']
+        : ['ref-images', 'ref-image', 'first-frame', 'last-frame', 'image'];
+    const matches = ranked(imagePriority);
+    if (matches.length > 0) return matches;
   }
 
   if (sourceHandle === 'video') {
-    for (const h of ['video', 'ref-video']) {
-      if (allowed.includes(h)) return h;
-    }
+    const matches = ranked(['video', 'ref-video']);
+    if (matches.length > 0) return matches;
   }
 
-  if (sourceHandle === 'audio' && allowed.includes('audio')) return 'audio';
-  if (sourceHandle === 'document' && allowed.includes('document')) return 'document';
+  if (sourceHandle === 'audio' && allowed.includes('audio')) return ['audio'];
+  if (sourceHandle === 'document' && allowed.includes('document')) return ['document'];
 
   // Fall back to the first handle in the allowed set (deterministic, contract-driven).
-  return allowed[0];
+  return [allowed[0] as string];
 }
 
 // The single output/source handle id a newly-created node of this type

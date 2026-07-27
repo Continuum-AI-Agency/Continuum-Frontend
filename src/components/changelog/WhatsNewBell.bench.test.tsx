@@ -1,7 +1,10 @@
-// End-to-end bench for FEA-05 (in-app "What's New"). Drives the REAL path with
-// NO mocks of the changelog: real CHANGELOG_RAW → real changelogSchema.parse →
-// real sort/unread math (getSortedChangelog / computeUnreadCount) → the rendered
-// <WhatsNewBell/> and its persisted dashboardPrefs read-state.
+// End-to-end bench for FEA-05 (in-app "What's New"). Drives the REAL render
+// path with NO mocks: DB-shaped rows → real changelogSchema.parse (the same
+// boundary the server reader enforces) → real sort/unread math
+// (sortChangelogDesc / computeUnreadCount) → the rendered <WhatsNewBell/> and
+// its persisted dashboardPrefs read-state. The write->read hop (recorder ->
+// whats_new table -> anon RLS read) is covered separately by
+// `bun run whats-new:bench`.
 //
 // One un-exercised hop, by design: the per-row markdown body renders through
 // SafeMarkdownLazy, which is `next/dynamic(..., { ssr: false })`. That does not
@@ -24,16 +27,41 @@ if (typeof (globalThis as { ResizeObserver?: unknown }).ResizeObserver !== 'func
   };
 }
 
-import {
-  computeUnreadCount,
-  getLatestEntryId,
-  getSortedChangelog,
-} from '@/lib/changelog/changelog';
+import { computeUnreadCount, getLatestEntryId, sortChangelogDesc } from '@/lib/changelog/changelog';
+import { changelogSchema } from '@/lib/changelog/schema';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 import { WhatsNewBell } from './WhatsNewBell';
 
-const realEntries = getSortedChangelog();
+const TAG_LABEL: Record<string, string> = { new: 'New', improved: 'Improved', fixed: 'Fixed' };
+
+// Rows shaped exactly as public.whats_new returns them, validated through the
+// same boundary schema the server reader uses, then sorted newest-first.
+const realEntries = sortChangelogDesc(
+  changelogSchema.parse([
+    {
+      id: '2026-07-20-planner-bulk-actions',
+      date: '2026-07-20',
+      title: 'Bulk actions & drag-to-reschedule in the Planner',
+      body: 'Select multiple posts to **duplicate, delete, or move** them in one go.',
+      tag: 'new',
+    },
+    {
+      id: '2026-07-19-video-thumbnail-frame',
+      date: '2026-07-19',
+      title: 'Choose a thumbnail frame for your videos',
+      body: 'Scrub any generated video and pick the exact cover frame.',
+      tag: 'improved',
+    },
+    {
+      id: '2026-07-18-scheduled-continuum-reports',
+      date: '2026-07-18',
+      title: 'Scheduled Continuum Report emails',
+      body: 'Set your brand report to arrive automatically on the cadence you choose.',
+      tag: 'new',
+    },
+  ]),
+);
 
 beforeEach(() => {
   try {
@@ -51,7 +79,7 @@ describe('WhatsNewBell end-to-end', () => {
     const expectedUnread = computeUnreadCount(realEntries, null);
     expect(expectedUnread).toBe(realEntries.length);
 
-    render(<WhatsNewBell />);
+    render(<WhatsNewBell entries={realEntries} />);
 
     // unreadCount is gated behind the hook's mounted flag; wait for the effect.
     await waitFor(() => {
@@ -60,7 +88,7 @@ describe('WhatsNewBell end-to-end', () => {
   });
 
   it('renders the newest entry title, date and tag once the popover opens', async () => {
-    render(<WhatsNewBell />);
+    render(<WhatsNewBell entries={realEntries} />);
     const trigger = await screen.findByRole('button');
     fireEvent.click(trigger);
 
@@ -71,14 +99,14 @@ describe('WhatsNewBell end-to-end', () => {
       expect(screen.getByText(newest.title)).toBeTruthy();
     });
     expect(screen.getAllByText(expectedDate).length).toBeGreaterThan(0);
-    // Seeded newest entry carries the 'new' tag → rendered as the "New" pill.
-    expect(newest.tag).toBe('new');
-    expect(screen.getAllByText('New').length).toBeGreaterThan(0);
+    if (newest.tag) {
+      expect(screen.getAllByText(TAG_LABEL[newest.tag]).length).toBeGreaterThan(0);
+    }
   });
 
   it('persists last-seen and clears the header badge after opening', async () => {
     const expectedUnread = computeUnreadCount(realEntries, null);
-    render(<WhatsNewBell />);
+    render(<WhatsNewBell entries={realEntries} />);
     const trigger = await screen.findByRole('button');
 
     // Badge present before opening.

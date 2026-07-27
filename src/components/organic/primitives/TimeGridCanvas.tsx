@@ -48,6 +48,7 @@ type TimeGridCanvasProps = {
   onClearFailure?: (draftId: string) => void;
   onEnrich?: (draftId: string) => void;
   onRealize?: (draftId: string) => void;
+  onStitch?: (draftId: string) => void;
   onNativeDrop?: (
     dayId: string,
     time: string,
@@ -77,6 +78,7 @@ export function TimeGridCanvas({
   onClearFailure,
   onEnrich,
   onRealize,
+  onStitch,
   onNativeDrop,
 }: TimeGridCanvasProps) {
   const todayId = React.useMemo(() => formatDayId(new Date()), []);
@@ -126,6 +128,7 @@ export function TimeGridCanvas({
         onClearFailure={onClearFailure}
         onEnrich={onEnrich}
         onRealize={onRealize}
+        onStitch={onStitch}
         onNativeDrop={onNativeDrop}
         onCreatePost={({ dayId, platformKey, status, mode, format }) =>
           onCreatePost({
