@@ -855,6 +855,8 @@ function OrganicCalendarWorkspaceInner({
     generateDraftMedia,
     isGenerating: isGeneratingMedia,
     expandDrafts,
+    stitchDraftReel,
+    stitchingDraftIds,
   } = useGenerateDraftMedia();
 
   // Per-card stage CTAs: "Enrich" (Stage-2 blueprint sketch) on a text-only
@@ -872,6 +874,10 @@ function OrganicCalendarWorkspaceInner({
   const handleRealizeDraft = React.useCallback(
     (draftId: string) => {
       const draft = drafts.find((d) => d.id === draftId);
+      if (draft?.mediaSuggestion?.reel?.composition) {
+        handleOpenDraftInAiStudio(draft);
+        return;
+      }
       const previewRevision = draft?.mediaSuggestion?.previewRevision;
       if (!brandProfileId || !draft?.backendDraftId || !previewRevision) return;
       void generateDraftMedia(brandProfileId, [
@@ -883,11 +889,33 @@ function OrganicCalendarWorkspaceInner({
         },
       ]);
     },
-    [brandProfileId, drafts, generateDraftMedia],
+    [brandProfileId, drafts, generateDraftMedia, handleOpenDraftInAiStudio],
+  );
+
+  const handleStitchDraft = React.useCallback(
+    (draftId: string) => {
+      const draft = drafts.find((candidate) => candidate.id === draftId);
+      const reel = draft?.mediaSuggestion?.reel;
+      if (!brandProfileId || !draft?.backendDraftId || !reel?.composition) return;
+      const sceneDuration =
+        reel.scenes?.reduce(
+          (total, scene) => total + (typeof scene.durationSec === 'number' ? scene.durationSec : 0),
+          0,
+        ) ?? 0;
+      void stitchDraftReel(brandProfileId, {
+        feId: draft.id,
+        backendDraftId: draft.backendDraftId,
+        durationSec:
+          typeof reel.durationSec === 'number' && reel.durationSec > 0
+            ? reel.durationSec
+            : sceneDuration,
+      });
+    },
+    [brandProfileId, drafts, stitchDraftReel],
   );
 
   // Selected reel drafts that carry a persisted storyboard and have not yet been
-  // rendered to video — the eligible set for the gated "Generate videos" batch.
+  // prepared as editable compositions — the eligible set for the gated batch.
   const reelTargets = React.useMemo(() => {
     const selected = new Set(selectedIds);
     return drafts
@@ -900,6 +928,7 @@ function OrganicCalendarWorkspaceInner({
           (format === 'reel' || format === 'video') &&
           hasStoryboard &&
           reel?.generated !== true &&
+          !reel?.composition &&
           Boolean(d.backendDraftId)
         );
       })
@@ -923,8 +952,8 @@ function OrganicCalendarWorkspaceInner({
           ? ` Only the first ${capped.length} of ${reelTargets.length} selected will render (max ${DEFAULT_REEL_VIDEO_BATCH_MAX} per batch).`
           : '';
       const confirmed = window.confirm(
-        `Generate ${capped.length} reel video${capped.length === 1 ? '' : 's'}? ` +
-          `This renders ~${approxClips} AI video clips and may take a few minutes.${overflowNote}`,
+        `Prepare ${capped.length} reel composition${capped.length === 1 ? '' : 's'}? ` +
+          `This renders ~${approxClips} AI video clips, then arranges them in AI Studio for editing.${overflowNote}`,
       );
       if (!confirmed) return;
     }
@@ -1194,6 +1223,7 @@ function OrganicCalendarWorkspaceInner({
                             onClearFailure={handleClearFailure}
                             onEnrich={handleEnrichDraft}
                             onRealize={handleRealizeDraft}
+                            onStitch={handleStitchDraft}
                             onNativeDrop={handleNativeDrop}
                           />
                         </div>
@@ -1337,6 +1367,20 @@ function OrganicCalendarWorkspaceInner({
                           Post Preview
                         </p>
                         <div className="flex items-center gap-1.5">
+                          {previewDraft?.mediaSuggestion?.reel?.composition &&
+                          previewDraft.mediaSuggestion.reel.generated !== true ? (
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="sm"
+                              disabled={stitchingDraftIds.has(previewDraft.id)}
+                              onClick={() => handleStitchDraft(previewDraft.id)}
+                            >
+                              {stitchingDraftIds.has(previewDraft.id)
+                                ? 'Stitching…'
+                                : 'Ready to render'}
+                            </Button>
+                          ) : null}
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -1353,7 +1397,9 @@ function OrganicCalendarWorkspaceInner({
                                         : undefined
                                     }
                                   >
-                                    Open in AI Studio
+                                    {previewDraft?.mediaSuggestion?.reel?.composition
+                                      ? 'Edit in AI Studio'
+                                      : 'Open in AI Studio'}
                                   </Button>
                                 </span>
                               </TooltipTrigger>

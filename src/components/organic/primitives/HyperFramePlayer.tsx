@@ -3,12 +3,9 @@
 import { PlayIcon } from '@radix-ui/react-icons';
 import { Loader2 } from 'lucide-react';
 import * as React from 'react';
-import {
-  persistHyperframeMp4OnFirstRender,
-  resetHyperframeMp4Guard,
-} from '@/lib/organic/hyperframeMp4';
+import { createClientRenderJob } from '@/lib/api/clientRenderJobs.client';
+import { openClientRenderInbox } from '@/lib/client-render/ClientRenderProvider';
 import { signHyperframeComposition } from '@/lib/organic/hyperframeSign';
-import { createHyperframeMp4Renderer } from '@/lib/organic/renderHyperframeMp4';
 import { cn } from '@/lib/utils';
 import type { OrganicCalendarDraft } from './types';
 
@@ -77,71 +74,58 @@ export function HyperFramePlayer({
   const hyperframe = draft.mediaSuggestion?.hyperframe ?? null;
   const coverUrl = resolveCoverUrl(draft);
   const mp4Status = hyperframe?.mp4Status ?? null;
-
   const [state, setState] = React.useState<PlayerState>('idle');
   const [signedUrl, setSignedUrl] = React.useState<string | null>(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-
-  const kickOffMp4Render = React.useCallback(
-    (compositionHtmlUrl: string) => {
-      if (!hyperframe?.compositionId) return;
-      const dimensions = resolveRenderDimensions(draft);
-      persistHyperframeMp4OnFirstRender({
-        compositionId: hyperframe.compositionId,
-        brandId,
-        draftId: draft.id ?? null,
-        durationSec: resolveDurationSec(draft),
-        renderMp4: createHyperframeMp4Renderer({
-          htmlUrl: compositionHtmlUrl,
-          width: dimensions.width,
-          height: dimensions.height,
-          durationSec: resolveDurationSec(draft),
-        }),
-      });
-    },
-    [brandId, draft, hyperframe?.compositionId],
-  );
-
-  // Sign the composition and kick off the background MP4 render without touching
-  // the visible player state. Used by the eager (scroll-into-view) trigger and Retry.
-  const ensureMp4Rendered = React.useCallback(async () => {
-    if (!hyperframe || !hasText(hyperframe.htmlPath) || !hyperframe.compositionId) return;
-    const url = await signHyperframeComposition(brandId, hyperframe.htmlPath);
-    if (!url) return;
-    kickOffMp4Render(url);
-  }, [brandId, hyperframe, kickOffMp4Render]);
-
-  // Render the MP4 as soon as the card scrolls into view (not only on Play), so a
-  // hyperframe draft has a publishable video without the user ever opening it.
-  // Skips 'ready' (already rendered) and 'failed' (Retry only, to avoid a loop).
+  // Project the composition into the durable brand queue. Viewing or playing the
+  // preview never consents to an encode and never claims the job.
   React.useEffect(() => {
-    if (!hyperframe || !hasText(hyperframe.htmlPath) || !hyperframe.compositionId) return;
-    if (mp4Status === 'ready' || mp4Status === 'failed') return;
-    const el = containerRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    let triggered = false;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting && !triggered) {
-            triggered = true;
-            observer.disconnect();
-            void ensureMp4Rendered();
-          }
-        }
+    if (
+      !hyperframe ||
+      !hasText(hyperframe.htmlPath) ||
+      !hyperframe.compositionId ||
+      !draft.backendDraftId ||
+      mp4Status === 'ready'
+    ) {
+      return;
+    }
+    const dimensions = resolveRenderDimensions(draft);
+    void createClientRenderJob({
+      brandId,
+      sourceId: hyperframe.compositionId,
+      sourceRevision: hyperframe.compositionId,
+      title: `HyperFrame: ${draft.title}`,
+      inputs: [
+        {
+          position: 0,
+          kind: 'composition',
+          sourceId: hyperframe.compositionId,
+          label: 'HyperFrame composition',
+          sourceRevision: hyperframe.compositionId,
+          storage: { bucket: 'hyperframes-compositions', path: hyperframe.htmlPath },
+          durationSeconds: resolveDurationSec(draft),
+          mimeType: 'text/html',
+        },
+      ],
+      executionSpec: {
+        kind: 'organic_hyperframe',
+        draftId: draft.backendDraftId,
+        compositionId: hyperframe.compositionId,
+        htmlPath: hyperframe.htmlPath,
+        durationSeconds: resolveDurationSec(draft),
+        width: dimensions.width,
+        height: dimensions.height,
+        origin: {
+          label: 'Organic HyperFrame',
+          viewHref: '/planner',
+        },
       },
-      { rootMargin: '200px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [hyperframe, mp4Status, ensureMp4Rendered]);
+    }).catch(() => undefined);
+  }, [brandId, draft, hyperframe, mp4Status]);
 
   const handleRetry = React.useCallback(() => {
-    if (!hyperframe?.compositionId) return;
-    resetHyperframeMp4Guard(hyperframe.compositionId);
-    void ensureMp4Rendered();
-  }, [hyperframe?.compositionId, ensureMp4Rendered]);
+    openClientRenderInbox();
+  }, []);
 
   const handlePlay = React.useCallback(async () => {
     if (!hyperframe || !hasText(hyperframe.htmlPath)) {
@@ -159,14 +143,10 @@ export function HyperFramePlayer({
     }
     setSignedUrl(url);
     setState('playing');
-    kickOffMp4Render(url);
-  }, [brandId, hyperframe, kickOffMp4Render]);
+  }, [brandId, hyperframe]);
 
   return (
-    <div
-      ref={containerRef}
-      className="relative aspect-video w-full overflow-hidden rounded-xl border border-border/70 bg-black"
-    >
+    <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border/70 bg-black">
       {state === 'playing' && signedUrl ? (
         <iframe
           sandbox="allow-scripts allow-same-origin"
@@ -213,13 +193,9 @@ export function HyperFramePlayer({
 
       {state !== 'playing' && mp4Status === 'failed' ? (
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-black/70 px-3 py-1.5 text-xs text-white">
-          <span>Video render failed.</span>
-          <button
-            type="button"
-            onClick={handleRetry}
-            className="rounded-md bg-white/20 px-2 py-0.5 font-medium transition-colors hover:bg-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Retry
+          <span>Video render needs attention.</span>
+          <button type="button" onClick={handleRetry}>
+            Render inbox
           </button>
         </div>
       ) : null}

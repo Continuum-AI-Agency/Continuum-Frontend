@@ -1,7 +1,7 @@
 'use client';
 
 // Shared hook for opt-in Step-3 media realization: dispatches reel/video drafts
-// to /reels/generate (FE-stitch path) and image/carousel drafts to /media/realize
+// to /reels/generate (editable Canvas composition path) and image/carousel drafts to /media/realize
 // (headless Nano-Banana path). Both streams update the calendar store in-place so
 // the calendar/list/preview surfaces reflect live progress without a refetch.
 
@@ -9,17 +9,20 @@ import {
   DEFAULT_MEDIA_REALIZE_BATCH_MAX,
   mediaExpandResponseSchema,
   mediaRealizeFrameSchema,
+  preparePlannerCompositionResponseSchema,
+  type ReelVideoBatchFrame,
   reelVideoBatchFrameSchema,
 } from '@continuum/contracts';
 import * as React from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import { createClientRenderJob } from '@/lib/api/clientRenderJobs.client';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
-import { stitchAndFinalizeReel } from '@/lib/organic/reelClientStitch';
+import { openClientRenderInbox } from '@/lib/client-render/ClientRenderProvider';
 import { useCalendarStore } from '@/lib/organic/store';
 import { parseNdjson } from '@/lib/streaming/parseNdjson';
-import { checkSpliceSupport } from '@/StudioCanvas/utils/splice/webcodecsSupport';
 import { patchUnlessUserSupplied } from './attachWinsGuard';
+import { formatMediaReadyToast } from './mediaToastCopy';
 
 export type MediaGenerationDraftTarget = {
   feId: string;
@@ -33,12 +36,21 @@ export type DraftExpandTarget = {
   backendDraftId: string;
 };
 
+export type StitchPlannerDraftTarget = {
+  feId: string;
+  backendDraftId: string;
+  durationSec: number;
+};
+
 export type UseGenerateDraftMediaResult = {
   generateDraftMedia: (brandId: string, drafts: MediaGenerationDraftTarget[]) => Promise<void>;
   isGenerating: boolean;
   /** Stage-2 "Enrich": enqueue a durable expand_draft (blueprint sketch) per draft. */
   expandDrafts: (brandId: string, drafts: DraftExpandTarget[]) => Promise<void>;
   isExpanding: boolean;
+  /** Opens the shared render inbox where this prepared reel can be claimed. */
+  stitchDraftReel: (brandId: string, draft: StitchPlannerDraftTarget) => Promise<void>;
+  stitchingDraftIds: ReadonlySet<string>;
 };
 
 const REEL_FORMATS = new Set(['reel', 'video']);
@@ -50,8 +62,8 @@ function isReelFormat(format: string): boolean {
 const REEL_STAGE_LABELS: Record<string, string> = {
   planning: 'Planning scenes…',
   generating_scenes: 'Generating clips…',
-  stitching: 'Stitching reel…',
-  persisting: 'Saving video…',
+  stitching: 'Preparing composition…',
+  persisting: 'Saving composition…',
 };
 
 // Structured reel preflight codes → user-actionable copy. Anything unmapped
@@ -67,6 +79,21 @@ export function friendlyReelError(error: string): string {
   return REEL_ERROR_MESSAGES[error] ?? error;
 }
 
+// Veo scene rendering holds the stream for minutes, so the backend heartbeats
+// reel_progress frames carrying human-ready copy plus elapsed/ETA telemetry.
+// Surfacing it keeps the generation widget honest instead of parking on one
+// stage label that never moves.
+export function reelProgressLabel(
+  frame: Extract<ReelVideoBatchFrame, { type: 'reel_progress' }>,
+): string {
+  if (frame.message) return frame.message;
+  const stageLabel = REEL_STAGE_LABELS[frame.stage] ?? 'Working…';
+  const telemetry: string[] = [];
+  if (typeof frame.elapsedSec === 'number') telemetry.push(`${frame.elapsedSec}s elapsed`);
+  if (typeof frame.etaSec === 'number') telemetry.push(`~${frame.etaSec}s remaining`);
+  return telemetry.length > 0 ? `${stageLabel} — ${telemetry.join(', ')}` : stageLabel;
+}
+
 // Synthesizes a stable generation-registry job id for an editor-triggered
 // realize. The realize stream has no backend job id, but the GenerationsPopover
 // only needs a stable key per draft to project live status/progress.
@@ -80,9 +107,12 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
   const { show } = useToast();
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [isExpanding, setIsExpanding] = React.useState(false);
+  const stitchingDraftIds = React.useMemo<ReadonlySet<string>>(() => new Set(), []);
   const abortRef = React.useRef<AbortController | null>(null);
 
-  React.useEffect(() => () => abortRef.current?.abort(), []);
+  // Do not abort when the Planner view unmounts. The request owns only module-level
+  // Zustand updates + the shell toast, so it can safely finish while the user moves
+  // to AI Studio or another section. A newer batch still supersedes it explicitly.
 
   const generateDraftMedia = React.useCallback(
     async (brandId: string, drafts: MediaGenerationDraftTarget[]) => {
@@ -242,12 +272,33 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
     [show, updateDraft],
   );
 
-  return { generateDraftMedia, isGenerating, expandDrafts, isExpanding };
+  const stitchDraftReel = React.useCallback(
+    async (brandId: string, target: StitchPlannerDraftTarget) => {
+      if (!brandId || !target.backendDraftId) return;
+      openClientRenderInbox();
+      show({
+        title: 'Reel ready to render',
+        description: 'Claim it from the shared render queue to use this device.',
+        variant: 'success',
+      });
+    },
+    [show],
+  );
+
+  return {
+    generateDraftMedia,
+    isGenerating,
+    expandDrafts,
+    isExpanding,
+    stitchDraftReel,
+    stitchingDraftIds,
+  };
 }
 
 type UpsertGeneration = ReturnType<typeof useCalendarStore.getState>['upsertGeneration'];
 
-// Reel generation: reuses the /reels/generate endpoint + FE stitch path.
+// Reel generation stops at durable scene clips. The composition API seeds the
+// reserved Planner Canvas room and the shared render inbox owns the hardware step.
 async function realizeReels(
   brandId: string,
   targets: MediaGenerationDraftTarget[],
@@ -257,16 +308,6 @@ async function realizeReels(
   controller: AbortController,
   authHeaders: Record<string, string>,
 ): Promise<void> {
-  const support = await checkSpliceSupport();
-  if (!support.ok) {
-    show({
-      title: "Can't render reels here",
-      description: `${support.reason}. Try Chrome or Edge on desktop.`,
-      variant: 'error',
-    });
-    return;
-  }
-
   const feIdByBackendId = new Map(targets.map((t) => [t.backendDraftId, t.feId]));
   const feIdFor = (backendDraftId: string): string | null =>
     feIdByBackendId.get(backendDraftId) ?? null;
@@ -328,19 +369,53 @@ async function realizeReels(
         break;
       }
       case 'reel_progress':
-        setStage(frame.draftId, REEL_STAGE_LABELS[frame.stage] ?? 'Working…');
+        setStage(frame.draftId, reelProgressLabel(frame));
         break;
       case 'reel_clips_ready': {
         const feId = feIdFor(frame.draftId);
         if (!feId) break;
         try {
-          const linked = await stitchAndFinalizeReel({
-            brandId,
-            draftId: frame.draftId,
-            clips: frame.clips,
-            durationSec: frame.durationSec,
+          setStage(frame.draftId, 'Preparing composition…');
+          const preparedResponse = await fetch('/api/organic/ai-studio/compositions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brandId, draftId: frame.draftId }),
             signal: controller.signal,
-            onStage: (label) => setStage(frame.draftId, label),
+          });
+          if (!preparedResponse.ok) {
+            const payload = (await preparedResponse.json().catch(() => null)) as {
+              error?: string;
+            } | null;
+            throw new Error(payload?.error ?? 'Could not prepare the Canvas composition.');
+          }
+          const prepared = preparePlannerCompositionResponseSchema.parse(
+            await preparedResponse.json(),
+          );
+          await createClientRenderJob({
+            brandId,
+            sourceId: frame.draftId,
+            sourceRevision: prepared.composition.sourceFingerprint,
+            title: `Planner reel: ${frame.draftId.slice(0, 8)}`,
+            inputs: prepared.clips.map((clip) => ({
+              position: clip.index,
+              kind: 'video',
+              sourceId: `${clip.bucket}:${clip.storagePath}`,
+              label: `Scene ${clip.index + 1}`,
+              sourceRevision: prepared.composition.sourceFingerprint,
+              storage: { bucket: clip.bucket, path: clip.storagePath },
+              role: clip.role,
+              durationSeconds: clip.durationSec,
+              ...(clip.mimeType ? { mimeType: clip.mimeType } : {}),
+            })),
+            executionSpec: {
+              kind: 'planner_reel',
+              draftId: frame.draftId,
+              durationSeconds: frame.durationSec,
+              origin: {
+                label: 'Planner reel',
+                viewHref: prepared.composition.openHref,
+              },
+            },
           });
           patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
             ...draft,
@@ -348,14 +423,16 @@ async function realizeReels(
             generationError: undefined,
             mediaSuggestion: {
               ...draft.mediaSuggestion,
-              mediaStatus: 'ready',
+              mediaStatus: 'pending',
               reel: {
                 ...draft.mediaSuggestion?.reel,
-                generated: true,
-                url: linked.path,
-                bucket: linked.bucket,
-                signedUrl: linked.signedUrl,
-                durationSec: linked.durationSec,
+                generated: false,
+                durationSec: frame.durationSec,
+                scenes: frame.clips.map((clip) => ({
+                  ...clip,
+                  error: null,
+                })),
+                composition: prepared.composition,
                 error: null,
               },
             },
@@ -364,11 +441,18 @@ async function realizeReels(
             jobId: realizeJobId(feId),
             draftId: feId,
             status: 'completed',
-            stage: undefined,
+            stage: 'Ready to edit',
+            previewUrl: frame.clips[0]?.signedClipUrl,
+          });
+          show({
+            title: 'Reel ready to render',
+            description:
+              'The editable composition is saved. Claim it from the render inbox when you are ready.',
+            variant: 'success',
           });
         } catch (err) {
           if (err instanceof DOMException && err.name === 'AbortError') break;
-          const message = err instanceof Error ? err.message : 'Reel stitching failed.';
+          const message = err instanceof Error ? err.message : 'Composition preparation failed.';
           patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
             ...draft,
             generationStage: undefined,
@@ -434,8 +518,8 @@ async function realizeReels(
       case 'batch_completed': {
         if (frame.ready > 0) {
           show({
-            title: 'Reels generated',
-            description: `${frame.ready} reel${frame.ready === 1 ? '' : 's'} ready${frame.failed > 0 ? `, ${frame.failed} failed` : ''}.`,
+            title: 'Reel clips generated',
+            description: `${frame.ready} reel composition${frame.ready === 1 ? '' : 's'} prepared${frame.failed > 0 ? `, ${frame.failed} failed` : ''}.`,
             variant: frame.failed > 0 ? 'error' : 'success',
           });
         } else if (frame.failed > 0) {
@@ -601,8 +685,7 @@ async function realizeImages(
       case 'realize_batch_completed': {
         if (frame.ready > 0) {
           show({
-            title: 'Media generated',
-            description: `${frame.ready} draft${frame.ready === 1 ? '' : 's'} have media ready${frame.failed > 0 ? `, ${frame.failed} failed` : ''}.`,
+            ...formatMediaReadyToast(frame.ready, frame.failed),
             variant: frame.failed > 0 ? 'error' : 'success',
           });
           // Convergence safety net: realize_ready already mounted the assets for
@@ -611,8 +694,7 @@ async function realizeImages(
           useCalendarStore.getState().requestCalendarRefetch();
         } else if (frame.failed > 0) {
           show({
-            title: 'Media generation failed',
-            description: `${frame.failed} draft${frame.failed === 1 ? '' : 's'} failed.`,
+            ...formatMediaReadyToast(frame.ready, frame.failed),
             variant: 'error',
           });
         }

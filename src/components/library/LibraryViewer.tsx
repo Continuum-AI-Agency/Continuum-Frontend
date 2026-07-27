@@ -44,6 +44,7 @@ import { AssetDetailModal } from './detail/AssetDetailModal';
 import { useCustomFields } from './fields/useCustomFields';
 import { LibraryBulkToolbar } from './LibraryBulkToolbar';
 import { LibraryFilterBar } from './LibraryFilterBar';
+import { LibraryRenderQueue } from './LibraryRenderQueue';
 import { type LibraryBrowseDestination, LibrarySidebar } from './LibrarySidebar';
 import { LibraryTagManager } from './LibraryTagManager';
 import { MediaGrid } from './MediaGrid';
@@ -614,6 +615,8 @@ export function LibraryViewer({
                 Upgrade to a paid plan to enable AI analysis, descriptions, and semantic search.
               </div>
             )}
+
+            {view === 'media' ? <LibraryRenderQueue /> : null}
 
             <div
               className={`transition-opacity ${isFiltering ? 'pointer-events-none opacity-60' : ''}`}

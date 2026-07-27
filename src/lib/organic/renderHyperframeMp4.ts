@@ -32,6 +32,7 @@ export type HyperframeMp4RendererConfig = {
   height: number;
   durationSec: number;
   fps?: number;
+  signal?: AbortSignal;
 };
 
 const DEFAULT_FPS = 30;
@@ -171,8 +172,8 @@ async function captureCompositionFrame(
 
 /**
  * Builds a renderer that encodes the composition to an MP4 Blob via mediabunny.
- * Returns a function so callers (persistHyperframeMp4OnFirstRender) can defer the
- * expensive work and run it at most once.
+ * Returns a function so the shared render executor can schedule the expensive
+ * capture inside the single browser hardware lane.
  */
 export function createHyperframeMp4Renderer(
   config: HyperframeMp4RendererConfig,
@@ -226,6 +227,7 @@ export function createHyperframeMp4Renderer(
       // iframe, so we snapshot the DOM at each frame's wall-clock position.
       const startMs = Date.now();
       for (let frame = 0; frame < plan.frameCount; frame += 1) {
+        if (config.signal?.aborted) throw new DOMException('Render stopped.', 'AbortError');
         const targetMs = frame * plan.frameDuration * 1000;
         const elapsedMs = Date.now() - startMs;
         if (elapsedMs < targetMs) await delay(targetMs - elapsedMs);

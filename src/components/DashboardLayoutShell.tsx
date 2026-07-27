@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import type React from 'react';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { ClientRenderProvider } from '@/lib/client-render/ClientRenderProvider';
 import { DashboardHeader } from './dashboard-header';
 import { AppSidebar } from './navigation/AppSidebar';
 import { CommandPaletteProvider } from './navigation/CommandPaletteProvider';
@@ -59,26 +60,28 @@ export default function DashboardLayoutShell({
       user={user}
       permissions={permissions}
     >
-      <CommandPaletteProvider>
-        <StrategicAnalysisRealtimeListener brandId={activeBrandId} />
-        <StrategicAnalysisStatusPill brandId={activeBrandId} />
-        <div className="relative">
-          <div className="particle-layer top" aria-hidden="true" />
-          <div className="particle-layer bottom" aria-hidden="true" />
+      <ClientRenderProvider>
+        <CommandPaletteProvider>
+          <StrategicAnalysisRealtimeListener brandId={activeBrandId} />
+          <StrategicAnalysisStatusPill brandId={activeBrandId} />
+          <div className="relative">
+            <div className="particle-layer top" aria-hidden="true" />
+            <div className="particle-layer bottom" aria-hidden="true" />
 
-          <SidebarProvider defaultOpen={false}>
-            <AppSidebar />
-            <SidebarInset className="flex h-dvh flex-col overflow-hidden bg-transparent">
-              <DashboardHeader />
-              <main className="@container/app-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-[var(--shell-gutter)] pb-[var(--shell-stack-gap)]">
-                <BrandWelcomeBanner />
-                <div className="min-h-full w-full min-w-0">{children}</div>
-              </main>
-            </SidebarInset>
-          </SidebarProvider>
-        </div>
-        <CommandPalette />
-      </CommandPaletteProvider>
+            <SidebarProvider defaultOpen={false}>
+              <AppSidebar />
+              <SidebarInset className="flex h-dvh flex-col overflow-hidden bg-transparent">
+                <DashboardHeader />
+                <main className="@container/app-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-[var(--shell-gutter)] pb-[var(--shell-stack-gap)]">
+                  <BrandWelcomeBanner />
+                  <div className="min-h-full w-full min-w-0">{children}</div>
+                </main>
+              </SidebarInset>
+            </SidebarProvider>
+          </div>
+          <CommandPalette />
+        </CommandPaletteProvider>
+      </ClientRenderProvider>
     </ActiveBrandProvider>
   );
 }
