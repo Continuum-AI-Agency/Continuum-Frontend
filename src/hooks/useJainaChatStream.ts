@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentMentionReference } from '@/lib/agent-references';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { browserTimezone } from '@/lib/automations/schedule';
 import {
   type JainaChatStreamRequest,
   type JainaPlanAction,
@@ -209,6 +210,9 @@ export function useJainaChatStream() {
             brandId: input.brandId,
             sessionId: input.sessionId,
             canvas: input.canvas,
+            // Jaina answers questions phrased in the user's local calendar
+            // ("last week", "since yesterday"), so it needs their zone.
+            timezone: browserTimezone(),
             ...(input.references && input.references.length > 0
               ? { references: input.references }
               : {}),
