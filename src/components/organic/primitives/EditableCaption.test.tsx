@@ -11,7 +11,7 @@ mock.module('@/components/ui/textarea', () => ({
 
 afterAll(() => mock.restore());
 
-import { EditableCaption } from './EditableCaption';
+import { CaptionCharCount, EditableCaption } from './EditableCaption';
 
 describe('EditableCaption', () => {
   beforeEach(() => cleanup());
@@ -52,5 +52,39 @@ describe('EditableCaption', () => {
     const field = screen.getByLabelText('Caption');
     fireEvent.blur(field);
     expect(screen.getByLabelText('Edit caption').tagName).toBe('BUTTON');
+  });
+});
+
+describe('CaptionCharCount', () => {
+  beforeEach(() => cleanup());
+
+  // The live bug: this counter had its own limits map (linkedin 3000) while the publish
+  // path clamped every platform at 2200. Both now read the same capability block.
+  it('counts against the platform ceiling, not Instagram everywhere', () => {
+    render(<CaptionCharCount caption="abc" platform="linkedin" />);
+    expect(screen.getByText('3 / 3,000')).toBeTruthy();
+
+    cleanup();
+    render(<CaptionCharCount caption="abc" platform="instagram" />);
+    expect(screen.getByText('3 / 2,200')).toBeTruthy();
+
+    cleanup();
+    render(<CaptionCharCount caption="abc" platform="facebook" />);
+    expect(screen.getByText('3 / 63,206')).toBeTruthy();
+  });
+
+  it('falls back to the tightest ceiling for a platform we cannot publish to', () => {
+    render(<CaptionCharCount caption="abc" platform="tiktok" />);
+    expect(screen.getByText('3 / 2,200')).toBeTruthy();
+  });
+
+  it('only flags over-limit at the platform ceiling — 2,600 chars is fine on LinkedIn', () => {
+    const caption = 'a'.repeat(2600);
+    render(<CaptionCharCount caption={caption} platform="linkedin" />);
+    expect(screen.getByText('2,600 / 3,000').className).not.toContain('text-destructive');
+
+    cleanup();
+    render(<CaptionCharCount caption={caption} platform="instagram" />);
+    expect(screen.getByText('2,600 / 2,200').className).toContain('text-destructive');
   });
 });

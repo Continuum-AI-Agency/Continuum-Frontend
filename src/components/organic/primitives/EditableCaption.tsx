@@ -1,14 +1,9 @@
 'use client';
 
+import { captionLimits, toPublishPlatform } from '@continuum/contracts';
 import * as React from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-
-const CAPTION_LIMITS: Record<string, number> = {
-  instagram: 2200,
-  facebook: 63206,
-  linkedin: 3000,
-};
 
 // All user-supplied text is HTML-escaped before being inserted into the HTML
 // string, so dangerouslySetInnerHTML on the mirror div is XSS-safe.
@@ -64,8 +59,11 @@ export function InlinePreviewTextarea({
   );
 }
 
+// The counter reads the SAME capability block the publisher clamps against, so a caption
+// the counter shows as in-bounds is one that publishes whole. They used to be two maps and
+// a LinkedIn draft at 2,600 chars counted green while publishing truncated at 2200.
 export function CaptionCharCount({ caption, platform }: { caption: string; platform: string }) {
-  const limit = CAPTION_LIMITS[platform] ?? 2200;
+  const limit = captionLimits(toPublishPlatform(platform) ?? 'instagram').maxLength;
   const len = caption.length;
   return (
     <div className="mt-1 flex justify-end">

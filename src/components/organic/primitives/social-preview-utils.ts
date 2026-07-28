@@ -1,3 +1,4 @@
+import { toPublishPlatform } from '@continuum/contracts';
 import { buildFullCaption } from '@/lib/organic/publish-utils';
 import type { OrganicCalendarDraft } from './types';
 
@@ -76,7 +77,9 @@ export function buildInstagramPreviewData(draft: OrganicCalendarDraft, verified 
     avatar: handle.slice(0, 1).toUpperCase(),
     image: resolveMediaSource(platform, draft.location),
     likes: '2,847',
-    caption: buildFullCaption(draft),
+    // The preview shows the caption as it will publish, so the clamp must be the
+    // destination platform's — not Instagram's on every frame.
+    caption: buildFullCaption(draft, toPublishPlatform(platform) ?? 'instagram'),
     time: draft.timeLabel,
     verified,
   };
@@ -89,7 +92,7 @@ export function buildLinkedInPreviewData(draft: OrganicCalendarDraft) {
     author: handle,
     headline: draft.tone || 'Brand team',
     avatar: handle.slice(0, 1).toUpperCase(),
-    content: buildFullCaption(draft),
+    content: buildFullCaption(draft, 'linkedin'),
     time: draft.timeLabel,
     image: resolveMediaSource('linkedin', draft.location),
     reactions: '1,234',
