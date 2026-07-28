@@ -4,6 +4,7 @@ import { buildWeekDays } from '@/components/organic/primitives/calendar-utils';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import {
   buildPersistedDraftPayload,
+  collapseDraftGroups,
   isDayIdInWeekRange,
   mapPersistedRowToCalendarEntry,
   normalizePersistedStatus,
@@ -480,5 +481,115 @@ describe('mapPersistedRowToCalendarEntry — captionPreview precedence', () => {
   it('falls back to slot_data.caption when neither refined copy nor snapshot exists', () => {
     const entry = mapPersistedRowToCalendarEntry(rowWith({ slotCaption: 'Slot caption' }), days);
     expect(entry?.draft.captionPreview).toBe('Slot caption');
+  });
+});
+
+// #235: a multi-platform post is N sibling rows sharing a group_id. Without collapsing
+// them the planner renders N identical cards — the whole visible symptom of the feature
+// being unimplemented.
+describe('collapseDraftGroups', () => {
+  const days = buildWeekDays(new Date('2026-06-01T12:00:00'));
+  const GROUP_ID = '22222222-2222-2222-2222-222222222222';
+
+  const siblingRow = (
+    platform: string,
+    overrides: Partial<PersistedOrganicDraftRow> = {},
+  ): PersistedOrganicDraftRow => ({
+    id: `row-${platform}`,
+    status: 'draft',
+    scheduled_date: '2026-06-01 11:00:00+00',
+    platform_account_id: `acct-${platform}`,
+    // The source keeps its bare client_key; siblings carry the derived suffix. That is
+    // how the collapse identifies which row the autosave still converges on.
+    client_key: platform === 'instagram' ? 'post-abc' : `post-abc::${platform}`,
+    group_id: GROUP_ID,
+    slot_data: {
+      placementId: `placement-${platform}`,
+      dayId: '2026-06-01',
+      platform: { name: platform, accountId: `acct-${platform}` },
+      draftSnapshot: {
+        id: `placement-${platform}`,
+        title: 'One post, three destinations',
+        platforms: [platform],
+        captionPreview: 'Shared copy',
+      },
+    },
+    ...overrides,
+  });
+
+  const mapRows = (rows: PersistedOrganicDraftRow[]) =>
+    rows
+      .map((row) => mapPersistedRowToCalendarEntry(row, days))
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+  it('collapses three grouped rows into one entry with three platforms and three members', () => {
+    // Deliberately out of canonical order: Supabase does not promise a row order, so
+    // the collapse must impose one or the card's badges reshuffle between refetches.
+    const entries = collapseDraftGroups(
+      mapRows([siblingRow('linkedin'), siblingRow('instagram'), siblingRow('facebook')]),
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].draft.platforms).toEqual(['instagram', 'facebook', 'linkedin']);
+    expect(entries[0].draft.groupId).toBe(GROUP_ID);
+    expect(entries[0].draft.groupMembers).toHaveLength(3);
+    expect(entries[0].draft.groupMembers?.map((member) => member.platform)).toEqual([
+      'instagram',
+      'facebook',
+      'linkedin',
+    ]);
+    expect(entries[0].draft.groupMembers?.map((member) => member.backendDraftId)).toEqual([
+      'row-instagram',
+      'row-facebook',
+      'row-linkedin',
+    ]);
+  });
+
+  it('keeps the source row as the collapsed representative', () => {
+    const entries = collapseDraftGroups(
+      mapRows([siblingRow('facebook'), siblingRow('linkedin'), siblingRow('instagram')]),
+    );
+
+    // The FE autosave keys on client_key: collapsing onto a sibling would send every
+    // subsequent edit to the wrong row.
+    expect(entries[0].draft.clientKey).toBe('post-abc');
+    expect(entries[0].draft.backendDraftId).toBe('row-instagram');
+  });
+
+  it('passes ungrouped rows through untouched', () => {
+    const plain = mapRows([
+      { ...siblingRow('instagram'), id: 'row-a', group_id: null, client_key: 'plain-a' },
+      { ...siblingRow('linkedin'), id: 'row-b', group_id: null, client_key: 'plain-b' },
+    ]);
+    const entries = collapseDraftGroups(plain);
+
+    expect(entries).toHaveLength(2);
+    expect(entries.map((entry) => entry.draft.platforms)).toEqual([['instagram'], ['linkedin']]);
+    expect(entries[0].draft.groupId).toBeNull();
+    // Still a group of one, so consumers never branch on "not grouped".
+    expect(entries[0].draft.groupMembers).toHaveLength(1);
+  });
+
+  it('does NOT collapse a group split across two days', () => {
+    // Siblings can be rescheduled apart. Merging them across days would make one of
+    // the days silently lose its post.
+    const entries = collapseDraftGroups(
+      mapRows([
+        siblingRow('instagram'),
+        siblingRow('linkedin', {
+          scheduled_date: '2026-06-02 11:00:00+00',
+          slot_data: {
+            placementId: 'placement-linkedin',
+            dayId: '2026-06-02',
+            platform: { name: 'linkedin', accountId: 'acct-linkedin' },
+            draftSnapshot: { id: 'placement-linkedin', platforms: ['linkedin'] },
+          },
+        }),
+      ]),
+    );
+
+    expect(entries).toHaveLength(2);
+    expect(entries.map((entry) => entry.dayId).sort()).toEqual(['2026-06-01', '2026-06-02']);
+    expect(entries.map((entry) => entry.draft.platforms)).toEqual([['instagram'], ['linkedin']]);
   });
 });

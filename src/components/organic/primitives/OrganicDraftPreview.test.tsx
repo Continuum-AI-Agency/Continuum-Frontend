@@ -111,23 +111,30 @@ mock.module('./MediaSelectPopover', () => ({
 
 mock.module('./PostMetaChips', () => ({
   PostMetaChips: ({
-    platform,
+    platforms,
     format,
     timeLabel,
     actions,
   }: {
-    platform: string;
+    platforms: string[];
     format: string;
     timeLabel: string;
     actions?: ReactNode;
   }) => (
     <div data-testid="meta-chips">
-      <span>{platform}</span>
+      {platforms.map((platform) => (
+        <span key={platform}>{platform}</span>
+      ))}
       <span>{format}</span>
       <span>{timeLabel}</span>
       {actions}
     </div>
   ),
+}));
+
+const fanOutAndApproveMock = mock(() => Promise.resolve(true));
+mock.module('@/components/organic/hooks/useFanOutDraft', () => ({
+  useFanOutDraft: () => ({ fanOutAndApprove: fanOutAndApproveMock, isFanningOut: false }),
 }));
 
 mock.module('./PostCommandMenu', () => ({
@@ -639,5 +646,110 @@ describe('OrganicDraftPreview — attached video renders', () => {
     );
     expect(videoIn(container)).toBeNull();
     expect(screen.getByAltText('Test post — slide 1')).toBeTruthy();
+  });
+});
+
+// #235: one editable draft, N destinations. The frame selector is the payoff of
+// multi-select — check how ONE copy lands on each surface before committing.
+describe('OrganicDraftPreview — multi-platform frame selector', () => {
+  const multiPlatformDraft = () =>
+    baseDraft({
+      platforms: ['instagram', 'facebook', 'linkedin'],
+      publishingAssets: [
+        {
+          role: 'primary',
+          kind: 'image',
+          slideIndex: 0,
+          storagePath: 'library/img.png',
+          storageUrl: 'https://cdn.example/img.png',
+        },
+      ],
+    });
+
+  beforeEach(() => {
+    cleanup();
+    resetEditingDraftId();
+    (calendarStoreState.updateDraft as ReturnType<typeof mock>).mockClear();
+    fanOutAndApproveMock.mockClear();
+  });
+
+  it('renders no frame switcher for a single-platform draft', () => {
+    renderPreview();
+    expect(screen.queryByText('See it on')).toBeNull();
+  });
+
+  it('renders a frame switcher for every selected platform when there is more than one', () => {
+    render(<OrganicDraftPreview draft={multiPlatformDraft()} brandProfileId="brand-1" />);
+
+    expect(screen.getByText('See it on')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'IG' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'FB' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'LI' }).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  // THE regression this guards: "look at it on LinkedIn" must not quietly drop
+  // Facebook and Instagram from the post.
+  it('switches the rendered frame without mutating draft.platforms', () => {
+    render(<OrganicDraftPreview draft={multiPlatformDraft()} brandProfileId="brand-1" />);
+    fireEvent.click(screen.getByLabelText('Edit post'));
+    expect(screen.getByLabelText('Edit instagram caption')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'LI' }));
+
+    // The frame — and the caption's enforced char limit — follow the selector.
+    expect(screen.getByLabelText('Edit linkedin post copy')).toBeTruthy();
+    expect(screen.queryByLabelText('Edit instagram caption')).toBeNull();
+    expect(screen.getByRole('button', { name: 'LI' }).getAttribute('aria-pressed')).toBe('true');
+
+    // The post itself is untouched: no store write, and all three chips remain.
+    expect(calendarStoreState.updateDraft as ReturnType<typeof mock>).not.toHaveBeenCalled();
+    const chips = screen.getByTestId('meta-chips');
+    expect(chips.textContent).toContain('instagram');
+    expect(chips.textContent).toContain('facebook');
+    expect(chips.textContent).toContain('linkedin');
+  });
+
+  it('offers to approve every platform at once and fans out instead of approving one row', () => {
+    const onApprove = mock();
+    render(
+      <OrganicDraftPreview
+        draft={multiPlatformDraft()}
+        brandProfileId="brand-1"
+        onApprove={onApprove}
+      />,
+    );
+
+    const cta = screen.getByRole('button', { name: 'Approve for 3 platforms' });
+    fireEvent.click(cta);
+
+    // Fan-out is a backend row-copy: a browser-cloned sibling would fail the publish
+    // gate, which reads media and caption exclusively from content_json.
+    expect(fanOutAndApproveMock).toHaveBeenCalledTimes(1);
+    expect(onApprove).not.toHaveBeenCalled();
+  });
+
+  it('keeps the single-platform CTA and the single-draft approve path intact', () => {
+    const onApprove = mock();
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          publishingAssets: [
+            {
+              role: 'primary',
+              kind: 'image',
+              slideIndex: 0,
+              storagePath: 'library/img.png',
+              storageUrl: 'https://cdn.example/img.png',
+            },
+          ],
+        })}
+        brandProfileId="brand-1"
+        onApprove={onApprove}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve & Schedule' }));
+    expect(onApprove).toHaveBeenCalledWith('draft-1');
+    expect(fanOutAndApproveMock).not.toHaveBeenCalled();
   });
 });

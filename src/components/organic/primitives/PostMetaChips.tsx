@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -39,6 +40,37 @@ function Sep() {
 
 function platformLabel(platform: OrganicPlatformKey): string {
   return PLATFORM_OPTIONS.find((p) => p.value === platform)?.label ?? 'Instagram';
+}
+
+/**
+ * The selection, in the menu's own order and never empty.
+ *
+ * Zero platforms is not representable downstream — every persist path stamps a scalar
+ * `platform` column from `platforms[0]` — so an empty selection collapses to Instagram
+ * rather than writing a row nothing can publish.
+ */
+function normalizeSelection(platforms: readonly OrganicPlatformKey[]): OrganicPlatformKey[] {
+  const ordered = PLATFORM_OPTIONS.map((option) => option.value).filter((value) =>
+    platforms.includes(value),
+  );
+  return ordered.length > 0 ? ordered : ['instagram'];
+}
+
+/**
+ * Chip copy that stays glanceable as the selection grows: the platform's own name at
+ * one, both names at two, a count at three. At N=1 this is byte-identical to the
+ * single-platform chip it replaced.
+ */
+function selectionChipLabel(platforms: OrganicPlatformKey[]): string {
+  if (platforms.length === 1) return platformLabel(platforms[0]);
+  if (platforms.length === 2)
+    return `${platformLabel(platforms[0])} + ${platformLabel(platforms[1])}`;
+  return `${platforms.length} platforms`;
+}
+
+/** Always names every selected platform — the chip label stops doing so at N=3. */
+function selectionAriaLabel(platforms: OrganicPlatformKey[]): string {
+  return `Change platforms — ${platforms.map(platformLabel).join(', ')} selected`;
 }
 
 function TimeChip({ value, onChange }: { value: string; onChange: (next: string) => void }) {
@@ -117,44 +149,77 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
  * for the ⋯ command menu. Replaces the always-on select header.
  */
 export function PostMetaChips({
-  platform,
+  platforms,
   format,
   timeLabel,
-  onPlatformChange,
+  onPlatformsChange,
   onFormatChange,
   onTimeChange,
   actions,
 }: {
-  platform: OrganicPlatformKey;
+  platforms: OrganicPlatformKey[];
   format: string;
   timeLabel: string;
-  onPlatformChange: (next: OrganicPlatformKey) => void;
+  onPlatformsChange: (next: OrganicPlatformKey[]) => void;
   onFormatChange: (next: string) => void;
   onTimeChange: (next: string) => void;
   actions?: React.ReactNode;
 }) {
+  const selected = normalizeSelection(platforms);
+
+  const togglePlatform = (value: OrganicPlatformKey) => {
+    const next = selected.includes(value)
+      ? selected.filter((item) => item !== value)
+      : [...selected, value];
+    // Deselecting the last platform is refused rather than silently corrected, so the
+    // menu never reports a state the caller did not ask for.
+    if (next.length === 0) return;
+    onPlatformsChange(normalizeSelection(next));
+  };
+
   return (
     <div className="flex items-center gap-1 border-b border-border/60 bg-muted/40 px-2 py-1.5">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className={chipClass} aria-label="Change platform">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: PLATFORM_DOT[platform] ?? '#7C6FFF' }}
-            />
-            {platformLabel(platform)}
+          <button type="button" className={chipClass} aria-label={selectionAriaLabel(selected)}>
+            <span className="flex items-center">
+              {selected.map((value, index) => (
+                <span
+                  key={value}
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full ring-1 ring-muted/40',
+                    index > 0 && '-ml-0.5',
+                  )}
+                  style={{ backgroundColor: PLATFORM_DOT[value] ?? '#7C6FFF' }}
+                />
+              ))}
+            </span>
+            {selectionChipLabel(selected)}
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-40">
-          {PLATFORM_OPTIONS.map((option) => (
-            <DropdownMenuItem key={option.value} onSelect={() => onPlatformChange(option.value)}>
-              <span
-                className="mr-2 h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: PLATFORM_DOT[option.value] ?? '#7C6FFF' }}
-              />
-              {option.label}
-            </DropdownMenuItem>
-          ))}
+        <DropdownMenuContent align="start" className="w-44">
+          {PLATFORM_OPTIONS.map((option) => {
+            const checked = selected.includes(option.value);
+            return (
+              <DropdownMenuCheckboxItem
+                key={option.value}
+                checked={checked}
+                // The last remaining platform cannot be unchecked: zero platforms is
+                // not representable downstream.
+                disabled={checked && selected.length === 1}
+                // Radix closes the menu on select by default, which would end the
+                // multi-select after the very first toggle.
+                onSelect={(event) => event.preventDefault()}
+                onCheckedChange={() => togglePlatform(option.value)}
+              >
+                <span
+                  className="mr-2 h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: PLATFORM_DOT[option.value] ?? '#7C6FFF' }}
+                />
+                {option.label}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
         </DropdownMenuContent>
       </DropdownMenu>
 

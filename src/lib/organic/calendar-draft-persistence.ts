@@ -3,6 +3,7 @@ import {
   type OrganicMediaStage,
   organicMediaStageSchema,
   organicUgcSpecSchema,
+  parseSiblingClientKey,
   plannerCompositionSchema,
 } from '@continuum/contracts';
 import {
@@ -229,6 +230,9 @@ export type PersistedOrganicDraftRow = {
   // Immutable per-brand identity (UNIQUE (brand_id, client_key)). Legacy rows are
   // null; we fall back to the snapshot/row id when mapping.
   client_key?: string | null;
+  // Shared by every sibling row of a fanned-out multi-platform post. Null for the
+  // ordinary single-platform case — a group of one.
+  group_id?: string | null;
 };
 
 export type PersistedDraftWritePayload = {
@@ -514,6 +518,90 @@ function resolveMediaStage(
   return deriveOrganicMediaStage(placement as Parameters<typeof deriveOrganicMediaStage>[0]);
 }
 
+// Canonical platform order for a collapsed group. Fixed rather than
+// insertion-ordered so a card's badges do not reshuffle between refetches
+// (Supabase does not promise a stable row order).
+const CANONICAL_GROUP_PLATFORM_ORDER: readonly OrganicPlatformKey[] = [
+  'instagram',
+  'facebook',
+  'linkedin',
+  'tiktok',
+  'youtube',
+];
+
+function canonicalPlatformRank(platform: OrganicPlatformKey): number {
+  const index = CANONICAL_GROUP_PLATFORM_ORDER.indexOf(platform);
+  return index === -1 ? CANONICAL_GROUP_PLATFORM_ORDER.length : index;
+}
+
+/**
+ * The source row of a group, if it can be identified.
+ *
+ * Fan-out gives siblings a derived key (`<sourceClientKey>::<platform>`) and leaves the
+ * source's bare — so the member whose key carries no sibling suffix IS the source. It is
+ * the right representative: the frontend autosave keys on the source's client_key, so
+ * collapsing onto a sibling would make every autosave write to the wrong row.
+ */
+function findGroupSourceEntry(entries: PersistedCalendarEntry[]): PersistedCalendarEntry {
+  const source = entries.find(
+    (entry) => !entry.draft.clientKey || parseSiblingClientKey(entry.draft.clientKey) === null,
+  );
+  return source ?? entries[0];
+}
+
+/**
+ * Collapse fanned-out sibling rows into ONE calendar entry per group.
+ *
+ * A multi-platform post is N rows sharing a `group_id`; without this the planner renders
+ * N identical cards. The renderers already map over `draft.platforms`, so the whole fix
+ * is upstream: union the members' platforms onto the source row and carry the per-row
+ * identities in `groupMembers` for publish/approve.
+ *
+ * Grouping is keyed on `(dayId, groupId)`, never `groupId` alone. Siblings can be
+ * rescheduled apart, and a group spanning two days is genuinely two cards — merging them
+ * would make one of the days silently lose its post.
+ */
+export function collapseDraftGroups(entries: PersistedCalendarEntry[]): PersistedCalendarEntry[] {
+  const groups = new Map<string, PersistedCalendarEntry[]>();
+  for (const entry of entries) {
+    const groupId = entry.draft.groupId;
+    if (!groupId) continue;
+    const key = `${entry.dayId}::${groupId}`;
+    const bucket = groups.get(key) ?? [];
+    bucket.push(entry);
+    groups.set(key, bucket);
+  }
+
+  const collapsedByEntry = new Map<PersistedCalendarEntry, PersistedCalendarEntry>();
+  const absorbed = new Set<PersistedCalendarEntry>();
+
+  for (const members of groups.values()) {
+    if (members.length < 2) continue;
+
+    const source = findGroupSourceEntry(members);
+    const groupMembers = members
+      .flatMap((entry) => entry.draft.groupMembers ?? [])
+      .sort((a, b) => canonicalPlatformRank(a.platform) - canonicalPlatformRank(b.platform));
+
+    const platforms: OrganicPlatformKey[] = [];
+    for (const member of groupMembers) {
+      if (!platforms.includes(member.platform)) platforms.push(member.platform);
+    }
+
+    collapsedByEntry.set(source, {
+      dayId: source.dayId,
+      draft: { ...source.draft, platforms, groupMembers },
+    });
+    for (const entry of members) {
+      if (entry !== source) absorbed.add(entry);
+    }
+  }
+
+  return entries
+    .filter((entry) => !absorbed.has(entry))
+    .map((entry) => collapsedByEntry.get(entry) ?? entry);
+}
+
 export function mapPersistedRowToCalendarEntry(
   row: PersistedOrganicDraftRow,
   days: OrganicCalendarDay[],
@@ -550,6 +638,9 @@ export function mapPersistedRowToCalendarEntry(
         ];
 
   const draftId = mapSlotDataDraftId(slotData, row.id);
+  const status = normalizePersistedStatus(row.status);
+  const clientKey = readString(row.client_key) ?? readString(snapshot.clientKey) ?? draftId;
+  const groupId = readString(row.group_id) ?? null;
 
   const mediaSuggestion = restoreMediaSuggestion(
     Object.keys(asRecord(snapshot.mediaSuggestion)).length > 0
@@ -561,7 +652,12 @@ export function mapPersistedRowToCalendarEntry(
     id: draftId,
     backendDraftId: row.id,
     // Canonical identity from the column (fallback: snapshot, else the local id).
-    clientKey: readString(row.client_key) ?? readString(snapshot.clientKey) ?? draftId,
+    clientKey,
+    groupId,
+    // A group of one until collapseDraftGroups merges the siblings. Stamping it here
+    // (rather than only on grouped rows) is what lets every consumer read groupMembers
+    // without a "not grouped" branch.
+    groupMembers: [{ backendDraftId: row.id, platform: platforms[0], status, clientKey }],
     title:
       readString(snapshot.title) ??
       readString(slotData.title) ??
@@ -575,7 +671,7 @@ export function mapPersistedRowToCalendarEntry(
       day.suggestedTimes[0] ??
       '9:00 AM',
     dateLabel: isUnscheduled ? '' : `${day.label}, ${day.dateLabel}`,
-    status: normalizePersistedStatus(row.status),
+    status,
     mediaStage: resolveMediaStage(row.media_stage, placement),
     // A non-empty content_json is the backend's own "this draft has generated copy"
     // signal — the same predicate the generate-copy route's precondition uses.

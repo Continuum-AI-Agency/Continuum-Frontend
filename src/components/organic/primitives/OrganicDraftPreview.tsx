@@ -32,6 +32,7 @@ import {
   useDraftMediaPlacement,
 } from '@/components/organic/hooks/useDraftMediaPlacement';
 import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
+import { useFanOutDraft } from '@/components/organic/hooks/useFanOutDraft';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
 import { Iphone } from '@/components/ui/iphone';
@@ -71,6 +72,15 @@ import type { OrganicCalendarDraft } from './types';
 // keeps the bezel, media, and type in proportion while preserving the preview's
 // existing scroll behavior in the panel.
 const PHONE_PREVIEW_SCALE = 0.72;
+
+// Terse enough to sit in a segmented control without wrapping.
+const PREVIEW_FRAME_LABELS: Partial<Record<OrganicPlatformKey, string>> = {
+  instagram: 'IG',
+  facebook: 'FB',
+  linkedin: 'LI',
+  tiktok: 'TT',
+  youtube: 'YT',
+};
 
 interface OrganicDraftPreviewProps {
   draft: OrganicCalendarDraft;
@@ -798,9 +808,24 @@ export function OrganicDraftPreview({
   const draftForPreview = useDraftWithFreshMedia(draft, brandProfileId);
   const isHyperframeFormat = draft.format.toLowerCase() === 'hyperframe';
   const isCarouselFormat = draft.format.toLowerCase() === 'carousel';
-  const selectedPlatform = draft.platforms[0] || 'instagram';
-  const previewMaxWidth = resolvePreviewMaxWidth(selectedPlatform);
-  const mediaAspectRatio = resolvePreviewAspectRatio(selectedPlatform, draft.format);
+  // The platforms this post goes out on. Multi-select is the whole point of #235:
+  // one editable draft, N destinations.
+  const selectedPlatforms = React.useMemo<OrganicPlatformKey[]>(
+    () => (draft.platforms.length > 0 ? draft.platforms : ['instagram']),
+    [draft.platforms],
+  );
+  // Which platform's frame we are LOOKING at — a view concern, not a property of the
+  // post. Changing it must never touch draft.platforms, or "check how it lands on
+  // LinkedIn" would silently drop the other platforms from the post.
+  const [previewFramePlatform, setPreviewFramePlatform] = React.useState<OrganicPlatformKey | null>(
+    null,
+  );
+  const framePlatform =
+    previewFramePlatform && selectedPlatforms.includes(previewFramePlatform)
+      ? previewFramePlatform
+      : selectedPlatforms[0];
+  const previewMaxWidth = resolvePreviewMaxWidth(framePlatform);
+  const mediaAspectRatio = resolvePreviewAspectRatio(framePlatform, draft.format);
   const creativeDirection = resolveCreativeDirection(draft);
   // The agent-generated hook, if this draft has been generated. Scored on view.
   const draftHook = resolveDraftHook(draft);
@@ -885,6 +910,27 @@ export function OrganicDraftPreview({
   );
 
   const { publish, isPublishing, stage, pollingAttempt, tokenExpired } = usePublishDraft();
+
+  // Approving a multi-platform draft is a fan-out first: the backend copies the row
+  // once per platform, and only then does each row get approved. Doing it at approve
+  // (rather than at selection) is what keeps the copy/media shared while it is editable.
+  const { fanOutAndApprove, isFanningOut } = useFanOutDraft();
+  const isMultiPlatform = selectedPlatforms.length > 1;
+  const handleApprove = React.useCallback(() => {
+    if (!onApprove) return;
+    if (isMultiPlatform) {
+      void fanOutAndApprove(draft);
+      return;
+    }
+    onApprove(draft.id);
+  }, [draft, fanOutAndApprove, isMultiPlatform, onApprove]);
+  const approveLabel = isFanningOut
+    ? 'Approving…'
+    : draft.status === 'scheduled'
+      ? 'Approved for posting'
+      : isMultiPlatform
+        ? `Approve for ${selectedPlatforms.length} platforms`
+        : 'Approve & Schedule';
   const isInstagram = draft.platforms.includes('instagram');
   const isPublished = draft.status === 'published';
   const canPublish = isInstagram && !isPublished && draft.status !== 'streaming';
@@ -1195,7 +1241,7 @@ export function OrganicDraftPreview({
           setIsEditing(true);
           setHashtagsOpen(true);
         }}
-        onApproveSchedule={onApprove ? () => onApprove(draft.id) : undefined}
+        onApproveSchedule={onApprove ? handleApprove : undefined}
         canSchedule={canMarkScheduled}
         isScheduled={draft.status === 'scheduled'}
         onMoveBackToDraft={() => patchDraft({ status: 'draft' })}
@@ -1214,12 +1260,13 @@ export function OrganicDraftPreview({
         {/* Glanceable metadata strip + ⋯ command menu. Nothing else lives here
             permanently — every editing tool opens on demand. */}
         <PostMetaChips
-          platform={selectedPlatform as OrganicPlatformKey}
+          platforms={selectedPlatforms}
           format={toPublishFormat(draft.format)}
           timeLabel={draft.timeLabel}
-          onPlatformChange={(value) => {
-            if (!isOrganicPlatformKey(value)) return;
-            patchDraft({ platforms: [value] });
+          onPlatformsChange={(next) => {
+            const platforms = next.filter((value) => isOrganicPlatformKey(value));
+            if (platforms.length === 0) return;
+            patchDraft({ platforms });
           }}
           onFormatChange={(value) => patchDraft({ format: value })}
           onTimeChange={(value) => patchDraft({ timeLabel: value })}
@@ -1315,6 +1362,32 @@ export function OrganicDraftPreview({
               </ContextualPanel>
             )}
 
+            {/* The payoff of multi-select: check how ONE copy lands on each surface
+                before committing. Purely a view switch — it never edits the post. */}
+            {selectedPlatforms.length > 1 && (
+              <fieldset className="flex items-center gap-1.5 border-0 p-0">
+                <legend className="float-left mr-1.5 text-2xs uppercase tracking-wide text-muted-foreground">
+                  See it on
+                </legend>
+                {selectedPlatforms.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={value === framePlatform}
+                    onClick={() => setPreviewFramePlatform(value)}
+                    className={cn(
+                      'rounded-md border px-2 py-0.5 text-2xs font-medium transition-colors duration-150',
+                      value === framePlatform
+                        ? 'border-primary/40 bg-primary/10 text-primary'
+                        : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground',
+                    )}
+                  >
+                    {PREVIEW_FRAME_LABELS[value] ?? value}
+                  </button>
+                ))}
+              </fieldset>
+            )}
+
             {isHyperframeFormat ? (
               <div className="flex flex-col gap-3">
                 <HyperFramePlayer draft={draft} brandId={brandProfileId ?? ''} />
@@ -1325,12 +1398,12 @@ export function OrganicDraftPreview({
                   <EditableCaption
                     value={draft.captionPreview}
                     onChange={handleCaptionChange}
-                    platform={selectedPlatform}
+                    platform={framePlatform}
                     editable={isEditing}
                   />
                 </div>
               </div>
-            ) : selectedPlatform === 'instagram' ? (
+            ) : framePlatform === 'instagram' ? (
               <div className="flex justify-center">
                 <div className="w-[433px] max-w-full" style={{ zoom: PHONE_PREVIEW_SCALE }}>
                   <Iphone>
@@ -1347,7 +1420,7 @@ export function OrganicDraftPreview({
                   </Iphone>
                 </div>
               </div>
-            ) : selectedPlatform === 'facebook' ? (
+            ) : framePlatform === 'facebook' ? (
               <FacebookFeedPreview
                 draft={draftForPreview}
                 onCaptionChange={handleCaptionChange}
@@ -1358,7 +1431,7 @@ export function OrganicDraftPreview({
                 onEditCreativeDirection={() => setCreativeOpen(true)}
                 onEditHashtags={() => setHashtagsOpen(true)}
               />
-            ) : selectedPlatform === 'linkedin' ? (
+            ) : framePlatform === 'linkedin' ? (
               <LinkedInDesktopPreview
                 draft={draftForPreview}
                 onCaptionChange={handleCaptionChange}
@@ -1372,7 +1445,7 @@ export function OrganicDraftPreview({
             ) : (
               <div className="flex min-h-[24rem] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 px-4 py-10">
                 <p className="text-sm text-muted-foreground">
-                  Preview for {selectedPlatform} is coming soon.
+                  Preview for {framePlatform} is coming soon.
                 </p>
               </div>
             )}
@@ -1394,16 +1467,16 @@ export function OrganicDraftPreview({
             {onApprove && (
               <button
                 type="button"
-                disabled={isApproveDisabled || !readiness.ready}
-                onClick={() => onApprove(draft.id)}
+                disabled={isApproveDisabled || !readiness.ready || isFanningOut}
+                onClick={handleApprove}
                 className={cn(
                   'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors',
-                  isApproveDisabled || !readiness.ready
+                  isApproveDisabled || !readiness.ready || isFanningOut
                     ? 'cursor-not-allowed bg-muted text-muted-foreground'
                     : 'bg-primary text-primary-foreground hover:bg-primary/90',
                 )}
               >
-                {draft.status === 'scheduled' ? 'Approved for posting' : 'Approve & Schedule'}
+                {approveLabel}
               </button>
             )}
 

@@ -5,12 +5,50 @@ import type { InputHTMLAttributes, ReactNode } from 'react';
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
 
+// Radix's real menu needs a portal + pointer capture happy-dom cannot provide. The stub
+// keeps the two behaviours the multi-select depends on: `onSelect` runs first and can
+// preventDefault (which is what stops Radix closing after the first toggle), and a
+// disabled item fires nothing at all.
+let lastSelectWasPrevented: boolean | null = null;
+
 mock.module('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuItem: ({ children, onSelect }: { children: ReactNode; onSelect?: () => void }) => (
     <button type="button" onClick={() => onSelect?.()}>
+      {children}
+    </button>
+  ),
+  DropdownMenuCheckboxItem: ({
+    children,
+    checked,
+    disabled,
+    onSelect,
+    onCheckedChange,
+  }: {
+    children: ReactNode;
+    checked?: boolean;
+    disabled?: boolean;
+    onSelect?: (event: { preventDefault: () => void }) => void;
+    onCheckedChange?: (next: boolean) => void;
+  }) => (
+    <button
+      type="button"
+      role="menuitemcheckbox"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => {
+        let prevented = false;
+        onSelect?.({
+          preventDefault: () => {
+            prevented = true;
+          },
+        });
+        lastSelectWasPrevented = prevented;
+        onCheckedChange?.(!checked);
+      }}
+    >
       {children}
     </button>
   ),
@@ -32,14 +70,15 @@ mock.module('@/lib/organic/scheduling', () => ({
 
 afterAll(() => mock.restore());
 
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { PostMetaChips } from './PostMetaChips';
 
 function setup(overrides: Partial<Parameters<typeof PostMetaChips>[0]> = {}) {
   const props = {
-    platform: 'instagram' as const,
+    platforms: ['instagram'] as OrganicPlatformKey[],
     format: 'Post',
     timeLabel: '9:00 AM',
-    onPlatformChange: mock(),
+    onPlatformsChange: mock(),
     onFormatChange: mock(),
     onTimeChange: mock(),
     ...overrides,
@@ -48,20 +87,81 @@ function setup(overrides: Partial<Parameters<typeof PostMetaChips>[0]> = {}) {
   return props;
 }
 
+const platformChip = () => screen.getByRole('button', { name: /Change platforms/ });
+const platformOption = (label: string) => screen.getByRole('menuitemcheckbox', { name: label });
+
 describe('PostMetaChips', () => {
-  beforeEach(() => cleanup());
+  beforeEach(() => {
+    cleanup();
+    lastSelectWasPrevented = null;
+  });
 
   it('renders the glanceable platform · format · time chips', () => {
     setup();
-    expect(screen.getByLabelText('Change platform').textContent).toContain('Instagram');
+    expect(platformChip().textContent).toContain('Instagram');
     expect(screen.getByLabelText('Change format').textContent).toContain('Post');
     expect(screen.getByLabelText('Edit posting time').textContent).toContain('9:00 AM');
   });
 
-  it('changes platform from the chip menu', () => {
-    const { onPlatformChange } = setup();
-    fireEvent.click(screen.getByText('Facebook'));
-    expect(onPlatformChange).toHaveBeenCalledWith('facebook');
+  it('labels the chip with the platform name at one selection', () => {
+    setup();
+    // Byte-identical to the single-platform chip this replaced.
+    expect(platformChip().textContent).toBe('Instagram');
+  });
+
+  it('labels the chip with both names at two selections', () => {
+    setup({ platforms: ['instagram', 'linkedin'] });
+    expect(platformChip().textContent).toBe('Instagram + LinkedIn');
+  });
+
+  it('labels the chip with a count at three selections', () => {
+    setup({ platforms: ['instagram', 'facebook', 'linkedin'] });
+    expect(platformChip().textContent).toBe('3 platforms');
+  });
+
+  it('names every selected platform in the aria-label, including at the count label', () => {
+    setup({ platforms: ['instagram', 'facebook', 'linkedin'] });
+    expect(platformChip().getAttribute('aria-label')).toBe(
+      'Change platforms — Instagram, Facebook, LinkedIn selected',
+    );
+  });
+
+  it('adds a platform without closing the menu', () => {
+    const { onPlatformsChange } = setup();
+    fireEvent.click(platformOption('LinkedIn'));
+
+    expect(onPlatformsChange).toHaveBeenCalledWith(['instagram', 'linkedin']);
+    // Radix closes the menu on select by default; preventDefault is what keeps a
+    // multi-select multi.
+    expect(lastSelectWasPrevented).toBe(true);
+  });
+
+  it('removes an already-selected platform', () => {
+    const { onPlatformsChange } = setup({ platforms: ['instagram', 'linkedin'] });
+    fireEvent.click(platformOption('Instagram'));
+    expect(onPlatformsChange).toHaveBeenCalledWith(['linkedin']);
+  });
+
+  it('always reports the selection in the menu order, whatever order it arrives in', () => {
+    const { onPlatformsChange } = setup({ platforms: ['linkedin'] });
+    fireEvent.click(platformOption('Instagram'));
+    expect(onPlatformsChange).toHaveBeenCalledWith(['instagram', 'linkedin']);
+  });
+
+  it('disables the last remaining platform — zero platforms is not representable', () => {
+    const { onPlatformsChange } = setup({ platforms: ['linkedin'] });
+
+    const sole = platformOption('LinkedIn');
+    expect(sole.hasAttribute('disabled')).toBe(true);
+
+    fireEvent.click(sole);
+    expect(onPlatformsChange).not.toHaveBeenCalled();
+  });
+
+  it('leaves the other platforms enabled while one is selected', () => {
+    setup({ platforms: ['linkedin'] });
+    expect(platformOption('Instagram').hasAttribute('disabled')).toBe(false);
+    expect(platformOption('Facebook').hasAttribute('disabled')).toBe(false);
   });
 
   it('changes format from the chip menu', () => {

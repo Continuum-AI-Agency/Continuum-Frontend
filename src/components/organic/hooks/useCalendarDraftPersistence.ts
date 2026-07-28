@@ -16,6 +16,7 @@ import type {
 import { request } from '@/lib/api/http';
 import {
   buildPersistedDraftPayload,
+  collapseDraftGroups,
   mapPersistedRowToCalendarEntry,
   mergeUnsavedLocalDrafts,
   type PersistedOrganicDraftRow,
@@ -134,7 +135,8 @@ export function useCalendarDraftPersistence({
       days.push(buildUnscheduledDay());
     }
 
-    const dedupedByDraftId = new Map<string, { updatedAt: number; entry: CalendarEntry }>();
+    const mapped: CalendarEntry[] = [];
+    const updatedAtByDraftId = new Map<string, number>();
     const knownIds = new Set<string>();
 
     for (const row of drafts) {
@@ -143,12 +145,24 @@ export function useCalendarDraftPersistence({
       const entry = mapPersistedRowToCalendarEntry(row, days);
       if (!entry) continue;
 
+      mapped.push(entry);
       const updatedAt = parseUpdatedAt(row.updated_at);
+      updatedAtByDraftId.set(
+        entry.draft.id,
+        Math.max(updatedAtByDraftId.get(entry.draft.id) ?? 0, updatedAt),
+      );
+      knownIds.add(row.id);
+    }
+
+    // Fan-out siblings are N rows of ONE post. Collapse them before the dedupe so the
+    // grid gets one card with N platform badges instead of N identical cards.
+    const dedupedByDraftId = new Map<string, { updatedAt: number; entry: CalendarEntry }>();
+    for (const entry of collapseDraftGroups(mapped)) {
+      const updatedAt = updatedAtByDraftId.get(entry.draft.id) ?? 0;
       const existing = dedupedByDraftId.get(entry.draft.id);
       if (!existing || updatedAt >= existing.updatedAt) {
         dedupedByDraftId.set(entry.draft.id, { updatedAt, entry });
       }
-      knownIds.add(row.id);
     }
 
     for (const { entry } of dedupedByDraftId.values()) {

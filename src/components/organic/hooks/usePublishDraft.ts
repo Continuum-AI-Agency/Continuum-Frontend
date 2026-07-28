@@ -1,13 +1,19 @@
 'use client';
 
-import type { PublishEvent, PublishPlatform } from '@continuum/contracts';
+import type { PublishEvent } from '@continuum/contracts';
 import * as React from 'react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { classifyOrganicError } from '@/lib/organic/error-handling';
-import { buildPublishBody, inferPublishPlatform } from '@/lib/organic/publish-utils';
+import {
+  buildPublishBody,
+  describePublishError,
+  inferPublishPlatform,
+  parseSSE,
+  publishPlatformLabel,
+} from '@/lib/organic/publish-utils';
 import { useCalendarStore } from '@/lib/organic/store';
 
 // The SSE frames are the backend's own PublishEvent union, imported rather than
@@ -15,34 +21,6 @@ import { useCalendarStore } from '@/lib/organic/store';
 type ProcessingEvent = Extract<PublishEvent, { type: 'processing' }>;
 type PublishedEvent = Extract<PublishEvent, { type: 'published' }>;
 type FailedEvent = Extract<PublishEvent, { type: 'failed' }>;
-
-const PLATFORM_LABELS: Record<PublishPlatform, string> = {
-  instagram: 'Instagram',
-  facebook: 'Facebook',
-  linkedin: 'LinkedIn',
-};
-
-function platformLabel(platform: PublishPlatform | undefined): string {
-  return platform ? PLATFORM_LABELS[platform] : 'the platform';
-}
-
-// User-facing copy for the precise publish failure codes the backend maps from the
-// provider's error code + the staging gate. Falls back to the raw message.
-const PUBLISH_ERROR_MESSAGES: Record<string, string> = {
-  token_expired:
-    'PLEASE RECONNECT: The connection for the selected Instagram account expired or was revoked. Reconnect that account in Integrations, then try again. We always post to the account you selected — never a different one on the brand.',
-  rate_limited:
-    'The platform is temporarily rate-limiting requests. Wait a few minutes and try again.',
-  media_processing_error: "The platform couldn't process this media. Check the file and try again.",
-  media_staging_failed:
-    "We couldn't prepare your media for publishing. Re-attach the creative and try again.",
-  media_upload_failed: "We couldn't upload your media to the platform. Try again in a moment.",
-  unsupported_format: "This post format isn't supported on that platform.",
-};
-
-function describePublishError(code: string, fallback: string): string {
-  return PUBLISH_ERROR_MESSAGES[code] ?? fallback;
-}
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -57,33 +35,6 @@ export type UsePublishDraftResult = {
   tokenExpired: boolean;
   error: string | null;
 };
-
-// ── SSE line parser ─────────────────────────────────────────────────────────
-
-async function* parseSSE(body: ReadableStream<Uint8Array>) {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const blocks = buffer.split('\n\n');
-    buffer = blocks.pop() ?? '';
-
-    for (const block of blocks) {
-      let eventName = 'message';
-      let data = '';
-      for (const line of block.split('\n')) {
-        if (line.startsWith('event: ')) eventName = line.slice(7).trim();
-        else if (line.startsWith('data: ')) data = line.slice(6).trim();
-      }
-      if (data) yield { event: eventName, data };
-    }
-  }
-}
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -206,7 +157,7 @@ export function usePublishDraft(): UsePublishDraftResult {
             }));
             show({
               title: 'Published',
-              description: `Your post is now live on ${platformLabel(ev.platform)}.`,
+              description: `Your post is now live on ${publishPlatformLabel(ev.platform)}.`,
               variant: 'success',
             });
           } else if (event === 'failed') {

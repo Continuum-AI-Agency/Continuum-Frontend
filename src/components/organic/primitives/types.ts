@@ -14,6 +14,23 @@ export type OrganicDraftStatus =
   | 'placeholder'
   | 'published';
 
+/**
+ * One row of a fan-out group — "the same post" on one platform.
+ *
+ * The organic stack stays one-platform-per-draft-row: a multi-platform post is N sibling
+ * rows sharing a `group_id`, each publishing through the unchanged single-platform path.
+ * The planner collapses them into ONE card whose `platforms` is the union, and keeps the
+ * per-row identities here so publish/approve can still address each row individually.
+ */
+export type OrganicDraftGroupMember = {
+  /** organic_calendar_drafts.id — the row this platform publishes from. */
+  backendDraftId: string;
+  platform: OrganicPlatformTag;
+  status: OrganicDraftStatus;
+  /** Per-brand identity; siblings carry `<sourceClientKey>::<platform>`. */
+  clientKey?: string;
+};
+
 export type OrganicCalendarDraft = {
   id: string;
   title: string;
@@ -62,6 +79,13 @@ export type OrganicCalendarDraft = {
   // FE<->BE so a draft is enriched in place (UPSERT on (brand_id, client_key))
   // instead of duplicated. Stable across refetches, unlike `id`.
   clientKey?: string;
+  /** Non-null when this draft is one platform of a fanned-out multi-platform post. */
+  groupId?: string | null;
+  /**
+   * Every row of this draft's group, in canonical platform order. Always at least the
+   * draft's own row, so consumers never have to special-case "not grouped".
+   */
+  groupMembers?: OrganicDraftGroupMember[];
   instagram_post_id?: string | null;
   mediaSuggestion?: {
     provider?: string | null;
