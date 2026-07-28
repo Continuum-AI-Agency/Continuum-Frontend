@@ -998,13 +998,50 @@ export const PortfolioAdsetSchema = z.object({
 });
 export type PortfolioAdset = z.infer<typeof PortfolioAdsetSchema>;
 
+/** What an ad's creative actually IS, at a resolution you can read.
+ *
+ *  `thumbnailUrl` on the ad is Meta's default 64x64 (`stp=...p64x64_q75...`) — about
+ *  4,000 pixels, and the signed URL cannot be resized by hand (stripping `stp=`
+ *  returns 403). Every consumer that showed a creative larger than a favicon was
+ *  upscaling that smear. These fields carry the readable renditions instead:
+ *  `imageUrl` for an image creative, `posterUrl` for the 480x848-class video poster
+ *  from `GET /{video_id}/thumbnails`, `videoUrl` for the playable source when Meta
+ *  grants it.
+ *
+ *  Every field is optional: an edge deployment that predates this shape must keep
+ *  parsing, and the Frontend falls back to `thumbnailUrl` when they are absent. */
+export const AdCreativeSlideSchema = z.object({
+  /** Position in the carousel, 0-based. */
+  index: z.number(),
+  imageUrl: z.string().nullable().optional(),
+  /** Playable source when this slide is a video AND Meta granted access to it. */
+  videoUrl: z.string().nullable().optional(),
+  posterUrl: z.string().nullable().optional(),
+  caption: z.string().nullable().optional(),
+});
+export type AdCreativeSlide = z.infer<typeof AdCreativeSlideSchema>;
+
+export const AdCreativeMediaSchema = z.object({
+  /** Derived the same way as paid_media.ad_creatives.format. */
+  format: z.enum(['image', 'video', 'carousel', 'unknown']).optional(),
+  imageUrl: z.string().nullable().optional(),
+  posterUrl: z.string().nullable().optional(),
+  videoUrl: z.string().nullable().optional(),
+  permalinkUrl: z.string().nullable().optional(),
+  /** Populated only for carousels; a single-media ad leaves this empty. */
+  slides: z.array(AdCreativeSlideSchema).optional(),
+});
+export type AdCreativeMedia = z.infer<typeof AdCreativeMediaSchema>;
+
 /** One ad inside an ad set — provenance only (display-only; ads are not enrollable).
  *  Lazy-loaded per ad set via paid-media-metrics scope=adset_ads. */
 export const AdsetAdSchema = z.object({
   id: z.string(),
   name: z.string().nullable().optional(),
   status: z.string().nullable().optional(), // Meta effective_status
+  /** Meta's 64x64. Kept as the last-resort fallback, never the preferred render. */
   thumbnailUrl: z.string().nullable().optional(),
+  creative: AdCreativeMediaSchema.nullable().optional(),
 });
 export type AdsetAd = z.infer<typeof AdsetAdSchema>;
 

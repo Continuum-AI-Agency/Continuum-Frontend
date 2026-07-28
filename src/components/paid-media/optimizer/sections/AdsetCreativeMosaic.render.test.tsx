@@ -1,8 +1,33 @@
+// The media stack below the mosaic is deliberately NOT mocked. Stubbing ChatMedia here
+// would hide the one composition risk that matters — the tile sits inside a Radix
+// HoverCard trigger, and if that trigger swallowed pointerenter, hover-to-play would
+// never fire. So the real CreativeHoverCard, ChatMediaCarousel and ChatMediaThumb all
+// render, and the hover tests drive a pointer at the actual <video>.
+
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AdDailyTrend, AdsetAd, PaidAdAngle } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import * as realData from '../useOptimizerData';
+
+// embla and Radix reach for observers happy-dom does not expose. Inert stubs are
+// fine: these tests assert wiring and the src/preload contract, not layout.
+class ObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
+}
+const testGlobals = globalThis as unknown as Record<string, unknown>;
+const testWindow = global.window as unknown as Record<string, unknown>;
+testGlobals.ResizeObserver ??= ObserverStub;
+testGlobals.IntersectionObserver ??= ObserverStub;
+testGlobals.MutationObserver ??= testWindow.MutationObserver ?? ObserverStub;
+const elementProto = HTMLElement.prototype as unknown as Record<string, unknown>;
+elementProto.hasPointerCapture ??= () => false;
+elementProto.setPointerCapture ??= () => {};
+elementProto.releasePointerCapture ??= () => {};
 
 // Mutable hook returns so each test drives the load state without re-mocking the
 // process-wide module.
@@ -25,21 +50,30 @@ mock.module('@/hooks/usePaidCreativeRecovery', () => ({
   usePaidCreativeRecovery: () => ({ freshUrlById: {}, recover: () => {} }),
 }));
 
-// The hover card and the media thumb are exercised by their own suites; here they
-// would only drag next/image + Radix into the mosaic's unit. Stub to their contract.
-mock.module('../charts/CreativeHoverCard', () => ({
-  CreativeHoverCard: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}));
-mock.module('@/components/chat/media/ChatMedia', () => ({
-  ChatMediaThumb: ({ media }: { media: { name?: string; url: string } }) => (
-    <span data-testid="thumb" data-url={media.url} />
+// The one stub kept: a Radix Dialog rendering through a portal tells us nothing extra
+// about the mosaic, and this keeps "which slide opened" easy to assert.
+mock.module('@/components/organic/primitives/MediaLightbox', () => ({
+  MediaLightbox: ({ items, title }: { items: unknown[]; title: string }) => (
+    <div data-items={items.length} data-testid="lightbox">
+      {title}
+    </div>
   ),
 }));
 
 const { AdsetCreativeMosaic } = await import('./AdsetCreativeMosaic');
 
-function ad(id: string, name: string): AdsetAd {
-  return { id, name, status: 'ACTIVE', thumbnailUrl: `https://cdn.test/${id}.jpg` };
+function ad(id: string, name: string, creative?: AdsetAd['creative']): AdsetAd {
+  return { id, name, status: 'ACTIVE', thumbnailUrl: `https://cdn.test/${id}.jpg`, creative };
+}
+
+/** Shaped like what the deployed edge returns for a Vivo47 reel: an Instagram-hosted
+ *  MP4 alongside a Facebook-hosted poster. */
+function videoAd(): AdsetAd {
+  return ad('ad-reel', 'Vivo47 Video Ene26', {
+    format: 'video',
+    posterUrl: 'https://cdn.test/poster.jpg',
+    videoUrl: 'https://cdn.test/clip.mp4',
+  });
 }
 
 function trend(adId: string, spend: number, impressions: number): AdDailyTrend {
@@ -116,13 +150,136 @@ describe('AdsetCreativeMosaic', () => {
       ],
     };
 
-    render(<AdsetCreativeMosaic accountId="act_1" adsetId="as-1" brandId="b1" currency="USD" />);
+    const { container } = render(
+      <AdsetCreativeMosaic accountId="act_1" adsetId="as-1" brandId="b1" currency="USD" />,
+    );
 
     expect(screen.getByText('Hook A')).toBeTruthy();
     expect(screen.getByText('Hook B')).toBeTruthy();
-    expect(screen.getAllByTestId('thumb').length).toBe(2);
+    expect(container.querySelectorAll('img').length).toBe(2);
     // The derived CPM for ad-1, and its angle chip.
     expect(document.body.textContent).toContain('$250 · CPM $10');
     expect(document.body.textContent).toContain('Scarcity');
+  });
+
+  it('renders the readable image, not Metas 64x64 thumbnail', () => {
+    adsReturn = {
+      data: [ad('ad-1', 'Hook A', { format: 'image', imageUrl: 'https://cdn.test/full.jpg' })],
+      isLoading: false,
+      isError: false,
+    };
+    const { container } = render(
+      <AdsetCreativeMosaic accountId="act_1" adsetId="as-1" brandId="b1" currency="USD" />,
+    );
+    expect(container.querySelector('img')?.getAttribute('src')).toContain('full.jpg');
+    expect(container.querySelector('img')?.getAttribute('src')).not.toContain('ad-1.jpg');
+  });
+
+  it('pages a carousel in place, one slide per child', () => {
+    adsReturn = {
+      data: [
+        ad('ad-1', 'Carousel', {
+          format: 'carousel',
+          slides: [
+            { index: 0, imageUrl: 'https://cdn.test/1.jpg' },
+            { index: 1, imageUrl: 'https://cdn.test/2.jpg' },
+            { index: 2, imageUrl: 'https://cdn.test/3.jpg' },
+          ],
+        }),
+      ],
+      isLoading: false,
+      isError: false,
+    };
+    const { container } = render(
+      <AdsetCreativeMosaic accountId="act_1" adsetId="as-1" brandId="b1" currency="USD" />,
+    );
+    expect(container.querySelectorAll('img').length).toBe(3);
+    expect(document.body.textContent).toContain('1/3');
+    expect(screen.getByRole('button', { name: /next/i })).toBeTruthy();
+  });
+
+  it('renders a real <video> on its poster and downloads nothing before hover', () => {
+    adsReturn = { data: [videoAd()], isLoading: false, isError: false };
+    const { container } = render(
+      <AdsetCreativeMosaic accountId="act_1" adsetId="as-1" brandId="b1" currency="USD" />,
+    );
+
+    const video = container.querySelector('video') as HTMLVideoElement;
+    expect(video).toBeTruthy();
+    expect(video.getAttribute('poster')).toBe('https://cdn.test/poster.jpg');
+    expect(video.getAttribute('preload')).toBe('none');
+    expect(video.getAttribute('src')).toBeNull();
+  });
+
+  it('starts playback on pointer enter — the HoverCard trigger does not swallow it', () => {
+    adsReturn = { data: [videoAd()], isLoading: false, isError: false };
+    const { container } = render(
+      <AdsetCreativeMosaic accountId="act_1" adsetId="as-1" brandId="b1" currency="USD" />,
+    );
+
+    const video = container.querySelector('video') as HTMLVideoElement;
+    const play = mock(() => Promise.resolve());
+    const pause = mock();
+    video.play = play as unknown as HTMLVideoElement['play'];
+    video.pause = pause as unknown as HTMLVideoElement['pause'];
+
+    fireEvent.pointerEnter(video);
+    expect(video.getAttribute('src')).toBe('https://cdn.test/clip.mp4');
+    fireEvent.loadedData(video);
+    expect(play).toHaveBeenCalled();
+
+    fireEvent.pointerLeave(video);
+    expect(pause).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a source-less video as a still, badged Video, with no <video> to play', () => {
+    adsReturn = {
+      data: [ad('ad-1', 'Reel', { format: 'video', posterUrl: 'https://cdn.test/poster.jpg' })],
+      isLoading: false,
+      isError: false,
+    };
+    const { container } = render(
+      <AdsetCreativeMosaic accountId="act_1" adsetId="as-1" brandId="b1" currency="USD" />,
+    );
+    expect(container.querySelector('video')).toBeNull();
+    expect(container.querySelector('img')?.getAttribute('src')).toContain('poster.jpg');
+    expect(document.body.textContent).toContain('Video');
+  });
+
+  it('opens the full-size viewer on the slide that was activated', () => {
+    adsReturn = {
+      data: [
+        ad('ad-1', 'Carousel', {
+          format: 'carousel',
+          slides: [
+            { index: 0, imageUrl: 'https://cdn.test/1.jpg' },
+            { index: 1, imageUrl: 'https://cdn.test/2.jpg' },
+          ],
+        }),
+      ],
+      isLoading: false,
+      isError: false,
+    };
+    render(<AdsetCreativeMosaic accountId="act_1" adsetId="as-1" brandId="b1" currency="USD" />);
+    expect(screen.queryByTestId('lightbox')).toBeNull();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Open /i })[0] as HTMLElement);
+    const lightbox = screen.getByTestId('lightbox');
+    expect(lightbox.getAttribute('data-items')).toBe('2');
+    expect(lightbox.textContent).toBe('Carousel');
+  });
+
+  it('still shows the AD tile when an ad has no usable media at all', () => {
+    adsReturn = {
+      data: [{ id: 'ad-1', name: 'Broken', status: 'ACTIVE', thumbnailUrl: null }],
+      isLoading: false,
+      isError: false,
+    };
+    const { container } = render(
+      <AdsetCreativeMosaic accountId="act_1" adsetId="as-1" brandId="b1" currency="USD" />,
+    );
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('video')).toBeNull();
+    expect(document.body.textContent).toContain('AD');
   });
 });

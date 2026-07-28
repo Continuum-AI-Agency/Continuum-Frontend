@@ -8,6 +8,7 @@ import {
   mediaFromPaidVerdict,
   mediaFromPersistedAttachments,
   mediaFromPreviewUrls,
+  mediaListFromAdsetAd,
   resolveMediaKind,
 } from './media';
 
@@ -232,5 +233,86 @@ describe('mediaFromJainaMediaEntry', () => {
     expect(
       mediaFromJainaMediaEntry({ entity_type: 'ad', entity_id: '1', image_url: null }),
     ).toBeNull();
+  });
+});
+
+describe('mediaListFromAdsetAd', () => {
+  const CDN = 'https://scontent-lax3-1.xx.fbcdn.net';
+
+  it('prefers the full image over Metas 64x64 thumbnail', () => {
+    const media = mediaListFromAdsetAd({
+      id: 'ad1',
+      name: 'Ad One',
+      thumbnailUrl: `${CDN}/tiny_p64x64.jpg`,
+      creative: { format: 'image', imageUrl: `${CDN}/full.jpg` },
+    });
+    expect(media).toHaveLength(1);
+    expect(media[0]).toMatchObject({ url: `${CDN}/full.jpg`, kind: 'image' });
+  });
+
+  it('renders a playable video as kind video with the poster attached', () => {
+    const media = mediaListFromAdsetAd({
+      id: 'ad1',
+      thumbnailUrl: `${CDN}/tiny.jpg`,
+      creative: { format: 'video', posterUrl: `${CDN}/poster.jpg`, videoUrl: `${CDN}/clip.mp4` },
+    });
+    expect(media[0]).toMatchObject({
+      url: `${CDN}/clip.mp4`,
+      kind: 'video',
+      thumbnailUrl: `${CDN}/poster.jpg`,
+    });
+    expect(media[0]?.badge).toBeUndefined();
+  });
+
+  it('keeps an unplayable video as an image on its poster, badged Video', () => {
+    const media = mediaListFromAdsetAd({
+      id: 'ad1',
+      thumbnailUrl: `${CDN}/tiny.jpg`,
+      creative: { format: 'video', posterUrl: `${CDN}/poster.jpg`, videoUrl: null },
+    });
+    expect(media[0]).toMatchObject({ url: `${CDN}/poster.jpg`, kind: 'image', badge: 'Video' });
+  });
+
+  it('expands a carousel into one item per slide with k/N badges', () => {
+    const media = mediaListFromAdsetAd({
+      id: 'ad1',
+      creative: {
+        format: 'carousel',
+        permalinkUrl: 'https://www.instagram.com/p/abc/',
+        slides: [
+          { index: 0, imageUrl: `${CDN}/1.jpg`, caption: 'First' },
+          { index: 1, imageUrl: `${CDN}/2.jpg` },
+          { index: 2, videoUrl: `${CDN}/3.mp4`, posterUrl: `${CDN}/3.jpg` },
+        ],
+      },
+    });
+    expect(media).toHaveLength(3);
+    expect(media[0]).toMatchObject({ id: 'ad1:0', caption: 'First', kind: 'image' });
+    // The carousel renders the k/N counter itself; slides must not duplicate it.
+    expect(media[0]?.badge).toBeUndefined();
+    expect(media[2]).toMatchObject({
+      url: `${CDN}/3.mp4`,
+      kind: 'video',
+      thumbnailUrl: `${CDN}/3.jpg`,
+    });
+    expect(media[0]?.permalink).toBe('https://www.instagram.com/p/abc/');
+  });
+
+  it('applies the recovery override to the primary still only', () => {
+    const media = mediaListFromAdsetAd(
+      { id: 'ad1', thumbnailUrl: `${CDN}/expired.jpg`, creative: { format: 'image' } },
+      `${CDN}/fresh.jpg`,
+    );
+    expect(media[0]?.url).toBe(`${CDN}/fresh.jpg`);
+  });
+
+  it('falls back to the bare thumbnail when the edge sent no creative at all', () => {
+    const media = mediaListFromAdsetAd({ id: 'ad1', thumbnailUrl: `${CDN}/tiny.jpg` });
+    expect(media[0]).toMatchObject({ url: `${CDN}/tiny.jpg`, kind: 'image' });
+  });
+
+  it('returns nothing usable rather than a broken tile', () => {
+    expect(mediaListFromAdsetAd({ id: 'ad1', thumbnailUrl: null })).toEqual([]);
+    expect(mediaListFromAdsetAd({ id: 'ad1', thumbnailUrl: 'not-a-url' })).toEqual([]);
   });
 });

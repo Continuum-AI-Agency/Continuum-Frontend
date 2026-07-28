@@ -3,8 +3,16 @@
 import { FileIcon } from '@radix-ui/react-icons';
 import { ExternalLink, Play } from 'lucide-react';
 import Image from 'next/image';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
+import {
+  Carousel,
+  type CarouselApi,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from '@/components/ui/carousel';
 import { cn } from '@/lib/utils';
 import type { ChatMedia } from './media';
 
@@ -41,6 +49,12 @@ type ChatMediaThumbProps = {
   onRecover?: (media: ChatMedia) => void;
   /** Natural dimensions once an image paints (aspect-ratio badges need this). */
   onLoadDimensions?: (dims: { width: number; height: number }) => void;
+  /**
+   * Play a video on pointer-enter and pause on leave, instead of sitting on its poster.
+   * Off by default: a page of autonomously-playing tiles is noise, and every existing
+   * call site was written against the still.
+   */
+  hoverPlay?: boolean;
 };
 
 // The single media renderer for every surface that shows a creative. It branches on `kind`, which
@@ -53,6 +67,7 @@ export function ChatMediaThumb({
   fallbackSeed,
   onRecover,
   onLoadDimensions,
+  hoverPlay = false,
 }: ChatMediaThumbProps) {
   // Failures are keyed to the URL that failed, so recovered media (a new signed
   // URL arriving via props) invalidates the failure without an explicit reset.
@@ -77,30 +92,69 @@ export function ChatMediaThumb({
 
   const seed = fallbackSeed ?? media.name ?? media.caption;
 
+  // #t=0.01 makes browsers paint the first frame when there is no poster, instead of
+  // showing an empty black box.
+  const videoSrc = media.thumbnailUrl ? media.url : `${media.url}#t=0.01`;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const hoveredRef = useRef(false);
+  // With a poster to paint, a hover-play tile downloads ZERO video bytes until the
+  // pointer arrives: `preload="none"` plus a withheld src. Withholding the src is
+  // strictly stronger than gating on an IntersectionObserver — an off-screen tile has
+  // nothing to fetch either way, and a pointer that arrives before the observer fires
+  // still starts playback immediately.
+  const deferUntilHover = hoverPlay && Boolean(media.thumbnailUrl);
+  const resolvedVideoSrc = deferUntilHover && !hovered ? undefined : videoSrc;
+
   return (
     <div className={cn('relative size-full overflow-hidden rounded-md bg-muted', className)}>
       {exhausted ? (
         <MediaFallbackTile seed={seed} />
       ) : media.kind === 'video' && !videoFailed ? (
         <>
-          {/* #t=0.01 makes browsers paint the first frame when there is no poster, instead of
-              showing an empty black box. */}
           <video
-            src={media.thumbnailUrl ? media.url : `${media.url}#t=0.01`}
+            ref={videoRef}
+            src={resolvedVideoSrc}
             poster={media.thumbnailUrl}
             aria-label={media.name ?? media.caption}
-            preload="metadata"
+            preload={deferUntilHover ? 'none' : 'metadata'}
             muted
             playsInline
+            loop={hoverPlay}
             onError={() => {
               setFailedVideoUrl(media.url);
               requestRecovery();
             }}
+            onLoadedData={() => {
+              if (hoveredRef.current) void videoRef.current?.play();
+            }}
+            onPointerEnter={
+              hoverPlay
+                ? () => {
+                    hoveredRef.current = true;
+                    setHovered(true);
+                    if (resolvedVideoSrc) void videoRef.current?.play();
+                  }
+                : undefined
+            }
+            onPointerLeave={
+              hoverPlay
+                ? () => {
+                    hoveredRef.current = false;
+                    videoRef.current?.pause();
+                  }
+                : undefined
+            }
             className="size-full object-cover"
           >
             <track kind="captions" />
           </video>
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <span
+            className={cn(
+              'pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity',
+              hoverPlay && hovered && 'opacity-0',
+            )}
+          >
             <Play className="size-5 fill-white/90 text-white/90 drop-shadow" aria-hidden="true" />
           </span>
         </>
@@ -134,6 +188,112 @@ export function ChatMediaThumb({
           {media.badge}
         </span>
       ) : null}
+    </div>
+  );
+}
+
+type ChatMediaCarouselProps = {
+  items: readonly ChatMedia[];
+  className?: string;
+  /** Seed for the fallback letter tile on every slide. */
+  fallbackSeed?: string;
+  onRecoverItem?: (media: ChatMedia) => void;
+  /** Natural dimensions of the FIRST slide, once it paints. */
+  onLoadDimensions?: (dims: { width: number; height: number }) => void;
+  /** Forwarded to every slide's thumb. */
+  hoverPlay?: boolean;
+  /** Called with the slide index when the media is activated (click or Enter). */
+  onOpen?: (index: number) => void;
+};
+
+/**
+ * One creative, paged in place — a carousel ad shown the way someone scrolling the feed
+ * would see it, rather than flattened to its cover slide.
+ *
+ * A single-item list renders as a bare thumb with no chrome, so callers can hand this
+ * whatever a creative turned out to be without branching on the count first.
+ */
+export function ChatMediaCarousel({
+  items,
+  className,
+  fallbackSeed,
+  onRecoverItem,
+  onLoadDimensions,
+  hoverPlay = false,
+  onOpen,
+}: ChatMediaCarouselProps) {
+  const [api, setApi] = useState<CarouselApi | null>(null);
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    if (!api) return;
+    const syncCurrent = () => setCurrent(api.selectedScrollSnap());
+    syncCurrent();
+    api.on('select', syncCurrent);
+    api.on('reInit', syncCurrent);
+    return () => {
+      api.off('select', syncCurrent);
+      api.off('reInit', syncCurrent);
+    };
+  }, [api]);
+
+  if (items.length === 0) return null;
+
+  const slide = (media: ChatMedia, index: number) => {
+    const thumb = (
+      <ChatMediaThumb
+        fallbackSeed={fallbackSeed}
+        hoverPlay={hoverPlay}
+        media={media}
+        onLoadDimensions={index === 0 ? onLoadDimensions : undefined}
+        onRecover={onRecoverItem}
+      />
+    );
+    if (!onOpen) return thumb;
+    return (
+      <button
+        aria-label={`Open ${media.name ?? media.caption ?? 'creative'}`}
+        className="relative block size-full cursor-zoom-in"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen(index);
+        }}
+        type="button"
+      >
+        {thumb}
+      </button>
+    );
+  };
+
+  if (items.length === 1) {
+    const only = items[0];
+    return only ? (
+      <div className={cn('relative size-full', className)}>{slide(only, 0)}</div>
+    ) : null;
+  }
+
+  // The arrows sit inside the tile and surface on hover — a creative grid should read as
+  // creatives, not as a row of controls.
+  const arrowClass =
+    'size-7 border-0 bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity ' +
+    'group-hover/carousel:opacity-100 hover:bg-black/75 hover:text-white disabled:opacity-0';
+
+  return (
+    <div className={cn('group/carousel relative size-full', className)}>
+      <Carousel className="size-full" opts={{ loop: false }} setApi={setApi}>
+        <CarouselContent className="ml-0 size-full">
+          {items.map((media, index) => (
+            <CarouselItem className="pl-0" key={media.id}>
+              {slide(media, index)}
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+        <CarouselPrevious className={cn('left-2', arrowClass)} />
+        <CarouselNext className={cn('right-2', arrowClass)} />
+      </Carousel>
+      <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 font-medium text-2xs text-white backdrop-blur-sm">
+        {current + 1}/{items.length}
+      </span>
     </div>
   );
 }

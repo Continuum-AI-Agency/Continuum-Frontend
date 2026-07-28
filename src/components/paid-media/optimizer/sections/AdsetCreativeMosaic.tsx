@@ -7,15 +7,22 @@
 // daily read) and reveals the full analytics — angle, hook, confidence, spend
 // sparkline, last CPA — through the shared CreativeHoverCard on hover.
 //
+// A tile shows the creative as it actually is: a carousel pages through its slides,
+// a video plays on hover when Meta granted us a source, and clicking opens the whole
+// thing full-size. That depends entirely on the media the edge resolves — see
+// supabase/functions/paid-media-metrics/meta/adset-creatives.ts for why the ad's own
+// `thumbnailUrl` (Meta's 64x64) can never be the thing rendered at this size.
+//
 // The three reads are lazy (keyed by adsetId), so only the selected ad set's ads
 // are ever fetched — the same discipline that keeps the drill-in cheap on an
 // account with dozens of ad sets. One recovery hook heals every tile's expired
 // Meta CDN URL for the whole gallery.
 
-import type { AdDailyTrend } from '@continuum/contracts';
+import type { AdDailyTrend, AdsetAd } from '@continuum/contracts';
 import { useMemo, useState } from 'react';
-import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
-import { mediaFromPaidVerdict } from '@/components/chat/media/media';
+import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
+import { type ChatMedia, mediaListFromAdsetAd } from '@/components/chat/media/media';
+import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePaidCreativeRecovery } from '@/hooks/usePaidCreativeRecovery';
@@ -55,6 +62,15 @@ function aggregate(trend: AdDailyTrend | null | undefined): { spend: number; cpm
   return { spend, cpm: impressions > 0 ? (spend / impressions) * 1000 : null };
 }
 
+/** Lightbox items for one ad's media, in slide order. */
+function toLightboxItems(media: ChatMedia[]): LightboxItem[] {
+  return media.map((item) => ({
+    url: item.url,
+    caption: item.caption ?? item.name ?? '',
+    isVideo: item.kind === 'video',
+  }));
+}
+
 export function AdsetCreativeMosaic({
   brandId,
   accountId,
@@ -69,6 +85,8 @@ export function AdsetCreativeMosaic({
   // Natural aspect per ad, learned as each image paints — what turns a uniform grid
   // into a real masonry. Portrait-ish default keeps layout shift small before load.
   const [ratios, setRatios] = useState<Record<string, number>>({});
+  // Which ad is open full-size, and on which of its slides.
+  const [opened, setOpened] = useState<{ ad: AdsetAd; index: number } | null>(null);
 
   const angleByAd = useMemo(
     () => new Map(anglesQuery.data.map((angle) => [angle.ad_id, angle])),
@@ -125,12 +143,7 @@ export function AdsetCreativeMosaic({
           const angle = angleByAd.get(ad.id) ?? null;
           const trend = trendByAd.get(ad.id) ?? null;
           const { spend, cpm } = aggregate(trend);
-          const media = mediaFromPaidVerdict({
-            adId: ad.id,
-            adName: label,
-            thumbnailUrl: freshUrlById[ad.id] ?? ad.thumbnailUrl ?? null,
-            permalinkUrl: null,
-          });
+          const media = mediaListFromAdsetAd(ad, freshUrlById[ad.id]);
 
           return (
             <CreativeHoverCard
@@ -140,17 +153,19 @@ export function AdsetCreativeMosaic({
               brandId={brandId}
               currency={currency}
               key={ad.id}
+              posterUrl={ad.creative?.posterUrl ?? ad.creative?.imageUrl ?? null}
               trend={trend}
             >
               <div className="mb-3 break-inside-avoid overflow-hidden rounded-md border border-border/60 bg-card transition-colors hover:border-border">
-                {media ? (
+                {media.length > 0 ? (
                   <span
                     className="relative block w-full overflow-hidden bg-muted"
                     style={{ aspectRatio: ratios[ad.id] ?? 0.8 }}
                   >
-                    <ChatMediaThumb
+                    <ChatMediaCarousel
                       fallbackSeed={label}
-                      media={media}
+                      hoverPlay
+                      items={media}
                       onLoadDimensions={({ width, height }) => {
                         if (width > 0 && height > 0) {
                           setRatios((prev) =>
@@ -158,7 +173,8 @@ export function AdsetCreativeMosaic({
                           );
                         }
                       }}
-                      onRecover={() => recover(ad.id)}
+                      onOpen={(index) => setOpened({ ad, index })}
+                      onRecoverItem={() => recover(ad.id)}
                     />
                   </span>
                 ) : (
@@ -196,6 +212,18 @@ export function AdsetCreativeMosaic({
           Per-creative spend appears once daily metrics load — hover a creative for its angle and
           trend.
         </p>
+      ) : null}
+      {opened ? (
+        <MediaLightbox
+          index={opened.index}
+          items={toLightboxItems(mediaListFromAdsetAd(opened.ad, freshUrlById[opened.ad.id]))}
+          onIndexChange={(index) => setOpened({ ad: opened.ad, index })}
+          onOpenChange={(open) => {
+            if (!open) setOpened(null);
+          }}
+          open
+          title={opened.ad.name || opened.ad.id}
+        />
       ) : null}
     </div>
   );

@@ -40,7 +40,10 @@ export function usePaidCreativeRecovery({
         thumbnail_url: null,
       })
         .then((preview) => {
-          const url = preview.thumbnail_url ?? preview.image_url;
+          // Full-size first. Recovery exists to replace a dead URL with a live one —
+          // taking the 64x64 first meant a healed tile came back less readable than
+          // the one that failed.
+          const url = preview.image_url ?? preview.thumbnail_url;
           if (url) setFreshUrlById((prev) => ({ ...prev, [adId]: url }));
         })
         .catch(() => {

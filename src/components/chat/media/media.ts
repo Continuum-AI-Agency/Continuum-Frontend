@@ -1,4 +1,4 @@
-import type { MediaAsset } from '@continuum/contracts';
+import type { AdsetAd, MediaAsset } from '@continuum/contracts';
 import type { Attachment } from '../attachments';
 
 // One shape for every piece of media a chat surface shows: a composer upload, a library search hit,
@@ -164,6 +164,73 @@ export function mediaFromCreativeAd(ad: {
     name: ad.creative?.title ?? ad.name ?? undefined,
     badge: isVideo ? 'Video' : undefined,
   };
+}
+
+/**
+ * One optimizer ad-set ad, as everything it is worth showing.
+ *
+ * A single-media ad yields one item; a carousel yields one per slide, so the caller
+ * can page through the ad the way a person scrolling the feed would. The comment on
+ * `mediaFromCreativeAd` above — "Meta never hands the dashboard a playable MP4" — is
+ * only true of the paths that never asked. `scope=adset_ads` now resolves the video
+ * source when the account grants it, so a video creative with a real MP4 becomes
+ * `kind: 'video'` and can actually play. Without one it stays an image on the poster
+ * frame plus a "Video" badge, because a JPEG in a <video> renders as a black box.
+ *
+ * `overrideUrl` is the recovered URL from usePaidCreativeRecovery: it heals an expired
+ * primary CDN link and therefore only applies to the primary item.
+ */
+export function mediaListFromAdsetAd(ad: AdsetAd, overrideUrl?: string | null): ChatMedia[] {
+  const label = ad.name ?? ad.id;
+  const creative = ad.creative ?? null;
+
+  const slides = creative?.slides ?? [];
+  if (slides.length > 1) {
+    return slides
+      .map((slide, index): ChatMedia | null => {
+        const poster = slide.posterUrl ?? slide.imageUrl ?? null;
+        const url = slide.videoUrl ?? slide.imageUrl ?? slide.posterUrl ?? null;
+        if (!isHttpUrl(url)) return null;
+        return {
+          id: `${ad.id}:${slide.index ?? index}`,
+          url,
+          thumbnailUrl: isHttpUrl(poster) ? poster : undefined,
+          kind: isHttpUrl(slide.videoUrl) ? 'video' : 'image',
+          name: label,
+          caption: slide.caption ?? undefined,
+          permalink: isHttpUrl(creative?.permalinkUrl) ? creative.permalinkUrl : undefined,
+          // No position badge: ChatMediaCarousel owns the "k/N" counter, and a slide
+          // carrying its own would print the same number twice on one tile. A poster
+          // with no playable source is a video slide we cannot play — say so.
+          badge: !isHttpUrl(slide.videoUrl) && isHttpUrl(slide.posterUrl) ? 'Video' : undefined,
+        };
+      })
+      .filter((media): media is ChatMedia => media !== null);
+  }
+
+  // Resolution order mirrors the edge's own precedence: a real image, then the
+  // 480x848-class video poster, and only then Meta's 64x64 as a last resort.
+  const poster = creative?.imageUrl ?? creative?.posterUrl ?? ad.thumbnailUrl ?? null;
+  const still = isHttpUrl(overrideUrl) ? overrideUrl : poster;
+  const playable = creative?.videoUrl ?? null;
+  const isVideo = creative?.format === 'video' || isHttpUrl(playable);
+
+  const url = isHttpUrl(playable) ? playable : still;
+  if (!isHttpUrl(url)) return [];
+
+  return [
+    {
+      id: ad.id,
+      url,
+      thumbnailUrl: isHttpUrl(still) ? still : undefined,
+      kind: isHttpUrl(playable) ? 'video' : 'image',
+      name: label,
+      permalink: isHttpUrl(creative?.permalinkUrl) ? creative.permalinkUrl : undefined,
+      // A video we cannot play still says so — the badge is the only signal left that
+      // the creative moves.
+      badge: isVideo && !isHttpUrl(playable) ? 'Video' : undefined,
+    },
+  ];
 }
 
 /** What's-Working paid verdict row. Stills only; absorbs the http guard. */
