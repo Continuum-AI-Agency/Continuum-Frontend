@@ -120,6 +120,12 @@ interface CalendarState {
   // day. Deliberately absent from PersistedCalendarState: a focus ring restored
   // onto an off-screen day would silently misdirect the next "+".
   focusedDayId: string | null;
+  // The draft the user asked to EDIT, as distinct from the one merely selected. The
+  // intent is raised in one component tree (a hover card on a calendar chip or list
+  // row) and consumed in another (the preview panel's editor), so it cannot be local
+  // state. Ephemeral: deliberately absent from PersistedCalendarState — a restored
+  // edit intent would re-open the editor on a draft nobody asked to edit.
+  editingDraftId: string | null;
   selectedDraftIds: string[];
   selectedTrendIds: string[];
   persistedWeekStartId: string | null;
@@ -183,6 +189,12 @@ interface CalendarState {
   // server-side (or confirmed there was nothing to delete).
   clearPendingServerDeletes: (backendIds: string[]) => void;
   setSelectedDraftId: (id: string | null) => void;
+  setEditingDraftId: (id: string | null) => void;
+  /**
+   * Select a draft AND open it in edit mode, in one atomic set. Two writes would let
+   * `setSelectedDraftId`'s own intent-clearing land between them.
+   */
+  beginEditingDraft: (id: string) => void;
   setFocusedDayId: (id: string | null) => void;
   setSelectedDraftIds: (ids: string[]) => void;
   toggleDraftSelection: (id: string) => void;
@@ -320,6 +332,7 @@ export const useCalendarStore = create<CalendarState>()(
       ghosts: {},
       selectedDraftId: null,
       focusedDayId: null,
+      editingDraftId: null,
       selectedDraftIds: [],
       selectedTrendIds: [],
       persistedWeekStartId: null,
@@ -461,6 +474,10 @@ export const useCalendarStore = create<CalendarState>()(
               ...day,
               slots: day.slots.filter((slot) => !draftIdSet.has(slot.id)),
             })),
+            editingDraftId:
+              state.editingDraftId && draftIdSet.has(state.editingDraftId)
+                ? null
+                : state.editingDraftId,
             pendingServerDeletes: backendIdsToDelete.length
               ? [...state.pendingServerDeletes, ...backendIdsToDelete]
               : state.pendingServerDeletes,
@@ -475,7 +492,17 @@ export const useCalendarStore = create<CalendarState>()(
           };
         }),
 
-      setSelectedDraftId: (id) => set({ selectedDraftId: id }),
+      // Moving to a different draft abandons the edit intent; re-selecting the draft
+      // already being edited leaves it standing.
+      setSelectedDraftId: (id) =>
+        set((state) => ({
+          selectedDraftId: id,
+          editingDraftId: state.editingDraftId === id ? state.editingDraftId : null,
+        })),
+
+      setEditingDraftId: (id) => set({ editingDraftId: id }),
+
+      beginEditingDraft: (id) => set({ selectedDraftId: id, editingDraftId: id }),
 
       setFocusedDayId: (id) => set({ focusedDayId: id }),
       setSelectedDraftIds: (ids) => set({ selectedDraftIds: ids }),
@@ -580,6 +607,7 @@ export const useCalendarStore = create<CalendarState>()(
         set((state) => ({
           days: state.days.map((day) => ({ ...day, slots: [] })),
           selectedDraftId: null,
+          editingDraftId: null,
           selectedDraftIds: [],
           gridStatus: 'idle',
           gridProgress: { percent: 0 },
@@ -761,6 +789,7 @@ export const useCalendarStore = create<CalendarState>()(
           ghosts: {},
           selectedDraftId: null,
           focusedDayId: null,
+          editingDraftId: null,
           selectedDraftIds: [],
           selectedTrendIds: [],
           persistedWeekStartId: null,

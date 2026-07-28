@@ -11,6 +11,7 @@ import {
 } from '@radix-ui/react-icons';
 import * as React from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -135,7 +136,10 @@ function rowActivationProps(onSelect: () => void) {
  * Row thumbnail. It routes through `ChatMediaThumb` because a video draft used to
  * be fed to a raw `<img>` by an image-only resolver and rendered as a blank square.
  */
-function DraftRowThumbnail({ draft }: { draft: OrganicCalendarDraft }) {
+function DraftRowThumbnail({ draft: persistedDraft }: { draft: OrganicCalendarDraft }) {
+  // Re-signed on read: a row whose upload-time signed URL has expired resolves to
+  // nothing and renders an empty square until the page is reloaded.
+  const draft = useDraftWithFreshMedia(persistedDraft);
   const media = resolveDraftMedia(draft);
   return (
     <div
@@ -171,11 +175,9 @@ function DraftRowThumbnail({ draft }: { draft: OrganicCalendarDraft }) {
  */
 function DraftRowHoverPreview({
   draft,
-  onEdit,
   onRegenerate,
 }: {
   draft: OrganicCalendarDraft;
-  onEdit: () => void;
   onRegenerate?: () => void;
 }) {
   return (
@@ -189,7 +191,6 @@ function DraftRowHoverPreview({
     >
       <DraftHoverCardContent
         draft={draft}
-        onEdit={onEdit}
         onRegenerate={onRegenerate ? () => onRegenerate() : undefined}
       />
     </HoverCardContent>
@@ -214,6 +215,7 @@ const DraftRow = React.memo(function DraftRow({
   onRegenerate?: () => void;
 }) {
   const framePlatform = draft.platforms[0] ?? 'instagram';
+  const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
 
   return (
     <HoverCard openDelay={300} closeDelay={120}>
@@ -274,7 +276,7 @@ const DraftRow = React.memo(function DraftRow({
           </ContextMenuTrigger>
         </HoverCardTrigger>
         <ContextMenuContent className="w-48">
-          <ContextMenuItem onSelect={onSelect}>
+          <ContextMenuItem onSelect={() => beginEditingDraft(draft.id)}>
             <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
             Open in editor
           </ContextMenuItem>
@@ -294,7 +296,7 @@ const DraftRow = React.memo(function DraftRow({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      <DraftRowHoverPreview draft={draft} onEdit={onSelect} onRegenerate={onRegenerate} />
+      <DraftRowHoverPreview draft={draft} onRegenerate={onRegenerate} />
     </HoverCard>
   );
 });
@@ -352,7 +354,7 @@ const BacklogRow = React.memo(function BacklogRow({
           </div>
         </div>
       </HoverCardTrigger>
-      <DraftRowHoverPreview draft={draft} onEdit={onSelect} />
+      <DraftRowHoverPreview draft={draft} />
     </HoverCard>
   );
 });

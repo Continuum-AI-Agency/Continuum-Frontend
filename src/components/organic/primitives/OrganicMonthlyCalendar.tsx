@@ -89,6 +89,7 @@ function DraftChip({
   onDelete?: (id: string) => void;
 }) {
   const platform = draft.platforms[0] ?? 'instagram';
+  const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
 
   return (
     <HoverCard openDelay={300} closeDelay={100}>
@@ -113,7 +114,7 @@ function DraftChip({
           </ContextMenuTrigger>
         </HoverCardTrigger>
         <ContextMenuContent className="w-48">
-          <ContextMenuItem onSelect={onClick}>
+          <ContextMenuItem onSelect={() => beginEditingDraft(draft.id)}>
             <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
             Open in editor
           </ContextMenuItem>
@@ -148,7 +149,6 @@ function DraftChip({
       >
         <DraftHoverCardContent
           draft={draft}
-          onEdit={() => onClick()}
           onRegenerate={onRegenerate ? () => onRegenerate(draft.id) : undefined}
         />
       </HoverCardContent>

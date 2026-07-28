@@ -21,6 +21,7 @@ const store = {
   updateDraft: mock(),
   bulkDeleteDrafts: mock(),
   duplicateDraft: mock(),
+  beginEditingDraft: mock((_id: string) => undefined),
 };
 
 mock.module('@/lib/organic/store', () => createCalendarStoreStub(store));
@@ -112,6 +113,7 @@ describe('CalendarDraftCard', () => {
     // letting real modules leak in and cross-contaminate sibling tests.
     store.updateDraft.mockClear();
     store.bulkDeleteDrafts.mockClear();
+    store.beginEditingDraft.mockClear();
   });
 
   afterEach(() => {
@@ -136,6 +138,42 @@ describe('CalendarDraftCard', () => {
 
     fireEvent.click(cardButton);
     expect(onSelect).toHaveBeenCalledWith('draft-1');
+  });
+
+  // #233b: "Open in editor" used to be plain selection, which does nothing at all on
+  // the card that is already selected — the normal case after one click.
+  it('"Open in editor" raises the edit intent rather than merely selecting', () => {
+    const onSelect = mock();
+    render(
+      <CalendarDraftCard
+        draft={draft}
+        isSelected
+        isMultiSelected={false}
+        onSelect={onSelect}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open in editor' }));
+
+    expect(store.beginEditingDraft).toHaveBeenCalledWith('draft-1');
+  });
+
+  // A quick edit should bring the card into the panel, not force it into edit mode.
+  it('a quick edit selects without raising an edit intent', () => {
+    render(
+      <CalendarDraftCard
+        draft={draft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByText('Platform: LinkedIn')[0]);
+
+    expect(store.beginEditingDraft).not.toHaveBeenCalled();
   });
 
   it('quick platform edit updates draft and keeps editor focused', () => {

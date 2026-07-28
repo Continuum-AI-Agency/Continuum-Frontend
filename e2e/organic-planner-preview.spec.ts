@@ -7,7 +7,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createDefaultOnboardingState } from '../src/lib/onboarding/state';
 import { mintSessionWithPassword } from './support/auth';
 
-// Organic planner list + draft-preview bench (Airtable #227, #225, #226, #231).
+// Organic planner list + draft-preview bench (Airtable #227, #225, #226, #231, #233).
 //
 // Drives the REAL code path across its real boundaries: forty-odd draft rows are written to
 // the real local Postgres, read back through the real Backend `/api/organic/calendar/drafts`,
@@ -278,6 +278,55 @@ async function openListPlanner(page: Page, extraQuery = ''): Promise<void> {
     .toBe('list');
 
   await expect(listViewport(page)).toBeVisible({ timeout: 60_000 });
+}
+
+// A month chip is a plain <button> carrying the draft title. `getByRole` would also match
+// the hover card's own controls once it opens, so the chip lookup is scoped by title.
+const monthChip = (page: Page, title: string) =>
+  page.getByRole('button', { name: title, exact: false }).first();
+
+async function openMonthPlanner(page: Page, extraQuery = ''): Promise<void> {
+  await page.goto(`/organic?tab=planner&view=month${extraQuery}`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
+
+  const plannerTab = page.getByRole('button', { name: 'Planner', exact: true });
+  await expect(plannerTab).toBeVisible({ timeout: 120_000 });
+
+  const monthToggle = page.getByRole('button', { name: 'Month', exact: true }).first();
+  await expect
+    .poll(
+      async () => {
+        if ((await monthToggle.getAttribute('aria-pressed')) === 'true') return 'month';
+        await monthToggle.click({ timeout: 5_000 }).catch(() => {});
+        return 'not-month';
+      },
+      { timeout: 120_000, intervals: [1000, 2000, 3000] },
+    )
+    .toBe('month');
+}
+
+// Radix HoverCard closes on pointer-leave, never on Escape: reading the popper without
+// dismissing the previous one measures the PREVIOUS chip's card.
+async function dismissHoverCard(page: Page): Promise<void> {
+  await page.mouse.move(5, 5);
+  await expect(page.locator('[data-radix-popper-content-wrapper]')).toHaveCount(0, {
+    timeout: 20_000,
+  });
+}
+
+const hoverCard = (page: Page) =>
+  page.locator('[data-radix-popper-content-wrapper] [data-side][data-align]').first();
+
+async function hoverMonthChip(page: Page, title: string) {
+  await dismissHoverCard(page);
+  const chip = monthChip(page, title);
+  await chip.scrollIntoViewIfNeeded();
+  await chip.hover();
+  const card = hoverCard(page);
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  return card;
 }
 
 test.describe('organic planner list + draft preview', () => {
@@ -727,16 +776,26 @@ test.describe('organic planner list + draft preview', () => {
         .locator('[data-radix-popper-content-wrapper] [data-side][data-align]')
         .first();
       await expect(hovered).toBeVisible({ timeout: 20_000 });
-      return hovered.evaluate((el) => {
-        const video = el.querySelector('video') as HTMLVideoElement | null;
-        const img = el.querySelector('img') as HTMLImageElement | null;
-        return {
-          hasVideo: Boolean(video),
-          videoSrc: (video?.getAttribute('src') ?? '').slice(0, 64),
-          videoPoster: video?.getAttribute('poster') ?? null,
-          naturalWidth: img?.naturalWidth ?? 0,
-        };
-      });
+      const read = () =>
+        hovered.evaluate((el) => {
+          const video = el.querySelector('video') as HTMLVideoElement | null;
+          const img = el.querySelector('img') as HTMLImageElement | null;
+          return {
+            hasVideo: Boolean(video),
+            videoSrc: (video?.getAttribute('src') ?? '').slice(0, 64),
+            videoPoster: video?.getAttribute('poster') ?? null,
+            naturalWidth: img?.naturalWidth ?? 0,
+          };
+        });
+      // Re-signing is asynchronous, so a decayed draft's media arrives a beat after the
+      // card opens. Reading once would measure the placeholder and call it a blank card.
+      await expect
+        .poll(async () => (await read()).hasVideo, {
+          timeout: 30_000,
+          intervals: [250, 500, 1000, 2000],
+        })
+        .toBe(true);
+      return read();
     };
 
     // The media claims run BEFORE any preview is opened, so nothing the preview pane does to
@@ -755,12 +814,22 @@ test.describe('organic planner list + draft preview', () => {
     ).toBe(true);
     console.log(`[#225] live video row hover media: ${JSON.stringify(freshProbe)}`);
 
-    // The same reel with a DECAYED signed URL: `useDraftWithFreshMedia` lives only in the
-    // preview pane, so this measures whether the list surface can resolve a video whose
-    // upload-time URL has lapsed. Reported, not asserted — it is outside what this batch fixed.
+    // #233a. The same reel with a DECAYED signed URL. `useDraftWithFreshMedia` used to live
+    // ONLY in the preview pane, so the list row and its hover card resolved a lapsed URL to
+    // nothing and painted the gradient placeholder — "the detail of the post aren't showing…
+    // you have to reload". The hook is now shared by every rendering surface, so this is an
+    // assertion rather than the report it used to be.
     const decayedProbe = await probeHoverMedia(VIDEO_TITLE);
+    expect(
+      decayedProbe.hasVideo,
+      `a decayed video draft still renders no <video> on the list surface: ${JSON.stringify(decayedProbe)}`,
+    ).toBe(true);
+    expect(
+      decayedProbe.videoSrc.length,
+      'the decayed draft resolved to an empty media URL — it was never re-signed',
+    ).toBeGreaterThan(0);
     console.log(
-      `[#225] decayed (storageUrl:'' , reel.signedUrl:null) video row hover media: ${JSON.stringify(decayedProbe)}`,
+      `[#233a] decayed (storageUrl:'' , reel.signedUrl:null) video row hover media: ${JSON.stringify(decayedProbe)}`,
     );
 
     await page.mouse.move(5, 5);
@@ -1069,5 +1138,133 @@ test.describe('organic planner list + draft preview', () => {
 
     console.log('[#231] two video tiles → "Only one video per post", Attach disabled');
     await page.screenshot({ path: `${SCREENSHOT_DIR}/picker-refuses-two-videos.png` });
+  });
+
+  // #233 — the tester's own surface. "The detail of the post aren't showing in calendar…
+  // if you touch the button of edit it should open." Both halves are measured here on the
+  // MONTH view, against a draft whose signed URL has decayed, with NO page.reload().
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright test signature
+  test('#233 month hover renders decayed media + caption, and Edit opens the editor', async ({}, testInfo) => {
+    testInfo.setTimeout(480_000);
+
+    // Every sign POST the page makes, counted at the network. The cache claim cannot be
+    // made from the DOM — only from what actually left the browser.
+    const signRequests: string[] = [];
+    const countSign = (url: string) => {
+      if (url.includes('/api/organic/agent/hyperframes/sign')) signRequests.push(url);
+    };
+    page.on('request', (request) => {
+      if (request.method() === 'POST') countSign(request.url());
+    });
+
+    await openMonthPlanner(page);
+
+    // The fixture sits one day out, which normally lands in the current month; roll
+    // forward once rather than depending on the day the bench happens to run.
+    const chip = monthChip(page, VIDEO_TITLE);
+    if (!(await chip.isVisible().catch(() => false))) {
+      await page
+        .getByLabel('Next month')
+        .click()
+        .catch(() => {});
+    }
+    await expect(chip, 'the seeded video draft never appeared on the month grid').toBeVisible({
+      timeout: 120_000,
+    });
+
+    // ---- (a) media + caption, with NO reload ----
+    const card = await hoverMonthChip(page, VIDEO_TITLE);
+    await expect
+      .poll(async () => card.locator('video').count(), {
+        timeout: 30_000,
+        intervals: [250, 500, 1000, 2000],
+      })
+      .toBeGreaterThan(0);
+    const cardVideo = card.locator('video').first();
+    const cardSrc = await cardVideo.getAttribute('src');
+    expect(
+      (cardSrc ?? '').length,
+      'the month hover card resolved the decayed draft to an empty media URL',
+    ).toBeGreaterThan(0);
+    await expect(card, 'the hover card rendered no caption').toContainText('PLPREV VIDEO CAPTION');
+    await expect(card.getByText('No caption yet')).toHaveCount(0);
+    console.log(`[#233a] month hover card media src: ${(cardSrc ?? '').slice(0, 72)}`);
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/month-hover-decayed-media.png` });
+
+    // ---- (b) a second hover costs ZERO further sign POSTs ----
+    const signsAfterFirstHover = signRequests.length;
+    await dismissHoverCard(page);
+    const secondCard = await hoverMonthChip(page, VIDEO_TITLE);
+    await expect
+      .poll(async () => secondCard.locator('video').count(), {
+        timeout: 30_000,
+        intervals: [250, 500, 1000],
+      })
+      .toBeGreaterThan(0);
+    // Settle: a late request would otherwise be counted after the assertion.
+    await page.waitForTimeout(1_500);
+    expect(
+      signRequests.length - signsAfterFirstHover,
+      `a re-hover re-signed: ${signRequests.length - signsAfterFirstHover} extra POST(s) — the TTL cache is not holding`,
+    ).toBe(0);
+    console.log(
+      `[#233a] ${signRequests.length} sign POST(s) total; the second hover added ${signRequests.length - signsAfterFirstHover}`,
+    );
+
+    // ---- (c) Edit opens the panel IN edit mode ----
+    const preview = page.getByRole('complementary', { name: 'Draft preview' });
+    const doneEditing = page.locator('button[aria-label="Done editing post"]');
+
+    await dismissHoverCard(page);
+    const editCard = await hoverMonthChip(page, VIDEO_TITLE);
+    await editCard.getByRole('button', { name: 'Edit' }).click();
+    await expect(preview, 'Edit did not open the preview panel').toBeVisible({ timeout: 60_000 });
+    await expect(
+      doneEditing,
+      'Edit opened the panel read-only instead of in edit mode',
+    ).toBeVisible({ timeout: 30_000 });
+    console.log('[#233b] Edit from a cold month chip opened the panel in edit mode');
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/month-edit-opens-editor.png` });
+
+    // ---- (d) the ALREADY-SELECTED case: the exact shape of the bug ----
+    // The month view passed `onEdit={() => onClick()}`, discarding the id; `onClick` is
+    // plain selection, so on the draft that was already selected Edit did nothing at all.
+    await doneEditing.click();
+    await expect(doneEditing).toHaveCount(0, { timeout: 20_000 });
+    await dismissHoverCard(page);
+    await monthChip(page, VIDEO_TITLE).click();
+    await expect(preview).toBeVisible({ timeout: 30_000 });
+
+    const selectedCard = await hoverMonthChip(page, VIDEO_TITLE);
+    await selectedCard.getByRole('button', { name: 'Edit' }).click();
+    await expect(
+      doneEditing,
+      'Edit was a no-op on the draft that was ALREADY selected — the reported bug',
+    ).toBeVisible({ timeout: 30_000 });
+    console.log('[#233b] Edit works on an already-selected draft');
+
+    // ---- (e) the COLLAPSED case: the intent has to re-open the panel ----
+    await doneEditing.click();
+    await page.getByLabel('Collapse draft preview').click({ force: true });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (document.querySelector('#planner-preview') as HTMLElement | null)?.offsetWidth ?? 0,
+          ),
+        { timeout: 20_000, intervals: [200, 400, 800] },
+      )
+      .toBe(0);
+
+    await dismissHoverCard(page);
+    const collapsedCard = await hoverMonthChip(page, VIDEO_TITLE);
+    await collapsedCard.getByRole('button', { name: 'Edit' }).click();
+    await expect(
+      doneEditing,
+      'Edit left the panel collapsed — the edit intent never re-expanded it',
+    ).toBeVisible({ timeout: 30_000 });
+    console.log('[#233b] Edit re-expanded a collapsed preview into edit mode');
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/month-edit-from-collapsed.png` });
   });
 });

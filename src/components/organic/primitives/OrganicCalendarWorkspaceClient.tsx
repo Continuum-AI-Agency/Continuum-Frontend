@@ -173,6 +173,8 @@ function OrganicCalendarWorkspaceInner({
     setDateRange,
     focusedDayId,
     setFocusedDayId,
+    editingDraftId,
+    beginEditingDraft,
   } = useCalendarStore(
     useShallow((state) => ({
       days: state.days,
@@ -200,6 +202,8 @@ function OrganicCalendarWorkspaceInner({
       setDateRange: state.setDateRange,
       focusedDayId: state.focusedDayId,
       setFocusedDayId: state.setFocusedDayId,
+      editingDraftId: state.editingDraftId,
+      beginEditingDraft: state.beginEditingDraft,
     })),
   );
 
@@ -586,6 +590,34 @@ function OrganicCalendarWorkspaceInner({
     isAutoSelectSuppressed,
     setSelectedDraftId,
   ]);
+
+  // `?draftId=…&edit=1` opens the draft IN edit mode. Plain `?draftId=` stays
+  // select-only on purpose — collapsing a deep-linked preview must stay collapsed.
+  // The `editingDraftId !== searchDraftId` guard keeps this one-shot, so leaving edit
+  // mode with the param still in the URL does not re-enter it on the next render.
+  const searchWantsEdit = searchParams?.get('edit') === '1';
+  React.useEffect(() => {
+    if (!searchWantsEdit || !searchDraftId) return;
+    if (!isCalendarHydrated || !allDraftIds.has(searchDraftId)) return;
+    if (isAutoSelectSuppressed(searchDraftId)) return;
+    if (editingDraftId === searchDraftId) return;
+    beginEditingDraft(searchDraftId);
+  }, [
+    searchWantsEdit,
+    searchDraftId,
+    isCalendarHydrated,
+    allDraftIds,
+    isAutoSelectSuppressed,
+    editingDraftId,
+    beginEditingDraft,
+  ]);
+
+  // An edit intent raised while the panel is collapsed has to re-open it, or Edit
+  // reads as another dead button. No loop: collapsing nulls the intent.
+  React.useEffect(() => {
+    if (!editingDraftId || !isPreviewCollapsed) return;
+    expandPreview();
+  }, [editingDraftId, isPreviewCollapsed, expandPreview]);
 
   const { show } = useToast();
   const { reschedule, rescheduleMany } = useRescheduleDraft();

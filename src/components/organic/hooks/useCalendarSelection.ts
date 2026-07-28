@@ -13,6 +13,7 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
     toggleDraftSelection,
     clearDraftSelection,
     bulkDeleteDrafts,
+    setEditingDraftId,
   } = useCalendarStore(
     useShallow((state) => ({
       selectedDraftId: state.selectedDraftId,
@@ -21,6 +22,7 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
       toggleDraftSelection: state.toggleDraftSelection,
       clearDraftSelection: state.clearDraftSelection,
       bulkDeleteDrafts: state.bulkDeleteDrafts,
+      setEditingDraftId: state.setEditingDraftId,
     })),
   );
 
@@ -63,17 +65,21 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
     [toggleDraftSelection, setSelectedDraftId, clearDraftSelection],
   );
 
+  // Dismissing the panel abandons the edit intent too. Without this, the workspace's
+  // expand-on-edit effect would re-open the panel the instant it was collapsed.
   const clearAll = React.useCallback(() => {
     setDismissedDraftId(selectedDraftId);
     setSelectedDraftId(null);
+    setEditingDraftId(null);
     clearDraftSelection();
     setIsPreviewCollapsed(false);
-  }, [selectedDraftId, setSelectedDraftId, clearDraftSelection]);
+  }, [selectedDraftId, setSelectedDraftId, setEditingDraftId, clearDraftSelection]);
 
   const collapsePreview = React.useCallback(() => {
     setDismissedDraftId(selectedDraftId);
+    setEditingDraftId(null);
     setIsPreviewCollapsed(true);
-  }, [selectedDraftId]);
+  }, [selectedDraftId, setEditingDraftId]);
 
   const expandPreview = React.useCallback(() => {
     setDismissedDraftId(null);

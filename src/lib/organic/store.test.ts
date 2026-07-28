@@ -189,4 +189,87 @@ describe('useCalendarStore', () => {
       expect(useCalendarStore.getState().focusedDayId).toBeNull();
     });
   });
+
+  describe('editingDraftId', () => {
+    beforeEach(() => {
+      useCalendarStore.setState({ selectedDraftId: null, editingDraftId: null });
+    });
+
+    it('defaults to null — a planner opens read-only', () => {
+      expect(useCalendarStore.getState().editingDraftId).toBeNull();
+    });
+
+    it('beginEditingDraft selects AND opens the draft for editing in one write', () => {
+      useCalendarStore.getState().beginEditingDraft('d1');
+
+      const state = useCalendarStore.getState();
+      expect(state.selectedDraftId).toBe('d1');
+      expect(state.editingDraftId).toBe('d1');
+    });
+
+    it('abandons the edit intent when the selection moves to another draft', () => {
+      useCalendarStore.getState().beginEditingDraft('d1');
+
+      useCalendarStore.getState().setSelectedDraftId('d2');
+
+      expect(useCalendarStore.getState().editingDraftId).toBeNull();
+    });
+
+    it('keeps the edit intent when the same draft is re-selected', () => {
+      useCalendarStore.getState().beginEditingDraft('d1');
+
+      useCalendarStore.getState().setSelectedDraftId('d1');
+
+      expect(useCalendarStore.getState().editingDraftId).toBe('d1');
+    });
+
+    it('clears when the draft being edited is deleted', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+      useCalendarStore.getState().beginEditingDraft('d1');
+
+      useCalendarStore.getState().bulkDeleteDrafts(['d1']);
+
+      expect(useCalendarStore.getState().editingDraftId).toBeNull();
+    });
+
+    it('survives the deletion of a DIFFERENT draft', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+      useCalendarStore.getState().addDraft('day-1', createDraft('d2'));
+      useCalendarStore.getState().beginEditingDraft('d1');
+
+      useCalendarStore.getState().bulkDeleteDrafts(['d2']);
+
+      expect(useCalendarStore.getState().editingDraftId).toBe('d1');
+    });
+
+    it('clears on clearCalendar and on a brand switch', () => {
+      useCalendarStore.getState().beginEditingDraft('d1');
+      useCalendarStore.getState().clearCalendar();
+      expect(useCalendarStore.getState().editingDraftId).toBeNull();
+
+      useCalendarStore.getState().beginEditingDraft('d1');
+      useCalendarStore.getState().resetForBrandSwitch();
+      expect(useCalendarStore.getState().editingDraftId).toBeNull();
+    });
+
+    // A restored edit intent would re-open the editor on a draft nobody asked to
+    // edit, so it must never reach sessionStorage.
+    it('is absent from the persisted state', () => {
+      useCalendarStore.getState().beginEditingDraft('d1');
+
+      const partialize = useCalendarStore.persist.getOptions().partialize;
+      if (!partialize) throw new Error('the calendar store lost its partialize');
+      const persisted = partialize(useCalendarStore.getState()) as Record<string, unknown>;
+
+      expect(Object.keys(persisted)).not.toContain('editingDraftId');
+      expect(Object.keys(persisted).sort()).toEqual([
+        'backlogDrafts',
+        'dateRange',
+        'days',
+        'persistedWeekStartId',
+        'selectedTrendIds',
+        'viewMode',
+      ]);
+    });
+  });
 });

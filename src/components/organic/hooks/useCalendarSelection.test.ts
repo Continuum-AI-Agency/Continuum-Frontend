@@ -5,15 +5,21 @@ import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub
 const storeState: {
   selectedDraftId: string | null;
   selectedDraftIds: string[];
+  editingDraftId: string | null;
   setSelectedDraftId: (id: string | null) => void;
+  setEditingDraftId: (id: string | null) => void;
   toggleDraftSelection: (id: string) => void;
   clearDraftSelection: () => void;
   bulkDeleteDrafts: (ids: string[]) => void;
 } = {
   selectedDraftId: null,
   selectedDraftIds: [],
+  editingDraftId: null,
   setSelectedDraftId: mock((id: string | null) => {
     storeState.selectedDraftId = id;
+  }),
+  setEditingDraftId: mock((id: string | null) => {
+    storeState.editingDraftId = id;
   }),
   toggleDraftSelection: mock(),
   clearDraftSelection: mock(() => {
@@ -40,6 +46,7 @@ describe('useCalendarSelection', () => {
   beforeEach(() => {
     storeState.selectedDraftId = null;
     storeState.selectedDraftIds = [];
+    storeState.editingDraftId = null;
   });
 
   afterEach(() => {
@@ -149,5 +156,25 @@ describe('useCalendarSelection', () => {
 
     expect(storeState.selectedDraftId).toBeNull();
     expect(result.current.isAutoSelectSuppressed('draft-1')).toBe(true);
+  });
+
+  // Dismissing the panel has to abandon the edit intent too, or the workspace's
+  // expand-on-edit effect re-opens the panel the instant it is collapsed.
+  it('clears the edit intent when the preview is collapsed', () => {
+    const { result } = renderSelection('draft-1');
+    storeState.editingDraftId = 'draft-1';
+
+    act(() => result.current.collapsePreview());
+
+    expect(storeState.editingDraftId).toBeNull();
+  });
+
+  it('clears the edit intent when the selection is cleared', () => {
+    const { result } = renderSelection('draft-1');
+    storeState.editingDraftId = 'draft-1';
+
+    act(() => result.current.clearAll());
+
+    expect(storeState.editingDraftId).toBeNull();
   });
 });

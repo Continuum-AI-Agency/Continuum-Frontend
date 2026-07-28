@@ -5,6 +5,7 @@ import { Loader2, Send } from 'lucide-react';
 import { useProgressAnimation } from '@/components/organic/hooks/useProgressAnimation';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
 import { Progress } from '@/components/ui/progress';
+import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { DraftCardMedia, resolveFormatAspectClass } from './DraftCardMedia';
 import type { OrganicCalendarDraft } from './types';
@@ -24,13 +25,15 @@ function resolveHashtags(draft: OrganicCalendarDraft): string[] {
 
 export function DraftHoverCardContent({
   draft,
-  onEdit,
   onRegenerate,
 }: {
   draft: OrganicCalendarDraft;
-  onEdit?: (id: string) => void;
   onRegenerate?: (id: string) => void;
 }) {
+  // Edit reads its target from the draft it is rendering, not from a callback the
+  // call site supplies: the month view passed `() => onClick()`, which discarded the
+  // id and made Edit a no-op whenever the draft was already selected.
+  const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
   const { publish, isPublishing } = usePublishDraft();
   const displayProgress = useProgressAnimation(draft.progress, draft.generationStage);
   const canPublish =
@@ -44,6 +47,7 @@ export function DraftHoverCardContent({
 
   const aspectClass = resolveFormatAspectClass(draft.format);
   const isStory = (draft.format ?? '').toLowerCase() === 'story';
+  const hasCaption = (draft.captionPreview ?? '').trim().length > 0;
 
   return (
     <div className="w-[272px] overflow-hidden rounded-xl border border-border/80 bg-card shadow-2xl shadow-black/20">
@@ -57,11 +61,16 @@ export function DraftHoverCardContent({
         />
       </div>
 
-      {/* Caption */}
+      {/* Caption. An empty captionPreview (the persistence layer defaults it to '')
+          used to render an empty <p>, which reads as a broken card. */}
       <div className="px-3 pt-2.5 pb-1.5">
-        <p className="max-h-56 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-foreground">
-          {draft.captionPreview}
-        </p>
+        {hasCaption ? (
+          <p className="max-h-56 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-foreground">
+            {draft.captionPreview}
+          </p>
+        ) : (
+          <p className="text-xs italic leading-relaxed text-muted-foreground">No caption yet</p>
+        )}
       </div>
 
       {/* Hashtags */}
@@ -96,19 +105,17 @@ export function DraftHoverCardContent({
 
       {/* Quick actions */}
       <div className="flex items-center gap-1 border-t border-border/50 px-2.5 py-2">
-        {onEdit && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(draft.id);
-            }}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <Pencil1Icon className="h-3 w-3" />
-            Edit
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            beginEditingDraft(draft.id);
+          }}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Pencil1Icon className="h-3 w-3" />
+          Edit
+        </button>
         {onRegenerate && draft.status !== 'streaming' && (
           <button
             type="button"

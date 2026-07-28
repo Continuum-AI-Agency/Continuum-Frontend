@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
@@ -12,7 +12,29 @@ mock.module('next/image', () => ({
   default: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />,
 }));
 
-mock.module('@/lib/organic/store', () => createCalendarStoreStub({}));
+const beginEditingDraft = mock((_id: string) => undefined);
+
+mock.module('@/lib/organic/store', () =>
+  createCalendarStoreStub({
+    beginEditingDraft,
+    // A row thumbnail gets no brand id as a prop; it reads the planner's own account
+    // context, which is what lets it re-sign a decayed storage URL.
+    accountContext: { accountIds: {}, accountOptions: {}, brandId: 'brand-1' },
+  }),
+);
+
+// Real re-signing, stubbed only at the HTTP boundary.
+const requestMock = mock((_args: { path: string; method?: string; body?: unknown }) =>
+  Promise.resolve<unknown>({
+    signedUrl: 'https://signed.test/fresh.png',
+    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+  }),
+);
+
+mock.module('@/lib/api/http', () => ({
+  request: requestMock,
+  http: { request: requestMock },
+}));
 
 mock.module('./DraftDeletionConfirmation', () => ({
   useDraftDeletionConfirmation: () => ({ requestDraftDeletion: mock() }),
@@ -23,7 +45,12 @@ mock.module('@/components/ui/context-menu', () => ({
   ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   ContextMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuSeparator: () => <hr />,
-  ContextMenuItem: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  // `onSelect` is the item's whole behaviour, so the stub has to forward it.
+  ContextMenuItem: ({ children, onSelect }: { children: ReactNode; onSelect?: () => void }) => (
+    <button type="button" onClick={() => onSelect?.()}>
+      {children}
+    </button>
+  ),
 }));
 
 // Radix's ScrollArea needs layout APIs happy-dom does not provide. The primitive
@@ -244,6 +271,45 @@ describe('OrganicListView', () => {
     expect(content.getAttribute('data-collision-padding')).toBe('12');
     expect(content.className).toContain('w-[272px]');
     expect(content.className).not.toContain('w-80');
+  });
+
+  // #233b: "Open in editor" only ever selected the row. On the row that was already
+  // selected — the normal case — that is a no-op.
+  it('opens the row in EDIT mode from the context menu, carrying the draft id', () => {
+    renderList({ days: [makeDay([makeDraft({ id: 'draft-77' })])] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open in editor' }));
+
+    expect(beginEditingDraft).toHaveBeenCalledTimes(1);
+    expect(beginEditingDraft).toHaveBeenCalledWith('draft-77');
+  });
+
+  // #233a: the row read the raw persisted draft, so an expired signed URL resolved
+  // to nothing and the square stayed blank until the page was reloaded.
+  it('re-signs a decayed durable pair so the thumbnail is not blank', async () => {
+    renderList({
+      days: [
+        makeDay([
+          makeDraft({
+            publishingAssets: [
+              {
+                role: 'primary',
+                kind: 'image',
+                bucket: 'brand-profile-assets',
+                storagePath: 'brand/decayed.png',
+                storageUrl: '',
+              },
+            ],
+          }),
+        ]),
+      ],
+    });
+
+    await waitFor(() => {
+      const image = screen.getByTestId('draft-row-thumbnail').querySelector('img');
+      if (!image) throw new Error('the row thumbnail is still blank');
+      expect(image.getAttribute('src')).toBe('https://signed.test/fresh.png');
+    });
   });
 
   it('keeps every clickable row reachable from the keyboard', () => {

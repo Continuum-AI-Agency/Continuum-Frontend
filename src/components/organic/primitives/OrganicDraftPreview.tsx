@@ -31,6 +31,7 @@ import {
   type SlotTarget,
   useDraftMediaPlacement,
 } from '@/components/organic/hooks/useDraftMediaPlacement';
+import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
 import { Iphone } from '@/components/ui/iphone';
@@ -39,7 +40,6 @@ import { DraftHookViralityBadge } from '@/components/virality/DraftHookViralityB
 import { uploadDraftCreatives } from '@/lib/creative-assets/uploadDraftCreative';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { flattenHashtags } from '@/lib/organic/hashtags';
-import { signMediaAsset, signOrganicMediaAsset } from '@/lib/organic/hyperframeSign';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
 import { useCalendarStore } from '@/lib/organic/store';
@@ -96,14 +96,6 @@ type SocialPreviewProps = {
 
 function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
-}
-
-// A mediaSuggestion url is only re-signable when it is a storage path — never a
-// transient data: payload nor a user-supplied absolute URL.
-function isSignableStoragePath(value: string | null | undefined): value is string {
-  if (!hasText(value)) return false;
-  const trimmed = value.trim();
-  return !trimmed.startsWith('data:') && !/^https?:\/\//i.test(trimmed);
 }
 
 function brandInitials(name: string | undefined): string {
@@ -646,173 +638,6 @@ function HashtagInput({ onAdd }: { onAdd: (tag: string) => void }) {
   );
 }
 
-/**
- * Re-signs the draft's durable publishing assets on read. Persisted drafts store
- * only bucket+storagePath (the upload-time signed URL expires in ~1h), so this
- * mints fresh storageUrls when the preview opens.
- */
-function useDraftWithFreshMedia(
-  draft: OrganicCalendarDraft,
-  brandProfileId?: string,
-): OrganicCalendarDraft {
-  const [freshByPath, setFreshByPath] = React.useState<Record<string, string>>({});
-
-  const signables = React.useMemo(
-    () =>
-      (draft.publishingAssets ?? []).filter(
-        (a) => hasText(a.storagePath) && (hasText(a.assetId) || hasText(a.bucket)),
-      ),
-    [draft.publishingAssets],
-  );
-
-  React.useEffect(() => {
-    if (!brandProfileId || signables.length === 0) return;
-    let cancelled = false;
-    void Promise.all(
-      signables.map(async (asset) => {
-        const url = hasText(asset.assetId)
-          ? await signMediaAsset({ brandId: brandProfileId, assetId: asset.assetId })
-          : await signOrganicMediaAsset({
-              brandId: brandProfileId,
-              bucket: asset.bucket as string,
-              path: asset.storagePath,
-            });
-        return url ? ([asset.storagePath, url] as const) : null;
-      }),
-    ).then((pairs) => {
-      if (cancelled) return;
-      const next: Record<string, string> = {};
-      for (const pair of pairs) if (pair) next[pair[0]] = pair[1];
-      if (Object.keys(next).length > 0) setFreshByPath(next);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [brandProfileId, signables]);
-
-  const reel = draft.mediaSuggestion?.reel;
-  const reelBucket = reel?.generated === true && hasText(reel.url) ? (reel.bucket ?? null) : null;
-  const reelPath = reel?.generated === true ? (reel.url ?? null) : null;
-  const [freshReelUrl, setFreshReelUrl] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!brandProfileId || !reelBucket || !reelPath) return;
-    let cancelled = false;
-    void signOrganicMediaAsset({
-      brandId: brandProfileId,
-      bucket: reelBucket,
-      path: reelPath,
-    }).then((url) => {
-      if (!cancelled && url) setFreshReelUrl(url);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [brandProfileId, reelBucket, reelPath]);
-
-  // Hyperframe MP4 + cover are durable bucket+path references too; re-sign both so
-  // the player/card render fresh URLs instead of an expired URL or a base64 cover.
-  const hyperframe = draft.mediaSuggestion?.hyperframe;
-  const hfMp4Bucket = hasText(hyperframe?.mp4Path) ? (hyperframe?.mp4Bucket ?? null) : null;
-  const hfMp4Path = hasText(hyperframe?.mp4Path) ? (hyperframe?.mp4Path ?? null) : null;
-  const hfCoverBucket = hasText(hyperframe?.coverPath) ? (hyperframe?.bucket ?? null) : null;
-  const hfCoverPath = hasText(hyperframe?.coverPath) ? (hyperframe?.coverPath ?? null) : null;
-  const [freshHfMp4Url, setFreshHfMp4Url] = React.useState<string | null>(null);
-  const [freshHfCoverUrl, setFreshHfCoverUrl] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!brandProfileId) return;
-    let cancelled = false;
-    void (async () => {
-      if (hfMp4Bucket && hfMp4Path) {
-        const url = await signOrganicMediaAsset({
-          brandId: brandProfileId,
-          bucket: hfMp4Bucket,
-          path: hfMp4Path,
-        });
-        if (!cancelled && url) setFreshHfMp4Url(url);
-      }
-      if (hfCoverBucket && hfCoverPath) {
-        const url = await signOrganicMediaAsset({
-          brandId: brandProfileId,
-          bucket: hfCoverBucket,
-          path: hfCoverPath,
-        });
-        if (!cancelled && url) setFreshHfCoverUrl(url);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [brandProfileId, hfMp4Bucket, hfMp4Path, hfCoverBucket, hfCoverPath]);
-
-  // Single-image drafts persist the durable pair on the suggestion itself
-  // (bucket + url as a storage path) with no publishingAssets/reel/hyperframe
-  // row claiming it. Re-sign that pair too so an expired assetUrl refreshes
-  // like every other leg.
-  const suggestion = draft.mediaSuggestion;
-  const suggestionUnclaimed = !suggestion?.reel && !suggestion?.hyperframe;
-  const suggestionUrl = suggestion?.url ?? null;
-  const suggestionBucket = suggestion?.bucket ?? null;
-  const singleImagePath =
-    suggestionUnclaimed && hasText(suggestionBucket) && isSignableStoragePath(suggestionUrl)
-      ? suggestionUrl
-      : null;
-  const singleImageBucket = singleImagePath ? suggestionBucket : null;
-  const [freshSingleImageUrl, setFreshSingleImageUrl] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!brandProfileId || !singleImageBucket || !singleImagePath) return;
-    let cancelled = false;
-    void signOrganicMediaAsset({
-      brandId: brandProfileId,
-      bucket: singleImageBucket,
-      path: singleImagePath,
-    }).then((url) => {
-      if (!cancelled && url) setFreshSingleImageUrl(url);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [brandProfileId, singleImageBucket, singleImagePath]);
-
-  return React.useMemo(() => {
-    const freshPublishing = Object.keys(freshByPath).length > 0 && draft.publishingAssets;
-    const freshHyperframe = (freshHfMp4Url || freshHfCoverUrl) && draft.mediaSuggestion?.hyperframe;
-    const freshSingleImage = freshSingleImageUrl && draft.mediaSuggestion;
-    if (!freshPublishing && !freshReelUrl && !freshHyperframe && !freshSingleImage) return draft;
-    const next: OrganicCalendarDraft = { ...draft };
-    if (freshPublishing && draft.publishingAssets) {
-      next.publishingAssets = draft.publishingAssets.map((asset) =>
-        freshByPath[asset.storagePath]
-          ? { ...asset, storageUrl: freshByPath[asset.storagePath] }
-          : asset,
-      );
-    }
-    if ((freshReelUrl || freshHyperframe || freshSingleImage) && draft.mediaSuggestion) {
-      next.mediaSuggestion = {
-        ...draft.mediaSuggestion,
-        ...(freshSingleImage
-          ? { assetUrl: freshSingleImageUrl, signedUrl: freshSingleImageUrl }
-          : {}),
-        ...(freshReelUrl && draft.mediaSuggestion.reel
-          ? { reel: { ...draft.mediaSuggestion.reel, signedUrl: freshReelUrl } }
-          : {}),
-        ...(freshHyperframe
-          ? {
-              hyperframe: {
-                ...draft.mediaSuggestion.hyperframe,
-                ...(freshHfMp4Url ? { mp4Url: freshHfMp4Url } : {}),
-                ...(freshHfCoverUrl ? { coverImageUrl: freshHfCoverUrl } : {}),
-              },
-            }
-          : {}),
-      };
-    }
-    return next;
-  }, [draft, freshByPath, freshReelUrl, freshHfMp4Url, freshHfCoverUrl, freshSingleImageUrl]);
-}
-
 // A titled inline panel that appears on demand (from the ⋯ menu) and collapses
 // when dismissed — the progressive-disclosure home for secondary editors.
 function ContextualPanel({
@@ -966,6 +791,8 @@ export function OrganicDraftPreview({
 }: OrganicDraftPreviewProps) {
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
+  const editingDraftId = useCalendarStore((state) => state.editingDraftId);
+  const setEditingDraftId = useCalendarStore((state) => state.setEditingDraftId);
   const { requestDraftDeletion } = useDraftDeletionConfirmation();
   const openInStudio = useOpenDraftInAiStudio();
   const draftForPreview = useDraftWithFreshMedia(draft, brandProfileId);
@@ -1000,19 +827,26 @@ export function OrganicDraftPreview({
   // toggle mounts the editable affordances (caption textarea, hashtag/creative
   // editors, media dropzone). Every save/change handler below stays wired — it is
   // simply unreachable until the user opts into editing.
-  const [isEditing, setIsEditing] = React.useState(false);
+  // Edit mode lives in the store, not here: the hover card's Edit button and the
+  // "Open in editor" context items sit in a different component tree entirely and
+  // have to be able to drive it.
+  const isEditing = editingDraftId === draft.id;
+  const setIsEditing = React.useCallback(
+    (next: boolean) => {
+      setEditingDraftId(next ? draft.id : null);
+    },
+    [draft.id, setEditingDraftId],
+  );
   const toggleEditing = React.useCallback(() => {
-    setIsEditing((prev) => {
-      const next = !prev;
-      // Leaving edit mode collapses the on-demand editor panels so the read-only
-      // frame reads as a clean final look.
-      if (!next) {
-        setCreativeOpen(false);
-        setHashtagsOpen(false);
-      }
-      return next;
-    });
-  }, []);
+    const next = !isEditing;
+    // Leaving edit mode collapses the on-demand editor panels so the read-only
+    // frame reads as a clean final look.
+    if (!next) {
+      setCreativeOpen(false);
+      setHashtagsOpen(false);
+    }
+    setIsEditing(next);
+  }, [isEditing, setIsEditing]);
   // Enlarge-and-act lightbox target: a blueprint concept frame or a realized slide.
   const [lightbox, setLightbox] = React.useState<{
     kind: 'blueprint' | 'slide';

@@ -162,6 +162,7 @@ export function CalendarDraftCard({
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
   const { requestDraftDeletion } = useDraftDeletionConfirmation();
   const duplicateDraft = useCalendarStore((state) => state.duplicateDraft);
+  const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
   const { publish, isPublishing } = usePublishDraft();
   const displayProgress = useProgressAnimation(draft.progress, draft.generationStage);
   const openInStudio = useOpenDraftInAiStudio();
@@ -207,6 +208,8 @@ export function CalendarDraftCard({
     draft.status !== 'published';
   const showHoverPreview = draft.status !== 'streaming' && draft.status !== 'placeholder';
 
+  // Selection only — a quick edit (time preset, retry) should bring the draft into
+  // the panel, not force the panel into edit mode.
   const focusEditor = React.useCallback(
     (draftId: string) => {
       onSelect(draftId);
@@ -613,7 +616,7 @@ export function CalendarDraftCard({
         {/* Context menu */}
         <ContextMenuContent className="w-56">
           <ContextMenuLabel>Quick Edit</ContextMenuLabel>
-          <ContextMenuItem onSelect={() => focusEditor(draft.id)}>
+          <ContextMenuItem onSelect={() => beginEditingDraft(draft.id)}>
             <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
             Open in editor
           </ContextMenuItem>
@@ -781,7 +784,7 @@ export function CalendarDraftCard({
         className="p-0 border-none bg-transparent shadow-none"
         avoidCollisions
       >
-        <DraftHoverCardContent draft={draft} onEdit={focusEditor} onRegenerate={onRegenerate} />
+        <DraftHoverCardContent draft={draft} onRegenerate={onRegenerate} />
       </HoverCardContent>
     </HoverCard>
   ) : (

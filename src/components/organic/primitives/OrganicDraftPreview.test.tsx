@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { useEffect, useReducer } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import type { OrganicCalendarDraft } from './types';
 
@@ -27,9 +28,51 @@ mock.module('@/components/organic/hooks/usePublishDraft', () => ({
   })),
 }));
 
-mock.module('@/lib/organic/store', () =>
-  createCalendarStoreStub({ updateDraft: mock(), bulkDeleteDrafts: mock() }),
-);
+// Edit mode is store state (a hover card in another component tree raises the
+// intent), so the stub has to be STATEFUL and has to re-render its subscribers. A
+// fixed-value stub would leave `isEditing` false forever and every edit-mode
+// assertion below would silently measure the read-only tree instead.
+let editingDraftId: string | null = null;
+const storeSubscribers = new Set<() => void>();
+const notifyStore = () => {
+  for (const subscriber of storeSubscribers) subscriber();
+};
+
+const resetEditingDraftId = () => {
+  editingDraftId = null;
+};
+
+const calendarStoreStub = createCalendarStoreStub({
+  updateDraft: mock(),
+  bulkDeleteDrafts: mock(),
+  accountContext: { accountIds: {}, accountOptions: {}, brandId: null },
+  get editingDraftId() {
+    return editingDraftId;
+  },
+  setEditingDraftId: (id: string | null) => {
+    editingDraftId = id;
+    notifyStore();
+  },
+  beginEditingDraft: (id: string) => {
+    editingDraftId = id;
+    notifyStore();
+  },
+});
+
+const calendarStoreState = calendarStoreStub.useCalendarStore.getState() as Record<string, unknown>;
+
+calendarStoreStub.useCalendarStore.mockImplementation((selector: (state: unknown) => unknown) => {
+  const [, forceRender] = useReducer((tick: number) => tick + 1, 0);
+  useEffect(() => {
+    storeSubscribers.add(forceRender);
+    return () => {
+      storeSubscribers.delete(forceRender);
+    };
+  }, []);
+  return selector(calendarStoreState);
+});
+
+mock.module('@/lib/organic/store', () => calendarStoreStub);
 
 mock.module('./AiStudioHandoffContext', () => ({
   useOpenDraftInAiStudio: () => undefined,
@@ -183,6 +226,12 @@ const render = (ui: ReactNode) => rtlRender(<ToastProvider>{ui}</ToastProvider>)
 const renderPreview = () =>
   render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
 
+// Edit intent outlives a render, so every test starts in read-only mode.
+beforeEach(() => {
+  cleanup();
+  resetEditingDraftId();
+});
+
 function baseDraft(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
   return {
     id: 'draft-1',
@@ -228,6 +277,28 @@ describe('OrganicDraftPreview — contextual shell', () => {
     // Toggling back locks the preview again.
     fireEvent.click(screen.getByLabelText('Done editing post'));
     expect(screen.queryByLabelText('Edit instagram caption')).toBeNull();
+  });
+
+  // #233b: the hover card's Edit button raises the intent from a different component
+  // tree, so the panel has to read edit mode off the store rather than local state.
+  it('enters edit mode when the store carries an edit intent for this draft', () => {
+    (calendarStoreState.beginEditingDraft as (id: string) => void)('draft-1');
+    renderPreview();
+    expect(screen.getByLabelText('Edit instagram caption')).toBeTruthy();
+    expect(screen.getByLabelText('Done editing post')).toBeTruthy();
+  });
+
+  it('ignores an edit intent that belongs to a different draft', () => {
+    (calendarStoreState.beginEditingDraft as (id: string) => void)('some-other-draft');
+    renderPreview();
+    expect(screen.queryByLabelText('Edit instagram caption')).toBeNull();
+  });
+
+  it('clears the store edit intent when editing is toggled off', () => {
+    (calendarStoreState.beginEditingDraft as (id: string) => void)('draft-1');
+    renderPreview();
+    fireEvent.click(screen.getByLabelText('Done editing post'));
+    expect(calendarStoreState.editingDraftId).toBeNull();
   });
 });
 

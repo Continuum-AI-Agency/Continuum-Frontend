@@ -3,6 +3,7 @@
 import { resolveOrganicImageUrl } from '@continuum/contracts';
 import { PlayIcon } from '@radix-ui/react-icons';
 import Image from 'next/image';
+import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
 import { cn } from '@/lib/utils';
 import type { OrganicCalendarDraft } from './types';
 
@@ -127,7 +128,7 @@ function resolveHyperframeCoverUrl(cover: DraftHyperframeCover): string | null {
 }
 
 export function DraftCardMedia({
-  draft,
+  draft: persistedDraft,
   aspectClass = 'aspect-square',
   className,
   sizes = '280px',
@@ -137,6 +138,10 @@ export function DraftCardMedia({
   className?: string;
   sizes?: string;
 }) {
+  // Unconditional and first: a persisted draft carries an expired signed URL, which
+  // resolves to nothing and renders the gradient placeholder until the page is
+  // reloaded. The hyperframe early return below must not be able to skip the re-sign.
+  const draft = useDraftWithFreshMedia(persistedDraft);
   const platform = draft.platforms[0] ?? 'instagram';
   const [gradientStart, gradientEnd] = PLATFORM_GRADIENTS[platform] ?? ['#5A48F9', '#7C6FFF'];
   const altText =
