@@ -10,6 +10,7 @@ import {
   type FreshnessMeta,
   freshnessFromDiagnosticsMeta,
 } from '@continuum/contracts';
+import { formatRelativeTime } from '@/lib/time/relativeTime';
 
 export type { FreshnessMeta, FreshnessStatus } from '@continuum/contracts';
 export { deriveFreshnessMeta, freshnessFromDiagnosticsMeta } from '@continuum/contracts';
@@ -23,4 +24,16 @@ export function freshnessFromSyncedAt(
   extra: Omit<FreshnessInput, 'lastSyncedAt'> = {},
 ): FreshnessMeta {
   return deriveFreshnessMeta({ ...extra, lastSyncedAt: lastSyncedAt ?? null });
+}
+
+// A freshness card holds an AGE (cache_age_seconds), not a timestamp, so this
+// adapts that age onto the app's one canonical relative-time formatter rather
+// than hand-rolling a ninth "5m ago" ladder. Null when the age is unknown, so a
+// caller hides the label instead of printing a placeholder.
+export function formatFreshnessAge(
+  cacheAgeSeconds: number | null | undefined,
+  now: number = Date.now(),
+): string | null {
+  if (cacheAgeSeconds == null || !Number.isFinite(cacheAgeSeconds)) return null;
+  return formatRelativeTime(now - Math.max(0, cacheAgeSeconds) * 1000, now);
 }

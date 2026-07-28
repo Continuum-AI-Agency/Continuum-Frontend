@@ -7,5 +7,10 @@ export { DataState, type DataStateStatus } from './DataState';
 export { DisabledReason } from './DisabledReason';
 export { EmptyState } from './EmptyState';
 export { ErrorRetryState } from './ErrorRetryState';
+export {
+  FreshnessBadge,
+  type FreshnessPresentation,
+  freshnessBadgePresentation,
+} from './FreshnessBadge';
 export { LoadingState } from './LoadingState';
 export { SamplePreview } from './SamplePreview';
