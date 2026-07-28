@@ -4,6 +4,7 @@
 // thin re-export kept so existing `./videoModel` imports continue to resolve.
 
 export type {
+  VideoGeneratorImageReferenceHandle,
   VideoGeneratorModel,
   VideoGeneratorNodeType,
   VideoGeneratorReferenceMode,
@@ -12,6 +13,7 @@ export {
   DEFAULT_VIDEO_GENERATOR_MODEL,
   getVideoGeneratorBackendModel,
   getVideoGeneratorImageLimit,
+  getVideoGeneratorImageReferenceHandle,
   getVideoGeneratorReferenceMode,
   getVideoGeneratorReferenceModes,
   getVideoGeneratorTargetHandles,

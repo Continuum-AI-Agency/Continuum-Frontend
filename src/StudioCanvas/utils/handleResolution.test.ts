@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  getVideoGeneratorImageReferenceHandle,
+  getVideoGeneratorReferenceModes,
+  VIDEO_GENERATOR_MODELS,
+} from '@continuum/contracts';
+import {
   getSourceHandleForNodeType,
   getTargetHandleCandidatesForNodeType,
   getTargetHandleForNodeType,
@@ -137,5 +142,29 @@ describe('getTargetHandleCandidatesForNodeType — reference-mode aware image dr
 
     expect(candidates).not.toContain('first-frame');
     expect(candidates).not.toContain('last-frame');
+  });
+
+  // A drop resolves to an id the node must actually be drawing. Offering the alias
+  // the node does NOT render puts the edge on a handle absent from the DOM, where it
+  // silently fails to draw — the exact shape of the Veo 3.1 reference-image bug.
+  it('never offers the image-reference alias the node does not render', () => {
+    for (const model of VIDEO_GENERATOR_MODELS) {
+      for (const mode of getVideoGeneratorReferenceModes(model)) {
+        const rendered = getVideoGeneratorImageReferenceHandle(model, mode);
+        const candidates = getTargetHandleCandidatesForNodeType('videoGen', 'image', {
+          model,
+          referenceMode: mode,
+        });
+        const offered = candidates.filter((h) => h === 'ref-image' || h === 'ref-images');
+
+        expect(offered).toEqual(rendered ? [rendered] : []);
+      }
+    }
+  });
+
+  it('lands an image on the singular handle pixverse-v6 renders', () => {
+    expect(getTargetHandleForNodeType('videoGen', 'image', { model: 'pixverse-v6' })).toBe(
+      'ref-image',
+    );
   });
 });

@@ -53,7 +53,7 @@ import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import {
   getVideoGeneratorImageLimit,
-  getVideoGeneratorReferenceMode,
+  getVideoGeneratorImageReferenceHandle,
   getVideoGeneratorReferenceModes,
   getVideoGeneratorTargetHandles,
   resolveVideoGeneratorModel,
@@ -97,7 +97,12 @@ const getResolutionOptions = (
   return ['720p', '1080p'];
 };
 
-export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<VideoGenNodeData>>) {
+export function VideoGenBlock({
+  id,
+  data,
+  type,
+  selected,
+}: NodeProps<ReactFlowNode<VideoGenNodeData>>) {
   const updateNode = useStudioStore((state) => state.updateNode);
   const setEdges = useStudioStore((state) => state.setEdges);
   const triggerSave = useStudioStore((state) => state.triggerSave);
@@ -110,15 +115,14 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
 
-  const model = resolveVideoGeneratorModel({
-    type: 'videoGen',
-    data: data as unknown as Record<string, unknown>,
-  });
+  // The REAL node type, not a hardcoded 'videoGen'. A legacy veoDirector/veoFast node
+  // carries no data.model, so the type is the only thing that says which model it is —
+  // and the store resolves its allowed handles from that same type. Guessing here made
+  // the rail render handles the graph then refused.
+  const nodeShape = { type, data: data as unknown as Record<string, unknown> };
+  const model = resolveVideoGeneratorModel(nodeShape);
   const modelLabel = VIDEO_GENERATOR_MODEL_LABELS[model];
-  const referenceMode = resolveVideoGeneratorReferenceMode({
-    type: 'videoGen',
-    data: data as unknown as Record<string, unknown>,
-  });
+  const referenceMode = resolveVideoGeneratorReferenceMode(nodeShape);
   const availableReferenceModes = getVideoGeneratorReferenceModes(model);
 
   // Derived from the contract's handle list rather than a parallel set of booleans,
@@ -126,9 +130,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
   const targetHandles = getVideoGeneratorTargetHandles(model, referenceMode);
   const supportsFrameInputs = targetHandles.includes('first-frame');
   const supportsReferenceVideo = targetHandles.includes('ref-video');
-  const referenceImageHandle = targetHandles.find(
-    (handle) => handle === 'ref-images' || handle === 'ref-image',
-  );
+  const referenceImageHandle = getVideoGeneratorImageReferenceHandle(model, referenceMode);
 
   const [isHovered, setIsHovered] = useState(false);
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
@@ -162,17 +164,24 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
   // undo point and the count in the toast.
   const applyHandleShapeChange = useCallback(
     (patch: Partial<VideoGenNodeData>, title: string) => {
-      const before = flowEdges.filter((edge) => edge.target === id).length;
+      // Both counts come from the store, and so does the array handed to setEdges.
+      // Measuring `before` against React Flow's copy while reading `remaining` from the
+      // store let the reported number come from two arrays that need not agree.
+      const inboundCount = () =>
+        useStudioStore.getState().edges.filter((edge) => edge.target === id).length;
+
+      const before = inboundCount();
       takeSnapshot();
       updateNode(id, (node) => ({
         ...node,
         data: { ...(node.data as VideoGenNodeData), ...patch },
       }));
-      setEdges(flowEdges);
+      // updateNode does not re-run normalizeEdges, so re-seat the edges against the
+      // node's new handle shape explicitly.
+      setEdges(useStudioStore.getState().edges);
       triggerSave();
 
-      const remaining = useStudioStore.getState().edges.filter((edge) => edge.target === id).length;
-      const dropped = before - remaining;
+      const dropped = before - inboundCount();
       if (dropped > 0) {
         show({
           title,
@@ -181,20 +190,24 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
         });
       }
     },
-    [flowEdges, id, setEdges, show, takeSnapshot, triggerSave, updateNode],
+    [id, setEdges, show, takeSnapshot, triggerSave, updateNode],
   );
 
   const handleModelChange = useCallback(
     (nextModel: VideoGeneratorModel) => {
+      // Carry the mode across when the new model also supports it. Snapping to the new
+      // model's DEFAULT mode silently changed a choice the user never touched — and
+      // since veo-3.1-fast defaults to frames and veo-3.1 to images, switching between
+      // the two Veo models threw away every frame connection for no reason.
+      const legalModes = getVideoGeneratorReferenceModes(nextModel);
+      const nextMode = legalModes.includes(referenceMode) ? referenceMode : legalModes[0];
+
       applyHandleShapeChange(
-        {
-          model: nextModel,
-          referenceMode: getVideoGeneratorReferenceMode(nextModel),
-        },
+        { model: nextModel, referenceMode: nextMode },
         `Switched to ${VIDEO_GENERATOR_MODEL_LABELS[nextModel]}`,
       );
     },
-    [applyHandleShapeChange],
+    [applyHandleShapeChange, referenceMode],
   );
 
   const handleReferenceModeChange = useCallback(

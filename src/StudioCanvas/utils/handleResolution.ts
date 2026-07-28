@@ -1,4 +1,10 @@
-import type { StudioNodeType } from '@continuum/contracts';
+import {
+  getVideoGeneratorImageReferenceHandle,
+  isVideoGeneratorNodeType,
+  resolveVideoGeneratorModel,
+  resolveVideoGeneratorReferenceMode,
+  type StudioNodeType,
+} from '@continuum/contracts';
 import { getAllowedSourceHandles, getAllowedTargetHandles } from './isValidConnection';
 
 // The node types the edge-drop-to-create flow (useEdgeDropNode) and the sidebar
@@ -54,17 +60,26 @@ export function getTargetHandleCandidatesForNodeType(
   }
 
   if (sourceHandle === 'image') {
-    // nanoGen renders only a singular `ref-image` handle; every other
-    // image-accepting node (video generators, omniGen) renders the plural
-    // `ref-images`. The priority order must match the node's actual handle or
-    // the resolved id won't exist and the edge silently fails to render.
-    // `last-frame` trails `first-frame` so a SECOND image dropped on a
-    // frames-mode video node has somewhere to land.
-    const imagePriority =
-      nodeType === 'nanoGen'
-        ? ['ref-image', 'ref-images', 'first-frame', 'last-frame', 'image']
-        : ['ref-images', 'ref-image', 'first-frame', 'last-frame', 'image'];
-    const matches = ranked(imagePriority);
+    // `ref-image` and `ref-images` are aliases and BOTH sit in a video generator's
+    // allowed set, but the node draws exactly one of them. Ask the contract which id
+    // it renders instead of ranking the pair — a resolved id that isn't in the DOM
+    // produces an edge that silently fails to render. nanoGen is not a video
+    // generator and renders the singular. `last-frame` trails `first-frame` so a
+    // SECOND image dropped on a frames-mode video node has somewhere to land.
+    const imageReferenceHandle = isVideoGeneratorNodeType(nodeType)
+      ? getVideoGeneratorImageReferenceHandle(
+          resolveVideoGeneratorModel(syntheticNode),
+          resolveVideoGeneratorReferenceMode(syntheticNode),
+        )
+      : nodeType === 'nanoGen'
+        ? 'ref-image'
+        : 'ref-images';
+    const matches = ranked([
+      ...(imageReferenceHandle ? [imageReferenceHandle] : []),
+      'first-frame',
+      'last-frame',
+      'image',
+    ]);
     if (matches.length > 0) return matches;
   }
 

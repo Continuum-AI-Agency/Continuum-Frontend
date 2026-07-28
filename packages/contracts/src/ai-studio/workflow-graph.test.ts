@@ -6,6 +6,7 @@ import {
   getAllowedTargetHandles,
   getStudioPortMetadata,
   getTargetHandleConnectionLimit,
+  getVideoGeneratorImageReferenceHandle,
   getVideoGeneratorReferenceMode,
   getVideoGeneratorReferenceModes,
   getVideoGeneratorTargetHandles,
@@ -261,6 +262,32 @@ describe('video generator reference modes', () => {
   it('keeps veo-3.1-lite frames-only regardless of a requested mode', () => {
     expect(getVideoGeneratorTargetHandles('veo-3.1-lite', 'images')).not.toContain('ref-images');
     expect(getVideoGeneratorTargetHandles('veo-3.1-lite', 'images')).toContain('first-frame');
+  });
+
+  it('names exactly one rendered image-reference handle, always inside the allowed set', () => {
+    for (const model of VIDEO_GENERATOR_MODELS) {
+      for (const mode of getVideoGeneratorReferenceModes(model)) {
+        const rendered = getVideoGeneratorImageReferenceHandle(model, mode);
+        const allowed = getVideoGeneratorTargetHandles(model, mode);
+
+        if (rendered === undefined) {
+          expect(allowed).not.toContain('ref-image');
+          expect(allowed).not.toContain('ref-images');
+          continue;
+        }
+        expect(allowed).toContain(rendered);
+      }
+    }
+  });
+
+  it('renders the plural alias everywhere except pixverse-v6, which allows only the singular', () => {
+    expect(getVideoGeneratorImageReferenceHandle('veo-3.1', 'images')).toBe('ref-images');
+    expect(getVideoGeneratorImageReferenceHandle('kling-omni')).toBe('ref-images');
+    expect(getVideoGeneratorImageReferenceHandle('seedance-2.0')).toBe('ref-images');
+    expect(getVideoGeneratorImageReferenceHandle('pixverse-v6')).toBe('ref-image');
+    // frames mode and veo-3.1-lite expose no image-reference handle at all.
+    expect(getVideoGeneratorImageReferenceHandle('veo-3.1', 'frames')).toBeUndefined();
+    expect(getVideoGeneratorImageReferenceHandle('veo-3.1-lite')).toBeUndefined();
   });
 
   it('derives the supports* predicates from the handle table so they cannot drift', () => {

@@ -275,6 +275,28 @@ export function getVideoGeneratorTargetHandles(
   return [...TEXT_TARGET_HANDLES, ...VIDEO_IMAGE_REFERENCE_HANDLES];
 }
 
+export type VideoGeneratorImageReferenceHandle = (typeof VIDEO_IMAGE_REFERENCE_HANDLES)[number];
+
+/**
+ * The ONE image-reference handle id a video-generator node RENDERS.
+ *
+ * The allowed set carries both aliases so graphs saved against either id keep
+ * validating, but the node draws a single dot. Every consumer — the node's handle
+ * rail, the drop-target resolver, the legacy edge remap — must agree on which id
+ * that is, or an edge lands on a handle that does not exist in the DOM and silently
+ * fails to render. Plural is canonical; `pixverse-v6` is the one model whose allowed
+ * set carries only the singular.
+ */
+export function getVideoGeneratorImageReferenceHandle(
+  model: VideoGeneratorModel,
+  mode?: VideoGeneratorReferenceMode,
+): VideoGeneratorImageReferenceHandle | undefined {
+  const allowed = getVideoGeneratorTargetHandles(model, mode);
+  if (allowed.includes('ref-images')) return 'ref-images';
+  if (allowed.includes('ref-image')) return 'ref-image';
+  return undefined;
+}
+
 // Derived from the handle table so a capability can never disagree with the handles
 // the node actually renders. Omitting `mode` answers for the model's DEFAULT mode.
 export function supportsVideoGeneratorFrameInputs(

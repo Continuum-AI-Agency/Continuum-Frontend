@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
-import type { Connection } from '@xyflow/react';
+import {
+  getVideoGeneratorImageReferenceHandle,
+  getVideoGeneratorReferenceModes,
+  resolveVideoGeneratorModel,
+  resolveVideoGeneratorReferenceMode,
+  VIDEO_GENERATOR_MODELS,
+} from '@continuum/contracts';
+import type { Connection, Edge } from '@xyflow/react';
 import type { StudioNode } from '../types';
 import { useStudioStore } from './useStudioStore';
 
@@ -583,5 +590,83 @@ describe('video reference mode edge normalization', () => {
     setEdge('ref-images');
 
     expect(useStudioStore.getState().edges).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Rendered-handle parity — the id the node DRAWS must survive normalizeEdges
+// unchanged. These tests inject the handle the rail actually renders rather than
+// the canonical id: asserting on 'ref-images' directly is why the regression that
+// flipped the rendered id to the singular alias shipped green.
+// ---------------------------------------------------------------------------
+describe('rendered image-reference handle survives normalization', () => {
+  beforeEach(() => {
+    useStudioStore.setState({ nodes: [], edges: [] });
+  });
+
+  const connectImageTo = (
+    node: Pick<StudioNode, 'type' | 'data'>,
+    targetHandle: string,
+  ): Edge[] => {
+    useStudioStore.getState().setNodes([
+      { id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' },
+      { id: 'vid1', position: { x: 0, y: 0 }, data: node.data, type: node.type },
+    ]);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e-ref',
+        source: 'img1',
+        sourceHandle: 'image',
+        target: 'vid1',
+        targetHandle,
+        type: 'dataType',
+      },
+    ]);
+    return useStudioStore.getState().edges;
+  };
+
+  for (const model of VIDEO_GENERATOR_MODELS) {
+    for (const mode of getVideoGeneratorReferenceModes(model)) {
+      const rendered = getVideoGeneratorImageReferenceHandle(model, mode);
+      if (!rendered) continue;
+
+      it(`${model} in ${mode} mode keeps its rendered '${rendered}' handle`, () => {
+        const edges = connectImageTo(
+          { type: 'videoGen', data: { model, referenceMode: mode } },
+          rendered,
+        );
+
+        expect(edges).toHaveLength(1);
+        expect(edges[0].targetHandle).toBe(rendered);
+      });
+    }
+  }
+
+  it('does not drop the singular handle pixverse-v6 is the only model to render', () => {
+    const edges = connectImageTo({ type: 'videoGen', data: { model: 'pixverse-v6' } }, 'ref-image');
+
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('ref-image');
+  });
+
+  it('still migrates a legacy singular handle on a plural-rendering model', () => {
+    const edges = connectImageTo({ type: 'videoGen', data: { model: 'veo-3.1' } }, 'ref-image');
+
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('ref-images');
+  });
+
+  it('accepts the handles a legacy veoDirector node renders with no data.model', () => {
+    const model = resolveVideoGeneratorModel({ type: 'veoDirector', data: {} });
+    const rendered = getVideoGeneratorImageReferenceHandle(
+      model,
+      resolveVideoGeneratorReferenceMode({ type: 'veoDirector', data: {} }),
+    );
+
+    expect(rendered).toBeDefined();
+    const edges = connectImageTo({ type: 'veoDirector', data: {} }, rendered as string);
+
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe(rendered);
   });
 });

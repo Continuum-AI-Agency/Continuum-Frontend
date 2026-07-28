@@ -24,6 +24,8 @@
     "test:e2e": "playwright test",
     "goals:orchestrator:e2e:bench": "set -a; . ./.env.local; set +a; GOALS_BENCH_BACKEND_PORT=4401 NEXT_PUBLIC_API_URL=http://127.0.0.1:4401 PORT=3108 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3108 NEXT_DIST_DIR=.next/goals-orchestrator-e2e playwright test e2e/goals-orchestrator.bench.spec.ts --workers=1",
     "optimizer:viz:bench": "bun run src/components/paid-media/optimizer/charts/optimizer-viz.bench.ts",
+    "studio:handle-parity:bench": "bun test ./src/StudioCanvas/studio-handle-parity.bench.tsx",
+    "studio:veo-refs:e2e:bench": "set -a; . ./.env.local; set +a; PORT=3001 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 NEXT_DIST_DIR=.next/studio-veo-refs-e2e playwright test e2e/studio-veo-reference-connections.spec.ts --workers=1",
     "optimizer:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir coverage src/components/paid-media/optimizer",
     "optimizer:e2e:bench": "playwright test --config playwright.optimizer.config.ts --workers=1",
     "organic:metrics:compare:bench": "bun run src/lib/organic/organic-metrics-compare.bench.ts",

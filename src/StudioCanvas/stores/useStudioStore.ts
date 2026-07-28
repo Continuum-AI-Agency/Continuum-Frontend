@@ -23,7 +23,12 @@ import {
   validateConnection,
 } from '../utils/isValidConnection';
 import { resolveCollisions } from '../utils/nodeCollisions';
-import { isVideoGeneratorNodeType } from '../utils/videoModel';
+import {
+  getVideoGeneratorImageReferenceHandle,
+  isVideoGeneratorNodeType,
+  resolveVideoGeneratorModel,
+  resolveVideoGeneratorReferenceMode,
+} from '../utils/videoModel';
 
 export type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep';
 export type InteractionMode = 'pan' | 'select';
@@ -128,10 +133,9 @@ const getEdgeStyle = (sourceHandle: string | null) => {
 // survive across schema updates. Keys are the old handle name; values are
 // functions that return the canonical handle for a given node type, or null
 // when the handle genuinely has no mapping (edge should be dropped).
-const remapLegacyTargetHandle = (
-  handle: string,
-  targetNodeType: string | undefined,
-): string | null => {
+const remapLegacyTargetHandle = (handle: string, targetNode: StudioNode): string | null => {
+  const targetNodeType = targetNode.type;
+
   // 'text' was used as a target handle before the string-node vocabulary was
   // locked. The canonical vocabulary is: nanoGen uses 'prompt', video generators
   // use 'prompt-in'. There is no 'text' target on any current node type.
@@ -149,9 +153,16 @@ const remapLegacyTargetHandle = (
   }
 
   // Single 'ref-image' was used before video generators standardised on
-  // 'ref-images' (plural).
+  // 'ref-images' (plural). Remap to whichever id THIS node actually renders, not to
+  // the plural unconditionally: pixverse-v6 allows only the singular, so the blanket
+  // rewrite pushed its edges outside their own allowed set and dropped every one.
   if (handle === 'ref-image' && isVideoGeneratorNodeType(targetNodeType)) {
-    return 'ref-images';
+    return (
+      getVideoGeneratorImageReferenceHandle(
+        resolveVideoGeneratorModel(targetNode),
+        resolveVideoGeneratorReferenceMode(targetNode),
+      ) ?? handle
+    );
   }
 
   // 'frame-N' came from a per-slot frame strip that no longer exists. The payload
@@ -177,7 +188,7 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
     const targetNode = nodeById.get(edge.target);
     if (!targetNode || !edge.targetHandle) return edge;
 
-    const remapped = remapLegacyTargetHandle(edge.targetHandle, targetNode.type);
+    const remapped = remapLegacyTargetHandle(edge.targetHandle, targetNode);
     if (remapped === null) {
       console.warn(
         `[normalizeEdges] dropping edge ${edge.id}: target handle '${edge.targetHandle}' has no canonical mapping for node type '${targetNode.type}'`,
