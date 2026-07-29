@@ -5,6 +5,7 @@ import { Loader2, Send } from 'lucide-react';
 import { useProgressAnimation } from '@/components/organic/hooks/useProgressAnimation';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
 import { Progress } from '@/components/ui/progress';
+import { inferPublishPlatform } from '@/lib/organic/publish-utils';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { DraftCardMedia, resolveFormatAspectClass } from './DraftCardMedia';
@@ -36,8 +37,10 @@ export function DraftHoverCardContent({
   const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
   const { publish, isPublishing } = usePublishDraft();
   const displayProgress = useProgressAnimation(draft.progress, draft.generationStage);
+  // Publishable on any platform the backend has an adapter for, not Instagram alone —
+  // hardcoding 'instagram' hid this button on every Facebook and LinkedIn draft.
   const canPublish =
-    draft.platforms.includes('instagram') &&
+    inferPublishPlatform(draft) != null &&
     draft.status !== 'published' &&
     draft.status !== 'streaming';
 

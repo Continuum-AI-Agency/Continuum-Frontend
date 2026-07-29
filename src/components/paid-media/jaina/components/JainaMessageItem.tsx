@@ -22,6 +22,7 @@ import {
   normalizeJainaMarkdownTables,
 } from '../jainaUtils';
 import type { JainaChatMessage } from '../types';
+import { AudienceGroupApprovalCard } from './AudienceGroupApprovalCard';
 import { ClarificationBanner } from './ClarificationBanner';
 import { CreativesSection } from './CreativesSection';
 import { JainaInlineReport } from './JainaInlineReport';
@@ -255,6 +256,12 @@ export function JainaMessageItem({
             ) : null}
 
             <ObjectivesQueue objectives={objectives ?? []} isStreaming={isStreaming} />
+
+            <AudienceGroupApprovalCard
+              toolResults={toolResults ?? []}
+              isStreaming={isStreaming}
+              onApprove={onSuggestionClick}
+            />
 
             <ThinkingWindow
               reasoning={reasoning ?? []}

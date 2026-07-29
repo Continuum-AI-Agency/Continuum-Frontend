@@ -16,6 +16,8 @@
 
 import {
   getOptimizationMetricDefinition,
+  LOOKBACK_LABEL,
+  type LookbackWindow,
   type OptimizationObjective,
   type PortfolioLevel,
   type PortfolioListItem,
@@ -23,6 +25,7 @@ import {
 import { ArrowLeftIcon, LineChartIcon, RefreshCwIcon } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { InsightDataTable } from '@/components/dashboard/datatable/InsightDataTable';
+import { formatDateRange } from '@/components/shared/DateRangeField';
 import { MetricStrip } from '@/components/shared/MetricStrip';
 import { DataState } from '@/components/shared/state/DataState';
 import { Badge } from '@/components/ui/badge';
@@ -33,21 +36,22 @@ import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
 import { AdSetTimeline } from '../charts/AdSetTimeline';
 import { AdsetActionMenu } from '../charts/AdsetActionMenu';
-import { AngleMatrix } from '../charts/AngleMatrix';
+import { AdsetAngleStanding } from '../charts/AdsetAngleStanding';
+import { buildAdsetAngleStanding } from '../charts/angleStanding';
 import { ChartError, ChartSkeleton } from '../charts/ChartStates';
 import { ConfidenceBadge } from '../charts/ConfidenceBadge';
 import { CpaHeroTimeline } from '../charts/CpaHeroTimeline';
 import { splitReallocation } from '../charts/chartData';
 import { maxCiUpperBound } from '../charts/chartScale';
 import { chartStatus, combinedChartStatus } from '../charts/chartStatus';
-import { FunnelConversion } from '../charts/FunnelConversion';
 import { PacingGauge } from '../charts/PacingGauge';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { RoasProfitLine } from '../charts/RoasProfitLine';
 import { ScoreRadar } from '../charts/ScoreRadar';
+import { StepFunnel } from '../charts/StepFunnel';
 import {
   adSetRoasSeries,
-  buildCycleActionMap,
+  bindTimelineEvents,
   DEFAULT_PACING_PERIOD_DAYS,
   sumFunnelWindow,
 } from '../charts/vizData';
@@ -59,13 +63,14 @@ import {
   useOptimizerAdAngles,
   useOptimizerAdDailyTrends,
   useOptimizerAdsetAds,
-  useOptimizerAngleMatrix,
+  useOptimizerAdsetCreativeWinrates,
   useOptimizerBackfillAdsetNames,
   useOptimizerCpaSeries,
   useOptimizerEnrolledAdsets,
   useOptimizerFirstRunPoll,
   useOptimizerMutations,
   useOptimizerPerformance,
+  useOptimizerTimelineEvents,
 } from '../useOptimizerData';
 import type { OptimizerAdMetric, WorkspaceSection } from '../useOptimizerUrlState';
 import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
@@ -109,7 +114,14 @@ export function PortfolioDetailWorkspace({
   const level = (portfolio.level as PortfolioLevel) ?? 'adset';
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const cpaSeriesQuery = useOptimizerCpaSeries(portfolio.id);
-  const angleMatrixQuery = useOptimizerAngleMatrix(portfolio.id);
+  const timelineEventsQuery = useOptimizerTimelineEvents(portfolio.id);
+  // The portfolio's reporting window, defaulting to the historical d14 for rows written
+  // before the setting existed.
+  const lookbackWindow = (portfolio.lookback_window ?? 'd14') as LookbackWindow;
+  const flightLabel = portfolio.period_start
+    ? formatDateRange({ from: portfolio.period_start, to: portfolio.period_end ?? null })
+    : null;
+  const winratesQuery = useOptimizerAdsetCreativeWinrates(brandId, lookbackWindow, 'angle');
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
   const snapshotsQuery = useOptimizerAccountSnapshots(brandId, adAccountId, level);
   const { run, archive, update } = useOptimizerMutations(brandId, adAccountId);
@@ -135,14 +147,22 @@ export function PortfolioDetailWorkspace({
   // recommend mode (observe hard-halts Meta writes; autopilot applies automatically).
   // runId pins the apply to this run.
   const reallocation = splitReallocation(items);
-  const movedCount = reallocation.gaining.length + reallocation.losing.length;
+  // ONE definition of "moved" — this used to be derived here as gaining+losing while the
+  // card counted distinct ids, so the Apply gate and the copy could disagree.
+  const movedCount = reallocation.movedCount;
   const canApplyReallocation = portfolio.apply_mode === 'recommend' && movedCount > 0;
   // Observe is only worth interrupting for once the engine has actually produced
   // moves it is being prevented from making. Before that it is just the mode.
   const isObserveWithMoves = portfolio.apply_mode === 'observe' && movedCount > 0;
   const latestRunId = (latestRun as { id?: string } | null)?.id;
   const confidenceScore = latestRun?.confidence?.score;
-  const actionsByTs = buildCycleActionMap(report);
+  // Bind every observed event (cycles, applied budgets, pauses, config changes) to the cycle
+  // it could have influenced. The old buildCycleActionMap read only latest_run.cycle_ts, so
+  // by construction the chart could show exactly one flag no matter how much had happened.
+  const eventsByTs = bindTimelineEvents(
+    cpaSeriesQuery.data.map((point) => ({ ts: point.cycle_ts })),
+    timelineEventsQuery.data,
+  );
   const pacing = (latestRun as { pacing?: unknown } | null)?.pacing ?? null;
   const metric = getOptimizationMetricDefinition(portfolio.objective);
   // Human ad-set names for the action surface. The enrolled roster stores each name
@@ -151,6 +171,13 @@ export function PortfolioDetailWorkspace({
   const adsetNameById = new Map(
     enrolledQuery.data.map((adset) => [adset.adset_id, adset.adset_name ?? '']),
   );
+
+  // One executable row per enrolled ad set, from the within-ad-set creative win rates.
+  const angleRows = buildAdsetAngleStanding({
+    winrateRows: winratesQuery.data,
+    enrolledIds: enrolledQuery.data.map((adset) => adset.adset_id),
+    nameById: adsetNameById,
+  });
 
   // Self-heal missing names: ad sets enrolled before the enroll path forwarded
   // names have a blank roster name and render as raw Meta ids. The account-snapshot
@@ -314,7 +341,15 @@ export function PortfolioDetailWorkspace({
                   label: 'Allocated',
                   value: formatCurrency(latestRun?.allocated_total ?? null, currency),
                 },
-                { label: 'Daily budget', value: formatCurrency(portfolio.daily_total, currency) },
+                {
+                  label: 'Daily budget',
+                  // An 'observed' portfolio reallocates within live spend, so naming
+                  // daily_total as "the budget" would misdescribe what the cycle targets.
+                  value:
+                    portfolio.budget_source === 'fixed'
+                      ? formatCurrency(portfolio.daily_total, currency)
+                      : `${formatCurrency(portfolio.daily_total, currency)} · matched`,
+                },
                 {
                   label: 'Period budget',
                   value:
@@ -328,6 +363,8 @@ export function PortfolioDetailWorkspace({
                 },
                 { label: portfolioLevelLabel(level), value: String(portfolio.adset_count) },
                 { label: 'Pending', value: String(portfolio.pending_recommendations) },
+                { label: 'Lookback', value: LOOKBACK_LABEL[lookbackWindow] ?? lookbackWindow },
+                ...(flightLabel ? [{ label: 'Period', value: flightLabel }] : []),
               ]}
             />
             <span className="inline-flex items-center gap-1.5">
@@ -360,11 +397,11 @@ export function PortfolioDetailWorkspace({
                   onRetry={cpaSeriesQuery.refetch}
                 />
               }
-              loading={<ChartSkeleton className="h-44" />}
+              loading={<ChartSkeleton className="h-[300px]" />}
               status={chartStatus(cpaSeriesQuery)}
             >
               <CpaHeroTimeline
-                actionsByTs={actionsByTs}
+                eventsByTs={eventsByTs}
                 confidenceBand={latestRun?.confidence?.band}
                 currency={currency}
                 objective={portfolio.objective}
@@ -410,7 +447,7 @@ export function PortfolioDetailWorkspace({
                 loading={<ChartSkeleton className="h-32" />}
                 status={combinedChartStatus(snapshotsQuery, enrolledQuery)}
               >
-                <FunnelConversion objective={portfolio.objective} window={funnelWindow} />
+                <StepFunnel objective={portfolio.objective} window={funnelWindow} />
               </DataState>
             </OptimizerPanel>
           </div>
@@ -470,6 +507,7 @@ export function PortfolioDetailWorkspace({
                 </p>
               ) : null}
               <ReallocationFlow
+                budgetSource={portfolio.budget_source}
                 currency={currency}
                 items={items}
                 nameById={adsetNameById}
@@ -483,26 +521,22 @@ export function PortfolioDetailWorkspace({
             <OptimizerPanel
               meta={
                 <span className="text-3xs text-muted-foreground">
-                  {metric.costLabel} per audience &amp; angle
+                  within-ad-set creative wins · {lookbackWindow}
                 </span>
               }
-              title="Audience × angle"
+              title="Angle to run next"
             >
               <DataState
                 error={
                   <ChartError
-                    message="The audience × angle matrix could not load."
-                    onRetry={angleMatrixQuery.refetch}
+                    message="The creative angle standing could not load."
+                    onRetry={winratesQuery.refetch}
                   />
                 }
                 loading={<ChartSkeleton className="h-32" />}
-                status={chartStatus(angleMatrixQuery)}
+                status={chartStatus(winratesQuery)}
               >
-                <AngleMatrix
-                  cells={angleMatrixQuery.data}
-                  currency={currency}
-                  objective={portfolio.objective}
-                />
+                <AdsetAngleStanding currency={currency} rows={angleRows} />
               </DataState>
             </OptimizerPanel>
           </div>

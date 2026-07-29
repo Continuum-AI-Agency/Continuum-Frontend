@@ -28,7 +28,12 @@ describe('ReallocationFlow', () => {
     // Held ad set is excluded; the two moved ones render as rows.
     expect(getByText('act_1::adset_gainer')).toBeTruthy();
     expect(getByText('act_1::adset_loser')).toBeTruthy();
-    expect(container.textContent).toContain('$40 moved across 2 ad sets');
+    // Gainers, losers AND the net — a cut that used to read as "$40 moved" now reads as a
+    // net, which is the number that tells you whether spend is being reallocated or reduced.
+    expect(container.textContent).toContain('+$40 to 1');
+    expect(container.textContent).toContain('−$40 from 1');
+    expect(container.textContent).toContain('net +$0');
+    expect(container.textContent).toContain('across 2 ad sets');
     expect(container.innerHTML).toContain('bg-success');
     expect(container.innerHTML).toContain('bg-destructive');
     expect(container.innerHTML).not.toMatch(/emerald-|rose-/);
@@ -65,5 +70,40 @@ describe('ReallocationFlow', () => {
     // The lead objective labels the cost column CPL and the results column Leads.
     expect(container.textContent).toContain('CPL');
     expect(container.textContent).toContain('Leads');
+  });
+});
+
+describe('ReallocationFlow — net honesty', () => {
+  // The field bug: −$746 out, +$75 in read as "$75 moved", so a budget CUT looked like a
+  // reallocation. The net is what distinguishes them.
+  const cuttingItems = [
+    { adset_id: 'up', current_budget: 100, final_budget: 175, change_abs: 75, change_pct: 0.75 },
+    {
+      adset_id: 'down',
+      current_budget: 900,
+      final_budget: 154,
+      change_abs: -746,
+      change_pct: -0.83,
+    },
+  ] as never;
+
+  it('surfaces a net cut instead of reporting only the gainers', () => {
+    const { container } = render(<ReallocationFlow currency="USD" items={cuttingItems} />);
+    expect(container.textContent).toContain('net −$671');
+  });
+
+  it('warns when a budget-neutral portfolio does not net to zero', () => {
+    const { container } = render(
+      <ReallocationFlow budgetSource="observed" currency="USD" items={cuttingItems} />,
+    );
+    expect(container.textContent).toContain('should be about zero');
+  });
+
+  it('explains a deliberate cut on a fixed-target portfolio instead of warning', () => {
+    const { container } = render(
+      <ReallocationFlow budgetSource="fixed" currency="USD" items={cuttingItems} />,
+    );
+    expect(container.textContent).toContain('fixed daily budget');
+    expect(container.textContent).not.toContain('should be about zero');
   });
 });

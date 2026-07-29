@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AgentAttachment } from '@continuum/contracts';
 import type { AgentMentionReference } from '@/lib/agent-references';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
@@ -27,7 +28,7 @@ type JainaChatInput = {
   sessionId?: string;
   clarificationId?: string;
   userId?: string;
-  images?: Array<{ url: string; name?: string; mediaType?: string }>;
+  images?: AgentAttachment[];
   references?: AgentMentionReference[];
   planAction?: JainaPlanAction;
   forceReportArtifact?: boolean;

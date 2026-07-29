@@ -7,6 +7,8 @@
 // data from a previous workspace.
 
 import {
+  type AccountEnrollment,
+  AccountEnrollmentSchema,
   type AdAccount,
   AdAccountSchema,
   type AdDailyTrend,
@@ -15,8 +17,7 @@ import {
   AdSetSnapshotSchema,
   type AdsetAd,
   AdsetAdsResponseSchema,
-  type AngleMatrixCell,
-  AngleMatrixCellSchema,
+  type AdsetCreativeWinRateRow,
   type ApplyAdsetStatusRequest,
   type ApplyAdsetStatusResponse,
   ApplyAdsetStatusResponseSchema,
@@ -26,6 +27,7 @@ import {
   type ApplyRunRequest,
   type ApplyRunResponse,
   ApplyRunResponseSchema,
+  adsetCreativeWinRateRowSchema,
   type ConvertCboRequest,
   type ConvertCboResponse,
   ConvertCboResponseSchema,
@@ -39,6 +41,8 @@ import {
   CycleRunReportSchema,
   type CycleSkipReason,
   type EnrollRequest,
+  type EnrollResult,
+  EnrollResultSchema,
   type OptimizerInsightRequest,
   type OptimizerInsightResponse,
   OptimizerInsightResponseSchema,
@@ -60,6 +64,8 @@ import {
   type SetRecommendationStatusRequest,
   type SuggestResult,
   SuggestResultSchema,
+  type TimelineEvent,
+  TimelineEventSchema,
   type UpdatePortfolioPatch,
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -120,7 +126,6 @@ export const optimizerQueryKeys = {
   adAccounts: (brandId: string) => ['optimizer', 'ad-accounts', brandId] as const,
   performance: (portfolioId: string) => ['optimizer', 'performance', portfolioId] as const,
   cpaSeries: (portfolioId: string) => ['optimizer', 'efficiency-series', portfolioId] as const,
-  angleMatrix: (portfolioId: string) => ['optimizer', 'angle-matrix', portfolioId] as const,
   renewals: (brandId: string) => ['optimizer', 'renewals', brandId] as const,
   logs: (brandId: string) => ['optimizer', 'logs', brandId] as const,
   suggestions: (brandId: string, adAccountId: string | null, level: PortfolioLevel = 'adset') =>
@@ -131,6 +136,11 @@ export const optimizerQueryKeys = {
     level: PortfolioLevel = 'adset',
   ) => ['optimizer', 'snapshots', brandId, adAccountId ?? 'all', level] as const,
   enrolledAdsets: (portfolioId: string) => ['optimizer', 'enrolled-adsets', portfolioId] as const,
+  accountEnrollments: (brandId: string, accountId: string) =>
+    ['optimizer', 'account-enrollments', brandId, accountId] as const,
+  timelineEvents: (portfolioId: string) => ['optimizer', 'timeline-events', portfolioId] as const,
+  adsetWinrates: (brandId: string, window: string, dimension: string) =>
+    ['optimizer', 'adset-winrates', brandId, window, dimension] as const,
   archivedPortfolios: (brandId: string, adAccountId: string | null) =>
     ['optimizer', 'archived', brandId, adAccountId ?? 'all'] as const,
   adsetAds: (adsetId: string) => ['optimizer', 'adset-ads', adsetId] as const,
@@ -294,18 +304,6 @@ async function fetchCpaSeries(portfolioId: string): Promise<CpaSeriesPoint[]> {
     .parse(data ?? []);
 }
 
-async function fetchAngleMatrix(portfolioId: string): Promise<AngleMatrixCell[]> {
-  const { data, error } = await getClient().rpc('optimizer_get_angle_matrix', {
-    p_portfolio_id: portfolioId,
-    p_window: 'd14',
-  });
-  if (error) throw new Error('optimizer_get_angle_matrix unreachable');
-  return z
-    .array(AngleMatrixCellSchema)
-    .catch([])
-    .parse(data ?? []);
-}
-
 async function fetchRenewals(brandId: string): Promise<RenewalTask[]> {
   const { data, error } = await getClient().rpc('optimizer_list_renewal_tasks', {
     p_brand_id: brandId,
@@ -455,13 +453,82 @@ async function createPortfolio(request: CreatePortfolioRequest): Promise<{ portf
   return { portfolio_id: parsed.data };
 }
 
-async function enrollAdsets(request: EnrollRequest): Promise<{ enrolled: number }> {
+async function enrollAdsets(request: EnrollRequest): Promise<EnrollResult> {
   const { data, error } = await getClient().functions.invoke('optimizer-enroll', {
     body: request,
   });
-  if (error) throw new Error('Failed to enroll ad sets');
-  const parsed = z.object({ enrolled: z.number().int().nonnegative() }).safeParse(data);
-  return { enrolled: parsed.success ? parsed.data.enrolled : 0 };
+  if (error) {
+    // The edge forwards the real reason (a dead Meta token reads very differently from a
+    // portfolio that is not yours). Swallowing it behind one generic string is what made
+    // the duplicate-enrollment failure unreadable in the field.
+    const detail =
+      typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : '';
+    throw new OptimizerRpcError(
+      detail.trim().length > 0 ? detail : 'Could not enroll these ad sets.',
+      pgErrorCode(error),
+    );
+  }
+  const parsed = EnrollResultSchema.safeParse(data);
+  return parsed.success ? parsed.data : { enrolled: 0, moved: [], first_cycle: 'queued' };
+}
+
+/** Which portfolio already claims each ad set on this account. An ad set may hold exactly
+ *  ONE active enrollment, so the picker needs this to warn before save and the confirm step
+ *  needs it to name what will move. */
+async function fetchAccountEnrollments(
+  brandId: string,
+  accountId: string,
+): Promise<AccountEnrollment[]> {
+  const { data, error } = await getClient().rpc('optimizer_list_account_enrollments', {
+    p_brand_id: brandId,
+    p_ad_account_id: accountId,
+  });
+  if (error) throw new Error('optimizer_list_account_enrollments unreachable');
+  return z
+    .array(AccountEnrollmentSchema)
+    .catch([])
+    .parse(data ?? []);
+}
+
+/** Within-ad-set creative win rates for ONE label dimension. The cohort is a single ad set,
+ *  so audience/budget/placement are held roughly constant — the closest thing to a
+ *  controlled creative test the account gives away. Deployed and contract-typed since the
+ *  paid-creative-intel foundation; this is its first frontend caller. */
+async function fetchAdsetCreativeWinrates(
+  brandId: string,
+  window: string,
+  dimension: string,
+): Promise<AdsetCreativeWinRateRow[]> {
+  const { data, error } = await getClient().rpc('paid_media_get_adset_creative_winrates', {
+    p_brand_id: brandId,
+    p_window: window,
+    p_dimension: dimension,
+  });
+  if (error) throw new Error('paid_media_get_adset_creative_winrates unreachable');
+  // Row-wise parse: a contract lag drops the offending row rather than blanking the panel.
+  const rows = Array.isArray(data) ? data : [];
+  const out: AdsetCreativeWinRateRow[] = [];
+  for (const raw of rows) {
+    const parsed = adsetCreativeWinRateRowSchema.safeParse(raw);
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out;
+}
+
+/** Observed events (cycles, applied budgets, pauses, config changes) plotted as flags on
+ *  the cost timeline. */
+async function fetchTimelineEvents(portfolioId: string): Promise<TimelineEvent[]> {
+  const { data, error } = await getClient().rpc('optimizer_get_timeline_events', {
+    p_portfolio_id: portfolioId,
+    p_limit: 200,
+  });
+  if (error) throw new Error('optimizer_get_timeline_events unreachable');
+  return z
+    .array(TimelineEventSchema)
+    .catch([])
+    .parse(data ?? []);
 }
 
 /** Why a "Run now" click could not reach a working service. */
@@ -828,11 +895,13 @@ async function restorePortfolio(input: { portfolio_id: string; name: string }): 
 
 const EMPTY_ACCOUNTS: AdAccount[] = [];
 const EMPTY_CPA: CpaSeriesPoint[] = [];
-const EMPTY_ANGLES: AngleMatrixCell[] = [];
 const EMPTY_RENEWALS: RenewalTask[] = [];
 const EMPTY_LOGS: OptimizerLogRow[] = [];
 const EMPTY_SNAPSHOTS: AdSetSnapshot[] = [];
 const EMPTY_ENROLLED: PortfolioAdset[] = [];
+const EMPTY_ACCOUNT_ENROLLMENTS: AccountEnrollment[] = [];
+const EMPTY_TIMELINE_EVENTS: TimelineEvent[] = [];
+const EMPTY_WINRATES: AdsetCreativeWinRateRow[] = [];
 const EMPTY_ADS: AdsetAd[] = [];
 const EMPTY_AD_TRENDS: AdDailyTrend[] = [];
 const EMPTY_AD_ANGLES: PaidAdAngle[] = [];
@@ -962,16 +1031,6 @@ export function useOptimizerCpaSeries(portfolioId: string | null) {
   });
 }
 
-export function useOptimizerAngleMatrix(portfolioId: string | null) {
-  return useOptimizerRead({
-    queryKey: optimizerQueryKeys.angleMatrix(portfolioId ?? 'none'),
-    queryFn: () => fetchAngleMatrix(portfolioId as string),
-    empty: EMPTY_ANGLES,
-    enabled: Boolean(portfolioId),
-    staleTime: FIVE_MINUTES,
-  });
-}
-
 export function useOptimizerRenewals(brandId: string) {
   return useOptimizerRead({
     queryKey: optimizerQueryKeys.renewals(brandId),
@@ -1084,6 +1143,42 @@ export function useOptimizerEnrolledAdsets(portfolioId: string | null) {
     empty: EMPTY_ENROLLED,
     enabled: Boolean(portfolioId),
     staleTime: TEN_MINUTES,
+  });
+}
+
+/** Account-wide ad-set → owning-portfolio map. Backs the picker's "already in X" badge and
+ *  the move disclosure on save. */
+export function useOptimizerAccountEnrollments(brandId: string | null, accountId: string | null) {
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.accountEnrollments(brandId ?? 'none', accountId ?? 'none'),
+    queryFn: () => fetchAccountEnrollments(brandId as string, accountId as string),
+    empty: EMPTY_ACCOUNT_ENROLLMENTS,
+    enabled: Boolean(brandId && accountId),
+    staleTime: FIVE_MINUTES,
+  });
+}
+
+export function useOptimizerAdsetCreativeWinrates(
+  brandId: string | null,
+  window: string,
+  dimension: string,
+) {
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.adsetWinrates(brandId ?? 'none', window, dimension),
+    queryFn: () => fetchAdsetCreativeWinrates(brandId as string, window, dimension),
+    empty: EMPTY_WINRATES,
+    enabled: Boolean(brandId),
+    staleTime: FIVE_MINUTES,
+  });
+}
+
+export function useOptimizerTimelineEvents(portfolioId: string | null) {
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.timelineEvents(portfolioId ?? 'none'),
+    queryFn: () => fetchTimelineEvents(portfolioId as string),
+    empty: EMPTY_TIMELINE_EVENTS,
+    enabled: Boolean(portfolioId),
+    staleTime: FIVE_MINUTES,
   });
 }
 
@@ -1298,8 +1393,8 @@ export function usePrefetchPortfolioDetail(brandId: string) {
         staleTime: FIVE_MINUTES,
       });
       void queryClient.prefetchQuery({
-        queryKey: optimizerQueryKeys.angleMatrix(portfolioId),
-        queryFn: () => withReadTimeout(fetchAngleMatrix(portfolioId)),
+        queryKey: optimizerQueryKeys.timelineEvents(portfolioId),
+        queryFn: () => withReadTimeout(fetchTimelineEvents(portfolioId)),
         staleTime: FIVE_MINUTES,
       });
       void queryClient.prefetchQuery({

@@ -79,4 +79,41 @@ describe('useCanvasComposer — settling and dismissing a turn', () => {
     await waitFor(() => expect(hook.result.current.state.status).toBe('idle'));
     expect(hook.result.current.state.graph).toBeNull();
   });
+
+  it('persists attachment metadata on the turn and sends durable references to Canvas', async () => {
+    const hook = renderHook(() => useCanvasComposer('brand-1', 'room-1'));
+    act(() => {
+      void hook.result.current.submit('Use the attached media as a visual reference.', [], {
+        attachments: [
+          {
+            assetId: 'asset-1',
+            versionId: 'version-1',
+            url: 'https://signed.example/asset-1.png',
+            name: 'asset-1.png',
+            mediaType: 'image/png',
+            storagePath: 'brand-1/assets/asset-1/asset-1.png',
+          },
+        ],
+        references: [
+          {
+            id: 'asset-1',
+            type: 'media_asset',
+            label: 'asset-1.png',
+            source: 'canvas',
+          },
+        ],
+      });
+    });
+
+    await waitFor(() => expect(streamCanvasComposer).toHaveBeenCalledTimes(1));
+    const call = streamCanvasComposer.mock.calls[0]?.[0] as unknown as {
+      request: { references?: Array<{ id: string; type: string }> };
+    };
+    expect(call.request.references).toEqual([
+      expect.objectContaining({ id: 'asset-1', type: 'media_asset' }),
+    ]);
+    expect(hook.result.current.turns.at(-1)?.attachments).toEqual([
+      expect.objectContaining({ assetId: 'asset-1', versionId: 'version-1' }),
+    ]);
+  });
 });

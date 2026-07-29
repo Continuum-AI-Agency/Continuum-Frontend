@@ -2,6 +2,7 @@
 
 import type {
   AgentDelegatedFrameData,
+  AgentAttachment,
   AgentMentionReference,
   AiStudioComposerFrame,
   CanvasComposerReference,
@@ -65,6 +66,7 @@ export interface CanvasComposerState {
 export interface ComposerTurn {
   id: string;
   prompt: string;
+  attachments?: AgentAttachment[];
   references?: AgentMentionReference[];
   state: CanvasComposerState;
 }
@@ -311,6 +313,7 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
       selectedNodeIds?: string[],
       options?: {
         remember?: boolean;
+        attachments?: AgentAttachment[];
         references?: AgentMentionReference[];
         thinking?: boolean;
         editorContext?: CanvasEditorContext;
@@ -335,6 +338,7 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
         {
           id: newTurnId(),
           prompt: prompt.trim(),
+          ...(options?.attachments?.length ? { attachments: options.attachments } : {}),
           ...(options?.references?.length ? { references: options.references } : {}),
           state: { ...IDLE_COMPOSER_STATE, status: 'running' },
         },

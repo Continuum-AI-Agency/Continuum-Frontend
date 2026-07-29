@@ -47,6 +47,7 @@ import { LibraryFilterBar } from './LibraryFilterBar';
 import { LibraryRenderQueue } from './LibraryRenderQueue';
 import { type LibraryBrowseDestination, LibrarySidebar } from './LibrarySidebar';
 import { LibraryTagManager } from './LibraryTagManager';
+import { McpUploadIntentPanel } from './McpUploadIntentPanel';
 import { MediaGrid } from './MediaGrid';
 import { MediaSearchBar } from './MediaSearchBar';
 import { UploadStrip } from './UploadStrip';
@@ -584,6 +585,8 @@ export function LibraryViewer({
                 e.target.value = '';
               }}
             />
+
+            <McpUploadIntentPanel brandId={brandId} />
 
             <AnimatePresence initial={false}>
               {uploads.length > 0 && (

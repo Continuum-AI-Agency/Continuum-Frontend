@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import { uploadChatAttachment } from '@/lib/chat/uploadChatAttachment';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import type { Attachment } from './attachments';
 
@@ -9,18 +8,14 @@ export const ACCEPTED_ATTACHMENT_TYPES = 'image/*,video/*,application/pdf';
 
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
-// The agent reads the URL within seconds of the send, but the transcript re-renders it for as long
-// as the session is open. A week keeps history intact without minting effectively-permanent links;
-// `storagePath` is retained so an expired URL can be re-signed rather than lost.
-const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
-
 export type ChatAttachmentsController = {
   files: Attachment[];
   add: (incoming: FileList | File[]) => void;
   remove: (id: string) => void;
   clear: () => void;
-  saveToLibrary: (id: string) => Promise<void>;
+  retry: (id: string) => Promise<void>;
   isUploading: boolean;
+  hasErrors: boolean;
 };
 
 type UseChatAttachmentsParams = {
@@ -36,7 +31,6 @@ export function formatAttachmentSize(bytes: number): string {
 
 export function useChatAttachments({
   brandId,
-  sessionId,
 }: UseChatAttachmentsParams): ChatAttachmentsController {
   const [files, setFiles] = useState<Attachment[]>([]);
 
@@ -52,14 +46,15 @@ export function useChatAttachments({
       }
 
       try {
-        const { storagePath, signedUrl } = await uploadChatAttachment({
-          brandId,
-          sessionId: sessionId ?? 'unsaved',
-          attachmentId: id,
-          file,
-          expiresInSeconds: SIGNED_URL_TTL_SECONDS,
+        const result = await uploadMediaAsset({ brandId, file });
+        patch(id, {
+          status: 'ready',
+          assetId: result.assetId,
+          versionId: result.versionId,
+          url: result.signedUrl,
+          storagePath: result.storagePath,
+          error: undefined,
         });
-        patch(id, { status: 'ready', url: signedUrl, storagePath });
       } catch (error) {
         patch(id, {
           status: 'error',
@@ -67,7 +62,7 @@ export function useChatAttachments({
         });
       }
     },
-    [brandId, patch, sessionId],
+    [brandId, patch],
   );
 
   const add = useCallback(
@@ -115,26 +110,18 @@ export function useChatAttachments({
     setFiles([]);
   }, []);
 
-  const saveToLibrary = useCallback(
+  const retry = useCallback(
     async (id: string) => {
       const target = files.find((file) => file.id === id);
-      if (!brandId || !target?.file || target.savedAssetId) return;
-
-      patch(id, { saving: true });
-      try {
-        const result = await uploadMediaAsset({ file: target.file, brandId });
-        patch(id, { saving: false, savedAssetId: result.assetId });
-      } catch (error) {
-        patch(id, {
-          saving: false,
-          error: error instanceof Error ? error.message : 'Could not save to library',
-        });
-      }
+      if (!target?.file || target.status !== 'error') return;
+      patch(id, { status: 'uploading', error: undefined });
+      await upload(id, target.file);
     },
-    [brandId, files, patch],
+    [files, patch, upload],
   );
 
   const isUploading = useMemo(() => files.some((file) => file.status === 'uploading'), [files]);
+  const hasErrors = useMemo(() => files.some((file) => file.status === 'error'), [files]);
 
-  return { files, add, remove, clear, saveToLibrary, isUploading };
+  return { files, add, remove, clear, retry, isUploading, hasErrors };
 }

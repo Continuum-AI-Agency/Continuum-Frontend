@@ -5,7 +5,7 @@
 
 export {
   WHATS_NEW_TAGS as CHANGELOG_TAGS,
-  type WhatsNewEntry as ChangelogEntry,
-  whatsNewChangelogSchema as changelogSchema,
-  whatsNewEntrySchema as changelogEntrySchema,
+  type WhatsNewReadEntry as ChangelogEntry,
+  whatsNewReadChangelogSchema as changelogSchema,
+  whatsNewReadEntrySchema as changelogEntrySchema,
 } from '@continuum/contracts';

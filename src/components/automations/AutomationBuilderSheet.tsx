@@ -1,8 +1,9 @@
 'use client';
 
-// Create/edit Sheet for an automation. Mounted once per chat surface with the
-// surface's agent fixed; opens via the automation sheet store (sidebar "+ New",
-// message-level "Automate this prompt", or Edit from the detail sheet).
+// Edit Sheet for an automation. Mounted once per chat surface with the
+// surface's agent fixed; the only way in is the detail sheet's Edit action, so
+// there is always an automation loaded — creation lives in the automation
+// workspace, not here.
 
 import type { AgentTarget, Automation } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -31,12 +32,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  useAutomation,
-  useCreateAutomation,
-  useRunAutomationNow,
-  useUpdateAutomation,
-} from '@/lib/automations/automations';
+import { useAutomation, useUpdateAutomation } from '@/lib/automations/automations';
 import { browserTimezone } from '@/lib/automations/schedule';
 import { useAutomationSheetStore } from '@/lib/automations/sheet-store';
 import {
@@ -54,9 +50,9 @@ const AGENT_LABELS: Record<AgentTarget, string> = {
   organic: 'Organic agent',
 };
 
-const defaultFormValues = (promptSeed: string | null): AutomationBuilderFormValues => ({
+const emptyFormValues = (): AutomationBuilderFormValues => ({
   name: '',
-  prompt: promptSeed ?? '',
+  prompt: '',
   scheduleKind: 'weekly',
   time: '09:00',
   dayOfWeek: 1,
@@ -85,102 +81,60 @@ type AutomationBuilderSheetProps = {
 export function AutomationBuilderSheet({ agent, brandId }: AutomationBuilderSheetProps) {
   const { show } = useToast();
   const builderOpen = useAutomationSheetStore((state) => state.builderOpen);
-  const builderAgent = useAutomationSheetStore((state) => state.builderAgent);
-  const builderPromptSeed = useAutomationSheetStore((state) => state.builderPromptSeed);
   const editAutomationId = useAutomationSheetStore((state) => state.editAutomationId);
   const close = useAutomationSheetStore((state) => state.close);
-  const openDetail = useAutomationSheetStore((state) => state.openDetail);
 
   const { data: editAutomation } = useAutomation(editAutomationId ?? undefined);
-  const createMutation = useCreateAutomation(brandId ?? undefined);
   const updateMutation = useUpdateAutomation(brandId ?? undefined);
-  const runNowMutation = useRunAutomationNow(brandId ?? undefined);
 
-  const isEdit = Boolean(editAutomationId);
-  // Two surfaces mount their own instance; only the one matching the agent
-  // responds. Edit mode resolves the agent from the loaded automation.
-  const isOwnedByThisSurface = isEdit ? editAutomation?.agent === agent : builderAgent === agent;
+  // Two surfaces mount their own instance; only the one whose agent matches the
+  // loaded automation responds.
+  const isOwnedByThisSurface = editAutomation?.agent === agent;
   const open = builderOpen && isOwnedByThisSurface && Boolean(brandId);
 
   const form = useForm<AutomationBuilderFormValues>({
     resolver: zodResolver(builderFormSchema),
-    defaultValues: defaultFormValues(null),
+    defaultValues: emptyFormValues(),
   });
 
   useEffect(() => {
-    if (!open) return;
-    if (isEdit && editAutomation) {
-      form.reset(automationToFormValues(editAutomation));
-    } else if (!isEdit) {
-      form.reset(defaultFormValues(builderPromptSeed));
-    }
-  }, [open, isEdit, editAutomation, builderPromptSeed, form]);
+    if (!open || !editAutomation) return;
+    form.reset(automationToFormValues(editAutomation));
+  }, [open, editAutomation, form]);
 
   if (!brandId) return null;
 
   const onSubmit = async (values: AutomationBuilderFormValues) => {
+    if (!editAutomationId) return;
     try {
-      if (isEdit && editAutomationId) {
-        await updateMutation.mutateAsync({
-          automationId: editAutomationId,
-          patch: {
-            name: values.name,
-            prompt: values.prompt,
-            schedule: toSchedule(values),
-            recipients: toRecipients(values),
-            enabled: values.enabled,
-          },
-        });
-        show({ title: 'Automation updated', variant: 'success' });
-        close();
-        return;
-      }
-
-      const automation = await createMutation.mutateAsync({
-        brandId,
-        name: values.name,
-        agent,
-        prompt: values.prompt,
-        schedule: toSchedule(values),
-        recipients: toRecipients(values),
-        enabled: values.enabled,
-      });
-      show({
-        title: 'Automation created',
-        description: 'It will run on schedule. Kick off a first run now?',
-        variant: 'success',
-        action: {
-          label: 'Run now',
-          onClick: () => {
-            runNowMutation.mutate(automation.id, {
-              onSuccess: () => openDetail(automation.id),
-              onError: (error) =>
-                show({
-                  title: 'Could not start run',
-                  description: error instanceof Error ? error.message : 'Unknown error',
-                  variant: 'error',
-                }),
-            });
-          },
+      await updateMutation.mutateAsync({
+        automationId: editAutomationId,
+        patch: {
+          name: values.name,
+          prompt: values.prompt,
+          schedule: toSchedule(values),
+          recipients: toRecipients(values),
+          enabled: values.enabled,
         },
       });
+      show({ title: 'Automation updated', variant: 'success' });
       close();
     } catch (error) {
       show({
-        title: isEdit ? 'Could not update automation' : 'Could not create automation',
+        title: 'Could not update automation',
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: 'error',
       });
     }
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const isSubmitting = updateMutation.isPending;
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && close()}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-xl">
         <SheetHeader>
-          <SheetTitle>{isEdit ? 'Edit automation' : 'New automation'}</SheetTitle>
+          <SheetTitle>Edit automation</SheetTitle>
           <SheetDescription>
             {AGENT_LABELS[agent]} runs this prompt on a schedule and emails the report to your
             recipients.
@@ -262,7 +216,7 @@ export function AutomationBuilderSheet({ agent, brandId }: AutomationBuilderShee
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Saving…' : isEdit ? 'Save changes' : 'Create automation'}
+                {isSubmitting ? 'Saving…' : 'Save changes'}
               </Button>
             </SheetFooter>
           </form>

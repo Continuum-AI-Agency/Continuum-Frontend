@@ -43,6 +43,7 @@ import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { flattenHashtags } from '@/lib/organic/hashtags';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
+import { inferPublishPlatform } from '@/lib/organic/publish-utils';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { resolveDraftHook } from '@/lib/virality/draftHook';
@@ -931,9 +932,12 @@ export function OrganicDraftPreview({
       : isMultiPlatform
         ? `Approve for ${selectedPlatforms.length} platforms`
         : 'Approve & Schedule';
-  const isInstagram = draft.platforms.includes('instagram');
+  // Gate on "is there a publisher for this draft's platform", not on Instagram specifically.
+  // The literal check hid the Publish button — and the whole footer — on every Facebook and
+  // LinkedIn draft, leaving the card's right-click menu as the only way to publish them.
+  const publishPlatform = inferPublishPlatform(draft);
   const isPublished = draft.status === 'published';
-  const canPublish = isInstagram && !isPublished && draft.status !== 'streaming';
+  const canPublish = publishPlatform != null && !isPublished && draft.status !== 'streaming';
   const showFooter = onApprove != null || canPublish || isPublished;
 
   // Single unified attach path: every selection from the media Popover goes
@@ -1513,7 +1517,10 @@ export function OrganicDraftPreview({
             {isPublished && (
               <div className="flex items-center justify-center gap-2 px-4 py-1.5">
                 <span className="text-sm text-muted-foreground">Published</span>
-                {draft.instagram_post_id && (
+                {/* Instagram is the only platform whose permalink we can build from the post
+                    id alone. Facebook and LinkedIn ids do not form a public URL this way, so
+                    they get no link rather than a broken instagram.com one. */}
+                {publishPlatform === 'instagram' && draft.instagram_post_id && (
                   <a
                     href={`https://www.instagram.com/p/${draft.instagram_post_id}/`}
                     target="_blank"

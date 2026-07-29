@@ -1,5 +1,6 @@
 import type {
   AeoSnapshotCard,
+  AgentAttachment,
   AgentDelegatedFrameData,
   BulkContentPlan,
   MediaSearchResultsFrame,
@@ -226,5 +227,5 @@ export type AgentChatInput = {
   platformAccountIds?: Record<string, string>;
   // Composer attachments, already uploaded and signed. The backend folds them into the same image
   // path as @-mentioned library media.
-  images?: Array<{ url: string; name?: string; mediaType?: string }>;
+  images?: AgentAttachment[];
 };

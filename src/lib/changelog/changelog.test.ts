@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'bun:test';
-import { computeUnreadCount, getLatestEntryId, sortChangelogDesc } from './changelog';
+import {
+  computeUnreadCount,
+  getChangelogRetentionStartDate,
+  getLatestEntryId,
+  sortChangelogDesc,
+} from './changelog';
 import type { ChangelogEntry } from './schema';
 
 function entry(id: string, date: string): ChangelogEntry {
-  return { id, date, title: `t-${id}`, body: `b-${id}` };
+  return { id, date, createdAt: `${date}T12:00:00.000Z`, title: `t-${id}`, body: `b-${id}` };
 }
+
+describe('getChangelogRetentionStartDate', () => {
+  it('keeps entries from the prior five calendar days, including the cutoff date', () => {
+    expect(getChangelogRetentionStartDate(new Date('2026-07-27T23:59:59.000Z'))).toBe('2026-07-22');
+  });
+});
 
 describe('sortChangelogDesc', () => {
   it('sorts DESC by date then id', () => {

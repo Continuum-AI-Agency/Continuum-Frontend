@@ -43,6 +43,10 @@ import {
 } from '@/components/ai-elements/queue';
 import { AutomationSheets } from '@/components/automations/AutomationSheets';
 import { ChatProvenanceBanner } from '@/components/chat/AgentInitiatorPill';
+import {
+  buildAgentAttachmentContext,
+  mergeAttachmentReferences,
+} from '@/components/chat/attachmentReferences';
 import type { Attachment } from '@/components/chat/attachments';
 import { ChatMarker } from '@/components/chat/ChatMarker';
 import { ChatTranscript } from '@/components/chat/ChatTranscript';
@@ -2566,6 +2570,7 @@ export function JainaChatSurface({
       query: string;
       canvas: boolean;
       clarificationId?: string;
+      images?: QueuedJainaMessage['images'];
       references?: AgentMentionReference[];
       forceReportArtifact?: boolean;
     }) => {
@@ -2576,6 +2581,7 @@ export function JainaChatSurface({
         content,
         createdAt: new Date().toISOString(),
         canvas: input.canvas,
+        ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
         ...(input.references && input.references.length > 0
           ? { references: input.references }
           : {}),
@@ -2592,9 +2598,14 @@ export function JainaChatSurface({
       const normalizedQuery = query.trim();
       if (!normalizedQuery) return;
 
-      const images = attachments
-        ?.filter((a) => a.status === 'ready' && Boolean(a.url))
-        .map((a) => ({ url: a.url as string, name: a.name, mediaType: a.type }));
+      const submittedAttachments = attachments ?? [];
+      const attachmentContext = buildAgentAttachmentContext(submittedAttachments, 'jaina');
+      const resolvedReferences = mergeAttachmentReferences(
+        references,
+        submittedAttachments,
+        'jaina',
+      );
+      const images = attachmentContext.attachments;
 
       const pendingPlanId = findPendingPlanId(messages);
 
@@ -2602,9 +2613,9 @@ export function JainaChatSurface({
         query: normalizedQuery,
         canvas: false,
         clarificationId: pendingClarificationId,
-        ...(references.length > 0 ? { references } : {}),
+        ...(resolvedReferences.length > 0 ? { references: resolvedReferences } : {}),
         forceReportArtifact: isJainaProMode,
-        ...(images && images.length > 0 ? { images } : {}),
+        ...(images.length > 0 ? { images } : {}),
         ...(pendingPlanId
           ? {
               planAction: {
@@ -2695,6 +2706,7 @@ export function JainaChatSurface({
         query: nextQueuedMessage.content,
         canvas: nextQueuedMessage.canvas,
         clarificationId: nextQueuedMessage.clarificationId,
+        images: nextQueuedMessage.images,
         references: nextQueuedMessage.references,
         forceReportArtifact: nextQueuedMessage.forceReportArtifact,
       });
@@ -3230,6 +3242,7 @@ export function JainaChatSurface({
                     handleSubmit(value, submitted, references)
                   }
                   attachments={attachments}
+                  attachmentOnlyPrompt="Analyze the attached media in the context of my paid media."
                   disabled={isInputDisabled}
                   ariaLabel="Message Jaina"
                   mentionProvider={jainaMentionProvider}

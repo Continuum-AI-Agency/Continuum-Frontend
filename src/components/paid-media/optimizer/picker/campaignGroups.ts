@@ -48,7 +48,21 @@ export type AdsetPickItem = {
   mismatch: boolean;
   // What this ad set actually declared it buys (Meta optimization_goal → kpiField).
   kpiField: string | null;
+  // Another portfolio holds this ad set's single ACTIVE enrollment. Selecting it here is a
+  // MOVE, not a copy — the DB allows exactly one active enrollment per ad set. Left
+  // selectable on purpose (moving is a legitimate thing to want); the badge and the save
+  // confirmation are what make it a decision rather than a surprise. Null when unclaimed or
+  // when the claim is this same portfolio.
+  enrolledIn: AdsetClaim | null;
 };
+
+/** Which portfolio currently owns an ad set's active enrollment. */
+export type AdsetClaim = { portfolioId: string; portfolioName: string };
+
+/** adset_id → owning portfolio, for every ACTIVE enrollment on the account. */
+export type AdsetClaimMap = ReadonlyMap<string, AdsetClaim>;
+
+const NO_CLAIMS: AdsetClaimMap = new Map();
 
 export type CampaignSection = {
   campaignId: string;
@@ -93,6 +107,7 @@ function toPickItem(
   snapshot: AdSetSnapshot,
   mode: PortfolioLevel,
   objective?: OptimizationObjective,
+  claims: AdsetClaimMap = NO_CLAIMS,
 ): AdsetPickItem {
   const currentBudget = snapshot.currentBudget ?? 0;
   const frozen = snapshot.status === 'frozen' || snapshot.freeze === true;
@@ -129,6 +144,7 @@ function toPickItem(
     budgetType: snapshot.budgetType,
     mismatch: Boolean(objectiveKpi && kpiField && kpiField !== objectiveKpi),
     kpiField,
+    enrolledIn: claims.get(snapshot.id) ?? null,
   };
 }
 
@@ -149,6 +165,7 @@ export function buildCampaignSections(
   snapshots: AdSetSnapshot[],
   mode: PortfolioLevel = 'adset',
   objective?: OptimizationObjective,
+  claims: AdsetClaimMap = NO_CLAIMS,
 ): CampaignSection[] {
   const byCampaign = new Map<string, { name: string; items: AdsetPickItem[] }>();
 
@@ -157,7 +174,7 @@ export function buildCampaignSections(
     const campaignName =
       snapshot.campaignName?.trim() || (campaignId === UNGROUPED_ID ? UNGROUPED_LABEL : campaignId);
     const bucket = byCampaign.get(campaignId) ?? { name: campaignName, items: [] };
-    bucket.items.push(toPickItem(snapshot, mode, objective));
+    bucket.items.push(toPickItem(snapshot, mode, objective, claims));
     byCampaign.set(campaignId, bucket);
   }
 
@@ -187,6 +204,48 @@ export function buildCampaignSections(
     if (b.campaignId === UNGROUPED_ID) return -1;
     return a.campaignName.localeCompare(b.campaignName);
   });
+}
+
+/** Build the ad-set → owning-portfolio map, EXCLUDING the portfolio being edited: an ad set
+ *  already enrolled here is not moving anywhere, and badging it "In: <this portfolio>" would
+ *  read as a conflict where there is none. */
+export function buildClaimMap(
+  enrollments: ReadonlyArray<{
+    adset_id: string;
+    portfolio_id: string;
+    portfolio_name: string | null;
+  }>,
+  currentPortfolioId: string | null,
+): AdsetClaimMap {
+  const map = new Map<string, AdsetClaim>();
+  for (const row of enrollments) {
+    if (row.portfolio_id === currentPortfolioId) continue;
+    map.set(row.adset_id, {
+      portfolioId: row.portfolio_id,
+      portfolioName: row.portfolio_name?.trim() || 'another portfolio',
+    });
+  }
+  return map;
+}
+
+/** The ad sets a save would take from other portfolios, grouped by which portfolio loses
+ *  them — the sentence the confirm step needs ("3 ad sets will move out of Prospecting Q3"). */
+export function previewMoves(
+  selectedIds: ReadonlyArray<string>,
+  claims: AdsetClaimMap,
+): Array<{ portfolioName: string; adsetIds: string[] }> {
+  const byPortfolio = new Map<string, { portfolioName: string; adsetIds: string[] }>();
+  for (const id of selectedIds) {
+    const claim = claims.get(id);
+    if (!claim) continue;
+    const bucket = byPortfolio.get(claim.portfolioId) ?? {
+      portfolioName: claim.portfolioName,
+      adsetIds: [],
+    };
+    bucket.adsetIds.push(id);
+    byPortfolio.set(claim.portfolioId, bucket);
+  }
+  return [...byPortfolio.values()].sort((a, b) => b.adsetIds.length - a.adsetIds.length);
 }
 
 // The CBO campaigns in a fleet: campaigns whose ad sets are held

@@ -118,6 +118,61 @@ describe('usePublishDraft', () => {
     expect(body.igAccountId).toBeUndefined();
   });
 
+  // platform_post_id is what the backend actually persists; instagram_post_id is the legacy
+  // mirror it dual-writes for Instagram ONLY. Stamping the mirror on every platform put a
+  // Facebook post id behind the "View on Instagram" instagram.com/p/ permalink.
+  const publishedFrames = (platform: string, postId: string) => [
+    { event: 'started', data: { type: 'started', platform, format: 'POST' } },
+    {
+      event: 'published',
+      data: { type: 'published', platform, postId, format: 'POST', accountId: 'acct-1' },
+    },
+  ];
+
+  it('mirrors the post id into instagram_post_id for an Instagram publish', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        body: sseStream(publishedFrames('instagram', 'ig-post-1')),
+      }),
+    );
+
+    const { result } = renderHook(() => usePublishDraft());
+    await act(async () => {
+      await result.current.publish(draft);
+    });
+
+    await waitFor(() => expect(updateDraftMock).toHaveBeenCalled());
+    const patch = updateDraftMock.mock.calls[0][1]({});
+    expect(patch.platform_post_id).toBe('ig-post-1');
+    expect(patch.instagram_post_id).toBe('ig-post-1');
+  });
+
+  it('never writes instagram_post_id for a Facebook publish', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        body: sseStream(publishedFrames('facebook', 'fb-post-1')),
+      }),
+    );
+
+    const { result } = renderHook(() => usePublishDraft());
+    await act(async () => {
+      await result.current.publish({ ...draft, platforms: ['facebook'] } as never);
+    });
+
+    await waitFor(() => expect(updateDraftMock).toHaveBeenCalled());
+    const patch = updateDraftMock.mock.calls[0][1]({});
+    expect(patch.platform_post_id).toBe('fb-post-1');
+    expect(patch.status).toBe('published');
+    // A Facebook id here renders a dead instagram.com/p/<fb-id> link.
+    expect(patch.instagram_post_id).toBeUndefined();
+  });
+
   it('names the publishing platform in the success toast', async () => {
     vi.stubGlobal(
       'fetch',

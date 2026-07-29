@@ -68,6 +68,7 @@ import { formatCpa, formatCurrency } from '../format';
 import { useOptimizerAccountSnapshots } from '../useOptimizerData';
 import { AdsetAdList } from './AdsetAdList';
 import {
+  type AdsetClaimMap,
   type AdsetPickItem,
   buildCampaignSections,
   type CampaignSection,
@@ -106,6 +107,9 @@ type CampaignAdsetPickerProps = {
   /** The portfolio's objective. Unlocks the KPI-mismatch marking and an objective-correct cost
    *  column. Optional so PortfolioManagePanel keeps working unchanged. */
   objective?: OptimizationObjective;
+  /** Which OTHER portfolio already claims each ad set. Selecting a claimed ad set moves it,
+   *  so the row says so before the save rather than after. Omit to disable the marking. */
+  claims?: AdsetClaimMap;
   /** How tall the scroll region is. The default suits an inline form; the two-pane builder
    *  passes h-full and gives the picker the whole pane. */
   heightClassName?: string;
@@ -201,6 +205,11 @@ const AdsetRow = memo(function AdsetRow({
                 Wrong KPI
               </Badge>
             ) : null}
+            {row.enrolledIn ? (
+              <Badge variant="outline" className="shrink-0 text-3xs">
+                In: {row.enrolledIn.portfolioName}
+              </Badge>
+            ) : null}
           </span>
 
           {/* The reason is always VISIBLE, never tooltip-only — line-clamped so the row height
@@ -218,6 +227,13 @@ const AdsetRow = memo(function AdsetRow({
           {row.eligible && row.mismatch ? (
             <span className="mt-0.5 line-clamp-1 block text-2xs text-warning">
               Buys {row.kpiField} — the optimizer freezes it and never moves its budget.
+            </span>
+          ) : null}
+          {/* An ad set holds exactly one active enrollment, so selecting a claimed one MOVES
+              it. Said before the save, not discovered after the other portfolio empties. */}
+          {row.enrolledIn ? (
+            <span className="mt-0.5 line-clamp-1 block text-2xs text-muted-foreground">
+              Selecting this moves it out of {row.enrolledIn.portfolioName}.
             </span>
           ) : null}
         </label>
@@ -356,6 +372,7 @@ export function CampaignAdsetPicker({
   isError = false,
   mode = 'adset',
   objective,
+  claims,
   heightClassName = 'h-[24rem]',
 }: CampaignAdsetPickerProps) {
   const [query, setQuery] = useState('');
@@ -373,8 +390,8 @@ export function CampaignAdsetPicker({
   );
 
   const sections = useMemo(
-    () => buildCampaignSections(snapshots, mode, objective),
-    [snapshots, mode, objective],
+    () => buildCampaignSections(snapshots, mode, objective, claims),
+    [snapshots, mode, objective, claims],
   );
   const counts = useMemo(() => pickerCounts(sections), [sections]);
   const selectedIds = useMemo(() => new Set(selectedAdsetIds), [selectedAdsetIds]);

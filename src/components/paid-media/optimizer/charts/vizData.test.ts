@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'bun:test';
 
-import type { ParsedCycleRunReport } from '@continuum/contracts';
 import { cpaSeriesTrend } from './__fixtures__/optimizerFixtures';
 import type { CpaTrendPoint } from './chartData';
 import {
   adSetRoasSeries,
+  bindTimelineEvents,
   buildConfidenceRadar,
   buildConversionFunnel,
   buildCpaHeroPoints,
   buildCpaProjection,
-  buildCycleActionMap,
   mergeAdDailyByMetric,
   pacingSnapshot,
   projectionEndpoint,
@@ -222,17 +221,23 @@ describe('pacingSnapshot', () => {
 
 describe('buildCpaHeroPoints', () => {
   it('enriches each cycle with the spend/conversions behind the CPA and attaches actions by ts', () => {
+    const event = {
+      ts: '2026-06-22T00:00:00.000Z',
+      kind: 'cycle' as const,
+      label: 'Reallocated · ↑2 ↓1',
+      count: 1,
+    };
     const points = buildCpaHeroPoints(cpaSeriesTrend, {
-      '2026-06-22T00:00:00.000Z': ['Reallocated · ↑2 ↓1'],
+      '2026-06-22T00:00:00.000Z': [event],
     });
     expect(points).toHaveLength(4);
     const last = points.at(-1);
     expect(last?.cpa).toBe(25); // 500 / 20
     expect(last?.spend).toBe(500);
     expect(last?.conv).toBe(20);
-    expect(last?.actions).toEqual(['Reallocated · ↑2 ↓1']);
-    // Earlier cycles carry no actions.
-    expect(points[0].actions).toEqual([]);
+    expect(last?.events).toEqual([event]);
+    // Earlier cycles carry no events.
+    expect(points[0].events).toEqual([]);
   });
 
   it('uses the supplied multiplier when an objective is priced as CPM', () => {
@@ -241,35 +246,46 @@ describe('buildCpaHeroPoints', () => {
   });
 });
 
-describe('buildCycleActionMap', () => {
-  it('summarizes the latest run reallocation and appends recommendation labels', () => {
-    const report = {
-      portfolio: null,
-      latest_run: { id: 'run', cycle_ts: '2026-06-22T00:00:00.000Z', mode: 'balanced' },
-      latest_items: [
-        { adset_id: 'a', current_budget: 100, final_budget: 140, change_abs: 40, change_pct: 40 },
-        { adset_id: 'b', current_budget: 100, final_budget: 90, change_abs: -10, change_pct: -10 },
-      ],
-      recommendations: [
-        {
-          id: 'r',
-          adset_id: 'act_1::adset_x',
-          kind: 'pause',
-          trigger: 'P2',
-          severity: 'high',
-          reason: null,
-          status: 'pending',
-        },
-      ],
-      history: [],
-    } as unknown as ParsedCycleRunReport;
+describe('bindTimelineEvents', () => {
+  const points = [
+    { ts: '2026-06-20T06:00:00.000Z' },
+    { ts: '2026-06-21T06:00:00.000Z' },
+    { ts: '2026-06-22T06:00:00.000Z' },
+  ];
+  const event = (ts: string, label: string) => ({ ts, kind: 'config' as const, label, count: 1 });
 
-    const map = buildCycleActionMap(report);
-    expect(map['2026-06-22T00:00:00.000Z']).toEqual(['Reallocated · ↑1 ↓1', 'pause · adset_x']);
+  // Events do not land ON cycle timestamps — a human edits a budget at 14:32, the cycle ran
+  // at 06:00 — so an exact-ts join drops nearly all of them.
+  it('binds an event to the last cycle at or before it', () => {
+    const map = bindTimelineEvents(points, [event('2026-06-21T14:32:00.000Z', 'budget changed')]);
+    expect(map['2026-06-21T06:00:00.000Z']?.[0].label).toBe('budget changed');
   });
 
-  it('returns an empty map when there is no run', () => {
-    expect(buildCycleActionMap(null)).toEqual({});
+  it('binds an event landing exactly on a cycle to that cycle', () => {
+    const map = bindTimelineEvents(points, [event('2026-06-22T06:00:00.000Z', 'ran')]);
+    expect(map['2026-06-22T06:00:00.000Z']).toHaveLength(1);
+  });
+
+  // There is no point on the chart such an event could explain.
+  it('drops events that precede the first plotted cycle', () => {
+    expect(bindTimelineEvents(points, [event('2026-06-01T00:00:00.000Z', 'ancient')])).toEqual({});
+  });
+
+  it('groups several events onto the same cycle', () => {
+    const map = bindTimelineEvents(points, [
+      event('2026-06-22T08:00:00.000Z', 'one'),
+      event('2026-06-22T09:00:00.000Z', 'two'),
+    ]);
+    expect(map['2026-06-22T06:00:00.000Z']).toHaveLength(2);
+  });
+
+  it('ignores an unparseable timestamp instead of throwing', () => {
+    expect(bindTimelineEvents(points, [event('not-a-date', 'bad')])).toEqual({});
+  });
+
+  it('is empty with no points or no events', () => {
+    expect(bindTimelineEvents([], [event('2026-06-22T06:00:00.000Z', 'x')])).toEqual({});
+    expect(bindTimelineEvents(points, [])).toEqual({});
   });
 });
 

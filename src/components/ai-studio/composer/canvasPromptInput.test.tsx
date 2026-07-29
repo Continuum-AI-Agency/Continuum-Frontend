@@ -58,6 +58,82 @@ const setEditorText = (editor: HTMLElement, text: string): void => {
 };
 
 describe('canvas PromptInput context grabber', () => {
+  it('submits a visible default prompt when a ready Library image is the only input', async () => {
+    const onSubmit = mock();
+    const clear = mock();
+    render(
+      <PromptInput
+        variant="canvas"
+        attachmentOnlyPrompt="Use the attached media as a visual reference."
+        attachments={{
+          files: [
+            {
+              id: 'local-1',
+              assetId: 'asset-1',
+              versionId: 'version-1',
+              name: 'reference.png',
+              type: 'image/png',
+              size: '2 KB',
+              status: 'ready',
+              url: 'https://signed.example/reference.png',
+              storagePath: 'brand-1/assets/asset-1/reference.png',
+            },
+          ],
+          add: mock(),
+          remove: mock(),
+          clear,
+          retry: mock(async () => {}),
+          isUploading: false,
+          hasErrors: false,
+        }}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toBe(
+      'Use the attached media as a visual reference.',
+    );
+    expect(onSubmit.mock.calls[0]?.[1]).toEqual([
+      expect.objectContaining({ assetId: 'asset-1', status: 'ready' }),
+    ]);
+    expect(clear).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not submit while an attachment is still uploading', () => {
+    const onSubmit = mock();
+    render(
+      <PromptInput
+        variant="canvas"
+        attachmentOnlyPrompt="Use the attached media as a visual reference."
+        attachments={{
+          files: [
+            {
+              id: 'local-1',
+              name: 'reference.png',
+              type: 'image/png',
+              size: '2 KB',
+              status: 'uploading',
+            },
+          ],
+          add: mock(),
+          remove: mock(),
+          clear: mock(),
+          retry: mock(async () => {}),
+          isUploading: true,
+          hasErrors: false,
+        }}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('turns a picked skill into a canvas reference on submit', async () => {
     const onSubmit = mock();
     const provider = createCanvasComposerMentionProvider({

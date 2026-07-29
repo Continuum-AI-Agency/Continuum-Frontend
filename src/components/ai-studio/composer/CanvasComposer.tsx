@@ -25,8 +25,15 @@ import {
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { Message } from '@/components/ai-elements/message';
+import {
+  buildAgentAttachmentContext,
+  mergeAttachmentReferences,
+} from '@/components/chat/attachmentReferences';
+import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
+import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { PromptInput } from '@/components/chat/prompt-input';
+import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
@@ -80,6 +87,10 @@ export function CanvasComposer({
   const [expanded, setExpanded] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [queuedText, setQueuedText] = useState<string | null>(null);
+  const composerAttachments = useChatAttachments({
+    brandId: brandProfileId,
+    sessionId: roomId,
+  });
   const { state, turns, submit, cancel, clear, dismiss, decideProposal, decidingProposalId } =
     useCanvasComposer(brandProfileId, roomId);
 
@@ -124,12 +135,21 @@ export function CanvasComposer({
       onStop={cancel}
       mentionProvider={mentionProvider}
       mentionSource="canvas"
+      attachments={composerAttachments}
+      attachmentOnlyPrompt="Use the attached media as a visual reference."
       queuedText={queuedText}
       onQueuedTextConsumed={() => setQueuedText(null)}
-      onSubmit={(value, _attachments, references) => {
+      onSubmit={(value, submittedAttachments, references) => {
+        const attachmentContext = buildAgentAttachmentContext(submittedAttachments, 'canvas');
+        const resolvedReferences = mergeAttachmentReferences(
+          references,
+          submittedAttachments,
+          'canvas',
+        );
         void submit(value, selectedNodeIds, {
           remember: expanded,
-          references,
+          attachments: attachmentContext.attachments,
+          references: resolvedReferences,
           thinking,
         });
       }}
@@ -299,6 +319,10 @@ function TurnMessages({
         <p className="text-sm">
           <MentionifiedText text={turn.prompt} references={turn.references} />
         </p>
+        <ChatMediaGrid
+          items={mediaFromPersistedAttachments(turn.id, turn.attachments)}
+          lightboxTitle="Attachment"
+        />
       </Message>
       {/* biome-ignore lint/a11y/useValidAriaRole: `role` is the Message component's author prop (house ai-elements API), not an ARIA role */}
       <Message role="assistant">

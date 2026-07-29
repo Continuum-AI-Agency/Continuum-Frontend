@@ -23,7 +23,7 @@ import { useAgentRunStore } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { readNdjsonStream } from '@/lib/streaming/readNdjsonStream';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 type RunEventSource = {
   schema: string;
@@ -129,9 +129,6 @@ export function useAgentRunStream(
     if (!runId || !enabled) return;
 
     const source = RUN_EVENT_SOURCES[agent];
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase.channel(`agent-run:${agent}:${runId}`);
-
     let cancelled = false;
 
     const ingest = (events: AgentRunEventDto[]): void => {
@@ -139,25 +136,23 @@ export function useAgentRunStream(
       appendEvents(runId, events);
     };
 
-    // Subscribe FIRST. Hydrating first would drop anything emitted between the fetch
-    // completing and the subscription going live.
-    channel
-      .on(
-        'postgres_changes',
+    // Subscribe FIRST — `onSubscribed` runs only once the channel is live, so nothing
+    // emitted while the backlog fetch is in flight is lost.
+    const unsubscribe = subscribeToPostgresChanges({
+      label: `agent-run:${agent}:${runId}`,
+      bindings: [
         {
           event: 'INSERT',
           schema: source.schema,
           table: source.table,
           filter: `run_id=eq.${runId}`,
+          onRow: (row) => {
+            const event = rowToEvent(row);
+            if (event) ingest([event]);
+          },
         },
-        (payload) => {
-          const event = rowToEvent(payload.new as Record<string, unknown>);
-          if (event) ingest([event]);
-        },
-      )
-      .subscribe(async (status) => {
-        if (cancelled || status !== 'SUBSCRIBED') return;
-
+      ],
+      onSubscribed: async () => {
         try {
           const token = await getBrowserAccessToken();
           if (!token || cancelled) return;
@@ -182,11 +177,12 @@ export function useAgentRunStream(
         } catch {
           // Hydration is best-effort — Realtime still delivers everything from here on.
         }
-      });
+      },
+    });
 
     return () => {
       cancelled = true;
-      void supabase.removeChannel(channel);
+      unsubscribe();
     };
   }, [runId, agent, enabled, appendEvents]);
 }

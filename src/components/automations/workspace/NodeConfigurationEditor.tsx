@@ -1,17 +1,29 @@
 'use client';
 
 import {
+  AUTOMATION_PLANNER_UPSERT_DEFAULTS,
   AUTOMATION_SOURCE_LIFECYCLE,
+  type AutomationActionNodeType,
+  type AutomationAiStudioGenerator,
   type AutomationCapabilitiesResponse,
+  type AutomationPaidOptimizerOperation,
   type AutomationSourceKind,
   type AutomationWebhookDestination,
+  type AutomationWebhookEndpoint,
   type AutomationWorkflowNode,
   automationAgentCapabilitySchema,
+  automationAiStudioGeneratorSchema,
   automationSourceKindSchema,
   parseAutomationSourceQuery,
+  resolveAutomationAiStudioGenerateConfig,
+  resolveAutomationLibrarySaveConfig,
+  resolveAutomationOrganicPublishConfig,
+  resolveAutomationPaidOptimizerConfig,
+  resolveAutomationPlannerUpsertConfig,
 } from '@continuum/contracts';
-import { Expand, Lightbulb, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { Copy, Expand, Lightbulb, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -49,9 +61,29 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { getApiUrl } from '@/lib/api/config';
 import { cn } from '@/lib/utils';
+import { AiStudioRoomPicker } from './pickers/AiStudioRoomPicker';
+import { LibraryCollectionPicker } from './pickers/LibraryCollectionPicker';
+import { OrganicPublishTargetPicker } from './pickers/OrganicPublishTargetPicker';
+import { PaidPortfolioPicker } from './pickers/PaidPortfolioPicker';
+import { PlannerTargetPicker } from './pickers/PlannerTargetPicker';
 
 type WorkflowConfig = AutomationWorkflowNode['config'];
+
+export const automationWebhookDeliveryUrl = (publicId: string): string =>
+  getApiUrl(`/api/automations/hooks/${publicId}`);
+
+export async function copyAutomationValue(value: string, label: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success(`${label} copied`);
+  } catch {
+    toast.error(`Could not copy the ${label.toLowerCase()}`, {
+      description: 'Your browser blocked clipboard access — select the text and copy it manually.',
+    });
+  }
+}
 
 type PromptStarter = {
   label: string;
@@ -107,6 +139,55 @@ const textList = (value: string): string[] =>
 
 export const appendPromptStarter = (value: string, starter: string): string =>
   value.trim() ? `${value.trim()}\n\n${starter}` : starter;
+
+/** Keeps a numeric bound editable without letting a half-typed value (or a
+ *  cleared field) write a number the config schema would reject. */
+export function boundedInteger(raw: string, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+/** `null` is a real value here — it means "no cap" — so an empty field must
+ *  clear the cap rather than fall back to the previous number. */
+export function boundedPercent(raw: string): number | null {
+  if (raw.trim().length === 0) return null;
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.min(100, Math.max(0, parsed));
+}
+
+export const paidOptimizerOperationOptions = [
+  { value: 'run_cycle', label: 'Run an optimization cycle' },
+  { value: 'apply_approved', label: 'Apply human-approved recommendations' },
+] as const satisfies ReadonlyArray<{ value: AutomationPaidOptimizerOperation; label: string }>;
+
+/** Surfaces what the backend says about an action before a run proves it. The
+ *  capabilities response carries `actions` optionally, so an older backend
+ *  simply yields no notice rather than a false "unavailable". */
+function ActionCapabilityNotice({
+  type,
+  capabilities,
+}: {
+  type: AutomationActionNodeType;
+  capabilities: AutomationCapabilitiesResponse | null;
+}) {
+  const capability = capabilities?.actions?.find((action) => action.type === type);
+  if (!capability) return null;
+  if (capability.availability === 'ready' && capability.lifecycle === 'production') return null;
+
+  return (
+    <div className="rounded-md border border-warning/30 bg-warning/5 p-3">
+      <Badge variant="warning">
+        {capability.availability === 'needs_connection' ? 'Needs connection' : 'Limited'}
+      </Badge>
+      <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+        {capability.reason ??
+          'This action is not fully available in this environment yet. A run may fail preflight.'}
+      </p>
+    </div>
+  );
+}
 
 function PromptField({
   label,
@@ -331,11 +412,12 @@ function Choice({
   onChange: (value: string) => void;
   disabled: boolean;
 }) {
+  const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Select value={value} disabled={disabled} onValueChange={onChange}>
-        <SelectTrigger>
+        <SelectTrigger id={id} aria-label={label}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -764,18 +846,90 @@ function AgentEditor({
   );
 }
 
+/**
+ * The endpoint id is minted by the Webhooks dialog and written back into the
+ * node — a user typing one here could only ever break the binding, so this is
+ * read-only on purpose and shows the delivery URL the caller actually needs.
+ */
+function ManagedEndpointSummary({
+  endpointId,
+  endpoints,
+}: {
+  endpointId: string | undefined;
+  endpoints: AutomationWebhookEndpoint[];
+}) {
+  const endpoint = endpointId ? endpoints.find((candidate) => candidate.id === endpointId) : null;
+
+  if (!endpointId) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Label>Managed endpoint</Label>
+        <div className="rounded-md border border-warning/30 bg-warning/5 p-3">
+          <Badge variant="warning">Not attached</Badge>
+          <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+            Open Webhooks in the workspace header and create an endpoint for this node. Publishing
+            is blocked until one is attached.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const deliveryUrl = endpoint ? automationWebhookDeliveryUrl(endpoint.publicId) : null;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>Managed endpoint</Label>
+      <div className="rounded-md border p-3">
+        <div className="flex items-center gap-2">
+          <Badge variant="success">Attached</Badge>
+          <span className="truncate text-[11px] text-muted-foreground">
+            {endpoint?.name ?? endpointId}
+          </span>
+        </div>
+        {deliveryUrl ? (
+          <div className="mt-2 flex items-center gap-1.5">
+            <code className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
+              {deliveryUrl}
+            </code>
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Copy delivery URL"
+              onClick={() => void copyAutomationValue(deliveryUrl, 'Delivery URL')}
+            >
+              <Copy aria-hidden="true" />
+            </Button>
+          </div>
+        ) : (
+          <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+            This endpoint belongs to another brand or was deleted. Create a new one from Webhooks.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function NodeConfigurationEditor({
   node,
   disabled,
   onChange,
   sourceCapabilities,
   webhookDestinations,
+  webhookEndpoints,
+  brandId,
 }: {
   node: AutomationWorkflowNode;
   disabled: boolean;
   onChange: (config: WorkflowConfig) => void;
   sourceCapabilities: AutomationCapabilitiesResponse | null;
   webhookDestinations?: AutomationWebhookDestination[];
+  webhookEndpoints?: AutomationWebhookEndpoint[];
+  /** Scopes every action picker's list. Absent ⇒ each picker degrades to its
+   *  raw-id field rather than offering a list it cannot scope. */
+  brandId?: string;
 }) {
   switch (node.type) {
     case 'source':
@@ -1206,13 +1360,9 @@ export function NodeConfigurationEditor({
     case 'trigger.webhook':
       return (
         <>
-          <Field
-            label="Managed endpoint ID"
-            value={node.config.endpointId ?? ''}
-            disabled={disabled}
-            onChange={(endpointId) =>
-              onChange({ ...node.config, endpointId: endpointId || undefined })
-            }
+          <ManagedEndpointSummary
+            endpointId={node.config.endpointId}
+            endpoints={webhookEndpoints ?? []}
           />
           <JsonObjectField
             label="Payload schema"
@@ -1370,75 +1520,207 @@ export function NodeConfigurationEditor({
               }
             }}
           />
-          {(webhookDestinations ?? []).length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Create a signed destination from Webhooks before publishing.
-            </p>
-          ) : null}
+          {node.config.destinationId ? null : (
+            <div className="rounded-md border border-warning/30 bg-warning/5 p-3">
+              <Badge variant="warning">Needs setup</Badge>
+              <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+                {(webhookDestinations ?? []).length === 0
+                  ? 'No signed destinations exist yet. Open Webhooks in the workspace header to create one.'
+                  : 'Select a signed destination. This step cannot run or publish until one is chosen.'}
+              </p>
+            </div>
+          )}
           <p className="text-[11px] text-muted-foreground">
             The destination owns its URL, method, signing secret, and retry ledger.
           </p>
         </>
       );
-    case 'action.library_save':
-      return (
-        <Field
-          label="Title template"
-          value={node.config.titleTemplate}
-          disabled={disabled}
-          onChange={(titleTemplate) => onChange({ ...node.config, titleTemplate })}
-        />
-      );
-    case 'action.planner_upsert':
-      return (
-        <Field
-          label="Scheduled-at path"
-          value={node.config.scheduledAtPath}
-          disabled={disabled}
-          onChange={(scheduledAtPath) => onChange({ ...node.config, scheduledAtPath })}
-        />
-      );
-    case 'action.organic_publish':
-      return (
-        <Field
-          label="Connected account ID"
-          value={node.config.accountId}
-          disabled={disabled}
-          onChange={(accountId) => onChange({ ...node.config, accountId })}
-        />
-      );
-    case 'action.ai_studio_generate':
-      return (
-        <PromptField
-          label="Generation instructions"
-          value={node.config.instructions}
-          disabled={disabled}
-          placeholder="Describe the asset to create, including format, composition, and constraints."
-          onChange={(instructions) => onChange({ ...node.config, instructions })}
-        />
-      );
-    case 'action.paid_optimizer':
+    case 'action.library_save': {
+      // Written through the resolver, so a draft still carrying the legacy
+      // `folderId` alias is read correctly and upgraded on the next save.
+      const target = resolveAutomationLibrarySaveConfig(node.config);
       return (
         <>
-          <Choice
-            label="Operation"
-            value={node.config.operation}
+          <ActionCapabilityNotice type={node.type} capabilities={sourceCapabilities} />
+          <LibraryCollectionPicker
+            brandId={brandId}
+            value={target.collectionId}
             disabled={disabled}
-            options={['pause', 'resume', 'set_budget', 'replace_creative'].map((value) => ({
-              value,
-              label: value,
-            }))}
-            onChange={(operation) =>
-              onChange({ ...node.config, operation: operation as typeof node.config.operation })
-            }
+            onChange={(collectionId) => onChange({ ...target, collectionId })}
           />
           <Field
-            label="Target ID"
-            value={node.config.targetId}
+            label="Title template"
+            value={target.titleTemplate}
             disabled={disabled}
-            onChange={(targetId) => onChange({ ...node.config, targetId })}
+            onChange={(titleTemplate) => onChange({ ...target, titleTemplate })}
           />
         </>
       );
+    }
+    case 'action.planner_upsert': {
+      const target = resolveAutomationPlannerUpsertConfig(node.config);
+      return (
+        <>
+          <ActionCapabilityNotice type={node.type} capabilities={sourceCapabilities} />
+          <PlannerTargetPicker
+            brandId={brandId}
+            value={{ platform: target.platform, accountId: target.accountId }}
+            disabled={disabled}
+            onChange={(next) => onChange({ ...target, ...next })}
+          />
+          <Field
+            label="Drafts path"
+            value={target.itemsPath}
+            disabled={disabled}
+            placeholder={AUTOMATION_PLANNER_UPSERT_DEFAULTS.itemsPath}
+            onChange={(itemsPath) => onChange({ ...target, itemsPath })}
+          />
+          <Field
+            label="Maximum drafts per run"
+            type="number"
+            value={target.maxDrafts}
+            disabled={disabled}
+            onChange={(maxDrafts) =>
+              onChange({
+                ...target,
+                maxDrafts: boundedInteger(maxDrafts, target.maxDrafts, 1, 50),
+              })
+            }
+          />
+        </>
+      );
+    }
+    case 'action.organic_publish': {
+      const selector = resolveAutomationOrganicPublishConfig(node.config);
+      return (
+        <>
+          <ActionCapabilityNotice type={node.type} capabilities={sourceCapabilities} />
+          <OrganicPublishTargetPicker
+            brandId={brandId}
+            value={{ platform: selector.platform, accountId: selector.accountId }}
+            disabled={disabled}
+            onChange={(next) => onChange({ ...selector, ...next })}
+          />
+          <Field
+            label="Schedule lookahead (hours)"
+            type="number"
+            value={selector.lookaheadHours}
+            disabled={disabled}
+            onChange={(lookaheadHours) =>
+              onChange({
+                ...selector,
+                lookaheadHours: boundedInteger(lookaheadHours, selector.lookaheadHours, 1, 168),
+              })
+            }
+          />
+          <Field
+            label="Maximum posts per run"
+            type="number"
+            value={selector.maxPosts}
+            disabled={disabled}
+            onChange={(maxPosts) =>
+              onChange({
+                ...selector,
+                maxPosts: boundedInteger(maxPosts, selector.maxPosts, 1, 25),
+              })
+            }
+          />
+          <p className="text-[11px] leading-4 text-muted-foreground">
+            Approved drafts scheduled within the lookahead are published. A past-due draft is caught
+            up, which is why there is no lower bound.
+          </p>
+        </>
+      );
+    }
+    case 'action.ai_studio_generate': {
+      const request = resolveAutomationAiStudioGenerateConfig(node.config);
+      return (
+        <>
+          <ActionCapabilityNotice type={node.type} capabilities={sourceCapabilities} />
+          <Choice
+            label="Generator"
+            value={request.generator}
+            disabled={disabled}
+            options={automationAiStudioGeneratorSchema.options.map((generator) => ({
+              value: generator,
+              label: generator === 'image' ? 'Image' : 'Video',
+            }))}
+            onChange={(generator) =>
+              onChange({
+                ...request,
+                generator: generator as AutomationAiStudioGenerator,
+              })
+            }
+          />
+          <PromptField
+            label="Generation instructions"
+            value={request.instructions}
+            disabled={disabled}
+            placeholder="Describe the asset to create, including format, composition, and constraints."
+            onChange={(instructions) => onChange({ ...request, instructions })}
+          />
+          <Field
+            label="Outputs per run"
+            type="number"
+            value={request.maxOutputs}
+            disabled={disabled}
+            onChange={(maxOutputs) =>
+              onChange({
+                ...request,
+                maxOutputs: boundedInteger(maxOutputs, request.maxOutputs, 1, 4),
+              })
+            }
+          />
+          <AiStudioRoomPicker
+            brandId={brandId}
+            value={request.roomId}
+            disabled={disabled}
+            onChange={(roomId) => onChange({ ...request, roomId })}
+          />
+          <p className="text-[11px] leading-4 text-muted-foreground">
+            An automation runs headless, so it can only reach the image and video generators. A
+            saved Studio workflow is replayed by the canvas in a browser and cannot be scheduled.
+          </p>
+        </>
+      );
+    }
+    case 'action.paid_optimizer': {
+      const target = resolveAutomationPaidOptimizerConfig(node.config);
+      return (
+        <>
+          <ActionCapabilityNotice type={node.type} capabilities={sourceCapabilities} />
+          <PaidPortfolioPicker
+            brandId={brandId}
+            value={target.portfolioId}
+            disabled={disabled}
+            onChange={(portfolioId) => onChange({ ...target, portfolioId })}
+          />
+          <Choice
+            label="Operation"
+            value={target.operation}
+            disabled={disabled}
+            options={paidOptimizerOperationOptions}
+            onChange={(operation) =>
+              onChange({
+                ...target,
+                operation: operation as AutomationPaidOptimizerOperation,
+              })
+            }
+          />
+          <Field
+            label="Maximum budget change per apply (%)"
+            type="number"
+            value={target.maxBudgetDeltaPct ?? ''}
+            disabled={disabled}
+            placeholder="No cap"
+            onChange={(raw) => onChange({ ...target, maxBudgetDeltaPct: boundedPercent(raw) })}
+          />
+          <p className="text-[11px] leading-4 text-muted-foreground">
+            Pausing an ad is human-only and there is no entity-addressed budget write, so an
+            automation either runs a cycle or applies what a human already approved.
+          </p>
+        </>
+      );
+    }
   }
 }

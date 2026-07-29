@@ -9,6 +9,7 @@ import { useEffect, useRef } from 'react';
 import { useAgentRunStream } from '@/hooks/useAgentRunStream';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 const CANVAS_RUNS_SCHEMA = 'brand_profiles';
 const CANVAS_RUNS_TABLE = 'ai_studio_canvas_composer_runs';
@@ -34,39 +35,33 @@ export function CanvasComposerRunTail({ run }: { run: AgentRunDto }) {
   runRef.current = run;
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase.channel(`agent-run:canvas:${run.runId}`);
-    let cancelled = false;
-
     const fold = (row: Record<string, unknown>): void => {
-      if (cancelled) return;
       const next = runFromRow(row, runRef.current);
       if (runChanged(next, runRef.current)) upsertRun(next);
     };
 
-    channel
-      .on(
-        'postgres_changes',
+    // A label distinct from the event tail's, on top of the helper's unique suffix: this
+    // run has TWO subscriptions, and sharing a topic between them is what used to crash
+    // the app to the global 500 boundary.
+    return subscribeToPostgresChanges({
+      label: `agent-run-row:canvas:${run.runId}`,
+      bindings: [
         {
           event: 'UPDATE',
           schema: CANVAS_RUNS_SCHEMA,
           table: CANVAS_RUNS_TABLE,
           filter: `run_id=eq.${run.runId}`,
+          onRow: fold,
         },
-        (payload) => {
-          const row = payload.new as Record<string, unknown> | null;
-          if (row) fold(row);
-        },
-      )
-      .subscribe(async (status) => {
-        if (cancelled || status !== 'SUBSCRIBED') return;
+      ],
+      onSubscribed: async () => {
         // Close the mount race: the run may have gone terminal between the active-runs
         // hydrate and this subscription going live, and a missed UPDATE never replays.
         // Untyped view on purpose: the generated Database types do not carry this table
         // until the migration is applied and types are regenerated; the row is narrowed
         // field-by-field in runFromRow regardless.
         try {
-          const { data } = await (supabase as unknown as SupabaseClient)
+          const { data } = await (createSupabaseBrowserClient() as unknown as SupabaseClient)
             .schema(CANVAS_RUNS_SCHEMA)
             .from(CANVAS_RUNS_TABLE)
             .select('status,error_message,finished_at')
@@ -76,12 +71,8 @@ export function CanvasComposerRunTail({ run }: { run: AgentRunDto }) {
         } catch {
           // Best-effort — Realtime still delivers every change from here on.
         }
-      });
-
-    return () => {
-      cancelled = true;
-      void supabase.removeChannel(channel);
-    };
+      },
+    });
   }, [run.runId, upsertRun]);
 
   return null;

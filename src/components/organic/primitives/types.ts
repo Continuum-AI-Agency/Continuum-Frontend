@@ -86,6 +86,13 @@ export type OrganicCalendarDraft = {
    * draft's own row, so consumers never have to special-case "not grouped".
    */
   groupMembers?: OrganicDraftGroupMember[];
+  /**
+   * The published post's id on whatever platform it went out to. Canonical — the backend
+   * writes `platform_post_id` for every platform and mirrors `instagram_post_id` only for
+   * Instagram, so anything platform-agnostic must read this one.
+   */
+  platform_post_id?: string | null;
+  /** Legacy Instagram mirror. Only ever set for Instagram posts; never for Facebook/LinkedIn. */
   instagram_post_id?: string | null;
   mediaSuggestion?: {
     provider?: string | null;
@@ -140,6 +147,9 @@ export type OrganicCalendarDraft = {
       storagePath?: string | null;
       storageUrl?: string | null;
       format?: string | null;
+      /** Which reel scene this panel belongs to — `role` cannot carry the join
+       *  because several scenes share `role: 'body'`. Drives contact-sheet order. */
+      sceneIndex?: number | null;
     }> | null;
     reel?: {
       generated?: boolean | null;

@@ -3398,6 +3398,277 @@ export type Database = {
         }
         Relationships: []
       }
+      audience_group_members: {
+        Row: {
+          attempt: number
+          brand_id: string
+          created_at: string
+          definition: Json
+          dependency_member_key: string | null
+          error_message: string | null
+          id: string
+          kind: string
+          member_key: string
+          meta_audience_id: string | null
+          provider_snapshot: Json | null
+          status: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          attempt?: number
+          brand_id: string
+          created_at?: string
+          definition: Json
+          dependency_member_key?: string | null
+          error_message?: string | null
+          id?: string
+          kind: string
+          member_key: string
+          meta_audience_id?: string | null
+          provider_snapshot?: Json | null
+          status?: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          attempt?: number
+          brand_id?: string
+          created_at?: string
+          definition?: Json
+          dependency_member_key?: string | null
+          error_message?: string | null
+          id?: string
+          kind?: string
+          member_key?: string
+          meta_audience_id?: string | null
+          provider_snapshot?: Json | null
+          status?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audience_group_members_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "audience_group_members_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audience_group_members_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "audience_group_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audience_group_versions: {
+        Row: {
+          approval_expires_at: string
+          approval_token_hash: string
+          approved_at: string | null
+          approved_by: string | null
+          brand_id: string
+          content_hash: string
+          created_at: string
+          created_by: string
+          group_id: string
+          id: string
+          manifest: Json
+          status: string
+          targeting_spec: Json | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approval_expires_at: string
+          approval_token_hash: string
+          approved_at?: string | null
+          approved_by?: string | null
+          brand_id: string
+          content_hash: string
+          created_at?: string
+          created_by: string
+          group_id: string
+          id?: string
+          manifest: Json
+          status?: string
+          targeting_spec?: Json | null
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          approval_expires_at?: string
+          approval_token_hash?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          brand_id?: string
+          content_hash?: string
+          created_at?: string
+          created_by?: string
+          group_id?: string
+          id?: string
+          manifest?: Json
+          status?: string
+          targeting_spec?: Json | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audience_group_versions_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "audience_group_versions_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audience_group_versions_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "audience_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audience_groups: {
+        Row: {
+          ad_account_id: string
+          archived_at: string | null
+          brand_id: string
+          created_at: string
+          created_by: string
+          current_version_id: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          archived_at?: string | null
+          brand_id: string
+          created_at?: string
+          created_by: string
+          current_version_id?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          archived_at?: string | null
+          brand_id?: string
+          created_at?: string
+          created_by?: string
+          current_version_id?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audience_groups_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "audience_groups_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audience_groups_current_version_fk"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "audience_group_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audience_publish_runs: {
+        Row: {
+          actor_id: string
+          attempt: number
+          brand_id: string
+          completed_at: string | null
+          id: string
+          operation_id: string
+          request_hash: string
+          started_at: string
+          status: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          actor_id: string
+          attempt?: number
+          brand_id: string
+          completed_at?: string | null
+          id?: string
+          operation_id: string
+          request_hash: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          actor_id?: string
+          attempt?: number
+          brand_id?: string
+          completed_at?: string | null
+          id?: string
+          operation_id?: string
+          request_hash?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audience_publish_runs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "audience_publish_runs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audience_publish_runs_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: true
+            referencedRelation: "audience_group_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_action_receipts: {
         Row: {
           action_kind: string
@@ -5729,6 +6000,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          kind: string
           name: string
         }
         Insert: {
@@ -5736,6 +6008,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          kind?: string
           name: string
         }
         Update: {
@@ -5743,6 +6016,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          kind?: string
           name?: string
         }
         Relationships: [
@@ -8695,6 +8969,15 @@ export type Database = {
           embedding_text: string
         }[]
       }
+      claim_audience_group_publish: {
+        Args: {
+          p_approval_token_hash: string
+          p_content_hash: string
+          p_user_id?: string
+          p_version_id: string
+        }
+        Returns: Json
+      }
       claim_automation_run_email: {
         Args: { p_run_id: string }
         Returns: boolean
@@ -8929,6 +9212,14 @@ export type Database = {
       }
       cleanup_old_canvas_sessions: { Args: never; Returns: undefined }
       cleanup_old_chat_messages: { Args: never; Returns: undefined }
+      complete_audience_group_publish: {
+        Args: {
+          p_targeting_spec?: Json
+          p_user_id?: string
+          p_version_id: string
+        }
+        Returns: Json
+      }
       complete_automation_run_owned: {
         Args: {
           p_error?: Json
@@ -8997,6 +9288,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      create_audience_group_draft: {
+        Args: {
+          p_ad_account_id: string
+          p_approval_expires_at: string
+          p_approval_token_hash: string
+          p_brand_id: string
+          p_content_hash: string
+          p_group_id?: string
+          p_manifest: Json
+          p_members: Json
+          p_name: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       create_automation_workflow_draft: {
         Args: {
           p_agent: string
@@ -9031,6 +9337,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      create_canvas_workspace: {
+        Args: { p_brand_profile_id: string; p_name: string; p_user_id?: string }
+        Returns: Json
       }
       decrypt_token: { Args: { ct: string }; Returns: string }
       decrypt_tokens: { Args: { p_cts: string[] }; Returns: string[] }
@@ -9345,6 +9655,18 @@ export type Database = {
         }
       }
       purge_automation_workflow_evidence: { Args: never; Returns: Json }
+      record_audience_group_member_result: {
+        Args: {
+          p_error_message?: string
+          p_member_key: string
+          p_meta_audience_id?: string
+          p_provider_snapshot?: Json
+          p_status: string
+          p_user_id?: string
+          p_version_id: string
+        }
+        Returns: undefined
+      }
       refresh_virality_brand_stats: { Args: never; Returns: number }
       report_send_recently_sent: {
         Args: { p_brand_id: string; p_within?: string }
@@ -9505,6 +9827,10 @@ export type Database = {
           similarity: number
           updated_at: string
         }[]
+      }
+      set_brand_timezone: {
+        Args: { brand_id: string; tz: string }
+        Returns: string
       }
       sweep_pending_automation_emails: {
         Args: { p_limit: number }
@@ -13117,6 +13443,7 @@ export type Database = {
           phase: string | null
           progress: number
           result_asset_ids: string[]
+          result_asset_refs: Json
           source_id: string
           source_revision: string
           state: string
@@ -13142,6 +13469,7 @@ export type Database = {
           phase?: string | null
           progress?: number
           result_asset_ids?: string[]
+          result_asset_refs?: Json
           source_id: string
           source_revision: string
           state?: string
@@ -13167,6 +13495,7 @@ export type Database = {
           phase?: string | null
           progress?: number
           result_asset_ids?: string[]
+          result_asset_refs?: Json
           source_id?: string
           source_revision?: string
           state?: string
@@ -14163,6 +14492,47 @@ export type Database = {
           phase: string | null
           progress: number
           result_asset_ids: string[]
+          result_asset_refs: Json
+          source_id: string
+          source_revision: string
+          state: string
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      complete_client_render_job: {
+        Args: {
+          p_job_id: string
+          p_lease_token: string
+          p_result_asset_ids: string[]
+          p_user_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
           source_id: string
           source_revision: string
           state: string
@@ -14326,6 +14696,18 @@ export type Database = {
         }[]
       }
       storage_object_brand_id: { Args: { p_name: string }; Returns: string }
+      transition_asset_review_guarded: {
+        Args: {
+          p_actor: string
+          p_asset_id: string
+          p_brand_id: string
+          p_expected_current_status: string
+          p_idempotency_key: string
+          p_note: string
+          p_to_status: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
@@ -15122,6 +15504,68 @@ export type Database = {
           wa_id?: string
         }
         Relationships: []
+      }
+      planner_canvas_compositions: {
+        Row: {
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          draft_id: string
+          error: string | null
+          id: string
+          is_current: boolean
+          publish_node_id: string
+          result_asset_id: string | null
+          revision: number
+          room_id: string
+          source_fingerprint: string
+          status: string
+          timeline_node_id: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          draft_id: string
+          error?: string | null
+          id?: string
+          is_current?: boolean
+          publish_node_id: string
+          result_asset_id?: string | null
+          revision: number
+          room_id: string
+          source_fingerprint: string
+          status?: string
+          timeline_node_id: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          draft_id?: string
+          error?: string | null
+          id?: string
+          is_current?: boolean
+          publish_node_id?: string
+          result_asset_id?: string | null
+          revision?: number
+          room_id?: string
+          source_fingerprint?: string
+          status?: string
+          timeline_node_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planner_canvas_compositions_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "organic_calendar_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       post_generation_jobs: {
         Row: {
@@ -17241,6 +17685,53 @@ export type Database = {
         }
         Relationships: []
       }
+      upload_intents: {
+        Row: {
+          asset_refs: Json
+          brand_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          max_files: number
+          mcp_session_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asset_refs?: Json
+          brand_id: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          max_files?: number
+          mcp_session_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asset_refs?: Json
+          brand_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          max_files?: number
+          mcp_session_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upload_intents_mcp_session_id_fkey"
+            columns: ["mcp_session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["session_id"]
+          },
+        ]
+      }
       user_preferences: {
         Row: {
           last_brand_id: string | null
@@ -17348,6 +17839,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      complete_upload_intent: {
+        Args: {
+          p_asset_refs: Json
+          p_upload_intent_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       compute_capabilities: {
         Args: { p_account_type: string; p_platform: string }
         Returns: string[]
@@ -17408,6 +17907,10 @@ export type Database = {
         Args: { p_session_id: string; p_user_id?: string }
         Returns: string
       }
+      get_upload_intent: {
+        Args: { p_upload_intent_id: string; p_user_id?: string }
+        Returns: Json
+      }
       get_user_last_brand: { Args: { p_user_id?: string }; Returns: string }
       issue_connect_link: {
         Args: {
@@ -17421,6 +17924,15 @@ export type Database = {
           expires_at: string
           link_id: string
         }[]
+      }
+      issue_upload_intent: {
+        Args: {
+          p_brand_id: string
+          p_max_files?: number
+          p_mcp_session_id?: string
+          p_user_id?: string
+        }
+        Returns: Json
       }
       list_brand_accounts: {
         Args: {

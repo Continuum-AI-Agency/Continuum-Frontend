@@ -253,10 +253,13 @@ export function PortfolioSetup({
       {
         onError: () => setPendingKey(null),
         onSuccess: ({ portfolio_id }) => {
+          // A suggestion with no entities would create an INERT portfolio: the scheduler
+          // claims it every cycle and skips with `no_adsets` forever, while the UI shows an
+          // active portfolio that never scores. Surface it as a failed enroll (the state it
+          // actually is) instead of navigating to an empty portfolio that looks created.
           if (suggestion.adset_ids.length === 0) {
             setPendingKey(null);
-            setCreatedKeys((prev) => new Set(prev).add(suggestion.name));
-            onCreated?.(portfolio_id);
+            setEnrollFailedKeys((prev) => new Set(prev).add(suggestion.name));
             return;
           }
 
@@ -755,6 +758,11 @@ export function PortfolioCreateForm({
           mode,
           apply_mode: applyMode,
           daily_total: effectiveDaily,
+          // effectiveDaily is a snapshot of what the selected ad sets spend TODAY, not a
+          // target anyone chose — so the portfolio must keep tracking the live sum. Pinning
+          // it is what made balanced cycles claw budgets back to their create-day values.
+          budget_source: 'observed',
+          lookback_window: 'd14',
           ...(Number.isFinite(cpaValue) && cpaValue > 0
             ? { cpa_target: cpaValue / metric.denominatorMultiplier }
             : {}),

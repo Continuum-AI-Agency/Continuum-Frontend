@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  buildAdminUserListSearchParams,
   canBulkTransfer,
   describeWorkflowNames,
   formatBrandDisambiguationLabel,
@@ -13,6 +14,35 @@ describe('membershipLabel', () => {
     expect(membershipLabel(0)).toBe('0 memberships');
     expect(membershipLabel(1)).toBe('1 membership');
     expect(membershipLabel(2)).toBe('2 memberships');
+  });
+});
+
+describe('buildAdminUserListSearchParams', () => {
+  it('preserves unrelated parameters and resets pagination for a trimmed query', () => {
+    const result = buildAdminUserListSearchParams(
+      'section=users&page=4&pageSize=25',
+      '  alex@example.com  ',
+      50,
+    );
+    const params = new URLSearchParams(result);
+
+    expect(params.get('query')).toBe('alex@example.com');
+    expect(params.get('page')).toBe('1');
+    expect(params.get('pageSize')).toBe('50');
+    expect(params.get('section')).toBe('users');
+  });
+
+  it('removes the query when search is cleared', () => {
+    const result = buildAdminUserListSearchParams(
+      'section=users&query=alex&page=4&pageSize=25',
+      '   ',
+      50,
+    );
+    const params = new URLSearchParams(result);
+
+    expect(params.has('query')).toBe(false);
+    expect(params.get('page')).toBe('1');
+    expect(params.get('pageSize')).toBe('50');
   });
 });
 

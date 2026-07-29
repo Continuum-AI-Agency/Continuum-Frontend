@@ -14,6 +14,9 @@ export function mapPlacementToDraft(
     storagePath: frame.storagePath ?? undefined,
     storageUrl: frame.storageUrl ?? undefined,
     format: frame.format ?? undefined,
+    // Explicit whitelist — without this line the panel-to-scene join key never
+    // reaches the browser, no matter what the contracts say.
+    sceneIndex: frame.sceneIndex ?? undefined,
   }));
   const mediaSuggestion = rawMediaSuggestion
     ? ({ ...rawMediaSuggestion, storyboard } as OrganicCalendarDraft['mediaSuggestion'])

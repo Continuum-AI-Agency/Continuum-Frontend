@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { readNdjsonStream } from '@/lib/streaming/readNdjsonStream';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 export type ParsedRunEvent = {
   seq: number;
@@ -63,15 +63,16 @@ export function useRunEventStream(
     // to resolve as completed-partial vs hard timeout (see resolveWatchdogStatus).
     let receivedAnyEvent = false;
 
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase.channel(`run-events:${runId}`);
+    // Assigned by the subscribe call below; only ever invoked from a callback that runs
+    // after it returns (a delivered row, or the watchdog).
+    let unsubscribe: (() => void) | null = null;
 
     const terminateWith = (termStatus: RunStreamStatus) => {
       if (cancelled) return;
       cancelled = true;
       if (timeoutHandle) clearTimeout(timeoutHandle);
       setStatus(termStatus);
-      void channel.unsubscribe();
+      unsubscribe?.();
     };
 
     const dispatchEvent = (event: ParsedRunEvent) => {
@@ -96,30 +97,27 @@ export function useRunEventStream(
 
     // Subscribe first, then hydrate — ensures no events are lost in the window
     // between hydration completing and the subscription activating.
-    channel
-      .on(
-        'postgres_changes',
+    unsubscribe = subscribeToPostgresChanges({
+      label: `run-events:${runId}`,
+      bindings: [
         {
           event: 'INSERT',
           schema: 'organic',
           table: 'organic_agent_run_events',
           filter: `run_id=eq.${runId}`,
+          onRow: (row) => {
+            if (cancelled) return;
+            dispatchEvent({
+              seq: typeof row.seq === 'number' ? row.seq : -1,
+              eventId: typeof row.event_id === 'string' ? row.event_id : '',
+              type: typeof row.type === 'string' ? row.type : '',
+              data: (row.payload as Record<string, unknown>) ?? {},
+              ts: typeof row.created_at === 'string' ? row.created_at : '',
+            });
+          },
         },
-        (realtimePayload) => {
-          if (cancelled) return;
-          const row = realtimePayload.new as Record<string, unknown>;
-          dispatchEvent({
-            seq: typeof row.seq === 'number' ? row.seq : -1,
-            eventId: typeof row.event_id === 'string' ? row.event_id : '',
-            type: typeof row.type === 'string' ? row.type : '',
-            data: (row.payload as Record<string, unknown>) ?? {},
-            ts: typeof row.created_at === 'string' ? row.created_at : '',
-          });
-        },
-      )
-      .subscribe(async (channelStatus) => {
-        if (cancelled || channelStatus !== 'SUBSCRIBED') return;
-
+      ],
+      onSubscribed: async () => {
         try {
           const token = await getBrowserAccessToken();
           if (!token || cancelled) return;
@@ -158,12 +156,13 @@ export function useRunEventStream(
           // Hydration failure is non-fatal — Realtime will deliver new events
           if (!cancelled) setStatus('live');
         }
-      });
+      },
+    });
 
     return () => {
       cancelled = true;
       if (timeoutHandle) clearTimeout(timeoutHandle);
-      void channel.unsubscribe();
+      unsubscribe?.();
     };
   }, [runId]);
 

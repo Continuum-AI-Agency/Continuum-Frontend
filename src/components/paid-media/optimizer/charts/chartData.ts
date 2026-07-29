@@ -50,7 +50,18 @@ export type Reallocation = {
   gaining: FlowRow[];
   losing: FlowRow[];
   maxAbs: number;
+  /** Sum of the increases. Named "moved" because that is the money changing hands. */
   totalMoved: number;
+  /** Sum of the decreases, as a POSITIVE number. */
+  totalFreed: number;
+  /** totalMoved - totalFreed. On a budget-neutral (observed) portfolio this is ~0; a large
+   *  negative net means the cycle is CUTTING total spend, not reallocating it. That
+   *  distinction was invisible when only the gainers were totalled — a cycle that took $746
+   *  out and put $75 back read as "$75 moved". */
+  net: number;
+  /** How many ad sets changed at all. ONE definition, so the card and the Apply gate can
+   *  never disagree about what "moved" means. */
+  movedCount: number;
 };
 
 /** Split cycle items into budget gainers/losers. HELD items (freezeReason) are
@@ -71,7 +82,16 @@ export function splitReallocation(items: CycleItemRow[]): Reallocation {
   const losing = moved.filter((row) => row.change < 0).sort((a, b) => a.change - b.change);
   const maxAbs = Math.max(...moved.map((row) => Math.abs(row.change)), 1);
   const totalMoved = gaining.reduce((sum, row) => sum + row.change, 0);
-  return { gaining, losing, maxAbs, totalMoved };
+  const totalFreed = losing.reduce((sum, row) => sum - row.change, 0);
+  return {
+    gaining,
+    losing,
+    maxAbs,
+    totalMoved,
+    totalFreed,
+    net: totalMoved - totalFreed,
+    movedCount: moved.length,
+  };
 }
 
 export type BudgetSlice = { name: string; daily: number };

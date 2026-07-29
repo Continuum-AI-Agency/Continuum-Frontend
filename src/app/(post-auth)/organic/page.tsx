@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
-import type { PlatformKey } from '@/components/onboarding/platforms';
 import type { OrganicAgentMentionContext } from '@/components/organic/agent/OrganicAgentPanel';
 import { OrganicAgentPanelLazy } from '@/components/organic/agent/OrganicAgentPanelLazy';
 import { OrganicMetricsDashboardLazy } from '@/components/organic/OrganicMetricsDashboardLazy';
@@ -13,11 +12,8 @@ import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import { ensureOnboardingState } from '@/lib/onboarding/storage';
 import { deriveMetricAccountsByPlatform } from '@/lib/organic/metricAccounts';
-import {
-  ORGANIC_MVP_PLATFORM_KEYS,
-  ORGANIC_PLATFORMS,
-  type OrganicPlatformKey,
-} from '@/lib/organic/platforms';
+import { deriveOrganicPlatformAccounts } from '@/lib/organic/platformAccountOptions';
+import { ORGANIC_MVP_PLATFORM_KEYS, type OrganicPlatformKey } from '@/lib/organic/platforms';
 import type { Trend } from '@/lib/organic/trends';
 import type { BrandInsightsQuestion } from '@/lib/schemas/brandInsights';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -85,7 +81,7 @@ async function OrganicContent({
   }
   const { brandId, state: onboarding } = onboardingResult.value;
   const brandProfileId = brandId;
-  const mvpPlatformSet = new Set<OrganicPlatformKey>(ORGANIC_MVP_PLATFORM_KEYS);
+  const mvpPlatforms: readonly OrganicPlatformKey[] = ORGANIC_MVP_PLATFORM_KEYS;
 
   const integrationSummary =
     integrationSummaryResult.status === 'fulfilled' ? integrationSummaryResult.value : null;
@@ -96,34 +92,12 @@ async function OrganicContent({
     );
   }
 
-  const platformAccounts = ORGANIC_PLATFORMS.filter(({ key }) =>
-    mvpPlatformSet.has(key as OrganicPlatformKey),
-  ).map(({ key, label }) => {
-    const connection = onboarding.connections[key] ?? { connected: false, accountId: null };
-    const summaryAccounts = integrationSummary?.[key as PlatformKey]?.accounts ?? [];
-
-    // Platform is considered connected if either the user connected it personally OR the brand has assigned accounts.
-    const isConnected = Boolean(connection.connected) || summaryAccounts.length > 0;
-
-    // The DEFAULT account. It is only a default: the planner's account switcher can point the
-    // platform at any of `options` below. Publishing used to be stuck on this one value, so a
-    // brand with two Instagram profiles could only ever post to whichever sorted first.
-    const accountId =
-      connection.accountId ??
-      (summaryAccounts.length > 0 ? summaryAccounts[0].integrationAccountId : null);
-
-    const options = summaryAccounts.map((account) => ({
-      id: account.integrationAccountId,
-      label: account.alias ?? account.name,
-    }));
-
-    return {
-      platform: key as OrganicPlatformKey,
-      label,
-      connected: isConnected,
-      accountId,
-      options,
-    };
+  // Shared with the automation action pickers so the planner and an automation
+  // can never disagree about which (platform, account) pairs are publishable.
+  const platformAccounts = deriveOrganicPlatformAccounts({
+    integrationSummary,
+    connections: onboarding.connections,
+    platforms: mvpPlatforms,
   });
 
   const activePlatformKeys = platformAccounts

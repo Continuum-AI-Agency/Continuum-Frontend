@@ -1,15 +1,33 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, render } from '@testing-library/react';
+import { Children, isValidElement, type ReactNode } from 'react';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
 
-// Stub the BKLit ComposedChart container (needs ResizeObserver). It ignores its
-// children, so the projection line, terminal marker, action pins and tooltip
-// never render (no chart context needed) — we assert the projected-CPA header and
-// the empty-vs-populated switch, which is the hero's own chrome.
+let lastChartPoint: unknown;
+
+// Stub the BKLit ComposedChart container (needs ResizeObserver). Render only the
+// tooltip child against the last real chart point so this seam also covers the
+// tooltip's action list without needing chart context.
 mock.module('@/components/charts/composed-chart', () => ({
-  ComposedChart: () => <div data-testid="hero-chart" />,
+  ComposedChart: ({ data, children }: { data: unknown[]; children: ReactNode }) => {
+    lastChartPoint = data.at(-1);
+    const tooltip = Children.toArray(children).find(
+      (child) => isValidElement(child) && child.props.matchCrosshair === true,
+    );
+    return (
+      <>
+        <div data-testid="hero-chart" />
+        {tooltip}
+      </>
+    );
+  },
+}));
+
+mock.module('@/components/charts/tooltip', () => ({
+  ChartTooltip: ({ content }: { content: (context: { point: unknown }) => ReactNode }) =>
+    content({ point: lastChartPoint }),
 }));
 
 import { cpaSeriesSparse, cpaSeriesTrend } from './__fixtures__/optimizerFixtures';
@@ -39,5 +57,62 @@ describe('CpaHeroTimeline', () => {
     const { container } = render(<CpaHeroTimeline objective="awareness" series={cpaSeriesTrend} />);
     // The rotated axis title names the cost — even with the chart body stubbed out.
     expect(container.textContent).toContain('CPM');
+  });
+
+  it('renders repeated events without a duplicate React key warning', () => {
+    const event = {
+      ts: '2026-06-22T00:00:00.000Z',
+      kind: 'config' as const,
+      label: 'pause · 120250872653660236',
+      count: 1,
+    };
+    const originalConsoleError = console.error;
+    const consoleError = mock(() => {});
+    console.error = consoleError as unknown as typeof console.error;
+
+    try {
+      const { getAllByText } = render(
+        <CpaHeroTimeline
+          eventsByTs={{ '2026-06-22T00:00:00.000Z': [event, event] }}
+          series={cpaSeriesTrend}
+        />,
+      );
+
+      expect(getAllByText(event.label)).toHaveLength(2);
+      expect(
+        consoleError.mock.calls.some((call) =>
+          call.join(' ').includes('Encountered two children with the same key'),
+        ),
+      ).toBe(false);
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
+
+  // The tooltip panel is dark in BOTH themes, so page-theme text tokens render near-black
+  // text on a near-black card. This is what made the hover card unreadable in light mode.
+  it('styles the tooltip with the on-dark tooltip tokens, never the page foreground', () => {
+    const { container } = render(
+      <CpaHeroTimeline
+        eventsByTs={{
+          '2026-06-22T00:00:00.000Z': [
+            { ts: '2026-06-22T00:00:00.000Z', kind: 'applied', label: 'Budgets applied', count: 1 },
+          ],
+        }}
+        series={cpaSeriesTrend}
+      />,
+    );
+    const panel = container.querySelector('.min-w-\\[196px\\]');
+    expect(panel).toBeTruthy();
+    expect(panel?.innerHTML).toContain('text-chart-tooltip-foreground');
+    // Page-theme tokens inside the always-dark panel are the bug: near-black on near-black.
+    expect(panel?.innerHTML).not.toContain('text-foreground');
+    expect(panel?.innerHTML).not.toContain('text-muted-foreground');
+  });
+
+  it('shows the cost change against the previous cycle', () => {
+    const { container } = render(<CpaHeroTimeline currency="USD" series={cpaSeriesTrend} />);
+    // The trend fixture ends below its previous cycle, so the delta reads as a fall.
+    expect(container.textContent).toContain('↓');
   });
 });

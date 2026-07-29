@@ -9,7 +9,7 @@
 // One un-exercised hop, by design: the per-row markdown body renders through
 // SafeMarkdownLazy, which is `next/dynamic(..., { ssr: false })`. That does not
 // hydrate under happy-dom, so the body text is NOT asserted here — the
-// deterministic surface (unread badge, title, date, tag, per-row "new" dot, and
+// deterministic surface (unread badge, title, timestamp, tag, per-row "new" dot, and
 // the persisted last-seen id) IS. Verify the markdown body render manually via a
 // /run through the real app.
 
@@ -29,19 +29,19 @@ if (typeof (globalThis as { ResizeObserver?: unknown }).ResizeObserver !== 'func
 
 import { computeUnreadCount, getLatestEntryId, sortChangelogDesc } from '@/lib/changelog/changelog';
 import { changelogSchema } from '@/lib/changelog/schema';
-import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 import { WhatsNewBell } from './WhatsNewBell';
 
 const TAG_LABEL: Record<string, string> = { new: 'New', improved: 'Improved', fixed: 'Fixed' };
 
-// Rows shaped exactly as public.whats_new returns them, validated through the
-// same boundary schema the server reader uses, then sorted newest-first.
+// Rows shaped exactly as the header reader's public.whats_new select returns,
+// validated through the same boundary schema, then sorted newest-first.
 const realEntries = sortChangelogDesc(
   changelogSchema.parse([
     {
       id: '2026-07-20-planner-bulk-actions',
       date: '2026-07-20',
+      createdAt: '2026-07-20T15:30:00.000Z',
       title: 'Bulk actions & drag-to-reschedule in the Planner',
       body: 'Select multiple posts to **duplicate, delete, or move** them in one go.',
       tag: 'new',
@@ -49,6 +49,7 @@ const realEntries = sortChangelogDesc(
     {
       id: '2026-07-19-video-thumbnail-frame',
       date: '2026-07-19',
+      createdAt: '2026-07-19T15:30:00.000Z',
       title: 'Choose a thumbnail frame for your videos',
       body: 'Scrub any generated video and pick the exact cover frame.',
       tag: 'improved',
@@ -56,6 +57,7 @@ const realEntries = sortChangelogDesc(
     {
       id: '2026-07-18-scheduled-continuum-reports',
       date: '2026-07-18',
+      createdAt: '2026-07-18T15:30:00.000Z',
       title: 'Scheduled Continuum Report emails',
       body: 'Set your brand report to arrive automatically on the cadence you choose.',
       tag: 'new',
@@ -87,18 +89,18 @@ describe('WhatsNewBell end-to-end', () => {
     });
   });
 
-  it('renders the newest entry title, date and tag once the popover opens', async () => {
+  it('renders the newest entry title, timestamp and tag once the popover opens', async () => {
     render(<WhatsNewBell entries={realEntries} />);
     const trigger = await screen.findByRole('button');
     fireEvent.click(trigger);
 
     const newest = realEntries[0];
-    const expectedDate = formatRelativeTime(`${newest.date}T00:00:00Z`);
-
     await waitFor(() => {
       expect(screen.getByText(newest.title)).toBeTruthy();
     });
-    expect(screen.getAllByText(expectedDate).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText((_content, element) => element?.dateTime === newest.createdAt),
+    ).toBeTruthy();
     if (newest.tag) {
       expect(screen.getAllByText(TAG_LABEL[newest.tag]).length).toBeGreaterThan(0);
     }

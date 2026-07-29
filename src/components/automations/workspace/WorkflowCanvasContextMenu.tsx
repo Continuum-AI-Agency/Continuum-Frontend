@@ -112,14 +112,10 @@ export function WorkflowCanvasContextMenu({
                         return (
                           <ContextMenuItem
                             key={item.type}
-                            disabled={item.comingSoon}
                             onSelect={() => onAddNode(item.type, target.position)}
                           >
                             <Icon className="mr-2 size-4" aria-hidden="true" />
                             <span className="truncate">{item.label}</span>
-                            {item.comingSoon ? (
-                              <ContextMenuItemInfo description="Coming soon" />
-                            ) : null}
                           </ContextMenuItem>
                         );
                       })}
@@ -188,14 +184,10 @@ export function WorkflowCanvasContextMenu({
                         return (
                           <ContextMenuItem
                             key={item.type}
-                            disabled={item.comingSoon}
                             onSelect={() => onAddConnectedNode(node.id, item.type)}
                           >
                             <Icon className="mr-2 size-4" aria-hidden="true" />
                             <span className="truncate">{item.label}</span>
-                            {item.comingSoon ? (
-                              <ContextMenuItemInfo description="Coming soon" />
-                            ) : null}
                           </ContextMenuItem>
                         );
                       })}

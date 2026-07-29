@@ -41,31 +41,11 @@ import {
 } from '@/lib/automations/automations';
 import { describeSchedule, formatInTimezone } from '@/lib/automations/schedule';
 import { useAutomationSheetStore } from '@/lib/automations/sheet-store';
-
-const RUN_STATUS_PILL: Record<
-  AutomationRun['status'],
-  { label: string; variant: 'success' | 'error' | 'warning' | 'info'; pulse?: boolean }
-> = {
-  completed: { label: 'Completed', variant: 'success' },
-  failed: { label: 'Failed', variant: 'error' },
-  running: { label: 'Running', variant: 'info', pulse: true },
-  queued: { label: 'Queued', variant: 'warning' },
-};
-
-const EMAIL_STATUS_LABEL: Record<AutomationRun['emailStatus'], string> = {
-  sent: 'Emailed',
-  sending: 'Emailing…',
-  pending: 'Email pending',
-  failed: 'Email failed',
-  skipped: 'Email skipped',
-};
-
-function formatDuration(run: AutomationRun): string | null {
-  if (!run.startedAt || !run.completedAt) return null;
-  const seconds = Math.round((Date.parse(run.completedAt) - Date.parse(run.startedAt)) / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-}
+import {
+  AUTOMATION_EMAIL_STATUS_LABEL as EMAIL_STATUS_LABEL,
+  formatAutomationRunDuration as formatDuration,
+  AUTOMATION_RUN_STATUS_PILL as RUN_STATUS_PILL,
+} from './workspace/runs/runPresentation';
 
 function RunRow({
   run,
@@ -225,15 +205,22 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
                   <PlayIcon className="size-3.5" />
                   {runNowMutation.isPending ? 'Starting…' : 'Run now'}
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openEditor(automation.id)}
-                >
-                  <SquarePenIcon className="size-3.5" />
-                  Edit
-                </Button>
+                {/* The builder that openEditor targets is this surface's sibling, so an
+                    automation belonging to another agent has nowhere to open and would
+                    strand the store at builderOpen with no one left to close it. This
+                    sheet still renders such an automation while it slides out on the
+                    agent mismatch, so the hand-off has to be gated here too. */}
+                {automation.agent === agent && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openEditor(automation.id)}
+                  >
+                    <SquarePenIcon className="size-3.5" />
+                    Edit
+                  </Button>
+                )}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button type="button" size="sm" variant="ghost" className="text-destructive">

@@ -6,11 +6,13 @@ import type { CampaignSection } from './campaignGroups';
 import {
   buildCampaignSections,
   buildCboCampaignSections,
+  buildClaimMap,
   defaultCollapsed,
   filterItems,
   filterSection,
   flattenRows,
   pickerCounts,
+  previewMoves,
   sectionEligibleIds,
   topEligibleBySpend,
 } from './campaignGroups';
@@ -498,5 +500,95 @@ describe('objective awareness', () => {
       expect(def.kpiField.length).toBeGreaterThan(0);
       expect(def.costLabel.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('buildClaimMap', () => {
+  const rows = [
+    { adset_id: 'a1', portfolio_id: 'p-other', portfolio_name: 'Prospecting Q3' },
+    { adset_id: 'a2', portfolio_id: 'p-self', portfolio_name: 'This one' },
+    { adset_id: 'a3', portfolio_id: 'p-other2', portfolio_name: '  ' },
+  ];
+
+  it('maps ad sets claimed by OTHER portfolios', () => {
+    const map = buildClaimMap(rows, 'p-self');
+    expect(map.get('a1')).toEqual({ portfolioId: 'p-other', portfolioName: 'Prospecting Q3' });
+  });
+
+  // An ad set already enrolled here is not moving; badging it would invent a conflict.
+  it('omits ad sets already enrolled in the portfolio being edited', () => {
+    expect(buildClaimMap(rows, 'p-self').has('a2')).toBe(false);
+  });
+
+  it('falls back to a readable label for a blank portfolio name', () => {
+    expect(buildClaimMap(rows, 'p-self').get('a3')?.portfolioName).toBe('another portfolio');
+  });
+
+  it('claims everything when there is no current portfolio (create flow)', () => {
+    expect(buildClaimMap(rows, null).size).toBe(3);
+  });
+});
+
+describe('previewMoves', () => {
+  const claims = buildClaimMap(
+    [
+      { adset_id: 'a1', portfolio_id: 'p1', portfolio_name: 'Prospecting Q3' },
+      { adset_id: 'a2', portfolio_id: 'p1', portfolio_name: 'Prospecting Q3' },
+      { adset_id: 'a3', portfolio_id: 'p2', portfolio_name: 'Retargeting' },
+    ],
+    null,
+  );
+
+  it('groups the moves by the portfolio that loses them, biggest first', () => {
+    expect(previewMoves(['a1', 'a2', 'a3'], claims)).toEqual([
+      { portfolioName: 'Prospecting Q3', adsetIds: ['a1', 'a2'] },
+      { portfolioName: 'Retargeting', adsetIds: ['a3'] },
+    ]);
+  });
+
+  it('ignores unclaimed selections', () => {
+    expect(previewMoves(['unclaimed'], claims)).toEqual([]);
+  });
+
+  it('is empty when nothing selected is claimed', () => {
+    expect(previewMoves([], claims)).toEqual([]);
+  });
+});
+
+describe('buildCampaignSections claims', () => {
+  it('stamps the owning portfolio onto the row', () => {
+    const claims = buildClaimMap(
+      [{ adset_id: 'a1', portfolio_id: 'p1', portfolio_name: 'Prospecting Q3' }],
+      null,
+    );
+    const [section] = buildCampaignSections(
+      [snap({ id: 'a1', campaignId: 'c1', campaignName: 'C1' })],
+      'adset',
+      undefined,
+      claims,
+    );
+    expect(section.adsets[0].enrolledIn?.portfolioName).toBe('Prospecting Q3');
+  });
+
+  // A claimed ad set must stay selectable — moving it is a legitimate thing to want.
+  it('leaves a claimed ad set eligible', () => {
+    const claims = buildClaimMap(
+      [{ adset_id: 'a1', portfolio_id: 'p1', portfolio_name: 'Prospecting Q3' }],
+      null,
+    );
+    const [section] = buildCampaignSections(
+      [snap({ id: 'a1', campaignId: 'c1', campaignName: 'C1' })],
+      'adset',
+      undefined,
+      claims,
+    );
+    expect(section.adsets[0].eligible).toBe(true);
+  });
+
+  it('leaves enrolledIn null when no claim map is supplied', () => {
+    const [section] = buildCampaignSections([
+      snap({ id: 'a1', campaignId: 'c1', campaignName: 'C1' }),
+    ]);
+    expect(section.adsets[0].enrolledIn).toBeNull();
   });
 });

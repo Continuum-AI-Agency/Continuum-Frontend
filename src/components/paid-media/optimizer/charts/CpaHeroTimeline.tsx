@@ -14,8 +14,12 @@
 // labels with formatCpa. A bar drawn there has no readable height, so spend lives
 // in the tooltip, at its real value, instead.
 
-import { type CpaSeriesPoint, getOptimizationMetricDefinition } from '@continuum/contracts';
-import { ZapIcon } from 'lucide-react';
+import {
+  type CpaSeriesPoint,
+  getOptimizationMetricDefinition,
+  type TimelineEvent,
+} from '@continuum/contracts';
+import { PauseIcon, SettingsIcon, WalletIcon, ZapIcon } from 'lucide-react';
 import { useChartStable } from '@/components/charts/chart-context';
 import { ComposedChart } from '@/components/charts/composed-chart';
 import { Grid } from '@/components/charts/grid';
@@ -39,7 +43,7 @@ const dayFmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric'
 
 type CpaHeroTimelineProps = {
   series: CpaSeriesPoint[];
-  actionsByTs?: Record<string, string[]>;
+  eventsByTs?: Record<string, TimelineEvent[]>;
   targetCpa?: number | null;
   currency?: string | null;
   confidenceBand?: string | null;
@@ -48,14 +52,14 @@ type CpaHeroTimelineProps = {
 
 export function CpaHeroTimeline({
   series,
-  actionsByTs = {},
+  eventsByTs = {},
   targetCpa,
   currency,
   confidenceBand,
   objective,
 }: CpaHeroTimelineProps) {
   const metric = getOptimizationMetricDefinition(objective);
-  const points = buildCpaHeroPoints(series, actionsByTs, metric.denominatorMultiplier);
+  const points = buildCpaHeroPoints(series, eventsByTs, metric.denominatorMultiplier);
 
   if (points.length < 2) {
     return (
@@ -101,7 +105,11 @@ export function CpaHeroTimeline({
           {metric.costLabel}
         </span>
         <ComposedChart
+          // aspect-ratio yields to max-height in CSS, so this stays wide on a narrow
+          // viewport but never grows into the ~640px monolith a full-bleed 5:2 produced on
+          // a desktop panel — the chart was taller than everything below it combined.
           aspectRatio="5 / 2"
+          className="max-h-[300px]"
           data={points}
           margin={{ top: 16, right: 18, bottom: 26, left: 56 }}
           xDataKey="date"
@@ -152,14 +160,21 @@ function CycleActionPins({ points }: { points: CpaHeroPoint[] }) {
   return (
     <g>
       {points.map((point) => {
-        if (point.actions.length === 0) return null;
+        if (point.events.length === 0) return null;
         const x = xScale(point.date) ?? 0;
+        // A cycle can carry several kinds at once; the pin takes the colour of the most
+        // consequential one present. Money moving outranks a setting being changed.
+        const kinds = new Set(point.events.map((event) => event.kind));
+        const dominant = (['applied', 'status', 'config', 'cycle'] as const).find((kind) =>
+          kinds.has(kind),
+        );
+        const color = eventStyle(dominant ?? 'cycle').color;
         return (
           <g key={point.ts} transform={`translate(${x}, 0)`}>
-            {/* Native hover: the SVG title lists the actions taken this cycle. */}
-            <title>{point.actions.join(' · ')}</title>
+            {/* Native hover: a keyboard/screen-reader path to the same list the card shows. */}
+            <title>{point.events.map((event) => event.label).join(' · ')}</title>
             <line
-              stroke="var(--chart-4)"
+              stroke={color}
               strokeDasharray="2,3"
               strokeOpacity={0.45}
               x1={0}
@@ -172,12 +187,12 @@ function CycleActionPins({ points }: { points: CpaHeroPoint[] }) {
               cy={innerHeight}
               fill="var(--chart-marker-background)"
               r={5}
-              stroke="var(--chart-4)"
+              stroke={color}
               strokeWidth={2.5}
             />
-            {point.actions.length > 1 ? (
+            {point.events.length > 1 ? (
               <>
-                <circle cx={7} cy={innerHeight - 9} fill="var(--chart-4)" r={6.5} />
+                <circle cx={7} cy={innerHeight - 9} fill={color} r={6.5} />
                 <text
                   dominantBaseline="central"
                   fill="var(--chart-marker-background)"
@@ -187,7 +202,7 @@ function CycleActionPins({ points }: { points: CpaHeroPoint[] }) {
                   x={7}
                   y={innerHeight - 9}
                 >
-                  {point.actions.length}
+                  {point.events.length}
                 </text>
               </>
             ) : null}
@@ -197,6 +212,21 @@ function CycleActionPins({ points }: { points: CpaHeroPoint[] }) {
     </g>
   );
 }
+
+/** Per-kind glyph + accent. The pin and the tooltip row use the SAME pair, so a mark on the
+ *  axis and its line in the card are recognizably the same event. */
+const EVENT_STYLE: Record<string, { Icon: typeof ZapIcon; color: string; label: string }> = {
+  cycle: { Icon: ZapIcon, color: 'var(--chart-4)', label: 'Cycle' },
+  applied: { Icon: WalletIcon, color: 'var(--success)', label: 'Applied' },
+  status: { Icon: PauseIcon, color: 'var(--warning)', label: 'Status' },
+  config: { Icon: SettingsIcon, color: 'var(--chart-3)', label: 'Setting' },
+};
+
+function eventStyle(kind: string) {
+  return EVENT_STYLE[kind] ?? EVENT_STYLE.cycle;
+}
+
+const timeFmt = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
 
 function HeroTooltip({
   point,
@@ -209,35 +239,67 @@ function HeroTooltip({
   costLabel: string;
   resultLabel: string;
 }) {
+  // The tooltip panel is dark in BOTH themes (--chart-tooltip-background), so it needs its
+  // own foreground tokens. Using the page's text-foreground rendered near-black text on a
+  // near-black panel in light mode — the card was there, and unreadable.
+  const delta = point.deltaCpa;
   return (
-    <div className="min-w-[184px] space-y-2 p-1">
-      <div className="text-3xs text-muted-foreground uppercase tracking-wide">
+    <div className="min-w-[196px] max-w-[260px] space-y-2 p-1">
+      <div className="text-3xs text-chart-tooltip-muted uppercase tracking-wide">
         {point.date instanceof Date ? dayFmt.format(point.date) : ''}
       </div>
       <div className="flex items-baseline justify-between gap-4">
-        <span className="text-xs text-muted-foreground">{costLabel}</span>
-        <span className="font-data font-semibold text-base text-foreground tabular-nums">
-          {formatCpa(point.cpa, currency)}
+        <span className="text-xs text-chart-tooltip-muted">{costLabel}</span>
+        <span className="flex items-baseline gap-1.5">
+          <span className="font-data font-semibold text-base text-chart-tooltip-foreground tabular-nums">
+            {formatCpa(point.cpa, currency)}
+          </span>
+          {delta != null && delta !== 0 ? (
+            <span
+              className="font-data text-2xs tabular-nums"
+              style={{ color: delta < 0 ? 'var(--success)' : 'var(--warning)' }}
+            >
+              {delta < 0 ? '↓' : '↑'}
+              {formatCpa(Math.abs(delta), currency)}
+            </span>
+          ) : null}
         </span>
       </div>
-      <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
+      <div className="flex items-center justify-between text-xs text-chart-tooltip-muted tabular-nums">
         <span>spend {formatCurrency(point.spend, currency)}</span>
         <span>
           {Math.round(point.conv)} {resultLabel.toLowerCase()}
         </span>
       </div>
-      {point.actions.length > 0 ? (
-        <div className="space-y-1 border-border/60 border-t pt-1.5">
-          {point.actions.map((action) => (
-            <div className="flex items-center gap-1.5 text-xs" key={action}>
-              <ZapIcon
-                aria-hidden="true"
-                className="size-3 shrink-0"
-                style={{ color: 'var(--chart-4)' }}
-              />
-              <span className="text-foreground">{action}</span>
-            </div>
-          ))}
+      {point.events.length > 0 ? (
+        // Capped + scrollable: a busy cycle can carry a dozen events, and an uncapped card
+        // grows past the plot and gets clipped by the chart container.
+        <div className="max-h-32 space-y-1 overflow-y-auto border-white/15 border-t pt-1.5">
+          {point.events.map((event, index) => {
+            const { Icon, color } = eventStyle(event.kind);
+            const at = Date.parse(event.ts);
+            // Two events on one cycle can be byte-identical (the same config field changed
+            // twice carries the same label and detail), so position is the only thing that
+            // distinguishes them. This list is read-only and never reorders, which is what
+            // makes an index key safe here.
+            return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: identical repeated events have no other unique key
+              <div className="flex items-start gap-1.5 text-xs" key={`${point.ts}:event:${index}`}>
+                <Icon aria-hidden="true" className="mt-0.5 size-3 shrink-0" style={{ color }} />
+                <span className="min-w-0 flex-1">
+                  <span className="text-chart-tooltip-foreground">{event.label}</span>
+                  {event.detail ? (
+                    <span className="text-chart-tooltip-muted"> · {event.detail}</span>
+                  ) : null}
+                </span>
+                {Number.isNaN(at) ? null : (
+                  <span className="shrink-0 text-3xs text-chart-tooltip-muted tabular-nums">
+                    {timeFmt.format(new Date(at))}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </div>
@@ -260,10 +322,15 @@ function HeroLegend({ hasProjection, costLabel }: { hasProjection: boolean; cost
           Projected
         </span>
       ) : null}
-      <span className="inline-flex items-center gap-1.5">
-        <span className="size-2 rounded-full border" style={{ borderColor: 'var(--chart-4)' }} />
-        Optimizer action
-      </span>
+      {(['cycle', 'applied', 'status', 'config'] as const).map((kind) => {
+        const { color, label } = eventStyle(kind);
+        return (
+          <span className="inline-flex items-center gap-1.5" key={kind}>
+            <span className="size-2 rounded-full border" style={{ borderColor: color }} />
+            {label}
+          </span>
+        );
+      })}
     </div>
   );
 }

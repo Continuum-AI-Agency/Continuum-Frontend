@@ -21,7 +21,6 @@ import {
   automationRunDetailResponseSchema,
   automationWorkflowResponseSchema,
   automationWorkflowValidationSchema,
-  type CreateAutomationRequest,
   type CreateWorkflowAutomationRequest,
   createAutomationWebhookDestinationResponseSchema,
   createAutomationWebhookEndpointResponseSchema,
@@ -37,7 +36,9 @@ import {
   type PublishAutomationWorkflowResponse,
   publishAutomationWorkflowResponseSchema,
   type RecipientCandidate,
+  type RotateAutomationWebhookEndpointSecretResponse,
   type RunAutomationNowResponse,
+  rotateAutomationWebhookEndpointSecretResponseSchema,
   runAutomationNowResponseSchema,
   type SaveAutomationDraftRequest,
   type TestAutomationWorkflowResponse,
@@ -89,6 +90,20 @@ export async function createAutomationWebhookEndpoint(input: {
   });
 }
 
+// Rotation is destructive by design: the previous signing secret stops
+// verifying the moment this resolves, so the caller must confirm first and
+// must reveal the returned secret exactly once.
+export async function rotateAutomationWebhookEndpointSecret(input: {
+  automationId: string;
+  endpointId: string;
+}): Promise<RotateAutomationWebhookEndpointSecretResponse> {
+  return http.request({
+    path: `/api/automations/${encodeURIComponent(input.automationId)}/webhook-endpoints/${encodeURIComponent(input.endpointId)}/rotate`,
+    method: 'POST',
+    schema: rotateAutomationWebhookEndpointSecretResponseSchema,
+  });
+}
+
 export async function createAutomationWebhookDestination(input: {
   brandId: string;
   name: string;
@@ -116,16 +131,6 @@ export async function fetchAutomation(automationId: string): Promise<Automation>
   const result = await http.request<AutomationResponse>({
     path: `/api/automations/${encodeURIComponent(automationId)}`,
     method: 'GET',
-    schema: automationResponseSchema,
-  });
-  return result.automation;
-}
-
-export async function createAutomation(input: CreateAutomationRequest): Promise<Automation> {
-  const result = await http.request<AutomationResponse>({
-    path: '/api/automations',
-    method: 'POST',
-    body: input,
     schema: automationResponseSchema,
   });
   return result.automation;
@@ -261,15 +266,18 @@ export async function unpublishAutomationWorkflow(
   });
 }
 
+// `actionNodeIds` is the backend's own computed list of the nodes this publish
+// granted live-action rights to. It used to be parsed and thrown away, which
+// left the pre-publish surface guessing at what publishing had actually armed;
+// the full response is returned so callers can show it.
 export async function publishAutomationWorkflow(
   automationId: string,
-): Promise<AutomationWorkflowResponse> {
-  const result = await http.request<PublishAutomationWorkflowResponse>({
+): Promise<PublishAutomationWorkflowResponse> {
+  return http.request<PublishAutomationWorkflowResponse>({
     path: `/api/automations/${encodeURIComponent(automationId)}/workflow/publish`,
     method: 'POST',
     schema: publishAutomationWorkflowResponseSchema,
   });
-  return { version: result.version, validation: result.validation };
 }
 
 export async function testAutomationWorkflow(
@@ -359,16 +367,6 @@ export function useRecipientCandidates(brandId?: string) {
     queryKey: recipientCandidatesQueryKey(brandId),
     queryFn: () => fetchRecipientCandidates(brandId as string),
     enabled: Boolean(brandId),
-  });
-}
-
-export function useCreateAutomation(brandId?: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: createAutomation,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: automationsQueryKey(brandId) });
-    },
   });
 }
 

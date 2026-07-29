@@ -92,8 +92,10 @@ export function publishPlatformLabel(platform: PublishPlatform | undefined | nul
  * provider's error code + the staging gate.
  */
 export const PUBLISH_ERROR_MESSAGES: Record<string, string> = {
+  // Platform-neutral: this copy is shared by Instagram, Facebook and LinkedIn publishes, and
+  // naming Instagram sent Facebook users to reconnect the wrong integration.
   token_expired:
-    'PLEASE RECONNECT: The connection for the selected Instagram account expired or was revoked. Reconnect that account in Integrations, then try again. We always post to the account you selected — never a different one on the brand.',
+    'PLEASE RECONNECT: The connection for the selected account expired or was revoked. Reconnect that account in Integrations, then try again. We always post to the account you selected — never a different one on the brand.',
   rate_limited:
     'The platform is temporarily rate-limiting requests. Wait a few minutes and try again.',
   media_processing_error: "The platform couldn't process this media. Check the file and try again.",

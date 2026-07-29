@@ -5,6 +5,16 @@
 
 import type { ChangelogEntry } from './schema';
 
+export const CHANGELOG_RETENTION_DAYS = 5;
+
+/** Oldest calendar date still eligible for the header changelog window, in UTC. */
+export function getChangelogRetentionStartDate(now: Date = new Date()): string {
+  const windowStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - CHANGELOG_RETENTION_DAYS),
+  );
+  return windowStart.toISOString().slice(0, 10);
+}
+
 /** Sort DESC by (date, id): newest first, same-day ties broken by id descending. */
 export function sortChangelogDesc(entries: ChangelogEntry[]): ChangelogEntry[] {
   return [...entries].sort((a, b) => {

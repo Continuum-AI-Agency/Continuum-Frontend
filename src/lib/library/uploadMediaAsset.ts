@@ -12,8 +12,11 @@
 import {
   type AssetPreviewState,
   classifyLibraryFile,
+  completeMcpUploadIntentRequestSchema,
+  completeMcpUploadIntentResponseSchema,
   type LibraryUploadTicket,
   libraryUploadTicketSchema,
+  type PinnedLibraryImageRef,
   registerMediaErrorSchema,
   registerMediaResponseSchema,
 } from '@continuum/contracts';
@@ -85,6 +88,29 @@ export type UploadMediaAssetParams = {
   onResumeState?: (state: UploadResumeState) => void;
   onProgress?: (progress: ResumableUploadProgress) => void;
 };
+
+export async function completeMcpUploadIntent(
+  params: {
+    brandId: string;
+    uploadIntentId: string;
+    assetRefs: PinnedLibraryImageRef[];
+  },
+  deps: Pick<UploadMediaAssetDeps, 'createClient'> = {},
+) {
+  const request = completeMcpUploadIntentRequestSchema.parse({
+    action: 'complete_mcp_upload_intent',
+    brandId: params.brandId,
+    uploadIntentId: params.uploadIntentId,
+    assetRefs: params.assetRefs,
+  });
+  const supabase = (deps.createClient ?? createSupabaseBrowserClient)();
+  const data = await invokeLibraryUpload(supabase, request);
+  const parsed = completeMcpUploadIntentResponseSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error('library-upload returned an invalid MCP upload-intent receipt');
+  }
+  return parsed.data;
+}
 
 // supabase-js wraps a non-2xx edge response in a FunctionsHttpError whose
 // `.context` is the raw Response. Pull the edge fn's `{ message }` body out of it

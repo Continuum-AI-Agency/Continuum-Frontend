@@ -52,6 +52,30 @@ const blobToDataUrl = (blob: Blob): Promise<string> =>
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/**
+ * Largest attached video we will inline as a data URL. Inlining makes the media
+ * same-origin, which is the only way a `<video>` can be snapshotted into the
+ * foreignObject rasterizer without tainting the canvas. Past this size the string
+ * cost outweighs the benefit and we fall back to a CORS-mode fetch instead.
+ */
+const MAX_INLINE_VIDEO_BYTES = 24 * 1024 * 1024;
+
+/**
+ * Force CORS mode on every element that references an attached asset.
+ *
+ * Without `crossorigin`, the browser fetches media in no-cors mode and taints the
+ * canvas REGARDLESS of the response's CORS headers — so a perfectly permissive
+ * `Access-Control-Allow-Origin: *` from Supabase Storage does not save us. The
+ * attribute is what opts the request into CORS mode; the header only decides
+ * whether that request is allowed. Both are required, and only this half was
+ * missing.
+ */
+export const withCrossOrigin = (html: string): string =>
+  html.replace(/<(img|video|audio)\b([^>]*?)(\/?)>/gi, (tag, name, attrs: string, selfClose) => {
+    if (!/hf-asset:\/\//i.test(attrs) || /\bcrossorigin\s*=/i.test(attrs)) return tag;
+    return `<${name}${attrs} crossorigin="anonymous"${selfClose}>`;
+  });
+
 async function resolveCompositionHtml(
   composition: HyperframesBrowserComposition,
   signal?: AbortSignal,
@@ -60,14 +84,26 @@ async function resolveCompositionHtml(
   if (!response.ok) throw new Error(`Composition fetch failed (${response.status})`);
   let html = await response.text();
 
+  html = withCrossOrigin(html);
+
   for (const asset of composition.assets) {
     throwIfAborted(signal);
     let replacement = asset.url;
-    if (asset.kind === 'image') {
+
+    // Images and video are inlined; audio is not. Audio never touches the canvas
+    // — `mixdownTimelineAudio` fetches it directly through mediabunny — so it
+    // cannot taint anything and inlining it would only bloat the HTML.
+    if (asset.kind === 'image' || asset.kind === 'video') {
       const media = await fetch(asset.url, { signal, credentials: 'omit' });
-      if (!media.ok) throw new Error(`Attached image fetch failed (${media.status})`);
-      replacement = await blobToDataUrl(await media.blob());
+      if (!media.ok) throw new Error(`Attached ${asset.kind} fetch failed (${media.status})`);
+      const blob = await media.blob();
+      if (asset.kind === 'image' || blob.size <= MAX_INLINE_VIDEO_BYTES) {
+        replacement = await blobToDataUrl(blob);
+      }
+      // Oversized video keeps its remote URL and relies on the crossorigin
+      // attribute applied above to stay untainted.
     }
+
     html = html.replace(new RegExp(`hf-asset://${escapeRegExp(asset.assetId)}`, 'g'), replacement);
   }
   if (html.includes('hf-asset://')) {
@@ -139,13 +175,31 @@ async function seekComposition(iframe: HTMLIFrameElement, timestamp: number): Pr
     Array.from(doc?.querySelectorAll('video') ?? []).map(async (video) => {
       video.muted = true;
       video.pause();
+      // `data-source-start` is the in-point within the source clip. audioElements()
+      // already honours it when building the mixdown, so ignoring it here would
+      // drift the picture against its own audio by exactly that offset.
       const start = Number(video.dataset.start ?? 0);
-      await waitForSeek(video, Math.max(0, timestamp - start));
+      const sourceStart = Number(video.dataset.sourceStart ?? 0);
+      const offset = Number.isFinite(sourceStart) ? sourceStart : 0;
+      await waitForSeek(video, Math.max(0, timestamp - start + offset));
     }),
   );
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 }
 
+/**
+ * Snapshot the current video frame as an embeddable data URL.
+ *
+ * Returns null instead of throwing on a tainted canvas. That distinction is
+ * load-bearing: this runs once per video per frame, so an uncaught SecurityError
+ * here does not lose one frame, it destroys an entire multi-minute render (and
+ * the review capture, which shares this path). Degrading to "drop the video
+ * element" keeps the rest of the composition renderable and lets the caller
+ * surface a warning.
+ *
+ * JPEG rather than PNG: this is the hot path (30fps x duration x N videos) and
+ * PNG-encoding photographic frames is both far slower and several times larger.
+ */
 function videoFrameDataUrl(video: HTMLVideoElement): string | null {
   if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return null;
   const canvas = document.createElement('canvas');
@@ -153,8 +207,12 @@ function videoFrameDataUrl(video: HTMLVideoElement): string | null {
   canvas.height = video.videoHeight;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
-  ctx.drawImage(video, 0, 0);
-  return canvas.toDataURL('image/png');
+  try {
+    ctx.drawImage(video, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  } catch {
+    return null;
+  }
 }
 
 async function rasterizeFrame(

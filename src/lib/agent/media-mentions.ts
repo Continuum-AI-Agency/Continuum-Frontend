@@ -14,6 +14,7 @@ import type {
   MediaSearchResultItem,
 } from '@continuum/contracts';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
+import { fetchLibraryCollections } from '@/lib/library/collections';
 import {
   buildLibraryQuery,
   MEDIA_SOURCES,
@@ -189,13 +190,6 @@ export async function fetchMediaMentionAssets(
   return filterSuggestionsByQuery(suggestions, trimmed);
 }
 
-async function fetchMediaMentionCollections(brandId: string): Promise<MediaCollection[]> {
-  const response = await fetch(`/api/library/collections?brandId=${encodeURIComponent(brandId)}`);
-  if (!response.ok) return [];
-  const payload = (await response.json()) as { collections?: MediaCollection[] };
-  return payload.collections ?? [];
-}
-
 // The subfolders shown when "Media library" is opened with no query: the source
 // folders followed by the brand's collections. Fail-open on the collections
 // fetch so a miss still yields the source folders.
@@ -203,7 +197,7 @@ export async function fetchMediaLibraryFolders(
   brandId: string,
   referenceSource: MentionSource = 'organic',
 ): Promise<AgentMentionSuggestion[]> {
-  const collections = await fetchMediaMentionCollections(brandId).catch(() => []);
+  const collections = await fetchLibraryCollections(brandId).catch(() => []);
   return [
     ...MEDIA_SOURCE_FOLDERS.map((folder) => sourceFolderToSuggestion(folder, referenceSource)),
     ...collections.map((collection) => collectionToSuggestion(collection, referenceSource)),

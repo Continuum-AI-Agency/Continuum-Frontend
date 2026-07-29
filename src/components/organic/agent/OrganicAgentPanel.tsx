@@ -9,6 +9,10 @@ import { useShallow } from 'zustand/react/shallow';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import { Suggestion } from '@/components/ai-elements/suggestion';
 import { ChatProvenanceBanner } from '@/components/chat/AgentInitiatorPill';
+import {
+  buildAgentAttachmentContext,
+  mergeAttachmentReferences,
+} from '@/components/chat/attachmentReferences';
 import type { Attachment } from '@/components/chat/attachments';
 import { ChatMarker } from '@/components/chat/ChatMarker';
 import { ChatMessage } from '@/components/chat/ChatMessage';
@@ -664,19 +668,21 @@ export function OrganicAgentPanel({
 
       const content = value.trim();
       const messageId = crypto.randomUUID();
-      const images = submittedAttachments
-        .filter((attachment) => attachment.status === 'ready' && attachment.url)
-        .map((attachment) => ({
-          url: attachment.url as string,
-          name: attachment.name,
-          mediaType: attachment.type,
-          storagePath: attachment.storagePath,
-        }));
+      const attachmentContext = buildAgentAttachmentContext(submittedAttachments, 'organic');
+      const resolvedReferences = mergeAttachmentReferences(
+        references,
+        submittedAttachments,
+        'organic',
+      );
+      const images = attachmentContext.attachments;
       // Same shape the backend persists on the user turn, so the live transcript and a resumed one
       // render the attachment identically.
       const metadata =
-        references.length > 0 || images.length > 0
-          ? { references, ...(images.length > 0 ? { attachments: images } : {}) }
+        resolvedReferences.length > 0 || images.length > 0
+          ? {
+              references: resolvedReferences,
+              ...(images.length > 0 ? { attachments: images } : {}),
+            }
           : undefined;
 
       dispatch({ type: 'SUBMIT_USER_MESSAGE', content, messageId, metadata });
@@ -685,7 +691,7 @@ export function OrganicAgentPanel({
         brandId,
         sessionId: currentSessionId,
         messages: [{ id: messageId, role: 'user' as const, content, metadata }],
-        references,
+        references: resolvedReferences,
         weekStart: currentWeekStartIso(),
         timezone: resolveTimezone(),
         platformAccountIds,
@@ -1892,6 +1898,7 @@ export function OrganicAgentPanel({
           <PromptInput
             onSubmit={(value, submitted, references) => handleSubmit(value, submitted, references)}
             attachments={attachments}
+            attachmentOnlyPrompt="Use the attached media as context for this organic task."
             disabled={inputDisabled}
             isStreaming={composerBusy}
             onStop={handleStop}

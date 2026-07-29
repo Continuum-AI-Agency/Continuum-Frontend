@@ -11,12 +11,17 @@ export default async function AutomationsPage() {
   const { activeBrandId } = await getActiveBrandContext();
   if (!activeBrandId) redirect('/onboarding');
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .schema('brand_profiles')
     .from('automations')
     .select('id, name, enabled, updated_at')
     .eq('brand_id', activeBrandId)
     .order('updated_at', { ascending: false });
+
+  // A failed read must not masquerade as an empty list; error.tsx owns the retry.
+  if (error) {
+    throw new Error(`Failed to load automations for brand ${activeBrandId}: ${error.message}`);
+  }
 
   return (
     <main className="min-h-dvh bg-background px-6 py-8 md:px-10">

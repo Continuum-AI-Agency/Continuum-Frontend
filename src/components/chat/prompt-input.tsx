@@ -48,6 +48,7 @@ type PromptInputProps = {
   // Attachment state lives with the surface, which owns the brand and session that decide where an
   // upload lands. The composer only drives it. Build one with useChatAttachments.
   attachments?: ChatAttachmentsController;
+  attachmentOnlyPrompt?: string;
   variant?: 'chat' | 'canvas';
   disabled?: boolean;
   placeholder?: string;
@@ -429,6 +430,7 @@ export function PromptInput({
   isStreaming = false,
   onStop,
   variant = 'chat',
+  attachmentOnlyPrompt,
 }: PromptInputProps) {
   const [plainValue, setPlainValue] = React.useState('');
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
@@ -469,8 +471,15 @@ export function PromptInput({
   const canSubmit = useMemo(
     () =>
       !(attachments?.isUploading ?? false) &&
+      !(attachments?.hasErrors ?? false) &&
       (Boolean(plainValue.trim()) || (attachments?.files.length ?? 0) > 0 || references.length > 0),
-    [attachments?.files.length, attachments?.isUploading, plainValue, references.length],
+    [
+      attachments?.files.length,
+      attachments?.hasErrors,
+      attachments?.isUploading,
+      plainValue,
+      references.length,
+    ],
   );
 
   const handleSubmit = useCallback(
@@ -479,8 +488,14 @@ export function PromptInput({
       if (!canSubmit || disabled) return;
       const serialized = syncFromEditor();
       const trimmedValue = serialized.text.trim();
-      const linkReferences = extractLinkReferences(trimmedValue, mentionSource);
-      onSubmit(trimmedValue, attachments?.files ?? [], [
+      const submittedAttachments = attachments?.files ?? [];
+      const submittedValue =
+        trimmedValue ||
+        (submittedAttachments.some((attachment) => attachment.status === 'ready')
+          ? (attachmentOnlyPrompt ?? '')
+          : '');
+      const linkReferences = extractLinkReferences(submittedValue, mentionSource);
+      onSubmit(submittedValue, submittedAttachments, [
         ...serialized.references.map(({ token: _t, preview, refKey: _k, ...reference }) => {
           // Fold composer preview into metadata so history can render inline media
           // thumbs + hover cards without a re-fetch.
@@ -506,7 +521,15 @@ export function PromptInput({
       setMentionSuggestions([]);
       if (editorRef.current) editorRef.current.innerHTML = '';
     },
-    [attachments, canSubmit, disabled, mentionSource, onSubmit, syncFromEditor],
+    [
+      attachmentOnlyPrompt,
+      attachments,
+      canSubmit,
+      disabled,
+      mentionSource,
+      onSubmit,
+      syncFromEditor,
+    ],
   );
 
   useEffect(() => {
@@ -779,7 +802,7 @@ export function PromptInput({
               <Attachments
                 files={attachments?.files ?? []}
                 onRemove={attachments?.remove ?? (() => undefined)}
-                onSaveToLibrary={attachments?.saveToLibrary}
+                onRetry={(id) => void attachments?.retry(id)}
               />
             </motion.div>
           ) : null}

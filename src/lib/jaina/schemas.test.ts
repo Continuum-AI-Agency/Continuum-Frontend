@@ -120,6 +120,36 @@ describe('jainaChatRequestSchema', () => {
 
     expect(result.success).toBe(true);
   });
+
+  it('accepts durable Library attachments and media_asset references', () => {
+    const reference = {
+      id: 'asset-1',
+      type: 'media_asset',
+      label: 'Hero packshot',
+      source: 'jaina',
+      metadata: { mediaType: 'image/png' },
+    };
+    const result = jainaChatRequestSchema.safeParse({
+      query: 'Analyze the attached media in the context of my paid media.',
+      context: {
+        adAccountId: 'act_123',
+        brandId: 'brand_456',
+        references: [reference],
+        images: [
+          {
+            assetId: 'asset-1',
+            versionId: 'version-1',
+            url: 'https://signed.example/hero.png',
+            name: 'hero.png',
+            mediaType: 'image/png',
+            storagePath: 'brand_456/assets/asset-1/hero.png',
+          },
+        ],
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('responseReportArtifactJobStartedSchema', () => {

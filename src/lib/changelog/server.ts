@@ -2,11 +2,11 @@ import 'server-only';
 
 import { cache } from 'react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { sortChangelogDesc } from './changelog';
+import { getChangelogRetentionStartDate, sortChangelogDesc } from './changelog';
 import { type ChangelogEntry, changelogEntrySchema } from './schema';
 
-// The popover surfaces only the most recent window; the whats_new table keeps
-// full history (nothing is pruned), so bound the read here.
+// The popover surfaces only the active five-day window; the whats_new table
+// retains full history for auditability, so apply both bounds to this read.
 const WHATS_NEW_LIMIT = 8;
 
 /**
@@ -18,9 +18,11 @@ const WHATS_NEW_LIMIT = 8;
 export const getServerChangelog = cache(async (): Promise<ChangelogEntry[]> => {
   try {
     const supabase = await createSupabaseServerClient();
+    const retentionStartDate = getChangelogRetentionStartDate();
     const { data, error } = await supabase
       .from('whats_new')
-      .select('id, date, title, body, tag')
+      .select('id, date, title, body, tag, createdAt:created_at')
+      .gte('date', retentionStartDate)
       .order('date', { ascending: false })
       .order('id', { ascending: false })
       .limit(WHATS_NEW_LIMIT);

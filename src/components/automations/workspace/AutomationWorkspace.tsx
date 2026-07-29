@@ -1,18 +1,11 @@
 'use client';
 
 import {
-  AUTOMATION_NODE_LIFECYCLE,
-  AUTOMATION_SOURCE_LIFECYCLE,
   type Automation,
   type AutomationCapabilitiesResponse,
-  type AutomationSourceKind,
-  type AutomationValidationIssue,
-  type AutomationWebhookDestination,
-  type AutomationWebhookEndpoint,
   type AutomationWorkflowDefinition,
   type AutomationWorkflowNode,
   type AutomationWorkflowValidation,
-  getAutomationNodePortSpec,
   type TestAutomationWorkflowResponse,
   validateAutomationWorkflow,
 } from '@continuum/contracts';
@@ -38,8 +31,6 @@ import {
   CirclePause,
   CirclePlay,
   Cloud,
-  Copy,
-  Focus,
   Lock,
   PanelLeftClose,
   PanelRightClose,
@@ -47,26 +38,16 @@ import {
   Search,
   ShieldCheck,
   Unlock,
-  Webhook,
   X,
 } from 'lucide-react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Connection as CanvasConnection } from '@/components/ai-elements/connection';
 import { Controls as CanvasControls } from '@/components/ai-elements/controls';
 import { Panel as CanvasPanel } from '@/components/ai-elements/panel';
-import { TestResults } from '@/components/ai-elements/test-results';
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from '@/components/ai-elements/tool';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -79,47 +60,44 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { getApiUrl } from '@/lib/api/config';
 import {
-  createAutomationWebhookDestination,
-  createAutomationWebhookEndpoint,
   fetchAutomation,
   fetchAutomationCapabilities,
   fetchAutomationWebhookResources,
   fetchAutomationWorkflow,
   publishAutomationWorkflow,
-  runAutomationNow,
   saveAutomationWorkflowDraft,
   testAutomationWorkflow,
   unpublishAutomationWorkflow,
   updateAutomation,
   useAutomationRunDetail,
+  useRunAutomationNow,
   validateAutomationWorkflowForPublish,
 } from '@/lib/automations/automations';
+import {
+  type ResolvedNodeCapability,
+  resolveNodeLifecycle,
+} from '@/lib/automations/capability-lifecycle';
 import { cn } from '@/lib/utils';
 import {
-  AUTOMATION_NODE_CATALOG,
-  createAutomationWorkflowNode,
-  getAutomationNodeCatalogItem,
-  isAutomationWebhookNodeType,
-} from './automationNodeCatalog';
-import { NodeConfigurationEditor } from './NodeConfigurationEditor';
+  applyDefinitionToCanvasNodes,
+  errorMessage,
+  IconButton,
+  issueCount,
+  type SaveState,
+  type VersionState,
+  WebhookManager,
+  type WebhookResources,
+  WorkflowInspector,
+} from './AutomationWorkspacePanels';
+import { AUTOMATION_NODE_CATALOG, createAutomationWorkflowNode } from './automationNodeCatalog';
+import { PublishReadinessDialog } from './PublishReadinessDialog';
+import { type RightRailTab, RightRailTabs } from './runs/RightRailTabs';
+import { RunHistoryPanel } from './runs/RunHistoryPanel';
+import { useActiveRun } from './runs/useActiveRun';
 import { WorkflowCanvasContextMenu, type WorkflowMenuTarget } from './WorkflowCanvasContextMenu';
 import { type WorkflowCanvasEdge, WorkflowEdge } from './WorkflowEdge';
 import { type WorkflowCanvasNode, WorkflowNodeCard } from './WorkflowNodeCard';
@@ -133,7 +111,6 @@ import {
 import {
   liveExecutionsByNodeId,
   testExecutionsByNodeId,
-  type WorkflowNodeExecutionView,
   workflowEdgeExecutionState,
 } from './workflowVisualState';
 
@@ -141,13 +118,8 @@ const nodeTypes: NodeTypes = { workflow: WorkflowNodeCard };
 const edgeTypes: EdgeTypes = { workflow: WorkflowEdge };
 const workflowConnectionLine = CanvasConnection as ConnectionLineComponent<WorkflowCanvasNode>;
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 type ActiveOperation = 'test' | 'run' | 'publish' | 'unpublish' | 'toggle' | null;
-type VersionState = 'draft' | 'published' | 'archived';
 type CanvasDensity = 'overview' | 'compact' | 'detail';
-
-const errorMessage = (error: unknown, fallback: string) =>
-  error instanceof Error ? error.message : fallback;
 
 const operationLabel: Record<Exclude<ActiveOperation, null>, string> = {
   test: 'Testing',
@@ -157,32 +129,10 @@ const operationLabel: Record<Exclude<ActiveOperation, null>, string> = {
   toggle: 'Updating',
 };
 
-const issueCount = (
-  validation: AutomationWorkflowValidation | null,
-  severity: 'error' | 'warning',
-) => validation?.issues.filter((issue) => issue.severity === severity).length ?? 0;
-
 const nextNodePosition = (count: number) => ({
   x: 120 + (count % 4) * 310,
   y: 120 + (Math.floor(count / 4) % 4) * 210,
 });
-
-function IconButton({
-  label,
-  children,
-  ...props
-}: React.ComponentProps<typeof Button> & { label: string }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button aria-label={label} size="icon" variant="ghost" {...props}>
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
 
 function WorkflowStatusBadge({ isPublished, enabled }: { isPublished: boolean; enabled: boolean }) {
   if (!isPublished) {
@@ -201,13 +151,37 @@ function WorkflowStatusBadge({ isPublished, enabled }: { isPublished: boolean; e
   );
 }
 
+// The palette advertises what you would GET if you dropped the node, so it
+// resolves the lifecycle of the node the factory actually builds rather than
+// reading the bundled constant keyed by type.
+const paletteCapabilities = (
+  capabilities: AutomationCapabilitiesResponse | null,
+): Map<AutomationWorkflowNode['type'], ResolvedNodeCapability> =>
+  new Map(
+    AUTOMATION_NODE_CATALOG.flatMap((group) => group.items).map((item) => [
+      item.type,
+      resolveNodeLifecycle({
+        node: createAutomationWorkflowNode({
+          type: item.type,
+          position: { x: 0, y: 0 },
+          id: `palette-${item.type}`,
+        }),
+        capabilities,
+      }),
+    ]),
+  );
+
 function NodePalette({
   locked,
+  capabilities,
   onAdd,
 }: {
   locked: boolean;
+  capabilities: AutomationCapabilitiesResponse | null;
   onAdd: (type: AutomationWorkflowNode['type']) => void;
 }) {
+  const capabilityByType = useMemo(() => paletteCapabilities(capabilities), [capabilities]);
+
   return (
     <Command className="rounded-none bg-transparent">
       <CommandInput disabled={locked} placeholder="Find a node…" />
@@ -224,19 +198,18 @@ function NodePalette({
             </p>
             {group.items.map((item) => {
               const Icon = item.icon;
-              const lifecycle = AUTOMATION_NODE_LIFECYCLE[item.type];
-              const comingSoon = item.comingSoon === true;
+              const capability = capabilityByType.get(item.type);
+              const lifecycle = capability?.lifecycle ?? 'production';
+              const unavailable = capability?.availability === 'unavailable';
               return (
                 <CommandItem
                   key={item.type}
-                  disabled={locked || comingSoon}
+                  disabled={locked}
                   value={`${item.label} ${item.description} ${item.type}`}
-                  onSelect={() => {
-                    if (!comingSoon) onAdd(item.type);
-                  }}
+                  onSelect={() => onAdd(item.type)}
                   className={cn(
                     'items-start py-2.5',
-                    lifecycle === 'preview' && 'opacity-55 grayscale-[0.35]',
+                    (lifecycle === 'preview' || unavailable) && 'opacity-55 grayscale-[0.35]',
                   )}
                 >
                   <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border bg-card">
@@ -245,8 +218,8 @@ function NodePalette({
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5 text-xs font-medium">
                       {item.label}
-                      {comingSoon ? (
-                        <Badge variant="muted">Coming soon</Badge>
+                      {unavailable ? (
+                        <Badge variant="destructive">Unavailable</Badge>
                       ) : lifecycle === 'preview' ? (
                         <Badge variant="muted">Preview</Badge>
                       ) : null}
@@ -265,537 +238,6 @@ function NodePalette({
   );
 }
 
-function PortsSummary({ node }: { node: AutomationWorkflowNode }) {
-  const ports = getAutomationNodePortSpec(node);
-  const inputs = Object.keys(ports.inputs);
-  const outputs = Object.keys(ports.outputs);
-
-  return (
-    <div className="flex flex-col gap-2">
-      <Label>Typed ports</Label>
-      <div className="flex flex-wrap gap-1.5">
-        {inputs.map((port) => (
-          <Badge key={`in-${port}`} variant="outline">
-            in · {port}
-          </Badge>
-        ))}
-        {outputs.map((port) => (
-          <Badge key={`out-${port}`} variant="violet">
-            out · {port}
-          </Badge>
-        ))}
-        {inputs.length + outputs.length === 0 ? <Badge variant="muted">No ports</Badge> : null}
-      </div>
-    </div>
-  );
-}
-
-function ValidationIssueButton({
-  issue,
-  onSelect,
-}: {
-  issue: AutomationValidationIssue;
-  onSelect: (nodeId: string) => void;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={!issue.nodeId}
-      onClick={() => issue.nodeId && onSelect(issue.nodeId)}
-      className="w-full rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
-    >
-      <Alert variant={issue.severity === 'error' ? 'destructive' : 'default'} className="py-2.5">
-        <AlertCircle aria-hidden="true" />
-        <AlertTitle className="text-xs">
-          {issue.severity === 'error' ? 'Blocks publishing' : 'Review'}
-        </AlertTitle>
-        <AlertDescription className="text-xs">{issue.message}</AlertDescription>
-      </Alert>
-    </button>
-  );
-}
-
-type WebhookResources = {
-  endpoints: AutomationWebhookEndpoint[];
-  destinations: AutomationWebhookDestination[];
-};
-
-function WebhookManager({
-  automation,
-  versionId,
-  selected,
-  locked,
-  resources,
-  onRefresh,
-  onEndpointCreated,
-}: {
-  automation: Automation;
-  versionId: string;
-  selected: AutomationWorkflowNode | null;
-  locked: boolean;
-  resources: WebhookResources;
-  onRefresh: () => Promise<void>;
-  onEndpointCreated: (endpointId: string) => void;
-}) {
-  const [name, setName] = useState('');
-  const [url, setUrl] = useState('');
-  const [secret, setSecret] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const selectedWebhook = selected?.type === 'trigger.webhook' ? selected : null;
-
-  const createDestination = async () => {
-    setBusy(true);
-    setError(null);
-    setSecret(null);
-    try {
-      const result = await createAutomationWebhookDestination({
-        brandId: automation.brandId,
-        name: name.trim() || 'Automation destination',
-        url,
-        method: 'POST',
-      });
-      setSecret(result.signingSecret);
-      setName('');
-      setUrl('');
-      await onRefresh();
-    } catch (creationError) {
-      setError(errorMessage(creationError, 'Could not create this destination.'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const createEndpoint = async () => {
-    if (!selectedWebhook) return;
-    setBusy(true);
-    setError(null);
-    setSecret(null);
-    try {
-      const result = await createAutomationWebhookEndpoint({
-        automationId: automation.id,
-        workflowVersionId: versionId,
-        nodeId: selectedWebhook.id,
-        name: selectedWebhook.label,
-        payloadSchema: selectedWebhook.config.payloadSchema,
-      });
-      setSecret(result.signingSecret);
-      onEndpointCreated(result.endpoint.id);
-      await onRefresh();
-    } catch (creationError) {
-      setError(errorMessage(creationError, 'Could not create this endpoint.'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex cursor-not-allowed">
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline" disabled>
-                  <Webhook data-icon="inline-start" />
-                  <span className="hidden xl:inline">Webhooks</span>
-                </Button>
-              </DialogTrigger>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>Coming soon</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Managed webhooks</DialogTitle>
-          <DialogDescription>
-            Signed inbound triggers and deterministic outbound destinations for this brand.
-          </DialogDescription>
-        </DialogHeader>
-
-        {secret ? (
-          <Alert>
-            <ShieldCheck aria-hidden="true" />
-            <AlertTitle>Copy this signing secret now</AlertTitle>
-            <AlertDescription className="space-y-2">
-              <code className="block break-all rounded bg-muted p-2 text-xs">{secret}</code>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void navigator.clipboard.writeText(secret)}
-              >
-                <Copy data-icon="inline-start" />
-                Copy secret
-              </Button>
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        {error ? (
-          <Alert variant="destructive">
-            <AlertCircle aria-hidden="true" />
-            <AlertTitle>Webhook setup failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        <section className="space-y-3 rounded-lg border p-4">
-          <div>
-            <h3 className="text-sm font-medium">Inbound endpoint</h3>
-            <p className="text-xs text-muted-foreground">
-              Select an inbound webhook node, then create its reveal-once secret.
-            </p>
-          </div>
-          {selectedWebhook ? (
-            selectedWebhook.config.endpointId ? (
-              <Badge variant="success">Endpoint attached</Badge>
-            ) : (
-              <Button disabled={locked || busy} onClick={() => void createEndpoint()}>
-                Create endpoint for {selectedWebhook.label}
-              </Button>
-            )
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Select an Inbound webhook node on the canvas.
-            </p>
-          )}
-          <div className="space-y-2">
-            {resources.endpoints.map((endpoint) => {
-              const deliveryUrl = getApiUrl(`/api/automations/hooks/${endpoint.publicId}`);
-              return (
-                <div key={endpoint.id} className="rounded-md border bg-muted/30 p-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-xs font-medium">{endpoint.name}</span>
-                    <Badge variant={endpoint.enabled ? 'success' : 'muted'}>
-                      {endpoint.enabled ? 'Active' : 'Draft'}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 flex items-center gap-1.5">
-                    <code className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
-                      {deliveryUrl}
-                    </code>
-                    <IconButton
-                      label={`Copy ${endpoint.name} URL`}
-                      className="size-7"
-                      onClick={() => void navigator.clipboard.writeText(deliveryUrl)}
-                    >
-                      <Copy aria-hidden="true" />
-                    </IconButton>
-                  </div>
-                </div>
-              );
-            })}
-            {resources.endpoints.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground">No inbound endpoints yet.</p>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="space-y-3 rounded-lg border p-4">
-          <div>
-            <h3 className="text-sm font-medium">Outbound destination</h3>
-            <p className="text-xs text-muted-foreground">
-              Requests use Webhook-Id, Webhook-Timestamp, Webhook-Signature, and Idempotency-Key.
-            </p>
-          </div>
-          <Input
-            value={name}
-            disabled={busy}
-            placeholder="Destination name"
-            onChange={(event) => setName(event.target.value)}
-          />
-          <Input
-            type="url"
-            value={url}
-            disabled={busy}
-            placeholder="https://hooks.example.com/continuum"
-            onChange={(event) => setUrl(event.target.value)}
-          />
-          <Button
-            disabled={busy || !url.startsWith('https://')}
-            onClick={() => void createDestination()}
-          >
-            Create signed destination
-          </Button>
-          <div className="flex flex-wrap gap-2">
-            {resources.destinations.map((destination) => (
-              <Badge key={destination.id} variant={destination.enabled ? 'outline' : 'muted'}>
-                {destination.name}
-              </Badge>
-            ))}
-          </div>
-        </section>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function WorkflowInspector({
-  selected,
-  locked,
-  validation,
-  execution,
-  evidence,
-  checks,
-  actionReceipts,
-  sourceCapabilities,
-  webhookDestinations,
-  onPatch,
-  onSelectIssue,
-  onMessage,
-}: {
-  selected: AutomationWorkflowNode | null;
-  locked: boolean;
-  validation: AutomationWorkflowValidation | null;
-  execution?: WorkflowNodeExecutionView;
-  evidence: TestAutomationWorkflowResponse['evidence'];
-  checks: TestAutomationWorkflowResponse['checks'];
-  actionReceipts: TestAutomationWorkflowResponse['actionReceipts'];
-  sourceCapabilities: AutomationCapabilitiesResponse | null;
-  webhookDestinations: AutomationWebhookDestination[];
-  onPatch: (patch: Partial<AutomationWorkflowNode>) => void;
-  onSelectIssue: (nodeId: string) => void;
-  onMessage: (message: string | null) => void;
-}) {
-  const selectedIssues = validation?.issues.filter((issue) => issue.nodeId === selected?.id) ?? [];
-  const catalogItem = selected ? getAutomationNodeCatalogItem(selected.type) : null;
-  const webhookComingSoon = selected ? isAutomationWebhookNodeType(selected.type) : false;
-
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-card">
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-        {locked ? (
-          <Lock className="size-3.5 text-muted-foreground" aria-hidden="true" />
-        ) : (
-          <Save className="size-3.5 text-muted-foreground" aria-hidden="true" />
-        )}
-        <div className="min-w-0">
-          <h2 className="text-xs font-medium">Inspector</h2>
-          <p className="truncate text-[11px] text-muted-foreground">
-            {selected ? selected.label : 'Select a node'}
-          </p>
-        </div>
-      </div>
-
-      <ScrollArea className="min-h-0 flex-1">
-        {selected && catalogItem ? (
-          <motion.div
-            key={selected.id}
-            initial={{ opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="flex flex-col gap-4 p-4"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <Badge variant="outline">{catalogItem.category}</Badge>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {catalogItem.description}
-                </p>
-              </div>
-              {execution ? (
-                <Badge
-                  variant={
-                    execution.status === 'completed'
-                      ? 'success'
-                      : execution.status === 'failed'
-                        ? 'destructive'
-                        : 'warning'
-                  }
-                >
-                  {execution.status}
-                </Badge>
-              ) : null}
-            </div>
-
-            <Separator />
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`node-label-${selected.id}`}>Label</Label>
-              <Input
-                id={`node-label-${selected.id}`}
-                value={selected.label}
-                disabled={locked}
-                onChange={(event) => onPatch({ label: event.target.value })}
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`node-description-${selected.id}`}>Description</Label>
-              <Textarea
-                id={`node-description-${selected.id}`}
-                value={selected.description ?? ''}
-                disabled={locked}
-                onChange={(event) => onPatch({ description: event.target.value })}
-                rows={3}
-                placeholder="Explain this step for collaborators."
-              />
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <Label>Configuration</Label>
-              <NodeConfigurationEditor
-                node={selected}
-                disabled={locked || webhookComingSoon}
-                sourceCapabilities={sourceCapabilities}
-                webhookDestinations={webhookDestinations}
-                onChange={(config) => {
-                  const previewSource =
-                    selected.type === 'source' &&
-                    'source' in config &&
-                    AUTOMATION_SOURCE_LIFECYCLE[config.source as AutomationSourceKind] ===
-                      'preview';
-                  onPatch({
-                    config,
-                    ...(previewSource ? { disabled: true } : {}),
-                  } as Partial<AutomationWorkflowNode>);
-                  onMessage(null);
-                }}
-              />
-              <p className="text-[11px] leading-4 text-muted-foreground">
-                Typed validation runs locally, again on the server, and once more before publishing.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between gap-4 rounded-md border p-3">
-              <div>
-                <Label htmlFor={`node-disabled-${selected.id}`}>Disable node</Label>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Keep the step in the graph without running it.
-                </p>
-              </div>
-              <Switch
-                id={`node-disabled-${selected.id}`}
-                checked={selected.disabled}
-                disabled={locked || (webhookComingSoon && selected.disabled)}
-                onCheckedChange={(disabled) => {
-                  if (webhookComingSoon && !disabled) return;
-                  onPatch({ disabled });
-                }}
-              />
-            </div>
-
-            <PortsSummary node={selected} />
-
-            {execution ? (
-              <>
-                <Separator />
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Run evidence</Label>
-                    <Badge variant="outline">{execution.durationMs} ms</Badge>
-                  </div>
-                  {evidence.map((event) => (
-                    <Tool
-                      key={`${event.seq}-${event.eventType}`}
-                      type={event.toolName ?? event.eventType}
-                      state={
-                        event.status === 'failed'
-                          ? 'error'
-                          : event.status === 'running'
-                            ? 'running'
-                            : 'output-available'
-                      }
-                    >
-                      <ToolHeader title={event.toolName ?? event.eventType.replace('.', ' · ')} />
-                      <ToolContent>
-                        {event.input !== undefined ? <ToolInput value={event.input} /> : null}
-                        {event.output !== undefined ? <ToolOutput value={event.output} /> : null}
-                      </ToolContent>
-                    </Tool>
-                  ))}
-                  {checks.length > 0 ? (
-                    <TestResults
-                      title="Deterministic checks"
-                      results={checks.map((check) => ({
-                        id: check.id,
-                        name: check.name,
-                        status: check.status,
-                        error: check.status === 'fail' ? check.detail : undefined,
-                      }))}
-                    />
-                  ) : null}
-                  {actionReceipts.map((receipt) => (
-                    <Tool
-                      key={`${receipt.nodeId}-${receipt.actionKind}`}
-                      type={receipt.actionKind}
-                      state={receipt.status === 'completed' ? 'output-available' : 'error'}
-                    >
-                      <ToolHeader
-                        title={`${receipt.effect === 'simulated' ? 'Simulated' : 'Live'} · ${receipt.actionKind}`}
-                      />
-                      <ToolContent>
-                        <ToolOutput value={receipt} />
-                      </ToolContent>
-                    </Tool>
-                  ))}
-                </div>
-              </>
-            ) : null}
-
-            {selectedIssues.length > 0 ? (
-              <>
-                <Separator />
-                <div className="flex flex-col gap-2">
-                  <Label>Node validation</Label>
-                  {selectedIssues.map((issue, index) => (
-                    <ValidationIssueButton
-                      key={`${issue.code}-${issue.nodeId ?? index}`}
-                      issue={issue}
-                      onSelect={onSelectIssue}
-                    />
-                  ))}
-                </div>
-              </>
-            ) : null}
-          </motion.div>
-        ) : (
-          <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center">
-            <span className="flex size-10 items-center justify-center rounded-md border bg-muted">
-              <Focus className="size-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <h3 className="mt-3 text-sm font-medium">Inspect a workflow step</h3>
-            <p className="mt-1 max-w-56 text-xs leading-5 text-muted-foreground">
-              Select a node to edit its instructions, data bindings, conditions, and outcomes.
-            </p>
-          </div>
-        )}
-
-        <Separator />
-
-        <div className="flex flex-col gap-3 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <Label>Graph validation</Label>
-            <Badge variant={validation?.ok ? 'success' : 'destructive'}>
-              {validation?.ok
-                ? 'Ready'
-                : `${issueCount(validation, 'error')} error${issueCount(validation, 'error') === 1 ? '' : 's'}`}
-            </Badge>
-          </div>
-          {validation?.issues.length ? (
-            validation.issues.map((issue, index) => (
-              <ValidationIssueButton
-                key={`${issue.code}-${issue.nodeId ?? issue.edgeId ?? index}`}
-                issue={issue}
-                onSelect={onSelectIssue}
-              />
-            ))
-          ) : (
-            <Alert>
-              <ShieldCheck aria-hidden="true" />
-              <AlertTitle>Structural checks pass</AlertTitle>
-              <AlertDescription>
-                Run a server-side test before publishing this version.
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
-      </ScrollArea>
-    </div>
-  );
-}
-
 function LoadingWorkspace({ message }: { message: string }) {
   return (
     <div className="automation-workspace-shell fixed inset-x-0 top-0 flex h-dvh items-center justify-center bg-background text-sm text-muted-foreground md:left-[var(--app-sidebar-width,3.5rem)]">
@@ -808,12 +250,11 @@ function LoadingWorkspace({ message }: { message: string }) {
 }
 
 function Workspace({ automation: initialAutomation }: { automation: Automation }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const { fitView, screenToFlowPosition, setViewport, zoomTo } = useReactFlow<
     WorkflowCanvasNode,
     WorkflowCanvasEdge
   >();
+  const { activeRunId, focusRun } = useActiveRun();
   const [automation, setAutomation] = useState(initialAutomation);
   const [base, setBase] = useState<AutomationWorkflowDefinition | null>(null);
   const [revision, setRevision] = useState(0);
@@ -822,7 +263,6 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowCanvasNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowCanvasEdge>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeRunId, setActiveRunId] = useState<string | null>(() => searchParams.get('run'));
   const [canvasDensity, setCanvasDensity] = useState<CanvasDensity>('detail');
   const [menuTarget, setMenuTarget] = useState<WorkflowMenuTarget>({
     kind: 'pane',
@@ -831,9 +271,12 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
   const [connectionFeedback, setConnectionFeedback] = useState<string | null>(null);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [rightTab, setRightTab] = useState<RightRailTab>('inspector');
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [activeOperation, setActiveOperation] = useState<ActiveOperation>(null);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<TestAutomationWorkflowResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sourceCapabilities, setSourceCapabilities] =
@@ -849,6 +292,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
     reason: 'Choose both an output and an input.',
   });
   const liveRunQuery = useAutomationRunDetail(activeRunId ?? undefined);
+  const runNowMutation = useRunAutomationNow(automation.brandId);
 
   const locked = automation.isPublished || versionState !== 'draft';
   const definition = useMemo(
@@ -867,6 +311,10 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
   }, [activeRunId, liveRunQuery.data?.nodeRuns, testResult]);
   const selected = nodes.find((node) => node.id === selectedId)?.data.workflowNode ?? null;
   const selectedExecution = selectedId ? executionByNodeId.get(selectedId) : undefined;
+  const selectedNodeRuns = useMemo(
+    () => (liveRunQuery.data?.nodeRuns ?? []).filter((nodeRun) => nodeRun.nodeId === selectedId),
+    [liveRunQuery.data?.nodeRuns, selectedId],
+  );
   const busy = activeOperation !== null;
 
   useEffect(() => {
@@ -1049,8 +497,22 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
 
   const configureNode = useCallback((nodeId: string) => {
     setSelectedId(nodeId);
+    setRightTab('inspector');
     setRightOpen(true);
   }, []);
+
+  // The one way anything selects a node and brings it into view: the publish
+  // dialog's blocker rows, an edge endpoint, and a validation issue all land here.
+  const focusNode = useCallback(
+    (nodeId: string) => {
+      setSelectedId(nodeId);
+      setNodes((current) => current.map((node) => ({ ...node, selected: node.id === nodeId })));
+      setRightTab('inspector');
+      setRightOpen(true);
+      void fitView({ nodes: [{ id: nodeId }], duration: 240, padding: 0.8 });
+    },
+    [fitView, setNodes],
+  );
 
   const duplicateNode = useCallback(
     (nodeId: string) => {
@@ -1164,13 +626,19 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
     (edgeId: string, endpoint: 'source' | 'target') => {
       const edge = edges.find((candidate) => candidate.id === edgeId);
       if (!edge) return;
-      const nodeId = edge[endpoint];
-      setSelectedId(nodeId);
-      setNodes((current) => current.map((node) => ({ ...node, selected: node.id === nodeId })));
-      setRightOpen(true);
-      void fitView({ nodes: [{ id: nodeId }], duration: 240, padding: 0.8 });
+      focusNode(edge[endpoint]);
     },
-    [edges, fitView, setNodes],
+    [edges, focusNode],
+  );
+
+  // The publish dialog's escape hatch hands back a whole definition; the canvas
+  // is the source of truth for node state, so the patch lands node by node and
+  // the existing autosave effect persists it.
+  const applyDefinition = useCallback(
+    (next: AutomationWorkflowDefinition) => {
+      setNodes((current) => applyDefinitionToCanvasNodes({ nodes: current, definition: next }));
+    },
+    [setNodes],
   );
 
   const displayNodes = useMemo<WorkflowCanvasNode[]>(
@@ -1181,6 +649,10 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
           ...node.data,
           locked,
           issues: validation?.issues.filter((issue) => issue.nodeId === node.id) ?? [],
+          capability: resolveNodeLifecycle({
+            node: node.data.workflowNode,
+            capabilities: sourceCapabilities,
+          }),
           execution: executionByNodeId.get(node.id),
           onConfigure: configureNode,
           onDuplicate: duplicateNode,
@@ -1195,6 +667,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
       executionByNodeId,
       locked,
       nodes,
+      sourceCapabilities,
       toggleNodeDisabled,
       validation?.issues,
     ],
@@ -1215,27 +688,18 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
     }));
   }, [edges, executionByNodeId, nodes]);
 
-  const setRunInLocation = useCallback(
-    (runId: string | null) => {
-      const next = new URLSearchParams(searchParams.toString());
-      if (runId) next.set('run', runId);
-      else next.delete('run');
-      const query = next.toString();
-      router.replace(query ? `?${query}` : '?', { scroll: false });
-    },
-    [router, searchParams],
-  );
-
   const runOperation = useCallback(
     async <Result,>({
       operation,
       action,
       onSuccess,
+      onFailure,
       fallback,
     }: {
       operation: Exclude<ActiveOperation, null>;
       action: () => Promise<Result>;
       onSuccess: (result: Result) => void;
+      onFailure?: (message: string) => void;
       fallback: string;
     }) => {
       setActiveOperation(operation);
@@ -1243,7 +707,9 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
       try {
         onSuccess(await action());
       } catch (error) {
-        setMessage(errorMessage(error, fallback));
+        const failure = errorMessage(error, fallback);
+        setMessage(failure);
+        onFailure?.(failure);
       } finally {
         setActiveOperation(null);
       }
@@ -1253,8 +719,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
 
   const handleTest = () => {
     if (!definition) return;
-    setActiveRunId(null);
-    setRunInLocation(null);
+    focusRun(null);
     const selectedTriggerId = selected?.type.startsWith('trigger.') ? selected.id : undefined;
     void runOperation({
       operation: 'test',
@@ -1281,8 +746,10 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
 
   const handlePublish = () => {
     if (!definition) return;
+    setPublishError(null);
     void runOperation({
       operation: 'publish',
+      onFailure: setPublishError,
       action: async () => {
         const preflight = await validateAutomationWorkflowForPublish(automation.id, definition);
         if (!preflight.ok) {
@@ -1307,7 +774,12 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
           activeVersionId: response.version.id,
           draftVersionId: null,
         }));
-        setMessage('Published, locked, and active.');
+        setPublishOpen(false);
+        setMessage(
+          `Published, locked, and active · ${response.actionNodeIds.length} live action${
+            response.actionNodeIds.length === 1 ? '' : 's'
+          } granted.`,
+        );
       },
       fallback: 'Could not publish workflow.',
     });
@@ -1456,6 +928,8 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
               <WebhookManager
                 automation={automation}
                 versionId={versionId}
+                versionState={versionState}
+                saveState={saveState}
                 selected={selected}
                 locked={locked}
                 resources={webhookResources}
@@ -1503,11 +977,15 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                   onClick={() => {
                     void runOperation({
                       operation: 'run',
-                      action: () => runAutomationNow(automation.id),
+                      // The mutation — not the bare fetch — so the runs query is
+                      // invalidated and the new run appears in the Runs tab now
+                      // rather than at the next five-second poll.
+                      action: () => runNowMutation.mutateAsync(automation.id),
                       onSuccess: (runId) => {
                         setTestResult(null);
-                        setActiveRunId(runId);
-                        setRunInLocation(runId);
+                        focusRun(runId);
+                        setRightTab('runs');
+                        setRightOpen(true);
                         setMessage(`Run queued · ${runId.slice(0, 8)}`);
                       },
                       fallback: 'Could not queue workflow run.',
@@ -1537,7 +1015,10 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                 <Button
                   size="sm"
                   disabled={!validation.ok || saveState === 'saving' || busy}
-                  onClick={handlePublish}
+                  onClick={() => {
+                    setPublishError(null);
+                    setPublishOpen(true);
+                  }}
                 >
                   {activeOperation === 'publish' ? (
                     <Spinner data-icon="inline-start" />
@@ -1631,7 +1112,11 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                     </Alert>
                   ) : null}
                   <div className={cn('h-full', locked && 'h-[calc(100%-5.5rem)]')}>
-                    <NodePalette locked={locked} onAdd={addNode} />
+                    <NodePalette
+                      locked={locked}
+                      capabilities={sourceCapabilities}
+                      onAdd={addNode}
+                    />
                   </div>
                 </div>
               ) : null}
@@ -1711,10 +1196,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                       }
                     }}
                     connectionLineComponent={workflowConnectionLine}
-                    onNodeClick={(_, node) => {
-                      setSelectedId(node.id);
-                      setRightOpen(true);
-                    }}
+                    onNodeClick={(_, node) => configureNode(node.id)}
                     onNodeContextMenu={(event, node) => {
                       event.preventDefault();
                       setSelectedId(node.id);
@@ -1879,38 +1361,75 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                   className="shrink-0 overflow-hidden border-l"
                 >
                   <div className="h-full w-[22rem]">
-                    <WorkflowInspector
-                      selected={selected}
-                      locked={locked}
-                      validation={validation}
-                      execution={selectedExecution}
-                      evidence={
-                        testResult?.evidence.filter((event) => event.nodeId === selectedId) ?? []
+                    <RightRailTabs
+                      tab={rightTab}
+                      onTabChange={setRightTab}
+                      inspector={
+                        <WorkflowInspector
+                          selected={selected}
+                          locked={locked}
+                          validation={validation}
+                          execution={selectedExecution}
+                          evidence={
+                            testResult?.evidence.filter((event) => event.nodeId === selectedId) ??
+                            []
+                          }
+                          nodeRuns={selectedNodeRuns}
+                          checks={
+                            testResult?.checks.filter(
+                              (check) => !check.nodeId || check.nodeId === selectedId,
+                            ) ?? []
+                          }
+                          actionReceipts={
+                            testResult?.actionReceipts.filter(
+                              (receipt) => receipt.nodeId === selectedId,
+                            ) ?? []
+                          }
+                          sourceCapabilities={sourceCapabilities}
+                          webhookDestinations={webhookResources.destinations}
+                          webhookEndpoints={webhookResources.endpoints}
+                          onPatch={patchSelected}
+                          onSelectIssue={focusNode}
+                          onMessage={setMessage}
+                        />
                       }
-                      checks={
-                        testResult?.checks.filter(
-                          (check) => !check.nodeId || check.nodeId === selectedId,
-                        ) ?? []
+                      runs={
+                        <RunHistoryPanel
+                          automationId={automation.id}
+                          activeRunId={activeRunId}
+                          onFocusRun={(runId) => {
+                            setTestResult(null);
+                            focusRun(runId);
+                          }}
+                        />
                       }
-                      actionReceipts={
-                        testResult?.actionReceipts.filter(
-                          (receipt) => receipt.nodeId === selectedId,
-                        ) ?? []
-                      }
-                      sourceCapabilities={sourceCapabilities}
-                      webhookDestinations={webhookResources.destinations}
-                      onPatch={patchSelected}
-                      onSelectIssue={(nodeId) => {
-                        setSelectedId(nodeId);
-                        setRightOpen(true);
-                      }}
-                      onMessage={setMessage}
                     />
                   </div>
                 </motion.aside>
               ) : null}
             </AnimatePresence>
           </div>
+
+          <PublishReadinessDialog
+            open={publishOpen}
+            onOpenChange={setPublishOpen}
+            definition={definition}
+            capabilities={sourceCapabilities}
+            testResult={testResult}
+            // The escape hatch patches the canvas locally and the draft saves on
+            // a debounce, but the server publishes its STORED draft — so Publish
+            // stays shut until that write lands.
+            publishing={activeOperation === 'publish' || saveState === 'saving'}
+            testing={activeOperation === 'test'}
+            errorMessage={publishError}
+            onFocusNode={(nodeId) => {
+              setPublishOpen(false);
+              focusNode(nodeId);
+            }}
+            onApplyDefinition={applyDefinition}
+            onRunTest={handleTest}
+            onConfirmPublish={handlePublish}
+          />
 
           {busy ? (
             <div className="pointer-events-none absolute bottom-4 right-4 flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-xs">

@@ -1,3 +1,4 @@
+import type { AgentAttachment } from '@continuum/contracts';
 import type { AgentMentionReference } from '@/lib/agent-references';
 
 export type QueuedJainaMessage = {
@@ -5,6 +6,7 @@ export type QueuedJainaMessage = {
   content: string;
   createdAt: string;
   canvas: boolean;
+  images?: AgentAttachment[];
   references?: AgentMentionReference[];
   forceReportArtifact?: boolean;
   clarificationId?: string;

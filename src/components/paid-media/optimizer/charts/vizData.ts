@@ -8,8 +8,8 @@
 import type {
   AdDailyTrend,
   CpaSeriesPoint,
-  ParsedCycleRunReport,
   RunConfidence,
+  TimelineEvent,
 } from '@continuum/contracts';
 import { intFmt } from '@/components/charts/chart-formatters';
 import { buildProjectionPath, type ProjectionPoint } from '@/components/charts/projection-utils';
@@ -49,6 +49,12 @@ export type FunnelStageOut = {
   stepPct: number | null;
   /** Per-stage heat fill (undefined on the top stage — it has no prior to rate). */
   color?: string;
+  /** How many were lost at this step (previous − this). Null on the top stage. */
+  dropOff: number | null;
+  /** This stage as a fraction of the TOP stage (0–1). Always 1 on the first stage. Kept
+   *  alongside stepPct because they answer different questions: stepPct is "how well did
+   *  this hand-off work", overallPct is "how much of the original traffic is left". */
+  overallPct: number;
 };
 
 type FunnelStep = { key: keyof FunnelWindow; label: string };
@@ -83,6 +89,7 @@ export function buildConversionFunnel(
   const steps = funnelStepsFor(objective);
   const values = steps.map((step) => Math.max(0, Math.round(Number(window[step.key] ?? 0))));
 
+  const top = values[0] ?? 0;
   return steps.map((step, index) => {
     if (index === 0) {
       return {
@@ -90,6 +97,8 @@ export function buildConversionFunnel(
         value: values[index],
         displayValue: intFmt(values[index]),
         stepPct: null,
+        dropOff: null,
+        overallPct: 1,
       };
     }
     const prev = values[index - 1];
@@ -100,6 +109,8 @@ export function buildConversionFunnel(
       displayValue: intFmt(values[index]),
       stepPct: rate,
       color: stepHeatFill(rate),
+      dropOff: Math.max(0, prev - values[index]),
+      overallPct: top > 0 ? values[index] / top : 0,
     };
   });
 }
@@ -299,12 +310,17 @@ export type CpaHeroPoint = {
   spend: number;
   conv: number;
   ts: string;
-  actions: string[];
+  /** Observed events bound to this cycle (see bindTimelineEvents). */
+  events: TimelineEvent[];
+  /** Cost change vs the PREVIOUS plotted cycle. Null on the first point. A cost number
+   *  without its direction makes the reader scrub back along the line to find out whether
+   *  it is good news. */
+  deltaCpa: number | null;
 };
 
 export function buildCpaHeroPoints(
   series: CpaSeriesPoint[],
-  actionsByTs: Record<string, string[]> = {},
+  eventsByTs: Record<string, TimelineEvent[]> = {},
   denominatorMultiplier = 1,
 ): CpaHeroPoint[] {
   return series
@@ -319,36 +335,52 @@ export function buildCpaHeroPoints(
         point.cpa != null,
     )
     .sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
-    .map((point) => ({
-      date: new Date(point.ts),
-      cpa: Math.round(point.cpa),
-      spend: Math.round(point.spend),
-      conv: point.conv,
-      ts: point.ts,
-      actions: actionsByTs[point.ts] ?? [],
-    }));
+    .map((point, index, all) => {
+      const previous = index > 0 ? all[index - 1] : null;
+      return {
+        date: new Date(point.ts),
+        cpa: Math.round(point.cpa),
+        spend: Math.round(point.spend),
+        conv: point.conv,
+        ts: point.ts,
+        events: eventsByTs[point.ts] ?? [],
+        deltaCpa: previous ? Math.round(point.cpa) - Math.round(previous.cpa) : null,
+      };
+    });
 }
 
-/** Optimizer actions per cycle from a parsed report, keyed by the run's cycle_ts,
- *  so the hero can pin them onto the timeline. The latest run contributes a
- *  reallocation summary (how many ad sets moved up/down); pending recommendations
- *  contribute their kind + ad set. */
-export function buildCycleActionMap(report: ParsedCycleRunReport | null): Record<string, string[]> {
-  const ts = report?.latest_run?.cycle_ts;
-  if (!ts) return {};
+/** Bind observed events to the cycle they belong to.
+ *
+ *  Events do not happen ON cycle timestamps — a human changes a budget at 14:32, the cycle
+ *  ran at 06:00 — so an exact-timestamp join (what buildCycleActionMap did) drops nearly all
+ *  of them. Each event is attached to the LAST cycle at or before it, which is the cycle
+ *  whose plotted cost the event could actually have influenced. Events preceding the first
+ *  plotted cycle are dropped: there is no point on the chart they could explain.
+ *
+ *  `points` must be sorted oldest→newest (buildCpaHeroPoints guarantees this). */
+export function bindTimelineEvents(
+  points: ReadonlyArray<{ ts: string }>,
+  events: readonly TimelineEvent[],
+): Record<string, TimelineEvent[]> {
+  if (points.length === 0 || events.length === 0) return {};
+  const out: Record<string, TimelineEvent[]> = {};
+  const times = points.map((point) => Date.parse(point.ts));
 
-  const actions: string[] = [];
-  const gainers = report.latest_items.filter((item) => (item.change_abs ?? 0) > 0).length;
-  const losers = report.latest_items.filter((item) => (item.change_abs ?? 0) < 0).length;
-  if (gainers > 0 || losers > 0) {
-    actions.push(`Reallocated · ↑${gainers} ↓${losers}`);
+  for (const event of events) {
+    const at = Date.parse(event.ts);
+    if (Number.isNaN(at)) continue;
+    let index = -1;
+    for (let i = 0; i < times.length; i += 1) {
+      if (times[i] <= at) index = i;
+      else break;
+    }
+    if (index < 0) continue;
+    const key = points[index].ts;
+    const bucket = out[key] ?? [];
+    bucket.push(event);
+    out[key] = bucket;
   }
-  for (const rec of report.recommendations) {
-    const shortId = rec.adset_id.split('::').pop() ?? rec.adset_id;
-    actions.push(`${rec.kind.replace(/_/g, ' ')} · ${shortId}`);
-  }
-
-  return actions.length > 0 ? { [ts]: actions } : {};
+  return out;
 }
 
 // ── Multi-creative ad-set timeline ───────────────────────────────────────────

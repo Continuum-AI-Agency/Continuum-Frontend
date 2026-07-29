@@ -303,7 +303,7 @@ describe('CboCampaigns', () => {
         pacing: { dailyTotal: 57 },
       },
     };
-    const { getByRole, getByText } = render(
+    const { getByRole, getByText, container } = render(
       <CboCampaigns
         brandId="b1"
         accountId="act_1"
@@ -313,7 +313,9 @@ describe('CboCampaigns', () => {
       />,
     );
     fireEvent.click(getByRole('button', { name: /Preview as converted/ }));
-    expect(getByText('$8 moved across 2 ad sets')).toBeTruthy();
+    // The summary is split across spans (gainers / losers / net), so assert on the text.
+    expect(container.textContent).toContain('+$8 to 1');
+    expect(container.textContent).toContain('across 2 ad sets');
     expect(getByText('2 action recommendations raised on the converted ad sets.')).toBeTruthy();
   });
 

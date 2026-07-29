@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { createHash } from 'node:crypto';
 
-import { uploadMediaAsset } from './uploadMediaAsset';
+import { completeMcpUploadIntent, uploadMediaAsset } from './uploadMediaAsset';
 
 type InvokeResult = { data?: unknown; error?: unknown };
 
@@ -44,6 +44,17 @@ function makeClient(opts: FakeClientOptions) {
         opts.bodies?.push(args.body);
         if (action === 'sign_upload') return opts.sign ?? { data: VALID_TICKET, error: null };
         if (action === 'register') return opts.register ?? { data: VALID_REGISTER, error: null };
+        if (action === 'complete_mcp_upload_intent') {
+          return {
+            data: {
+              upload_intent_id: args.body.uploadIntentId,
+              status: 'completed',
+              asset_refs: args.body.assetRefs,
+              updated_at: '2026-07-28T00:00:00.000Z',
+            },
+            error: null,
+          };
+        }
         return { data: null, error: null };
       },
     },
@@ -70,6 +81,27 @@ function mp4File(): File {
 }
 
 describe('uploadMediaAsset', () => {
+  it('completes an MCP upload handoff with pinned Library versions', async () => {
+    const calls: string[] = [];
+    const bodies: Record<string, unknown>[] = [];
+    const client = makeClient({ calls, bodies });
+    const result = await completeMcpUploadIntent(
+      {
+        brandId: '11111111-1111-4111-8111-111111111111',
+        uploadIntentId: '22222222-2222-4222-8222-222222222222',
+        assetRefs: [
+          {
+            asset_id: '33333333-3333-4333-8333-333333333333',
+            version_id: '44444444-4444-4444-8444-444444444444',
+          },
+        ],
+      },
+      { createClient: () => client },
+    );
+    expect(calls).toEqual(['invoke:complete_mcp_upload_intent']);
+    expect(result.status).toBe('completed');
+  });
+
   it('signs, uploads, then registers in order and returns the asset coordinates', async () => {
     const calls: string[] = [];
     const client = makeClient({ calls });

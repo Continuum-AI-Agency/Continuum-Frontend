@@ -20,7 +20,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { AdminActionConfirmation } from '@/components/admin/AdminActionConfirmation';
 import {
   buildAdminPaginationRange,
@@ -123,6 +123,7 @@ const GLOBAL_LIBRARY_BRAND_OPTION: AdminBrandOption = {
   active: true,
   ownerEmail: null,
 };
+const SEARCH_DEBOUNCE_MS = 300;
 
 type AdminAuditResponse = {
   entries?: AdminAuditLogEntry[];
@@ -167,6 +168,10 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const searchParamsString = searchParams.toString();
 
   const [query, setQuery] = useState(searchQuery);
+  const searchParamsRef = useRef(searchParamsString);
+  const settledSearchQueryRef = useRef(searchQuery.trim());
+  const lastRequestedQueryRef = useRef(searchQuery.trim());
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedUserId, setSelectedUserId] = useState(users[0]?.id ?? null);
   const [pendingActions, setPendingActions] = useState<PendingActions>({});
   const [tierOverrides, setTierOverrides] = useState<Record<string, string>>({});
@@ -194,8 +199,20 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const [isReportSmokeLoading, setIsReportSmokeLoading] = useState(false);
 
   useEffect(() => {
-    setQuery(searchQuery);
-  }, [searchQuery]);
+    searchParamsRef.current = searchParamsString;
+    settledSearchQueryRef.current = searchQuery.trim();
+  }, [searchParamsString, searchQuery]);
+
+  useEffect(() => {
+    const syncQueryFromHistory = () => {
+      const historyQuery = new URL(window.location.href).searchParams.get('query') ?? '';
+      lastRequestedQueryRef.current = historyQuery.trim();
+      setQuery(historyQuery);
+    };
+
+    window.addEventListener('popstate', syncQueryFromHistory);
+    return () => window.removeEventListener('popstate', syncQueryFromHistory);
+  }, []);
 
   useEffect(() => {
     setSelectedUserId(users[0]?.id ?? null);
@@ -234,6 +251,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const totalCountLabel = pagination.totalCount.toLocaleString();
   const trimmedQuery = query.trim();
   const serverQueryActive = searchQuery.trim().length > 0;
+  const isDirectoryUpdating = isNavPending || trimmedQuery !== searchQuery.trim();
   const totalLabelSuffix = serverQueryActive ? 'matches' : 'total';
   const paginationItems = useMemo(
     () => buildAdminPaginationRange({ currentPage: safePage, totalPages, siblingCount: 1 }),
@@ -285,23 +303,53 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     return `?${params}`;
   }
 
-  useEffect(() => {
-    const currentQuery = new URLSearchParams(searchParamsString).get('query') ?? '';
-    if (trimmedQuery === currentQuery.trim()) return;
+  const commitSearch = useCallback(
+    (nextQuery: string) => {
+      const normalizedQuery = nextQuery.trim();
+      const currentQuery = new URLSearchParams(searchParamsRef.current).get('query')?.trim() ?? '';
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+      lastRequestedQueryRef.current = normalizedQuery;
 
-    const timeout = setTimeout(() => {
+      if (normalizedQuery === currentQuery) {
+        return;
+      }
+
       startNavTransition(() => {
         const params = buildAdminUserListSearchParams(
-          searchParamsString,
-          trimmedQuery,
+          searchParamsRef.current,
+          normalizedQuery,
           pagination.pageSize,
         );
-        router.push(`?${params}`);
+        router.replace(`?${params}`, { scroll: false });
       });
-    }, 300);
+    },
+    [pagination.pageSize, router, startNavTransition],
+  );
 
-    return () => clearTimeout(timeout);
-  }, [trimmedQuery, pagination.pageSize, router, searchParamsString, startNavTransition]);
+  useEffect(() => {
+    if (
+      trimmedQuery === settledSearchQueryRef.current ||
+      trimmedQuery === lastRequestedQueryRef.current
+    ) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      searchTimeoutRef.current = null;
+      commitSearch(trimmedQuery);
+    }, SEARCH_DEBOUNCE_MS);
+    searchTimeoutRef.current = timeout;
+
+    return () => {
+      clearTimeout(timeout);
+      if (searchTimeoutRef.current === timeout) {
+        searchTimeoutRef.current = null;
+      }
+    };
+  }, [commitSearch, trimmedQuery]);
 
   async function copyImpersonationLinkToClipboard(url: string): Promise<boolean> {
     try {
@@ -778,9 +826,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
             <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-base font-semibold text-primary">User Directory</h2>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
                   Showing {users.length} on this page · {totalCountLabel} {totalLabelSuffix}
-                  {isNavPending ? ' · Updating...' : null}
+                  {isDirectoryUpdating ? ' · Updating...' : null}
                 </p>
               </div>
               <div className="w-full lg:w-[320px]">
@@ -788,14 +836,38 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                   Search users
                 </Label>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  {isDirectoryUpdating ? (
+                    <Loader2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  )}
                   <Input
                     id="admin-user-search"
                     placeholder="Search users by name or email"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    className="pl-9"
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter') return;
+                      event.preventDefault();
+                      commitSearch(query);
+                    }}
+                    className="px-9"
                   />
+                  {query ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Clear search"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      onClick={() => {
+                        setQuery('');
+                        commitSearch('');
+                      }}
+                    >
+                      <XCircle className="size-3.5" />
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -809,7 +881,13 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
               </AlertDescription>
             </Alert>
 
-            <div className="rounded-lg border border-subtle bg-surface">
+            <div
+              data-testid="admin-user-directory-results"
+              aria-busy={isDirectoryUpdating}
+              className={`rounded-lg border border-subtle bg-surface transition-opacity ${
+                isDirectoryUpdating ? 'opacity-70' : ''
+              }`}
+            >
               <div className="max-h-[64vh] overflow-auto">
                 <div className="min-w-[900px]">
                   <Table>

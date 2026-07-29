@@ -11,18 +11,25 @@
 // counts them and asks for confirmation before saving that change.
 
 import {
+  type AdSetSnapshot,
   type ApplyMode,
+  type BudgetSource,
   getOptimizationMetricDefinition,
+  LOOKBACK_LABEL,
+  LOOKBACK_WINDOWS,
+  type LookbackWindow,
   type OptimizationModeDto,
   type OptimizationObjective,
   OptimizationObjectiveSchema,
   type PortfolioLevel,
   type PortfolioListItem,
+  recommendLookbackWindow,
   toMinorUnits,
   type UpdatePortfolioPatch,
 } from '@continuum/contracts';
 import { Archive, ChevronDown, Loader2, Pause, Play } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { DateRangeField, type DateRangeValue } from '@/components/shared/DateRangeField';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,10 +53,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { currencySymbol, humanize } from '../format';
+import { currencySymbol, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
+import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
 import { applyModeExplainer, applyModePill, freezeLabel } from '../reportModel';
 import {
+  useOptimizerAccountEnrollments,
   useOptimizerAccountSnapshots,
   useOptimizerEnrolledAdsets,
   useOptimizerMutations,
@@ -61,6 +70,15 @@ const APPLY_MODES: ApplyMode[] = ['observe', 'recommend', 'autopilot'];
 const OBJECTIVES = OptimizationObjectiveSchema.options;
 /** The period the pacing gauge estimates against when no period budget is set. */
 const PACING_PERIOD_DAYS = 30;
+
+/** A flight window of `days` starting today, as plain ISO dates. Built in UTC so the start
+ *  date is the day the operator sees, not a timezone-shifted neighbour. */
+export function nextFlightWindow(days: number, today = new Date()): DateRangeValue {
+  const start = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  const end = new Date(start.getTime() + (days - 1) * 86_400_000);
+  const iso = (date: Date) => date.toISOString().slice(0, 10);
+  return { from: iso(start), to: iso(end) };
+}
 
 /** The enrolled ad sets that will STOP matching the portfolio's KPI if its objective changes.
  *  An ad set that declares it buys a specific result (kpiField) no longer matches when that
@@ -116,6 +134,13 @@ export function PortfolioManagePanel({
   );
   const enrolledRead = useOptimizerEnrolledAdsets(portfolio.id);
   const snapshotsRead = useOptimizerAccountSnapshots(brandId, adAccountId, level);
+  // Who else holds each ad set's single active enrollment. Drives the picker's "In: X" badge
+  // and the move confirmation, so a claimed ad set is a disclosed decision rather than a 409.
+  const accountEnrollmentsRead = useOptimizerAccountEnrollments(brandId, adAccountId);
+  const claims = useMemo(
+    () => buildClaimMap(accountEnrollmentsRead.data, portfolio.id),
+    [accountEnrollmentsRead.data, portfolio.id],
+  );
 
   const [name, setName] = useState(portfolio.name);
   const [objective, setObjective] = useState<OptimizationObjective>(
@@ -131,6 +156,18 @@ export function PortfolioManagePanel({
   const [dailyTotal, setDailyTotal] = useState(
     portfolio.daily_total != null ? String(portfolio.daily_total) : '',
   );
+  const [budgetSource, setBudgetSource] = useState<BudgetSource>(
+    portfolio.budget_source === 'fixed' ? 'fixed' : 'observed',
+  );
+  const [lookbackWindow, setLookbackWindow] = useState<LookbackWindow>(
+    LOOKBACK_WINDOWS.includes(portfolio.lookback_window as LookbackWindow)
+      ? (portfolio.lookback_window as LookbackWindow)
+      : 'd14',
+  );
+  const [flight, setFlight] = useState<DateRangeValue>({
+    from: portfolio.period_start ?? null,
+    to: portfolio.period_end ?? null,
+  });
   const [cpaTarget, setCpaTarget] = useState('');
   const [periodBudget, setPeriodBudget] = useState('');
   const [velocityCap, setVelocityCap] = useState('');
@@ -182,6 +219,13 @@ export function PortfolioManagePanel({
     if (Number.isFinite(period) && period >= 0 && period !== portfolio.period_budget) {
       next.period_budget = period;
     }
+    if (budgetSource !== (portfolio.budget_source ?? 'observed')) next.budget_source = budgetSource;
+    if (lookbackWindow !== (portfolio.lookback_window ?? 'd14')) {
+      next.lookback_window = lookbackWindow;
+    }
+    // null clears a flight date (back to unpaced); undefined leaves it untouched.
+    if (flight.from !== (portfolio.period_start ?? null)) next.period_start = flight.from;
+    if (flight.to !== (portfolio.period_end ?? null)) next.period_end = flight.to;
     const velocity = Number.parseFloat(velocityCap);
     if (Number.isFinite(velocity) && velocity >= 0) next.velocity_cap_pct = velocity / 100;
     const maxDaily = Number.parseFloat(maxDailyApply);
@@ -202,10 +246,35 @@ export function PortfolioManagePanel({
     velocityCap,
     maxDailyApply,
     maxChangePct,
+    budgetSource,
+    lookbackWindow,
+    flight,
     portfolio,
     currency,
     metric.denominatorMultiplier,
   ]);
+
+  // The live sum of the SELECTED ad sets' budgets — what an 'observed' portfolio actually
+  // reallocates within, and the number the daily-budget field should be pinned to if a human
+  // wants a fixed target that matches reality today.
+  const selectedBudgetSum = useMemo(() => {
+    const selected = new Set(selectedAdsetIds);
+    return snapshotsRead.data
+      .filter((snapshot) => selected.has(snapshot.id))
+      .reduce((sum, snapshot) => sum + (snapshot.currentBudget ?? 0), 0);
+  }, [snapshotsRead.data, selectedAdsetIds]);
+
+  const lookbackHint = useMemo(
+    () =>
+      recommendLookbackWindow(
+        snapshotsRead.data.filter((snapshot) => selectedAdsetIds.includes(snapshot.id)),
+        metric.kpiField as keyof AdSetSnapshot['windows']['d14'],
+        metric.resultLabel.toLowerCase(),
+      ),
+    [snapshotsRead.data, selectedAdsetIds, metric.kpiField, metric.resultLabel],
+  );
+
+  const [showMoveConfirm, setShowMoveConfirm] = useState(false);
 
   // Autopilot writes real budgets to Meta, and the apply layer reads an absent cap as
   // UNCAPPED — so it may only be armed once BOTH guardrails are set and positive. The DB
@@ -237,6 +306,9 @@ export function PortfolioManagePanel({
   }, [enrolledIds, selectedAdsetIds]);
 
   const hasChanges = Object.keys(patch).length > 0 || toAdd.length > 0 || toRemove.length > 0;
+
+  // Which ad sets this save would take from other portfolios, and who loses them.
+  const pendingMoves = useMemo(() => previewMoves(toAdd, claims), [toAdd, claims]);
 
   async function performSave() {
     if (!hasChanges || saving) return;
@@ -272,11 +344,18 @@ export function PortfolioManagePanel({
     }
   }
 
-  // Changing the objective freezes mismatched ad sets — confirm that before writing it.
+  // Two consequences need saying out loud before the write. Changing the objective freezes
+  // mismatched ad sets; enrolling a claimed ad set REMOVES it from another portfolio (the DB
+  // allows exactly one active enrollment). Objective first — it is the more destructive of
+  // the two, and the move dialog names the portfolios that lose ad sets either way.
   function handleSaveClick() {
     if (!hasChanges || saving) return;
     if (objectiveChanged && affectedAdsets.length > 0) {
       setShowObjectiveConfirm(true);
+      return;
+    }
+    if (pendingMoves.length > 0) {
+      setShowMoveConfirm(true);
       return;
     }
     void performSave();
@@ -381,13 +460,103 @@ export function PortfolioManagePanel({
             ) : null}
           </div>
           <div className="space-y-1.5">
+            <Label htmlFor={`manage-budget-source-${portfolio.id}`}>Total budget</Label>
+            <Select
+              onValueChange={(value) => setBudgetSource(value as BudgetSource)}
+              value={budgetSource}
+            >
+              <SelectTrigger id={`manage-budget-source-${portfolio.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="observed">Match current spend</SelectItem>
+                <SelectItem value="fixed">Fixed daily target</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-2xs text-muted-foreground">
+              {budgetSource === 'observed'
+                ? 'Reallocates within whatever the enrolled ad sets are spending now — increases and decreases cancel out.'
+                : 'Drives the portfolio toward the daily budget below, so the total can go up or down.'}
+            </p>
+          </div>
+          <div className="space-y-1.5">
             <Label htmlFor={`manage-daily-${portfolio.id}`}>Daily budget ({symbol})</Label>
             <Input
+              disabled={budgetSource === 'observed'}
               id={`manage-daily-${portfolio.id}`}
               inputMode="decimal"
-              value={dailyTotal}
               onChange={(event) => setDailyTotal(event.target.value)}
+              value={dailyTotal}
             />
+            {/* The one field that must track the enrolled roster had the least help: nothing
+                re-derived it when the picker changed membership, so a portfolio kept
+                conserving a months-old sum. */}
+            {budgetSource === 'fixed' && selectedBudgetSum > 0 ? (
+              <SuggestionChip
+                label={`Match current ${symbol}${Math.round(selectedBudgetSum).toLocaleString('en-US')}/day`}
+                onClick={() => setDailyTotal(String(Math.round(selectedBudgetSum)))}
+              />
+            ) : null}
+            {budgetSource === 'observed' && selectedBudgetSum > 0 ? (
+              <p className="text-2xs text-muted-foreground tabular-nums">
+                Currently {formatCurrency(selectedBudgetSum, currency)}/day across{' '}
+                {selectedAdsetIds.length} {selectedAdsetIds.length === 1 ? 'ad set' : 'ad sets'}.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </Section>
+
+      <Section
+        description="What period the optimizer reads and plans against. The lookback drives every metric on this portfolio; the flight window turns the period budget into real pacing instead of an estimate."
+        title="Reporting period"
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor={`manage-lookback-${portfolio.id}`}>Lookback window</Label>
+            <Select
+              onValueChange={(value) => setLookbackWindow(value as LookbackWindow)}
+              value={lookbackWindow}
+            >
+              <SelectTrigger id={`manage-lookback-${portfolio.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LOOKBACK_WINDOWS.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {LOOKBACK_LABEL[value]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-2xs text-muted-foreground">{lookbackHint.reason}</p>
+            {lookbackHint.window !== lookbackWindow ? (
+              <SuggestionChip
+                label={`Use ${LOOKBACK_LABEL[lookbackHint.window]}`}
+                onClick={() => setLookbackWindow(lookbackHint.window)}
+              />
+            ) : null}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`manage-flight-${portfolio.id}`}>Flight window</Label>
+            <DateRangeField
+              disabled={saving}
+              id={`manage-flight-${portfolio.id}`}
+              onChange={setFlight}
+              placeholder="No flight window"
+              value={flight}
+            />
+            <p className="text-2xs text-muted-foreground">
+              {flight.from && flight.to
+                ? 'The period budget paces against these dates.'
+                : 'Set start and end dates to pace against the period budget.'}
+            </p>
+            {!(flight.from && flight.to) ? (
+              <SuggestionChip
+                label={`Suggest next ${PACING_PERIOD_DAYS} days`}
+                onClick={() => setFlight(nextFlightWindow(PACING_PERIOD_DAYS))}
+              />
+            ) : null}
           </div>
         </div>
       </Section>
@@ -576,10 +745,54 @@ export function PortfolioManagePanel({
             <AlertDialogAction
               onClick={() => {
                 setShowObjectiveConfirm(false);
+                if (pendingMoves.length > 0) {
+                  setShowMoveConfirm(true);
+                  return;
+                }
                 void performSave();
               }}
             >
               Change objective &amp; save
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open) setShowMoveConfirm(false);
+        }}
+        open={showMoveConfirm}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Move {toAdd.length === 1 ? 'this ad set' : 'these ad sets'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              An ad set can only be optimized by one portfolio at a time, so enrolling these removes
+              them from where they are now. Their budgets stay exactly as Meta has them — only who
+              reallocates them changes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul className="space-y-1 text-xs text-muted-foreground">
+            {pendingMoves.map((move) => (
+              <li key={move.portfolioName}>
+                <span className="font-medium text-foreground">{move.adsetIds.length}</span>{' '}
+                {move.adsetIds.length === 1 ? 'ad set' : 'ad sets'} out of{' '}
+                <span className="font-medium text-foreground">{move.portfolioName}</span>
+              </li>
+            ))}
+          </ul>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowMoveConfirm(false);
+                void performSave();
+              }}
+            >
+              Move &amp; save
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

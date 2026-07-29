@@ -1,5 +1,6 @@
 import {
   agentDelegatedFrameSchema,
+  agentAttachmentSchema,
   checkpointBlockV2LenientSchema,
   blockBaseSchema as contractBlockBaseSchema,
   chartBlockBaseSchema as contractChartBlockBaseSchema,
@@ -72,7 +73,7 @@ export const jainaChatRequestSchema = z.object({
     canvas: z.boolean().optional(),
     timezone: z.string().min(1).max(64).optional(),
     references: z.array(agentMentionReferenceSchema).optional(),
-    images: z.array(z.object({ url: z.string().url(), name: z.string().optional() })).optional(),
+    images: z.array(agentAttachmentSchema).optional(),
   }),
 });
 

@@ -37,7 +37,6 @@ export type AutomationNodeCatalogItem = {
   description: string;
   category: AutomationNodeCategory;
   icon: LucideIcon;
-  comingSoon?: true;
 };
 
 export const AUTOMATION_NODE_CATALOG: ReadonlyArray<{
@@ -82,10 +81,9 @@ export const AUTOMATION_NODE_CATALOG: ReadonlyArray<{
       {
         type: 'trigger.webhook',
         label: 'Inbound webhook',
-        description: 'Coming soon · Accept a typed request from another system.',
+        description: 'Accept a signed, typed request from another system.',
         category: 'trigger',
         icon: Globe2,
-        comingSoon: true,
       },
     ],
   },
@@ -244,10 +242,9 @@ export const AUTOMATION_NODE_CATALOG: ReadonlyArray<{
       {
         type: 'action.outbound_webhook',
         label: 'Send webhook',
-        description: 'Coming soon · Deliver the result to an external system.',
+        description: 'Deliver the result to a signed destination in another system.',
         category: 'outcome',
         icon: Share2,
-        comingSoon: true,
       },
     ],
   },
@@ -275,8 +272,18 @@ export const getAutomationNodeLifecycle = (
     ? AUTOMATION_SOURCE_LIFECYCLE[node.config.source]
     : AUTOMATION_NODE_LIFECYCLE[node.type];
 
-export const isAutomationWebhookNodeType = (type: AutomationWorkflowNode['type']): boolean =>
-  type === 'trigger.webhook' || type === 'action.outbound_webhook';
+/**
+ * A node the graph accepts structurally but the runtime would refuse: the
+ * managed webhook binding is minted by a separate flow (the Webhooks dialog),
+ * so a freshly dropped webhook node is legal-but-inert until that binding
+ * lands. Surfaced on the canvas and in the inspector so the gap is visible
+ * before publishing rejects it.
+ */
+export const automationNodeNeedsBinding = (node: AutomationWorkflowNode): boolean => {
+  if (node.type === 'trigger.webhook') return !node.config.endpointId;
+  if (node.type === 'action.outbound_webhook') return !node.config.destinationId;
+  return false;
+};
 
 const createNodeId = (type: AutomationWorkflowNode['type']) =>
   `${type.replaceAll('.', '-')}-${crypto.randomUUID().slice(0, 8)}`;
@@ -499,11 +506,13 @@ export function createAutomationWorkflowNode({
       return {
         ...common,
         type,
-        label: 'Pause paid target',
+        // Portfolio-addressed, not entity-addressed: the optimizer exposes no
+        // status write, so this node cannot pause or resume anything. It drains
+        // the recommendations a human already approved.
+        label: 'Apply approved optimizer changes',
         config: {
-          operation: 'pause',
-          targetType: 'adset',
-          targetId: 'select-paid-target',
+          portfolioId: null,
+          operation: 'apply_approved',
           maxBudgetDeltaPct: null,
         },
       };
@@ -513,6 +522,7 @@ export function createAutomationWorkflowNode({
         type,
         label: 'Send webhook',
         config: {
+          destinationId: undefined,
           method: 'POST',
           secretRef: null,
         },

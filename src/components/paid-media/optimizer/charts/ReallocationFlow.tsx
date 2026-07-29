@@ -37,6 +37,9 @@ type ReallocationFlowProps = {
   // Optional: unlocks the KPI-adaptive cost/results columns.
   objective?: OptimizationObjective | string | null;
   snapshotById?: Map<string, AdSetSnapshot>;
+  /** How the portfolio decides its total. Lets the card explain a non-zero net instead of
+   *  leaving the reader to guess whether a shrinking total is intended. */
+  budgetSource?: string | null;
 };
 
 export function ReallocationFlow({
@@ -45,10 +48,11 @@ export function ReallocationFlow({
   nameById,
   objective,
   snapshotById,
+  budgetSource,
 }: ReallocationFlowProps) {
-  const { gaining, losing, maxAbs, totalMoved } = splitReallocation(items);
+  const { gaining, losing, maxAbs, totalMoved, totalFreed, net, movedCount } =
+    splitReallocation(items);
   const movedIds = new Set([...gaining, ...losing].map((row) => row.adsetId));
-  const movedCount = movedIds.size;
 
   if (movedCount === 0) {
     return <ChartEmpty message="No budget moved this cycle — allocations held steady." />;
@@ -97,9 +101,42 @@ export function ReallocationFlow({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">
-        {formatCurrency(totalMoved, currency)} moved across {movedCount} ad sets
-      </p>
+      {/* Gainers, losers and the NET, not just the gainers. A cycle that took $746 out and
+          put $75 back used to read as "$75 moved", which is how a budget cut passed for a
+          reallocation. A non-zero net on a budget-neutral portfolio is the signal. */}
+      <div className="space-y-0.5">
+        <p className="text-xs text-muted-foreground tabular-nums">
+          <span className="text-success">+{formatCurrency(totalMoved, currency)}</span> to{' '}
+          {gaining.length} ·{' '}
+          <span className="text-destructive">−{formatCurrency(totalFreed, currency)}</span> from{' '}
+          {losing.length} · net{' '}
+          <span
+            className={cn(
+              Math.abs(net) < 1
+                ? 'text-muted-foreground'
+                : net > 0
+                  ? 'text-success'
+                  : 'text-destructive',
+            )}
+          >
+            {net >= 0 ? '+' : '−'}
+            {formatCurrency(Math.abs(net), currency)}
+          </span>{' '}
+          across {movedCount} {movedCount === 1 ? 'ad set' : 'ad sets'}
+        </p>
+        {budgetSource === 'observed' && Math.abs(net) >= 1 ? (
+          <p className="text-2xs text-warning">
+            This portfolio reallocates within current spend, so the net should be about zero. A gap
+            this size usually means ad-set budgets changed in Meta since the last cycle.
+          </p>
+        ) : null}
+        {budgetSource === 'fixed' && net <= -1 ? (
+          <p className="text-2xs text-muted-foreground">
+            Total spend is coming down because this portfolio targets a fixed daily budget. Switch
+            it to &ldquo;Match current spend&rdquo; in Manage to reallocate instead.
+          </p>
+        ) : null}
+      </div>
       <InsightDataTable
         columns={columns}
         defaultSort={{ columnId: 'change', direction: 'desc' }}

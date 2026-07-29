@@ -106,6 +106,8 @@ function restoreStoryboard(
     storagePath: readString(item.storagePath) ?? null,
     storageUrl: readString(item.storageUrl) ?? null,
     format: readString(item.format) ?? null,
+    // Survives a reload: without it the join key is dropped on restore.
+    sceneIndex: readNumber(item.sceneIndex) ?? null,
   }));
 }
 

@@ -32,11 +32,12 @@ import { Pill } from '@/components/kibo-ui/pill';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { ResolvedNodeCapability } from '@/lib/automations/capability-lifecycle';
 import { cn } from '@/lib/utils';
 import {
+  automationNodeNeedsBinding,
   getAutomationNodeCatalogItem,
   getAutomationNodeLifecycle,
-  isAutomationWebhookNodeType,
 } from './automationNodeCatalog';
 import type { WorkflowNodeExecutionView } from './workflowVisualState';
 
@@ -44,6 +45,12 @@ export type WorkflowCanvasNodeData = {
   workflowNode: AutomationWorkflowNode;
   locked: boolean;
   issues: AutomationValidationIssue[];
+  /**
+   * Server-resolved lifecycle for this node. The workspace owns the capabilities
+   * response, so it resolves once and hands the answer down; the bundled
+   * constant is only the fallback for a card rendered without one.
+   */
+  capability?: ResolvedNodeCapability;
   execution?: WorkflowNodeExecutionView;
   onConfigure?: (nodeId: string) => void;
   onDuplicate?: (nodeId: string) => void;
@@ -171,6 +178,7 @@ export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNod
   const {
     workflowNode: node,
     issues,
+    capability,
     execution,
     locked,
     onConfigure,
@@ -180,8 +188,9 @@ export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNod
   } = data;
   const spec = getAutomationNodePortSpec(node);
   const catalogItem = getAutomationNodeCatalogItem(node.type);
-  const lifecycle = getAutomationNodeLifecycle(node);
-  const webhookComingSoon = isAutomationWebhookNodeType(node.type);
+  const lifecycle = capability?.lifecycle ?? getAutomationNodeLifecycle(node);
+  const unavailable = capability?.availability === 'unavailable';
+  const needsBinding = automationNodeNeedsBinding(node);
   const inputs = Object.keys(spec.inputs);
   const outputs = Object.keys(spec.outputs);
   const errors = issues.filter((issue) => issue.severity === 'error');
@@ -244,7 +253,9 @@ export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNod
           errors.length > 0 && 'border-destructive/60',
           execution?.status === 'failed' && 'border-destructive ring-2 ring-destructive/15',
           execution?.status === 'running' && 'border-primary/70',
-          (node.disabled || lifecycle === 'preview') && 'opacity-55 grayscale-[0.35]',
+          (node.disabled || lifecycle === 'preview' || unavailable) &&
+            'opacity-55 grayscale-[0.35]',
+          unavailable && 'border-destructive/50',
         )}
       >
         <NodeHeader className="bg-card/90">
@@ -284,8 +295,10 @@ export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNod
           <div className="workflow-node-meta flex items-center justify-between gap-2 border-t border-border/60 pt-2">
             <span className="truncate text-[11px] text-muted-foreground">{nodeDetail(node)}</span>
             <div className="flex shrink-0 items-center gap-1">
-              {webhookComingSoon ? (
-                <Badge variant="muted">Coming soon</Badge>
+              {unavailable ? (
+                <Badge variant="destructive">Unavailable</Badge>
+              ) : needsBinding ? (
+                <Badge variant="warning">Needs setup</Badge>
               ) : lifecycle === 'preview' ? (
                 <Badge variant="muted">Preview</Badge>
               ) : null}

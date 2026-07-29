@@ -9,7 +9,6 @@ import { Pill } from '@/components/kibo-ui/pill';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { computeUnreadCount } from '@/lib/changelog/changelog';
 import type { ChangelogEntry } from '@/lib/changelog/schema';
-import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 
 const TAG_LABEL: Record<NonNullable<ChangelogEntry['tag']>, string> = {
@@ -66,9 +65,13 @@ function ChangelogRowItem({ entry, unread }: { entry: ChangelogEntry; unread: bo
             {entry.title}
           </span>
         </div>
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {formatRelativeTime(`${entry.date}T00:00:00Z`)}
-        </span>
+        <time
+          className="shrink-0 text-xs text-muted-foreground"
+          dateTime={entry.createdAt}
+          title={entry.createdAt}
+        >
+          {formatChangelogTimestamp(entry.createdAt)}
+        </time>
       </div>
       {entry.tag && (
         <Pill variant={TAG_VARIANT[entry.tag]} className="mt-1.5">
@@ -80,4 +83,13 @@ function ChangelogRowItem({ entry, unread }: { entry: ChangelogEntry; unread: bo
       </div>
     </div>
   );
+}
+
+function formatChangelogTimestamp(timestamp: string): string {
+  return new Date(timestamp).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }

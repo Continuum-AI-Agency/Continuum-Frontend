@@ -42,6 +42,26 @@ describe('queueing', () => {
     expect(queued[1]?.content).toBe('second');
   });
 
+  it('keeps durable image context attached while a message waits in the queue', () => {
+    const queued = enqueueMessage(
+      [],
+      buildQueuedMessage('q1', 'Analyze this creative', {
+        images: [
+          {
+            assetId: 'asset-1',
+            versionId: 'version-1',
+            url: 'https://signed.example/asset-1.png',
+            mediaType: 'image/png',
+          },
+        ],
+      }),
+    );
+
+    expect(queued[0]?.images).toEqual([
+      expect.objectContaining({ assetId: 'asset-1', versionId: 'version-1' }),
+    ]);
+  });
+
   it('updates only the targeted queued message content', () => {
     const queued = [buildQueuedMessage('q1', 'first'), buildQueuedMessage('q2', 'second')];
 

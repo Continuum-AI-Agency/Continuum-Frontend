@@ -102,6 +102,13 @@ Or hoist it for a whole file / project via a fixture or `test.use({ storageState
   `onboarding.spec.ts` on this same harness and helpers.
 - Never print raw tokens or the service-role key in test output.
 
+## Admin search bench
+
+`bun run admin:search:e2e:bench` drives the real `/admin` RSC search path while
+delaying one real response to reproduce the stale-snapshot race. Set
+`E2E_ADMIN_STORAGE_STATE_PATH` to a pre-approved, short-lived admin Playwright
+storage-state file for the local Frontend origin. The bench intentionally does
+not create users or mint sessions with service-role credentials.
 
 ## Chat shell bench (`chat:e2e:bench`)
 

@@ -150,10 +150,14 @@ export function usePublishDraft(): UsePublishDraftResult {
             }
           } else if (event === 'published') {
             const ev = parsed as PublishedEvent;
+            // platform_post_id is canonical; instagram_post_id is the legacy mirror the
+            // backend dual-writes for Instagram ONLY. Stamping it for every platform put a
+            // Facebook post id behind an instagram.com/p/ permalink.
             updateDraft(draft.id, (d) => ({
               ...d,
               status: 'published' as const,
-              instagram_post_id: ev.postId ?? null,
+              platform_post_id: ev.postId ?? null,
+              ...(ev.platform === 'instagram' ? { instagram_post_id: ev.postId ?? null } : {}),
             }));
             show({
               title: 'Published',
