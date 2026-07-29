@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { AutomationSourceKind, AutomationWorkflowNodeType } from './workflow';
-import { automationSourceKindSchema } from './workflow';
 
 export const automationCapabilityLifecycleSchema = z.enum(['production', 'preview']);
 export type AutomationCapabilityLifecycle = z.infer<typeof automationCapabilityLifecycleSchema>;
@@ -80,14 +79,39 @@ export const AUTOMATION_SOURCE_LIFECYCLE: Readonly<
   planner: 'production',
   trends: 'production',
   previous_run: 'production',
-  competitors: 'preview',
+  competitors: 'production',
   connected_platform: 'preview',
   live_web: 'preview',
+  // Held at preview until each one's resolver ships. The backend gates on the
+  // resolver wiring FIRST and this constant second (see
+  // App/automations/workflow/sources.ts `isSourceProductionWired`), so flipping
+  // one of these to production is a one-line, one-way-revertible change once its
+  // reader is deployed — and until then the runtime refuses it regardless.
+  optimizer: 'production',
+  whats_working: 'production',
+  audience: 'production',
 };
 
 export const automationSourceCapabilitySchema = z
   .object({
-    source: automationSourceKindSchema,
+    /**
+     * Deliberately a string, not `automationSourceKindSchema`.
+     *
+     * This response is `.strict()` and the frontend parses it with `.parse()`,
+     * which throws. Pinning the enum here means a backend that ships a new
+     * source kind first makes the ENTIRE `/capabilities` query throw on an older
+     * frontend — capabilities resolves to null, `resolveNodeLifecycle` falls
+     * back to the bundled constant, and every node silently reports
+     * `availability: 'ready'`. One unknown row would disable all
+     * `needs_connection` and `unavailable` gating at once.
+     *
+     * The node CONFIG keeps the strict enum (`automationSourceKindSchema`): a
+     * saved graph must never name a kind the runtime cannot dispatch. Only this
+     * server-authoritative response widens, and `resolveNodeLifecycle` already
+     * matches by string equality, so it costs nothing. Same reasoning as
+     * `actions` being optional below.
+     */
+    source: z.string().min(1).max(80),
     lifecycle: automationCapabilityLifecycleSchema,
     availability: automationCapabilityAvailabilitySchema,
     reason: z.string().max(500).nullable(),

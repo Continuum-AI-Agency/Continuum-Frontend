@@ -34,7 +34,6 @@ describe('organicUgcSpecSchema', () => {
       sceneCount: 4,
       targetDurationSeconds: 20,
       captionsEnabled: true,
-      continuity: 'cut',
     });
   });
 

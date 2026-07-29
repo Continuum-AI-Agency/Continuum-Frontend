@@ -26,11 +26,10 @@ import { selectLiveRuns, useAgentRunStore } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { CanvasComposerRunTail } from './CanvasComposerRunTail';
-import { HyperframesRunWorker } from './HyperframesRunWorker';
 
 function EventLogRunTail({ run, agent }: { run: AgentRunDto; agent: RunEventAgentKind }) {
   useAgentRunStream(run.runId, agent);
-  return agent === 'hyperframes' ? <HyperframesRunWorker run={run} /> : null;
+  return null;
 }
 
 /**

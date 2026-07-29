@@ -42,8 +42,14 @@ function resolveCoverUrl(draft: OrganicCalendarDraft): string | null {
   return null;
 }
 
+// The authored values win. `spec` is the legacy scene graph and is null on
+// everything the composition agent writes — reading only from it silently
+// letterboxed every vertical piece into 16:9 at a fixed 15s.
 function resolveDurationSec(draft: OrganicCalendarDraft): number {
-  const spec = draft.mediaSuggestion?.hyperframe?.spec;
+  const hyperframe = draft.mediaSuggestion?.hyperframe;
+  const authored = hyperframe?.durationSeconds;
+  if (typeof authored === 'number' && Number.isFinite(authored) && authored > 0) return authored;
+  const spec = hyperframe?.spec;
   if (spec && typeof spec === 'object' && !Array.isArray(spec)) {
     const candidate = (spec as Record<string, unknown>).durationSec;
     if (typeof candidate === 'number' && Number.isFinite(candidate) && candidate > 0) {
@@ -54,7 +60,20 @@ function resolveDurationSec(draft: OrganicCalendarDraft): number {
 }
 
 function resolveRenderDimensions(draft: OrganicCalendarDraft): { width: number; height: number } {
-  const spec = draft.mediaSuggestion?.hyperframe?.spec;
+  const hyperframe = draft.mediaSuggestion?.hyperframe;
+  const width = hyperframe?.width;
+  const height = hyperframe?.height;
+  if (
+    typeof width === 'number' &&
+    typeof height === 'number' &&
+    Number.isFinite(width) &&
+    Number.isFinite(height) &&
+    width > 0 &&
+    height > 0
+  ) {
+    return { width, height };
+  }
+  const spec = hyperframe?.spec;
   if (spec && typeof spec === 'object' && !Array.isArray(spec)) {
     const candidate = (spec as Record<string, unknown>).aspectRatio;
     if (candidate === '16:9' || candidate === '9:16' || candidate === '1:1') {
@@ -62,6 +81,13 @@ function resolveRenderDimensions(draft: OrganicCalendarDraft): { width: number; 
     }
   }
   return DEFAULT_DIMENSIONS;
+}
+
+function resolveSourceAssets(
+  draft: OrganicCalendarDraft,
+): Array<{ assetId: string; kind: 'image' | 'video' | 'audio' }> {
+  const assets = draft.mediaSuggestion?.hyperframe?.sourceAssets;
+  return Array.isArray(assets) ? assets : [];
 }
 
 export function HyperFramePlayer({
@@ -115,6 +141,7 @@ export function HyperFramePlayer({
         durationSeconds: resolveDurationSec(draft),
         width: dimensions.width,
         height: dimensions.height,
+        assets: resolveSourceAssets(draft),
         origin: {
           label: 'Organic HyperFrame',
           viewHref: '/planner',

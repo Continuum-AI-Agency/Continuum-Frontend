@@ -1,4 +1,5 @@
 import {
+  type BrandBookPieceKind,
   HYPERFRAMES_AUDIO_INPUT_HANDLE,
   HYPERFRAMES_IMAGE_INPUT_HANDLE,
   HYPERFRAMES_PROMPT_INPUT_HANDLE,
@@ -18,9 +19,11 @@ import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/ToastProvider';
+import { GroundingChip } from '../components/GroundingChip';
 import { useCanvasRuntime } from '../contexts/CanvasRuntimeContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { HyperframesAgentNodeData } from '../types';
+import { toggleBrandPiece, toggleSkillId } from '../utils/brandEnforcement';
 import { startHyperframesAgentNode } from '../utils/startHyperframesAgent';
 
 const labelForStatus = (status: HyperframesAgentNodeData['status']): string => {
@@ -51,6 +54,7 @@ export function HyperframesAgentBlock({
 }: NodeProps<ReactFlowNode<HyperframesAgentNodeData>>) {
   const runtime = useCanvasRuntime();
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const triggerSave = useStudioStore((state) => state.triggerSave);
   const { show } = useToast();
   const [starting, setStarting] = useState(false);
   const running = starting || Boolean(data.isExecuting);
@@ -74,8 +78,36 @@ export function HyperframesAgentBlock({
     }
   }, [id, running, runtime, show, updateNodeData]);
 
+  const handleToggleSkill = useCallback(
+    (skillId: string) => {
+      updateNodeData(id, { skillIds: toggleSkillId(data.skillIds, skillId) });
+      triggerSave();
+    },
+    [data.skillIds, id, triggerSave, updateNodeData],
+  );
+
+  const handleToggleBrandPiece = useCallback(
+    (kind: BrandBookPieceKind) => {
+      updateNodeData(id, { brandBookPieces: toggleBrandPiece(data.brandBookPieces, kind) });
+      triggerSave();
+    },
+    [data.brandBookPieces, id, triggerSave, updateNodeData],
+  );
+
   return (
     <div className="relative h-full min-h-[360px] min-w-[360px]">
+      {/* Inside the card's top-left, not straddling its border (Airtable #229). */}
+      <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
+        <GroundingChip
+          brandId={runtime?.brandProfileId}
+          skillIds={data.skillIds}
+          brandBookPieces={data.brandBookPieces}
+          editable
+          onToggleSkill={handleToggleSkill}
+          onTogglePiece={handleToggleBrandPiece}
+          className="bg-background/90 shadow-sm backdrop-blur-sm"
+        />
+      </div>
       <NodeResizer
         minWidth={360}
         minHeight={360}
@@ -96,7 +128,7 @@ export function HyperframesAgentBlock({
               </span>
               <div>
                 <div className="text-sm font-semibold">HyperFrames Agent</div>
-                <div className="text-2xs text-muted-foreground">Gemini 3.5 Flash-Lite</div>
+                <div className="text-2xs text-muted-foreground">Gemini 3.6 Flash</div>
               </div>
             </div>
             <span className="text-2xs font-medium text-muted-foreground">

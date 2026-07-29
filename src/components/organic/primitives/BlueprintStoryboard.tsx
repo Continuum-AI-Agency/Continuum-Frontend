@@ -25,7 +25,9 @@ function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-// Persisted 512px storyboard preview frames (Stage-2 blueprint). The backend
+// Persisted storyboard preview frames (Stage-2 blueprint). Reel panels render at 1K —
+// they become the Veo first frame, so they are not previews — while carousel and single
+// frames stay at 512px. The backend
 // re-signs storageUrl on every calendar load, so render it directly. Only frames
 // with a usable signed URL are surfaced; base64 is never used.
 export function resolveStoryboardFrames(draft: OrganicCalendarDraft): StoryboardFrame[] {
@@ -55,6 +57,9 @@ function FrameTile({
   alt: string;
   onEnlarge: (index: number) => void;
 }) {
+  // A storyboard panel is 9:16 and exists to be JUDGED on framing. The square tile with
+  // object-cover this used to render cropped ~44% of every frame vertically — cutting
+  // away the exact thing a contact sheet is for, and hiding the copy-safe zone entirely.
   return (
     <button
       type="button"
@@ -63,15 +68,15 @@ function FrameTile({
         onEnlarge(index);
       }}
       aria-label={`Enlarge storyboard frame ${index + 1}${hasText(frame.role) ? ` — ${frame.role}` : ''}`}
-      className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted/40 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group relative aspect-[9/16] h-32 w-auto shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted/40 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Image
         src={frame.storageUrl}
         alt={`${alt} — storyboard frame ${index + 1}`}
         fill
         unoptimized
-        sizes="80px"
-        className="object-cover"
+        sizes="72px"
+        className="object-contain"
       />
       <span className="pointer-events-none absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100">
         <Maximize2 className="h-3 w-3" />
@@ -124,7 +129,7 @@ export function BlueprintStoryboard({
           />
         ))}
         {overflow > 0 && (
-          <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-dashed border-border/60 bg-muted/30 text-xs font-medium text-muted-foreground">
+          <span className="flex aspect-[9/16] h-32 w-auto shrink-0 items-center justify-center rounded-md border border-dashed border-border/60 bg-muted/30 text-xs font-medium text-muted-foreground">
             +{overflow}
           </span>
         )}

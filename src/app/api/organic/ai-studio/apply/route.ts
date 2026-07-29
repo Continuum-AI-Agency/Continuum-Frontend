@@ -1,4 +1,7 @@
-import { deriveOrganicMediaStage } from '@continuum/contracts';
+import {
+  deriveOrganicMediaStage,
+  registerGeneratedAssetResponseSchema,
+} from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
@@ -9,7 +12,7 @@ import {
 } from '@/lib/organic/ai-studio-bridge';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { type AppliedMediaAssetInput, buildAppliedMediaAssetRow } from './mediaAssetRow';
+import { type AppliedMediaAssetInput, buildApplyRegisterOperation } from './registerOperation';
 import { buildUserSuppliedContentJson } from './userSuppliedContentJson';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -17,19 +20,37 @@ export const runtime = 'nodejs';
 
 // Register a generated creative as a durable media.assets row so it is
 // searchable by the Organic agent in future sessions.
+//
+// Goes through Creative Operations rather than inserting the row directly: the RPC
+// mints the asset head, its version and lineage edges in one transaction, dedupes on
+// the idempotency key, and hands back the id — so the old `created_at desc limit 1`
+// re-read of the row we had just written, and its race, are gone.
 async function registerAiCreativeAsMediaAsset(params: AppliedMediaAssetInput): Promise<void> {
   const admin = createSupabaseAdminClient();
 
   // "media" schema is not in generated types yet; cast to untyped base client.
   const mediaAdmin = (admin as unknown as SupabaseClient).schema('media');
-  const { error } = await mediaAdmin.from('assets').insert(buildAppliedMediaAssetRow(params));
+  const operation = buildApplyRegisterOperation(params);
 
-  if (error) {
-    // Non-fatal: log and continue. The asset is still usable; it just won't be
-    // searchable until a future backfill adds it.
-    console.warn('[apply] media.assets insert failed', {
+  const { data, error } = await mediaAdmin.rpc('library_execute_operation', {
+    p_action: operation.action,
+    p_payload: { ...operation, actor: params.userId },
+  });
+
+  const parsed = registerGeneratedAssetResponseSchema.safeParse(data);
+  if (error || !parsed.success) {
+    // Non-fatal to the apply itself — the creative is already stored and already on
+    // the draft. Logged with the full storage coordinates plus the idempotency key so
+    // the object can be registered after the fact instead of being stranded.
+    console.error('[apply] media asset registration failed', {
+      brandId: params.brandProfileId,
+      bucket: params.bucket,
       storagePath: params.storagePath,
-      error: error.message,
+      fileName: params.fileName,
+      mimeType: params.mimeType,
+      kind: params.kind,
+      idempotencyKey: operation.idempotencyKey,
+      error: error?.message ?? parsed.error?.message,
     });
     return;
   }
@@ -37,38 +58,26 @@ async function registerAiCreativeAsMediaAsset(params: AppliedMediaAssetInput): P
   // Enqueue vision analysis. Tier-gated inside the edge function itself.
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (supabaseUrl && serviceKey) {
-    // Fetch the newly inserted row's id so analyze_media can locate it.
-    const { data: row } = await mediaAdmin
-      .from('assets')
-      .select('id')
-      .eq('storage_path', params.storagePath)
-      .eq('brand_id', params.brandProfileId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+  if (!supabaseUrl || !serviceKey) return;
 
-    if (row) {
-      const assetId = (row as unknown as { id: string }).id;
-      fetch(`${supabaseUrl}/functions/v1/analyze_media`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({
-          brandId: params.brandProfileId,
-          assetId,
-          storagePath: params.storagePath,
-          bucket: params.bucket,
-          mimeType: params.mimeType,
-          fileName: params.fileName,
-        }),
-      }).catch((err) => {
-        console.warn('[apply] analyze_media enqueue failed', { assetId, error: String(err) });
-      });
-    }
-  }
+  const assetId = parsed.data.assetId;
+  fetch(`${supabaseUrl}/functions/v1/analyze_media`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${serviceKey}`,
+    },
+    body: JSON.stringify({
+      brandId: params.brandProfileId,
+      assetId,
+      storagePath: params.storagePath,
+      bucket: params.bucket,
+      mimeType: params.mimeType,
+      fileName: params.fileName,
+    }),
+  }).catch((err) => {
+    console.warn('[apply] analyze_media enqueue failed', { assetId, error: String(err) });
+  });
 }
 
 function resolveAssetMimeType(kind: 'image' | 'video', provided?: string | null): string {

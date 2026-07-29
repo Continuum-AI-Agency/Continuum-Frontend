@@ -46,7 +46,11 @@
     ".next/wpd/types/**/*.ts",
     ".next/wpd/dev/types/**/*.ts",
     ".next/studio-veo-refs-e2e/types/**/*.ts",
-    ".next/studio-veo-refs-e2e/dev/types/**/*.ts"
+    ".next/studio-veo-refs-e2e/dev/types/**/*.ts",
+    ".next/budget-probe/types/**/*.ts",
+    ".next/budget-probe/dev/types/**/*.ts",
+    ".next/prepush/types/**/*.ts",
+    ".next/prepush/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

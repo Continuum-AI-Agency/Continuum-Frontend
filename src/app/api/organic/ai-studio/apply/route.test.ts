@@ -54,7 +54,9 @@ describe('POST /api/organic/ai-studio/apply', () => {
     });
     const rpcMock = mock().mockResolvedValue({ data: true, error: null });
     const getUserMock = mock().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
-    const insertedMediaRows: Array<Record<string, unknown>> = [];
+    // Registration now goes through media.library_execute_operation, so what this
+    // captures is the Creative Operations payload rather than a raw assets row.
+    const registerOperations: Array<Record<string, unknown>> = [];
 
     (
       globalThis as {
@@ -62,6 +64,18 @@ describe('POST /api/organic/ai-studio/apply', () => {
       }
     ).__testCreateSupabaseAdminClient = () => ({
       schema: (schema: string) => ({
+        rpc: async (_action: string, args: { p_payload: Record<string, unknown> }) => {
+          registerOperations.push(args.p_payload);
+          return {
+            data: {
+              assetId: '55555555-5555-4555-8555-555555555555',
+              versionId: '66666666-6666-4666-8666-666666666666',
+              lineageCount: 0,
+              status: 'created',
+            },
+            error: null,
+          };
+        },
         from: (table: string) => {
           let action: 'select' | 'insert' | 'update' = 'select';
           const query = {
@@ -114,7 +128,7 @@ describe('POST /api/organic/ai-studio/apply', () => {
         body: JSON.stringify({
           schemaVersion: 'planner_ai_apply_v1',
           draftId: 'draft-1',
-          brandProfileId: 'brand-1',
+          brandProfileId: '33333333-3333-4333-8333-333333333333',
           postType: 'post',
           platform: 'instagram',
           overwrite: true,
@@ -136,7 +150,13 @@ describe('POST /api/organic/ai-studio/apply', () => {
     expect(response.status).toBe(200);
     expect(uploadMock).toHaveBeenCalledTimes(1);
     expect(createSignedUrlMock).toHaveBeenCalledTimes(1);
-    expect(insertedMediaRows[0]?.size_bytes).toBe(68);
+    // Registration reached Creative Operations with the real byte count, and did so
+    // as a register_generated_asset operation rather than a direct table write.
+    expect(registerOperations).toHaveLength(1);
+    expect(registerOperations[0]?.action).toBe('register_generated_asset');
+    expect(registerOperations[0]?.sizeBytes).toBe(68);
+    expect(registerOperations[0]?.actor).toBe('user-1');
+    expect(registerOperations[0]?.idempotencyKey).toMatch(/^generated:[0-9a-f]{64}$/);
     const payload = await response.json();
     expect(payload.schemaVersion).toBe('planner_ai_apply_v1');
     expect(payload.assets[0].storageUrl).toBe('https://signed.example.com/file.png');

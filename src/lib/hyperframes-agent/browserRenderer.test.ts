@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { withCrossOrigin } from './browserRenderer';
+import { animatedCssProperties, withCrossOrigin } from './browserRenderer';
 
 /**
  * `crossorigin` is what opts a media fetch into CORS mode. Without it the browser
@@ -53,5 +53,42 @@ describe('withCrossOrigin', () => {
       '<video src="hf-asset://v1"></video><img src="hf-asset://i1"><video src="hf-asset://v2"></video>';
     const out = withCrossOrigin(html);
     expect(out.match(/crossorigin="anonymous"/g)).toHaveLength(3);
+  });
+});
+
+/**
+ * Serializing the DOM captures INLINE styles, so a GSAP composition (GSAP writes
+ * element.style) always rendered correctly — but a CSS `@keyframes` animation
+ * applies COMPUTED values and touches no inline style, so every frame came out
+ * at the animation's base state and the MP4 was a still. The freeze copies the
+ * seeked computed value onto the clone; getting these names wrong makes it
+ * silently do nothing, which looks exactly like the bug it fixes.
+ */
+describe('animatedCssProperties', () => {
+  it('converts camelCased keyframe properties to CSS names', () => {
+    expect(animatedCssProperties([{ backgroundColor: 'red' }, { backgroundColor: 'blue' }])).toEqual(
+      ['background-color'],
+    );
+  });
+
+  it('drops keyframe metadata, which is not a style property', () => {
+    const names = animatedCssProperties([
+      { offset: 0, easing: 'ease-out', composite: 'replace', opacity: '0' },
+      { offset: 1, computedOffset: 1, opacity: '1' },
+    ]);
+    expect(names).toEqual(['opacity']);
+  });
+
+  it('collects every property across the whole set, not just the first frame', () => {
+    const names = animatedCssProperties([
+      { opacity: '0' },
+      { transform: 'translateY(40px)' },
+      { letterSpacing: '0.2em' },
+    ]);
+    expect(names.sort()).toEqual(['letter-spacing', 'opacity', 'transform']);
+  });
+
+  it('returns nothing for a keyframe set that animates nothing', () => {
+    expect(animatedCssProperties([{ offset: 0 }, { offset: 1 }])).toEqual([]);
   });
 });

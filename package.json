@@ -68,8 +68,6 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@heroicons/react": "^2.2.0",
     "@hookform/resolvers": "^5.2.2",
-    "@hyperframes/core": "0.7.68",
-    "@hyperframes/player": "0.7.68",
     "@number-flow/react": "^0.6.1",
     "@onboardjs/core": "^1.0.0-rc.3",
     "@onboardjs/react": "^1.0.0-rc.3",

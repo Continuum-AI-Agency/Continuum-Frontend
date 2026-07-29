@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { artDirectionSchema } from '../creative/art-direction';
 import { organicUgcSpecSchema } from '../media/reel-video';
 
 export const organicPipelinePlatformSchema = z.enum([
@@ -112,6 +113,15 @@ export const organicReelSceneAssetSchema = z
      * serialization. Never set without `firstFrame`; Veo rejects that.
      */
     lastFrame: organicSceneFrameRefSchema.nullable().optional(),
+    /**
+     * The decisions behind this scene, kept alongside the rendered `prompt`.
+     *
+     * It persists because the still and the clip are different machines: the panel
+     * renders with a copy-safe zone and a single-frame rule, the Veo shot re-renders
+     * from this same direction with a movement clause instead. Drop it here and the
+     * clip silently reuses the still's string, which is the defect it exists to fix.
+     */
+    artDirection: artDirectionSchema.nullable().optional(),
   })
   .strict();
 
@@ -161,6 +171,25 @@ export const organicHyperframeAssetSchema = z
     mp4Status: z.enum(['pending', 'ready', 'failed']).nullable().optional(),
     error: z.string().nullable().optional(),
     spec: z.unknown().nullable().optional(),
+    // Authored render size and length. Explicit because `spec` is null on
+    // agent-written compositions, and the player used to derive both from it —
+    // falling back to 16:9/15s, which letterboxes every vertical piece.
+    width: z.number().int().positive().nullable().optional(),
+    height: z.number().int().positive().nullable().optional(),
+    durationSeconds: z.number().positive().nullable().optional(),
+    // Library assets embedded as hf-asset://<id>, re-signed by the browser at
+    // render time rather than baked in as URLs that expire before the render.
+    sourceAssets: z
+      .array(
+        z
+          .object({
+            assetId: z.string().min(1),
+            kind: z.enum(['image', 'video', 'audio']),
+          })
+          .strict(),
+      )
+      .nullable()
+      .optional(),
   })
   .strict();
 

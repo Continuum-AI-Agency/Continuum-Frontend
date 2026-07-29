@@ -131,6 +131,9 @@ export const automationSourceKindSchema = z.enum([
   'connected_platform',
   'live_web',
   'previous_run',
+  'optimizer',
+  'whats_working',
+  'audience',
 ]);
 export type AutomationSourceKind = z.infer<typeof automationSourceKindSchema>;
 
@@ -186,12 +189,33 @@ export const automationSourceQuerySchemas = {
       adAccountId: z.string().min(1).max(120).default('auto'),
       datePreset: z.enum(['last_7d', 'last_14d', 'last_30d']).default('last_7d'),
       level: z.enum(['account', 'campaign', 'adset', 'ad']).default('account'),
+      /**
+       * @deprecated Single-entity scope. Kept, not removed: this object is
+       * `.strict()` and every stored graph carries the key, so dropping it would
+       * fail every saved definition at parse. Read it through
+       * `resolveAutomationPaidAnalyticsScope`, never directly.
+       */
       objectId: z.string().min(1).max(120).default('auto'),
+      /**
+       * A saved `brand_profiles.paid_media_campaign_indexes` row — the user's own
+       * named group of campaign ids, authored in Paid Media. Campaign level only;
+       * the refine below enforces that at SAVE time, where it is still fixable.
+       */
+      campaignIndexId: z.string().uuid().nullable().default(null),
       metrics: z.array(z.string().min(1).max(80)).max(40).default([]),
       includeTopAds: z.boolean().default(false),
       topAdsLimit: z.number().int().min(1).max(25).default(5),
     })
-    .strict(),
+    .strict()
+    .superRefine((value, ctx) => {
+      if (value.campaignIndexId !== null && value.level !== 'campaign') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['campaignIndexId'],
+          message: 'A saved campaign index only scopes a campaign-level read.',
+        });
+      }
+    }),
   organic_analytics: z
     .object({
       platforms: z
@@ -217,8 +241,25 @@ export const automationSourceQuerySchemas = {
       limit: boundedSourceLimitSchema,
     })
     .strict(),
+  // Widened, not replaced: a stored `{search, limit}` config still parses.
+  // `instagram_posts` and `smart_search` are deliberately absent — both do a live
+  // per-competitor Instagram fetch, which is the wrong thing to put on a timer
+  // with nobody watching.
   competitors: z
-    .object({ search: sourceTextQuerySchema, limit: boundedSourceLimitSchema })
+    .object({
+      views: z
+        .array(
+          z.enum(['competitors', 'timeline', 'boards', 'board_items', 'awareness', 'gap_report']),
+        )
+        .max(6)
+        .default(['competitors']),
+      competitorId: z.string().trim().max(80).default(''),
+      boardId: z.string().trim().max(80).default(''),
+      status: z.enum(['any', 'active', 'paused']).default('any'),
+      sinceDays: z.number().int().min(1).max(365).default(30),
+      search: sourceTextQuerySchema,
+      limit: boundedSourceLimitSchema,
+    })
     .strict(),
   connected_platform: z
     .object({
@@ -238,6 +279,76 @@ export const automationSourceQuerySchemas = {
       limit: z.number().int().min(1).max(20).default(1),
     })
     .strict(),
+  // `views` omits `suggest`, `insight`, `logs` and `status`: all four are
+  // edge-backed, and the automation MCP context carries no user access token, so
+  // they would fail on every scheduled run. `suggest`/`insight` are also an LLM
+  // plus Meta fan-out — not something to fire unattended on a schedule.
+  optimizer: z
+    .object({
+      // '' means every portfolio the brand owns, capped by `limit`.
+      portfolioId: z.string().trim().max(120).default(''),
+      views: z
+        .array(
+          z.enum([
+            'portfolios',
+            'performance',
+            'adsets',
+            'cpa_series',
+            'angle_matrix',
+            'renewal_tasks',
+          ]),
+        )
+        .max(6)
+        .default(['portfolios', 'performance']),
+      window: z.enum(['d7', 'd14', 'd30']).default('d14'),
+      historyLimit: z.number().int().min(1).max(30).default(10),
+      pendingRecommendationsOnly: z.boolean().default(true),
+      limit: boundedSourceLimitSchema,
+    })
+    .strict(),
+  whats_working: z
+    .object({
+      views: z
+        .array(z.enum(['summary', 'verdicts', 'win_rates', 'adset_win_rates']))
+        .max(4)
+        .default(['verdicts', 'win_rates']),
+      funnel: z.enum(['all', 'tof', 'mof', 'bof']).default('all'),
+      /** Empty means every verdict kind. */
+      verdicts: z
+        .array(z.enum(['kill', 'scale', 'iterate', 'watch']))
+        .max(4)
+        .default([]),
+      /** Empty means every dimension. */
+      dimensions: z
+        .array(
+          z.enum([
+            'hook_archetype',
+            'angle',
+            'asset_type',
+            'theme',
+            'funnel_stage',
+            'visual_style',
+          ]),
+        )
+        .max(6)
+        .default([]),
+      window: z.enum(['d7', 'd14', 'd30']).default('d30'),
+      hideThinEvidence: z.boolean().default(true),
+      limit: boundedSourceLimitSchema,
+    })
+    .strict(),
+  // No `forceRefresh` field, deliberately. This read is cached and shared; an
+  // unattended run must never be able to bust it.
+  audience: z
+    .object({
+      platform: z.enum(['instagram', 'facebook', 'linkedin']).default('instagram'),
+      /** 'auto' resolves the brand's single linked account for the platform. */
+      integrationAccountId: z.string().trim().max(120).default('auto'),
+      dateRange: z.enum(['last_7d', 'last_14d', 'last_30d', 'last_90d']).default('last_30d'),
+      includeReachSplit: z.boolean().default(true),
+      includeDigest: z.boolean().default(true),
+    })
+    .strict(),
 } satisfies Record<AutomationSourceKind, z.ZodType>;
 
 export type AutomationSourceQuery = {
@@ -249,6 +360,78 @@ export const parseAutomationSourceQuery = <Kind extends AutomationSourceKind>(
   query: unknown,
 ): AutomationSourceQuery[Kind] =>
   automationSourceQuerySchemas[source].parse(query) as AutomationSourceQuery[Kind];
+
+/** What a paid-analytics source is actually pointed at, after precedence. */
+export type AutomationPaidAnalyticsSelection =
+  | { kind: 'account' }
+  | { kind: 'explicit'; objectIds: string[]; origin: 'pinned' | 'object_id' }
+  | { kind: 'campaign_index'; campaignIndexId: string };
+
+export type AutomationPaidAnalyticsScope = {
+  provider: 'meta';
+  /** 'auto' or an explicit id. The RESOLVER proves ownership, not this function. */
+  adAccountId: string;
+  datePreset: AutomationSourceQuery['paid_analytics']['datePreset'];
+  level: AutomationSourceQuery['paid_analytics']['level'];
+  selection: AutomationPaidAnalyticsSelection;
+  metrics: string[];
+  includeTopAds: boolean;
+  topAdsLimit: number;
+  /**
+   * Non-empty when more than one scoping shape was authored. Surfaced in the run
+   * envelope so a hand-edited config is visible rather than silently reinterpreted.
+   */
+  ambiguity: string[];
+};
+
+/**
+ * The one place paid scoping precedence is decided.
+ *
+ * Four shapes can express "which entities": a saved campaign index, node-level
+ * pinned ids, the legacy single `objectId`, or nothing (whole account). The
+ * editor and the `superRefine` above prevent authoring two at once, so only
+ * hand-edited JSON reaches a conflict — and when it does this still returns ONE
+ * deterministic answer and names the loser in `ambiguity`. Refusing at run time
+ * would brick a scheduled automation; picking silently is how a report ends up
+ * describing something other than what it claims.
+ */
+export const resolveAutomationPaidAnalyticsScope = (config: {
+  mode: 'live' | 'pinned';
+  pinnedIds: string[];
+  query: AutomationSourceQuery['paid_analytics'];
+}): AutomationPaidAnalyticsScope => {
+  const { query } = config;
+  const pinned = config.mode === 'pinned' ? config.pinnedIds.filter(Boolean) : [];
+  const hasIndex = typeof query.campaignIndexId === 'string' && query.campaignIndexId.length > 0;
+  const hasObjectId = query.objectId !== 'auto' && query.objectId.length > 0;
+  const ambiguity: string[] = [];
+
+  let selection: AutomationPaidAnalyticsSelection;
+  if (hasIndex) {
+    if (pinned.length > 0) ambiguity.push('Ignored pinned campaign ids: a saved index was set.');
+    if (hasObjectId) ambiguity.push('Ignored objectId: a saved index was set.');
+    selection = { kind: 'campaign_index', campaignIndexId: query.campaignIndexId as string };
+  } else if (pinned.length > 0) {
+    if (hasObjectId) ambiguity.push('Ignored objectId: pinned campaign ids were set.');
+    selection = { kind: 'explicit', objectIds: pinned, origin: 'pinned' };
+  } else if (hasObjectId) {
+    selection = { kind: 'explicit', objectIds: [query.objectId], origin: 'object_id' };
+  } else {
+    selection = { kind: 'account' };
+  }
+
+  return {
+    provider: query.provider,
+    adAccountId: query.adAccountId,
+    datePreset: query.datePreset,
+    level: query.level,
+    selection,
+    metrics: query.metrics,
+    includeTopAds: query.includeTopAds,
+    topAdsLimit: query.topAdsLimit,
+    ambiguity,
+  };
+};
 
 const sourceNodeSchema = z
   .object({
@@ -268,6 +451,22 @@ const sourceNodeSchema = z
             code: 'custom',
             path: ['pinnedIds'],
             message: 'Pinned sources require at least one record id.',
+          });
+        }
+        // Two ways to say "these campaigns" is one too many. Caught here, at
+        // save time, because this is the only place that sees both the node-level
+        // pins and the query. Nothing stored today carries `campaignIndexId`, so
+        // this cannot fail an existing definition.
+        if (
+          value.source === 'paid_analytics' &&
+          value.mode === 'pinned' &&
+          value.pinnedIds.length > 0 &&
+          typeof (value.query as { campaignIndexId?: unknown }).campaignIndexId === 'string'
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['query', 'campaignIndexId'],
+            message: 'Choose either a saved campaign index or specific pinned campaigns, not both.',
           });
         }
         const parsedQuery = automationSourceQuerySchemas[value.source].safeParse(value.query);

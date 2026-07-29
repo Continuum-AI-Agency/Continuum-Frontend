@@ -1,6 +1,6 @@
 import {
-  agentDelegatedFrameSchema,
   agentAttachmentSchema,
+  agentDelegatedFrameSchema,
   checkpointBlockV2LenientSchema,
   blockBaseSchema as contractBlockBaseSchema,
   chartBlockBaseSchema as contractChartBlockBaseSchema,
@@ -851,6 +851,25 @@ export const agentCompleteEventSchema = z.object({
 });
 export type AgentCompleteEventData = z.infer<typeof agentCompleteEventSchema>;
 
+// A structured worker's findings as its object streams. `lines` are INCREMENTS —
+// each frame carries only what became stable since the last one — so consumers
+// APPEND. Replacing prior lines for the same agent_id would drop findings.
+export const agentNarrationEventSchema = z.object({
+  agent_id: z.string().nullable(),
+  parent_agent_id: z.string().nullable().optional(),
+  agent_name: z.string().nullable().optional(),
+  display_name: z.string().nullable().optional(),
+  lines: z
+    .array(
+      z.object({
+        field: z.enum(['findings', 'insights', 'evidence', 'recommendations']),
+        text: z.string(),
+      }),
+    )
+    .default([]),
+});
+export type AgentNarrationEventData = z.infer<typeof agentNarrationEventSchema>;
+
 export const canvasContextLoadedEventSchema = z.object({}).passthrough();
 
 export const agentEnvelopeSchema = streamEventSchema(
@@ -1090,6 +1109,7 @@ export type JainaStreamEvent =
   | z.infer<typeof agentDelegatedFrameSchema>
   | { type: 'agent.spawn'; data: AgentSpawnEventData }
   | { type: 'agent.complete'; data: AgentCompleteEventData }
+  | { type: 'agent.narration'; data: AgentNarrationEventData }
   | { type: 'canvas.context.loaded'; data: Record<string, unknown> }
   | z.infer<typeof responseCheckpointReportSchema>
   | z.infer<typeof responseBlockDeltaSchema>
@@ -1124,6 +1144,7 @@ export const jainaStreamEventSchema = z.union([
   agentDelegatedFrameSchema,
   z.object({ type: z.literal('agent.spawn'), data: agentSpawnEventSchema }),
   z.object({ type: z.literal('agent.complete'), data: agentCompleteEventSchema }),
+  z.object({ type: z.literal('agent.narration'), data: agentNarrationEventSchema }),
   z.object({ type: z.literal('canvas.context.loaded'), data: z.record(z.string(), z.unknown()) }),
   responseCheckpointReportSchema,
   responseBlockDeltaSchema,

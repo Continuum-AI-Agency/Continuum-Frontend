@@ -8,6 +8,7 @@ import {
   adkEventSchema,
   agentCompleteEventSchema,
   agentEnvelopeSchema,
+  agentNarrationEventSchema,
   agentSpawnEventSchema,
   artifactDeltaSchema,
   type CheckpointBlockV2,
@@ -88,6 +89,8 @@ export type ActiveWorkerInfo = {
   lastToolState?: 'calling' | 'returned' | 'cached' | 'failed';
   outputBytes?: number;
   error?: string;
+  /** What this worker has reported so far, appended in arrival order. */
+  narration?: string[];
 };
 
 const compatibilityStreamEventSchema = z
@@ -1359,6 +1362,89 @@ function looksLikePlanRecord(payload: Record<string, unknown>): boolean {
   return hasPlanId && hasObjectives;
 }
 
+/**
+ * Parses the markdown plan the Jaina runtime actually sends at plan-init
+ * (`renderObjectivePlanMarkdown`, orchestrator.ts). It arrives as ONE
+ * `response.plan.delta` about a second into a turn — the earliest moment Jaina can
+ * tell the user what she is about to do.
+ *
+ * It used to be dropped: the accumulated-delta parser runs `JSON.parse` (markdown
+ * throws) and the key/value parser bails on `!includes('=')` (the markdown has no
+ * `=`), so both returned null and the plan never rendered.
+ *
+ * Shape:
+ *   Plan: <title>
+ *   Intent: <intent> | Date: <date_preset> | Scope ceiling: <scope>
+ *
+ *   1. [<scope>] <task>[ depends on <ids>]
+ *      <description>
+ *      Why: <rationale>
+ *      Stop when: <success criteria>
+ */
+function parsePlanFromMarkdownDelta(delta: string, previous: JainaPlan | null): JainaPlan | null {
+  const trimmed = delta.trim();
+  // A plan ALWAYS opens with the `Plan:` header. Requiring it is what keeps ordinary
+  // assistant prose from being mistaken for a plan.
+  if (!trimmed || trimmed.startsWith('{') || trimmed.startsWith('[')) return null;
+  const lines = trimmed.split('\n');
+  const titleMatch = lines[0]?.match(/^Plan:\s*(.+)$/);
+  if (!titleMatch) return null;
+
+  const title = titleMatch[1].trim();
+  const metaMatch = trimmed.match(/^Intent:\s*(.+)$/m);
+  const description = metaMatch ? metaMatch[1].trim() : (previous?.description ?? '');
+
+  const steps: JainaPlan['steps'] = [];
+  let current: { title: string; description?: string; successCriteria?: string } | null = null;
+
+  const commitCurrent = () => {
+    if (!current) return;
+    steps.push({
+      title: current.title,
+      // Same precedence the JSON parser uses: an explicit description wins, and the
+      // success criteria stands in when the model wrote none.
+      description: current.description ?? current.successCriteria,
+      status: 'pending',
+    });
+    current = null;
+  };
+
+  for (const raw of lines.slice(1)) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    const objectiveMatch = line.match(/^\d+\.\s*(?:\[[^\]]*\]\s*)?(.+)$/);
+    if (objectiveMatch) {
+      commitCurrent();
+      // `depends on …` is dependency bookkeeping appended to the task sentence; it is
+      // not part of what the objective IS, so it does not belong in the step title.
+      current = { title: objectiveMatch[1].replace(/\s+depends on\s+.+$/i, '').trim() };
+      continue;
+    }
+    if (!current) continue;
+
+    const stopWhen = line.match(/^Stop when:\s*(.+)$/i);
+    if (stopWhen) {
+      current.successCriteria = stopWhen[1].trim();
+      continue;
+    }
+    // `Why:` is the model's rationale for itself, not a description of the work.
+    if (/^Why:\s*/i.test(line)) continue;
+    if (!current.description) current.description = line;
+  }
+  commitCurrent();
+
+  if (steps.length === 0) return null;
+
+  return {
+    id: previous?.id ?? 'plan-1',
+    title,
+    description,
+    status: previous?.status ?? 'pending',
+    steps,
+  };
+}
+
 function parsePlanFromKeyValueDelta(delta: string, previous: JainaPlan | null): JainaPlan | null {
   const trimmed = delta.trim();
   if (!trimmed || trimmed.startsWith('{') || trimmed.startsWith('[')) return null;
@@ -1758,6 +1844,7 @@ export function reduceJainaStreamEvent(
       const nextPlanJson = `${state.planJson}${payload.delta}`;
       const nextPlan =
         parsePlanFromAccumulatedDelta(nextPlanJson, state.plan) ??
+        parsePlanFromMarkdownDelta(payload.delta, state.plan) ??
         parsePlanFromKeyValueDelta(payload.delta, state.plan);
       return {
         ...nextBase,
@@ -2666,6 +2753,47 @@ export function reduceJainaStreamEvent(
             detail: data.task_description ?? `Agent ${data.agent_id} spawned`,
             data: { ...data, spawn_ts: Date.now() },
           },
+        ],
+      };
+    }
+    case 'agent.narration': {
+      const parsed = agentNarrationEventSchema.safeParse((event as { data?: unknown }).data ?? {});
+      if (!parsed.success || parsed.data.lines.length === 0) {
+        return nextBase;
+      }
+      const data = parsed.data;
+      const agentId = data.agent_id;
+      const displayName = data.display_name ?? data.agent_name ?? agentId ?? 'Jaina';
+      const texts = data.lines.map((line) => line.text);
+
+      // APPEND, never replace: the backend sends only what became stable since the
+      // last frame, so overwriting would discard everything reported before it.
+      const existingWorker = agentId ? state.activeWorkers[agentId] : undefined;
+      const activeWorkers = agentId
+        ? {
+            ...state.activeWorkers,
+            [agentId]: {
+              ...(existingWorker ?? { agentId, displayName }),
+              narration: [...(existingWorker?.narration ?? []), ...texts],
+            },
+          }
+        : state.activeWorkers;
+
+      return {
+        ...nextBase,
+        activeWorkers,
+        progress: [
+          ...state.progress,
+          ...data.lines.map((line) => ({
+            stage: 'agent_narration',
+            at: new Date().toISOString(),
+            detail: line.text,
+            data: {
+              agent_id: agentId,
+              display_name: displayName,
+              field: line.field,
+            },
+          })),
         ],
       };
     }

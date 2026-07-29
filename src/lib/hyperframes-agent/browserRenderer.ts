@@ -215,6 +215,78 @@ function videoFrameDataUrl(video: HTMLVideoElement): string | null {
   }
 }
 
+const KEYFRAME_METADATA = new Set(['offset', 'easing', 'composite', 'computedOffset']);
+
+/**
+ * The CSS property names a set of keyframes actually animates, in kebab-case.
+ * Keyframes report properties camelCased (`backgroundColor`) while
+ * `getPropertyValue`/`setProperty` need `background-color`; the mismatch reads
+ * as "the freeze silently did nothing" rather than as an error.
+ */
+export const animatedCssProperties = (keyframes: readonly Keyframe[]): string[] => {
+  const names = new Set<string>();
+  for (const keyframe of keyframes) {
+    for (const property of Object.keys(keyframe)) {
+      if (KEYFRAME_METADATA.has(property)) continue;
+      names.add(property.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`));
+    }
+  }
+  return [...names];
+};
+
+/**
+ * Bake the current state of every running animation onto the serialization clone.
+ *
+ * This is what makes a seek visible in the output. Cloning captures INLINE styles
+ * — which is why a GSAP composition (GSAP writes element.style directly) always
+ * rendered correctly — but a CSS `@keyframes` animation applies computed values
+ * without touching the inline style at all. The clone therefore carried the
+ * animation's base state, and once rasterized inside a static SVG (a
+ * script-free, non-animating context) every frame came out identical. The
+ * composition agent is told never to load external scripts, so CSS animation is
+ * exactly what it writes, and every one of its videos was a still.
+ *
+ * Only animated elements and only their animated properties are touched: the
+ * Web Animations API already knows both, so there is no need to copy hundreds of
+ * computed properties per node. Written onto the CLONE, never the live document
+ * — an `!important` inline value on the source would override the animation and
+ * freeze it for every later frame.
+ */
+function freezeAnimationsOnClone(doc: Document, source: HTMLElement, clone: HTMLElement): void {
+  const animations = doc.getAnimations?.() ?? [];
+  if (animations.length === 0) return;
+  const view = doc.defaultView;
+  if (!view) return;
+
+  // cloneNode(true) preserves document order, so the Nth element of one tree is
+  // the Nth of the other — the same pairing the video substitution above relies on.
+  const sourceElements = Array.from(source.querySelectorAll('*'));
+  const cloneElements = Array.from(clone.querySelectorAll('*'));
+  const indexOf = new Map<Element, number>();
+  sourceElements.forEach((element, index) => indexOf.set(element, index));
+
+  for (const animation of animations) {
+    const effect = animation.effect;
+    if (!effect || typeof (effect as KeyframeEffect).getKeyframes !== 'function') continue;
+    const target = (effect as KeyframeEffect).target;
+    if (!target) continue;
+    const index = indexOf.get(target);
+    if (index === undefined) continue;
+    const twin = cloneElements[index];
+    if (!(twin instanceof (view as Window & typeof globalThis).HTMLElement)) continue;
+
+    const computed = view.getComputedStyle(target);
+    for (const cssName of animatedCssProperties((effect as KeyframeEffect).getKeyframes())) {
+      const value = computed.getPropertyValue(cssName);
+      if (value) twin.style.setProperty(cssName, value, 'important');
+    }
+    // The frozen values are the truth for this frame; leaving the animation
+    // shorthand on would let the SVG re-apply the keyframes' base state over them.
+    twin.style.setProperty('animation', 'none', 'important');
+    twin.style.setProperty('transition', 'none', 'important');
+  }
+}
+
 async function rasterizeFrame(
   iframe: HTMLIFrameElement,
   canvas: HTMLCanvasElement | OffscreenCanvas,
@@ -226,6 +298,7 @@ async function rasterizeFrame(
   const clone = doc.documentElement.cloneNode(true) as HTMLElement;
   clone.setAttribute('xmlns', XHTML_NS);
   clone.querySelectorAll('script').forEach((node) => node.remove());
+  freezeAnimationsOnClone(doc, doc.documentElement, clone);
   const sourceVideos = Array.from(doc.querySelectorAll('video'));
   const clonedVideos = Array.from(clone.querySelectorAll('video'));
   clonedVideos.forEach((video, index) => {

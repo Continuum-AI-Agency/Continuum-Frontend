@@ -1,12 +1,12 @@
-import { z } from "zod";
-
+import { z } from 'zod';
+import { artDirectionSchema } from '../creative/art-direction';
+import { coerceLegacyHyperframeFormat } from './organic';
 import {
   organicHyperframeAspectRatioSchema,
   organicHyperframeStylePresetSchema,
   organicHyperframeToneSchema,
   organicPipelinePlatformSchema,
-} from "./organic-pipeline";
-import { coerceLegacyHyperframeFormat } from "./organic";
+} from './organic-pipeline';
 
 /**
  * Bulk content generation (Milestone 1) — canonical contracts.
@@ -23,27 +23,22 @@ import { coerceLegacyHyperframeFormat } from "./organic";
  * not a target.
  */
 
-export const bulkContentFormatEnum = z.enum([
-  "reel",
-  "post",
-  "carousel",
-  "story",
-]);
+export const bulkContentFormatEnum = z.enum(['reel', 'post', 'carousel', 'story']);
 
 /** Format field that coerces legacy "hyperframe" → "reel" (HyperFrame is a method, not a format). */
 const bulkContentFormatField = z.preprocess(coerceLegacyHyperframeFormat, bulkContentFormatEnum);
 
 export const bulkContentObjectiveEnum = z.enum([
-  "follow",
-  "save",
-  "click",
-  "comment",
-  "dm",
-  "share",
+  'follow',
+  'save',
+  'click',
+  'comment',
+  'dm',
+  'share',
 ]);
 
 /** Roles map onto the existing reel multi-shot model (ReelSceneAsset.role). */
-export const bulkReelShotRoleEnum = z.enum(["hook", "body", "cta"]);
+export const bulkReelShotRoleEnum = z.enum(['hook', 'body', 'cta']);
 
 /**
  * One shot of a multi-shot reel storyboard. In M1 this is storyboard-only —
@@ -56,6 +51,12 @@ export const bulkReelShotSchema = z
     durationSec: z.number().int().min(1).max(60),
     prompt: z.string().min(1),
     captionText: z.string().nullable().optional(),
+    /**
+     * The decisions behind the prompt. Optional, because a shot planned before this
+     * existed is still a valid shot — but when it is present it is what the panel and
+     * the clip each render from, and `prompt` becomes a derived artifact.
+     */
+    artDirection: artDirectionSchema.nullable().optional(),
   })
   .strict();
 
@@ -188,7 +189,7 @@ export const bulkPlacementSpecSchema = z
 export const bulkContentPlanSchema = z
   .object({
     planId: z.string().min(1),
-    kind: z.literal("bulk"),
+    kind: z.literal('bulk'),
     title: z.string().min(1),
     summary: z.string().optional(),
     strategyBrief: bulkStrategyBriefSchema,

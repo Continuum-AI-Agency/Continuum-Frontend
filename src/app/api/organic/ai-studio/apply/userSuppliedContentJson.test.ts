@@ -93,7 +93,14 @@ describe('buildUserSuppliedContentJson', () => {
     });
 
     // Stale agent media is gone so the carousel/storyboard cannot re-render.
-    expect(ms.assets).toBeUndefined();
+    //
+    // `assets` is explicitly null rather than absent, and that distinction matters:
+    // the patch is spread over the EXISTING mediaSuggestion, so an omitted key would
+    // leave the previous agent carousel in place. ALL_MEDIA_SLOTS_CLEARED nulls every
+    // media slot precisely so a kind switch overwrites rather than merges.
+    // `storyboard` is not a cleared slot — it is dropped by MEDIA_OUTPUT_KEYS instead,
+    // hence absent rather than null.
+    expect(ms.assets).toBeNull();
     expect(ms.storyboard).toBeUndefined();
     // Non-media context is preserved.
     expect(ms.generationContext).toEqual({ finalPrompt: 'agent prompt' });

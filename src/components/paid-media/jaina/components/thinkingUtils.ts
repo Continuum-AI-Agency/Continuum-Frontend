@@ -61,6 +61,7 @@ export const STAGE_LABELS: Record<string, string> = {
   handoff_complete: 'Handoff complete',
   agent_spawn: 'Sub-agent working',
   agent_complete: 'Sub-agent complete',
+  agent_narration: 'Finding',
   synthesis_start: 'Writing report',
   synthesis_complete: 'Report ready',
   assembly_start: 'Assembling report',
@@ -396,7 +397,14 @@ export function buildThinkingSegments(
       continue;
     }
 
-    if (entry.stage !== 'thinking' || isNoisyStage(entry.stage)) {
+    // `agent_narration` carries a structured worker's findings as its object streams.
+    // It is prose written for the reader — the same class of content as `thinking` —
+    // and for most of a turn it is the ONLY content there is, so it groups with
+    // thoughts rather than being filtered out alongside the machinery stages.
+    if (
+      (entry.stage !== 'thinking' && entry.stage !== 'agent_narration') ||
+      isNoisyStage(entry.stage)
+    ) {
       continue;
     }
 

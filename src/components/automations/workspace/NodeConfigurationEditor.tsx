@@ -2,7 +2,6 @@
 
 import {
   AUTOMATION_PLANNER_UPSERT_DEFAULTS,
-  AUTOMATION_SOURCE_LIFECYCLE,
   type AutomationActionNodeType,
   type AutomationAiStudioGenerator,
   type AutomationCapabilitiesResponse,
@@ -13,7 +12,6 @@ import {
   type AutomationWorkflowNode,
   automationAgentCapabilitySchema,
   automationAiStudioGeneratorSchema,
-  automationSourceKindSchema,
   parseAutomationSourceQuery,
   resolveAutomationAiStudioGenerateConfig,
   resolveAutomationLibrarySaveConfig,
@@ -62,6 +60,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { getApiUrl } from '@/lib/api/config';
+import { buildAutomationSourceOptions } from '@/lib/automations/source-options';
 import { cn } from '@/lib/utils';
 import { AiStudioRoomPicker } from './pickers/AiStudioRoomPicker';
 import { LibraryCollectionPicker } from './pickers/LibraryCollectionPicker';
@@ -461,13 +460,6 @@ function Toggle({
   );
 }
 
-const sourceOptions = automationSourceKindSchema.options.map((source) => ({
-  value: source,
-  label: source.replaceAll('_', ' '),
-  disabled: false,
-  preview: AUTOMATION_SOURCE_LIFECYCLE[source] === 'preview',
-}));
-
 function SourceEditor({
   node,
   disabled,
@@ -508,6 +500,12 @@ function SourceEditor({
       ? parseAutomationSourceQuery('connected_platform', config.query)
       : null;
   const capability = sourceCapabilities?.sources.find((item) => item.source === config.source);
+  // Server truth, with the bundled enum as the "capabilities have not loaded"
+  // fallback so the editor still works offline or mid-fetch.
+  const sourceOptions = buildAutomationSourceOptions({
+    capabilities: sourceCapabilities,
+    selected: config.source,
+  });
   const patchQuery = (patch: Record<string, unknown>) =>
     onChange({ ...config, query: { ...query, ...patch } });
 

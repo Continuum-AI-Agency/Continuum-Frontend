@@ -3310,12 +3310,12 @@ export type Database = {
         Row: {
           brand_id: string
           created_at: string
+          deadline_at: string | null
           error_message: string | null
           finished_at: string | null
           id: string
           idempotency_key: string | null
           last_seq: number | null
-          node_revision: number
           request: Json
           session_id: string
           started_at: string | null
@@ -3325,12 +3325,12 @@ export type Database = {
         Insert: {
           brand_id: string
           created_at?: string
+          deadline_at?: string | null
           error_message?: string | null
           finished_at?: string | null
           id?: string
           idempotency_key?: string | null
           last_seq?: number | null
-          node_revision: number
           request?: Json
           session_id: string
           started_at?: string | null
@@ -3340,12 +3340,12 @@ export type Database = {
         Update: {
           brand_id?: string
           created_at?: string
+          deadline_at?: string | null
           error_message?: string | null
           finished_at?: string | null
           id?: string
           idempotency_key?: string | null
           last_seq?: number | null
-          node_revision?: number
           request?: Json
           session_id?: string
           started_at?: string | null
@@ -8952,6 +8952,14 @@ export type Database = {
           p_change_id: string
           p_room_id: string
           p_user_id: string
+        }
+        Returns: string
+      }
+      automation_trigger_run_rejection: {
+        Args: {
+          p_automation_id: string
+          p_trigger: string
+          p_trigger_node_id: string
         }
         Returns: string
       }

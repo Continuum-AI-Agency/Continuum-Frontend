@@ -135,7 +135,14 @@ export type OrganicCalendarDraft = {
       mp4Url?: string | null;
       mp4Status?: 'pending' | 'ready' | 'failed' | null;
       error?: string | null;
+      /** Legacy scene graph. Null on everything the composition agent writes. */
       spec?: unknown;
+      /** Authored render size and length; `spec` no longer carries them. */
+      width?: number | null;
+      height?: number | null;
+      durationSeconds?: number | null;
+      /** Library assets embedded as hf-asset://, re-signed at render time. */
+      sourceAssets?: Array<{ assetId: string; kind: 'image' | 'video' | 'audio' }> | null;
     } | null;
     // Persisted 512px Stage-2 blueprint storyboard preview frames. Durable
     // bucket+storagePath references; storageUrl is a transient signed value the

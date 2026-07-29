@@ -35,6 +35,7 @@ export type JainaForwardableType =
   | 'agent.spawn'
   | 'agent.complete'
   | 'agent.delegated'
+  | 'agent.narration'
   | 'response.objectives'
   | 'response.objective.updated'
   | 'response.report_artifact_job.started'
@@ -78,7 +79,8 @@ export type JainaAgentType =
   | 'agent.spawn'
   | 'agent.complete'
   | 'agent.envelope'
-  | 'agent.delegated';
+  | 'agent.delegated'
+  | 'agent.narration';
 
 export type JainaToolType = 'tool.call' | 'tool.result' | 'tool.batch';
 
@@ -177,6 +179,25 @@ export type JainaAgentCompleteEventData = {
   insight_count?: number;
   recommendation_count?: number;
   has_key_metrics?: boolean;
+};
+
+/**
+ * data shape for type: "agent.narration" — a structured worker's findings as its
+ * `Output.object` streams, so the client is not left silent while the worker runs.
+ *
+ * `lines` are INCREMENTS, never a cumulative snapshot: each frame carries only the
+ * entries that became stable since the previous frame. Consumers append; they must
+ * not replace prior lines for the same `agent_id`.
+ */
+export type JainaAgentNarrationEventData = {
+  agent_id: string | null;
+  parent_agent_id?: string | null;
+  agent_name?: string | null;
+  display_name?: string | null;
+  lines: Array<{
+    field: 'findings' | 'insights' | 'evidence' | 'recommendations';
+    text: string;
+  }>;
 };
 
 /** data shape for type: "state.delta". */
