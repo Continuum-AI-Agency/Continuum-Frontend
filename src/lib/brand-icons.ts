@@ -13,6 +13,13 @@ export const facebook: BrandIconData = {
   svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="5" fill="#1877F2"/><path d="M14.2 8.1h1.6V5.5c-.3 0-1.2-.1-2.2-.1-2.2 0-3.7 1.3-3.7 3.8v2.1H7.5v2.9h2.4v6.4h3v-6.4h2.4l.4-2.9h-2.8V9.5c0-.8.2-1.4 1.3-1.4Z" fill="#fff"/></svg>`,
 };
 
+// The Figma mark is the authentic five-shape logo (38x57 in Figma's own brand
+// kit), scaled and centred into the 24x24 box every other brand icon uses.
+export const figma: BrandIconData = {
+  title: 'Figma',
+  svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g transform="translate(4) scale(0.42105)"><path d="M19 28.5a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0Z" fill="#1ABCFE"/><path d="M0 47.5A9.5 9.5 0 0 1 9.5 38H19v9.5a9.5 9.5 0 1 1-19 0Z" fill="#0ACF83"/><path d="M19 0v19h9.5a9.5 9.5 0 1 0 0-19H19Z" fill="#FF7262"/><path d="M0 9.5A9.5 9.5 0 0 0 9.5 19H19V0H9.5A9.5 9.5 0 0 0 0 9.5Z" fill="#F24E1E"/><path d="M0 28.5A9.5 9.5 0 0 0 9.5 38H19V19H9.5A9.5 9.5 0 0 0 0 28.5Z" fill="#A259FF"/></g></svg>`,
+};
+
 export const google: BrandIconData = {
   title: 'Google',
   svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.6 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h6c-.3 1.4-1 2.5-2.1 3.3v2.7h3.4c2-1.8 3.3-4.6 3.3-8Z"/><path fill="#34A853" d="M12 23c3 0 5.6-1 7.4-2.7L16 17.6c-.9.6-2.2 1-4 1-3.1 0-5.7-2.1-6.6-4.9H1.9v2.8C3.7 20.3 7.5 23 12 23Z"/><path fill="#FBBC05" d="M5.4 13.7c-.2-.6-.4-1.3-.4-2s.1-1.4.4-2V6.9H1.9A11 11 0 0 0 1 11.7c0 1.7.4 3.3 1.1 4.8l3.3-2.8Z"/><path fill="#EA4335" d="M12 4.8c1.6 0 3.1.6 4.2 1.7l3.1-3.1A10.5 10.5 0 0 0 12 .4C7.5.4 3.7 3.1 1.9 6.9l3.5 2.8c.9-2.8 3.5-4.9 6.6-4.9Z"/></svg>`,

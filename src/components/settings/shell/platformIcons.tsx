@@ -1,53 +1,19 @@
 import { BarChart3 } from 'lucide-react';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import {
-  amazon,
-  google,
-  instagram,
-  linkedin,
-  meta,
-  threads,
-  tiktok,
-  x,
-  youtube,
-} from '@/lib/brand-icons';
-import { cn } from '@/lib/utils';
+  AmazonIcon,
+  GoogleIcon,
+  type IconComponent,
+  InstagramIcon,
+  LinkedInIcon,
+  MetaIcon,
+  ThreadsIcon,
+  TikTokIcon,
+  XIcon,
+  YouTubeIcon,
+} from '@/components/shared/icons';
 
-export type IconComponent = React.ComponentType<{ className?: string }>;
-
-interface IconData {
-  svg: string;
-  title: string;
-}
-
-function makeSvgIcon(iconData: IconData): IconComponent {
-  function SvgIcon({ className }: { className?: string }) {
-    return (
-      <span
-        className={cn(
-          'h-4 w-4 inline-block shrink-0 [&>svg]:w-full [&>svg]:h-full [&>svg]:block',
-          className,
-        )}
-        title={iconData.title}
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted inline brand-icon SVG from local @/lib/brand-icons constants, never user input
-        dangerouslySetInnerHTML={{ __html: iconData.svg }}
-      />
-    );
-  }
-  SvgIcon.displayName = `PlatformIcon(${iconData.title})`;
-  return SvgIcon;
-}
-
-const FacebookIcon = makeSvgIcon(meta);
-const InstagramIcon = makeSvgIcon(instagram);
-const GoogleIcon = makeSvgIcon(google);
-const YouTubeIcon = makeSvgIcon(youtube);
-const TikTokIcon = makeSvgIcon(tiktok);
-const ThreadsIcon = makeSvgIcon(threads);
-const MetaIcon = makeSvgIcon(meta);
-const LinkedInIcon = makeSvgIcon(linkedin);
-const AmazonIcon = makeSvgIcon(amazon);
-const XIcon = makeSvgIcon(x);
+export type { IconComponent };
 
 export const PLATFORM_LABELS: Record<PlatformKey, string> = {
   youtube: 'YouTube',
@@ -66,7 +32,8 @@ export const PLATFORM_LABELS: Record<PlatformKey, string> = {
 export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
   youtube: YouTubeIcon,
   instagram: InstagramIcon,
-  facebook: FacebookIcon,
+  // Settings groups Facebook under the Meta mark, matching PROVIDER_GROUP_ICONS.
+  facebook: MetaIcon,
   tiktok: TikTokIcon,
   x: XIcon,
   linkedin: LinkedInIcon,

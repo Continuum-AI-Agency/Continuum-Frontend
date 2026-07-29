@@ -13,7 +13,8 @@ import type {
   MediaSearchResultItem,
 } from '@continuum/contracts';
 import { LIBRARY_ACCEPT_ATTRIBUTE } from '@continuum/contracts';
-import { Columns3, Figma, LayoutGrid, ScanSearch, Upload } from 'lucide-react';
+import { Columns3, LayoutGrid, ScanSearch, Upload } from 'lucide-react';
+import { FigmaIcon } from '@/components/shared/icons';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
@@ -422,7 +423,7 @@ export function LibraryViewer({
                       disabled
                       title="Figma import is work in progress"
                     >
-                      <Figma className="size-4" />
+                      <FigmaIcon className="size-4" />
                       <span className="hidden sm:inline">Figma</span>
                       <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                         WIP

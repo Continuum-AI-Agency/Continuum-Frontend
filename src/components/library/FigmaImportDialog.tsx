@@ -1,7 +1,8 @@
 'use client';
 
 import type { FigmaFile, FigmaFrame, FigmaProject } from '@continuum/contracts';
-import { Check, Figma, Loader2, RefreshCw } from 'lucide-react';
+import { Check, Loader2, RefreshCw } from 'lucide-react';
+import { FigmaIcon } from '@/components/shared/icons';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -132,7 +133,7 @@ export function FigmaImportDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" variant="outline" size="sm">
-          <Figma className="size-4" />
+          <FigmaIcon className="size-4" />
           <span className="hidden sm:inline">Figma</span>
         </Button>
       </DialogTrigger>
@@ -191,7 +192,7 @@ export function FigmaImportDialog({
                 {busy === 'connect' ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
-                  <Figma className="size-4" />
+                  <FigmaIcon className="size-4" />
                 )}
                 Connect
               </Button>
@@ -297,7 +298,7 @@ export function FigmaImportDialog({
               {busy === 'import' ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
-                <Figma className="size-4" />
+                <FigmaIcon className="size-4" />
               )}
               Import
             </Button>

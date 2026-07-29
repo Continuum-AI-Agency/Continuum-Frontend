@@ -1,0 +1,15 @@
+export {
+  AmazonIcon,
+  FacebookIcon,
+  FigmaIcon,
+  GoogleIcon,
+  type IconComponent,
+  InstagramIcon,
+  LinkedInIcon,
+  MetaIcon,
+  makeSvgIcon,
+  ThreadsIcon,
+  TikTokIcon,
+  XIcon,
+  YouTubeIcon,
+} from './brandIcon';

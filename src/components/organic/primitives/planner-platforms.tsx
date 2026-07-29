@@ -1,13 +1,14 @@
-import {
-  CircleDashed,
-  Facebook,
-  Instagram,
-  Linkedin,
-  Music2,
-  Twitter,
-  Youtube,
-} from 'lucide-react';
+import { CircleDashed } from 'lucide-react';
 
+import {
+  FacebookIcon,
+  type IconComponent,
+  InstagramIcon,
+  LinkedInIcon,
+  TikTokIcon,
+  XIcon,
+  YouTubeIcon,
+} from '@/components/shared/icons';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import type { OrganicCalendarDay, OrganicCalendarPostedContent, OrganicPlatformTag } from './types';
 
@@ -35,7 +36,7 @@ export type PlannerPlatform = {
   key: PlannerPlatformKey;
   label: string;
   shortLabel: string;
-  Icon: typeof Instagram;
+  Icon: IconComponent;
   canCreate: boolean;
   comingSoon?: boolean;
 };
@@ -45,37 +46,37 @@ const PLATFORM_META: Record<PlannerPlatformKey, Omit<PlannerPlatform, 'canCreate
     key: 'instagram',
     label: 'Instagram',
     shortLabel: 'IG',
-    Icon: Instagram,
+    Icon: InstagramIcon,
   },
   linkedin: {
     key: 'linkedin',
     label: 'LinkedIn',
     shortLabel: 'IN',
-    Icon: Linkedin,
+    Icon: LinkedInIcon,
   },
   youtube: {
     key: 'youtube',
     label: 'YouTube',
     shortLabel: 'YT',
-    Icon: Youtube,
+    Icon: YouTubeIcon,
   },
   facebook: {
     key: 'facebook',
     label: 'Facebook',
     shortLabel: 'FB',
-    Icon: Facebook,
+    Icon: FacebookIcon,
   },
   tiktok: {
     key: 'tiktok',
     label: 'TikTok',
     shortLabel: 'TT',
-    Icon: Music2,
+    Icon: TikTokIcon,
   },
   x: {
     key: 'x',
     label: 'X',
     shortLabel: 'X',
-    Icon: Twitter,
+    Icon: XIcon,
   },
 };
 
