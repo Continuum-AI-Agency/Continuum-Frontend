@@ -16,7 +16,7 @@
       "name": "login route",
       "directory": "static/chunks/app/(auth)/login",
       "filePrefix": "page-",
-      "baselineBytes": 20126
+      "baselineBytes": 22477
     },
     {
       "name": "authenticated layout",
