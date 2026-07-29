@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  buildFullCaption,
   buildPublishBody,
   inferPostType,
   type PublishableDraft,
@@ -147,5 +148,44 @@ describe('buildPublishBody', () => {
   it('omits items below the carousel minimum so the backend can derive them', () => {
     const body = buildPublishBody(draft({ format: 'carousel' }), 'instagram', 'ig-1', 'brand-1');
     expect(body.postType === 'CAROUSEL' && body.items).toBeUndefined();
+  });
+});
+
+describe('buildFullCaption', () => {
+  const long = `${'word '.repeat(519)}finalword`;
+
+  it('defaults to the Instagram ceiling when no platform is given', () => {
+    const captioned = draft({ captionPreview: long });
+    expect(buildFullCaption(captioned)).toBe(buildFullCaption(captioned, 'instagram'));
+    expect(buildFullCaption(captioned).length).toBeLessThanOrEqual(2200);
+  });
+
+  it('leaves a 2,600-char caption whole for LinkedIn', () => {
+    const captioned = draft({ captionPreview: long });
+    expect(buildFullCaption(captioned, 'linkedin')).toBe(long.trim());
+  });
+
+  it('is unchanged for short captions on every platform', () => {
+    const captioned = draft({ captionPreview: 'Fresh bread', hashtags: { high: ['#bake'] } });
+    for (const platform of ['instagram', 'facebook', 'linkedin'] as const) {
+      expect(buildFullCaption(captioned, platform)).toBe('Fresh bread\n\n#bake');
+    }
+  });
+});
+
+describe('buildPublishBody caption', () => {
+  it('threads the target platform into the caption clamp', () => {
+    const long = `${'word '.repeat(519)}finalword`;
+    const captioned = draft({ captionPreview: long });
+
+    const linkedinBody = buildPublishBody(captioned, 'linkedin', 'acct', 'brand');
+    expect(linkedinBody.caption).toBe(long.trim());
+
+    const instagramBody = buildPublishBody(captioned, 'instagram', 'acct', 'brand');
+    expect((instagramBody.caption ?? '').length).toBeLessThanOrEqual(2200);
+
+    // No platform resolved yet → the tightest ceiling, so nothing over-reports.
+    const untargeted = buildPublishBody(captioned, null, null, null);
+    expect(untargeted.caption).toBe(instagramBody.caption);
   });
 });

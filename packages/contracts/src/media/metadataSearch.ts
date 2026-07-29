@@ -72,6 +72,7 @@ export const MEDIA_ASSET_SELECT_COLUMNS = [
   'origin_ref',
   'status',
   'review_status',
+  'head_version_id',
   'checksum',
   'title',
   'description',
@@ -154,6 +155,7 @@ export interface MediaAssetRow {
   origin_ref: Record<string, unknown> | null;
   status: MediaStatus;
   review_status: MediaReviewStatus;
+  head_version_id?: string | null;
   checksum: string | null;
   title: string | null;
   description: string | null;
@@ -253,6 +255,7 @@ export function mapMediaRowToAsset(row: MediaAssetRow, signedUrl: string | null)
     originRef: row.origin_ref,
     status: row.status,
     reviewStatus: row.review_status ?? 'none',
+    headVersionId: row.head_version_id ?? null,
     checksum: row.checksum,
     title: row.title,
     description: row.description,

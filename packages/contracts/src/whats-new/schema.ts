@@ -9,15 +9,26 @@ import { z } from 'zod';
 
 export const WHATS_NEW_TAGS = ['new', 'improved', 'fixed'] as const;
 
-export const whatsNewEntrySchema = z.object({
+const whatsNewEntryFields = {
   id: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   title: z.string().min(1),
   body: z.string().min(1),
   tag: z.enum(WHATS_NEW_TAGS).optional(),
+};
+
+export const whatsNewEntrySchema = z.object(whatsNewEntryFields);
+
+// `created_at` is the database-generated publication timestamp. The write
+// command intentionally omits it so Postgres remains the clock authority.
+export const whatsNewReadEntrySchema = z.object({
+  ...whatsNewEntryFields,
+  createdAt: z.string().datetime({ offset: true }),
 });
 
 export const whatsNewChangelogSchema = z.array(whatsNewEntrySchema);
+export const whatsNewReadChangelogSchema = z.array(whatsNewReadEntrySchema);
 
 export type WhatsNewTag = (typeof WHATS_NEW_TAGS)[number];
 export type WhatsNewEntry = z.infer<typeof whatsNewEntrySchema>;
+export type WhatsNewReadEntry = z.infer<typeof whatsNewReadEntrySchema>;

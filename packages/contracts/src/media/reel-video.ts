@@ -43,6 +43,13 @@ export const organicUgcSpecSchema = z
     targetDurationSeconds: z.number().min(12).max(30).default(20),
     captionsEnabled: z.boolean().default(true),
     characterDescription: z.string().min(1).max(1_000).nullable().optional(),
+    /**
+     * How each shot leaves its storyboard panel. `match` closes every shot on the
+     * NEXT shot's panel, so the clips flow seamlessly; `cut` (default) lets each
+     * clip end where the model takes it, which is the native UGC jump cut.
+     * Costs no extra generation either way — every panel already exists.
+     */
+    continuity: z.enum(['cut', 'match']).default('cut'),
   })
   .strict();
 export type OrganicUgcSpec = z.infer<typeof organicUgcSpecSchema>;

@@ -17,6 +17,7 @@ import {
   CreatePortfolioRequestSchema,
   CreatePortfolioResponseSchema,
   CycleRunReportSchema,
+  EnrollMovedAdsetSchema,
   EnrollRequestSchema,
   EnrollResponseSchema,
   OptimizerInsightRequestSchema,
@@ -475,10 +476,14 @@ export const SetRenewalTaskStatusReceiptSchema = z.object({
 });
 export type SetRenewalTaskStatusReceipt = z.infer<typeof SetRenewalTaskStatusReceiptSchema>;
 
-/** Result of create_from_suggestion — the new portfolio id + how many entities enrolled. */
+/** Result of create_from_suggestion — the new portfolio id, how many entities enrolled, and
+ *  which ad sets were taken from another portfolio to get there (enrolling a claimed ad set
+ *  is always a move; the agent must be able to say so rather than leave a user wondering why
+ *  an ad set left their other portfolio). */
 export const CreateFromSuggestionResponseSchema = z.object({
   portfolio_id: z.string().uuid(),
   enrolled: z.number().int().nonnegative(),
+  moved: z.array(EnrollMovedAdsetSchema).default([]),
 });
 export type CreateFromSuggestionResponse = z.infer<typeof CreateFromSuggestionResponseSchema>;
 

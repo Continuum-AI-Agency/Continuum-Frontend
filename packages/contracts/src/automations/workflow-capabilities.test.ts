@@ -6,12 +6,52 @@ import {
 } from '.';
 
 describe('automation capability manifest', () => {
-  test('keeps publish actions visible but preview-only', () => {
-    expect(AUTOMATION_NODE_LIFECYCLE['action.organic_publish']).toBe('preview');
-    expect(AUTOMATION_NODE_LIFECYCLE['action.email']).toBe('production');
-    expect(AUTOMATION_NODE_LIFECYCLE['logic.repeat_until']).toBe('production');
+  // Naming individual lifecycle values here goes stale every time an adapter is
+  // wired — it did, twice. What this package can honestly assert is the SHAPE:
+  // every action type carries a lifecycle, and every value is a legal member.
+  // Whether a 'production' value is TRUE is a backend fact, and
+  // App/automations/__tests__/action-registry.spec.ts is what pins it: that spec
+  // fails unless lifecycle and the adapter's `productionWired` agree.
+  test('assigns every action node type a legal lifecycle', () => {
+    const actionTypes = Object.keys(AUTOMATION_NODE_LIFECYCLE).filter((type) =>
+      type.startsWith('action.'),
+    );
+    expect(actionTypes.length).toBeGreaterThan(0);
+    for (const type of actionTypes) {
+      expect(['production', 'preview']).toContain(
+        AUTOMATION_NODE_LIFECYCLE[type as keyof typeof AUTOMATION_NODE_LIFECYCLE],
+      );
+    }
+  });
+
+  test('holds trigger.webhook back until its surface is announced', () => {
     expect(AUTOMATION_NODE_LIFECYCLE['trigger.webhook']).toBe('preview');
-    expect(AUTOMATION_NODE_LIFECYCLE['action.outbound_webhook']).toBe('preview');
+    expect(AUTOMATION_NODE_LIFECYCLE['logic.repeat_until']).toBe('production');
+  });
+
+  test('carries per-action capability, optional so either side can deploy first', () => {
+    const parsed = automationCapabilitiesResponseSchema.parse({
+      generatedAt: new Date().toISOString(),
+      mcpReadTools: [],
+      sources: [],
+    });
+    expect(parsed.actions).toBeUndefined();
+
+    expect(
+      automationCapabilitiesResponseSchema.parse({
+        generatedAt: new Date().toISOString(),
+        mcpReadTools: [],
+        sources: [],
+        actions: [
+          {
+            type: 'action.organic_publish',
+            lifecycle: 'preview',
+            availability: 'unavailable',
+            reason: 'Not connected to a production adapter yet.',
+          },
+        ],
+      }).actions?.[0]?.type,
+    ).toBe('action.organic_publish');
   });
 
   test('marks first-party sources production and open-world sources preview', () => {

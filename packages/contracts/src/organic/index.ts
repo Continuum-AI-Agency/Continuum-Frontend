@@ -7,6 +7,7 @@ export * from './competitorSeed';
 export * from './conversations';
 export * from './creativeLeaderboard';
 export * from './draft-enrichment';
+export * from './draft-fanout';
 export * from './insights';
 export * from './metricCatalog';
 export * from './metrics';

@@ -5,8 +5,10 @@ import {
   automationScheduleSchema,
 } from './automation';
 import {
+  type AutomationSocialPlatform,
   automationOutputContractRefSchema,
   automationReportDocumentSchema,
+  automationSocialPlatformSchema,
 } from './output-contracts';
 import {
   automationMetricOperatorSchema,
@@ -534,18 +536,81 @@ const emailActionNodeSchema = z
   })
   .strict();
 
+/**
+ * How the five modelled action configs stay backward compatible.
+ *
+ * Parsing is the compatibility boundary (see the schema-version note at the top
+ * of this file), and every one of these configs is `.strict()`, so a retired key
+ * cannot simply be deleted from the schema — a stored draft carrying it would
+ * stop parsing, which 404s `GET /workflow` and bricks the workspace.
+ *
+ * The shape each of them takes is therefore the same:
+ *
+ *  - canonical fields that every run needs, required where a value must be
+ *    authored and OPTIONAL where a sane bound exists;
+ *  - retired keys retained as optional and documented as ignored, so old JSON
+ *    (and every checked-in literal that still constructs it) keeps parsing and
+ *    keeps type-checking;
+ *  - one exported `resolveAutomation<Action>Config` that turns either shape into
+ *    the single fully-defaulted record an adapter acts on.
+ *
+ * Adapters must read configs THROUGH the resolver, never field by field: the
+ * resolver is where the legacy alias, the retired key, and the default bound are
+ * decided once. `logic.repeat_until` above is the same idea expressed as a
+ * union+transform; it can drop its legacy keys because nothing constructs that
+ * config as a TypeScript literal.
+ */
+
 const libraryActionNodeSchema = z
   .object({
     ...nodeBaseShape,
     type: z.literal('action.library_save'),
     config: z
       .object({
-        folderId: z.string().min(1).nullable().default(null),
+        // The Library's domain object is a COLLECTION (`media.collections`).
+        // There is no folder entity anywhere in the product; `folderId` was a
+        // misnomer. `null`/absent means the library root.
+        collectionId: z.string().min(1).nullable().optional(),
+        /** @deprecated Legacy alias for `collectionId`. Parsed, never authored. */
+        folderId: z.string().min(1).nullable().optional(),
         titleTemplate: z.string().min(1).max(300),
       })
-      .strict(),
+      .strict()
+      .superRefine((value, ctx) => {
+        if (
+          value.collectionId !== undefined &&
+          value.folderId !== undefined &&
+          (value.collectionId ?? null) !== (value.folderId ?? null)
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['collectionId'],
+            message: 'collectionId and the legacy folderId disagree. Keep collectionId only.',
+          });
+        }
+      }),
   })
   .strict();
+
+export type AutomationLibrarySaveConfig = z.infer<typeof libraryActionNodeSchema>['config'];
+
+export type AutomationLibrarySaveTarget = {
+  /** `null` = the library root. */
+  collectionId: string | null;
+  titleTemplate: string;
+};
+
+export const resolveAutomationLibrarySaveConfig = (
+  config: AutomationLibrarySaveConfig,
+): AutomationLibrarySaveTarget => ({
+  collectionId: config.collectionId ?? config.folderId ?? null,
+  titleTemplate: config.titleTemplate,
+});
+
+export const AUTOMATION_PLANNER_UPSERT_DEFAULTS = {
+  itemsPath: 'items',
+  maxDrafts: 10,
+} as const;
 
 const plannerActionNodeSchema = z
   .object({
@@ -553,12 +618,47 @@ const plannerActionNodeSchema = z
     type: z.literal('action.planner_upsert'),
     config: z
       .object({
-        platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube']),
-        scheduledAtPath: z.string().max(240).default('scheduledAt'),
+        /** Fallback for a `planner.draft` item that omits its own platform. */
+        platform: automationSocialPlatformSchema,
+        /**
+         * The connected account the created drafts belong to. Required to RUN —
+         * optional only so drafts saved before it existed keep parsing; the
+         * adapter's preflight rejects a null, which is what stops publication
+         * (publishing requires a passing test run, and preflight runs in one).
+         */
+        accountId: z.string().min(1).max(180).nullable().optional(),
+        /** Where the draft array lives inside the upstream structured value. */
+        itemsPath: z.string().trim().min(1).max(240).optional(),
+        maxDrafts: z.number().int().min(1).max(50).optional(),
+        /** @deprecated Retired — each item now carries its own `scheduledAt`. */
+        scheduledAtPath: z.string().max(240).optional(),
       })
       .strict(),
   })
   .strict();
+
+export type AutomationPlannerUpsertConfig = z.infer<typeof plannerActionNodeSchema>['config'];
+
+export type AutomationPlannerUpsertTarget = {
+  platform: AutomationSocialPlatform;
+  accountId: string | null;
+  itemsPath: string;
+  maxDrafts: number;
+};
+
+export const resolveAutomationPlannerUpsertConfig = (
+  config: AutomationPlannerUpsertConfig,
+): AutomationPlannerUpsertTarget => ({
+  platform: config.platform,
+  accountId: config.accountId ?? null,
+  itemsPath: config.itemsPath ?? AUTOMATION_PLANNER_UPSERT_DEFAULTS.itemsPath,
+  maxDrafts: config.maxDrafts ?? AUTOMATION_PLANNER_UPSERT_DEFAULTS.maxDrafts,
+});
+
+export const AUTOMATION_ORGANIC_PUBLISH_DEFAULTS = {
+  lookaheadHours: 24,
+  maxPosts: 5,
+} as const;
 
 const publishActionNodeSchema = z
   .object({
@@ -566,12 +666,53 @@ const publishActionNodeSchema = z
     type: z.literal('action.organic_publish'),
     config: z
       .object({
-        platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube']),
-        accountId: z.string().min(1),
+        platform: automationSocialPlatformSchema,
+        accountId: z.string().min(1).max(180),
+        /**
+         * How far ahead of the run instant a draft may be scheduled and still be
+         * published now. There is no lower bound on purpose: a past-due approved
+         * draft is exactly what this node exists to catch up.
+         */
+        lookaheadHours: z.number().int().min(1).max(168).optional(),
+        maxPosts: z.number().int().min(1).max(25).optional(),
       })
       .strict(),
   })
   .strict();
+
+export type AutomationOrganicPublishConfig = z.infer<typeof publishActionNodeSchema>['config'];
+
+export type AutomationOrganicPublishSelector = {
+  platform: AutomationSocialPlatform;
+  accountId: string;
+  lookaheadHours: number;
+  maxPosts: number;
+};
+
+export const resolveAutomationOrganicPublishConfig = (
+  config: AutomationOrganicPublishConfig,
+): AutomationOrganicPublishSelector => ({
+  platform: config.platform,
+  accountId: config.accountId,
+  lookaheadHours: config.lookaheadHours ?? AUTOMATION_ORGANIC_PUBLISH_DEFAULTS.lookaheadHours,
+  maxPosts: config.maxPosts ?? AUTOMATION_ORGANIC_PUBLISH_DEFAULTS.maxPosts,
+});
+
+/**
+ * The generation families AI Studio exposes as SERVER endpoints. The canvas
+ * engine is the browser, so a headless automation may only reach the two routes
+ * that already run without one: `image` is `POST /api/ai-studio/generate`
+ * (`nanoGen`) and `video` is `POST /api/ai-studio/generate-video` (`veo-3.1`).
+ * Nothing here names a "workflow": a saved Studio workflow is replayed by the
+ * canvas, and there is no headless runner for one to point at.
+ */
+export const automationAiStudioGeneratorSchema = z.enum(['image', 'video']);
+export type AutomationAiStudioGenerator = z.infer<typeof automationAiStudioGeneratorSchema>;
+
+export const AUTOMATION_AI_STUDIO_GENERATE_DEFAULTS = {
+  generator: 'image',
+  maxOutputs: 1,
+} as const satisfies { generator: AutomationAiStudioGenerator; maxOutputs: number };
 
 const studioActionNodeSchema = z
   .object({
@@ -579,12 +720,58 @@ const studioActionNodeSchema = z
     type: z.literal('action.ai_studio_generate'),
     config: z
       .object({
+        /** `brand_profiles.canvas_rooms.id` the output is attributed to; null = none. */
         roomId: z.string().min(1).nullable().default(null),
+        generator: automationAiStudioGeneratorSchema.optional(),
         instructions: z.string().min(1).max(20_000),
+        maxOutputs: z.number().int().min(1).max(4).optional(),
       })
       .strict(),
   })
   .strict();
+
+export type AutomationAiStudioGenerateConfig = z.infer<typeof studioActionNodeSchema>['config'];
+
+export type AutomationAiStudioGenerateRequest = {
+  roomId: string | null;
+  generator: AutomationAiStudioGenerator;
+  instructions: string;
+  maxOutputs: number;
+};
+
+export const resolveAutomationAiStudioGenerateConfig = (
+  config: AutomationAiStudioGenerateConfig,
+): AutomationAiStudioGenerateRequest => ({
+  roomId: config.roomId,
+  generator: config.generator ?? AUTOMATION_AI_STUDIO_GENERATE_DEFAULTS.generator,
+  instructions: config.instructions,
+  maxOutputs: config.maxOutputs ?? AUTOMATION_AI_STUDIO_GENERATE_DEFAULTS.maxOutputs,
+});
+
+/**
+ * What the optimizer actually exposes to a caller that is not a human at the
+ * dashboard.
+ *
+ * `pause`, `resume`, `set_budget` and `replace_creative` never existed as writes:
+ * ad pause is human-only, entity-addressed budget writes are not offered, and the
+ * real creative convert is disabled (`REAL_CONVERT_ENABLED = false`). Every one of
+ * them, if it happens at all, happens by a human approving a recommendation and the
+ * optimizer applying it — so all four normalize to `apply_approved` rather than
+ * being dropped, which would stop a stored config from parsing.
+ */
+export const automationPaidOptimizerOperationSchema = z.preprocess(
+  (value) =>
+    value === 'pause' ||
+    value === 'resume' ||
+    value === 'set_budget' ||
+    value === 'replace_creative'
+      ? 'apply_approved'
+      : value,
+  z.enum(['apply_approved', 'run_cycle']),
+);
+export type AutomationPaidOptimizerOperation = z.infer<
+  typeof automationPaidOptimizerOperationSchema
+>;
 
 const optimizerActionNodeSchema = z
   .object({
@@ -592,14 +779,37 @@ const optimizerActionNodeSchema = z
     type: z.literal('action.paid_optimizer'),
     config: z
       .object({
-        operation: z.enum(['pause', 'resume', 'set_budget', 'replace_creative']),
-        targetType: z.enum(['campaign', 'adset', 'ad']),
-        targetId: z.string().min(1),
+        /**
+         * The optimizer portfolio to act on. Required to RUN — optional only so
+         * entity-addressed configs saved before the retarget keep parsing.
+         */
+        portfolioId: z.string().uuid().nullable().optional(),
+        operation: automationPaidOptimizerOperationSchema,
         maxBudgetDeltaPct: z.number().min(0).max(100).nullable().default(null),
+        /** @deprecated Retired — the optimizer has no entity-addressed write surface. */
+        targetType: z.enum(['campaign', 'adset', 'ad']).optional(),
+        /** @deprecated Retired — see `targetType`. */
+        targetId: z.string().min(1).optional(),
       })
       .strict(),
   })
   .strict();
+
+export type AutomationPaidOptimizerConfig = z.infer<typeof optimizerActionNodeSchema>['config'];
+
+export type AutomationPaidOptimizerTarget = {
+  portfolioId: string | null;
+  operation: AutomationPaidOptimizerOperation;
+  maxBudgetDeltaPct: number | null;
+};
+
+export const resolveAutomationPaidOptimizerConfig = (
+  config: AutomationPaidOptimizerConfig,
+): AutomationPaidOptimizerTarget => ({
+  portfolioId: config.portfolioId ?? null,
+  operation: config.operation,
+  maxBudgetDeltaPct: config.maxBudgetDeltaPct,
+});
 
 const outboundWebhookActionNodeSchema = z
   .object({

@@ -27,6 +27,56 @@ export const automationReportDocumentSchema = z
   .strict();
 export type AutomationReportDocument = z.infer<typeof automationReportDocumentSchema>;
 
+/**
+ * The connected-account platforms an automation action can address.
+ *
+ * Declared here rather than in `workflow.ts` because the planner draft contract
+ * and the action node configs must speak the same vocabulary, and `workflow.ts`
+ * already imports this module (the reverse edge would be a cycle).
+ */
+export const automationSocialPlatformSchema = z.enum([
+  'instagram',
+  'facebook',
+  'linkedin',
+  'tiktok',
+  'youtube',
+]);
+export type AutomationSocialPlatform = z.infer<typeof automationSocialPlatformSchema>;
+
+/**
+ * One organic calendar draft, as an automation asks for it to be created.
+ *
+ * Field names are the organic domain's own, not new ones: `platform` and
+ * `format` are the planner's (`organicPostFormatEnum` — post/reel/carousel/
+ * story), `caption` + `hashtags` are what `buildPlatformCaption` assembles, and
+ * `brief` is the creative direction the draft carries into generation. There is
+ * deliberately no media field: this contract creates DRAFTS, and a draft's media
+ * is realized later by the organic pipeline, not by the automation.
+ *
+ * `scheduledAt` is an absolute, offset-bearing instant because
+ * `organic_calendar_drafts.scheduled_date` is a full `timestamptz` — a date-only
+ * string would land at midnight UTC and arm the scheduled-publish poller in the
+ * wrong hour.
+ */
+export const automationPlannerDraftItemSchema = z
+  .object({
+    platform: automationSocialPlatformSchema,
+    scheduledAt: z.string().datetime({ offset: true }),
+    format: z.enum(['post', 'reel', 'carousel', 'story']),
+    caption: z.string().max(5_000),
+    hashtags: z.array(z.string().min(1).max(80)).max(30),
+    brief: z.string().max(4_000),
+  })
+  .strict();
+export type AutomationPlannerDraftItem = z.infer<typeof automationPlannerDraftItemSchema>;
+
+export const automationPlannerDraftPayloadSchema = z
+  .object({
+    items: z.array(automationPlannerDraftItemSchema).min(1).max(50),
+  })
+  .strict();
+export type AutomationPlannerDraftPayload = z.infer<typeof automationPlannerDraftPayloadSchema>;
+
 export const automationWebhookPayloadSchema = z
   .object({
     title: z.string().min(1).max(300),
@@ -333,5 +383,15 @@ export const AUTOMATION_NATIVE_OUTPUT_CONTRACTS = {
     version: 1,
     schema: automationWebhookPayloadSchema,
     acceptedBy: ['action.outbound_webhook'],
+  },
+  // Registered so a graph that formats into the planner can be published at all:
+  // `planner.draft` was already a member of the native contract id enum, but an
+  // unregistered id has no executable schema, which is exactly the state
+  // `publishReadiness` reports as `invalid_output_schema`.
+  'planner.draft': {
+    contractId: 'planner.draft',
+    version: 1,
+    schema: automationPlannerDraftPayloadSchema,
+    acceptedBy: ['action.planner_upsert'],
   },
 } as const;

@@ -111,16 +111,35 @@ export function getAutomationNodePortSpec(node: AutomationWorkflowNode): PortSpe
         outputs: { receipt: 'records' },
         requiredInputs: ['input'],
       };
+    // The Library system of record stores BYTES (bucket, storage path, mime
+    // type), so `media` is the only upstream this node can actually save — and
+    // its preflight refuses every other artifact for the same reason: markdown
+    // filed into the creative library pollutes the semantic-search index that
+    // Library reads and brand grounding are both ranked by. The port list says
+    // so too, which is what stops the canvas offering the connection at all.
     case 'action.library_save':
       return {
-        inputs: { input: ['media', 'report', 'text', 'records'] },
+        inputs: { input: ['media'] },
         outputs: { receipt: 'records' },
         requiredInputs: ['input'],
       };
+    // Consumes `planner.draft@1`, which an `output.formatter` emits as
+    // `structured`. `records` stays accepted for a source/join that already
+    // carries draft rows; an agent's raw `artifact` does not, because the
+    // formatter is where the draft contract is actually enforced.
     case 'action.planner_upsert':
-    case 'action.organic_publish':
       return {
-        inputs: { input: ['records', 'media', 'text'] },
+        inputs: { input: ['structured', 'records'] },
+        outputs: { receipt: 'records' },
+        requiredInputs: ['input'],
+      };
+    // Selectors. Both nodes read their own system of record (approved drafts,
+    // approved recommendations) rather than the upstream value, so the incoming
+    // connection is sequencing, not data — anything may drive it.
+    case 'action.organic_publish':
+    case 'action.paid_optimizer':
+      return {
+        inputs: { input: 'any' },
         outputs: { receipt: 'records' },
         requiredInputs: ['input'],
       };
@@ -128,12 +147,6 @@ export function getAutomationNodePortSpec(node: AutomationWorkflowNode): PortSpe
       return {
         inputs: { input: ['records', 'media', 'text', 'any'] },
         outputs: { receipt: 'media' },
-        requiredInputs: ['input'],
-      };
-    case 'action.paid_optimizer':
-      return {
-        inputs: { input: ['records', 'text', 'any'] },
-        outputs: { receipt: 'records' },
         requiredInputs: ['input'],
       };
     case 'action.outbound_webhook':

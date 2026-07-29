@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { pinnedLibraryAssetRefSchema } from '../media/library-reference';
 
 export const canvasPublishingFormatSchema = z.enum(['image', 'carousel', 'video']);
 export type CanvasPublishingFormat = z.infer<typeof canvasPublishingFormatSchema>;
@@ -6,6 +7,7 @@ export type CanvasPublishingFormat = z.infer<typeof canvasPublishingFormatSchema
 export const canvasPublishingAssetSchema = z
   .object({
     assetId: z.string().uuid(),
+    versionId: z.string().uuid().optional(),
     kind: z.enum(['image', 'video']),
     order: z.number().int().nonnegative(),
   })
@@ -237,6 +239,7 @@ export const studioDeliverArtifactSchema = z
   .object({
     format: canvasPublishingFormatSchema,
     assetIds: z.array(z.string().uuid()).min(1).max(20),
+    assetRefs: z.array(pinnedLibraryAssetRefSchema).min(1).max(20),
   })
   .strict();
 export type StudioDeliverArtifact = z.infer<typeof studioDeliverArtifactSchema>;
@@ -280,6 +283,7 @@ export const studioDeliverReceiptSchema = z
     status: z.enum(['delivered', 'restored']),
     intent: studioDeliverIntentSchema,
     artifactAssetIds: z.array(z.string().uuid()),
+    artifactAssetRefs: z.array(pinnedLibraryAssetRefSchema),
     destinationId: z.string().min(1),
     /** The version/creative that was live BEFORE this delivery. */
     previousVersion: z.string().nullable(),

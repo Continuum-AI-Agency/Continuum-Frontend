@@ -402,6 +402,8 @@ export interface AttachMediaInput {
   /** media.assets id, when the media came from the Library. Persisted on the node
    *  so the generation it feeds can be traced back to it. */
   assetId?: string;
+  /** Exact media.asset_versions id selected for this generation. */
+  versionId?: string;
   bucket: string;
   storagePath: string;
   fileName?: string;
@@ -416,6 +418,7 @@ export type WorkflowEditOp =
   | { op: 'connect'; from: string; to: string; role?: string }
   | { op: 'disconnect'; from?: string; to?: string; targetHandle?: string }
   | { op: 'rewire'; from: string; to: string; role?: string }
+  | { op: 'attach_library_asset'; id: string; asset_id: string; version_id?: string }
   | { op: 'attach_media'; id: string; media: AttachMediaInput }
   | { op: 'detach_media'; id: string }
   | { op: 'rename'; id: string; label: string }
@@ -440,6 +443,7 @@ const REFERENCE_NODE_KIND: Record<string, WorkflowMediaKind> = {
 // no longer carries.
 const MEDIA_DATA_KEYS = [
   'assetId',
+  'assetVersionId',
   'sourcePath',
   'bucket',
   'sourceUrl',
@@ -562,6 +566,7 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
             // Written even when undefined: attaching different media to a node
             // that already held a Library asset must not leave the old id behind.
             assetId: op.media.assetId,
+            assetVersionId: op.media.versionId,
             sourcePath: op.media.storagePath,
             bucket: op.media.bucket,
             fileName: op.media.fileName,
@@ -570,6 +575,12 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
               : {}),
           },
         }));
+        break;
+      }
+      case 'attach_library_asset': {
+        errors.push(
+          `attach_library_asset for node "${op.id}" must be resolved through the Library boundary`,
+        );
         break;
       }
       case 'detach_media': {
@@ -774,6 +785,10 @@ export const attachMediaSchema = z
       .string()
       .optional()
       .describe('media.assets id when the media comes from the Library; keeps the usage trail.'),
+    versionId: z
+      .string()
+      .optional()
+      .describe('Pinned media.asset_versions id for reproducible generation provenance.'),
     bucket: z.string(),
     storagePath: z.string(),
     fileName: z.string().optional(),
@@ -818,6 +833,14 @@ export const workflowEditOpSchema = z.discriminatedUnion('op', [
     })
     .strict(),
   z.object({ op: z.literal('attach_media'), id: z.string(), media: attachMediaSchema }).strict(),
+  z
+    .object({
+      op: z.literal('attach_library_asset'),
+      id: z.string(),
+      asset_id: z.string().uuid(),
+      version_id: z.string().uuid().optional(),
+    })
+    .strict(),
   z.object({ op: z.literal('detach_media'), id: z.string() }).strict(),
   z.object({ op: z.literal('rename'), id: z.string(), label: z.string() }).strict(),
   z

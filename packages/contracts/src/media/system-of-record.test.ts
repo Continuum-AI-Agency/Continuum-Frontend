@@ -205,9 +205,11 @@ describe('review transitions', () => {
       brandId: 'b1',
       assetId: 'a1',
       toStatus: 'approved',
+      expectedCurrentStatus: 'in_review',
       note: 'ship it',
     });
     expect(parsed.toStatus).toBe('approved');
+    expect(parsed.expectedCurrentStatus).toBe('in_review');
   });
 
   it('rejects unknown statuses', () => {
@@ -298,8 +300,18 @@ describe('share links', () => {
     const parsed = publicSharePayloadSchema.parse({
       scope: 'asset',
       assets: [
-        { asset: { ...asset, headVersionId: 'v2' }, versionId: 'v2', versionNumber: 2, isHead: true },
-        { asset: { ...asset, headVersionId: 'v1' }, versionId: 'v1', versionNumber: 1, isHead: false },
+        {
+          asset: { ...asset, headVersionId: 'v2' },
+          versionId: 'v2',
+          versionNumber: 2,
+          isHead: true,
+        },
+        {
+          asset: { ...asset, headVersionId: 'v1' },
+          versionId: 'v1',
+          versionNumber: 1,
+          isHead: false,
+        },
       ],
       comments: [],
       policy: {

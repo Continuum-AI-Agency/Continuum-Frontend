@@ -26,6 +26,7 @@ export const reviewTransitionRequestSchema = z
     brandId: z.string().min(1),
     assetId: z.string().min(1),
     toStatus: mediaReviewStatusSchema,
+    expectedCurrentStatus: mediaReviewStatusSchema.optional(),
     note: z.string().max(2000).optional(),
   })
   .strict();
@@ -41,7 +42,8 @@ export const reviewTransitionResponseSchema = z
     assetId: z.string().min(1),
     reviewStatus: mediaReviewStatusSchema,
     reviewStatusUpdatedAt: z.string().nullable(),
-    event: assetReviewEventSchema,
+    changed: z.boolean(),
+    event: assetReviewEventSchema.nullable(),
   })
   .strict();
 export type ReviewTransitionResponse = z.infer<typeof reviewTransitionResponseSchema>;

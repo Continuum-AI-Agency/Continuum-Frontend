@@ -99,6 +99,7 @@ export interface ProjectedAttachment {
   media_kind: WorkflowMediaKind;
   file_name?: string;
   asset_ref?: string;
+  version_ref?: string;
 }
 
 export interface ProjectedTruncation {
@@ -337,6 +338,7 @@ function attachmentFor(
       media_kind: node.type === 'image' ? 'image' : 'video',
       file_name: typeof data.fileName === 'string' ? data.fileName : undefined,
       asset_ref: typeof data.assetId === 'string' ? data.assetId : undefined,
+      version_ref: typeof data.assetVersionId === 'string' ? data.assetVersionId : undefined,
     };
   }
 
@@ -350,6 +352,7 @@ function attachmentFor(
       media_kind: 'image',
       asset_ref:
         typeof data.generatedImageAssetId === 'string' ? data.generatedImageAssetId : undefined,
+      version_ref: typeof data.assetVersionId === 'string' ? data.assetVersionId : undefined,
     };
   }
   if (
@@ -362,6 +365,7 @@ function attachmentFor(
       media_kind: 'video',
       asset_ref:
         typeof data.generatedVideoAssetId === 'string' ? data.generatedVideoAssetId : undefined,
+      version_ref: typeof data.assetVersionId === 'string' ? data.assetVersionId : undefined,
     };
   }
 

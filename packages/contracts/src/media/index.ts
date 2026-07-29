@@ -17,6 +17,7 @@ export * from './import-ad-creative';
 export * from './instagram';
 export * from './instagram-caption';
 export * from './library-browse';
+export * from './library-reference';
 export * from './library-upload';
 export * from './metadataSearch';
 export * from './notifications';

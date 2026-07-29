@@ -25,10 +25,21 @@ export type PublishFormat = z.infer<typeof publishFormatSchema>;
  */
 export type PublishMediaTransport = 'url' | 'bytes';
 
+/**
+ * The caption a platform will actually accept. `maxLength` counts the assembled
+ * caption (body + hashtag block); `maxHashtags` counts the tag ARRAY, never a regex
+ * over prose, so a legitimate `#word` in the body is never stripped.
+ */
+export interface CaptionCapability {
+  readonly maxLength: number;
+  readonly maxHashtags: number;
+}
+
 export interface PlatformCapability {
   readonly formats: Readonly<Record<PublishFormat, boolean>>;
   readonly carousel: { readonly min: number; readonly max: number };
   readonly mediaTransport: PublishMediaTransport;
+  readonly caption: CaptionCapability;
 }
 
 export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCapability>> = {
@@ -36,17 +47,23 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     formats: { POST: true, REEL: true, CAROUSEL: true },
     carousel: { min: 2, max: 10 },
     mediaTransport: 'url',
+    // Instagram Content Publishing API.
+    caption: { maxLength: 2200, maxHashtags: 30 },
   },
   facebook: {
     formats: { POST: true, REEL: true, CAROUSEL: true },
     carousel: { min: 2, max: 10 },
     mediaTransport: 'url',
+    // Facebook's message field is effectively unbounded at the post level (63,206).
+    caption: { maxLength: 63206, maxHashtags: 30 },
   },
   linkedin: {
     // REEL maps to a native video post; CAROUSEL maps to a native multiImage post.
     formats: { POST: true, REEL: true, CAROUSEL: true },
     carousel: { min: 2, max: 20 },
     mediaTransport: 'bytes',
+    // LinkedIn ugcPost commentary.
+    caption: { maxLength: 3000, maxHashtags: 30 },
   },
 };
 
@@ -56,6 +73,31 @@ export function supportsFormat(platform: PublishPlatform, format: PublishFormat)
 
 export function carouselLimits(platform: PublishPlatform): { min: number; max: number } {
   return PLATFORM_CAPABILITIES[platform].carousel;
+}
+
+export function captionLimits(platform: PublishPlatform): {
+  maxLength: number;
+  maxHashtags: number;
+} {
+  return PLATFORM_CAPABILITIES[platform].caption;
+}
+
+/**
+ * The widest caption any supported platform accepts. Wire schemas parse before the
+ * platform is resolved, so they bound on this and leave exact per-platform truncation
+ * to the publisher, which knows the destination.
+ */
+export const CAPTION_MAX_ANY_PLATFORM: number = Math.max(
+  ...Object.values(PLATFORM_CAPABILITIES).map((capability) => capability.caption.maxLength),
+);
+
+/**
+ * Narrow a free-form platform string to a known publish platform. Planner drafts and
+ * preview components carry `string`, so this is the one place that decides what counts.
+ */
+export function toPublishPlatform(value: string | null | undefined): PublishPlatform | null {
+  const parsed = publishPlatformSchema.safeParse((value ?? '').trim().toLowerCase());
+  return parsed.success ? parsed.data : null;
 }
 
 export const publishResultSchema = z.object({

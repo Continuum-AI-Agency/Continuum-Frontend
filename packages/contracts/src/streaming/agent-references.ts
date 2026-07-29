@@ -33,6 +33,10 @@ export const agentMentionReferenceSchema = z.object({
 // A file the user attached to the composer. Already uploaded and signed by the Frontend before the
 // turn is sent; `storagePath` outlives the signed URL so an expired link can be re-minted.
 export const agentAttachmentSchema = z.object({
+  // Present for every new in-app upload. Optional keeps historical URL-only
+  // transcript rows readable while callers migrate to durable Library identity.
+  assetId: z.string().min(1).optional(),
+  versionId: z.string().min(1).optional(),
   url: z.string().min(1),
   name: z.string().optional(),
   mediaType: z.string().optional(),

@@ -12,7 +12,7 @@
  * so a carousel draft rendered as a carousel in the UI and published as a single image.
  * One mapping, matched loosely, is the fix.
  */
-import { buildInstagramCaption, type HashtagTiers } from '../media/instagram-caption';
+import { buildPlatformCaption, type HashtagTiers } from '../media/instagram-caption';
 import type { PublishFormat, PublishPlatform } from './publishing';
 
 /** The draft fields the publish body is built from. The planner's richer draft satisfies it. */
@@ -93,9 +93,16 @@ export function inferPostType(draft: PublishableDraft): PublishFormat {
   return resolvePublishFormat(draft.format);
 }
 
-/** The caption as published: body text plus the hashtag block, clamped to platform limits. */
-export function buildFullCaption(draft: PublishableDraft): string {
-  return buildInstagramCaption(draft.captionPreview, draft.hashtags);
+/**
+ * The caption as published: body text plus the hashtag block, clamped to the destination
+ * platform's limits. `platform` defaults to Instagram — the tightest of the three — so a
+ * caller that does not yet know its destination cannot over-report what will fit.
+ */
+export function buildFullCaption(
+  draft: PublishableDraft,
+  platform: PublishPlatform = 'instagram',
+): string {
+  return buildPlatformCaption(platform, draft.captionPreview, draft.hashtags);
 }
 
 /**
@@ -133,7 +140,7 @@ export function buildPublishBody(
   brandId: string | null,
 ): PublishRequestBody {
   const postType = inferPostType(draft);
-  const caption = buildFullCaption(draft) || undefined;
+  const caption = buildFullCaption(draft, platform ?? undefined) || undefined;
   const assets = draft.publishingAssets ?? [];
 
   const target: PublishTarget = {

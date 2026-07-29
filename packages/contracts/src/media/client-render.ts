@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { pinnedLibraryAssetRefSchema } from './library-reference';
 
 // PostgreSQL's uuid type accepts legacy/non-versioned UUID values used by some
 // of our seeded fixtures. Zod's `uuid()` validator only accepts RFC variant and
@@ -166,6 +167,7 @@ export const clientRenderJobSchema = z
     leaseExpiresAt: z.string().nullable(),
     attemptCount: z.number().int().nonnegative(),
     resultAssetIds: z.array(databaseUuidSchema),
+    resultAssetRefs: z.array(pinnedLibraryAssetRefSchema),
     errorCode: z.string().nullable(),
     errorMessage: z.string().nullable(),
     createdAt: z.string(),

@@ -86,6 +86,7 @@ describe('client render contracts', () => {
       leaseExpiresAt: null,
       attemptCount: 0,
       resultAssetIds: [],
+      resultAssetRefs: [],
       errorCode: null,
       errorMessage: null,
       createdAt: new Date().toISOString(),
@@ -128,6 +129,7 @@ describe('client render contracts', () => {
         leaseExpiresAt: null,
         attemptCount: 0,
         resultAssetIds: [],
+        resultAssetRefs: [],
         errorCode: null,
         errorMessage: null,
         createdAt: new Date().toISOString(),
@@ -135,5 +137,52 @@ describe('client render contracts', () => {
         completedAt: null,
       }),
     ).toThrow();
+  });
+
+  it('returns immutable Library references for completed render results', () => {
+    const result = clientRenderJobSchema.safeParse({
+      id: '7ab9c81f-49c9-4546-8845-a0c739c36963',
+      brandId: '6b23a115-e47f-494b-8810-30dc3ad183eb',
+      kind: 'mcp_clip_batch',
+      sourceId: 'source',
+      sourceRevision: '1',
+      title: 'Clip batch',
+      createdBy: null,
+      state: 'completed',
+      progress: 1,
+      phase: 'Complete',
+      inputs: [
+        {
+          position: 0,
+          kind: 'source_asset',
+          sourceId: 'a58c22fb-d5de-4781-b282-455397e758a0',
+          label: 'Source',
+          sourceAssetId: 'a58c22fb-d5de-4781-b282-455397e758a0',
+        },
+      ],
+      executionSpec: {
+        kind: 'mcp_clip_batch',
+        sourceAssetId: 'a58c22fb-d5de-4781-b282-455397e758a0',
+        origin: { label: 'Clips', viewHref: '/library' },
+      },
+      claimedBy: null,
+      claimedClientId: null,
+      leaseToken: null,
+      leaseExpiresAt: null,
+      attemptCount: 1,
+      resultAssetIds: ['11111111-1111-4111-8111-111111111111'],
+      resultAssetRefs: [
+        {
+          asset_id: '11111111-1111-4111-8111-111111111111',
+          version_id: '22222222-2222-4222-8222-222222222222',
+        },
+      ],
+      errorCode: null,
+      errorMessage: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+    });
+    expect(result.success).toBe(true);
   });
 });

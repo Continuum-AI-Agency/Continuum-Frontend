@@ -43,6 +43,7 @@ const fatGraph = {
         sourceUrl: SIGNED_URL,
         referenceType: 'product',
         assetId: 'asset-99',
+        assetVersionId: 'version-7',
         image: 'data:image/png;base64,' + 'A'.repeat(500),
       },
     },
@@ -96,6 +97,7 @@ describe('projectGraphForAgent', () => {
     expect(attachment?.media_kind).toBe('image');
     expect(attachment?.handle).toBe('ref-image');
     expect(attachment?.asset_ref).toBe('asset-99');
+    expect(attachment?.version_ref).toBe('version-7');
   });
 
   it('never leaks signed URLs, buckets, storage paths, or base64 into the agent payload', () => {

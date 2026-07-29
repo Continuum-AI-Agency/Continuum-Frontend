@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { AdSetSnapshot } from './engine-contracts';
 import { adviseSetup, ENGINE_DEFAULT_CPA_TARGET, type SetupAdviceIssueCode } from './advisor';
+import type { AdSetSnapshot } from './engine-contracts';
 
 /** Minimal snapshot — only the fields the advisor reads. */
 function adset(over: Partial<AdSetSnapshot> & { id: string }): AdSetSnapshot {

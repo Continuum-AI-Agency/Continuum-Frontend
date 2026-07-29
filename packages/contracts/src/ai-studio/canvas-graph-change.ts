@@ -41,8 +41,8 @@ export const canvasGraphChangeSetSchema = z
     affectedEdgeIds: z.array(z.string()),
     proposedNodes: z.array(studioNodeSchema),
     proposedEdges: z.array(studioEdgeSchema),
-    createdAt: z.string().datetime(),
-    decidedAt: z.string().datetime().nullable().optional(),
+    createdAt: z.iso.datetime({ offset: true }),
+    decidedAt: z.iso.datetime({ offset: true }).nullable().optional(),
   })
   .strict();
 export type CanvasGraphChangeSet = z.infer<typeof canvasGraphChangeSetSchema>;

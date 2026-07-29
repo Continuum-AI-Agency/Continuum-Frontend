@@ -4,7 +4,9 @@ import {
   INSTAGRAM_CAPTION_MAX_LENGTH,
   INSTAGRAM_HASHTAG_MAX,
   buildInstagramCaption,
+  buildPlatformCaption,
   clampInstagramCaption,
+  clampPlatformCaption,
 } from "./instagram-caption";
 
 describe("buildInstagramCaption", () => {
@@ -79,5 +81,62 @@ describe("clampInstagramCaption", () => {
     expect(out.endsWith("supercalifragilistic")).toBe(false);
     // No dangling partial of the final word.
     expect(/\bsupercalif?r?a?g?i?l?i?s?t?i?c?$/.test(out)).toBe(false);
+  });
+});
+
+describe("buildPlatformCaption", () => {
+  it("is byte-identical to buildInstagramCaption on the instagram path", () => {
+    const hashtags = { high: ["#sale"], medium: ["new", "#sale"], low: ["fresh"] };
+    for (const body of ["Hello world", "", "x".repeat(3000), "Save #now on everything"]) {
+      expect(buildPlatformCaption("instagram", body, hashtags)).toBe(
+        buildInstagramCaption(body, hashtags),
+      );
+    }
+  });
+
+  it("does NOT truncate a 2,600-char LinkedIn caption that Instagram would clamp", () => {
+    // The live bug: EditableCaption counted this green at 3000 while the publisher
+    // clamped every platform at 2200 and posted it cut off.
+    const body = `${"word ".repeat(519)}finalword`;
+    expect(body.length).toBeGreaterThan(2200);
+    expect(body.length).toBeLessThan(3000);
+
+    const linkedin = buildPlatformCaption("linkedin", body);
+    expect(linkedin).toBe(body.trim());
+    expect(linkedin.length).toBe(body.trim().length);
+
+    const instagram = buildPlatformCaption("instagram", body);
+    expect(instagram.length).toBeLessThanOrEqual(2200);
+    expect(instagram.length).toBeLessThan(linkedin.length);
+    // Clamped at a word boundary, so no dangling partial token.
+    expect(instagram.endsWith("word")).toBe(true);
+    expect(instagram).toBe(body.trim().slice(0, instagram.length));
+  });
+
+  it("gives Facebook the widest ceiling of the three", () => {
+    const body = "y".repeat(5000);
+    expect(buildPlatformCaption("facebook", body)).toHaveLength(5000);
+    expect(buildPlatformCaption("linkedin", body).length).toBeLessThanOrEqual(3000);
+    expect(buildPlatformCaption("instagram", body).length).toBeLessThanOrEqual(2200);
+  });
+
+  it("caps the hashtag block per platform", () => {
+    const tags = Array.from({ length: 40 }, (_, i) => `tag${i}`);
+    const out = buildPlatformCaption("linkedin", "c", tags);
+    expect((out.split("\n\n")[1] ?? "").split(" ")).toHaveLength(30);
+  });
+});
+
+describe("clampPlatformCaption", () => {
+  it("clamps against the destination platform's own maximum", () => {
+    const text = "z".repeat(4000);
+    expect(clampPlatformCaption("instagram", text)).toHaveLength(2200);
+    expect(clampPlatformCaption("linkedin", text)).toHaveLength(3000);
+    expect(clampPlatformCaption("facebook", text)).toHaveLength(4000);
+  });
+
+  it("handles null/undefined as empty string", () => {
+    expect(clampPlatformCaption("linkedin", undefined)).toBe("");
+    expect(clampPlatformCaption("linkedin", null)).toBe("");
   });
 });

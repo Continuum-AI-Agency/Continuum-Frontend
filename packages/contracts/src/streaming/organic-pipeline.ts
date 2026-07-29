@@ -74,6 +74,18 @@ export const organicHyperframeStylePresetSchema = z.enum([
 export const organicHyperframeToneSchema = z.enum(['calm', 'balanced', 'high-energy']);
 export const organicHyperframeAspectRatioSchema = z.enum(['16:9', '9:16', '1:1']);
 
+/**
+ * A durable pointer to a storyboard panel used as a video frame input. Bytes are
+ * downloaded at realization time; nothing base64 is ever persisted here.
+ */
+export const organicSceneFrameRefSchema = z
+  .object({
+    bucket: z.string().min(1),
+    storagePath: z.string().min(1),
+    assetId: z.string().nullable().optional(),
+  })
+  .strict();
+
 /** One scene of a multi-shot reel (mirrors backend ReelSceneAsset). */
 export const organicReelSceneAssetSchema = z
   .object({
@@ -87,6 +99,19 @@ export const organicReelSceneAssetSchema = z
     signedClipUrl: z.string().nullable().optional(),
     assetId: z.string().nullable().optional(),
     error: z.string().nullable().optional(),
+    /**
+     * The approved contact-sheet panel this scene animates FROM. Veo takes
+     * reference images XOR frames, so once this is set it replaces the scene's
+     * reference images entirely — the panel is what carries creator identity and
+     * product fidelity into the clip.
+     */
+    firstFrame: organicSceneFrameRefSchema.nullable().optional(),
+    /**
+     * The panel this scene animates INTO — the next scene's panel, when the shot
+     * match-cuts. Every panel exists before any clip renders, so this costs no
+     * serialization. Never set without `firstFrame`; Veo rejects that.
+     */
+    lastFrame: organicSceneFrameRefSchema.nullable().optional(),
   })
   .strict();
 
@@ -346,6 +371,14 @@ export const organicStoryboardPreviewSchema = z
     storagePath: z.string().min(1),
     storageUrl: signedMediaUrl,
     format: z.string().nullable().optional(),
+    /**
+     * Which reel scene this panel belongs to. `role` cannot carry the join —
+     * multiple scenes legitimately share `role: 'body'` — so realization needs an
+     * explicit key to hand the right panel to the right clip as its first frame.
+     * Optional because panels persisted before the contact-sheet path existed
+     * have no scene to point at.
+     */
+    sceneIndex: z.number().int().nonnegative().nullable().optional(),
   })
   .strict();
 

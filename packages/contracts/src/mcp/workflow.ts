@@ -27,6 +27,7 @@ const projectedAttachmentSchema = z
     media_kind: mcpWorkflowMediaKindSchema,
     file_name: z.string().optional(),
     asset_ref: z.string().optional(),
+    version_ref: z.string().optional(),
   })
   .strict();
 
@@ -36,6 +37,8 @@ const graphIssueSchema = z
     message: z.string(),
     nodeId: z.string().optional(),
     edgeId: z.string().optional(),
+    severity: z.enum(['error', 'warning']).optional(),
+    phase: z.enum(['edit', 'run']).optional(),
   })
   .strict();
 

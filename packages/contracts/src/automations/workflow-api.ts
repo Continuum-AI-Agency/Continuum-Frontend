@@ -143,6 +143,18 @@ export const createAutomationWebhookEndpointResponseSchema = z
   })
   .strict();
 
+// Rotation reveals the replacement secret once and invalidates the previous one
+// immediately, so the response carries the secret alone — the endpoint row is
+// unchanged and stays authoritative in the list read.
+export const rotateAutomationWebhookEndpointSecretResponseSchema = z
+  .object({
+    signingSecret: z.string().min(32),
+  })
+  .strict();
+export type RotateAutomationWebhookEndpointSecretResponse = z.infer<
+  typeof rotateAutomationWebhookEndpointSecretResponseSchema
+>;
+
 export const automationWebhookDestinationSchema = z
   .object({
     id: z.string().uuid(),

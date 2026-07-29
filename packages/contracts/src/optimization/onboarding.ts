@@ -36,6 +36,12 @@ export function suggestionToPortfolioConfig(
     mode: suggestion.mode,
     apply_mode: opts.apply_mode ?? 'observe',
     daily_total: suggestion.daily_total,
+    // A suggestion's daily_total is a point-in-time SUM of the member ad sets' live
+    // budgets, not a target anybody chose — so the portfolio must keep tracking the live
+    // sum. Pinning it as 'fixed' is what made balanced cycles claw budgets back to
+    // whatever they happened to be on the day the portfolio was created.
+    budget_source: 'observed',
+    lookback_window: 'd14',
     ...(suggestion.cpa_target ? { cpa_target: suggestion.cpa_target } : {}),
   };
 }

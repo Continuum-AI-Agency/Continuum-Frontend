@@ -186,6 +186,15 @@ export const RecommendationStatusSchema = z.enum([
 ]);
 export type RecommendationStatus = z.infer<typeof RecommendationStatusSchema>;
 
+/** Whether the cycle's daily total is derived from live ad-set budgets or pinned by a human.
+ *  See PortfolioConfigSchema.budget_source for why this exists. */
+export const BudgetSourceSchema = z.enum(['observed', 'fixed']);
+export type BudgetSource = z.infer<typeof BudgetSourceSchema>;
+
+/** The trailing window read/analysis surfaces report on. */
+export const LookbackWindowSchema = z.enum(['d7', 'd14', 'd30']);
+export type LookbackWindow = z.infer<typeof LookbackWindowSchema>;
+
 /** Input to create a portfolio (maps to optimizer_create_portfolio's p_config). */
 export const PortfolioConfigSchema = z.object({
   name: z.string().min(1),
@@ -196,6 +205,16 @@ export const PortfolioConfigSchema = z.object({
   apply_mode: ApplyModeSchema.default('recommend'),
   daily_total: z.number().nonnegative(),
   period_budget: z.number().nonnegative().optional(),
+  /** Where the cycle's daily total comes from. 'observed' (default) reallocates within the
+   *  live sum of enrolled ad-set budgets, so gainers and losers net to zero. 'fixed' means
+   *  a human set daily_total as a deliberate target and the total is allowed to move. */
+  budget_source: BudgetSourceSchema.default('observed'),
+  /** Trailing window every read/analysis surface reports on. Does not re-key the engine's
+   *  d3/d7/d14 scoring blend — use `config.weights` for that. */
+  lookback_window: LookbackWindowSchema.default('d14'),
+  /** Flight window (YYYY-MM-DD). With period_budget set, these turn on real pacing. */
+  period_start: z.string().date().optional(),
+  period_end: z.string().date().optional(),
   cpa_target: z.number().positive().optional(),
   velocity_cap_pct: z.number().min(0).max(5).optional(),
   /** Autopilot guardrails. max_daily_apply_minor: refuse autopilot if the daily pool
@@ -238,6 +257,11 @@ export const UpdatePortfolioPatchSchema = z
     apply_mode: ApplyModeSchema.optional(),
     daily_total: z.number().nonnegative().optional(),
     period_budget: z.number().nonnegative().nullable().optional(),
+    budget_source: BudgetSourceSchema.optional(),
+    lookback_window: LookbackWindowSchema.optional(),
+    // Flight window — null clears the date, returning the portfolio to unpaced.
+    period_start: z.string().date().nullable().optional(),
+    period_end: z.string().date().nullable().optional(),
     cpa_target: z.number().positive().nullable().optional(),
     velocity_cap_pct: z.number().min(0).max(5).optional(),
     // Autopilot guardrails — null clears the cap (uncapped).
@@ -286,9 +310,23 @@ export const EnrollExpansionSchema = z.object({
 });
 export type EnrollExpansion = z.infer<typeof EnrollExpansionSchema>;
 
+/** An ad set taken from another portfolio to satisfy this enrollment. The global partial
+ *  unique index (one ACTIVE enrollment per ad set) means enrolling a claimed ad set is
+ *  always a move, never a copy — so the caller must be able to say which portfolio lost it
+ *  rather than surfacing a constraint violation. */
+export const EnrollMovedAdsetSchema = z.object({
+  adset_id: z.string(),
+  from_portfolio_id: z.string().uuid(),
+  from_portfolio_name: z.string().nullable().optional(),
+});
+export type EnrollMovedAdset = z.infer<typeof EnrollMovedAdsetSchema>;
+
 export const EnrollResultSchema = z.object({
+  /** Ad sets that were not already actively enrolled in this portfolio. */
   enrolled: z.number().int().nonnegative(),
   first_cycle: z.literal('queued'),
+  /** Absent on older responses; treat as empty. */
+  moved: z.array(EnrollMovedAdsetSchema).default([]),
   expansion: EnrollExpansionSchema.optional(),
 });
 export type EnrollResult = z.infer<typeof EnrollResultSchema>;
@@ -534,6 +572,10 @@ export const PortfolioRowSchema = z
     level: z.string().optional(),
     daily_total: z.number().nullable().optional(),
     period_budget: z.number().nullable().optional(),
+    budget_source: z.string().nullable().optional(),
+    lookback_window: z.string().nullable().optional(),
+    period_start: z.string().nullable().optional(),
+    period_end: z.string().nullable().optional(),
     cpa_target: z.number().nullable().optional(),
     velocity_cap_pct: z.number().nullable().optional(),
   })
@@ -562,6 +604,13 @@ export const PortfolioListItemSchema = z.object({
   apply_mode: z.string(),
   daily_total: z.number().nullable(),
   period_budget: z.number().nullable(),
+  // Same declare-or-be-stripped rule as the autopilot fields below: optimizer_list_portfolios
+  // returns these, and an undeclared budget_source reads as undefined, which the FE would
+  // render as a fixed target the user never set.
+  budget_source: z.string().nullable().optional(),
+  lookback_window: z.string().nullable().optional(),
+  period_start: z.string().nullable().optional(),
+  period_end: z.string().nullable().optional(),
   status: z.string(),
   next_realloc_at: z.string().nullable(),
   adset_count: z.number().int().nonnegative(),
@@ -997,6 +1046,34 @@ export const PortfolioAdsetSchema = z.object({
   active: z.boolean(),
 });
 export type PortfolioAdset = z.infer<typeof PortfolioAdsetSchema>;
+
+/** One row of optimizer_list_account_enrollments — which portfolio already claims an ad set,
+ *  across the whole account. An ad set may hold exactly one ACTIVE enrollment, so the picker
+ *  needs this to say "already in Prospecting Q3" BEFORE the user saves, and the confirm step
+ *  needs it to say what will move. */
+export const AccountEnrollmentSchema = z.object({
+  adset_id: z.string(),
+  portfolio_id: z.string().uuid(),
+  portfolio_name: z.string().nullable(),
+});
+export type AccountEnrollment = z.infer<typeof AccountEnrollmentSchema>;
+
+/** What kind of thing happened to a portfolio at a point in time. */
+export const TimelineEventKindSchema = z.enum(['cycle', 'applied', 'status', 'config']);
+export type TimelineEventKind = z.infer<typeof TimelineEventKindSchema>;
+
+/** One row of optimizer_get_timeline_events — an observed event plotted as a flag on the
+ *  cost timeline. Money and status writes arrive pre-aggregated per day (one reallocation
+ *  touching 20 ad sets is one event to a reader); config changes arrive individually. */
+export const TimelineEventSchema = z.object({
+  ts: z.string(),
+  kind: TimelineEventKindSchema,
+  label: z.string(),
+  detail: z.string().nullable().optional(),
+  adset_id: z.string().nullable().optional(),
+  count: z.number().int().nonnegative().default(1),
+});
+export type TimelineEvent = z.infer<typeof TimelineEventSchema>;
 
 /** What an ad's creative actually IS, at a resolution you can read.
  *

@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  CAPTION_MAX_ANY_PLATFORM,
+  captionLimits,
   carouselLimits,
   PLATFORM_CAPABILITIES,
   publishEventSchema,
   publishResultSchema,
   supportsFormat,
+  toPublishPlatform,
 } from './publishing';
 
 describe('publish platform capabilities', () => {
@@ -95,5 +98,36 @@ describe('publish result schema', () => {
       accountId: 'urn:li:organization:2414183',
     });
     expect(parsed.success).toBe(true);
+  });
+});
+
+describe('caption capabilities', () => {
+  it('carries each platform its own real caption ceiling', () => {
+    expect(captionLimits('instagram')).toEqual({ maxLength: 2200, maxHashtags: 30 });
+    expect(captionLimits('linkedin')).toEqual({ maxLength: 3000, maxHashtags: 30 });
+    expect(captionLimits('facebook')).toEqual({ maxLength: 63206, maxHashtags: 30 });
+  });
+
+  it('exposes a widest-of-all bound that no platform exceeds', () => {
+    for (const platform of ['instagram', 'facebook', 'linkedin'] as const) {
+      expect(captionLimits(platform).maxLength).toBeLessThanOrEqual(CAPTION_MAX_ANY_PLATFORM);
+    }
+    // And it is actually one of them, not an invented number.
+    expect(CAPTION_MAX_ANY_PLATFORM).toBe(captionLimits('facebook').maxLength);
+  });
+});
+
+describe('toPublishPlatform', () => {
+  it('narrows known platform names, case- and whitespace-insensitively', () => {
+    expect(toPublishPlatform('instagram')).toBe('instagram');
+    expect(toPublishPlatform('LinkedIn')).toBe('linkedin');
+    expect(toPublishPlatform('  facebook ')).toBe('facebook');
+  });
+
+  it('returns null for platforms we cannot publish to', () => {
+    expect(toPublishPlatform('tiktok')).toBeNull();
+    expect(toPublishPlatform('')).toBeNull();
+    expect(toPublishPlatform(undefined)).toBeNull();
+    expect(toPublishPlatform(null)).toBeNull();
   });
 });
