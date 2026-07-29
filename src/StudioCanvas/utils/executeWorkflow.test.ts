@@ -1462,6 +1462,85 @@ describe('executeWorkflow', () => {
     expect(editNode?.data.isComplete).toBe(true);
   });
 
+  describe('image variations', () => {
+    const durableVariations = (count: number) => ({
+      type: 'images' as const,
+      items: Array.from({ length: count }, (_unused, index) => ({
+        mimeType: 'image/png',
+        url: `https://signed/v${index}.png`,
+        storagePath: `brand-1/canvas/v${index}.png`,
+        storageBucket: 'brand-profile-assets',
+        assetId: `asset-${index}`,
+      })),
+    });
+
+    const runGenerator = async (output: unknown) => {
+      const nodes: StudioNode[] = [
+        {
+          id: 'gen',
+          position: { x: 0, y: 0 },
+          type: 'nanoGen',
+          data: { model: 'nano-banana', positivePrompt: 'a cat', aspectRatio: '1:1' },
+        },
+      ];
+      useStudioStore.getState().setNodes(nodes);
+      useStudioStore.getState().setEdges([]);
+      await executeWorkflow(buildControls(mock(async () => ({ success: true, output }))) as never);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return useStudioStore.getState().nodes.find((node) => node.id === 'gen')?.data as Record<
+        string,
+        unknown
+      >;
+    };
+
+    it('persists every variation with its own durable coordinates', async () => {
+      const data = await runGenerator(durableVariations(4));
+      const variations = data.generatedImages as Array<Record<string, unknown>>;
+
+      expect(variations).toHaveLength(4);
+      expect(variations.map((variation) => variation.storagePath)).toEqual([
+        'brand-1/canvas/v0.png',
+        'brand-1/canvas/v1.png',
+        'brand-1/canvas/v2.png',
+        'brand-1/canvas/v3.png',
+      ]);
+      // URL-first: a variation must carry the signed URL and asset id, not just a
+      // preview, or it silently drops out of re-signing and the asset ledger.
+      expect(variations.map((variation) => variation.assetId)).toEqual([
+        'asset-0',
+        'asset-1',
+        'asset-2',
+        'asset-3',
+      ]);
+      expect(variations[2].preview).toBe('https://signed/v2.png');
+      expect(data.isComplete).toBe(true);
+    });
+
+    it('mirrors the first variation onto the single-image fields', async () => {
+      const data = await runGenerator(durableVariations(4));
+      expect(data.generatedImage).toBe('https://signed/v0.png');
+      expect(data.generatedImageUrl).toBe('https://signed/v0.png');
+      expect(data.generatedImageStoragePath).toBe('brand-1/canvas/v0.png');
+      expect(data.renderOutputAssetId).toBe('asset-0');
+    });
+
+    it('clears a previous 4-up when the next run produces a single image', async () => {
+      const first = await runGenerator(durableVariations(4));
+      expect(first.generatedImages).toHaveLength(4);
+
+      const second = await runGenerator({
+        type: 'image',
+        mimeType: 'image/png',
+        url: 'https://signed/solo.png',
+        storagePath: 'brand-1/canvas/solo.png',
+        storageBucket: 'brand-profile-assets',
+        assetId: 'asset-solo',
+      });
+      expect(second.generatedImages).toBeUndefined();
+      expect(second.generatedImage).toBe('https://signed/solo.png');
+    });
+  });
+
   describe('skip / regenerate by content', () => {
     const imgOutput = (nodeId: string) => ({
       success: true,

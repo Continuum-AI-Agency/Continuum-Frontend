@@ -1018,6 +1018,132 @@ describe('buildNodePayload', () => {
       expect(toBackendPayload(payload!).brand_book_pieces).toEqual([]);
     });
 
+    describe('image variations', () => {
+      const nanoNode = (variationCount?: 1 | 4): StudioNode => ({
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'nano-banana',
+          positivePrompt: 'A cat',
+          aspectRatio: '1:1',
+          variationCount,
+        },
+      });
+
+      it('omits numImages unless more than one variation was asked for', () => {
+        expect(buildNanoGenPayload(nanoNode(), new Map(), [], [])?.numImages).toBeUndefined();
+        expect(buildNanoGenPayload(nanoNode(1), new Map(), [], [])?.numImages).toBeUndefined();
+      });
+
+      it('sends numImages on the wire as num_images when four are asked for', () => {
+        const payload = buildNanoGenPayload(nanoNode(4), new Map(), [], []);
+        expect(payload?.numImages).toBe(4);
+        expect(toBackendPayload(payload!).num_images).toBe(4);
+      });
+
+      it('leaves num_images off the wire for a single-image generation', () => {
+        const payload = buildNanoGenPayload(nanoNode(1), new Map(), [], []);
+        expect(toBackendPayload(payload!).num_images).toBeUndefined();
+      });
+
+      const fourVariations = (): NodeOutput => ({
+        type: 'images',
+        items: [0, 1, 2, 3].map((index) => ({
+          base64: `IMG${index}`,
+          mimeType: 'image/png',
+          url: `https://signed/v${index}.png`,
+          storagePath: `brand/v${index}.png`,
+          storageBucket: 'brand-profile-assets',
+        })),
+      });
+
+      const consumerFedBy = (sourceHandle: string | undefined) => {
+        const producer = nanoNode(4);
+        const consumer: StudioNode = {
+          id: 'consumer',
+          type: 'nanoGen',
+          position: { x: 200, y: 0 },
+          data: { model: 'nano-banana', positivePrompt: 'use it', aspectRatio: '1:1' },
+        };
+        const edges: Edge[] = [
+          {
+            id: 'e1',
+            source: 'nano',
+            target: 'consumer',
+            sourceHandle,
+            targetHandle: 'ref-image',
+          } as Edge,
+        ];
+        const resolved = new Map<string, NodeOutput>([['nano', fourVariations()]]);
+        return buildNanoGenPayload(consumer, resolved, [producer, consumer], edges, 'brand-1');
+      };
+
+      it('routes the variation the edge actually points at into the reference images', () => {
+        const backend = toBackendPayload(consumerFedBy('image-2')!);
+        expect(backend.reference_images).toHaveLength(1);
+        expect(backend.reference_images?.[0]).toMatchObject({ data: 'IMG2' });
+      });
+
+      it('treats the legacy unnumbered handle as the first variation', () => {
+        expect(toBackendPayload(consumerFedBy('image')!).reference_images?.[0]).toMatchObject({
+          data: 'IMG0',
+        });
+      });
+
+      it('falls back to the first variation for a missing or out-of-range handle', () => {
+        expect(toBackendPayload(consumerFedBy(undefined)!).reference_images?.[0]).toMatchObject({
+          data: 'IMG0',
+        });
+        expect(toBackendPayload(consumerFedBy('image-9')!).reference_images?.[0]).toMatchObject({
+          data: 'IMG0',
+        });
+      });
+
+      it('prefers a variation durable URL over its base64, like a single image does', () => {
+        const producer = nanoNode(4);
+        const consumer: StudioNode = {
+          id: 'consumer',
+          type: 'nanoGen',
+          position: { x: 200, y: 0 },
+          data: { model: 'nano-banana', positivePrompt: 'use it', aspectRatio: '1:1' },
+        };
+        const urlOnly: NodeOutput = {
+          type: 'images',
+          items: [0, 1].map((index) => ({
+            mimeType: 'image/png',
+            url: `https://signed/v${index}.png`,
+            storagePath: `brand/v${index}.png`,
+            storageBucket: 'brand-profile-assets',
+          })),
+        };
+        const edges: Edge[] = [
+          {
+            id: 'e1',
+            source: 'nano',
+            target: 'consumer',
+            sourceHandle: 'image-1',
+            targetHandle: 'ref-image',
+          } as Edge,
+        ];
+        const backend = toBackendPayload(
+          buildNanoGenPayload(
+            consumer,
+            new Map<string, NodeOutput>([['nano', urlOnly]]),
+            [producer, consumer],
+            edges,
+            'brand-1',
+          )!,
+        );
+        expect(backend.reference_images?.[0]).toMatchObject({
+          image_url: 'https://signed/v1.png',
+          storage_path: 'brand/v1.png',
+          storage_bucket: 'brand-profile-assets',
+        });
+        expect(backend.reference_images?.[0]?.data).toBeUndefined();
+      });
+    });
+
     it('defaults an untagged video node to the full brand book', () => {
       const node: StudioNode = {
         id: 'veo',

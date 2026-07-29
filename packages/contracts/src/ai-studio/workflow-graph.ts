@@ -162,6 +162,33 @@ export const VIDEO_IMAGE_REFERENCE_HANDLES = ['ref-image', 'ref-images'] as cons
 export const VIDEO_FRAME_HANDLES = ['first-frame', 'last-frame'] as const;
 export const VIDEO_REFERENCE_VIDEO_HANDLE = 'ref-video' as const;
 
+/**
+ * An image generator can emit up to IMAGE_VARIATION_LIMIT variations from one run,
+ * each on its own source handle so a downstream node can consume a SPECIFIC one.
+ *
+ * Variation 0 keeps the bare `image` id rather than `image-0`. Every graph saved
+ * before variations existed has edges on `image`, and `normalizeEdges` DROPS an
+ * edge whose source handle is not in the allowed set — renumbering would silently
+ * delete those edges from every existing canvas.
+ */
+export const IMAGE_VARIATION_LIMIT = 4;
+export const IMAGE_VARIATION_HANDLE_PREFIX = 'image-';
+export const IMAGE_VARIATION_HANDLES = ['image', 'image-1', 'image-2', 'image-3'] as const;
+export type ImageVariationHandle = (typeof IMAGE_VARIATION_HANDLES)[number];
+
+export const getImageVariationHandleId = (index: number): string =>
+  index <= 0 ? 'image' : `${IMAGE_VARIATION_HANDLE_PREFIX}${index}`;
+
+/**
+ * Inverse of getImageVariationHandleId. Anything unrecognisable resolves to 0 so a
+ * legacy or malformed edge still yields the first variation instead of nothing.
+ */
+export const variationIndexFromHandle = (handleId?: string | null): number => {
+  if (!handleId || !handleId.startsWith(IMAGE_VARIATION_HANDLE_PREFIX)) return 0;
+  const index = Number.parseInt(handleId.slice(IMAGE_VARIATION_HANDLE_PREFIX.length), 10);
+  return Number.isInteger(index) && index > 0 && index < IMAGE_VARIATION_LIMIT ? index : 0;
+};
+
 export type VideoGeneratorNodeType = 'videoGen' | 'veoDirector' | 'veoFast';
 
 /**
@@ -504,7 +531,7 @@ export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
     case 'document':
       return ['document'];
     case 'nanoGen':
-      return ['image'];
+      return [...IMAGE_VARIATION_HANDLES];
     case 'extendVideo':
     case 'timelineEditor':
     case 'hyperframesAgent':

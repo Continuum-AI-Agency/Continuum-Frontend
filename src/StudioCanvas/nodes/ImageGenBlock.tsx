@@ -2,9 +2,11 @@ import {
   type BrandBookPieceKind,
   coerceImageSize,
   FIXED_IMAGE_PIXELS,
+  getImageVariationHandleId,
   type ImageGeneratorModel,
   imageSizesForModel,
   supportsImageSize,
+  variationIndexFromHandle,
 } from '@continuum/contracts';
 import { CopyIcon, DownloadIcon, ImageIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons';
 import {
@@ -16,6 +18,7 @@ import {
   type Node as ReactFlowNode,
   useEdges,
   useNodeId,
+  useUpdateNodeInternals,
 } from '@xyflow/react';
 import type React from 'react';
 import { useCallback, useRef, useState } from 'react';
@@ -59,6 +62,11 @@ import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { resignCanvasNodes } from '../utils/resignCanvasNodes';
 
+// One or a full quadrant. Anything between would leave the 2x2 grid ragged and
+// buys nothing: the ceiling is IMAGE_VARIATION_LIMIT either way.
+const VARIATION_COUNTS = [1, 4] as const;
+type VariationCount = (typeof VARIATION_COUNTS)[number];
+
 const LimitedHandle = ({
   maxConnections,
   isConnectable,
@@ -90,6 +98,9 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const brandId = useStudioStore((state) => state.brandId);
+  const setEdges = useStudioStore((state) => state.setEdges);
+  const currentEdges = useStudioStore((state) => state.edges);
+  const updateNodeInternals = useUpdateNodeInternals();
   const executionControls = useWorkflowExecution();
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
@@ -191,12 +202,54 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
     [id, triggerSave, updateNode],
   );
 
+  const handleVariationCountChange = useCallback(
+    (count: VariationCount) => {
+      const previousCount = data.variationCount ?? 1;
+      if (count === previousCount) return;
+
+      updateNode(id, (node) => ({
+        ...node,
+        data: { ...(node.data as NanoGenNodeData), variationCount: count },
+      }));
+
+      // Dropping to fewer variations removes the handles the surviving edges point
+      // at. React Flow would keep those edges in state pointed at a handle that is
+      // no longer in the DOM, so they stop being drawn while still looking connected.
+      if (count < previousCount) {
+        setEdges(
+          currentEdges.map((edge) =>
+            edge.source === id && variationIndexFromHandle(edge.sourceHandle) >= count
+              ? { ...edge, sourceHandle: getImageVariationHandleId(0) }
+              : edge,
+          ),
+        );
+      }
+
+      triggerSave();
+      // The handle set changed shape; without this React Flow keeps the old handle
+      // positions and edges render to the wrong point on the node.
+      updateNodeInternals(id);
+    },
+    [currentEdges, data.variationCount, id, setEdges, triggerSave, updateNode, updateNodeInternals],
+  );
+
   const handleRun = useCallback(async () => {
     console.info('[studio] run image node', { nodeId: id });
     await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
   }, [executionControls, id, brandId]);
 
-  const previewImage = (data.generatedImage as string | Blob | undefined) ?? data.generatedImageUrl;
+  const variationCount = data.variationCount ?? 1;
+  const generatedVariations = data.generatedImages ?? [];
+  const showVariationGrid = generatedVariations.length > 1;
+  const previewImage = showVariationGrid
+    ? undefined
+    : ((data.generatedImage as string | Blob | undefined) ?? data.generatedImageUrl);
+  // Handles follow what EXISTS once a run has produced variations, and what is
+  // REQUESTED before that, so the node never draws a handle with nothing behind it.
+  const outputHandleIds = Array.from(
+    { length: showVariationGrid ? generatedVariations.length : variationCount },
+    (_unused, index) => getImageVariationHandleId(index),
+  );
 
   // Expiry recovery: a signed URL can expire while the canvas is open. On an image
   // load error, re-sign this node once from its durable storage path/bucket.
@@ -308,6 +361,25 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
             align="end"
             className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
           >
+            <div className="flex items-center gap-0.5 rounded border border-border/60 bg-muted/50 p-0.5">
+              {VARIATION_COUNTS.map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  aria-pressed={variationCount === count}
+                  className={cn(
+                    'h-5 min-w-[1.25rem] rounded px-1 text-[10px] font-medium transition-colors',
+                    variationCount === count
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  onClick={() => handleVariationCountChange(count)}
+                  title={`Generate ${count} variation${count > 1 ? 's' : ''}`}
+                >
+                  {count}
+                </button>
+              ))}
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -336,6 +408,39 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
               {data.isExecuting ? (
                 <div className="w-full h-full flex items-center justify-center bg-muted p-4">
                   <GenerationPulseLoader />
+                </div>
+              ) : showVariationGrid ? (
+                <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-0.5 bg-muted">
+                  {generatedVariations.map((variation, index) => (
+                    <div
+                      key={variation.storagePath ?? variation.preview}
+                      className="relative overflow-hidden bg-muted group/variation"
+                    >
+                      <img
+                        src={variation.preview}
+                        alt={`Generated variation ${index + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        className="nodrag absolute right-1 top-1 z-20 h-6 w-6 border border-border/70 bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover/variation:opacity-90 hover:opacity-100"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          downloadAsset({
+                            data: variation.preview,
+                            baseName: `${fileBaseName}-${index + 1}`,
+                            fallbackExtension: 'png',
+                          });
+                        }}
+                        title={`Download variation ${index + 1}`}
+                        aria-label={`Download variation ${index + 1}`}
+                      >
+                        <DownloadIcon className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               ) : previewImage ? (
                 <div className="relative w-full h-full flex items-center justify-center bg-muted">
@@ -377,15 +482,24 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           </CanvasNode>
 
           <div
-            className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
+            className="absolute -right-2 top-0 bottom-0 z-20 flex flex-col items-center justify-evenly py-4 pointer-events-none"
             style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
           >
-            <Handle
-              type="source"
-              position={Position.Right}
-              id="image"
-              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
-            />
+            {outputHandleIds.map((handleId, index) => (
+              <div key={handleId} className="relative pointer-events-auto group/handle">
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={handleId}
+                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                />
+                {outputHandleIds.length > 1 ? (
+                  <span className="studio-handle-pill absolute right-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                    {`Variation ${index + 1}`}
+                  </span>
+                ) : null}
+              </div>
+            ))}
           </div>
 
           {/* Handles Container - Outside of Card to prevent clipping */}

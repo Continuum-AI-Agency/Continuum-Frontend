@@ -11,7 +11,7 @@ import type {
   BackendExtendVideoRequestPayload,
   StreamState,
 } from '@/lib/types/chatImage';
-import type { NodeOutput } from '../types/execution';
+import type { ImageOutputItem, NodeOutput } from '../types/execution';
 import { parseDataUrl } from '../utils/dataUrl';
 import { resolveWorkflowInitUrl } from './resolveWorkflowInitUrl';
 
@@ -129,6 +129,9 @@ export function useWorkflowExecution() {
         const decoder = new TextDecoder();
         let buffer = '';
         let finalOutput: NodeOutput | undefined;
+        // Sparse by design: keyed on the variation index the Backend stamps, so an
+        // out-of-order or partially-failed batch still lands each image in its own slot.
+        const imageVariations: Array<ImageOutputItem | undefined> = [];
 
         const processChunk = (chunk: string) => {
           const events = chunk.split(/\r?\n\r?\n/);
@@ -175,6 +178,7 @@ export function useWorkflowExecution() {
                 delta?: string;
                 progress?: number;
                 asset_id?: string;
+                variation_index?: number;
                 delivery?: 'durable' | 'fallback';
               };
 
@@ -235,8 +239,7 @@ export function useWorkflowExecution() {
                 if (expectedMedium === 'image') {
                   // URL-first: the signed URL is the source of truth; base64 is
                   // present only on the upload/sign fallback path.
-                  finalOutput = {
-                    type: 'image',
+                  const item: ImageOutputItem = {
                     base64: normalizedImageBase64,
                     mimeType: imageMimeType,
                     url: persistentImageUrl,
@@ -245,6 +248,10 @@ export function useWorkflowExecution() {
                     sizeBytes,
                     assetId: typeof parsed.asset_id === 'string' ? parsed.asset_id : undefined,
                   };
+                  // A num_images run emits one event per variation, each tagged
+                  // with its index. Absent means a plain single-image generation.
+                  imageVariations[parsed.variation_index ?? 0] = item;
+                  finalOutput = { type: 'image', ...item };
                   onOutputAvailable?.(finalOutput);
                 }
               }
@@ -284,10 +291,14 @@ export function useWorkflowExecution() {
                                   : undefined;
               const videoUrl = rawVideoString;
 
+              // On a variation run each `image` event already carries its own storage
+              // coordinates; `stored` describes only the primary, so folding it in would
+              // overwrite the last variation with variation 0's path.
               if (
                 eventName === 'stored' &&
                 expectedMedium === 'image' &&
-                finalOutput?.type === 'image'
+                finalOutput?.type === 'image' &&
+                imageVariations.filter(Boolean).length <= 1
               ) {
                 finalOutput = {
                   ...finalOutput,
@@ -300,7 +311,10 @@ export function useWorkflowExecution() {
 
               if ((eventName === 'video' || eventName === 'stored') && videoUrl) {
                 if (expectedMedium !== 'video') {
-                  return;
+                  // continue, not return: an image generation's `stored` event carries a
+                  // signed_url and lands here, and returning abandoned every event
+                  // batched behind it in the same chunk — usually `complete`.
+                  continue;
                 }
                 finalOutput = {
                   type: 'video',
@@ -339,6 +353,18 @@ export function useWorkflowExecution() {
                 typeof parsed.asset_id === 'string'
               ) {
                 finalOutput = { ...finalOutput, assetId: parsed.asset_id };
+              }
+
+              if (eventName === 'complete' && expectedMedium === 'image') {
+                const variations = imageVariations.filter(
+                  (item): item is ImageOutputItem => item !== undefined,
+                );
+                // Exactly one image stays the `image` output every downstream consumer
+                // already handles; only a genuine multi-variation run changes shape.
+                if (variations.length > 1) {
+                  finalOutput = { type: 'images', items: variations };
+                  onOutputAvailable?.(finalOutput);
+                }
               }
 
               if (eventName === 'error') {

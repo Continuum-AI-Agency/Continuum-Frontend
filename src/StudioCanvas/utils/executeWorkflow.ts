@@ -13,13 +13,14 @@ import type { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type {
   FrameExtractNodeData,
+  GeneratedImageVariation,
   HyperframesAgentNodeData,
   ImageNodeData,
   StudioNode,
   TimelineEditorNodeData,
   TimelineItem,
 } from '../types';
-import type { NodeOutput } from '../types/execution';
+import type { ImageOutputItem, NodeOutput } from '../types/execution';
 import {
   buildEnrichPayload,
   buildExtendVideoPayload,
@@ -1118,7 +1119,28 @@ export async function executeWorkflow(
         const genImage = (node.data as any).generatedImage as string | undefined;
         const genImageUrl = (node.data as any).generatedImageUrl as string | undefined;
         const durableImageUrl = isHttpUrl(genImage) ? genImage : genImageUrl;
-        if (genImage) {
+        const genImages = (node.data as any).generatedImages as
+          | GeneratedImageVariation[]
+          | undefined;
+        // A saved 4-variation node must come back as `images`, or every edge on an
+        // image-N handle would silently resolve to variation 0 after a reload.
+        if (genImages && genImages.length > 1) {
+          const items = genImages.map((variation) => {
+            const parsed = parseDataUrl(variation.preview);
+            return {
+              base64: parsed?.base64,
+              mimeType: parsed?.mimeType ?? 'image/png',
+              url: variation.url ?? (isHttpUrl(variation.preview) ? variation.preview : undefined),
+              storagePath: variation.storagePath,
+              storageBucket: variation.storageBucket,
+              assetId: variation.assetId,
+              assetVersionId: variation.assetVersionId,
+            };
+          });
+          if (items.some((item) => item.base64 || item.url)) {
+            resolvedOutputs.set(node.id, { type: 'images', items });
+          }
+        } else if (genImage) {
           const parsed = parseDataUrl(genImage);
           if (parsed?.base64) {
             resolvedOutputs.set(node.id, {
@@ -1277,9 +1299,63 @@ export async function executeWorkflow(
     return computeGenerationSignature(node, state.edges, lookup);
   };
 
+  // One variation's durable coordinates plus the preview the node renders. Shared
+  // by the single-image and multi-variation paths so a variation is persisted with
+  // the same fields — nothing here may become preview-only.
+  const toVariation = (item: ImageOutputItem): GeneratedImageVariation | undefined => {
+    const rawBase64 = item.base64 ?? '';
+    const parsed = rawBase64.startsWith('data:') ? parseDataUrl(rawBase64) : null;
+    const mimeType = parsed?.mimeType ?? item.mimeType;
+    const base64 = (parsed?.base64 ?? rawBase64).replace(/\s+/g, '');
+    const persistentUrl = item.url && !item.url.startsWith('data:') ? item.url : undefined;
+    const preview = persistentUrl ?? (base64 ? buildDataUrl(mimeType, base64) : undefined);
+    if (!preview) return undefined;
+    return {
+      preview,
+      url: persistentUrl,
+      storagePath: item.storagePath,
+      storageBucket: item.storageBucket,
+      assetId: item.assetId,
+      assetVersionId: item.assetVersionId,
+    };
+  };
+
   const setNodeOutput = (nodeId: string, output: NodeOutput) => {
     resolvedOutputs.set(nodeId, output);
-    if (output.type === 'image') {
+    if (output.type === 'images') {
+      const variations = output.items
+        .map(toVariation)
+        .filter((variation): variation is GeneratedImageVariation => variation !== undefined);
+      if (variations.length === 0) return;
+
+      const primary = variations[0];
+      useStudioStore.getState().updateNodeData(nodeId, {
+        generatedImages: variations,
+        // The primary also fills the single-image fields so download, re-sign, and
+        // every existing consumer keep working without knowing about variations.
+        generatedImage: primary.preview,
+        generatedImageUrl: primary.url,
+        generatedImageStoragePath: primary.storagePath,
+        generatedImageBucket: primary.storageBucket,
+        renderOutputAssetId: primary.assetId,
+        renderOutputAssetVersionId: primary.assetVersionId,
+        generationSignature: generationSignatureFor(nodeId),
+        isComplete: true,
+        isExecuting: false,
+      });
+      useStudioStore.getState().triggerSave();
+      output.items.forEach((item, index) => {
+        if (item.assetId || !variations[index]) return;
+        registerCanvasIfDurable(nodeId, {
+          kind: 'image',
+          bucket: item.storageBucket,
+          storagePath: item.storagePath,
+          url: variations[index].url,
+          mimeType: item.mimeType,
+          sizeBytes: item.sizeBytes,
+        });
+      });
+    } else if (output.type === 'image') {
       const rawBase64 = output.base64 ?? '';
       const parsed = rawBase64.startsWith('data:') ? parseDataUrl(rawBase64) : null;
       const mimeType = parsed?.mimeType ?? output.mimeType;
@@ -1296,6 +1372,9 @@ export async function executeWorkflow(
       });
       useStudioStore.getState().updateNodeData(nodeId, {
         generatedImage: previewImage,
+        // A re-run at variationCount 1 must clear a previous 4-up, or the node keeps
+        // rendering a stale grid and stale image-N handles.
+        generatedImages: undefined,
         generatedImageUrl: persistentUrl,
         generatedImageStoragePath: output.storagePath,
         generatedImageBucket: output.storageBucket,

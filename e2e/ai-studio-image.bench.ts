@@ -20,7 +20,11 @@
  *   3. AN AGENT-AUTHORED NODE RUNS           — a node written by the canvas agent with
  *      the exact illegal `imageSize: "1024px"` that shipped is corrected at WRITE time
  *      and generates. This is the node that 400d in production.
- *   4. A NEGATIVE PROMPT IS ACCEPTED         — wired from a text node into the new
+ *   4. VARIATIONS FAN OUT FOR REAL       — num_images=4 returns FOUR image events with
+ *      distinct variation indices, four distinct storage paths, four distinct asset-ledger
+ *      rows, and four signed URLs that each download real bytes. Counting events is not
+ *      enough: one image announced four times passes a count and fails this.
+ *   5. A NEGATIVE PROMPT IS ACCEPTED         — wired from a text node into the new
  *      `negative` handle, it survives the payload builder, the request schema (which used
  *      to silently strip it) and the generation.
  *
@@ -295,6 +299,259 @@ async function runCase(
   );
 }
 
+// ---------------------------------------------------------------------------
+// Variations (num_images). The single-image collector above deliberately keeps
+// only the last durable URL, so a variation run needs its own collector: the
+// whole claim here is that FOUR distinct images are persisted and announced, and
+// a collector that collapses them cannot tell four from one.
+// ---------------------------------------------------------------------------
+
+interface VariationEvent {
+  variationIndex?: number;
+  signedUrl?: string;
+  path?: string;
+  bucket?: string;
+  base64?: string;
+  delivery?: string;
+}
+
+interface VariationOutcome {
+  status: number;
+  error?: string;
+  images: VariationEvent[];
+  completeVariations?: Array<Record<string, unknown>>;
+  completeAssetId?: string;
+  completeHasVariationsKey: boolean;
+  wireBytes: number;
+}
+
+async function generateVariations(
+  body: Record<string, unknown>,
+  token: string,
+): Promise<VariationOutcome> {
+  const res = await fetch(`${API}/ai-studio/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  const empty = { images: [], completeHasVariationsKey: false, wireBytes: 0 };
+  if (res.status !== 200 || !res.body) {
+    return { status: res.status, error: (await res.text()).slice(0, 300), ...empty };
+  }
+
+  const images: VariationEvent[] = [];
+  let completeVariations: Array<Record<string, unknown>> | undefined;
+  let completeAssetId: string | undefined;
+  let completeHasVariationsKey = false;
+  let streamError: string | undefined;
+  let wireBytes = 0;
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    wireBytes += value.byteLength;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split('\n\n');
+    buffer = chunks.pop() ?? '';
+
+    for (const chunk of chunks) {
+      const event = chunk.match(/^event: (.+)$/m)?.[1];
+      const raw = chunk.match(/^data: (.+)$/m)?.[1];
+      if (!event || !raw) continue;
+      const data = JSON.parse(raw) as Record<string, unknown>;
+
+      if (event === 'image') {
+        images.push({
+          variationIndex:
+            typeof data.variation_index === 'number' ? data.variation_index : undefined,
+          signedUrl: typeof data.signed_url === 'string' ? data.signed_url : undefined,
+          path: typeof data.path === 'string' ? data.path : undefined,
+          bucket: typeof data.bucket === 'string' ? data.bucket : undefined,
+          base64: typeof data.base64 === 'string' ? data.base64 : undefined,
+          delivery: typeof data.delivery === 'string' ? data.delivery : undefined,
+        });
+      }
+      if (event === 'complete') {
+        completeHasVariationsKey = Object.hasOwn(data, 'variations');
+        if (Array.isArray(data.variations)) {
+          completeVariations = data.variations as Array<Record<string, unknown>>;
+        }
+        if (typeof data.asset_id === 'string') completeAssetId = data.asset_id;
+      }
+      if (event === 'error') streamError = String(data.message ?? 'unknown');
+    }
+  }
+
+  return {
+    status: 200,
+    error: streamError,
+    images,
+    completeVariations,
+    completeAssetId,
+    completeHasVariationsKey,
+    wireBytes,
+  };
+}
+
+async function runVariationCases(token: string): Promise<void> {
+  console.log('');
+  console.log('variations — num_images fans out into distinct persisted images');
+
+  const four = genNode({
+    model: 'nano-banana-2',
+    positivePrompt: 'a red sneaker on wet concrete, product photography',
+    aspectRatio: '1:1',
+    imageSize: '1K',
+    variationCount: 4,
+  });
+  const body = payloadFor(four);
+
+  check(
+    'the canvas node sends num_images=4 on the wire',
+    body.num_images === 4,
+    `num_images=${String(body.num_images)}`,
+  );
+
+  const outcome = await generateVariations(body as unknown as Record<string, unknown>, token);
+  if (outcome.status !== 200 || outcome.error) {
+    check('four-variation generation', false, `status=${outcome.status} ${outcome.error ?? ''}`);
+    return;
+  }
+
+  check(
+    'four image events came back, one per variation',
+    outcome.images.length === 4,
+    `${outcome.images.length} image event(s)`,
+  );
+  check(
+    'each image event is tagged with its own variation index',
+    JSON.stringify(outcome.images.map((image) => image.variationIndex)) === '[0,1,2,3]',
+    JSON.stringify(outcome.images.map((image) => image.variationIndex)),
+  );
+
+  // The URL-first requirement, and the thing a base64-shaped port would silently
+  // skip: four SEPARATE objects in storage, not one image announced four times.
+  const paths = new Set(outcome.images.map((image) => image.path).filter(Boolean));
+  check(
+    'each variation was persisted to its own storage path',
+    paths.size === 4,
+    `${paths.size} distinct path(s)`,
+  );
+  check(
+    'no variation leaked inline base64 on the success path',
+    outcome.images.every((image) => !image.base64 && image.delivery === 'durable'),
+  );
+
+  const assetIds = new Set(
+    (outcome.completeVariations ?? [])
+      .map((variation) => variation.asset_id)
+      .filter((assetId): assetId is string => typeof assetId === 'string'),
+  );
+  check(
+    'four distinct rows landed in the media asset ledger',
+    assetIds.size === 4,
+    `${assetIds.size} distinct asset id(s)`,
+  );
+  check(
+    'complete carries the per-variation manifest',
+    (outcome.completeVariations ?? []).length === 4,
+    `${(outcome.completeVariations ?? []).length} entries`,
+  );
+
+  // Every signed URL must actually resolve to bytes; a path recorded but never
+  // uploaded would pass every check above.
+  let downloadable = 0;
+  for (const image of outcome.images) {
+    if (!image.signedUrl) continue;
+    const res = await fetch(image.signedUrl);
+    if (res.ok && (await res.arrayBuffer()).byteLength > 1000) downloadable++;
+  }
+  check(
+    'every variation signed URL downloads real bytes',
+    downloadable === 4,
+    `${downloadable}/4 downloadable`,
+  );
+
+  // Downstream routing, against the URLs this run actually produced: an edge on
+  // image-2 must feed VARIATION 2 into the consumer's reference images.
+  const producedOutput: NodeOutput = {
+    type: 'images',
+    items: outcome.images.map((image) => ({
+      mimeType: 'image/png',
+      url: image.signedUrl,
+      storagePath: image.path,
+      storageBucket: image.bucket,
+    })),
+  };
+  const consumer = genNode({
+    model: 'nano-banana',
+    positivePrompt: 'use the reference',
+    aspectRatio: '1:1',
+  });
+  const consumerNode = { ...consumer, id: 'bench-consumer' } as StudioNode;
+  const variationEdge = {
+    id: 'e-variation',
+    source: 'bench-gen',
+    sourceHandle: 'image-2',
+    target: 'bench-consumer',
+    targetHandle: 'ref-image',
+  } as Edge;
+
+  const routed = toBackendPayload(
+    buildNanoGenPayload(
+      consumerNode,
+      new Map<string, NodeOutput>([['bench-gen', producedOutput]]),
+      [four, consumerNode],
+      [variationEdge],
+      BRAND_ID,
+    )!,
+  );
+  check(
+    'an image-2 edge routes variation 2 downstream, not variation 0',
+    routed.reference_images?.[0]?.image_url === outcome.images[2]?.signedUrl,
+    `routed=${routed.reference_images?.[0]?.image_url?.slice(-28) ?? '(none)'} expected=${outcome.images[2]?.signedUrl?.slice(-28) ?? '(none)'}`,
+  );
+
+  // Regression guard: a single-image run must be indistinguishable from what it
+  // was before variations existed.
+  const single = genNode({
+    model: 'nano-banana-2',
+    positivePrompt: 'a red sneaker on wet concrete, product photography',
+    aspectRatio: '1:1',
+    imageSize: '1K',
+    variationCount: 1,
+  });
+  const singleBody = payloadFor(single);
+  check(
+    'a single-image request sends no num_images at all',
+    singleBody.num_images === undefined,
+    `num_images=${String(singleBody.num_images)}`,
+  );
+
+  const singleOutcome = await generateVariations(
+    singleBody as unknown as Record<string, unknown>,
+    token,
+  );
+  check(
+    'a single-image run still emits exactly one image event',
+    singleOutcome.images.length === 1,
+    `${singleOutcome.images.length} image event(s)`,
+  );
+  check(
+    'a single-image complete carries no variations key',
+    !singleOutcome.completeHasVariationsKey,
+  );
+  check(
+    'a single-image run still registers its asset',
+    Boolean(singleOutcome.completeAssetId),
+    singleOutcome.completeAssetId,
+  );
+}
+
 async function main(): Promise<void> {
   console.log('── AI Studio image bench ─────────────────────────────────');
   console.log(`api    ${API}`);
@@ -456,6 +713,8 @@ async function main(): Promise<void> {
   } else {
     skip('negative-prompt paid generation', 'wire contract is checked above; use -- --full');
   }
+
+  await runVariationCases(token);
 
   note(
     'NOT covered by this run: the exact bytes of the Vertex request body. That the negative ' +

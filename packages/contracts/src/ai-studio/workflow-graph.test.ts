@@ -4,6 +4,7 @@ import {
   createNodeData,
   getAllowedSourceHandles,
   getAllowedTargetHandles,
+  getImageVariationHandleId,
   getStudioPortMetadata,
   getTargetHandleConnectionLimit,
   getVideoGeneratorImageReferenceHandle,
@@ -28,6 +29,7 @@ import {
   VIDEO_GENERATOR_MODELS,
   VIDEO_GENERATOR_REFERENCE_MODE_LABELS,
   validateConnection,
+  variationIndexFromHandle,
 } from './workflow-graph';
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) => ({
@@ -90,9 +92,46 @@ describe('handle vocabulary', () => {
   it('returns the single source handle per node type', () => {
     expect(getAllowedSourceHandles(node('s', 'string'))).toEqual(['text']);
     expect(getAllowedSourceHandles(node('i', 'image'))).toEqual(['image']);
-    expect(getAllowedSourceHandles(node('n', 'nanoGen'))).toEqual(['image']);
     expect(getAllowedSourceHandles(node('f', 'frameExtract'))).toEqual(['image']);
     expect(getAllowedTargetHandles(node('f', 'frameExtract'))).toEqual(['video']);
+  });
+
+  it('gives an image generator one source handle per variation, first one unnumbered', () => {
+    // The bare `image` id must stay first: it is what every pre-variation graph
+    // wired to, and it is what resolveConnection auto-picks.
+    expect(getAllowedSourceHandles(node('n', 'nanoGen'))).toEqual([
+      'image',
+      'image-1',
+      'image-2',
+      'image-3',
+    ]);
+  });
+
+  it('round-trips a variation index through its handle id', () => {
+    expect(getImageVariationHandleId(0)).toBe('image');
+    expect(getImageVariationHandleId(2)).toBe('image-2');
+    expect(variationIndexFromHandle('image')).toBe(0);
+    expect(variationIndexFromHandle('image-2')).toBe(2);
+  });
+
+  it('resolves an unknown, missing, or out-of-range variation handle to the first variation', () => {
+    expect(variationIndexFromHandle(undefined)).toBe(0);
+    expect(variationIndexFromHandle(null)).toBe(0);
+    expect(variationIndexFromHandle('ref-image')).toBe(0);
+    expect(variationIndexFromHandle('image-')).toBe(0);
+    expect(variationIndexFromHandle('image-nope')).toBe(0);
+    expect(variationIndexFromHandle('image-9')).toBe(0);
+    expect(variationIndexFromHandle('image--1')).toBe(0);
+  });
+
+  it('accepts a numbered variation edge out of an image generator', () => {
+    const workflowNodes = [node('gen', 'nanoGen'), node('consumer', 'nanoGen')];
+    const result = isValidConnection(
+      { source: 'gen', sourceHandle: 'image-2', target: 'consumer', targetHandle: 'ref-image' },
+      [],
+      workflowNodes,
+    );
+    expect(result).toBe(true);
   });
 
   it('connects a video to frame extraction and the extracted image to frame/reference inputs', () => {

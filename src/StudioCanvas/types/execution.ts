@@ -10,21 +10,28 @@ export type NodeExecutionState = {
   output?: NodeOutput;
 };
 
+// base64 is optional: under URL-first generation an image carries only a signed
+// URL (+ storage path/bucket). base64 is the emergency fallback.
+//
+// Shared by the single-image and multi-variation outputs so a variation can never
+// be a second-class image that skips storage, re-signing, or the asset ledger.
+export type ImageOutputItem = {
+  base64?: string;
+  mimeType: string;
+  url?: string;
+  storagePath?: string;
+  storageBucket?: string;
+  sizeBytes?: number;
+  assetId?: string;
+  assetVersionId?: string;
+};
+
 export type NodeOutput =
   | { type: 'text'; value: string }
-  // base64 is optional: under URL-first generation an image output carries only a
-  // signed URL (+ storage path/bucket). base64 is the emergency fallback.
-  | {
-      type: 'image';
-      base64?: string;
-      mimeType: string;
-      url?: string;
-      storagePath?: string;
-      storageBucket?: string;
-      sizeBytes?: number;
-      assetId?: string;
-      assetVersionId?: string;
-    }
+  | ({ type: 'image' } & ImageOutputItem)
+  // A `num_images` run: one item per variation, in variation_index order. The
+  // edge's sourceHandle picks which one a downstream node consumes.
+  | { type: 'images'; items: ImageOutputItem[] }
   | {
       type: 'video';
       url: string;
@@ -114,6 +121,9 @@ export interface GenerationPayload {
   aspectRatio?: string;
   resolution?: string;
   imageSize?: ImageSize;
+  // How many variations to generate. Omitted at 1 so a plain generation sends
+  // exactly the payload it always has.
+  numImages?: number;
   durationSeconds?: number;
   referenceImages?: Array<{
     data?: string;

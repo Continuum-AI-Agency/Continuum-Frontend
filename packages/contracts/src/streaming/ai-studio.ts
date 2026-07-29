@@ -11,7 +11,11 @@
 import { z } from 'zod';
 import { agentDelegatedFrameSchema } from '../agents/cross-agent';
 import { canvasGraphChangeSetSchema } from '../ai-studio/canvas-graph-change';
-import { studioEdgeSchema, studioNodeSchema } from '../ai-studio/workflow-graph';
+import {
+  IMAGE_VARIATION_LIMIT,
+  studioEdgeSchema,
+  studioNodeSchema,
+} from '../ai-studio/workflow-graph';
 import {
   responseDoneSchema,
   responseErrorSchema,
@@ -49,6 +53,16 @@ export const aiStudioReferenceImageSchema = z
   });
 export type AiStudioReferenceImage = z.infer<typeof aiStudioReferenceImageSchema>;
 
+// How many variations one image request asks for. Bounded by IMAGE_VARIATION_LIMIT
+// because that is how many source handles an image node can draw; the request
+// schema and the canvas must never disagree about the ceiling.
+export const aiStudioNumImagesSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(IMAGE_VARIATION_LIMIT)
+  .default(1);
+
 // Generation result for an image. `signed_url` + `bucket` + `path` are the
 // durable, authoritative outputs. Inline bytes are allowed only as a fallback
 // when persistence fails.
@@ -57,6 +71,10 @@ export const aiStudioImageResultEventSchema = z.object({
   signed_url: z.string().optional(),
   bucket: z.string().optional(),
   path: z.string().optional(),
+  // Which variation this event carries when the request asked for more than one
+  // (see aiStudioNumImagesSchema). Absent on single-image generations, which is
+  // why it is optional rather than defaulted — the FE treats absent as 0.
+  variation_index: z.number().int().min(0).optional(),
   resolution: z.string().optional(),
   delivery: z.enum(['durable', 'fallback']).optional(),
   size_bytes: z.number().int().nonnegative().optional(),

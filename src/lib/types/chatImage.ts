@@ -151,6 +151,7 @@ export type BackendChatImageRequestPayload = {
   };
   image_references?: { data?: string; image_url?: string; mime_type: string; filename?: string }[];
   negative_prompt?: string;
+  num_images?: number;
   // Creative-direction skill ids; the Backend folds their directives into the prompt.
   skill_ids?: string[];
   // Brand-book pieces tagged on the node; the Backend renders them into an

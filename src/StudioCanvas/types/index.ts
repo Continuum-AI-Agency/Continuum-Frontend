@@ -97,12 +97,29 @@ export interface NanoGenNodeData extends BaseNodeData {
   guidance?: number;
   scheduler?: string;
   promptEnhancement?: boolean;
+  // How many variations one run produces. 1 or IMAGE_VARIATION_LIMIT — the node
+  // draws one source handle per variation, so the ceiling is the handle count.
+  variationCount?: 1 | 4;
   generatedImage?: string | Blob;
   generatedImageUrl?: string;
   generatedImageStoragePath?: string;
   generatedImageBucket?: string;
   renderOutputAssetId?: string;
   renderOutputAssetVersionId?: string;
+  // One entry per variation, in handle order. Carries the SAME durable fields as
+  // the single-image case above; a variation that only held a data URL would skip
+  // re-signing and the asset ledger the moment its signed URL expired.
+  generatedImages?: GeneratedImageVariation[];
+}
+
+export interface GeneratedImageVariation {
+  // Signed URL when durable, base64 data URL only on the emergency fallback path.
+  preview: string;
+  url?: string;
+  storagePath?: string;
+  storageBucket?: string;
+  assetId?: string;
+  assetVersionId?: string;
 }
 
 export interface StringNodeData extends BaseNodeData {

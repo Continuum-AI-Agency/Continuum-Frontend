@@ -1,4 +1,8 @@
-import { coerceImageSize, imageResolutionFor } from '@continuum/contracts';
+import {
+  coerceImageSize,
+  imageResolutionFor,
+  variationIndexFromHandle,
+} from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import type {
   BackendChatImageRequestPayload,
@@ -47,15 +51,28 @@ type ImageRef = {
 const isHttpUrl = (value?: string | null): value is string =>
   typeof value === 'string' && /^https?:\/\//i.test(value.trim());
 
-const imageRefFromOutput = (output: NodeOutput | undefined): ImageRef | undefined => {
-  if (output?.type !== 'image') return undefined;
-  if (output.base64) return { data: output.base64, mimeType: output.mimeType };
-  if (isHttpUrl(output.url)) {
+// The one place an upstream image output becomes a reference, for both the
+// single-image and multi-variation shapes. A variation is chosen by the edge's
+// source handle and then resolved identically — routing lives here rather than
+// being re-derived at each of the four call sites.
+const imageRefFromOutput = (
+  output: NodeOutput | undefined,
+  sourceHandle?: string | null,
+): ImageRef | undefined => {
+  const item =
+    output?.type === 'image'
+      ? output
+      : output?.type === 'images'
+        ? (output.items[variationIndexFromHandle(sourceHandle)] ?? output.items[0])
+        : undefined;
+  if (!item) return undefined;
+  if (item.base64) return { data: item.base64, mimeType: item.mimeType };
+  if (isHttpUrl(item.url)) {
     return {
-      imageUrl: output.url.trim(),
-      mimeType: output.mimeType,
-      storageBucket: output.storageBucket,
-      storagePath: output.storagePath,
+      imageUrl: item.url.trim(),
+      mimeType: item.mimeType,
+      storageBucket: item.storageBucket,
+      storagePath: item.storagePath,
     };
   }
   return undefined;
@@ -102,8 +119,8 @@ function resolveInputValue(
     if (sourceOutput.type === 'text') {
       return { text: sourceOutput.value };
     }
-    if (sourceOutput.type === 'image') {
-      const ref = imageRefFromOutput(sourceOutput);
+    if (sourceOutput.type === 'image' || sourceOutput.type === 'images') {
+      const ref = imageRefFromOutput(sourceOutput, incomingEdge.sourceHandle);
       return ref ? { image: ref.data, imageUrl: ref.imageUrl } : undefined;
     }
     return undefined;
@@ -260,7 +277,7 @@ async function resolveImageInput(
   | undefined
 > {
   const output = resolvedData.get(edge.source);
-  const outputRef = imageRefFromOutput(output);
+  const outputRef = imageRefFromOutput(output, edge.sourceHandle);
   if (outputRef) {
     return { data: outputRef.data, imageUrl: outputRef.imageUrl, mimeType: outputRef.mimeType };
   }
@@ -543,7 +560,7 @@ export function buildNanoGenPayload(
         }
       }
 
-      const ref = imageRefFromOutput(output);
+      const ref = imageRefFromOutput(output, edge.sourceHandle);
       if (ref) {
         return {
           data: ref.data,
@@ -604,6 +621,7 @@ export function buildNanoGenPayload(
     aspectRatio: data.aspectRatio || '16:9',
     resolution,
     imageSize,
+    numImages: data.variationCount && data.variationCount > 1 ? data.variationCount : undefined,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
     referenceAssetIds: referenceAssetIds.length > 0 ? referenceAssetIds : undefined,
     skillIds: data.skillIds && data.skillIds.length > 0 ? data.skillIds : undefined,
@@ -716,7 +734,7 @@ export function buildVeoPayload(
                 }
               }
 
-              const ref = imageRefFromOutput(output);
+              const ref = imageRefFromOutput(output, edge.sourceHandle);
               if (ref) {
                 return {
                   data: ref.data,
@@ -866,6 +884,7 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
       weight: img.weight,
       referenceType: img.referenceType,
     })),
+    num_images: payload.numImages,
     skill_ids: payload.skillIds,
     brand_book_pieces: payload.brandBookPieces,
     reference_asset_ids: payload.referenceAssetIds,

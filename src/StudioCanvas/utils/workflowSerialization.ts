@@ -105,6 +105,18 @@ function stripRuntimeNodeData(
     expiringOutputKeys.forEach((key) => {
       delete next[key];
     });
+
+    // Same rule per variation: the preview and signed URL expire, the storage
+    // coordinates and asset ids do not. Dropping the array outright would lose
+    // the variation COUNT too, and the node would reload as a single image with
+    // its image-N edges pointing at handles it no longer draws.
+    if (Array.isArray(next.generatedImages)) {
+      next.generatedImages = next.generatedImages.map((variation) => {
+        if (!variation || typeof variation !== 'object') return variation;
+        const { preview, url, ...durable } = variation as Record<string, unknown>;
+        return durable;
+      });
+    }
   }
 
   if (Array.isArray(next.inputs)) {

@@ -18,9 +18,11 @@
 import { describe, expect, it } from 'bun:test';
 import {
   getAllowedTargetHandles,
+  getImageVariationHandleId,
   getVideoGeneratorReferenceModes,
   resolveVideoGeneratorModel,
   resolveVideoGeneratorReferenceMode,
+  variationIndexFromHandle,
   VIDEO_GENERATOR_MODELS,
   type VideoGeneratorModel,
   type VideoGeneratorReferenceMode,
@@ -30,9 +32,10 @@ import { cleanup, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { ImageGenBlock } from './nodes/ImageGenBlock';
 import { VideoGenBlock } from './nodes/VideoGenBlock';
 import { useStudioStore } from './stores/useStudioStore';
-import type { VideoGenNodeData } from './types';
+import type { NanoGenNodeData, VideoGenNodeData } from './types';
 
 interface Lane {
   readonly label: string;
@@ -234,5 +237,127 @@ describe('studio handle parity — rendered handles are the handles the graph ke
         useStudioStore.getState().nodes.find((n) => n.id === 'vid1') as { data: object },
       ),
     ).toBe('frames');
+  });
+});
+
+/**
+ * Same law, source side: the variation handles an image node DRAWS must be the
+ * handles `normalizeEdges` KEEPS.
+ *
+ * `getAllowedSourceHandles` used to return exactly `['image']` for nanoGen, and
+ * normalizeEdges DROPS any edge whose source handle is outside that set — with
+ * only a console.warn. So an `image-2` edge would vanish from the graph while the
+ * node happily rendered a handle for it. That is the invisible-edge failure the
+ * video half of this bench exists to catch, arrived at from the other direction.
+ */
+function renderedSourceHandleIds(data: Partial<NanoGenNodeData>): string[] {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const { container } = render(
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>
+        <ReactFlowProvider>
+          <ImageGenBlock
+            id="gen1"
+            type="nanoGen"
+            data={data as NanoGenNodeData}
+            selected={false}
+            zIndex={0}
+            isConnectable
+            positionAbsoluteX={0}
+            positionAbsoluteY={0}
+            dragging={false}
+            draggable
+            selectable
+            deletable
+          />
+        </ReactFlowProvider>
+      </ToastProvider>
+    </QueryClientProvider>,
+  );
+
+  const ids = Array.from(container.querySelectorAll('[data-handleid]'))
+    .filter((el) => el.getAttribute('data-handlepos') === 'right')
+    .map((el) => el.getAttribute('data-handleid') ?? '');
+
+  cleanup();
+  return ids.filter(Boolean);
+}
+
+const imageNode = (data: Partial<NanoGenNodeData>) => ({
+  id: 'gen1',
+  position: { x: 0, y: 0 },
+  type: 'nanoGen',
+  data,
+});
+
+describe('studio handle parity — image variation handles survive the store', () => {
+  const baseData: Partial<NanoGenNodeData> = {
+    model: 'nano-banana',
+    positivePrompt: 'a cat',
+    aspectRatio: '1:1',
+  };
+
+  it('draws one source handle per requested variation', () => {
+    expect(renderedSourceHandleIds({ ...baseData, variationCount: 1 })).toEqual(['image']);
+    expect(renderedSourceHandleIds({ ...baseData, variationCount: 4 })).toEqual([
+      'image',
+      'image-1',
+      'image-2',
+      'image-3',
+    ]);
+    // No variationCount at all is the pre-variation graph: one bare `image` handle.
+    expect(renderedSourceHandleIds(baseData)).toEqual(['image']);
+  });
+
+  it('keeps an edge on every handle it drew', () => {
+    const drawn = renderedSourceHandleIds({ ...baseData, variationCount: 4 });
+
+    useStudioStore.setState({ nodes: [], edges: [] });
+    useStudioStore.getState().setNodes([
+      imageNode({ ...baseData, variationCount: 4 }),
+      { id: 'consumer', position: { x: 400, y: 0 }, type: 'nanoGen', data: baseData },
+      // biome-ignore lint/suspicious/noExplicitAny: StudioNode['type'] is a closed union; the matrix is the point
+    ] as any);
+    useStudioStore.getState().setEdges(
+      drawn.map((sourceHandle, index) => ({
+        id: `e-${sourceHandle}`,
+        source: 'gen1',
+        sourceHandle,
+        target: 'consumer',
+        targetHandle: 'ref-image',
+        type: 'dataType',
+      })),
+    );
+
+    const kept = useStudioStore.getState().edges;
+    expect(kept.map((edge) => edge.sourceHandle)).toEqual(drawn);
+  });
+
+  it('rejects a handle beyond the variation ceiling instead of silently keeping it', () => {
+    useStudioStore.setState({ nodes: [], edges: [] });
+    useStudioStore.getState().setNodes([
+      imageNode({ ...baseData, variationCount: 4 }),
+      { id: 'consumer', position: { x: 400, y: 0 }, type: 'nanoGen', data: baseData },
+      // biome-ignore lint/suspicious/noExplicitAny: StudioNode['type'] is a closed union; the matrix is the point
+    ] as any);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e-image-9',
+        source: 'gen1',
+        sourceHandle: 'image-9',
+        target: 'consumer',
+        targetHandle: 'ref-image',
+        type: 'dataType',
+      },
+    ]);
+    expect(useStudioStore.getState().edges).toHaveLength(0);
+  });
+
+  it('every drawn handle round-trips through the contract that names it', () => {
+    const drawn = renderedSourceHandleIds({ ...baseData, variationCount: 4 });
+    drawn.forEach((handleId, index) => {
+      expect(handleId).toBe(getImageVariationHandleId(index));
+      expect(variationIndexFromHandle(handleId)).toBe(index);
+    });
   });
 });
