@@ -20368,18 +20368,19 @@ export type Database = {
         Returns: {
           ad_account_id: string
           apply_mode: string
-          apply_mode_changed_by: string
-          autopilot_paused: boolean
           brand_id: string
+          budget_source: string
           config: Json
           cpa_target: number
           daily_total: number
           id: string
           level: string
-          max_change_pct_per_cycle: number
-          max_daily_apply_minor: number
+          lookback_window: string
           mode: string
           objective: string
+          period_budget: number
+          period_end: string
+          period_start: string
         }[]
       }
       optimizer_claim_next_creative_swap_job: {
@@ -20475,7 +20476,7 @@ export type Database = {
       }
       optimizer_enroll_adset: {
         Args: { p_adsets: Json; p_portfolio_id: string }
-        Returns: number
+        Returns: Json
       }
       optimizer_expire_stale_recommendations: {
         Args: { p_days?: number }
@@ -20605,6 +20606,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      optimizer_get_timeline_events: {
+        Args: { p_limit?: number; p_portfolio_id: string }
+        Returns: Json
+      }
       optimizer_grant_approve_recommendation: {
         Args: { p_rec_id: string; p_rule_id: string }
         Returns: boolean
@@ -20616,6 +20621,14 @@ export type Database = {
           p_worker_id: string
         }
         Returns: boolean
+      }
+      optimizer_list_account_enrollments: {
+        Args: { p_ad_account_id?: string; p_brand_id: string }
+        Returns: {
+          adset_id: string
+          portfolio_id: string
+          portfolio_name: string
+        }[]
       }
       optimizer_list_archived_portfolios: {
         Args: { p_brand_id: string }
@@ -20639,6 +20652,8 @@ export type Database = {
           active: boolean
           adset_id: string
           adset_name: string
+          last_seen_at: string
+          missing_since: string
         }[]
       }
       optimizer_list_portfolios: { Args: { p_brand_id: string }; Returns: Json }
@@ -20651,23 +20666,32 @@ export type Database = {
         Returns: {
           ad_account_id: string
           apply_mode: string
-          apply_mode_changed_by: string
-          autopilot_paused: boolean
           brand_id: string
+          budget_source: string
           config: Json
           cpa_target: number
           daily_total: number
           id: string
           level: string
-          max_change_pct_per_cycle: number
-          max_daily_apply_minor: number
+          lookback_window: string
           mode: string
           objective: string
+          period_budget: number
+          period_end: string
+          period_start: string
         }[]
       }
       optimizer_mark_apply_results: {
         Args: { p_results: Json; p_run_id: string }
         Returns: number
+      }
+      optimizer_mark_roster_presence: {
+        Args: {
+          p_portfolio_id: string
+          p_seen_at: string
+          p_seen_ids: string[]
+        }
+        Returns: Json
       }
       optimizer_reconcile_cycle_items: {
         Args: { p_run_id: string }

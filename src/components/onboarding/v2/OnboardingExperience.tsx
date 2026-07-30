@@ -104,15 +104,21 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   const [domain, setDomain] = useState<string>(initialState.brand.website ?? defaultUrl ?? '');
   const { start, patch, jobs, reset } = useBackgroundJobs();
   const { brandId, resetState, state, updateState } = useOnboarding();
+  const emailReportOptInRef = useRef(state.emailReportOptIn ?? true);
 
   const navigate = useCallback(
-    (next: ScreenIndex) => {
+    async (next: ScreenIndex): Promise<boolean> => {
       directionRef.current = next > screen ? 1 : -1;
-      setScreen(next);
       if (next > persistedStepRef.current) {
-        persistedStepRef.current = next;
-        void updateState({ step: next });
+        try {
+          await updateState({ step: next });
+          persistedStepRef.current = next;
+        } catch {
+          return false;
+        }
       }
+      setScreen(next);
+      return true;
     },
     [screen, updateState],
   );
@@ -122,7 +128,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   const prewarmedRef = useRef(false);
   const launchInFlightRef = useRef(false);
   const launchKeyRef = useRef<string | null>(null);
-  const [selectedInspiration, setSelectedInspiration] = useState<SelectedInspiration | null>(null);
+  const selectedInspiration: SelectedInspiration | null = state.selectedInspiration;
 
   const ensureLaunchKey = () => {
     if (!launchKeyRef.current) {
@@ -239,7 +245,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
             reason: 'no_connected_instagram',
           });
         }
-        navigate(skipInspirations ? 6 : 5);
+        await navigate(skipInspirations ? 6 : 5);
       } catch (error) {
         show({
           title: "Couldn't continue",
@@ -256,6 +262,10 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     const launchTimer = timing();
     startLaunch(async () => {
       try {
+        // Drain any in-flight switch mutation through the serialized queue before
+        // completion. Otherwise a fast toggle + Finish click can persist completedAt
+        // while the previous email preference is still in flight.
+        await updateState({ emailReportOptIn: emailReportOptInRef.current });
         await completeOnboardingAction(brandId);
         useBrandProfileRevealCache.getState().invalidateBrand(brandId);
         trackOnboardingEvent('onboarding_launch_succeeded', {
@@ -282,10 +292,10 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       useBrandProfileRevealCache.getState().invalidateUrl(brandId, domain);
     }
     setDomain(url);
-    navigate(1); // Documents
+    if (!(await navigate(1))) return; // Documents
     patch('agentPreview', emptyBuckets());
 
-    const scrapePromise = start('scrape', (signal) => runScrape(url, signal));
+    const scrapePromise = start('scrape', (signal) => runScrape(brandId, url, signal));
 
     const supabase = createSupabaseBrowserClient();
     const { data } = await supabase.auth.getUser();
@@ -426,17 +436,17 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   );
 
   const onStepClick = (id: ShellPillId) => {
-    if (id === 'website') navigate(0);
-    if (id === 'documents' && screen >= 1) navigate(1);
-    if (id === 'integrations' && screen >= 2) navigate(2);
-    if (id === 'invites' && screen >= 3) navigate(3);
-    if (id === 'dna' && screen >= 4) navigate(4);
+    if (id === 'website') void navigate(0);
+    if (id === 'documents' && screen >= 1) void navigate(1);
+    if (id === 'integrations' && screen >= 2) void navigate(2);
+    if (id === 'invites' && screen >= 3) void navigate(3);
+    if (id === 'dna' && screen >= 4) void navigate(4);
   };
 
   const { hint, actions } = useBottomBar({
     screen,
     navigate,
-    onChangeUrl: () => navigate(0),
+    onChangeUrl: () => void navigate(0),
     onLaunch: handleLaunch,
     onContinueToInspirations: handleContinueToInspirations,
     inspirationsEnabled: INSPIRATIONS_ENABLED,
@@ -633,7 +643,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
           ) : screen === 1 ? (
             <DocumentsScreen totalSteps={TOTAL_STEPS} />
           ) : screen === 2 ? (
-            <IntegrationsScreen onAdvance={() => navigate(3)} />
+            <IntegrationsScreen onAdvance={() => void navigate(3)} />
           ) : screen === 3 ? (
             <InvitesScreen totalSteps={TOTAL_STEPS} />
           ) : screen === 4 ? (
@@ -646,18 +656,22 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
             <CompetitorInspirationsScreen
               brandId={brandId}
               selected={selectedInspiration}
-              onSelect={setSelectedInspiration}
-              onContinue={() => navigate(6)}
-              onBack={() => navigate(4)}
+              onSelect={(selection) => void updateState({ selectedInspiration: selection })}
+              onContinue={() => void navigate(6)}
+              onBack={() => void navigate(4)}
             />
           ) : (
             <InspirationGenerationScreen
               brandId={brandId}
               onFinish={handleFinishToDashboard}
               finishing={launching}
-              onBack={() => navigate(hasConnectedInstagram(state) ? 5 : 4)}
+              onBack={() => void navigate(hasConnectedInstagram(state) ? 5 : 4)}
               emailReportOptIn={state.emailReportOptIn ?? true}
-              onEmailReportOptInChange={(value) => void updateState({ emailReportOptIn: value })}
+              onEmailReportOptInChange={(value) => {
+                emailReportOptInRef.current = value;
+                void updateState({ emailReportOptIn: value });
+              }}
+              selectedInspiration={selectedInspiration}
             />
           )}
         </motion.div>
@@ -701,7 +715,7 @@ function resumeScreenFor(state: OnboardingState): ScreenIndex {
   if (hasInvites) dataFloor = 4;
   if (hasDna) dataFloor = 4;
 
-  const persistedStep = Math.min(4, Math.max(0, state.step ?? 0)) as ScreenIndex;
+  const persistedStep = Math.min(6, Math.max(0, state.step ?? 0)) as ScreenIndex;
   return Math.max(persistedStep, dataFloor) as ScreenIndex;
 }
 
@@ -721,7 +735,7 @@ function useBottomBar({
   launching,
 }: {
   screen: ScreenIndex;
-  navigate: (next: ScreenIndex) => void;
+  navigate: (next: ScreenIndex) => Promise<boolean>;
   onChangeUrl: () => void;
   onLaunch: () => void;
   onContinueToInspirations: () => void;
@@ -742,10 +756,10 @@ function useBottomBar({
           <Button variant="outline" size="sm" onClick={onChangeUrl}>
             ← Change URL
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => navigate(2)}>
+          <Button variant="ghost" size="sm" onClick={() => void navigate(2)}>
             Skip for now
           </Button>
-          <Button variant="default" size="sm" onClick={() => navigate(2)}>
+          <Button variant="default" size="sm" onClick={() => void navigate(2)}>
             Continue →
           </Button>
         </>
@@ -757,13 +771,13 @@ function useBottomBar({
       hint: '',
       actions: (
         <>
-          <Button variant="outline" size="sm" onClick={() => navigate(1)}>
+          <Button variant="outline" size="sm" onClick={() => void navigate(1)}>
             ← Back
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => navigate(3)}>
+          <Button variant="ghost" size="sm" onClick={() => void navigate(3)}>
             Skip for now
           </Button>
-          <Button variant="default" size="sm" onClick={() => navigate(3)}>
+          <Button variant="default" size="sm" onClick={() => void navigate(3)}>
             Continue →
           </Button>
         </>
@@ -775,13 +789,13 @@ function useBottomBar({
       hint: 'Add teammates — or invite them later from Settings.',
       actions: (
         <>
-          <Button variant="outline" size="sm" onClick={() => navigate(2)}>
+          <Button variant="outline" size="sm" onClick={() => void navigate(2)}>
             ← Back
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => navigate(4)}>
+          <Button variant="ghost" size="sm" onClick={() => void navigate(4)}>
             Skip for now
           </Button>
-          <Button variant="default" size="sm" onClick={() => navigate(4)}>
+          <Button variant="default" size="sm" onClick={() => void navigate(4)}>
             {dnaReady ? 'Reveal Brand DNA →' : 'Continue →'}
           </Button>
         </>

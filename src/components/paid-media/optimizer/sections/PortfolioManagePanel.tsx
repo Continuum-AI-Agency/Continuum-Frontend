@@ -96,6 +96,45 @@ export function adsetsThatStopMatching<T extends { id: string; kpiField?: string
   );
 }
 
+/** Enrolled entities the optimizer can no longer find on Meta — paused, deleted, or flipped
+ *  to CBO in Ads Manager. They stay enrolled on purpose: releasing a claim frees it for
+ *  another portfolio and changes what the optimizer spends against, so it is a human call.
+ *  Without this the roster reads "13 ad sets" while the cycle scores 2, and the operator has
+ *  no way to know which. Deselecting a row in the picker above and saving releases it. */
+export function DriftedEnrollments({
+  rows,
+}: {
+  rows: { adset_id: string; adset_name: string | null; missing_since?: string | null }[];
+}) {
+  const drifted = rows.filter((row) => Boolean(row.missing_since));
+  if (drifted.length === 0) return null;
+  const label = drifted.length === 1 ? 'ad set is' : 'ad sets are';
+  return (
+    <div
+      className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-2xs"
+      role="status"
+    >
+      <p className="font-medium text-warning">
+        {drifted.length} enrolled {label} no longer active on Meta
+      </p>
+      <ul className="mt-1 space-y-0.5 text-muted-foreground">
+        {drifted.slice(0, 5).map((row) => (
+          <li key={row.adset_id}>
+            {row.adset_name ?? row.adset_id}
+            {row.missing_since ? ` — since ${row.missing_since.slice(0, 10)}` : ''}
+          </li>
+        ))}
+      </ul>
+      {drifted.length > 5 ? (
+        <p className="mt-1 text-muted-foreground">+{drifted.length - 5} more</p>
+      ) : null}
+      <p className="mt-1 text-muted-foreground">
+        They still hold their enrollment. Deselect them above and save to release them.
+      </p>
+    </div>
+  );
+}
+
 /** One-line explanation of each optimization mode, shown under the Mode select as it changes.
  *  Radix select items don't nest tooltips cleanly, so the hint updates with the selection. */
 function modeExplainer(mode: string): string {
@@ -819,6 +858,7 @@ export function PortfolioManagePanel({
             {toRemove.length > 0 ? `−${toRemove.length} to remove` : ''}
           </p>
         ) : null}
+        <DriftedEnrollments rows={enrolledRead.data} />
       </div>
 
       {error ? (

@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Jaina stream frame definitions — cross-side type contract.
  *
@@ -17,6 +19,76 @@ export type JainaStreamEvent<TType extends string = string, TData = Record<strin
   type: TType;
   data?: TData;
 };
+
+export const jainaExecutionObjectiveStatusSchema = z.enum([
+  'pending',
+  'in_progress',
+  'blocked',
+  'deferred',
+  'partial',
+  'completed',
+  'failed',
+  'cancelled',
+]);
+
+export type JainaExecutionObjectiveStatus = z.infer<typeof jainaExecutionObjectiveStatusSchema>;
+
+export const jainaExecutionObjectiveSchema = z.object({
+  id: z.string(),
+  objective_key: z.string().nullable().default(null),
+  title: z.string(),
+  description: z.string().nullable().default(null),
+  status: jainaExecutionObjectiveStatusSchema,
+  scope: z.string().nullable().default(null),
+  reason_code: z.string().nullable().default(null),
+  details: z.string().nullable().default(null),
+  attempt_count: z.number().int().nonnegative().default(0),
+  version: z.number().int().nonnegative().default(0),
+  not_before: z.string().nullable().default(null),
+  last_attempt_at: z.string().nullable().default(null),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export type JainaExecutionObjective = z.infer<typeof jainaExecutionObjectiveSchema>;
+
+export const jainaExecutionAttemptStatusSchema = z.enum([
+  'pending',
+  'claimed',
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+]);
+
+export const jainaExecutionAttemptSchema = z.object({
+  attempt_id: z.string(),
+  objective_id: z.string(),
+  attempt_number: z.number().int().positive(),
+  status: jainaExecutionAttemptStatusSchema,
+  runtime_id: z.string().nullable().default(null),
+  started_at: z.string().nullable().default(null),
+  heartbeat_at: z.string().nullable().default(null),
+  completed_at: z.string().nullable().default(null),
+  error_code: z.string().nullable().default(null),
+});
+
+export type JainaExecutionAttempt = z.infer<typeof jainaExecutionAttemptSchema>;
+
+export const jainaObjectivesEventDataSchema = z.object({
+  plan_id: z.string().nullable().default(null),
+  objectives: z.array(jainaExecutionObjectiveSchema),
+});
+
+export type JainaObjectivesEventData = z.infer<typeof jainaObjectivesEventDataSchema>;
+
+export const jainaObjectiveUpdatedEventDataSchema = z.object({
+  objective: jainaExecutionObjectiveSchema,
+  previous_status: jainaExecutionObjectiveStatusSchema.nullable().default(null),
+  transition_id: z.string().nullable().default(null),
+});
+
+export type JainaObjectiveUpdatedEventData = z.infer<typeof jainaObjectiveUpdatedEventDataSchema>;
 
 // ---------------------------------------------------------------------------
 // Forwardable event types (whitelist enforced by Jaina BE server.ts)
@@ -40,6 +112,21 @@ export type JainaForwardableType =
   | 'response.objective.updated'
   | 'response.report_artifact_job.started'
   | 'response.block.delta'
+  // The strategist's live prose. The Backend allowlist
+  // (App/agents-ts/Jaina/src/runtime/server.ts, forwardableEventSchema) has
+  // permitted this since the prose-first work; this union had drifted behind it,
+  // so a parity spec between the two could not pass. Verified 2026-07-29.
+  | 'response.output_text.delta'
+  // Human-in-the-loop tool approval. 'tool.approval_required' deliberately reuses
+  // the name Organic already emits (App/organic/agent/src/agents/agent.ts) so both
+  // agents present ONE mental model to the Frontend.
+  | 'tool.approval_required'
+  | 'tool.approval_resolved'
+  | 'tool.output_denied'
+  // Paid campaign scaffolding lifecycle (proposal → per-step progress → receipt).
+  | 'paid.scaffold_proposed'
+  | 'paid.scaffold_progress'
+  | 'paid.scaffold_receipt'
   | 'adk.event'
   | 'error';
 

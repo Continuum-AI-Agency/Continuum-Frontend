@@ -4,17 +4,28 @@
 // stream/response interpreters. See streaming/onboarding-inspirations.ts for the
 // progressive NDJSON frames that carry these payloads.
 
-import { z } from "zod";
-import { httpUrlSchema } from "./_shared";
+import { z } from 'zod';
+import { httpUrlSchema } from './_shared';
 
 // Platform an inspiration item was pulled from.
 export const inspirationSourceSchema = z.enum([
-  "instagram",
-  "meta_ad_library",
-  "facebook",
-  "tiktok",
+  'instagram',
+  'meta_ad_library',
+  'facebook',
+  'tiktok',
 ]);
 export type InspirationSource = z.infer<typeof inspirationSourceSchema>;
+
+// The exact competitor creative a user chose during onboarding. This is shared
+// by persisted onboarding state and the generation request so the selection does
+// not disappear on navigation/resume or drift between the UI and generator.
+export const onboardingInspirationSelectionSchema = z
+  .object({
+    competitorName: z.string().min(1),
+    imageUrl: z.string().min(1),
+  })
+  .strict();
+export type OnboardingInspirationSelection = z.infer<typeof onboardingInspirationSelectionSchema>;
 
 export const inspirationMetricsSchema = z
   .object({
@@ -83,25 +94,17 @@ export type CompetitorInspiration = z.infer<typeof competitorInspirationSchema>;
 export const onboardingInspirationsRequestSchema = z
   .object({ brandId: z.string().min(1) })
   .strict();
-export type OnboardingInspirationsRequest = z.infer<
-  typeof onboardingInspirationsRequestSchema
->;
+export type OnboardingInspirationsRequest = z.infer<typeof onboardingInspirationsRequestSchema>;
 
 export const onboardingInspirationsResultSchema = z
   .object({ competitors: z.array(competitorInspirationSchema).default([]) })
   .strict();
-export type OnboardingInspirationsResult = z.infer<
-  typeof onboardingInspirationsResultSchema
->;
+export type OnboardingInspirationsResult = z.infer<typeof onboardingInspirationsResultSchema>;
 
 // Generation ---------------------------------------------------------------
 
 // The auto-spread directions for the three generations.
-export const generationDirectionSchema = z.enum([
-  "product",
-  "brand_awareness",
-  "hybrid",
-]);
+export const generationDirectionSchema = z.enum(['product', 'brand_awareness', 'hybrid']);
 export type GenerationDirection = z.infer<typeof generationDirectionSchema>;
 
 export const onboardingGenerateRequestSchema = z
@@ -115,9 +118,7 @@ export const onboardingGenerateRequestSchema = z
     competitorName: z.string().min(1).nullable().optional(),
   })
   .strict();
-export type OnboardingGenerateRequest = z.infer<
-  typeof onboardingGenerateRequestSchema
->;
+export type OnboardingGenerateRequest = z.infer<typeof onboardingGenerateRequestSchema>;
 
 export const onboardingGeneratedImageSchema = z
   .object({
@@ -126,13 +127,9 @@ export const onboardingGeneratedImageSchema = z
     direction: generationDirectionSchema,
   })
   .strict();
-export type OnboardingGeneratedImage = z.infer<
-  typeof onboardingGeneratedImageSchema
->;
+export type OnboardingGeneratedImage = z.infer<typeof onboardingGeneratedImageSchema>;
 
 export const onboardingGenerateResultSchema = z
   .object({ images: z.array(onboardingGeneratedImageSchema).default([]) })
   .strict();
-export type OnboardingGenerateResult = z.infer<
-  typeof onboardingGenerateResultSchema
->;
+export type OnboardingGenerateResult = z.infer<typeof onboardingGenerateResultSchema>;

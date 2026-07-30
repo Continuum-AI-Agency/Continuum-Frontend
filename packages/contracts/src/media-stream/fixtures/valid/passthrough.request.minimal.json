@@ -1,0 +1,12 @@
+{
+  "jobId": "job-minimal-1",
+  "scope": { "tenantId": "11111111-1111-4111-8111-111111111111" },
+  "source": {
+    "url": "https://example.test/a.bin"
+  },
+  "destination": {
+    "storeId": "continuum-primary",
+    "bucket": "media-source",
+    "key": "11111111-1111-4111-8111-111111111111/staged/a.bin"
+  }
+}

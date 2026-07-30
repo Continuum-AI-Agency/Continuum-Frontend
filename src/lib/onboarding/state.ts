@@ -1,4 +1,4 @@
-import { documentCategorySchema } from '@continuum/contracts';
+import { documentCategorySchema, onboardingInspirationSelectionSchema } from '@continuum/contracts';
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import { z } from 'zod';
 import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
@@ -187,7 +187,7 @@ export const brandInviteSchema = z.object({
 });
 
 const onboardingStateSchema = z.object({
-  step: z.number().int().min(0).max(4),
+  step: z.number().int().min(0).max(6),
   brand: brandSchema,
   documents: z.array(onboardingDocumentSchema),
   connections: z.object(connectionShape),
@@ -195,6 +195,7 @@ const onboardingStateSchema = z.object({
   invites: z.array(brandInviteSchema),
   completedAt: z.union([isoDateString, z.null()]).nullable(),
   emailReportOptIn: z.boolean().default(true),
+  selectedInspiration: onboardingInspirationSelectionSchema.nullable().default(null),
   preview: z
     .object({
       completedAt: isoDateString,
@@ -205,7 +206,7 @@ const onboardingStateSchema = z.object({
 });
 
 const onboardingPatchSchema = z.object({
-  step: z.number().int().min(0).max(4).optional(),
+  step: z.number().int().min(0).max(6).optional(),
   brand: brandSchema.partial().optional(),
   documents: z.array(onboardingDocumentSchema).optional(),
   connections: z.object(connectionPatchShape).partial().optional(),
@@ -213,6 +214,7 @@ const onboardingPatchSchema = z.object({
   invites: z.array(brandInviteSchema).optional(),
   completedAt: z.union([isoDateString, z.null()]).nullable().optional(),
   emailReportOptIn: z.boolean().optional(),
+  selectedInspiration: onboardingInspirationSelectionSchema.nullable().optional(),
   preview: z
     .object({
       completedAt: isoDateString,
@@ -242,6 +244,12 @@ export type BrandVoiceTag = z.infer<typeof brandVoiceTagSchema>;
 export function normalizeOnboardingState(raw: unknown): OnboardingState {
   return onboardingStateSchema.parse(raw);
 }
+
+export type OnboardingStateRepairResult = {
+  state: OnboardingState;
+  repaired: boolean;
+  issues: string[];
+};
 
 function makeDefaultConnectionState(): OnboardingConnectionState {
   return {
@@ -291,8 +299,79 @@ export function createDefaultOnboardingState(owner?: BrandMember): OnboardingSta
     invites: [],
     completedAt: null,
     emailReportOptIn: true,
+    selectedInspiration: null,
     preview: null,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function repairOnboardingState(
+  raw: unknown,
+  owner?: BrandMember,
+): OnboardingStateRepairResult {
+  const parsed = onboardingStateSchema.safeParse(raw);
+  if (parsed.success) {
+    return { state: parsed.data, repaired: false, issues: [] };
+  }
+
+  let state = createDefaultOnboardingState(owner);
+  const issues = parsed.error.issues.map((issue) => {
+    const path = issue.path.length > 0 ? issue.path.join('.') : 'state';
+    return `${path}: ${issue.message}`;
+  });
+
+  if (!isRecord(raw)) {
+    return { state, repaired: true, issues };
+  }
+
+  const topLevelKeys = [
+    'step',
+    'documents',
+    'members',
+    'invites',
+    'completedAt',
+    'emailReportOptIn',
+    'selectedInspiration',
+    'preview',
+  ] as const;
+
+  for (const key of topLevelKeys) {
+    if (!(key in raw)) continue;
+    const candidate = onboardingPatchSchema.safeParse({ [key]: raw[key] });
+    if (candidate.success) {
+      state = mergeOnboardingState(state, candidate.data);
+    }
+  }
+
+  if (isRecord(raw.brand)) {
+    for (const [key, value] of Object.entries(raw.brand)) {
+      const candidate = onboardingPatchSchema.safeParse({ brand: { [key]: value } });
+      const parsedBrand = candidate.success ? candidate.data.brand : undefined;
+      if (parsedBrand && key in parsedBrand) {
+        state = mergeOnboardingState(state, {
+          brand: {
+            [key]: parsedBrand[key as keyof OnboardingBrand],
+          } as OnboardingPatch['brand'],
+        });
+      }
+    }
+  }
+
+  if (isRecord(raw.connections)) {
+    for (const key of PLATFORM_KEYS) {
+      const value = raw.connections[key];
+      if (value === undefined) continue;
+      const candidate = onboardingPatchSchema.safeParse({ connections: { [key]: value } });
+      if (candidate.success) {
+        state = mergeOnboardingState(state, candidate.data);
+      }
+    }
+  }
+
+  return { state, repaired: true, issues };
 }
 
 export function createDefaultMetadata(brandId: string, owner?: BrandMember): OnboardingMetadata {
@@ -353,7 +432,7 @@ export function createBrandId(): string {
 function clampStep(step: number): number {
   if (Number.isNaN(step)) return 0;
   if (step < 0) return 0;
-  if (step > 4) return 4;
+  if (step > 6) return 6;
   return step;
 }
 
@@ -370,6 +449,7 @@ export function mergeOnboardingState(
     invites: [...current.invites],
     completedAt: current.completedAt ?? null,
     emailReportOptIn: current.emailReportOptIn ?? true,
+    selectedInspiration: current.selectedInspiration ?? null,
     preview: current.preview ?? null,
   };
 
@@ -461,6 +541,10 @@ export function mergeOnboardingState(
 
   if (patch.emailReportOptIn !== undefined) {
     next.emailReportOptIn = patch.emailReportOptIn;
+  }
+
+  if (patch.selectedInspiration !== undefined) {
+    next.selectedInspiration = patch.selectedInspiration ?? null;
   }
 
   if (patch.preview !== undefined) {

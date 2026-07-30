@@ -94,4 +94,51 @@ describe('suggestionToEnrollRequest', () => {
     );
     expect(req).toEqual({ portfolio_id: UUID, adset_ids: ['c1', 'c2'] });
   });
+
+  test('forwards the suggestion names so enrolled rows are not nameless', () => {
+    const req = suggestionToEnrollRequest(
+      UUID,
+      suggestion({
+        adset_ids: ['a', 'b'],
+        adset_names: { a: 'ALEIRA // $249', b: 'ALEIRA // 333' },
+      }),
+    );
+    expect(req).toEqual({
+      portfolio_id: UUID,
+      adset_ids: ['a', 'b'],
+      adset_names: { a: 'ALEIRA // $249', b: 'ALEIRA // 333' },
+    });
+    expect(() => EnrollRequestSchema.parse(req)).not.toThrow();
+  });
+
+  test('forwards only names for ids this suggestion carries', () => {
+    const req = suggestionToEnrollRequest(
+      UUID,
+      suggestion({ adset_ids: ['a'], adset_names: { a: 'Kept', z: 'Belongs to another group' } }),
+    );
+    expect(req).toEqual({ portfolio_id: UUID, adset_ids: ['a'], adset_names: { a: 'Kept' } });
+  });
+
+  test('omits adset_names entirely when nothing resolved — an empty map reads as "no names exist"', () => {
+    const blank = suggestionToEnrollRequest(UUID, suggestion({ adset_ids: ['a'] }));
+    expect(blank).not.toHaveProperty('adset_names');
+
+    const whitespace = suggestionToEnrollRequest(
+      UUID,
+      suggestion({ adset_ids: ['a'], adset_names: { a: '   ' } }),
+    );
+    expect(whitespace).not.toHaveProperty('adset_names');
+  });
+
+  test('campaign-level still enrolls by campaign_id — the edge resolves names from its own read', () => {
+    const req = suggestionToEnrollRequest(
+      UUID,
+      suggestion({
+        level: 'campaign',
+        adset_ids: ['camp_1'],
+        adset_names: { camp_1: 'Campaign 1' },
+      }),
+    );
+    expect(req).toEqual({ portfolio_id: UUID, campaign_id: 'camp_1' });
+  });
 });

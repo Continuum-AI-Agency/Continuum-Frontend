@@ -18,6 +18,11 @@ type Props = {
   isEdited: boolean;
 };
 
+export function canSaveBrandMd(draft: string): boolean {
+  const hasFrontMatter = draft.trimStart().startsWith('---');
+  return !hasFrontMatter || parseBrandMd(draft).tokens !== null;
+}
+
 // Raw textarea + live preview editor for brand.md (YAML front matter + prose body).
 // Front-matter validity is derived via parseBrandMd and shown as a non-blocking hint.
 // Save/reset write through saveBrandMd / resetBrandMd and then router.refresh() so
@@ -51,6 +56,7 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
   const frontMatterValid = parsed.tokens !== null;
   // If there is no front-matter fence at all, show "not present" rather than "invalid".
   const hasFrontMatter = draft.trimStart().startsWith('---');
+  const saveIsValid = canSaveBrandMd(draft);
 
   const handleSave = () => {
     startTransition(async () => {
@@ -131,11 +137,21 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
               {isResetting ? 'Reverting…' : 'Revert to generated'}
             </Button>
           ) : null}
-          <Button onClick={handleSave} disabled={isBusy || !dirty} variant="secondary">
+          <Button
+            onClick={handleSave}
+            disabled={isBusy || !dirty || !saveIsValid}
+            variant="secondary"
+          >
             {isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </div>
+      {!saveIsValid ? (
+        <p className="text-xs text-destructive" role="alert">
+          Fix the front matter before saving so structured brand colors, voice, and audience remain
+          usable across Continuum.
+        </p>
+      ) : null}
 
       {/* Tab: Edit | Preview */}
       <Tabs defaultValue="edit">

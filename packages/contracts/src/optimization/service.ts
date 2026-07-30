@@ -681,6 +681,11 @@ export const PortfolioSuggestionSchema = z.object({
    *  baseline". Consumers treat 0 as absent (suggestionToPortfolioConfig drops falsy). */
   cpa_target: z.number().nonnegative().optional(),
   adset_ids: z.array(z.string()),
+  /** id→name for the suggestion's entities, resolved from the same snapshot read that
+   *  produced the grouping. A suggestion used to carry ids only, so accepting one enrolled
+   *  nameless rows and the dashboard rendered raw Meta ids until a backfill healed them.
+   *  Optional because an older deployed suggest edge does not send it. */
+  adset_names: z.record(z.string(), z.string()).optional(),
   summary: z.object({
     adsets: z.number().int().nonnegative(),
     spend14: z.number(),
@@ -1044,6 +1049,13 @@ export const PortfolioAdsetSchema = z.object({
   adset_id: z.string(),
   adset_name: z.string().nullable(),
   active: z.boolean(),
+  /** Last cycle at which this ad set appeared in the account's live ACTIVE fleet. */
+  last_seen_at: z.string().nullable().optional(),
+  /** Set once the ad set STOPPED appearing there — paused, deleted, or flipped to CBO in Ads
+   *  Manager. It stays enrolled (releasing a claim is a human decision) but the optimizer can
+   *  no longer score it, so the roster must say so rather than presenting it as live.
+   *  Optional: older deployments of the read do not return it. */
+  missing_since: z.string().nullable().optional(),
 });
 export type PortfolioAdset = z.infer<typeof PortfolioAdsetSchema>;
 

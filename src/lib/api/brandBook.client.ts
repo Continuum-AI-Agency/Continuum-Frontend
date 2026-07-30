@@ -2,6 +2,7 @@
 
 import {
   type BrandMdSaveResult,
+  brandMdSaveRequestSchema,
   brandMdSaveResultSchema,
   type ReadinessAnalysis,
   readinessAnalysisSchema,
@@ -53,10 +54,11 @@ export async function deepenBrandBook(brandId: string): Promise<DeepenBrandBookR
  * new effective doc so the editor can update without a refetch.
  */
 export async function saveBrandMd(brandId: string, brandMd: string): Promise<BrandMdSaveResult> {
+  const body = brandMdSaveRequestSchema.parse({ brand_md: brandMd });
   const response = await http.request({
     path: `/onboarding/brand-profiles/${encodeURIComponent(brandId)}/brand-md`,
     method: 'POST',
-    body: { brand_md: brandMd },
+    body,
     cache: 'no-store',
   });
   return brandMdSaveResultSchema.parse(response);

@@ -12,6 +12,8 @@ import {
   degradeToNarrativeBlockV2 as contractDegradeToNarrativeBlockV2,
   insightListBlockSchema as contractInsightListBlockSchema,
   insightListItemSchema as contractInsightListItemSchema,
+  jainaExecutionObjectiveSchema as contractJainaExecutionObjectiveSchema,
+  jainaExecutionObjectiveStatusSchema as contractJainaExecutionObjectiveStatusSchema,
   metricGridBlockSchema as contractMetricGridBlockSchema,
   metricItemSchema as contractMetricItemSchema,
   narrativeBlockSchema as contractNarrativeBlockSchema,
@@ -207,24 +209,7 @@ export const frontendBudgetSchema = z
   })
   .passthrough();
 
-export const executionObjectiveSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  // Mirrors the Backend objective lifecycle (richer than the original 4 states).
-  status: z.enum([
-    'pending',
-    'in_progress',
-    'completed',
-    'failed',
-    'blocked',
-    'deferred',
-    'partial',
-  ]),
-  scope: z.string().nullable(),
-  details: z.string().nullable(),
-  created_at: z.string(),
-  updated_at: z.string(),
-});
+export const executionObjectiveSchema = contractJainaExecutionObjectiveSchema;
 
 export type ExecutionObjective = z.infer<typeof executionObjectiveSchema>;
 
@@ -1238,15 +1223,25 @@ export const artifactDeltaSchema = z.object({
 
 export type ArtifactDeltaEventData = z.infer<typeof artifactDeltaSchema>;
 
-export const jainaObjectiveStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'failed']);
+export const jainaObjectiveStatusSchema = contractJainaExecutionObjectiveStatusSchema;
 
 export type JainaObjectiveStatus = z.infer<typeof jainaObjectiveStatusSchema>;
 
 export const jainaObjectiveSchema = z.object({
   id: z.string(),
   title: z.string(),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   status: jainaObjectiveStatusSchema,
+  objective_key: z.string().nullable().optional(),
+  scope: z.string().nullable().optional(),
+  reason_code: z.string().nullable().optional(),
+  details: z.string().nullable().optional(),
+  attempt_count: z.number().int().nonnegative().default(0),
+  version: z.number().int().nonnegative().default(0),
+  not_before: z.string().nullable().optional(),
+  last_attempt_at: z.string().nullable().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
 });
 
 export type JainaObjective = z.infer<typeof jainaObjectiveSchema>;

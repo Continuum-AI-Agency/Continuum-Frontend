@@ -62,11 +62,13 @@ export function suggestionToCreateRequest(args: {
 
 /** Build the enroll request for a just-created portfolio from its suggestion.
  *  A single-campaign campaign-level suggestion enrolls by `campaign_id` (the enroll
- *  edge expands it to the campaign's ad sets); every other case enrolls the ad-set
- *  ids directly. A campaign-level suggestion carrying multiple campaign ids cannot be
- *  expressed as one EnrollRequest (`campaign_id` is singular) — callers fan out per
- *  campaign. Callers guard for a non-empty `adset_ids` before enrolling (EnrollRequest
- *  requires at least one entity), mirroring the dashboard's `adset_ids.length > 0` check. */
+ *  edge expands it to the campaign's ad sets, resolving names itself); every other case
+ *  enrolls the ad-set ids directly and forwards the suggestion's `adset_names` so the
+ *  plain-text name is persisted at enroll time. A campaign-level suggestion carrying
+ *  multiple campaign ids cannot be expressed as one EnrollRequest (`campaign_id` is
+ *  singular) — callers fan out per campaign. Callers guard for a non-empty `adset_ids`
+ *  before enrolling (EnrollRequest requires at least one entity), mirroring the
+ *  dashboard's `adset_ids.length > 0` check. */
 export function suggestionToEnrollRequest(
   portfolioId: string,
   suggestion: PortfolioSuggestion,
@@ -75,5 +77,16 @@ export function suggestionToEnrollRequest(
   if (suggestion.level === 'campaign' && firstId && suggestion.adset_ids.length === 1) {
     return { portfolio_id: portfolioId, campaign_id: firstId };
   }
-  return { portfolio_id: portfolioId, adset_ids: suggestion.adset_ids };
+  // Only forward names for ids this suggestion actually carries, and only when at least
+  // one resolved — an empty map would read as "we looked and there are no names".
+  const adset_names: Record<string, string> = {};
+  for (const id of suggestion.adset_ids) {
+    const name = suggestion.adset_names?.[id];
+    if (name && name.trim().length > 0) adset_names[id] = name;
+  }
+  return {
+    portfolio_id: portfolioId,
+    adset_ids: suggestion.adset_ids,
+    ...(Object.keys(adset_names).length > 0 ? { adset_names } : {}),
+  };
 }

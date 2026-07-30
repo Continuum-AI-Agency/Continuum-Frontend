@@ -22,12 +22,12 @@ import {
   type DocumentCategory,
   ensureBrandExists,
   mergeOnboardingState,
-  normalizeOnboardingState,
   type OnboardingDocument,
   type OnboardingMetadata,
   type OnboardingPatch,
   type OnboardingState,
   parseOnboardingMetadata,
+  repairOnboardingState,
 } from './state';
 
 type SupabaseOnboardingClient = SupabaseClient<Database>;
@@ -95,6 +95,7 @@ async function ensureBrandProfileRecord(
   brandId: string,
   owner: BrandMember,
   state?: OnboardingState,
+  options: { reuseMatchingBrand?: boolean } = {},
 ): Promise<string> {
   const { data: rawData, error } = await supabase
     .schema('brand_profiles')
@@ -133,12 +134,14 @@ async function ensureBrandProfileRecord(
   const emailReportOptIn = state?.emailReportOptIn ?? true;
 
   if (!data) {
-    const duplicateBrandId = await findMatchingActiveBrandId(supabase, owner.id, {
-      brandName,
-      websiteUrl: state?.brand?.website ?? null,
-    });
-    if (duplicateBrandId && duplicateBrandId !== brandId) {
-      return duplicateBrandId;
+    if (options.reuseMatchingBrand !== false) {
+      const duplicateBrandId = await findMatchingActiveBrandId(supabase, owner.id, {
+        brandName,
+        websiteUrl: state?.brand?.website ?? null,
+      });
+      if (duplicateBrandId && duplicateBrandId !== brandId) {
+        return duplicateBrandId;
+      }
     }
 
     const { error: insertError } = await supabase
@@ -394,6 +397,7 @@ function ensureActiveSelection(metadata: OnboardingMetadata): OnboardingMetadata
 async function fetchMetadataFromTable(
   supabase: SupabaseOnboardingClient,
   userId: string,
+  owner: BrandMember,
 ): Promise<OnboardingMetadata> {
   const { data, error } = await supabase
     .schema(ONBOARDING_SCHEMA)
@@ -411,10 +415,42 @@ async function fetchMetadataFromTable(
   };
 
   let activeBrandId: string | null = null;
+  const repairedRows: Array<{
+    user_id: string;
+    brand_id: string;
+    state: Json;
+    is_active: boolean;
+    updated_at: string;
+  }> = [];
+
   for (const row of data ?? []) {
-    metadata.brands[row.brand_id] = normalizeOnboardingState(row.state);
+    const repaired = repairOnboardingState(row.state, owner);
+    metadata.brands[row.brand_id] = repaired.state;
+    if (repaired.repaired) {
+      repairedRows.push({
+        user_id: userId,
+        brand_id: row.brand_id,
+        state: repaired.state as unknown as Json,
+        is_active: Boolean(row.is_active),
+        updated_at: new Date().toISOString(),
+      });
+      console.warn('[onboarding.state] repaired persisted state', {
+        brandId: row.brand_id,
+        issueCount: repaired.issues.length,
+      });
+    }
     if (row.is_active && !activeBrandId) {
       activeBrandId = row.brand_id;
+    }
+  }
+
+  if (repairedRows.length > 0) {
+    const { error: repairError } = await supabase
+      .schema(ONBOARDING_SCHEMA)
+      .from(ONBOARDING_TABLE)
+      .upsert(repairedRows, { onConflict: 'user_id,brand_id' });
+    if (repairError) {
+      throw repairError;
     }
   }
 
@@ -567,6 +603,49 @@ async function upsertActiveBrand(
   }
 }
 
+async function persistBrandState(
+  supabase: SupabaseOnboardingClient,
+  userId: string,
+  brandId: string,
+  state: OnboardingState,
+): Promise<void> {
+  const { data, error } = await supabase
+    .schema(ONBOARDING_SCHEMA)
+    .from(ONBOARDING_TABLE)
+    .update({
+      state: state as unknown as Json,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .eq('brand_id', brandId)
+    .select('brand_id')
+    .maybeSingle();
+
+  if (error && error.code !== 'PGRST116') {
+    throw error;
+  }
+  if (data) {
+    return;
+  }
+
+  const { error: insertError } = await supabase
+    .schema(ONBOARDING_SCHEMA)
+    .from(ONBOARDING_TABLE)
+    .upsert(
+      {
+        user_id: userId,
+        brand_id: brandId,
+        state: state as unknown as Json,
+        is_active: false,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,brand_id' },
+    );
+  if (insertError) {
+    throw insertError;
+  }
+}
+
 async function persistMetadata(
   supabase: SupabaseOnboardingClient,
   user: User,
@@ -636,7 +715,7 @@ function ensureActiveBrand(
 async function loadOnboardingContext(requestedBrandId?: string): Promise<OnboardingContext> {
   const { supabase, user, owner } = await getAuthContext();
 
-  let metadata = await fetchMetadataFromTable(supabase, user.id);
+  let metadata = await fetchMetadataFromTable(supabase, user.id, owner);
   const legacy = parseLegacyMetadata(user.user_metadata?.onboarding);
 
   if (legacy) {
@@ -755,7 +834,7 @@ async function updateBrandState(
   const context = await loadOnboardingContext(brandId);
   const nextState = mutate(context.state);
   context.metadata.brands[context.brandId] = nextState;
-  await persistMetadata(context.supabase, context.user, context.metadata);
+  await persistBrandState(context.supabase, context.user.id, context.brandId, nextState);
   await ensureBrandProfileRecord(context.supabase, context.brandId, context.owner, nextState);
   return nextState;
 }
@@ -902,7 +981,12 @@ export async function createBrandProfile(
   metadata.activeBrandId = brandId;
   await persistMetadata(supabase, user, metadata);
 
-  const resolvedBrandId = await ensureBrandProfileRecord(supabase, brandId, owner, state);
+  // "Add brand" is an explicit request for a distinct workspace. Reusing an
+  // existing brand with the same default name would silently redirect the user
+  // back into their current brand instead of creating the requested one.
+  const resolvedBrandId = await ensureBrandProfileRecord(supabase, brandId, owner, state, {
+    reuseMatchingBrand: false,
+  });
   if (resolvedBrandId !== brandId) {
     // An existing active brand already matches this candidate by name/website
     // (ticket #162 duplicate guard) — reuse it instead of tracking the
@@ -922,8 +1006,8 @@ export async function createBrandProfile(
 export async function deleteBrandFromMetadata(
   brandId: string,
 ): Promise<{ nextActiveBrandId: string | null }> {
-  const { supabase, user } = await getAuthContext();
-  const metadata = await fetchMetadataFromTable(supabase, user.id);
+  const { supabase, user, owner } = await getAuthContext();
+  const metadata = await fetchMetadataFromTable(supabase, user.id, owner);
 
   if (!metadata.brands[brandId]) {
     return { nextActiveBrandId: metadata.activeBrandId ?? null };

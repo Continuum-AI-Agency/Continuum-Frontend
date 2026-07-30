@@ -1,0 +1,20 @@
+{
+  "description": "Canonical JobErrorCode list. TypeScript source of truth is MEDIA_STREAM_ERROR_CODES in ../errors.ts; the Rust twin is JobErrorCode::ALL in Continuum-MediaStream/src/error.rs. Order is significant — both guards compare the sequence, not just the set.",
+  "codes": [
+    "BAD_REQUEST",
+    "UNAUTHORIZED",
+  "PATH_TENANCY_VIOLATION",
+  "BUCKET_NOT_ALLOWED",
+  "STORE_NOT_FOUND",
+  "STORE_CAPABILITY_UNAVAILABLE",
+  "URL_NOT_ALLOWED",
+    "SOURCE_FETCH_FAILED",
+    "SOURCE_NOT_FOUND",
+    "STORAGE_FAILED",
+    "LIMIT_EXCEEDED",
+    "ZIP64_LIMIT_EXCEEDED",
+    "TIMEOUT",
+    "CONFIG_INVALID",
+    "INTERNAL"
+  ]
+}

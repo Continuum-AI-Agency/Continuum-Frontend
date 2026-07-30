@@ -28,6 +28,18 @@ mock.module('@/lib/supabase/server', () => ({
     Promise.resolve({
       auth: {
         getUser: mock(() => Promise.resolve({ data: { user: { id: 'user-123' } } })),
+        getClaims: mock(() =>
+          Promise.resolve({
+            data: { claims: { sub: 'user-123', email: 'owner@example.com' } },
+            error: null,
+          }),
+        ),
+        getSession: mock(() =>
+          Promise.resolve({
+            data: { session: { access_token: 'test-access-token' } },
+            error: null,
+          }),
+        ),
       },
       schema: mock(() => ({
         from: mock(() => ({
@@ -89,13 +101,27 @@ describe('approveAndLaunchOnboardingAction', () => {
       googleAds: {
         connected: true,
         accounts: [
-          { id: 'acc-1', selected: true, name: 'Acc 1' },
-          { id: 'acc-2', selected: false, name: 'Acc 2' },
+          {
+            id: '00000000-0000-4000-8000-000000000001',
+            selected: true,
+            name: 'Acc 1',
+          },
+          {
+            id: '00000000-0000-4000-8000-000000000002',
+            selected: false,
+            name: 'Acc 2',
+          },
         ],
       },
       facebook: {
         connected: true,
-        accounts: [{ id: 'acc-3', selected: true, name: 'Acc 3' }],
+        accounts: [
+          {
+            id: '00000000-0000-4000-8000-000000000003',
+            selected: true,
+            name: 'Acc 3',
+          },
+        ],
       },
     },
     documents: [],
@@ -133,7 +159,10 @@ describe('approveAndLaunchOnboardingAction', () => {
     );
 
     expect(callArgs.payload.runContext.integration_account_ids).toEqual(
-      expect.arrayContaining(['acc-1', 'acc-3']),
+      expect.arrayContaining([
+        '00000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000003',
+      ]),
     );
     expect(callArgs.payload.runContext.integrated_platforms).toEqual(
       expect.arrayContaining(['google-ads', 'meta']),

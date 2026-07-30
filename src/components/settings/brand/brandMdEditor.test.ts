@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { parseBrandMd } from '@continuum/contracts';
+import { canSaveBrandMd } from './BrandMdEditor';
 
 // Unit tests for pure logic used by BrandMdEditor. React rendering is not
 // testable in bun without a DOM; we test the functions the editor delegates to.
@@ -85,5 +86,23 @@ describe('dirty-guard logic', () => {
     saved = serverValue;
     draft = serverValue;
     expect(draft !== saved).toBe(false);
+  });
+});
+
+describe('save guard', () => {
+  it('allows prose-only documents', () => {
+    expect(canSaveBrandMd('# Brand story')).toBe(true);
+  });
+
+  it('allows documents with valid canonical front matter', () => {
+    expect(canSaveBrandMd('---\nschema_version: 1\nbrand_name: Acme\n---\n# Brand story')).toBe(
+      true,
+    );
+  });
+
+  it('blocks invalid front matter before it can erase structured brand tokens', () => {
+    expect(canSaveBrandMd('---\nschema_version: 2\nbrand_name: Acme\n---\n# Brand story')).toBe(
+      false,
+    );
   });
 });

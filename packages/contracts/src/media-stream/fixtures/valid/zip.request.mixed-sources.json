@@ -1,0 +1,39 @@
+{
+  "jobId": "job-zip-export-1",
+  "scope": { "tenantId": "11111111-1111-4111-8111-111111111111" },
+  "entries": [
+    {
+      "path": "renders/hero.mp4",
+      "source": {
+        "storage": {
+          "storeId": "continuum-primary",
+          "bucket": "media-library",
+          "key": "11111111-1111-4111-8111-111111111111/44444444-4444-4444-8444-444444444444/hero.mp4"
+        }
+      }
+    },
+    {
+      "path": "renders/naïve — 日本語.png",
+      "source": {
+        "storage": {
+          "storeId": "continuum-primary",
+          "bucket": "media-library",
+          "key": "11111111-1111-4111-8111-111111111111/55555555-5555-4555-8555-555555555555/still.png"
+        }
+      }
+    },
+    {
+      "path": "external/reference.jpg",
+      "source": {
+        "url": "https://example.test/reference.jpg"
+      }
+    }
+  ],
+  "destination": {
+    "storeId": "continuum-archive",
+    "bucket": "media-export",
+    "key": "11111111-1111-4111-8111-111111111111/exports/2026-07-29-library.zip",
+    "contentType": "application/zip"
+  },
+  "compression": "store"
+}

@@ -75,10 +75,16 @@ import {
   unwrapReportEnvelope,
 } from './unwrapping';
 
-// Block categories the Backend streams progressively as `response.block.delta`
-// previews. Others (metric_grid/insight_list/comparison) arrive only in the
-// final checkpoint report, so they are ignored mid-stream.
-const STREAMABLE_V2_DELTA_CATEGORIES = new Set(['chart', 'data_table']);
+// Every complete V2 block may arrive as a progressive preview. The final
+// checkpoint report remains authoritative and replaces these snapshots.
+const STREAMABLE_V2_DELTA_CATEGORIES = new Set([
+  'narrative',
+  'metric_grid',
+  'chart',
+  'data_table',
+  'insight_list',
+  'comparison',
+]);
 
 export type JainaStreamStatus = 'idle' | 'starting' | 'streaming' | 'complete' | 'error';
 
@@ -1247,7 +1253,19 @@ function normalizeObjectiveStatus(value: unknown): JainaObjectiveStatus {
   if (['in_progress', 'in-progress', 'running', 'active', 'started'].includes(raw)) {
     return 'in_progress';
   }
-  if (['failed', 'error', 'errored', 'cancelled', 'canceled', 'blocked'].includes(raw)) {
+  if (['blocked', 'waiting', 'waiting_for_dependency'].includes(raw)) {
+    return 'blocked';
+  }
+  if (['deferred', 'retry_wait', 'scheduled'].includes(raw)) {
+    return 'deferred';
+  }
+  if (['partial', 'partially_completed'].includes(raw)) {
+    return 'partial';
+  }
+  if (['cancelled', 'canceled'].includes(raw)) {
+    return 'cancelled';
+  }
+  if (['failed', 'error', 'errored'].includes(raw)) {
     return 'failed';
   }
   return 'pending';
@@ -1274,9 +1292,26 @@ function normalizeObjectiveFromRecord(
   return {
     id,
     title,
-    description:
-      getNonEmptyString(record.description) ?? getNonEmptyString(record.summary) ?? undefined,
+    description: getNonEmptyString(record.description) ?? getNonEmptyString(record.summary) ?? null,
     status: normalizeObjectiveStatus(record.status),
+    objective_key: getNonEmptyString(record.objective_key) ?? null,
+    scope: getNonEmptyString(record.scope) ?? null,
+    reason_code: getNonEmptyString(record.reason_code) ?? null,
+    details: getNonEmptyString(record.details) ?? null,
+    attempt_count:
+      typeof record.attempt_count === 'number' &&
+      Number.isInteger(record.attempt_count) &&
+      record.attempt_count >= 0
+        ? record.attempt_count
+        : 0,
+    version:
+      typeof record.version === 'number' && Number.isInteger(record.version) && record.version >= 0
+        ? record.version
+        : 0,
+    not_before: getNonEmptyString(record.not_before) ?? null,
+    last_attempt_at: getNonEmptyString(record.last_attempt_at) ?? null,
+    created_at: getNonEmptyString(record.created_at),
+    updated_at: getNonEmptyString(record.updated_at),
   };
 }
 
@@ -1288,21 +1323,16 @@ function dedupeObjectives(objectives: JainaObjective[]): JainaObjective[] {
   return Array.from(map.values());
 }
 
-const snapshotObjectiveStatusRank: Record<JainaObjectiveStatus, number> = {
+const legacyObjectiveStatusRank: Record<JainaObjectiveStatus, number> = {
   pending: 0,
+  deferred: 1,
+  blocked: 2,
   in_progress: 1,
-  failed: 2,
-  completed: 3,
+  partial: 3,
+  failed: 3,
+  cancelled: 3,
+  completed: 4,
 };
-
-function mergeObjectiveSnapshotStatus(
-  existingStatus: JainaObjectiveStatus,
-  incomingStatus: JainaObjectiveStatus,
-): JainaObjectiveStatus {
-  return snapshotObjectiveStatusRank[incomingStatus] >= snapshotObjectiveStatusRank[existingStatus]
-    ? incomingStatus
-    : existingStatus;
-}
 
 function mergeObjectiveSnapshots(
   currentObjectives: JainaObjective[],
@@ -1335,7 +1365,17 @@ function mergeObjectiveSnapshots(
       id: targetId,
       title: incoming.title || existing.title,
       description: incoming.description ?? existing.description,
-      status: mergeObjectiveSnapshotStatus(existing.status, incoming.status),
+      status:
+        incoming.version > existing.version
+          ? incoming.status
+          : incoming.version < existing.version
+            ? existing.status
+            : incoming.version > 0 ||
+                legacyObjectiveStatusRank[incoming.status] >=
+                  legacyObjectiveStatusRank[existing.status]
+              ? incoming.status
+              : existing.status,
+      version: Math.max(existing.version, incoming.version),
     };
 
     byId.set(targetId, merged);
@@ -1343,16 +1383,6 @@ function mergeObjectiveSnapshots(
   }
 
   return Array.from(byId.values());
-}
-
-function mergeExplicitObjectiveStatus(
-  existingStatus: JainaObjectiveStatus | undefined,
-  incomingStatus: JainaObjectiveStatus,
-): JainaObjectiveStatus {
-  if (existingStatus === 'completed' && incomingStatus !== 'completed') {
-    return 'completed';
-  }
-  return incomingStatus;
 }
 
 function looksLikePlanRecord(payload: Record<string, unknown>): boolean {
@@ -1561,9 +1591,14 @@ function upsertObjective(
 
   const targetId = existingMatch?.id ?? normalized.id;
   const withTargetId: JainaObjective = {
+    ...existingMatch,
     ...normalized,
     id: targetId,
-    status: mergeExplicitObjectiveStatus(existingMatch?.status, normalized.status),
+    status:
+      existingMatch && normalized.version < existingMatch.version
+        ? existingMatch.status
+        : normalized.status,
+    version: Math.max(existingMatch?.version ?? 0, normalized.version),
   };
   const nextObjectives = currentObjectives.filter((objective) => objective.id !== targetId);
   nextObjectives.push(withTargetId);
@@ -1970,7 +2005,7 @@ export function reduceJainaStreamEvent(
       const v2Parsed = responseBlockDeltaV2Schema.safeParse(event);
       if (v2Parsed.success && v2Parsed.data.data) {
         const v2Payload = v2Parsed.data.data;
-        // Contract: chart + data_table blocks stream progressively; skip others.
+        // Contract: every complete V2 block can stream progressively.
         if (
           v2Payload.block_category &&
           !STREAMABLE_V2_DELTA_CATEGORIES.has(v2Payload.block_category)

@@ -4,6 +4,7 @@ import type {
   GenerationDirection,
   OnboardingGeneratedImage,
   OnboardingGenerationStreamFrame,
+  OnboardingInspirationSelection,
 } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -27,13 +28,12 @@ type Props = {
   onBack: () => void;
   emailReportOptIn: boolean;
   onEmailReportOptInChange: (value: boolean) => void;
+  selectedInspiration: OnboardingInspirationSelection | null;
 };
 
-// Creatives are generated up-front by the `creativePrewarm` background job (kicked
-// the moment the brand profile is finished, decoupled from the strategic analysis).
-// This screen displays those results; it only generates locally as a fallback when
-// the prewarm didn't run or produced nothing. Brand-guidelines only — no competitor
-// reference.
+// Brand-only creatives are prewarmed while the user moves through onboarding.
+// When they choose a competitor inspiration, this screen intentionally bypasses
+// that prewarm and generates a new set with the selected reference.
 export function InspirationGenerationScreen({
   brandId,
   onFinish,
@@ -41,6 +41,7 @@ export function InspirationGenerationScreen({
   onBack,
   emailReportOptIn,
   onEmailReportOptInChange,
+  selectedInspiration,
 }: Props) {
   const { jobs } = useBackgroundJobs();
   const prewarm = jobs.creativePrewarm;
@@ -52,6 +53,7 @@ export function InspirationGenerationScreen({
   const [phase, setPhase] = useState<Phase>('generating');
   const selfStartedRef = useRef(false);
   const erroredRef = useRef(false);
+  const imageCountRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
 
   const runGeneration = useCallback(() => {
@@ -60,6 +62,7 @@ export function InspirationGenerationScreen({
     controllerRef.current = controller;
     selfStartedRef.current = true;
     erroredRef.current = false;
+    imageCountRef.current = 0;
     setImages([]);
     setPhase('generating');
 
@@ -69,10 +72,16 @@ export function InspirationGenerationScreen({
           setTotal(frame.data.total);
           break;
         case 'image_ready':
+          imageCountRef.current += 1;
           setImages((prev) => [...prev, frame.data]);
           break;
         case 'generation_complete':
-          setPhase('done');
+          if (imageCountRef.current > 0) {
+            setPhase('done');
+          } else {
+            erroredRef.current = true;
+            setPhase('error');
+          }
           break;
         case 'error':
           erroredRef.current = true;
@@ -80,14 +89,19 @@ export function InspirationGenerationScreen({
       }
     };
 
-    void streamGeneration({ brandId, signal: controller.signal, onFrame: handleFrame })
+    void streamGeneration({
+      brandId,
+      selectedInspiration,
+      signal: controller.signal,
+      onFrame: handleFrame,
+    })
       .then(() =>
         setPhase((p) => (p === 'generating' ? (erroredRef.current ? 'error' : 'done') : p)),
       )
       .catch(() => {
         if (!controller.signal.aborted) setPhase('error');
       });
-  }, [brandId]);
+  }, [brandId, selectedInspiration?.competitorName, selectedInspiration?.imageUrl]);
 
   // Always abort an in-flight self-generation on unmount.
   useEffect(() => () => controllerRef.current?.abort(), []);
@@ -96,12 +110,17 @@ export function InspirationGenerationScreen({
   // otherwise generate locally exactly once.
   useEffect(() => {
     if (selfStartedRef.current) return;
+    if (selectedInspiration) {
+      runGeneration();
+      return;
+    }
     if (prewarm.status === 'running') return;
     if (prewarm.status === 'done' && prewarmImages.length > 0) return;
     runGeneration();
-  }, [prewarm.status, prewarmImages.length, runGeneration]);
+  }, [prewarm.status, prewarmImages.length, runGeneration, selectedInspiration]);
 
   const usingPrewarm =
+    !selectedInspiration &&
     !selfStartedRef.current &&
     (prewarm.status === 'running' || (prewarm.status === 'done' && prewarmImages.length > 0));
   const displayImages = usingPrewarm ? prewarmImages : images;
@@ -118,7 +137,10 @@ export function InspirationGenerationScreen({
       <header className="py-6 text-center">
         <h1 className="text-2xl font-semibold text-foreground">Your first on-brand creatives</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Generated from your brand guidelines. They&apos;re saving to your library now.
+          {selectedInspiration
+            ? `Guided by ${selectedInspiration.competitorName}, then rebuilt for your brand.`
+            : 'Generated from your brand guidelines.'}{' '}
+          They&apos;re saving to your library now.
         </p>
       </header>
 
@@ -135,7 +157,13 @@ export function InspirationGenerationScreen({
             >
               {image ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={image.signedUrl} alt="" className="aspect-square w-full object-cover" />
+                <img
+                  src={image.signedUrl}
+                  alt={`${DIRECTION_LABEL[image.direction]} creative${
+                    selectedInspiration ? ` inspired by ${selectedInspiration.competitorName}` : ''
+                  }`}
+                  className="aspect-square w-full object-cover"
+                />
               ) : (
                 <div className="flex aspect-square w-full items-center justify-center bg-muted text-xs text-muted-foreground">
                   {displayPhase === 'error' ? 'Generation failed' : 'Generating…'}

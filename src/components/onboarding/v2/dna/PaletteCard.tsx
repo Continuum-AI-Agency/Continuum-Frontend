@@ -18,8 +18,8 @@ export function PaletteCard({ colors, chip }: Props) {
       <CardContent>
         {colors.length > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {colors.map((hex) => (
-              <ColorSwatch key={hex} hex={hex} />
+            {colors.map((hex, index) => (
+              <ColorSwatch key={`${hex}-${index}`} hex={hex} />
             ))}
           </div>
         ) : (

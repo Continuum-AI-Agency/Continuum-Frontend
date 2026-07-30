@@ -1,10 +1,10 @@
 type FontSampleProps = {
   family: string | null;
-  role: 'Primary' | 'Secondary';
+  label: 'Primary' | 'Secondary';
   weight: number;
 };
 
-export function FontSample({ family, role, weight }: FontSampleProps) {
+export function FontSample({ family, label, weight }: FontSampleProps) {
   return (
     <div>
       <div
@@ -16,7 +16,7 @@ export function FontSample({ family, role, weight }: FontSampleProps) {
       <div className="mt-1 text-2xs text-[#94a3b8]">
         {family ?? 'Not detected'}
         <br />
-        <span className={role === 'Primary' ? 'text-[#5a39ff]' : 'text-[#94a3b8]'}>{role}</span>
+        <span className={label === 'Primary' ? 'text-[#5a39ff]' : 'text-[#94a3b8]'}>{label}</span>
       </div>
     </div>
   );
