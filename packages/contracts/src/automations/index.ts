@@ -4,6 +4,7 @@ export * from './automation-response';
 export * from './output-contracts';
 export * from './run';
 export * from './trigger-bindings';
+export * from './unset-config';
 export * from './workflow';
 export * from './workflow-api';
 export * from './workflow-capabilities';

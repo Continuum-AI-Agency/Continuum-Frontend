@@ -479,14 +479,21 @@ export function createAutomationWorkflowNode({
         ...common,
         type,
         label: 'Save to Library',
-        config: { folderId: null, titleTemplate: 'Automation output' },
+        // `collectionId`, not the legacy `folderId` alias: the contracts schema
+        // documents that key as parsed-never-authored, and a factory that
+        // authors it is the one caller making that untrue.
+        config: { collectionId: null, titleTemplate: 'Automation output' },
       };
     case 'action.planner_upsert':
       return {
         ...common,
         type,
         label: 'Add to Planner',
-        config: { platform: 'instagram', scheduledAtPath: 'scheduledAt' },
+        // `scheduledAtPath` is retired — each draft item now carries its own
+        // `scheduledAt`. `accountId` is what the adapter's preflight actually
+        // demands, so seeding the unset sentinel makes a freshly dropped node
+        // read as "pick an account" instead of silently failing its first run.
+        config: { platform: 'instagram', accountId: 'select-connected-account' },
       };
     case 'action.organic_publish':
       return {

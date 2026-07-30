@@ -395,3 +395,23 @@ export const AUTOMATION_NATIVE_OUTPUT_CONTRACTS = {
     acceptedBy: ['action.planner_upsert'],
   },
 } as const;
+
+/**
+ * The native ids that actually have an executable schema, and therefore the
+ * only ones a formatter can be PUBLISHED with.
+ *
+ * The id enum above is deliberately wider: it must keep parsing graphs saved
+ * against ids that were declared before their schema existed. That gap is the
+ * bug this constant closes — the editor used to hard-code its own list, which
+ * drifted the other way and left `planner.draft` registered but unreachable, so
+ * the content-to-planner chain could not be built in the UI at all. Any surface
+ * offering a native contract must derive its options from here.
+ */
+export const AUTOMATION_REGISTERED_NATIVE_OUTPUT_CONTRACT_IDS = Object.keys(
+  AUTOMATION_NATIVE_OUTPUT_CONTRACTS,
+) as AutomationNativeOutputContractId[];
+
+export const isRegisteredNativeOutputContractId = (
+  value: string,
+): value is AutomationNativeOutputContractId =>
+  Object.hasOwn(AUTOMATION_NATIVE_OUTPUT_CONTRACTS, value);

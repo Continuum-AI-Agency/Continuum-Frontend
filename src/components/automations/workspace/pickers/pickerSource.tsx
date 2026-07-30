@@ -14,6 +14,7 @@
 //     `select-connected-account`) renders as UNSET, not as text the user has to
 //     notice and overwrite.
 
+import { isAutomationUnsetConfigSentinel } from '@continuum/contracts';
 import { useId } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,13 +29,10 @@ export type PickerSourceState<TItem> = {
 
 export type PickerSource<TItem> = (brandId: string | undefined) => PickerSourceState<TItem>;
 
-/** Ids the node catalog seeds as "you must pick one", which were never real ids. */
-const PLACEHOLDER_IDS = new Set(['select-connected-account', 'select-paid-target']);
-
 export function isUnsetId(value: string | null | undefined): boolean {
   if (value == null) return true;
   const trimmed = value.trim();
-  return trimmed.length === 0 || PLACEHOLDER_IDS.has(trimmed);
+  return trimmed.length === 0 || isAutomationUnsetConfigSentinel(trimmed);
 }
 
 /** The stored id as something safe to show in a text input: a placeholder reads

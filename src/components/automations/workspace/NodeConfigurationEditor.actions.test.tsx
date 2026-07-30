@@ -49,8 +49,12 @@ function expectParses(node: AutomationWorkflowNode, config: unknown) {
 describe('action.library_save editor', () => {
   test('writes a collection-addressed config and drops the legacy folderId alias', () => {
     const node = makeNode('action.library_save');
-    // The node catalog still seeds the retired alias; the resolver reads it.
-    expect('folderId' in node.config).toBe(true);
+    // The catalog seeds `collectionId`, never the retired `folderId` alias —
+    // the contracts schema documents that key as parsed-never-authored, and the
+    // factory was the one caller making that untrue. Legacy graphs that still
+    // carry it keep parsing; nothing new writes it.
+    expect('folderId' in node.config).toBe(false);
+    expect(node.config).toMatchObject({ collectionId: null });
     const onChange = mock();
     renderEditor(node, onChange);
 

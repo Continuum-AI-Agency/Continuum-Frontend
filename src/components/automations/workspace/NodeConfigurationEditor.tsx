@@ -2,6 +2,7 @@
 
 import {
   AUTOMATION_PLANNER_UPSERT_DEFAULTS,
+  AUTOMATION_REGISTERED_NATIVE_OUTPUT_CONTRACT_IDS,
   type AutomationActionNodeType,
   type AutomationAiStudioGenerator,
   type AutomationCapabilitiesResponse,
@@ -12,6 +13,7 @@ import {
   type AutomationWorkflowNode,
   automationAgentCapabilitySchema,
   automationAiStudioGeneratorSchema,
+  isRegisteredNativeOutputContractId,
   parseAutomationSourceQuery,
   resolveAutomationAiStudioGenerateConfig,
   resolveAutomationLibrarySaveConfig,
@@ -129,6 +131,24 @@ const formatterStarters: PromptStarter[] = [
     text: 'Prioritize the decision, evidence, risks, and next actions. Keep every field concise and preserve the source labels.',
   },
 ];
+
+const NATIVE_CONTRACT_LABELS: Record<string, string> = {
+  'report.document': 'Report document',
+  'webhook.payload': 'Webhook payload',
+  'planner.draft': 'Planner draft',
+};
+
+/**
+ * Derived from the registry rather than hand-listed. The hand-listed version
+ * omitted `planner.draft`, which IS registered — so the formatter could never
+ * be pointed at it and the content-to-planner chain was unbuildable in the UI
+ * despite the adapter being wired. Deriving means registered and offerable
+ * cannot drift apart again in either direction.
+ */
+const NATIVE_CONTRACT_OPTIONS = AUTOMATION_REGISTERED_NATIVE_OUTPUT_CONTRACT_IDS.map((id) => ({
+  value: id,
+  label: NATIVE_CONTRACT_LABELS[id] ?? id,
+}));
 
 const textList = (value: string): string[] =>
   value
@@ -1035,13 +1055,9 @@ export function NodeConfigurationEditor({
               node.config.contract.kind === 'native' ? node.config.contract.contractId : 'custom'
             }
             disabled={disabled}
-            options={[
-              { value: 'report.document', label: 'Report document' },
-              { value: 'webhook.payload', label: 'Webhook payload' },
-              { value: 'custom', label: 'Custom JSON schema' },
-            ]}
+            options={[...NATIVE_CONTRACT_OPTIONS, { value: 'custom', label: 'Custom JSON schema' }]}
             onChange={(contractId) => {
-              if (contractId === 'report.document' || contractId === 'webhook.payload') {
+              if (isRegisteredNativeOutputContractId(contractId)) {
                 onChange({
                   ...node.config,
                   contract: { kind: 'native', contractId, version: 1 },

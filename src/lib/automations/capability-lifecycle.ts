@@ -83,55 +83,15 @@ export function resolveNodeLifecycle({
   return bundledCapability(node);
 }
 
-/**
- * Placeholder strings `createAutomationWorkflowNode` ships so a freshly dropped
- * node parses. Every one of them satisfies `z.string().min(1)`, so the node
- * saves, validates and publishes — and then fails at runtime against an id that
- * was never chosen. Treated as "unset" rather than "configured".
- */
-export const AUTOMATION_UNSET_CONFIG_SENTINELS = [
-  'select-connection',
-  'pending-schema-v1',
-  'select-connected-account',
-  'select-paid-target',
-] as const;
-
-export type AutomationUnsetConfigSentinel = (typeof AUTOMATION_UNSET_CONFIG_SENTINELS)[number];
-
-export type UnsetConfigField = {
-  /** Dotted path into `node.config`, e.g. `connectionId` or `targets.0.id`. */
-  path: string;
-  sentinel: AutomationUnsetConfigSentinel;
-};
-
-const SENTINELS = new Set<string>(AUTOMATION_UNSET_CONFIG_SENTINELS);
-
-const isSentinel = (value: string): value is AutomationUnsetConfigSentinel => SENTINELS.has(value);
-
-const collectSentinels = (value: unknown, path: string, found: UnsetConfigField[]): void => {
-  if (typeof value === 'string') {
-    if (isSentinel(value)) found.push({ path, sentinel: value });
-    return;
-  }
-  if (Array.isArray(value)) {
-    value.forEach((entry, index) => {
-      collectSentinels(entry, path ? `${path}.${index}` : String(index), found);
-    });
-    return;
-  }
-  if (value && typeof value === 'object') {
-    for (const [key, entry] of Object.entries(value)) {
-      collectSentinels(entry, path ? `${path}.${key}` : key, found);
-    }
-  }
-};
-
-/** Every placeholder value still sitting in a node's config, deeply. */
-export function findUnsetConfigFields(node: AutomationWorkflowNode): UnsetConfigField[] {
-  const found: UnsetConfigField[] = [];
-  collectSentinels(node.config, '', found);
-  return found;
-}
-
-export const hasUnsetConfigField = (node: AutomationWorkflowNode): boolean =>
-  findUnsetConfigFields(node).length > 0;
+// The unset-config sentinels and their walk moved to `@continuum/contracts` so
+// the publish ROUTE rejects the same graph the browser does — the check was
+// Frontend-only, which made it advisory against a direct API publish. Re-exported
+// here because the palette, node card, inspector and publish dialog all reach
+// for them through this module.
+export {
+  AUTOMATION_UNSET_CONFIG_SENTINELS,
+  type AutomationUnsetConfigSentinel,
+  findUnsetConfigFields,
+  hasUnsetConfigField,
+  type UnsetConfigField,
+} from '@continuum/contracts';
