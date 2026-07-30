@@ -1167,6 +1167,11 @@ export function NodeConfigurationEditor({
             disabled={disabled}
             onChange={(title) => onChange({ ...node.config, title })}
           />
+          <p className="text-[11px] leading-4 text-muted-foreground">
+            The title heads the rendered report. Objective, audience and sections describe the
+            report you want written — they shape the upstream formatter&rsquo;s target rather than
+            this step. A formatter that returns complete markdown is passed through as authored.
+          </p>
           <PromptField
             label="Objective"
             value={node.config.objective}
