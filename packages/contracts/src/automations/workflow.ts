@@ -268,9 +268,15 @@ export const automationSourceQuerySchemas = {
       limit: boundedSourceLimitSchema,
     })
     .strict(),
-  live_web: z
-    .object({ search: z.string().trim().min(1).max(500), limit: boundedSourceLimitSchema })
-    .strict(),
+  /**
+   * `search` carries the same `''` default as every other kind rather than a
+   * `.min(1)`. The editor parses an empty query the instant a kind is picked,
+   * and re-parses a stored node's query on every render, so a required field
+   * here throws inside React with no user action available — the workspace
+   * unmounts and unsaved graph edits are lost. Emptiness is enforced at publish
+   * instead, where it is still fixable.
+   */
+  live_web: z.object({ search: sourceTextQuerySchema, limit: boundedSourceLimitSchema }).strict(),
   previous_run: z
     .object({
       automationId: z.string().min(1).optional(),

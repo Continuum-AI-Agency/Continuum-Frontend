@@ -34,9 +34,10 @@ const sourceNode = (source: AutomationSourceKind, config: Record<string, unknown
 
 describe('source query defaults', () => {
   // The editor calls parseAutomationSourceQuery(kind, {}) the moment a user
-  // picks a kind. Any required field throws inside that onChange, which reads
-  // to the user as the panel breaking. `live_web` already has this defect;
-  // every kind added since must not.
+  // picks a kind, and re-parses a stored node's query on every render. Any
+  // required field throws inside React with no user action available, which
+  // reads to the user as the workspace breaking. No kind may have one; a field
+  // that must be filled belongs in publish readiness, not in the parse.
   test('every source kind parses from an empty query', () => {
     const broken: string[] = [];
     for (const kind of automationSourceKindSchema.options) {
@@ -44,7 +45,7 @@ describe('source query defaults', () => {
       if (!parsed.success) broken.push(kind);
     }
 
-    expect(broken).toEqual(['live_web']);
+    expect(broken).toEqual([]);
   });
 
   test('rejects an unknown key on every source kind', () => {
