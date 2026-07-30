@@ -127,6 +127,20 @@ export type JainaForwardableType =
   | 'paid.scaffold_proposed'
   | 'paid.scaffold_progress'
   | 'paid.scaffold_receipt'
+  // Generated creative media reaching the chat. The Frontend has had a reducer case
+  // (lib/jaina/stream.ts), a schema, a renderer and message persistence for this
+  // since the artifacts work; it was never FORWARDABLE, so an emitter would have
+  // been dropped silently at both server.ts gates. It is listed here (and in
+  // FORWARDABLE_EVENT_TYPES) so the paid-creative tool's media actually arrives.
+  //
+  // Note it also appears in JainaArtifactType below — that union is the full
+  // frame-type catalog, not the forwarding allowlist. Both are required.
+  | 'artifact.delta'
+  // The render job a paid reel is waiting on, so the chat can join to the shared
+  // client-render queue and show live stitch progress. Deliberately NOT folded into
+  // 'artifact.delta': that frame means "here is finished media", and a job id is
+  // not media.
+  | 'paid.creative_render'
   | 'adk.event'
   | 'error';
 

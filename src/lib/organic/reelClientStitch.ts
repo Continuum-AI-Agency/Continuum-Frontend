@@ -1,5 +1,6 @@
 import type { ClipWord, ReelClip } from '@continuum/contracts';
 import { DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
+import { attachVideoPoster } from '@/lib/library/videoPoster';
 import { runSpliceInWorker, runTimelineInWorker } from '@/StudioCanvas/workers/spliceWorkerClient';
 import type {
   TimelineWorkerItem,
@@ -117,6 +118,27 @@ export async function stitchAndFinalizeReel(
         : undefined,
       referenceAssetIds: captions?.referenceAssetIds,
     });
+
+    // This is the only place holding BOTH the finished blob and its asset id, which
+    // is why the poster is made here rather than in the executor or on the server —
+    // there is no server-side decode path at all.
+    //
+    // It matters beyond thumbnails: a Meta VIDEO ad creative requires an `image_hash`
+    // poster alongside its `video_id`, so without this a stitched reel can never
+    // become a paid ad. `attachVideoPoster` also backfills width/height/duration_ms,
+    // which `buildVideoAssetRow` writes as null.
+    //
+    // Deliberately AFTER the upload and fail-soft (both helpers return null rather
+    // than throwing): the MP4 is already durable at this point, and a poster failure
+    // must never fail a render the user has already paid the encode time for.
+    onStage?.('Making a poster…');
+    await attachVideoPoster({
+      file: outputBlob,
+      mimeType: 'video/mp4',
+      brandId,
+      assetId: linked.assetId,
+    }).catch(() => null);
+
     return {
       bucket: linked.bucket,
       path: linked.path,

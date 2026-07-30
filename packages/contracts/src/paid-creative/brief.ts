@@ -18,9 +18,38 @@ export const paidAdFunnelStageSchema = z.enum(['prospecting', 'retargeting', 're
 export type PaidAdFunnelStage = z.infer<typeof paidAdFunnelStageSchema>;
 
 // The creative format to produce. 'reel' is the default and reuses the reel/Veo
-// scene spine; 'video'/'image' are single-asset variants of the same path.
-export const paidAdFormatSchema = z.enum(['reel', 'video', 'image']);
+// scene spine; 'video' is the same spine as a single video ad; 'image' is a static;
+// 'carousel' is N slides through the organic carousel spine.
+//
+// This is the PAID/Meta vocabulary, deliberately — 'image' is what Meta calls a
+// static ad, and `PAID_FORMAT_TO_ORGANIC_FORMAT` already maps it to organic's
+// 'post'. Adding a second name for the same concept is exactly the drift the
+// contracts package exists to prevent, so there is no 'post' member here.
+export const paidAdFormatSchema = z.enum(['reel', 'video', 'image', 'carousel']);
 export type PaidAdFormat = z.infer<typeof paidAdFormatSchema>;
+
+/**
+ * The generation spine each format runs through. Every consumer that has to branch
+ * on format — the placement builder, the orchestrator's stage matrix, the chat
+ * artifact frame — reads this instead of re-deriving `format === 'reel' || format
+ * === 'video'` and drifting the day a fifth format lands.
+ */
+export const PAID_FORMAT_MEDIA_KIND = {
+  reel: 'video',
+  video: 'video',
+  image: 'static',
+  carousel: 'carousel',
+} as const satisfies Record<PaidAdFormat, 'video' | 'static' | 'carousel'>;
+
+export type PaidFormatMediaKind = (typeof PAID_FORMAT_MEDIA_KIND)[PaidAdFormat];
+
+/**
+ * Meta caps a carousel ad at 10 cards. Organic's `CarouselBlueprintOutputSchema`
+ * allows 12 — generating 11 or 12 would burn image spend on slides that can never
+ * ship, so paid clamps tighter than its own spine. Min 2 because a one-slide
+ * carousel is a static post and should be built as `format: 'image'`.
+ */
+export const PAID_CAROUSEL_SLIDE_BOUNDS = { min: 2, max: 10 } as const;
 
 export const paidAdBriefSchema = z.object({
   brandId: z.string().min(1),

@@ -18,6 +18,13 @@ import {
   metricItemSchema as contractMetricItemSchema,
   narrativeBlockSchema as contractNarrativeBlockSchema,
   tableColumnSchema as contractTableColumnSchema,
+  jainaScaffoldActionSchema,
+  jainaToolApprovalRequiredPayloadSchema,
+  jainaToolApprovalResolvedPayloadSchema,
+  jainaToolOutputDeniedPayloadSchema,
+  paidScaffoldProgressPayloadSchema,
+  paidScaffoldProposedPayloadSchema,
+  paidScaffoldReceiptPayloadSchema,
 } from '@continuum/contracts';
 import { z } from 'zod';
 import { agentMentionMetadataSchema, agentMentionReferenceSchema } from '@/lib/agent-references';
@@ -55,6 +62,10 @@ export const jainaPlanActionSchema = z.object({
 
 export type JainaPlanAction = z.infer<typeof jainaPlanActionSchema>;
 
+/** Re-exported from contracts so callers import one name from one place. */
+export type JainaScaffoldAction = z.infer<typeof jainaScaffoldActionSchema>;
+export { jainaScaffoldActionSchema };
+
 export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
   include_thoughts: z.boolean().optional(),
@@ -68,6 +79,15 @@ export const jainaChatRequestSchema = z.object({
     })
     .optional(),
   plan_action: jainaPlanActionSchema.optional(),
+  /**
+   * A human's answer to a paid-scaffold approval gate.
+   *
+   * THIS LINE IS LOAD-BEARING. `jainaChatRequestSchema` is a stripping `z.object`
+   * and `useJainaChatStream` parses through it BEFORE `JSON.stringify`, so an
+   * undeclared field vanishes with no type error, no runtime error and no log — and
+   * the Next route is a pure passthrough that would not catch it either.
+   */
+  scaffold_action: jainaScaffoldActionSchema.optional(),
   context: z.object({
     adAccountId: z.string().min(1),
     brandId: z.string().min(1),
@@ -1108,7 +1128,47 @@ export type JainaStreamEvent =
   | z.infer<typeof responseContentPartDoneSchema>
   | z.infer<typeof responseOutputItemDoneSchema>
   | z.infer<typeof responseDoneSchema>
+  | z.infer<typeof toolApprovalRequiredSchema>
+  | z.infer<typeof toolApprovalResolvedSchema>
+  | z.infer<typeof toolOutputDeniedSchema>
+  | z.infer<typeof paidScaffoldProposedSchema>
+  | z.infer<typeof paidScaffoldProgressSchema>
+  | z.infer<typeof paidScaffoldReceiptSchema>
   | z.infer<typeof streamErrorSchema>;
+
+/**
+ * Paid campaign scaffold + tool approval frames.
+ *
+ * The payload schemas come from `@continuum/contracts` — never re-declared here.
+ * Each must be added in THREE places: declared below, added to the `JainaStreamEvent`
+ * type union, and added to the runtime `z.union` array. Miss the third and
+ * `parseJainaStreamEventValue` drops the frame with a `console.warn` and nothing
+ * else fails; `stream.scaffold.test.ts` exists to catch exactly that.
+ */
+export const toolApprovalRequiredSchema = streamEventSchema(
+  'tool.approval_required',
+  jainaToolApprovalRequiredPayloadSchema,
+);
+export const toolApprovalResolvedSchema = streamEventSchema(
+  'tool.approval_resolved',
+  jainaToolApprovalResolvedPayloadSchema,
+);
+export const toolOutputDeniedSchema = streamEventSchema(
+  'tool.output_denied',
+  jainaToolOutputDeniedPayloadSchema,
+);
+export const paidScaffoldProposedSchema = streamEventSchema(
+  'paid.scaffold_proposed',
+  paidScaffoldProposedPayloadSchema,
+);
+export const paidScaffoldProgressSchema = streamEventSchema(
+  'paid.scaffold_progress',
+  paidScaffoldProgressPayloadSchema,
+);
+export const paidScaffoldReceiptSchema = streamEventSchema(
+  'paid.scaffold_receipt',
+  paidScaffoldReceiptPayloadSchema,
+);
 
 export const jainaStreamEventSchema = z.union([
   responseCreatedSchema,
@@ -1143,6 +1203,12 @@ export const jainaStreamEventSchema = z.union([
   responseContentPartDoneSchema,
   responseOutputItemDoneSchema,
   responseDoneSchema,
+  toolApprovalRequiredSchema,
+  toolApprovalResolvedSchema,
+  toolOutputDeniedSchema,
+  paidScaffoldProposedSchema,
+  paidScaffoldProgressSchema,
+  paidScaffoldReceiptSchema,
   streamErrorSchema,
 ]);
 
@@ -1205,6 +1271,25 @@ export const creativeArtifactSchema = z.object({
   call_to_action: z.string().optional(),
   platform: z.enum(['facebook', 'instagram', 'tiktok', 'google']).optional(),
   format: z.enum(['image', 'video', 'carousel']).optional(),
+  // The media.assets id behind `url`. Signed storage URLs are hour-scale, so a
+  // conversation reopened tomorrow renders the fallback tile with no way back; this is
+  // what lets CreativeCard re-sign on failure. Absent for Meta-CDN creatives, which are
+  // not ours to re-sign.
+  asset_id: z.string().optional(),
+  // The remaining cards of a CAROUSEL. `url` above stays the cover, so every existing
+  // consumer is untouched. One artifact with slides rather than N flat artifacts:
+  // CreativesSection is a strip of independent tiles, so N would read as N separate ads.
+  slides: z
+    .array(
+      z.object({
+        url: z.string().url(),
+        thumbnail_url: z.string().url().optional(),
+        asset_id: z.string().optional(),
+        caption: z.string().optional(),
+      }),
+    )
+    .max(10)
+    .optional(),
 });
 
 export type CreativeArtifact = z.infer<typeof creativeArtifactSchema>;

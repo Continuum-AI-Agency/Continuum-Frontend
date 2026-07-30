@@ -89,6 +89,9 @@ export async function spliceClips(options: SpliceOptions): Promise<SpliceResult>
     if (targetWidth <= 0 || targetHeight <= 0) {
       throw new Error('Unable to determine target dimensions from first clip');
     }
+    // avc requires even dimensions; image stills can be odd-sized.
+    targetWidth -= targetWidth % 2;
+    targetHeight -= targetHeight % 2;
 
     const offscreen = new OffscreenCanvas(targetWidth, targetHeight);
     const ctx = offscreen.getContext('2d');

@@ -2,8 +2,10 @@
 
 import { ImageIcon } from 'lucide-react';
 import { motion } from 'motion/react';
-import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
-import { mediaFromCreative } from '@/components/chat/media/media';
+import { useCallback, useState } from 'react';
+import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
+import { type ChatMedia, mediaListFromCreative } from '@/components/chat/media/media';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Badge } from '@/components/ui/badge';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -15,9 +17,56 @@ interface CreativeCardProps {
 }
 
 export function CreativeCard({ creative, index }: CreativeCardProps) {
+  const { activeBrandId } = useActiveBrandContext();
   // A video ad used to render its video URL into an <img>. The shared primitive reads
   // `format: 'video'` and renders a real poster frame with a play glyph.
-  const media = mediaFromCreative(creative);
+  //
+  // The LIST form, not the single: a generated carousel arrives as one artifact whose
+  // extra cards ride on `slides`. ChatMediaCarousel renders a one-item list as a bare
+  // thumb with no chrome, so a single-asset creative is unchanged.
+  const baseMedia = mediaListFromCreative(creative);
+
+  // Signed storage URLs are hour-scale. Reopening a conversation the next day would
+  // otherwise render the branded fallback tile with no way back — so a failed URL is
+  // re-minted from the media.assets id the frame carries.
+  const [recovered, setRecovered] = useState<Record<string, ChatMedia>>({});
+  const media = baseMedia.map((item) => recovered[item.id] ?? item);
+
+  const recover = useCallback(
+    async (item: ChatMedia) => {
+      // Only OUR assets are re-signable. A Meta-CDN creative has no media.assets row,
+      // so there is nothing to re-mint and the fallback tile is the honest end state.
+      const assetId = item.id.includes(':') ? null : item.id;
+      if (!assetId || !activeBrandId || recovered[item.id]) return;
+      try {
+        const response = await fetch('/api/library/sign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brandId: activeBrandId, assetId }),
+        });
+        if (!response.ok) return;
+        const { signedUrl, thumbnailUrl } = (await response.json()) as {
+          signedUrl?: string;
+          thumbnailUrl?: string | null;
+        };
+        if (!signedUrl) return;
+        setRecovered((current) => ({
+          ...current,
+          [item.id]: {
+            ...item,
+            url: signedUrl,
+            thumbnailUrl: thumbnailUrl ?? item.thumbnailUrl,
+          },
+        }));
+      } catch {
+        // A failed recovery leaves the fallback tile in place, which is already the
+        // correct visual for "this media is gone".
+      }
+    },
+    [recovered, activeBrandId],
+  );
+
+  const hasMedia = media.length > 0 && Boolean(media[0]?.url);
 
   return (
     <HoverCard openDelay={120} closeDelay={80}>
@@ -30,8 +79,13 @@ export function CreativeCard({ creative, index }: CreativeCardProps) {
           style={{ transformOrigin: 'bottom center' }}
         >
           <AspectRatio ratio={1}>
-            {media.url ? (
-              <ChatMediaThumb media={media} className="rounded-none" />
+            {hasMedia ? (
+              <ChatMediaCarousel
+                items={media}
+                className="rounded-none"
+                onRecoverItem={recover}
+                fallbackSeed={creative.headline ?? creative.id}
+              />
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-muted/40">
                 <ImageIcon className="size-5 text-muted-foreground/30" />
@@ -47,9 +101,14 @@ export function CreativeCard({ creative, index }: CreativeCardProps) {
         sideOffset={10}
         className="w-72 p-0 overflow-hidden"
       >
-        {media.url && (
+        {hasMedia && (
           <AspectRatio ratio={4 / 3}>
-            <ChatMediaThumb media={media} className="rounded-none" />
+            <ChatMediaCarousel
+              items={media}
+              className="rounded-none"
+              onRecoverItem={recover}
+              fallbackSeed={creative.headline ?? creative.id}
+            />
           </AspectRatio>
         )}
 
