@@ -123,9 +123,11 @@ import { resolveSidebarDropTarget } from '../utils/resolveSidebarDropTarget';
 import {
   DEFAULT_VIDEO_GENERATOR_MODEL,
   getVideoGeneratorReferenceMode,
+  VIDEO_GENERATOR_MODEL_GROUPS,
   VIDEO_GENERATOR_MODEL_LABELS,
   VIDEO_GENERATOR_MODELS,
   type VideoGeneratorModel,
+  type VideoGeneratorModelGroup,
 } from '../utils/videoModel';
 import { CanvasFloatingPanel } from './CanvasFloatingPanel';
 import { InstagramMediaBrowser } from './InstagramMediaBrowser';
@@ -297,6 +299,20 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
     ],
   },
 ];
+
+/**
+ * A menu item may offer a narrowed model list, so the provider groups are intersected
+ * with what the item actually offers and empty providers drop out of the menu.
+ */
+const modelGroupsFor = (
+  modelOptions: readonly VideoGeneratorModel[],
+): VideoGeneratorModelGroup[] => {
+  const offered = new Set<VideoGeneratorModel>(modelOptions);
+  return VIDEO_GENERATOR_MODEL_GROUPS.map((group) => ({
+    ...group,
+    models: group.models.filter((model) => offered.has(model)),
+  })).filter((group) => group.models.length > 0);
+};
 
 const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'nanoGen',
@@ -1722,17 +1738,26 @@ function Flow({
                         <ContextMenuSub key={`${item.type}-models`}>
                           <ContextMenuSubTrigger inset>{item.label}</ContextMenuSubTrigger>
                           <ContextMenuSubContent className="w-56">
-                            {item.modelOptions.map((model) => (
-                              <ContextMenuItem
-                                key={`${item.type}-${model}`}
-                                onClick={() => addNodeAtPointer(item.type, { model })}
-                              >
-                                <div className="flex min-w-0 flex-col">
-                                  <span>{VIDEO_GENERATOR_MODEL_LABELS[model]}</span>
-                                  <span className="text-xs text-muted-foreground">{item.desc}</span>
-                                </div>
-                                <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
-                              </ContextMenuItem>
+                            {modelGroupsFor(item.modelOptions).map((group) => (
+                              <ContextMenuSub key={`${item.type}-${group.provider}`}>
+                                <ContextMenuSubTrigger inset>{group.label}</ContextMenuSubTrigger>
+                                <ContextMenuSubContent className="w-56">
+                                  {group.models.map((model) => (
+                                    <ContextMenuItem
+                                      key={`${item.type}-${model}`}
+                                      onClick={() => addNodeAtPointer(item.type, { model })}
+                                    >
+                                      <div className="flex min-w-0 flex-col">
+                                        <span>{VIDEO_GENERATOR_MODEL_LABELS[model]}</span>
+                                        <span className="text-xs text-muted-foreground">
+                                          {item.desc}
+                                        </span>
+                                      </div>
+                                      <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
+                                    </ContextMenuItem>
+                                  ))}
+                                </ContextMenuSubContent>
+                              </ContextMenuSub>
                             ))}
                           </ContextMenuSubContent>
                         </ContextMenuSub>
