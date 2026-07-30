@@ -6,7 +6,9 @@
 export type {
   VideoGeneratorImageReferenceHandle,
   VideoGeneratorModel,
+  VideoGeneratorModelGroup,
   VideoGeneratorNodeType,
+  VideoGeneratorProvider,
   VideoGeneratorReferenceMode,
 } from '@continuum/contracts';
 export {
@@ -14,6 +16,7 @@ export {
   getVideoGeneratorBackendModel,
   getVideoGeneratorImageLimit,
   getVideoGeneratorImageReferenceHandle,
+  getVideoGeneratorProvider,
   getVideoGeneratorReferenceMode,
   getVideoGeneratorReferenceModes,
   getVideoGeneratorTargetHandles,
@@ -24,8 +27,10 @@ export {
   supportsVideoGeneratorReferenceImages,
   supportsVideoGeneratorReferenceVideo,
   VIDEO_FRAME_HANDLES,
+  VIDEO_GENERATOR_MODEL_GROUPS,
   VIDEO_GENERATOR_MODEL_LABELS,
   VIDEO_GENERATOR_MODELS,
+  VIDEO_GENERATOR_PROVIDER_LABELS,
   VIDEO_GENERATOR_REFERENCE_MODE_LABELS,
   VIDEO_IMAGE_REFERENCE_HANDLES,
   VIDEO_REFERENCE_VIDEO_HANDLE,
