@@ -4,6 +4,8 @@ import {
   ArrowRightLeft,
   Building2,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Copy,
   Globe2,
   History,
@@ -20,20 +22,26 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { AdminActionConfirmation } from '@/components/admin/AdminActionConfirmation';
 import {
+  ADMIN_AUDIT_ACTIONS,
+  buildAdminAuditRequestBody,
   buildAdminPaginationRange,
+  buildAdminTabParams,
   buildAdminUserListPaginationParams,
   buildAdminUserListSearchParams,
   canBulkTransfer,
   describeWorkflowNames,
+  formatAuditActionLabel,
   formatBrandDisambiguationLabel,
   groupPermissionsByUserId,
   membershipLabel,
+  resolveAdminTab,
 } from '@/components/admin/adminUserListUtils';
 import type {
   AdminAuditLogEntry,
+  AdminAuditPagination,
   AdminBrandOption,
   AdminPagination,
   AdminUser,
@@ -127,7 +135,11 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 type AdminAuditResponse = {
   entries?: AdminAuditLogEntry[];
+  pagination?: AdminAuditPagination;
 };
+
+const AUDIT_PAGE_SIZE = 50;
+const AUDIT_ACTION_ALL = 'all';
 
 type FirstValueReportSmokeResponse = {
   status?: string;
@@ -159,6 +171,21 @@ function roleVariant(role: string | null) {
   return 'outline';
 }
 
+// Pretty-print an audit before/after/metadata jsonb value for the detail panel.
+// Returns null for empty payloads (null/undefined or an empty object) so the
+// caller can hide the block rather than render a bare "{}".
+function formatAuditJson(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'object' && Object.keys(value as Record<string, unknown>).length === 0) {
+    return null;
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 export function AdminUserList({ users, permissions, pagination, searchQuery }: Props) {
   const { show } = useToast();
   const [isNavPending, startNavTransition] = useTransition();
@@ -166,6 +193,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const router = useRouter();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
+  const activeTab = resolveAdminTab(searchParams.get('tab'));
 
   const [query, setQuery] = useState(searchQuery);
   const searchParamsRef = useRef(searchParamsString);
@@ -191,6 +219,10 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const [isWorkflowLoading, setIsWorkflowLoading] = useState(false);
   const [auditEntries, setAuditEntries] = useState<AdminAuditLogEntry[]>([]);
   const [isAuditLoading, setIsAuditLoading] = useState(false);
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditActionFilter, setAuditActionFilter] = useState<string>(AUDIT_ACTION_ALL);
+  const [auditPagination, setAuditPagination] = useState<AdminAuditPagination | null>(null);
+  const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
   const [reportBrandId, setReportBrandId] = useState('');
   const [reportRecipientEmail, setReportRecipientEmail] = useState('');
   const [reportSmokeResult, setReportSmokeResult] = useState<FirstValueReportSmokeResponse | null>(
@@ -302,6 +334,16 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     );
     return `?${params}`;
   }
+
+  const handleTabChange = useCallback(
+    (value: string) => {
+      const params = buildAdminTabParams(searchParamsRef.current, resolveAdminTab(value));
+      startNavTransition(() => {
+        router.replace(params ? `?${params}` : window.location.pathname, { scroll: false });
+      });
+    },
+    [router, startNavTransition],
+  );
 
   const commitSearch = useCallback(
     (nextQuery: string) => {
@@ -517,18 +559,23 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     }
   }
 
-  async function loadAuditEntries() {
+  async function loadAuditEntries(page: number, action: string) {
     setIsAuditLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke<AdminAuditResponse>(
         'admin-audit-log',
         {
           method: 'POST',
-          body: { page: 1, pageSize: 50 },
+          body: buildAdminAuditRequestBody({
+            page,
+            pageSize: AUDIT_PAGE_SIZE,
+            action: action === AUDIT_ACTION_ALL ? null : action,
+          }),
         },
       );
       if (error) throw new Error(error.message);
       setAuditEntries(data?.entries ?? []);
+      setAuditPagination(data?.pagination ?? null);
     } catch (error) {
       show({
         title: 'Unable to load audit log',
@@ -551,9 +598,26 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   }, [sourceBrandId, workflowQuery]);
 
   useEffect(() => {
-    void loadAuditEntries();
+    void loadAuditEntries(auditPage, auditActionFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [auditPage, auditActionFilter]);
+
+  function handleAuditActionChange(value: string) {
+    setExpandedAuditId(null);
+    setAuditPage(1);
+    setAuditActionFilter(value);
+  }
+
+  function goToAuditPage(nextPage: number) {
+    setExpandedAuditId(null);
+    setAuditPage(nextPage);
+  }
+
+  function toggleAuditExpanded(id: string) {
+    setExpandedAuditId((current) => (current === id ? null : id));
+  }
+
+  const auditTotalPages = auditPagination?.totalPages ?? 0;
 
   function clearCheckedWorkflows() {
     setCheckedWorkflowIds(new Set());
@@ -610,7 +674,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         (current) => new Set(Array.from(current).filter((id) => !succeededIds.has(id))),
       );
       await loadWorkflows();
-      await loadAuditEntries();
+      await loadAuditEntries(auditPage, auditActionFilter);
     } catch (error) {
       show({
         title: 'Bulk action failed',
@@ -780,7 +844,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   }
 
   return (
-    <Tabs defaultValue="users" className="space-y-5">
+    <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <TabsList className="w-full justify-start overflow-x-auto rounded-md bg-surface p-1 xl:w-auto">
           <TabsTrigger value="users" className="gap-2">
@@ -1546,30 +1610,49 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         ) : null}
       </TabsContent>
 
-      <TabsContent value="audit" className="space-y-3">
-        <div className="flex items-center justify-between rounded-lg border border-subtle bg-surface p-3">
+      <TabsContent value="audit" className="space-y-3" data-testid="admin-audit-panel">
+        <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-primary">Admin Audit Log</h2>
-            <p className="text-xs text-muted-foreground">Latest service-role admin actions.</p>
+            <p className="text-xs text-muted-foreground">
+              Immutable trail of service-role admin actions. Expand a row for the before/after
+              change.
+            </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void loadAuditEntries()}
-            disabled={isAuditLoading}
-          >
-            {isAuditLoading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Select value={auditActionFilter} onValueChange={handleAuditActionChange}>
+              <SelectTrigger className="h-9 w-[220px]" aria-label="Filter by action">
+                <SelectValue placeholder="All actions" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={AUDIT_ACTION_ALL}>All actions</SelectItem>
+                {ADMIN_AUDIT_ACTIONS.map((action) => (
+                  <SelectItem key={action} value={action}>
+                    {formatAuditActionLabel(action)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void loadAuditEntries(auditPage, auditActionFilter)}
+              disabled={isAuditLoading}
+            >
+              {isAuditLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              Refresh
+            </Button>
+          </div>
         </div>
         <div className="rounded-lg border border-subtle bg-surface">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8" />
                 <TableHead>Action</TableHead>
                 <TableHead>Target</TableHead>
                 <TableHead>Status</TableHead>
@@ -1579,52 +1662,176 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
             <TableBody>
               {isAuditLoading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
                     Loading audit log...
                   </TableCell>
                 </TableRow>
               ) : auditEntries.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
-                    No audit entries yet.
+                  <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                    No audit entries for this filter.
                   </TableCell>
                 </TableRow>
               ) : (
-                auditEntries.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell>
-                      <div className="text-sm font-medium text-primary">{entry.action}</div>
-                      <p className="text-xs text-muted-foreground">
-                        Actor {entry.actor_user_id ?? 'unknown'}
-                      </p>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm text-primary">{entry.target_type}</div>
-                      <p className="max-w-[320px] truncate text-xs text-muted-foreground">
-                        {entry.target_id ?? 'none'}
-                      </p>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={entry.status === 'success' ? 'secondary' : 'destructive'}
-                        className="gap-1"
+                auditEntries.map((entry) => {
+                  const isExpanded = expandedAuditId === entry.id;
+                  const beforeJson = formatAuditJson(entry.before);
+                  const afterJson = formatAuditJson(entry.after);
+                  const metadataJson = formatAuditJson(entry.metadata);
+                  return (
+                    <Fragment key={entry.id}>
+                      <TableRow
+                        className="cursor-pointer"
+                        data-testid="admin-audit-row"
+                        onClick={() => toggleAuditExpanded(entry.id)}
                       >
-                        {entry.status === 'success' ? (
-                          <CheckCircle2 className="size-3" />
-                        ) : (
-                          <ShieldAlert className="size-3" />
-                        )}
-                        {entry.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(entry.created_at)}
-                    </TableCell>
-                  </TableRow>
-                ))
+                        <TableCell className="align-top">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-6"
+                            aria-expanded={isExpanded}
+                            aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleAuditExpanded(entry.id);
+                            }}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="size-4" />
+                            ) : (
+                              <ChevronRight className="size-4" />
+                            )}
+                          </Button>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <div className="text-sm font-medium text-primary">
+                            {formatAuditActionLabel(entry.action)}
+                          </div>
+                          <p className="max-w-[220px] truncate font-mono text-xs text-muted-foreground">
+                            Actor {entry.actor_user_id ?? 'unknown'}
+                          </p>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <div className="text-sm text-primary">{entry.target_type}</div>
+                          <p className="max-w-[320px] truncate font-mono text-xs text-muted-foreground">
+                            {entry.target_id ?? 'none'}
+                          </p>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <Badge
+                            variant={entry.status === 'success' ? 'secondary' : 'destructive'}
+                            className="gap-1"
+                          >
+                            {entry.status === 'success' ? (
+                              <CheckCircle2 className="size-3" />
+                            ) : (
+                              <ShieldAlert className="size-3" />
+                            )}
+                            {entry.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="align-top text-xs text-muted-foreground">
+                          {formatDate(entry.created_at)}
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded ? (
+                        <TableRow
+                          className="bg-muted/40 hover:bg-muted/40"
+                          data-testid="admin-audit-detail"
+                        >
+                          <TableCell colSpan={5} className="space-y-3 py-3">
+                            <dl className="grid gap-2 text-xs sm:grid-cols-2">
+                              <div>
+                                <dt className="text-muted-foreground">Actor</dt>
+                                <dd className="font-mono break-all text-primary">
+                                  {entry.actor_user_id ?? 'unknown'}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-muted-foreground">Request ID</dt>
+                                <dd className="font-mono break-all text-primary">
+                                  {entry.request_id ?? 'none'}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-muted-foreground">Target</dt>
+                                <dd className="font-mono break-all text-primary">
+                                  {entry.target_type}
+                                  {entry.target_id ? ` · ${entry.target_id}` : ''}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-muted-foreground">Brand profile</dt>
+                                <dd className="font-mono break-all text-primary">
+                                  {entry.brand_profile_id ?? 'none'}
+                                </dd>
+                              </div>
+                            </dl>
+                            <div className="grid gap-3 lg:grid-cols-2">
+                              <div>
+                                <p className="mb-1 text-xs font-medium text-muted-foreground">
+                                  Before
+                                </p>
+                                <pre className="max-h-64 overflow-auto rounded-md border border-subtle bg-background p-2 text-xs">
+                                  {beforeJson ?? '—'}
+                                </pre>
+                              </div>
+                              <div>
+                                <p className="mb-1 text-xs font-medium text-muted-foreground">
+                                  After
+                                </p>
+                                <pre className="max-h-64 overflow-auto rounded-md border border-subtle bg-background p-2 text-xs">
+                                  {afterJson ?? '—'}
+                                </pre>
+                              </div>
+                            </div>
+                            {metadataJson ? (
+                              <div>
+                                <p className="mb-1 text-xs font-medium text-muted-foreground">
+                                  Metadata
+                                </p>
+                                <pre className="max-h-64 overflow-auto rounded-md border border-subtle bg-background p-2 text-xs">
+                                  {metadataJson}
+                                </pre>
+                              </div>
+                            ) : null}
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </Fragment>
+                  );
+                })
               )}
             </TableBody>
           </Table>
+          {auditPagination && auditTotalPages > 1 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-subtle p-3">
+              <p className="text-xs text-muted-foreground">
+                Page {auditPagination.page} of {auditTotalPages} · {auditPagination.totalCount}{' '}
+                entries
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => goToAuditPage(Math.max(1, auditPage - 1))}
+                  disabled={!auditPagination.hasPrevPage || isAuditLoading}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => goToAuditPage(auditPage + 1)}
+                  disabled={!auditPagination.hasNextPage || isAuditLoading}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </TabsContent>
 

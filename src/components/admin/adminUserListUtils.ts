@@ -128,3 +128,77 @@ export function buildAdminUserListSearchParams(
   params.set('pageSize', String(pageSize));
   return params.toString();
 }
+
+// Admin console tabs -------------------------------------------------------
+
+// The admin console tabs, in render order. `users` is the default (no param).
+export const ADMIN_TABS = ['users', 'workflows', 'audit', 'reports'] as const;
+export type AdminTab = (typeof ADMIN_TABS)[number];
+
+// Coerce a raw `?tab=` value into a known tab, defaulting to `users`. Lets
+// /admin?tab=audit deep-link to the Audit tab instead of silently landing on
+// Users (BUG-001).
+export function resolveAdminTab(value: string | null | undefined): AdminTab {
+  return ADMIN_TABS.includes(value as AdminTab) ? (value as AdminTab) : 'users';
+}
+
+// Write the active tab back onto the URL, preserving unrelated params. The
+// default `users` tab is represented by the absence of the param to keep URLs
+// clean.
+export function buildAdminTabParams(currentParams: string, tab: AdminTab): string {
+  const params = new URLSearchParams(currentParams);
+  if (tab === 'users') {
+    params.delete('tab');
+  } else {
+    params.set('tab', tab);
+  }
+  return params.toString();
+}
+
+// Admin audit log ----------------------------------------------------------
+
+// The admin.* action keys the audit writers emit today (impersonate-user,
+// admin-set-admin, admin-access-actions, admin-update-tier,
+// admin-workflow-library). Drives the audit filter dropdown. A new writer
+// action must be added here to be filterable — keep in sync with the edge
+// functions under supabase/functions/admin-*.
+export const ADMIN_AUDIT_ACTIONS = [
+  'admin.user.set_admin',
+  'admin.user.impersonation_link',
+  'admin.member.remove',
+  'admin.brand.update_tier',
+  'admin.workflow.migrate_global_to_brand',
+  'admin.workflow.duplicate_to_brand',
+  'admin.workflow.promote_to_global',
+] as const;
+
+export type AdminAuditAction = (typeof ADMIN_AUDIT_ACTIONS)[number];
+
+// Humanize a dotted action key for display: 'admin.user.set_admin' becomes
+// 'User · Set admin', 'admin.workflow.promote_to_global' becomes
+// 'Workflow · Promote to global'. Falls back to the raw key so an unknown or
+// newly added action still renders legibly.
+export function formatAuditActionLabel(action: string): string {
+  if (!action) return action;
+  const withoutPrefix = action.startsWith('admin.') ? action.slice('admin.'.length) : action;
+  const [domain, ...rest] = withoutPrefix.split('.');
+  const humanize = (value: string) =>
+    value.replace(/_/g, ' ').replace(/^\w/, (character) => character.toUpperCase());
+  if (rest.length === 0) return humanize(domain ?? action);
+  return `${humanize(domain)} · ${humanize(rest.join(' '))}`;
+}
+
+type AdminAuditRequestInput = {
+  page: number;
+  pageSize: number;
+  action?: string | null;
+};
+
+// Build the admin-audit-log request body, omitting the `action` filter when it
+// is unset so the endpoint returns every action rather than filtering on an
+// empty string.
+export function buildAdminAuditRequestBody({ page, pageSize, action }: AdminAuditRequestInput) {
+  const body: { page: number; pageSize: number; action?: string } = { page, pageSize };
+  if (action) body.action = action;
+  return body;
+}

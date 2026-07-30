@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  buildAdminAuditRequestBody,
+  buildAdminTabParams,
   buildAdminUserListSearchParams,
   canBulkTransfer,
   describeWorkflowNames,
+  formatAuditActionLabel,
   formatBrandDisambiguationLabel,
   membershipLabel,
+  resolveAdminTab,
 } from '@/components/admin/adminUserListUtils';
 import type { AdminBrandOption, AdminWorkflowLibraryRow } from '@/components/admin/adminUserTypes';
 
@@ -43,6 +47,69 @@ describe('buildAdminUserListSearchParams', () => {
     expect(params.has('query')).toBe(false);
     expect(params.get('page')).toBe('1');
     expect(params.get('pageSize')).toBe('50');
+  });
+});
+
+describe('resolveAdminTab', () => {
+  it('returns a known tab unchanged', () => {
+    expect(resolveAdminTab('audit')).toBe('audit');
+    expect(resolveAdminTab('workflows')).toBe('workflows');
+  });
+
+  it('falls back to users for missing or unknown values', () => {
+    expect(resolveAdminTab(null)).toBe('users');
+    expect(resolveAdminTab(undefined)).toBe('users');
+    expect(resolveAdminTab('reports-typo')).toBe('users');
+  });
+});
+
+describe('buildAdminTabParams', () => {
+  it('sets the tab param and preserves unrelated params', () => {
+    const result = buildAdminTabParams('query=alex&page=2', 'audit');
+    const params = new URLSearchParams(result);
+    expect(params.get('tab')).toBe('audit');
+    expect(params.get('query')).toBe('alex');
+    expect(params.get('page')).toBe('2');
+  });
+
+  it('drops the tab param for the default users tab', () => {
+    const result = buildAdminTabParams('tab=audit&query=alex', 'users');
+    const params = new URLSearchParams(result);
+    expect(params.has('tab')).toBe(false);
+    expect(params.get('query')).toBe('alex');
+  });
+});
+
+describe('formatAuditActionLabel', () => {
+  it('humanizes a dotted domain.action key', () => {
+    expect(formatAuditActionLabel('admin.user.set_admin')).toBe('User · Set admin');
+    expect(formatAuditActionLabel('admin.workflow.promote_to_global')).toBe(
+      'Workflow · Promote to global',
+    );
+  });
+
+  it('falls back to a readable form for unknown keys', () => {
+    expect(formatAuditActionLabel('somethingelse')).toBe('Somethingelse');
+    expect(formatAuditActionLabel('')).toBe('');
+  });
+});
+
+describe('buildAdminAuditRequestBody', () => {
+  it('omits the action filter when unset', () => {
+    expect(buildAdminAuditRequestBody({ page: 1, pageSize: 50 })).toEqual({
+      page: 1,
+      pageSize: 50,
+    });
+    expect(buildAdminAuditRequestBody({ page: 2, pageSize: 25, action: null })).toEqual({
+      page: 2,
+      pageSize: 25,
+    });
+  });
+
+  it('includes the action filter when set', () => {
+    expect(
+      buildAdminAuditRequestBody({ page: 1, pageSize: 50, action: 'admin.user.set_admin' }),
+    ).toEqual({ page: 1, pageSize: 50, action: 'admin.user.set_admin' });
   });
 });
 
