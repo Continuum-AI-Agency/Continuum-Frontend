@@ -38,7 +38,7 @@ import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { AudioNodeData } from '../types';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import { uploadReferenceFile } from '../utils/uploadReferenceFile';
+import { stageAndUploadReferenceFile } from '../utils/uploadReferenceFile';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -95,13 +95,27 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
         reader.onloadend = () => {
           const result = reader.result as string;
           setAudioSrc(result);
-          updateNodeData(id, { audio: result, fileName: file.name });
-          triggerSave();
           if (brandId) {
-            void uploadReferenceFile(
-              { nodeId: id, file, brandId, field: 'audio' },
-              { updateNodeData },
+            void stageAndUploadReferenceFile(
+              {
+                nodeId: id,
+                file,
+                brandId,
+                field: 'audio',
+                previewData: {
+                  audio: result,
+                  fileName: file.name,
+                  assetId: undefined,
+                  assetVersionId: undefined,
+                  sourcePath: undefined,
+                  bucket: undefined,
+                  sourceUrl: undefined,
+                },
+              },
+              { updateNodeData, triggerSave },
             );
+          } else {
+            updateNodeData(id, { audio: result, fileName: file.name });
           }
         };
         reader.readAsDataURL(file);
@@ -145,13 +159,27 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
         try {
           const result = await fileToDataUrl(file);
           setAudioSrc(result);
-          updateNodeData(id, { audio: result, fileName: file.name });
-          triggerSave();
           if (brandId) {
-            void uploadReferenceFile(
-              { nodeId: id, file, brandId, field: 'audio' },
-              { updateNodeData },
+            void stageAndUploadReferenceFile(
+              {
+                nodeId: id,
+                file,
+                brandId,
+                field: 'audio',
+                previewData: {
+                  audio: result,
+                  fileName: file.name,
+                  assetId: undefined,
+                  assetVersionId: undefined,
+                  sourcePath: undefined,
+                  bucket: undefined,
+                  sourceUrl: undefined,
+                },
+              },
+              { updateNodeData, triggerSave },
             );
+          } else {
+            updateNodeData(id, { audio: result, fileName: file.name });
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to read dropped file';

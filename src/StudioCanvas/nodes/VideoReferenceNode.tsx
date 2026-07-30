@@ -39,7 +39,10 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { VideoNodeData } from '../types';
 import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import { uploadReferenceFile } from '../utils/uploadReferenceFile';
+import {
+  stageAndUploadReferenceFile,
+  uploadReferenceFile,
+} from '../utils/uploadReferenceFile';
 import { referenceStatusBadge } from './referenceStatusBadge';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
@@ -143,11 +146,33 @@ export function VideoReferenceNode({
   // Upload the local file to durable storage and swap to its signed URL. The
   // base64 preview remains the emergency fallback if the upload fails.
   const uploadLocalReference = useCallback(
-    (file: File) => {
-      if (!brandId) return;
-      void uploadReferenceFile({ nodeId: id, file, brandId, field: 'video' }, { updateNodeData });
+    (
+      file: File,
+      previewData?: {
+        video: string;
+        fileName: string;
+        assetId?: undefined;
+        assetVersionId?: undefined;
+        sourcePath?: undefined;
+        bucket?: undefined;
+        sourceUrl?: undefined;
+      },
+    ) => {
+      if (!brandId) {
+        if (previewData) updateNodeData(id, previewData);
+        return;
+      }
+      const deps = { updateNodeData, triggerSave };
+      if (previewData) {
+        void stageAndUploadReferenceFile(
+          { nodeId: id, file, brandId, field: 'video', previewData },
+          deps,
+        );
+        return;
+      }
+      void uploadReferenceFile({ nodeId: id, file, brandId, field: 'video' }, deps);
     },
-    [brandId, id, updateNodeData],
+    [brandId, id, triggerSave, updateNodeData],
   );
 
   const handleFileUpload = useCallback(
@@ -158,20 +183,20 @@ export function VideoReferenceNode({
         reader.onloadend = () => {
           const result = reader.result as string;
           setPreview(result);
-          updateNodeData(id, {
+          uploadLocalReference(file, {
             video: result,
             fileName: file.name,
+            assetId: undefined,
+            assetVersionId: undefined,
             sourcePath: undefined,
             bucket: undefined,
             sourceUrl: undefined,
           });
-          triggerSave();
-          uploadLocalReference(file);
         };
         reader.readAsDataURL(file);
       }
     },
-    [id, triggerSave, updateNodeData, uploadLocalReference],
+    [uploadLocalReference],
   );
 
   // Retry a failed upload from the retained local preview (the base64 the node
@@ -229,14 +254,15 @@ export function VideoReferenceNode({
         try {
           const result = await fileToDataUrl(file);
           setPreview(result);
-          updateNodeData(id, {
+          uploadLocalReference(file, {
             video: result,
             fileName: file.name,
+            assetId: undefined,
+            assetVersionId: undefined,
             sourcePath: undefined,
+            bucket: undefined,
             sourceUrl: undefined,
           });
-          triggerSave();
-          uploadLocalReference(file);
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to read dropped file';
           show({

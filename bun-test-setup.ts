@@ -21,8 +21,10 @@ global.navigator = window.navigator as any;
 global.Element = window.Element as any;
 global.SVGElement = window.SVGElement as any;
 global.HTMLElement = window.HTMLElement as any;
+global.HTMLFormElement = window.HTMLFormElement as any;
 global.HTMLInputElement = window.HTMLInputElement as any;
 global.HTMLTextAreaElement = window.HTMLTextAreaElement as any;
+global.FileReader = window.FileReader as any;
 // Add DocumentFragment which was missing
 global.DocumentFragment = window.DocumentFragment as any;
 global.Node = window.Node as any;
