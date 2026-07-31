@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
 
 // Bug #222: the composer card's X did not close it. `cancel()` aborted the fetch
 // and never touched the turn's status, and `dismiss()` returned right after
@@ -31,6 +32,8 @@ describe('useCanvasComposer — settling and dismissing a turn', () => {
     streamCanvasComposer.mockClear();
     request.mockClear();
     streamBehaviour = async () => {};
+    useStudioStore.getState().setNodes([]);
+    useStudioStore.getState().setEdges([]);
   });
 
   afterEach(cleanup);
@@ -115,5 +118,35 @@ describe('useCanvasComposer — settling and dismissing a turn', () => {
     expect(hook.result.current.turns.at(-1)?.attachments).toEqual([
       expect.objectContaining({ assetId: 'asset-1', versionId: 'version-1' }),
     ]);
+  });
+
+  it('applies a committed composer patch to the live Canvas without another approval step', async () => {
+    const hook = await startTurn(async ({ onFrame }) => {
+      onFrame({
+        type: 'composer.patch',
+        data: {
+          nodes: [
+            {
+              id: 'prompt-1',
+              type: 'string',
+              position: { x: 40, y: 80 },
+              data: { value: 'A direct Canvas edit' },
+            },
+          ],
+          edges: [],
+        },
+      });
+      onFrame({
+        type: 'composer.graph',
+        data: { nodeCount: 1, edgeCount: 0, addedNodeIds: ['prompt-1'] },
+      });
+      onFrame({ type: 'response.done', data: { summary: 'Changed the canvas.' } });
+    });
+
+    await waitFor(() => expect(hook.result.current.state.status).toBe('done'));
+    expect(useStudioStore.getState().nodes).toEqual([
+      expect.objectContaining({ id: 'prompt-1', data: { value: 'A direct Canvas edit' } }),
+    ]);
+    expect(hook.result.current).not.toHaveProperty('decideProposal');
   });
 });
