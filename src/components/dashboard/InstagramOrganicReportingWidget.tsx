@@ -7,6 +7,8 @@ import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } fro
 import { Pill } from '@/components/kibo-ui/pill';
 import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
 import { OrganicMetricsWidgetSkeleton } from '@/components/organic/MetricsSkeleton';
+import { articleFor } from '@/components/organic/organic-format';
+import { resolveReportViewState } from '@/components/organic/organic-metrics-utils';
 import {
   buildPostActivityDays,
   renderPostActivityReferenceLines,
@@ -28,9 +30,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { fetchOrganicAnalytics } from '@/lib/api/organicAnalytics.client';
+import {
+  fetchOrganicAnalytics,
+  isOrganicAnalyticsCancellation,
+} from '@/lib/api/organicAnalytics.client';
 import { useAccountSelectionStore } from '@/lib/integrations/accountSelectionStore';
 import { resolveSelectedAccountId } from '@/lib/integrations/resolveSelectedAccountId';
+import { organicPlatformLabel } from '@/lib/organic/platforms';
 import type {
   MetricComparison,
   OrganicDateRangePreset,
@@ -209,9 +215,17 @@ export function InstagramOrganicReportingWidget({
   className,
 }: Props) {
   const [platform, setPlatform] = React.useState<OrganicPlatform>(initialPlatform);
-  const { getSelection, setSelection } = useAccountSelectionStore();
-  const platformAccounts = platform === 'youtube' ? youtubeAccounts : accounts;
+  const { setSelection } = useAccountSelectionStore();
+  // Memoized because the account list drives a reset effect. Deriving it inline
+  // produced a fresh array on every parent render, which retriggered the reset
+  // without retriggering the narrower fetch effect and stranded the widget in
+  // 'idle' with an account visibly selected.
+  const platformAccounts = React.useMemo(
+    () => (platform === 'youtube' ? youtubeAccounts : accounts),
+    [accounts, platform, youtubeAccounts],
+  );
   const isSupportedPlatform = SUPPORTED_WIDGET_PLATFORMS.has(platform);
+  const platformLabel = organicPlatformLabel(platform);
   const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(() =>
     resolveSelectedAccountId({
       brandId,
@@ -226,42 +240,50 @@ export function InstagramOrganicReportingWidget({
   const [showFlags, setShowFlags] = React.useState(true);
 
   // Re-resolve the selected account when the brand or platform changes (each
-  // platform keeps its own remembered selection and its own account list).
+  // platform keeps its own remembered selection and its own account list). It no
+  // longer resets the load state: the fetch effect below owns every transition, so
+  // a reset can never leave a state the fetch effect will not move off.
   React.useEffect(() => {
     setSelectedAccountId(
-      resolveSelectedAccountId({ brandId, platform, platformAccounts, getSelection }),
+      resolveSelectedAccountId({
+        brandId,
+        platform,
+        platformAccounts,
+        getSelection: useAccountSelectionStore.getState().getSelection,
+      }),
     );
-    setState({ status: 'idle' });
     setExpandedMetric(null);
     setPosts([]);
-  }, [brandId, platform, platformAccounts, getSelection]);
+  }, [brandId, platform, platformAccounts]);
 
   React.useEffect(() => {
     if (selectedAccountId === null || !isSupportedPlatform) {
-      if (!isSupportedPlatform) {
-        setState({ status: 'idle' });
-      }
+      setState({ status: 'idle' });
       return;
     }
     const accountId = selectedAccountId;
+    const controller = new AbortController();
     let cancelled = false;
 
     async function run() {
       setState({ status: 'loading' });
       try {
-        const data = await fetchOrganicAnalytics({
-          brandId,
-          integrationAccountId: accountId,
-          platform: platform as 'instagram' | 'youtube',
-          range: { preset: DEFAULT_RANGE_PRESET },
-          scope: 'kpis',
-        });
+        const data = await fetchOrganicAnalytics(
+          {
+            brandId,
+            integrationAccountId: accountId,
+            platform: platform as 'instagram' | 'youtube',
+            range: { preset: DEFAULT_RANGE_PRESET },
+            scope: 'kpis',
+          },
+          { signal: controller.signal },
+        );
         if (cancelled) return;
         setState({ status: 'success', data });
       } catch (error) {
-        if (cancelled) return;
+        if (cancelled || isOrganicAnalyticsCancellation(error)) return;
         const message =
-          error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
+          error instanceof Error ? error.message : `Unable to load ${platformLabel} metrics.`;
         const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
         const retryAfter = (error as { retryAfter?: number }).retryAfter;
         const errorPlatform = (error as { errorPlatform?: string }).errorPlatform;
@@ -272,8 +294,9 @@ export function InstagramOrganicReportingWidget({
     void run();
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [brandId, selectedAccountId, platform]);
+  }, [brandId, isSupportedPlatform, platform, platformLabel, selectedAccountId]);
 
   // Post-activity markers: fetched in parallel and off the critical path so the
   // KPI/trend chart renders immediately and markers fill in a moment later.
@@ -309,6 +332,14 @@ export function InstagramOrganicReportingWidget({
       cancelled = true;
     };
   }, [brandId, selectedAccountId, platform]);
+
+  // One rule, shared with the metrics dashboard: only a missing account asks for an
+  // account. 'idle' with one selected is a load that has not begun.
+  const viewState = resolveReportViewState({
+    status: state.status,
+    hasAccount: selectedAccountId !== null,
+    hasData: state.status === 'success',
+  });
 
   return (
     <div
@@ -353,9 +384,7 @@ export function InstagramOrganicReportingWidget({
               </SelectItem>
             </SelectContent>
           </Select>
-          <h3 className="truncate text-xs font-semibold capitalize sm:text-sm">
-            {platform} reporting
-          </h3>
+          <h3 className="truncate text-xs font-semibold sm:text-sm">{platformLabel} reporting</h3>
           <span className="hidden whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground sm:inline-block">
             {rangeLabel(DEFAULT_RANGE_PRESET)}
           </span>
@@ -386,11 +415,13 @@ export function InstagramOrganicReportingWidget({
               }}
             >
               <SelectTrigger size="sm" className="h-7 text-xs">
-                <SelectValue placeholder={`Select ${platform} account`} />
+                <SelectValue
+                  placeholder={`Choose ${articleFor(platformLabel)} ${platformLabel} account`}
+                />
               </SelectTrigger>
               <SelectContent position="popper">
                 <SelectGroup>
-                  <SelectLabel>{platform} accounts</SelectLabel>
+                  <SelectLabel>{platformLabel} accounts</SelectLabel>
                   {platformAccounts.map((account) => (
                     <SelectItem
                       key={account.integrationAccountId}
@@ -416,29 +447,26 @@ export function InstagramOrganicReportingWidget({
                   size={48}
                   className="opacity-20"
                 />
-                <h3 className="text-lg font-semibold text-muted-foreground">
-                  {platform} Support Coming Soon
+                <h3 className="text-lg font-semibold text-foreground">
+                  {platformLabel} support coming soon
                 </h3>
-                <span className="block max-w-[300px] text-center text-sm text-muted-foreground">
-                  We&apos;re currently working on integrating {platform} organic metrics into your
-                  dashboard.
+                <span className="block max-w-[300px] text-center text-sm text-foreground">
+                  We&apos;re still building {platformLabel} organic reporting into your dashboard.
                 </span>
               </div>
             </div>
           ) : platformAccounts.length === 0 ? (
-            <span className="text-sm text-muted-foreground">
-              No {platform} accounts are linked to this brand profile.
+            <span className="text-sm text-foreground">
+              No {platformLabel} accounts are linked to this brand profile.
             </span>
-          ) : state.status === 'error' ? (
+          ) : viewState === 'error' && state.status === 'error' ? (
             <IntegrationErrorBanner
               errorCode={state.errorCode}
               message={state.message}
               platform={state.errorPlatform ?? platform}
               retryAfter={state.retryAfter}
             />
-          ) : state.status === 'loading' ? (
-            <OrganicMetricsWidgetSkeleton />
-          ) : state.status === 'success' ? (
+          ) : viewState === 'ready' && state.status === 'success' ? (
             <MetricsPanel
               data={state.data}
               posts={posts}
@@ -446,10 +474,12 @@ export function InstagramOrganicReportingWidget({
               expandedMetric={expandedMetric}
               onMetricSelect={setExpandedMetric}
             />
-          ) : (
-            <span className="text-sm text-muted-foreground">
-              Select a {platform} account to view organic reporting.
+          ) : viewState === 'chooseAccount' ? (
+            <span className="text-sm text-foreground">
+              Choose {articleFor(platformLabel)} {platformLabel} account to see your report.
             </span>
+          ) : (
+            <OrganicMetricsWidgetSkeleton />
           )}
         </div>
       </div>

@@ -36,10 +36,10 @@ mock.module('../primitives/DraftDeletionConfirmation', () => ({
 
 import { useCalendarSelection } from './useCalendarSelection';
 
-function renderSelection(selectedDraftId: string | null = null) {
+function renderSelection(selectedDraftId: string | null = null, onDismiss?: () => void) {
   storeState.selectedDraftId = selectedDraftId;
   storeState.selectedDraftIds = [];
-  return renderHook(() => useCalendarSelection([]));
+  return renderHook(() => useCalendarSelection([], { onDismiss }));
 }
 
 describe('useCalendarSelection', () => {
@@ -113,6 +113,53 @@ describe('useCalendarSelection', () => {
 
     expect(result.current.isPreviewCollapsed).toBe(false);
     expect(result.current.isAutoSelectSuppressed('draft-1')).toBe(false);
+  });
+
+  // THE H-02 regression. With a single dismissal slot, landing on `?draftId=A`, clicking
+  // pill B and closing recorded only B — so the deep-link watcher re-selected A and the
+  // panel could not be closed by any means.
+  it('keeps every dismissed draft suppressed, not just the last one', () => {
+    const { result, rerender } = renderSelection('draft-a');
+
+    act(() => result.current.clearAll());
+    rerender();
+    act(() => result.current.handleSelect('draft-b'));
+    rerender();
+    act(() => result.current.clearAll());
+    rerender();
+
+    expect(result.current.isAutoSelectSuppressed('draft-a')).toBe(true);
+    expect(result.current.isAutoSelectSuppressed('draft-b')).toBe(true);
+    expect(result.current.isAutoSelectSuppressed('draft-c')).toBe(false);
+  });
+
+  // Expanding used to clear the WHOLE set, re-arming every draft ever dismissed and
+  // handing the deep-link watcher its loop back.
+  it('re-arms only the selected draft on expand', () => {
+    const { result, rerender } = renderSelection('draft-a');
+
+    act(() => result.current.clearAll());
+    rerender();
+    act(() => result.current.handleSelect('draft-b'));
+    rerender();
+    act(() => result.current.collapsePreview());
+    rerender();
+    act(() => result.current.expandPreview());
+    rerender();
+
+    expect(result.current.isAutoSelectSuppressed('draft-b')).toBe(false);
+    expect(result.current.isAutoSelectSuppressed('draft-a')).toBe(true);
+  });
+
+  it('tells the call site to strip the deep link when the preview is dismissed', () => {
+    const onDismiss = mock();
+    const { result } = renderSelection('draft-1', onDismiss);
+
+    act(() => result.current.clearAll());
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.collapsePreview());
+    expect(onDismiss).toHaveBeenCalledTimes(2);
   });
 
   // A user can always get the panel back: picking the row again re-opens it even

@@ -9,6 +9,7 @@ import {
   enqueueCopyGeneration,
 } from '@/lib/organic/draftEnrichment';
 import { useCalendarStore } from '@/lib/organic/store';
+import { useDestructiveConfirmation } from '../primitives/DestructiveConfirmation';
 import { resolveDraftMediaStage } from '../primitives/DraftLifecycle';
 import type { OrganicCalendarDraft } from '../primitives/types';
 
@@ -72,6 +73,7 @@ export function useDraftEnrichmentLadder(
 ): DraftLadder {
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const { show } = useToast();
+  const { requestDestructiveConfirmation } = useDestructiveConfirmation();
   const [isBusy, setIsBusy] = React.useState(false);
 
   const mediaStage = resolveDraftMediaStage(draft);
@@ -187,10 +189,26 @@ export function useDraftEnrichmentLadder(
   const canRewriteCopy =
     hasCopy && !isStreaming && mediaStage !== 'realizing' && mediaStage !== 'realized';
 
+  // A rewrite replaces the caption and hashtags that are already there, so it asks first.
   const rewriteCopy = React.useCallback(() => {
     if (!canRewriteCopy || isBusy || !draft.backendDraftId) return;
-    void runLadderRequest('copy', true);
-  }, [canRewriteCopy, draft.backendDraftId, isBusy, runLadderRequest]);
+    void (async () => {
+      const confirmed = await requestDestructiveConfirmation({
+        title: 'Rewrite the copy?',
+        description:
+          'The current caption and hashtags are replaced by a fresh generation. This cannot be undone.',
+        confirmLabel: 'Rewrite copy',
+      });
+      if (!confirmed) return;
+      await runLadderRequest('copy', true);
+    })();
+  }, [
+    canRewriteCopy,
+    draft.backendDraftId,
+    isBusy,
+    requestDestructiveConfirmation,
+    runLadderRequest,
+  ]);
 
   return {
     steps,

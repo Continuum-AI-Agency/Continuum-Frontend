@@ -997,6 +997,7 @@ export async function executeWorkflow(
       isExecuting: false,
       isComplete: false,
       error: undefined,
+      errorCode: undefined,
       generatedImage: undefined,
       generatedImageUrl: undefined,
       generatedVideo: undefined,
@@ -1207,6 +1208,7 @@ export async function executeWorkflow(
     nodeId: string,
     status: 'running' | 'awaiting' | 'completed' | 'failed',
     error?: string,
+    errorCode?: string,
   ) => {
     const current = useStudioStore.getState().nodes.find((node) => node.id === nodeId)?.data as
       | Record<string, unknown>
@@ -1225,6 +1227,7 @@ export async function executeWorkflow(
       // Surfaced by the Video Editor node as a "paused — needs editing" badge.
       awaitingInput: status === 'awaiting',
       error: error,
+      errorCode: errorCode,
     });
     if (status !== 'running') {
       useStudioStore.getState().triggerSave();
@@ -1942,7 +1945,7 @@ export async function executeWorkflow(
       });
 
       if (!result.success) {
-        updateNodeStatus(nodeId, 'failed', result.error || 'Generation failed');
+        updateNodeStatus(nodeId, 'failed', result.error || 'Generation failed', result.errorCode);
         return false;
       }
 

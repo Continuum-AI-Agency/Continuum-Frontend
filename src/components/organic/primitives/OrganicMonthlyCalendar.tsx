@@ -1,5 +1,6 @@
 'use client';
 
+import { useDroppable } from '@dnd-kit/core';
 import { LightningBoltIcon, Pencil1Icon, TrashIcon } from '@radix-ui/react-icons';
 import { ChevronLeft, ChevronRight, GalleryHorizontalEnd, Plus } from 'lucide-react';
 import * as React from 'react';
@@ -19,8 +20,9 @@ import { cn } from '@/lib/utils';
 import { AddPostContextMenu } from './AddPostContextMenu';
 import { AddPostMenu } from './AddPostMenu';
 import { formatDayId } from './calendar-utils';
+import { StatusDot } from './DraftCardBadges';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
-import { statusFrameClasses } from './draft-card-styles';
+import { draftStatusPresentation, statusFrameClasses } from './draft-card-styles';
 import { PostedContentPreview } from './PostedContentQuickLook';
 import type { CreatePostOptions, PlannerPlatform } from './planner-platforms';
 import type {
@@ -28,6 +30,7 @@ import type {
   OrganicCalendarDraft,
   OrganicCalendarPostedContent,
 } from './types';
+import { useDraftDragHandle } from './useDraftDragHandle';
 
 const PLATFORM_CHIP_COLORS: Record<string, string> = {
   instagram: 'bg-pink-500/80 text-white',
@@ -45,7 +48,11 @@ type OrganicMonthlyCalendarProps = {
   platforms: PlannerPlatform[];
   postedContent: OrganicCalendarPostedContent[];
   selectedDraftId: string | null;
+  /** The multi-selection, so a shift-click on a chip can extend it and a bulk drag can
+      move the whole set — the same contract the week grid already honours. */
+  selectedDraftIds?: string[];
   onSelectDraft: (id: string) => void;
+  onToggleSelection?: (id: string) => void;
   onCreatePost: (options: CreatePostOptions) => void;
   onPreviousMonth: () => void;
   onNextMonth: () => void;
@@ -78,39 +85,80 @@ function buildMonthGrid(weekStart: Date): Date[] {
 function DraftChip({
   draft,
   isSelected,
+  isMultiSelected,
   onClick,
+  onToggleSelection,
   onRegenerate,
   onDelete,
 }: {
   draft: OrganicCalendarDraft;
   isSelected: boolean;
+  isMultiSelected: boolean;
   onClick: () => void;
+  onToggleSelection?: (id: string) => void;
   onRegenerate?: (id: string) => void;
   onDelete?: (id: string) => void;
 }) {
   const platform = draft.platforms[0] ?? 'instagram';
   const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
+  const { setNodeRef, listeners, attributes, isDragging, style } = useDraftDragHandle(draft.id);
+  const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
+  const { label: statusLabel } = draftStatusPresentation(draft.status);
+
+  // Drag start has to close an open preview, not merely refuse to open a new one: the
+  // 272px card otherwise sits under the cursor for the whole drag.
+  React.useEffect(() => {
+    if (isDragging) setIsPreviewOpen(false);
+  }, [isDragging]);
 
   return (
-    <HoverCard openDelay={300} closeDelay={100}>
+    <HoverCard
+      open={isPreviewOpen}
+      onOpenChange={(next) => {
+        if (isDragging) return;
+        setIsPreviewOpen(next);
+      }}
+      openDelay={300}
+      closeDelay={100}
+    >
       <ContextMenu>
         <HoverCardTrigger asChild>
           <ContextMenuTrigger asChild>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClick();
-              }}
-              className={cn(
-                'flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight transition-opacity hover:opacity-80',
-                statusFrameClasses(platform, draft.status, 'chip'),
-                isSelected && 'ring-1 ring-brand-primary ring-offset-1',
-              )}
-              title={draft.title}
+            <div
+              ref={setNodeRef}
+              style={style}
+              className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+              {...listeners}
+              {...attributes}
             >
-              <span className="truncate">{draft.title || 'Untitled'}</span>
-            </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // A drag ends in a click on the chip it started from. Un-guarded, every
+                  // month-view drag also swapped the preview panel — which is exactly why
+                  // the month grid felt like it had no drag and drop at all.
+                  if (isDragging) return;
+                  if (e.shiftKey && onToggleSelection) {
+                    onToggleSelection(draft.id);
+                    return;
+                  }
+                  onClick();
+                }}
+                className={cn(
+                  'flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight transition-opacity hover:opacity-80',
+                  statusFrameClasses(platform, draft.status, 'chip'),
+                  isSelected && 'ring-1 ring-brand-primary ring-offset-1',
+                  isMultiSelected && !isSelected && 'ring-1 ring-brand-primary/50',
+                )}
+                // The chip is coloured by PLATFORM, so without the dot and this title the
+                // month grid was the one surface that named no status at all.
+                title={`${statusLabel} · ${draft.title || 'Untitled'}`}
+              >
+                <StatusDot status={draft.status} />
+                <span className="truncate">{draft.title || 'Untitled'}</span>
+              </button>
+            </div>
           </ContextMenuTrigger>
         </HoverCardTrigger>
         <ContextMenuContent className="w-48">
@@ -190,11 +238,65 @@ function PostedContentChip({ post }: { post: OrganicCalendarPostedContent }) {
   );
 }
 
+/**
+ * One month cell: the day's chips AND the drop target for a draft dragged onto that day.
+ *
+ * The droppable id reuses the week grid's grammar verbatim, minus the platform segment —
+ * `parsePlannerCellId` already reads a platform-less id as "reschedule the day, leave the
+ * channel alone", which is the right semantics here because a month cell spans platforms.
+ */
+function MonthDayCell({
+  dayId,
+  isCurrentMonth,
+  isToday,
+  isFocused,
+  onFocusDay,
+  children,
+}: {
+  dayId: string;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  isFocused: boolean;
+  onFocusDay: (dayId: string) => void;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `planner-cell::${dayId}`,
+    data: { type: 'planner-cell', dayId },
+  });
+
+  return (
+    // Clicking the cell (not a chip) focuses the day, so the toolbar "+" and the
+    // right-click "New post" target it. DraftChip stops propagation. No keyboard handler
+    // by design: this is a pointer shortcut to a target keyboard users reach directly —
+    // every cell's own "+" already carries its dayId — so a key handler here would only
+    // add a dead tab stop.
+    // biome-ignore lint/a11y/noStaticElementInteractions: day-focus surface; the cell is a drop target, not a control
+    // biome-ignore lint/a11y/useKeyWithClickEvents: pointer-only shortcut; the cell's "+" button is the keyboard path
+    <div
+      ref={setNodeRef}
+      data-planner-cell={`planner-cell::${dayId}`}
+      onClick={() => onFocusDay(dayId)}
+      className={cn(
+        'group relative border-b border-r border-border/30 p-1.5 last:border-r-0',
+        !isCurrentMonth && 'opacity-40',
+        isToday && 'bg-primary/[0.04]',
+        isOver && 'bg-primary/10',
+        isFocused && 'ring-2 ring-inset ring-primary/40',
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function OrganicMonthlyCalendar({
   days,
   monthAnchorDate,
   selectedDraftId,
+  selectedDraftIds,
   onSelectDraft,
+  onToggleSelection,
   onCreatePost,
   onPreviousMonth,
   onNextMonth,
@@ -203,6 +305,10 @@ export function OrganicMonthlyCalendar({
   postedContent,
 }: OrganicMonthlyCalendarProps) {
   const todayId = React.useMemo(() => formatDayId(new Date()), []);
+  const selectedDraftIdSet = React.useMemo(
+    () => new Set(selectedDraftIds ?? []),
+    [selectedDraftIds],
+  );
   const focusedDayId = useCalendarStore((state) => state.focusedDayId);
   const setFocusedDayId = useCalendarStore((state) => state.setFocusedDayId);
 
@@ -290,21 +396,12 @@ export function OrganicMonthlyCalendar({
               // menu, preset to this day. No platformKey by design: the workspace
               // picks the brand's default platform (see the "+" note below).
               <AddPostContextMenu key={dayId} dayId={dayId} onCreatePost={onCreatePost}>
-                {/* Clicking the cell (not a chip) focuses the day, so the toolbar "+" and
-                  the right-click "New post" target it. DraftChip stops propagation.
-                  No keyboard handler by design: this is a pointer shortcut to a target
-                  keyboard users reach directly — every cell's own "+" already carries its
-                  dayId — so adding a key handler here would only add a dead tab stop. */}
-                {/* biome-ignore lint/a11y/noStaticElementInteractions: day-focus surface; the cell is a drop target, not a control */}
-                {/* biome-ignore lint/a11y/useKeyWithClickEvents: pointer-only shortcut; the cell's "+" button is the keyboard path */}
-                <div
-                  onClick={() => setFocusedDayId(dayId)}
-                  className={cn(
-                    'group relative border-b border-r border-border/30 p-1.5 last:border-r-0',
-                    !isCurrentMonth && 'opacity-40',
-                    isToday && 'bg-primary/[0.04]',
-                    dayId === focusedDayId && 'ring-2 ring-inset ring-primary/40',
-                  )}
+                <MonthDayCell
+                  dayId={dayId}
+                  isCurrentMonth={isCurrentMonth}
+                  isToday={isToday}
+                  isFocused={dayId === focusedDayId}
+                  onFocusDay={setFocusedDayId}
                 >
                   <div className="mb-1 flex items-center justify-between">
                     {isToday ? (
@@ -335,7 +432,9 @@ export function OrganicMonthlyCalendar({
                         key={draft.id}
                         draft={draft}
                         isSelected={draft.id === selectedDraftId}
+                        isMultiSelected={selectedDraftIdSet.has(draft.id)}
                         onClick={() => onSelectDraft(draft.id)}
+                        onToggleSelection={onToggleSelection}
                         onRegenerate={onRegenerate}
                         onDelete={onDeleteDraft}
                       />
@@ -349,7 +448,7 @@ export function OrganicMonthlyCalendar({
                       </span>
                     )}
                   </div>
-                </div>
+                </MonthDayCell>
               </AddPostContextMenu>
             );
           })}

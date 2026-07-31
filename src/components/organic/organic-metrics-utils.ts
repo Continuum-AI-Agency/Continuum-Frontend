@@ -3,8 +3,11 @@ import type {
   OrganicPost,
   OrganicPostBreakdownPoint,
 } from '@/lib/schemas/organicMetrics';
+import { NO_DATA, percentChangeFrom } from './organic-format';
 
 export type DrilldownWindow = '7d' | '30d';
+
+export const DRILLDOWN_WINDOW_DAYS: Record<DrilldownWindow, number> = { '7d': 7, '30d': 30 };
 export type PostMetricKey = 'reach' | 'views' | 'engagement' | 'comments';
 export type PostSortKey = 'recent' | 'hookRate' | 'views' | 'reach' | 'engagement';
 
@@ -18,7 +21,7 @@ export function calculateHookRate(post: OrganicPost): number | undefined {
 
 // Reels watch time arrives from Meta in milliseconds; render it human-readable.
 export function formatWatchTime(ms: number | undefined): string {
-  if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return '-';
+  if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return NO_DATA;
   const totalSeconds = ms / 1000;
   if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`;
   const totalMinutes = Math.floor(totalSeconds / 60);
@@ -133,6 +136,124 @@ export function isTrendKeyGraphable(
   return countNumericTrendPoints(trends, trendKey) >= minPoints;
 }
 
+export type TrendLineShape = { curve: 'linear' | 'monotone'; showDots: boolean };
+
+// How a line should be drawn for the number of real points behind it. Spline
+// smoothing across two points draws a rise-and-fall that no measurement
+// supports, so below the graphable threshold the line stays straight and every
+// recorded point is marked — the reader can then count what was actually
+// measured instead of reading a shape out of an interpolation.
+export function trendLineShape(
+  numericPointCount: number,
+  minPoints: number = MIN_GRAPHABLE_TREND_POINTS,
+): TrendLineShape {
+  const sparse = numericPointCount < minPoints;
+  return { curve: sparse ? 'linear' : 'monotone', showDots: sparse };
+}
+
+// Every calendar day in [since, until], inclusive. Empty for an inverted or
+// unparseable window rather than looping.
+export function enumerateDates(since: string, until: string): string[] {
+  const start = parseYmd(since);
+  const end = parseYmd(until);
+  if (!start || !end || start.getTime() > end.getTime()) return [];
+
+  const dates: string[] = [];
+  const cursor = new Date(start);
+  while (cursor.getTime() <= end.getTime()) {
+    dates.push(toYmd(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+// The `days`-long window ending on `until`. Anchored to the reporting range's
+// last day rather than to today, because the platforms report with a lag and an
+// axis that ends "today" ends on a day that has no data.
+export function windowEndingOn(until: string, days: number): { since: string; until: string } {
+  const end = parseYmd(until);
+  if (!end || days <= 0) return { since: until, until };
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+  return { since: toYmd(start), until: toYmd(end) };
+}
+
+export type DateAlignedPoint = { date: string; value: number | undefined; boosted: boolean };
+
+// A series whose axis comes from the window's calendar dates rather than from
+// however many points the metric happens to carry. Positional slicing gave each
+// metric its own axis — one ending on the 25th, another on the 26th, both under
+// one shared range label — and hid a missing day by sliding the window instead of
+// showing the gap.
+export function buildDateAlignedSeries(params: {
+  trends: ReadonlyArray<Record<string, unknown>> | undefined;
+  trendKey: string | undefined;
+  since: string;
+  until: string;
+}): DateAlignedPoint[] {
+  const { trends, trendKey, since, until } = params;
+  if (!trendKey) return [];
+
+  const byDate = new Map<string, Record<string, unknown>>();
+  for (const trend of trends ?? []) {
+    const date = trend.date;
+    if (typeof date === 'string' && date.length > 0) byDate.set(date, trend);
+  }
+
+  return enumerateDates(since, until).map((date) => {
+    const trend = byDate.get(date);
+    const value = trend?.[trendKey];
+    return {
+      date,
+      value: typeof value === 'number' ? value : undefined,
+      boosted: Boolean(trend?.boosted),
+    };
+  });
+}
+
+// The last day that actually reported a value. Drives the explicit "data current
+// through <date>" note: the platforms' reporting lag is otherwise invisible, and
+// looks like the range filter being wrong.
+export function latestNumericDate(
+  points: ReadonlyArray<{ date: string; value: number | undefined }>,
+): string | undefined {
+  for (let index = points.length - 1; index >= 0; index -= 1) {
+    const point = points[index];
+    if (point && typeof point.value === 'number') return point.date;
+  }
+  return undefined;
+}
+
+// Day-over-day change from the two most recent numeric trend points — and only
+// when those points are genuinely consecutive calendar days. Filtering gaps out
+// of a series makes "the last two entries" and "yesterday versus today" two
+// different questions; answering the second with the first is what put a DOWN
+// badge on a metric that had simply not reported for a week.
+export function dayOverDayComparisonFromTrends(
+  trends: ReadonlyArray<Record<string, unknown>> | undefined,
+  trendKey: string | undefined,
+): MetricComparison | undefined {
+  if (!trendKey) return undefined;
+
+  const numeric = (trends ?? [])
+    .map((trend) => ({ date: trend.date, value: trend[trendKey] }))
+    .filter(
+      (point): point is { date: string; value: number } =>
+        typeof point.date === 'string' && typeof point.value === 'number',
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const current = numeric[numeric.length - 1];
+  const previous = numeric[numeric.length - 2];
+  if (!current || !previous) return undefined;
+  if (!areConsecutiveDays(previous.date, current.date)) return undefined;
+
+  const percentageChange = percentChangeFrom(current.value, previous.value);
+  if (percentageChange === undefined) return undefined;
+
+  return { current: current.value, previous: previous.value, percentageChange };
+}
+
 // The post feed loads shallowest-first and deepens as the reader scrolls: the
 // last week, then the rest of the month, then the two months behind it. Each
 // boundary is a cumulative depth in days back from today; consecutive boundaries
@@ -150,6 +271,21 @@ export function toYmd(date: Date) {
 
 function utcDateOnly(value: Date) {
   return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+}
+
+const YMD_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseYmd(value: string): Date | null {
+  if (!YMD_PATTERN.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function areConsecutiveDays(earlier: string, later: string): boolean {
+  const start = parseYmd(earlier);
+  const end = parseYmd(later);
+  if (!start || !end) return false;
+  return end.getTime() - start.getTime() === 24 * 60 * 60 * 1000;
 }
 
 // How many days of history the window at `windowOffset` covers, or null when the
@@ -190,17 +326,20 @@ export function postWindowRange(windowOffset: number, now = new Date()) {
 // summed across days, so it stays lifetime-only with no comparison badge.
 export type PostComparisonKey = Exclude<PostMetricKey, 'reach'> | 'likes' | 'shares' | 'saved';
 
+// A day the platform did not report is left absent, not coerced to 0. Coercing
+// it plots a drop to zero that never happened and renders as the string "0"
+// wherever the value reaches a label.
 export function normalizeDailyBreakdown(points: OrganicPostBreakdownPoint[] | undefined) {
   return (points ?? [])
     .map((point) => ({
       date: point.date ?? (point.timestamp ? point.timestamp.slice(0, 10) : ''),
-      reach: point.reach ?? 0,
-      views: point.views ?? 0,
-      engagement: point.engagement ?? 0,
-      comments: point.comments ?? 0,
-      likes: point.likes ?? 0,
-      shares: point.shares ?? 0,
-      saved: point.saved ?? 0,
+      reach: point.reach,
+      views: point.views,
+      engagement: point.engagement,
+      comments: point.comments,
+      likes: point.likes,
+      shares: point.shares,
+      saved: point.saved,
     }))
     .filter((point) => point.date.length > 0)
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -216,18 +355,18 @@ function metricValueFromBreakdownPoint(
     comments?: number;
   },
   metricKey: PostMetricKey,
-) {
+): number | undefined {
   switch (metricKey) {
     case 'reach':
-      return point.reach ?? 0;
+      return point.reach;
     case 'views':
-      return point.views ?? 0;
+      return point.views;
     case 'engagement':
-      return point.engagement ?? 0;
+      return point.engagement;
     case 'comments':
-      return point.comments ?? 0;
+      return point.comments;
     default:
-      return 0;
+      return undefined;
   }
 }
 
@@ -245,10 +384,12 @@ function recentPostBreakdown(post: OrganicPost | null) {
     .slice(-7);
 }
 
+export type PostSeriesPoint = { date: string; value: number | undefined };
+
 export function buildPostMetricSeries(params: {
   post: OrganicPost | null;
   metricKey: PostMetricKey;
-}) {
+}): PostSeriesPoint[] {
   const { post, metricKey } = params;
   const breakdown = recentPostBreakdown(post);
 
@@ -257,6 +398,49 @@ export function buildPostMetricSeries(params: {
     value: metricValueFromBreakdownPoint(point, metricKey),
   }));
 }
+
+export function countNumericSeriesPoints(
+  points: ReadonlyArray<{ value: number | undefined }>,
+): number {
+  return points.reduce((count, point) => (typeof point.value === 'number' ? count + 1 : count), 0);
+}
+
+export type SectionLoadStatus = 'idle' | 'loading' | 'error' | 'success';
+export type ReportViewState = 'loading' | 'error' | 'ready' | 'chooseAccount';
+
+// Which branch an organic report surface should render. 'idle' on its own is
+// ambiguous — it covers both "no account chosen yet" and "an account is chosen and
+// the load has not started" — and reading it as the first is what made the empty
+// state ask the reader to select an account the picker already showed as selected.
+// The account, not the status, decides that question.
+export function resolveReportViewState(input: {
+  status: SectionLoadStatus;
+  hasAccount: boolean;
+  hasData: boolean;
+}): ReportViewState {
+  if (!input.hasAccount) return 'chooseAccount';
+  if (input.status === 'error') return 'error';
+  if (input.status === 'success' && input.hasData) return 'ready';
+  return 'loading';
+}
+
+export const POST_HISTORY_TRACKED_DAYS = 7;
+export const POST_COMPARISON_UNLOCK_DAYS = 14;
+
+// One wording for the per-post history accrual. It previously shipped in three
+// different phrasings across the quick look and the snapshot panel, which read as
+// three separate limitations rather than one.
+export function postHistoryProgressCopy(trackedDays: number): string {
+  return `Tracking this post's daily numbers as they come in — ${trackedDays} of ${POST_HISTORY_TRACKED_DAYS} days so far.`;
+}
+
+export const POST_HISTORY_ACCOUNT_STANDIN_COPY =
+  "Not enough daily numbers for this post yet, so this shows the whole account's trend instead.";
+
+export const POST_HISTORY_EMPTY_COPY =
+  'Daily tracking for this post starts today. Check back tomorrow for its first trend.';
+
+export const POST_COMPARISON_UNLOCK_COPY = `Change vs the week before appears after ${POST_COMPARISON_UNLOCK_DAYS} days of tracking.`;
 
 // Backend-computed period-over-period comparison (current 7d vs prior 7d) —
 // see periodComparisonFromBreakdown in fetch-organic-analytics/lib/post-snapshots.ts.

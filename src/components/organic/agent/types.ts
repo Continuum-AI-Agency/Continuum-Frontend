@@ -228,4 +228,7 @@ export type AgentChatInput = {
   // Composer attachments, already uploaded and signed. The backend folds them into the same image
   // path as @-mentioned library media.
   images?: AgentAttachment[];
+  // The reader's own BCP-47 locale, so the agent answers and drafts in the language they are
+  // actually working in rather than defaulting to English.
+  locale?: string;
 };

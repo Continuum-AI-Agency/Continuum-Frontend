@@ -73,15 +73,41 @@ export type JainaToolOutputDeniedPayload = z.infer<typeof jainaToolOutputDeniedP
 // Paid campaign scaffolding frames
 // ---------------------------------------------------------------------------
 
+/** The three human-in-the-loop gates, in the order the database enforces. */
+export const paidScaffoldGateSchema = z.enum(['build', 'populate', 'activate']);
+export type PaidScaffoldGate = z.infer<typeof paidScaffoldGateSchema>;
+
+/**
+ * `scaffoldId` ON EVERY `paid.scaffold_*` PAYLOAD IS `paid_scaffold_versions.id`.
+ *
+ * Not `paid_scaffolds.id`. The version is the unit of approval, the unit of the
+ * content hash, the foreign key nodes are stored under, and the only id every emit
+ * site provably holds — including a refusal, which fires before the plan is read.
+ * The parent scaffold rides along on the proposal frame only, as `parentScaffoldId`,
+ * so a Frontend can query nodes with one `eq('version_id', scaffoldId)` and no
+ * second hop through `current_version_id`.
+ */
+
 /**
  * data shape for type: "paid.scaffold_proposed" — what the agent intends to create,
  * before anything is written to the ad platform. `plan` stays unstructured here on
  * purpose: the scaffold plan's own schema lives in the paid contracts and evolves on
  * its own cadence; pinning its shape at the wire boundary would couple the two.
+ *
+ * THE TREE DOES NOT TRAVEL ON THE WIRE. `plan` carries ids, counts and a
+ * campaign-level skeleton; the nodes themselves are inlined only for a small
+ * scaffold and are marked `truncated` otherwise. Two reasons, both load-bearing:
+ * every frame is written twice (socket + a durable run-event row re-read on every
+ * replay), and a node's `status`/`meta_object_id` mutate during each gate, so a tree
+ * copied into the frame is stale the moment a build starts. The Frontend reads
+ * `brand_profiles.paid_scaffold_nodes`, which RLS already grants to brand members.
  */
 export const paidScaffoldProposedPayloadSchema = z
   .object({
+    /** `paid_scaffold_versions.id` — see the note above. */
     scaffoldId: z.string(),
+    /** `paid_scaffolds.id`, the mutable parent the versions hang off. */
+    parentScaffoldId: z.string().optional(),
     brandId: z.string().optional(),
     adAccountId: z.string().nullable().optional(),
     /** The proposed campaign → ad set → ad tree. Narrowed on the Frontend. */
@@ -105,6 +131,16 @@ export type PaidScaffoldProposedPayload = z.infer<typeof paidScaffoldProposedPay
 export const paidScaffoldProgressPayloadSchema = z
   .object({
     scaffoldId: z.string(),
+    /**
+     * The node this step touched, as `paid_scaffold_nodes.path_key` ('c0', 'c0/a1',
+     * 'c0/a1/ad2'). THIS IS THE ONLY STABLE ROW IDENTITY ON A PROGRESS FRAME, and it
+     * is what lets a table update one row in place. `entityId` cannot serve: it is
+     * the platform id, so it is null until the object exists. `index` cannot serve
+     * either: it is a walk ordinal, and a client that sorts or filters no longer has
+     * rows in walk order. Optional only because a gate-level phase (claimed, refused,
+     * completed) touches no single node.
+     */
+    pathKey: z.string().optional(),
     /** Which level of the tree this step touched. */
     step: z.string(),
     status: z.enum(['started', 'succeeded', 'failed', 'skipped']),
@@ -150,3 +186,32 @@ export const paidScaffoldReceiptPayloadSchema = z
   })
   .passthrough();
 export type PaidScaffoldReceiptPayload = z.infer<typeof paidScaffoldReceiptPayloadSchema>;
+
+// ---------------------------------------------------------------------------
+// The human's answer, travelling the other way
+// ---------------------------------------------------------------------------
+
+/**
+ * A human's decision on one `tool.approval_required`, carried as a typed field on
+ * the EXISTING chat stream POST body — the sibling of `plan_action`. There is no
+ * fifth endpoint, and there is no natural-language re-prompt: an approval expressed
+ * as an English sentence containing a token is a string the model can also write.
+ *
+ * SECURITY — this deliberately carries no approval token, no HMAC signature and no
+ * content hash. All three are re-read server-side from the gate row keyed by
+ * (scaffold_version_id, gate). A client that could supply any of them could mint its
+ * own approval, which is precisely what the gate exists to prevent. The gate row is
+ * the authority; the SDK's signature is only a cheap second layer inside `execute`.
+ */
+export const jainaScaffoldActionSchema = z.object({
+  decision: z.enum(['approve', 'deny']),
+  /** The SDK approval id from the `tool.approval_required` frame being answered. */
+  approval_id: z.string().min(1),
+  /** `paid_scaffold_versions.id`. With `gate`, this is the gate row's unique key. */
+  scaffold_version_id: z.string().uuid(),
+  gate: paidScaffoldGateSchema,
+  /** Echoed back for correlation only; never trusted for authorization. */
+  tool_call_id: z.string().min(1).optional(),
+  reason: z.string().max(500).optional(),
+});
+export type JainaScaffoldAction = z.infer<typeof jainaScaffoldActionSchema>;

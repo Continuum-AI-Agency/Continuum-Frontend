@@ -46,17 +46,26 @@ export function BrandTrendsTabs({ trends, events = [], questionsByNiche, generat
   return (
     <Tabs defaultValue="trends" className="flex flex-col gap-1">
       <TabsList className="grid h-7 w-full grid-cols-3 gap-0.5 p-0.5">
+        {/* Each badge counts the items available in its own tab, never a selection
+            or a cap. The aria-label says which quantity, since a bare number beside
+            a tab name is ambiguous to a screen reader. */}
         <TabsTrigger value="trends" className="h-6 min-w-0 px-2 text-xs">
           <span className="truncate">Trends</span>{' '}
-          <Badge variant="secondary">{trends.length}</Badge>
+          <Badge variant="secondary" aria-label={`${trends.length} trends available`}>
+            {trends.length}
+          </Badge>
         </TabsTrigger>
         <TabsTrigger value="events" className="h-6 min-w-0 px-2 text-xs">
           <span className="truncate">Events</span>{' '}
-          <Badge variant="secondary">{events.length}</Badge>
+          <Badge variant="secondary" aria-label={`${events.length} events available`}>
+            {events.length}
+          </Badge>
         </TabsTrigger>
         <TabsTrigger value="questions" className="h-6 min-w-0 px-2 text-xs">
           <span className="truncate">Questions</span>{' '}
-          <Badge variant="secondary">{questionsCount}</Badge>
+          <Badge variant="secondary" aria-label={`${questionsCount} questions available`}>
+            {questionsCount}
+          </Badge>
         </TabsTrigger>
       </TabsList>
 

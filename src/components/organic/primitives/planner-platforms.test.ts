@@ -1,3 +1,4 @@
+import { PLATFORM_CAPABILITIES } from '@continuum/contracts';
 import { describe, expect, it } from 'bun:test';
 import { buildPlannerPlatforms } from './planner-platforms';
 import type {
@@ -89,15 +90,21 @@ describe('buildPlannerPlatforms', () => {
     });
 
     expect(withoutComingSoon.some((platform) => platform.comingSoon)).toBe(false);
-    expect(platformKeys(withComingSoon)).toEqual([
-      'instagram',
-      'facebook',
-      'youtube',
-      'tiktok',
-      'x',
-    ]);
+    // Facebook and TikTok are NOT here: the coming-soon list is derived from what the backend
+    // cannot publish, and both have publishers now. Facebook sat in this list for months while
+    // having a complete, reviewed publisher, so the planner could not create a Facebook post.
+    expect(platformKeys(withComingSoon)).toEqual(['instagram', 'youtube', 'x']);
     expect(
       withComingSoon.filter((platform) => platform.comingSoon).every((platform) => platform.Icon),
     ).toBe(true);
+
+    // The invariant, not just today's list: anything the backend can publish to must never be
+    // rendered as coming-soon. This is what stops the two lists drifting apart again.
+    const comingSoonKeys = new Set(
+      withComingSoon.filter((platform) => platform.comingSoon).map((platform) => platform.key),
+    );
+    for (const publishable of Object.keys(PLATFORM_CAPABILITIES)) {
+      expect(comingSoonKeys.has(publishable as never)).toBe(false);
+    }
   });
 });

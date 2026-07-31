@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import React, { startTransition } from 'react';
 import { GenerationsPopover } from '@/components/organic/agent/GenerationsPopover';
 import { useGenerationJobsRealtime } from '@/components/organic/hooks/useGenerationJobsRealtime';
+import { writePlannerUrlState } from '@/lib/organic/plannerUrlState';
 import { useCalendarStore } from '@/lib/organic/store';
 import { prefetchMetricsDashboard } from '@/lib/prefetch/organic-metrics-cache';
 import { cn } from '@/lib/utils';
@@ -90,25 +91,20 @@ export function OrganicWorkspaceTabs({
     }
   }, [activeView, tabParam]);
 
-  const handleValueChange = React.useCallback(
-    (value: string) => {
-      const nextView = value as 'planner' | 'metrics' | 'agent';
+  const handleValueChange = React.useCallback((value: string) => {
+    const nextView = value as 'planner' | 'metrics' | 'agent';
 
-      const apply = () => {
-        setActiveView(nextView);
-        if (nextView === 'metrics') setMetricsEverShown(true);
-        if (nextView === 'agent') setAgentEverShown(true);
-        // Use history.replaceState instead of router.replace to avoid triggering
-        // a Next.js server re-render (which would flash the Suspense fallback).
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('tab', nextView);
-        window.history.replaceState(null, '', `?${params.toString()}`);
-      };
+    const apply = () => {
+      setActiveView(nextView);
+      if (nextView === 'metrics') setMetricsEverShown(true);
+      if (nextView === 'agent') setAgentEverShown(true);
+      // One writer for every planner URL param (see plannerUrlState): still
+      // history.replaceState under the hood, so no Next re-render and no Suspense flash.
+      writePlannerUrlState({ tab: nextView });
+    };
 
-      startTransition(apply);
-    },
-    [searchParams],
-  );
+    startTransition(apply);
+  }, []);
 
   // Active brand for the shell-wide ticker. Realtime on organic.post_generation_jobs
   // keeps the live generation summaries fresh on every tab (the ticker lives here,

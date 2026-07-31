@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 
 import { cn } from '@/lib/utils';
@@ -21,20 +21,9 @@ function ResizablePanel({ ...props }: React.ComponentProps<typeof Panel>) {
 
 type ResizableHandleProps = React.ComponentProps<typeof Separator> & {
   withHandle?: boolean;
-  collapseDirection?: 'left' | 'right';
-  onCollapse?: () => void;
-  collapseLabel?: string;
 };
 
-function ResizableHandle({
-  withHandle,
-  collapseDirection,
-  onCollapse,
-  collapseLabel,
-  className,
-  ...props
-}: ResizableHandleProps) {
-  const showHandle = withHandle || onCollapse !== undefined;
+function ResizableHandle({ withHandle, className, ...props }: ResizableHandleProps) {
   return (
     <Separator
       data-slot="resizable-handle"
@@ -44,7 +33,7 @@ function ResizableHandle({
       )}
       {...props}
     >
-      {showHandle ? (
+      {withHandle ? (
         <div
           aria-hidden="true"
           className="pointer-events-none bg-border z-10 flex h-8 w-2 flex-col items-center justify-center gap-0.5 rounded-full border shadow-sm transition-colors group-hover:bg-primary/20 group-hover:border-primary/60 aria-[orientation=horizontal]:h-2 aria-[orientation=horizontal]:w-8 aria-[orientation=horizontal]:flex-row"
@@ -54,27 +43,51 @@ function ResizableHandle({
           <span className="h-1 w-px bg-muted-foreground/60 rounded-full" />
         </div>
       ) : null}
-      {onCollapse ? (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onCollapse();
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-          className="bg-background hover:bg-accent absolute -right-3 top-3 z-20 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border shadow-sm transition-colors opacity-90 hover:opacity-100"
-          aria-label={collapseLabel ?? 'Collapse panel'}
-        >
-          {collapseDirection === 'left' ? (
-            <ChevronLeftIcon className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
-            <ChevronRightIcon className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
-        </button>
-      ) : null}
     </Separator>
   );
 }
 
-export { ResizableHandle, ResizablePanel, ResizablePanelGroup };
+const COLLAPSE_CHEVRON = {
+  left: ChevronLeftIcon,
+  right: ChevronRightIcon,
+  down: ChevronDownIcon,
+} as const;
+
+type ResizablePanelCollapseButtonProps = Omit<React.ComponentProps<'button'>, 'aria-label'> & {
+  direction?: keyof typeof COLLAPSE_CHEVRON;
+  label: string;
+};
+
+/**
+ * A collapsible panel's own collapse control. It must be rendered INSIDE the collapsible
+ * panel (in a `relative` wrapper), never inside `ResizableHandle`.
+ *
+ * react-resizable-panels captures pointer events for a drag on the document, so a button
+ * nested in the separator starts a resize instead of collapsing — React's synthetic
+ * `stopPropagation` cannot cancel a native capture, which is why the planner's e2e had to
+ * click it with `force: true`. Wrapping the separator is not an option either: separators
+ * must be direct DOM children of their group.
+ */
+function ResizablePanelCollapseButton({
+  direction = 'right',
+  label,
+  className,
+  ...props
+}: ResizablePanelCollapseButtonProps) {
+  const Chevron = COLLAPSE_CHEVRON[direction];
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      className={cn(
+        'bg-background hover:bg-accent absolute left-1 top-3 z-20 flex size-6 cursor-pointer items-center justify-center rounded-full border opacity-90 shadow-sm transition-colors hover:opacity-100',
+        className,
+      )}
+      {...props}
+    >
+      <Chevron className="h-3.5 w-3.5 text-muted-foreground" />
+    </button>
+  );
+}
+
+export { ResizableHandle, ResizablePanel, ResizablePanelCollapseButton, ResizablePanelGroup };

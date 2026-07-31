@@ -20,17 +20,30 @@ describe('describeAddPlaceholderBlock', () => {
 });
 
 describe('describeClearBlock', () => {
-  it('explains there is nothing to clear when the calendar is empty', () => {
+  it('explains there is nothing to hide when the view is empty', () => {
     const hint = describeClearBlock({ isGenerating: false, draftsCount: 0 });
-    expect(hint?.reason).toContain('no drafts');
+    expect(hint?.reason).toContain('no posts in this view to hide');
   });
 
-  it('blocks clearing while generation is running', () => {
+  it('blocks hiding while generation is running', () => {
     const hint = describeClearBlock({ isGenerating: true, draftsCount: 5 });
     expect(hint?.reason).toContain('Generation is running');
   });
 
-  it('allows clearing when drafts exist and idle', () => {
+  // The control hides; it never deletes. Copy that says "clear" or "delete" re-introduces
+  // exactly the fear the renamed control just removed.
+  it('never suggests posts are deleted', () => {
+    const reasons = [
+      describeClearBlock({ isGenerating: false, draftsCount: 0 })?.reason ?? '',
+      describeClearBlock({ isGenerating: true, draftsCount: 5 })?.reason ?? '',
+    ];
+    for (const reason of reasons) {
+      expect(reason.toLowerCase()).not.toContain('delete');
+      expect(reason.toLowerCase()).not.toContain('clearing');
+    }
+  });
+
+  it('allows hiding when posts exist and generation is idle', () => {
     expect(describeClearBlock({ isGenerating: false, draftsCount: 5 })).toBeNull();
   });
 });

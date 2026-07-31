@@ -1,3 +1,4 @@
+import { PLATFORM_CAPABILITIES } from '@continuum/contracts';
 import { CircleDashed } from 'lucide-react';
 
 import {
@@ -80,9 +81,25 @@ const PLATFORM_META: Record<PlannerPlatformKey, Omit<PlannerPlatform, 'canCreate
   },
 };
 
-const SCHEDULABLE_PLATFORM_ORDER: OrganicPlatformTag[] = ['instagram', 'linkedin'];
+/**
+ * Which platforms the planner offers is DERIVED from what the backend can actually publish, never
+ * listed by hand. Facebook had a complete, reviewed publisher for months while sitting in
+ * "coming soon" here, so the planner could not create a Facebook post at all — the two lists
+ * simply disagreed, and nothing made them agree.
+ *
+ * `PLATFORM_CAPABILITIES` is keyed by `PublishPlatform`, so a platform becomes creatable the moment
+ * a publisher exists for it, and cannot be silently forgotten.
+ */
+const PUBLISHABLE_PLATFORMS = new Set<string>(Object.keys(PLATFORM_CAPABILITIES));
 
-const COMING_SOON_ORDER: PlannerPlatformKey[] = ['facebook', 'youtube', 'tiktok', 'x'];
+const SCHEDULABLE_PLATFORM_ORDER: OrganicPlatformTag[] = (
+  ['instagram', 'linkedin', 'facebook', 'tiktok'] as OrganicPlatformTag[]
+).filter((platform) => PUBLISHABLE_PLATFORMS.has(platform));
+
+/** Whatever the planner can display but the backend cannot publish to. */
+const COMING_SOON_ORDER: PlannerPlatformKey[] = (
+  ['facebook', 'youtube', 'tiktok', 'x'] as PlannerPlatformKey[]
+).filter((platform) => !PUBLISHABLE_PLATFORMS.has(platform));
 
 const DISPLAY_PLATFORM_ORDER: PlannerPlatformKey[] = [
   'instagram',

@@ -73,10 +73,63 @@ describe('calendar draft persistence utils', () => {
     expect(payload.status).toBe('draft');
     expect(payload.platform).toBe('instagram');
     expect(payload.platform_account_id).toBe('acct-123');
-    expect(payload.scheduled_date).toBe('2026-04-21');
     expect(payload.slot_data.dayId).toBe('2026-04-21');
     expect(payload.slot_data.weekStart).toBe('2026-04-20');
     expect(payload.slot_data.timeLabel).toBe('1:00 PM');
+  });
+
+  // scheduled_date is a full timestamptz written verbatim. Writing a bare day let
+  // Postgres coerce it to midnight, which discarded the user's chosen time on every
+  // autosave tick and made the panel render the draft back as "12:00 AM".
+  it('writes an instant carrying the chip time, never a bare calendar day', () => {
+    const payload = buildPersistedDraftPayload({
+      brandId: '11111111-1111-4111-8111-111111111111',
+      weekStartId: '2026-04-20',
+      dayId: '2026-04-21',
+      draft: makeDraft({ status: 'draft', timeLabel: '1:00 PM' }),
+      timeZone: 'UTC',
+    });
+
+    expect(payload.scheduled_date).toBe('2026-04-21T13:00:00.000Z');
+    expect(payload.slot_data.timeOfDay).toBe('13:00');
+    expect(payload.slot_data.timeZone).toBe('UTC');
+  });
+
+  it('resolves the chip time in the requested zone, not as UTC wall clock', () => {
+    const payload = buildPersistedDraftPayload({
+      brandId: '11111111-1111-4111-8111-111111111111',
+      weekStartId: '2026-04-20',
+      dayId: '2026-04-21',
+      draft: makeDraft({ status: 'draft', timeLabel: '9:00 AM' }),
+      timeZone: 'America/New_York',
+    });
+
+    // 09:00 EDT is 13:00Z. A UTC reading would have produced 09:00Z.
+    expect(payload.scheduled_date).toBe('2026-04-21T13:00:00.000Z');
+  });
+
+  it('does NOT floor a past-dated draft forward — that would relocate backfilled work', () => {
+    const payload = buildPersistedDraftPayload({
+      brandId: '11111111-1111-4111-8111-111111111111',
+      weekStartId: '2020-01-06',
+      dayId: '2020-01-07',
+      draft: makeDraft({ status: 'draft', timeLabel: '9:00 AM' }),
+      timeZone: 'UTC',
+    });
+
+    expect(payload.scheduled_date).toBe('2020-01-07T09:00:00.000Z');
+  });
+
+  it('DOES floor a past-dated scheduled draft, so the publish poller cannot fire on arrival', () => {
+    const payload = buildPersistedDraftPayload({
+      brandId: '11111111-1111-4111-8111-111111111111',
+      weekStartId: '2020-01-06',
+      dayId: '2020-01-07',
+      draft: makeDraft({ status: 'scheduled', timeLabel: '9:00 AM' }),
+      timeZone: 'UTC',
+    });
+
+    expect(Date.parse(payload.scheduled_date)).toBeGreaterThan(Date.now());
   });
 
   it('maps persisted rows back into calendar entries', () => {
@@ -591,5 +644,117 @@ describe('collapseDraftGroups', () => {
     expect(entries).toHaveLength(2);
     expect(entries.map((entry) => entry.dayId).sort()).toEqual(['2026-06-01', '2026-06-02']);
     expect(entries.map((entry) => entry.draft.platforms)).toEqual([['instagram'], ['linkedin']]);
+  });
+});
+
+describe('field-edit read derivations', () => {
+  const days = () => buildWeekDays(new Date('2026-04-20T12:00:00'));
+
+  function rowWith(overrides: Partial<PersistedOrganicDraftRow>): PersistedOrganicDraftRow {
+    return {
+      id: 'backend-derive-1',
+      status: 'draft',
+      scheduled_date: '2026-04-21T00:00:00+00:00',
+      platform_account_id: 'acct-1',
+      slot_data: { dayId: '2026-04-21' },
+      ...overrides,
+    };
+  }
+
+  // hasCopy used to mean "content_json is non-empty", so a hand-typed caption left
+  // the COPY chip unchecked while a media-only attach checked it with no copy at all.
+  it('hasCopy is true for a hand-typed caption in content_json', () => {
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({ content_json: { copy: { caption: 'typed by a human' } } }),
+      days(),
+    );
+    expect(mapped?.draft.hasCopy).toBe(true);
+    expect(mapped?.draft.captionPreview).toBe('typed by a human');
+  });
+
+  it('hasCopy is FALSE for a non-empty content_json that carries no caption', () => {
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({ content_json: { publishingAssets: [{ role: 'single' }] } }),
+      days(),
+    );
+    expect(mapped?.draft.hasCopy).toBe(false);
+  });
+
+  it('hasCopy still recognizes a legacy caption stored only in slot_data', () => {
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({ slot_data: { dayId: '2026-04-21', caption: 'legacy manual copy' } }),
+      days(),
+    );
+    expect(mapped?.draft.hasCopy).toBe(true);
+  });
+
+  // The format revert: a stale draftSnapshot beat the value the user just saved.
+  it('format prefers content_json over a stale draftSnapshot', () => {
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({
+        content_json: { content: { format: 'Carousel' } },
+        slot_data: {
+          dayId: '2026-04-21',
+          draftSnapshot: makeDraft({ format: 'Reel' }),
+        },
+      }),
+      days(),
+    );
+    expect(mapped?.draft.format).toBe('Carousel');
+  });
+
+  it('hashtags prefer content_json over a stale draftSnapshot', () => {
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({
+        content_json: { copy: { hashtags: { high: ['#fresh'] } } },
+        slot_data: {
+          dayId: '2026-04-21',
+          draftSnapshot: { ...makeDraft(), hashtags: { high: ['#stale'] } },
+        },
+      }),
+      days(),
+    );
+    expect(mapped?.draft.hashtags?.high).toEqual(['#fresh']);
+  });
+
+  it('creative direction falls back to content_json for an agent draft', () => {
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({ content_json: { creative: { creativeDirectionPrompt: 'moody, wide' } } }),
+      days(),
+    );
+    expect(mapped?.draft.creativeDirectionPrompt).toBe('moody, wide');
+  });
+
+  // The "12:00 AM" report: a midnight-UTC timestamptz with a real time recorded
+  // alongside it used to render as midnight because the label was sliced from the
+  // ISO string's literal HH:MM.
+  it('timeLabel reads the recorded time of day, not the instant s UTC wall clock', () => {
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({
+        scheduled_date: '2026-04-21T00:00:00+00:00',
+        content_json: { schedule: { timeOfDay: '17:30' } },
+      }),
+      days(),
+    );
+    expect(mapped?.draft.timeLabel).toBe('5:30 PM');
+  });
+
+  it('timeLabel prefers slot_data timeOfDay over a display label', () => {
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({ slot_data: { dayId: '2026-04-21', timeOfDay: '13:45', timeLabel: '9:00 AM' } }),
+      days(),
+    );
+    expect(mapped?.draft.timeLabel).toBe('1:45 PM');
+  });
+
+  it('timeLabel derives from the instant in the recorded zone when nothing else is stored', () => {
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({
+        scheduled_date: '2026-04-21T13:00:00.000Z',
+        slot_data: { dayId: '2026-04-21', timeZone: 'UTC' },
+      }),
+      days(),
+    );
+    expect(mapped?.draft.timeLabel).toBe('1:00 PM');
   });
 });

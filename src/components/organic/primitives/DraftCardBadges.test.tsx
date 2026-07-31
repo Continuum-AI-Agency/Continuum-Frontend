@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/react';
-import { StatusBadge } from './DraftCardBadges';
+import { StatusBadge, StatusDot } from './DraftCardBadges';
+import { DRAFT_STATUS_PRESENTATION } from './draft-card-styles';
 
 // Assertions stay on the rendered WORDS: bun's mock.module is process-wide, and sibling
 // planner specs stub `ui/badge`, so a class/attribute assertion here would only be
@@ -38,5 +39,33 @@ describe('StatusBadge', () => {
 
     expect(screen.getByText('Newsletter')).toBeTruthy();
     expect(screen.queryByText('Draft')).toBeNull();
+  });
+});
+
+// The month grid's chip is coloured by PLATFORM, so it carried no status signal at all —
+// which made the legend's "every status is labeled" false on that surface.
+describe('StatusDot', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('announces the status even though the dot is only 6px', () => {
+    render(<StatusDot status="scheduled" />);
+
+    expect(screen.getByText('Scheduled')).toBeTruthy();
+  });
+
+  it('takes its hue from the canonical presentation table, not a local palette', () => {
+    const { container } = render(<StatusDot status="published" />);
+
+    expect(container.innerHTML).toContain(DRAFT_STATUS_PRESENTATION.published.strip);
+  });
+
+  it('carries the plain-language hint as its tooltip', () => {
+    const { container } = render(<StatusDot status="failed" />);
+
+    expect(
+      container.querySelector(`[title="${DRAFT_STATUS_PRESENTATION.failed.hint}"]`),
+    ).toBeTruthy();
   });
 });

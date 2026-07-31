@@ -8,6 +8,17 @@ import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub
 // bare `mock()` here hands `undefined` to every sibling spec's store selector.
 mock.module('@/lib/organic/store', () => createCalendarStoreStub());
 
+// The hook now reports a failed media write instead of swallowing it, so it needs a
+// toast. Stubbed rather than wrapped in a provider to keep these tests hook-only.
+const toastCalls: Array<{ title?: string; variant?: string }> = [];
+mock.module('@/components/ui/ToastProvider', () => ({
+  useToast: () => ({
+    show: (options: { title?: string; variant?: string }) => {
+      toastCalls.push(options);
+    },
+  }),
+}));
+
 // shapeUserSuppliedMedia is pure — use the real implementation.
 // creativeRefFromAsset is also pure.
 
@@ -86,6 +97,7 @@ describe('useDraftMediaPlacement', () => {
 
   beforeEach(() => {
     capturedUpdater = null;
+    toastCalls.length = 0;
     storedDraft = {
       id: 'draft-1',
       mediaSuggestion: { mediaStatus: 'pending' },

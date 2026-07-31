@@ -317,6 +317,57 @@ function reconcileJobFromPipeline(
   return { ...jobs, [jobId]: { ...existing, ...patch } };
 }
 
+/**
+ * Fold a server-restored transcript page into what is already on screen.
+ *
+ * The server page is authoritative for HISTORY; local state is authoritative for the turn
+ * IN FLIGHT. Only the server has seen the persisted record, but only the client has seen
+ * the message just typed and the empty assistant bubble opened for it — the assistant turn
+ * is not persisted until its run ends, so history can never carry it.
+ *
+ * Order is reconstructed rather than concatenated: a local-only message is placed just
+ * BEFORE the next message the server page also has, and one with no such successor goes
+ * last. Forward anchoring, not backward, is what keeps both ends right — an older page the
+ * reader already scrolled back to stays at the top, and the turn in flight stays at the
+ * bottom even when the server page carries messages the client has not folded yet.
+ */
+export function mergeRestoredMessages(
+  local: readonly ConversationMessage[],
+  restored: readonly ConversationMessage[],
+): ConversationMessage[] {
+  if (local.length === 0) return [...restored];
+
+  const restoredIndexById = new Map(restored.map((message, index) => [message.id, index]));
+  const AFTER_ALL_RESTORED = restored.length;
+  const localOnlyBefore = new Map<number, ConversationMessage[]>();
+  const pendingLocalOnly: ConversationMessage[] = [];
+
+  const placeBefore = (restoredIndex: number) => {
+    if (pendingLocalOnly.length === 0) return;
+    const existing = localOnlyBefore.get(restoredIndex);
+    if (existing) existing.push(...pendingLocalOnly);
+    else localOnlyBefore.set(restoredIndex, [...pendingLocalOnly]);
+    pendingLocalOnly.length = 0;
+  };
+
+  for (const message of local) {
+    const restoredIndex = restoredIndexById.get(message.id);
+    if (restoredIndex === undefined) pendingLocalOnly.push(message);
+    else placeBefore(restoredIndex);
+  }
+  placeBefore(AFTER_ALL_RESTORED);
+
+  if (localOnlyBefore.size === 0) return [...restored];
+
+  const merged: ConversationMessage[] = [];
+  restored.forEach((message, index) => {
+    merged.push(...(localOnlyBefore.get(index) ?? []));
+    merged.push(message);
+  });
+  merged.push(...(localOnlyBefore.get(AFTER_ALL_RESTORED) ?? []));
+  return merged;
+}
+
 export function initialPanelState(): PanelState {
   return {
     sessionId: null,
@@ -778,13 +829,27 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         isHydrated: false,
       };
 
-    case 'SESSION_SWITCH':
+    // Two different jobs behind one action. Switching to ANOTHER conversation is a full
+    // reset — nothing on screen belongs to the session being opened. Re-hydrating the
+    // session ALREADY on screen is not: the panel fires that fetch on mount without
+    // waiting for the composer, so the page can land after the user has typed, and
+    // resetting there deleted their message, the empty assistant bubble, and the
+    // streamingMessageId every STREAM_DELTA attaches to — the turn answered into nothing.
+    case 'SESSION_SWITCH': {
+      if (state.sessionId !== null && state.sessionId === action.sessionId) {
+        return {
+          ...state,
+          messages: mergeRestoredMessages(state.messages, action.messages),
+          isHydrated: true,
+        };
+      }
       return {
         ...initialPanelState(),
         sessionId: action.sessionId,
         messages: action.messages,
         isHydrated: true,
       };
+    }
 
     case 'PREPEND_MESSAGES': {
       const messages = prependUnseen(state.messages, action.messages);

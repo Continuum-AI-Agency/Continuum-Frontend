@@ -1,5 +1,20 @@
-import type { AgentDelegatedFrameData } from '@continuum/contracts';
-import { agentDelegatedFrameDataSchema } from '@continuum/contracts';
+import type {
+  AgentDelegatedFrameData,
+  JainaToolApprovalRequiredPayload,
+  JainaToolApprovalResolvedPayload,
+  JainaToolOutputDeniedPayload,
+  PaidScaffoldProgressPayload,
+  PaidScaffoldReceiptPayload,
+} from '@continuum/contracts';
+import {
+  agentDelegatedFrameDataSchema,
+  jainaToolApprovalRequiredPayloadSchema,
+  jainaToolApprovalResolvedPayloadSchema,
+  jainaToolOutputDeniedPayloadSchema,
+  paidScaffoldProgressPayloadSchema,
+  paidScaffoldProposedPayloadSchema,
+  paidScaffoldReceiptPayloadSchema,
+} from '@continuum/contracts';
 import { z } from 'zod';
 import type { JainaPlan } from '@/components/paid-media/jaina/types';
 import type { CampaignCanvasActionsEnvelope } from '@/lib/campaign-canvas/agent-actions';
@@ -190,6 +205,42 @@ export type JainaStreamState = {
    * the CALLER here: each entry renders as an "⇄ Asked Organic" transcript card.
    */
   delegations: AgentDelegatedFrameData[];
+  /** Approval gates this turn is waiting on, deduped by approvalId. */
+  pendingToolApprovals: JainaToolApprovalRequiredPayload[];
+  /** Resolutions keyed by approvalId, so a replayed 'required' cannot resurrect one. */
+  resolvedApprovals: Record<string, JainaToolApprovalResolvedPayload>;
+  deniedToolOutputs: JainaToolOutputDeniedPayload[];
+  scaffold: JainaScaffoldState | null;
+};
+
+export type JainaScaffoldNodeProgress = {
+  step: string;
+  status: 'started' | 'succeeded' | 'failed' | 'skipped';
+  entityId: string | null;
+  message: string | null;
+  index?: number;
+  total?: number;
+};
+
+export type JainaScaffoldState = {
+  /** `paid_scaffold_versions.id` — the key the node rows are filtered on. */
+  scaffoldId: string;
+  parentScaffoldId?: string;
+  brandId?: string;
+  adAccountId?: string | null;
+  approvalId?: string | null;
+  /** Ids + counts + a campaign skeleton. The rows come from Postgres, not from here. */
+  plan: unknown;
+  summary?: { campaigns?: number; adSets?: number; ads?: number };
+  /**
+   * Latest progress per node, keyed on `pathKey`. A MAP AND NOT AN ARRAY: a 50-ad-set
+   * build emits ~300 frames, and `useProjectedJainaRun` re-folds the entire durable
+   * log from scratch on every reattach. A keyed merge makes that fold idempotent by
+   * construction; an append would grow without bound on every replay.
+   */
+  progressByNode: Record<string, JainaScaffoldNodeProgress>;
+  lastProgress: { index?: number; total?: number } | null;
+  receipt: PaidScaffoldReceiptPayload | null;
 };
 
 export function createInitialJainaStreamState(): JainaStreamState {
@@ -222,6 +273,10 @@ export function createInitialJainaStreamState(): JainaStreamState {
     blockDeltasV2: [],
     reportArtifactJob: null,
     delegations: [],
+    pendingToolApprovals: [],
+    resolvedApprovals: {},
+    deniedToolOutputs: [],
+    scaffold: null,
   };
 }
 
@@ -789,10 +844,27 @@ export function normalizeCheckpointReportPayload(value: unknown): FrontendCheckp
       .filter((item): item is Record<string, unknown> => Boolean(item))
       .map((objective) => ({
         id: getNonEmptyString(objective.id) ?? '',
+        objective_key: getNonEmptyString(objective.objective_key) ?? null,
         title: getNonEmptyString(objective.title) ?? '',
+        description: getNonEmptyString(objective.description) ?? null,
         status: normalizeObjectiveStatus(objective.status),
         scope: getNonEmptyString(objective.scope) ?? null,
+        reason_code: getNonEmptyString(objective.reason_code) ?? null,
         details: getNonEmptyString(objective.details) ?? null,
+        attempt_count:
+          typeof objective.attempt_count === 'number' &&
+          Number.isInteger(objective.attempt_count) &&
+          objective.attempt_count >= 0
+            ? objective.attempt_count
+            : 0,
+        version:
+          typeof objective.version === 'number' &&
+          Number.isInteger(objective.version) &&
+          objective.version >= 0
+            ? objective.version
+            : 0,
+        not_before: getNonEmptyString(objective.not_before) ?? null,
+        last_attempt_at: getNonEmptyString(objective.last_attempt_at) ?? null,
         created_at: getNonEmptyString(objective.created_at) ?? new Date().toISOString(),
         updated_at: getNonEmptyString(objective.updated_at) ?? new Date().toISOString(),
       })),
@@ -3489,9 +3561,144 @@ export function reduceJainaStreamEvent(
       }
       return { ...nextBase, status: 'complete' };
     }
+
+    // ---- Paid campaign scaffold + tool approvals -------------------------------
+    //
+    // Every arm below tolerates REPLAY and OUT-OF-ORDER delivery, because that is
+    // the normal case rather than the edge case: useProjectedJainaRun re-folds the
+    // whole durable frame log through this same reducer on every reattach.
+    case 'tool.approval_required': {
+      const parsed = jainaToolApprovalRequiredPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success) return nextBase;
+      const approval = parsed.data;
+      // Already answered — a replayed 'required' must not resurrect the buttons.
+      if (state.resolvedApprovals[approval.approvalId]) return nextBase;
+      if (state.pendingToolApprovals.some((entry) => entry.approvalId === approval.approvalId)) {
+        return nextBase;
+      }
+      return { ...nextBase, pendingToolApprovals: [...state.pendingToolApprovals, approval] };
+    }
+
+    case 'tool.approval_resolved': {
+      const parsed = jainaToolApprovalResolvedPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success) return nextBase;
+      const resolution = parsed.data;
+      return {
+        ...nextBase,
+        pendingToolApprovals: state.pendingToolApprovals.filter(
+          (entry) => entry.approvalId !== resolution.approvalId,
+        ),
+        resolvedApprovals: {
+          ...state.resolvedApprovals,
+          [resolution.approvalId]: resolution,
+        },
+      };
+    }
+
+    case 'tool.output_denied': {
+      const parsed = jainaToolOutputDeniedPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success) return nextBase;
+      const denial = parsed.data;
+      return {
+        ...nextBase,
+        deniedToolOutputs: [...state.deniedToolOutputs, denial],
+        // `approvalId` is legitimately absent on a resume (fresh emitter), so only
+        // clear the pending entry when the frame actually names one.
+        pendingToolApprovals: denial.approvalId
+          ? state.pendingToolApprovals.filter((entry) => entry.approvalId !== denial.approvalId)
+          : state.pendingToolApprovals,
+      };
+    }
+
+    case 'paid.scaffold_proposed': {
+      const parsed = paidScaffoldProposedPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success) return nextBase;
+      const proposal = parsed.data;
+      // A repeat of the SAME proposal (replay) keeps progress; a genuinely new
+      // scaffold version starts clean.
+      const sameScaffold = state.scaffold?.scaffoldId === proposal.scaffoldId;
+      const extra = proposal as Record<string, unknown>;
+      return {
+        ...nextBase,
+        scaffold: {
+          scaffoldId: proposal.scaffoldId,
+          ...(typeof extra.parentScaffoldId === 'string'
+            ? { parentScaffoldId: extra.parentScaffoldId }
+            : {}),
+          ...(proposal.brandId ? { brandId: proposal.brandId } : {}),
+          adAccountId: proposal.adAccountId ?? null,
+          approvalId: proposal.approvalId ?? null,
+          plan: proposal.plan,
+          ...(proposal.summary ? { summary: proposal.summary } : {}),
+          progressByNode: sameScaffold ? (state.scaffold?.progressByNode ?? {}) : {},
+          lastProgress: sameScaffold ? (state.scaffold?.lastProgress ?? null) : null,
+          receipt: sameScaffold ? (state.scaffold?.receipt ?? null) : null,
+        },
+      };
+    }
+
+    case 'paid.scaffold_progress': {
+      const parsed = paidScaffoldProgressPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success || !state.scaffold) return nextBase;
+      const progress = parsed.data;
+      if (progress.scaffoldId !== state.scaffold.scaffoldId) return nextBase;
+      return {
+        ...nextBase,
+        scaffold: {
+          ...state.scaffold,
+          progressByNode: {
+            ...state.scaffold.progressByNode,
+            [scaffoldProgressKey(progress)]: {
+              step: progress.step,
+              status: progress.status,
+              entityId: progress.entityId ?? null,
+              message: progress.message ?? null,
+              ...(progress.index === undefined ? {} : { index: progress.index }),
+              ...(progress.total === undefined ? {} : { total: progress.total }),
+            },
+          },
+          lastProgress: {
+            ...(progress.index === undefined ? {} : { index: progress.index }),
+            ...(progress.total === undefined ? {} : { total: progress.total }),
+          },
+        },
+      };
+    }
+
+    case 'paid.scaffold_receipt': {
+      const parsed = paidScaffoldReceiptPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success || !state.scaffold) return nextBase;
+      if (parsed.data.scaffoldId !== state.scaffold.scaffoldId) return nextBase;
+      return { ...nextBase, scaffold: { ...state.scaffold, receipt: parsed.data } };
+    }
+
     default:
       return nextBase;
   }
+}
+
+/**
+ * The row a progress frame belongs to.
+ *
+ * `pathKey` is the only stable identity: `entityId` is the platform id and is null
+ * until the object exists, and `index` is a walk ordinal that stops meaning anything
+ * once a table is sorted or filtered. Gate-level phases touch no node, so they fall
+ * back to a per-step key rather than colliding on one.
+ */
+function scaffoldProgressKey(progress: PaidScaffoldProgressPayload): string {
+  return progress.pathKey ?? `${progress.step}#${progress.index ?? 0}`;
 }
 
 function buildProgressDetail(data: ProgressEventData): string | undefined {
@@ -3714,7 +3921,13 @@ function formatTableItems(value: unknown): string[] {
 export function hasRenderableStreamContent(
   state: Pick<
     JainaStreamState,
-    'report' | 'reportAssembly' | 'responseText' | 'pendingClarification' | 'plan'
+    | 'report'
+    | 'reportAssembly'
+    | 'responseText'
+    | 'pendingClarification'
+    | 'plan'
+    | 'scaffold'
+    | 'pendingToolApprovals'
   >,
 ): boolean {
   return Boolean(
@@ -3722,6 +3935,11 @@ export function hasRenderableStreamContent(
       state.reportAssembly ||
       (state.responseText && state.responseText.trim().length > 0) ||
       state.pendingClarification ||
-      state.plan,
+      state.plan ||
+      // A turn that proposes a scaffold and stops to await a human is a COMPLETE
+      // turn. Without these two the stream is finalized as 'error' and the gate the
+      // user is meant to answer renders as a failure.
+      state.scaffold ||
+      state.pendingToolApprovals.length > 0,
   );
 }

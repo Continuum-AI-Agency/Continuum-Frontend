@@ -26,6 +26,21 @@ const store = {
 
 mock.module('@/lib/organic/store', () => createCalendarStoreStub(store));
 
+// Status transitions go through the server, never a local store flip: "Approve & Schedule" drives
+// POST /approve → PATCH status=scheduled, and "Move back to draft" PATCHes status=draft. A local
+// flip made the card lie — it rendered "Scheduled"/"Draft" while the server row was unchanged, so
+// the scheduled-publish poller either never saw the post or published one the user had pulled.
+const approveAndSchedule = mock(async () => true);
+const unschedule = mock(async () => true);
+
+mock.module('@/components/organic/hooks/useApproveScheduleDraft', () => ({
+  useApproveScheduleDraft: () => ({ approveAndSchedule, isApproving: false }),
+}));
+
+mock.module('@/components/organic/hooks/useUnscheduleDraft', () => ({
+  useUnscheduleDraft: () => ({ unschedule, isUnscheduling: false }),
+}));
+
 mock.module('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -114,6 +129,8 @@ describe('CalendarDraftCard', () => {
     store.updateDraft.mockClear();
     store.bulkDeleteDrafts.mockClear();
     store.beginEditingDraft.mockClear();
+    approveAndSchedule.mockClear();
+    unschedule.mockClear();
   });
 
   afterEach(() => {
@@ -277,7 +294,9 @@ describe('CalendarDraftCard', () => {
     );
 
     fireEvent.click(screen.getAllByText('Approve & Schedule')[0]);
-    expect(store.updateDraft).toHaveBeenCalledTimes(1);
+    expect(approveAndSchedule).toHaveBeenCalledTimes(1);
+    // The status must never be flipped locally — only the server chain may move it.
+    expect(store.updateDraft).not.toHaveBeenCalled();
 
     rerender(
       <CalendarDraftCard
@@ -290,7 +309,23 @@ describe('CalendarDraftCard', () => {
     );
 
     fireEvent.click(screen.getAllByText('Approve & Schedule')[0]);
-    expect(store.updateDraft).toHaveBeenCalledTimes(1);
+    expect(approveAndSchedule).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves back to draft through the server so a scheduled publish is really cancelled', () => {
+    render(
+      <CalendarDraftCard
+        draft={draft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByText('Move back to draft')[0]);
+    expect(unschedule).toHaveBeenCalledTimes(1);
+    expect(store.updateDraft).not.toHaveBeenCalled();
   });
 
   it('clear failure button invokes onClearFailure for failed drafts', () => {
@@ -358,6 +393,37 @@ describe('CalendarDraftCard', () => {
 
     expect(screen.getByText('Text only — no media yet')).toBeTruthy();
     expect(screen.queryByText('Blueprint ready')).toBeNull();
+  });
+
+  // M-03: the sentence and the action shared one non-wrapping row, and only the action was
+  // `shrink-0` — so at the planner's narrowest column "Enrich" was clipped to "En…". The
+  // sentence yields (min-w-0 + truncate) and the row wraps; the action never shrinks.
+  it('lets the text-only sentence truncate so the Enrich action keeps its full width', () => {
+    const textOnly: OrganicCalendarDraft = {
+      ...draft,
+      id: 'draft-enrich-width',
+      backendDraftId: 'be-enrich',
+      mediaSuggestion: { mediaStatus: 'pending' },
+    };
+
+    render(
+      <CalendarDraftCard
+        draft={textOnly}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+        onEnrich={mock()}
+      />,
+    );
+
+    const sentence = screen.getByText('Text only — no media yet');
+    expect(sentence.className).toContain('min-w-0');
+    expect(sentence.className).toContain('truncate');
+    expect(sentence.parentElement?.className).toContain('flex-wrap');
+
+    const enrich = screen.getByText('Enrich');
+    expect(enrich.className).toContain('shrink-0');
   });
 
   it("shows the storyboard + 'Blueprint ready' pill for a pending draft with a persisted storyboard", () => {

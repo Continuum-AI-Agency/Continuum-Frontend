@@ -2,18 +2,26 @@ import { describe, expect, it } from 'bun:test';
 
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 import {
+  buildDateAlignedSeries,
   calculateHookRate,
   countNumericTrendPoints,
+  dayOverDayComparisonFromTrends,
+  enumerateDates,
   filterPostsByYoutubeType,
   formatWatchTime,
   isTrendKeyGraphable,
   isYouTubeShort,
+  latestNumericDate,
   MIN_GRAPHABLE_TREND_POINTS,
+  normalizeDailyBreakdown,
   POST_GALLERY_MAX_DAYS,
   postPeriodComparisons,
   postWindowDays,
   postWindowRange,
+  resolveReportViewState,
   summarizeYoutubeTypeMetrics,
+  trendLineShape,
+  windowEndingOn,
 } from './organic-metrics-utils';
 
 function reel(metrics: OrganicPost['metrics']): OrganicPost {
@@ -258,5 +266,318 @@ describe('post gallery scroll windows', () => {
   it('sums the tiers to the history cap', () => {
     const total = [0, 1, 2, 3].reduce((sum, offset) => sum + (postWindowDays(offset) ?? 0), 0);
     expect(total).toBe(POST_GALLERY_MAX_DAYS);
+  });
+});
+
+describe('trendLineShape', () => {
+  it('keeps a sparse series straight and marks every real point', () => {
+    expect(trendLineShape(2)).toEqual({ curve: 'linear', showDots: true });
+    expect(trendLineShape(1)).toEqual({ curve: 'linear', showDots: true });
+    expect(trendLineShape(0)).toEqual({ curve: 'linear', showDots: true });
+  });
+
+  it('smooths only once the series carries enough points to imply a shape', () => {
+    expect(trendLineShape(MIN_GRAPHABLE_TREND_POINTS)).toEqual({
+      curve: 'monotone',
+      showDots: false,
+    });
+    expect(trendLineShape(12)).toEqual({ curve: 'monotone', showDots: false });
+  });
+
+  it('honors a custom threshold', () => {
+    expect(trendLineShape(2, 2)).toEqual({ curve: 'monotone', showDots: false });
+  });
+});
+
+describe('trendLineShape applied to a 2-point series via the graphable gate', () => {
+  const twoPoints = [
+    { date: '2026-07-24', reach: 40 },
+    { date: '2026-07-25', reach: 10 },
+  ];
+
+  it('a 2-point reach series is not smoothed — spline would invent a bell curve', () => {
+    expect(isTrendKeyGraphable(twoPoints, 'reach')).toBe(false);
+    const shape = trendLineShape(countNumericTrendPoints(twoPoints, 'reach'));
+    expect(shape.curve).toBe('linear');
+    expect(shape.showDots).toBe(true);
+  });
+});
+
+describe('enumerateDates', () => {
+  it('lists every calendar day in the window, inclusive of both ends', () => {
+    expect(enumerateDates('2026-07-20', '2026-07-23')).toEqual([
+      '2026-07-20',
+      '2026-07-21',
+      '2026-07-22',
+      '2026-07-23',
+    ]);
+  });
+
+  it('returns the single day when both ends match', () => {
+    expect(enumerateDates('2026-07-20', '2026-07-20')).toEqual(['2026-07-20']);
+  });
+
+  it('crosses month and year boundaries', () => {
+    expect(enumerateDates('2026-12-30', '2027-01-02')).toEqual([
+      '2026-12-30',
+      '2026-12-31',
+      '2027-01-01',
+      '2027-01-02',
+    ]);
+  });
+
+  it('returns nothing for an inverted or unparseable window', () => {
+    expect(enumerateDates('2026-07-23', '2026-07-20')).toEqual([]);
+    expect(enumerateDates('', '2026-07-20')).toEqual([]);
+  });
+});
+
+describe('windowEndingOn', () => {
+  it('derives the window from the range end, not from today', () => {
+    expect(windowEndingOn('2026-07-25', 7)).toEqual({
+      since: '2026-07-19',
+      until: '2026-07-25',
+    });
+  });
+
+  it('derives a 30-day window the same way', () => {
+    expect(windowEndingOn('2026-07-25', 30)).toEqual({
+      since: '2026-06-26',
+      until: '2026-07-25',
+    });
+  });
+});
+
+describe('buildDateAlignedSeries', () => {
+  // Two metrics whose newest reported day differs. Positional slicing gave each
+  // its own axis (19-25 vs 20-26 July under one shared label); date alignment
+  // must give both the identical axis and show the shortfall as a gap.
+  const trends = [
+    { date: '2026-07-23', reach: 100, views: 900, boosted: false },
+    { date: '2026-07-25', reach: 120, views: 950, boosted: true },
+    { date: '2026-07-26', views: 980, boosted: false },
+  ];
+
+  it('spans every day of the window regardless of how many points a metric has', () => {
+    const reach = buildDateAlignedSeries({
+      trends,
+      trendKey: 'reach',
+      since: '2026-07-23',
+      until: '2026-07-26',
+    });
+    const views = buildDateAlignedSeries({
+      trends,
+      trendKey: 'views',
+      since: '2026-07-23',
+      until: '2026-07-26',
+    });
+
+    expect(reach.map((point) => point.date)).toEqual(views.map((point) => point.date));
+    expect(reach.map((point) => point.date)).toEqual([
+      '2026-07-23',
+      '2026-07-24',
+      '2026-07-25',
+      '2026-07-26',
+    ]);
+  });
+
+  it('leaves an unreported day as a gap instead of plotting it as zero', () => {
+    const reach = buildDateAlignedSeries({
+      trends,
+      trendKey: 'reach',
+      since: '2026-07-23',
+      until: '2026-07-26',
+    });
+    expect(reach.map((point) => point.value)).toEqual([100, undefined, 120, undefined]);
+  });
+
+  it('carries the boosted flag through on the days that have one', () => {
+    const reach = buildDateAlignedSeries({
+      trends,
+      trendKey: 'reach',
+      since: '2026-07-23',
+      until: '2026-07-26',
+    });
+    expect(reach.map((point) => point.boosted)).toEqual([false, false, true, false]);
+  });
+
+  it('ignores trend points outside the window', () => {
+    const series = buildDateAlignedSeries({
+      trends,
+      trendKey: 'reach',
+      since: '2026-07-25',
+      until: '2026-07-26',
+    });
+    expect(series).toEqual([
+      { date: '2026-07-25', value: 120, boosted: true },
+      { date: '2026-07-26', value: undefined, boosted: false },
+    ]);
+  });
+
+  it('returns an empty series for an unmapped trend key', () => {
+    expect(
+      buildDateAlignedSeries({
+        trends,
+        trendKey: undefined,
+        since: '2026-07-23',
+        until: '2026-07-26',
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe('latestNumericDate', () => {
+  it('names the last day that actually reported a value (the platform lag)', () => {
+    expect(
+      latestNumericDate([
+        { date: '2026-07-24', value: 10 },
+        { date: '2026-07-25', value: 12 },
+        { date: '2026-07-26', value: undefined },
+      ]),
+    ).toBe('2026-07-25');
+  });
+
+  it('is undefined when nothing reported', () => {
+    expect(latestNumericDate([{ date: '2026-07-26', value: undefined }])).toBeUndefined();
+    expect(latestNumericDate([])).toBeUndefined();
+  });
+});
+
+describe('dayOverDayComparisonFromTrends', () => {
+  it('compares the two most recent days when they are genuinely adjacent', () => {
+    const trends = [
+      { date: '2026-07-24', views: 100 },
+      { date: '2026-07-25', views: 130 },
+    ];
+    expect(dayOverDayComparisonFromTrends(trends, 'views')).toEqual({
+      current: 130,
+      previous: 100,
+      percentageChange: 30,
+    });
+  });
+
+  it('refuses to compare two non-adjacent days that gap filtering made neighbours', () => {
+    const trends = [
+      { date: '2026-07-18', views: 100 },
+      { date: '2026-07-19' },
+      { date: '2026-07-25', views: 10 },
+    ];
+    expect(dayOverDayComparisonFromTrends(trends, 'views')).toBeUndefined();
+  });
+
+  it('suppresses the comparison when the prior day was zero (no valid percentage)', () => {
+    const trends = [
+      { date: '2026-07-24', views: 0 },
+      { date: '2026-07-25', views: 10 },
+    ];
+    expect(dayOverDayComparisonFromTrends(trends, 'views')).toBeUndefined();
+  });
+
+  it('needs at least two numeric points and a mapped key', () => {
+    expect(dayOverDayComparisonFromTrends([{ date: '2026-07-25', views: 10 }], 'views')).toBeUndefined();
+    expect(dayOverDayComparisonFromTrends([{ date: '2026-07-25', views: 10 }], undefined)).toBeUndefined();
+  });
+});
+
+describe('normalizeDailyBreakdown', () => {
+  it('preserves an unreported metric as absent rather than coercing it to zero', () => {
+    const points = normalizeDailyBreakdown([
+      { date: '2026-07-25', views: 10 },
+      { date: '2026-07-26', views: 12, reach: 8 },
+    ]);
+    expect(points).toEqual([
+      {
+        date: '2026-07-25',
+        reach: undefined,
+        views: 10,
+        engagement: undefined,
+        comments: undefined,
+        likes: undefined,
+        shares: undefined,
+        saved: undefined,
+      },
+      {
+        date: '2026-07-26',
+        reach: 8,
+        views: 12,
+        engagement: undefined,
+        comments: undefined,
+        likes: undefined,
+        shares: undefined,
+        saved: undefined,
+      },
+    ]);
+  });
+
+  it('keeps a real zero as a real zero', () => {
+    const [point] = normalizeDailyBreakdown([{ date: '2026-07-25', views: 0 }]);
+    expect(point?.views).toBe(0);
+  });
+
+  it('drops points with no date and sorts ascending', () => {
+    const points = normalizeDailyBreakdown([
+      { date: '2026-07-26', views: 2 },
+      { views: 9 },
+      { date: '2026-07-25', views: 1 },
+    ]);
+    expect(points.map((point) => point.date)).toEqual(['2026-07-25', '2026-07-26']);
+  });
+});
+
+describe('post gallery window labelling', () => {
+  const now = new Date('2026-07-27T12:00:00.000Z');
+
+  it('states the next window in absolute dates, not as a bare day delta', () => {
+    // postWindowDays(1) is 23 — a cumulative-depth arithmetic result that reads
+    // as a contradiction against the "last 7d" filter. The absolute range does not.
+    expect(postWindowDays(1)).toBe(23);
+    expect(postWindowRange(1, now)).toEqual({ from: '2026-06-28', to: '2026-07-20' });
+  });
+});
+
+describe('resolveReportViewState', () => {
+  // The bug this encodes: 'idle' means two different things, and the empty state
+  // picked the wrong one. With an account selected it means "the load has not
+  // started"; only without one does it mean "choose an account".
+  it('shows the loading skeleton while idle with an account already selected', () => {
+    expect(resolveReportViewState({ status: 'idle', hasAccount: true, hasData: false })).toBe(
+      'loading',
+    );
+  });
+
+  it('asks for an account only when none is selected', () => {
+    expect(resolveReportViewState({ status: 'idle', hasAccount: false, hasData: false })).toBe(
+      'chooseAccount',
+    );
+    expect(resolveReportViewState({ status: 'loading', hasAccount: false, hasData: false })).toBe(
+      'chooseAccount',
+    );
+    expect(resolveReportViewState({ status: 'error', hasAccount: false, hasData: false })).toBe(
+      'chooseAccount',
+    );
+  });
+
+  it('shows the skeleton while loading', () => {
+    expect(resolveReportViewState({ status: 'loading', hasAccount: true, hasData: false })).toBe(
+      'loading',
+    );
+  });
+
+  it('surfaces an error over stale data', () => {
+    expect(resolveReportViewState({ status: 'error', hasAccount: true, hasData: true })).toBe(
+      'error',
+    );
+  });
+
+  it('renders the report once data is assembled', () => {
+    expect(resolveReportViewState({ status: 'success', hasAccount: true, hasData: true })).toBe(
+      'ready',
+    );
+  });
+
+  it('keeps the skeleton when the fetch succeeded but data is not assembled yet', () => {
+    expect(resolveReportViewState({ status: 'success', hasAccount: true, hasData: false })).toBe(
+      'loading',
+    );
   });
 });

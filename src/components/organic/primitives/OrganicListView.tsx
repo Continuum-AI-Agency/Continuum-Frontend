@@ -28,12 +28,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { UNSCHEDULED_DAY_ID } from './calendar-utils';
+import { StatusBadge } from './DraftCardBadges';
 import { resolveDraftMedia } from './DraftCardMedia';
 import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
 import { statusFrameClasses } from './draft-card-styles';
 import type { CreatePostMode, PlannerPlatform } from './planner-platforms';
-import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicDraftStatus } from './types';
+import type { OrganicCalendarDay, OrganicCalendarDraft } from './types';
 
 const PLATFORM_BADGE_COLORS: Record<string, string> = {
   instagram: 'bg-pink-500/15 text-pink-700 dark:text-pink-400',
@@ -76,31 +77,6 @@ function PlatformBadge({ platform }: { platform: string }) {
       )}
     >
       {platform.slice(0, 2).toUpperCase()}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: OrganicDraftStatus }) {
-  const config: Record<OrganicDraftStatus, { label: string; class: string }> = {
-    draft: { label: 'Draft', class: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' },
-    placeholder: { label: 'Draft', class: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' },
-    scheduled: {
-      label: 'Scheduled',
-      class: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
-    },
-    streaming: { label: 'Generating', class: 'bg-primary/15 text-primary' },
-    failed: { label: 'Failed', class: 'bg-destructive/15 text-destructive' },
-    published: {
-      label: 'Published',
-      class: 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-600',
-    },
-  };
-  const { label, class: cls } = config[status] ?? config.draft;
-  return (
-    <span
-      className={cn('rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide', cls)}
-    >
-      {label}
     </span>
   );
 }

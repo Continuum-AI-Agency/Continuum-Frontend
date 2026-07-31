@@ -1,9 +1,10 @@
 'use client';
 
+import type * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { cn } from '@/lib/utils';
 import { draftStatusPresentation, platformBadgeVariants } from './draft-card-styles';
-import type { OrganicCalendarDraft, OrganicPlatformTag } from './types';
+import type { OrganicDraftStatus, OrganicPlatformTag } from './types';
 
 const PLATFORM_ABBR: Record<string, string> = {
   instagram: 'IG',
@@ -33,7 +34,7 @@ export function StatusBadge({
   format,
   className,
 }: {
-  status: OrganicCalendarDraft['status'];
+  status: OrganicDraftStatus;
   format?: string;
   className?: string;
 }) {
@@ -55,5 +56,22 @@ export function StatusBadge({
     <Pill variant={tone} className={cn(pillClassName, className)} title={hint} aria-label={hint}>
       {label}
     </Pill>
+  );
+}
+
+/**
+ * The status marker for surfaces too narrow for the word — the month grid's chip, which
+ * is coloured by PLATFORM and so carried no status signal at all. The dot takes the
+ * canonical strip hue, and the label it hides visually is still announced and hoverable,
+ * so "every status is labeled" holds on the month grid too.
+ */
+export function StatusDot({ status }: { status: OrganicDraftStatus }): React.JSX.Element {
+  const { label, hint, strip } = draftStatusPresentation(status);
+
+  return (
+    <span className="inline-flex shrink-0 items-center" title={hint}>
+      <span className={cn('size-1.5 rounded-full', strip)} aria-hidden />
+      <span className="sr-only">{label}</span>
+    </span>
   );
 }

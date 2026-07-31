@@ -512,7 +512,74 @@ describe('buildClaimMap', () => {
 
   it('maps ad sets claimed by OTHER portfolios', () => {
     const map = buildClaimMap(rows, 'p-self');
-    expect(map.get('a1')).toEqual({ portfolioId: 'p-other', portfolioName: 'Prospecting Q3' });
+    expect(map.get('a1')).toEqual({
+      portfolioId: 'p-other',
+      portfolioName: 'Prospecting Q3',
+      sameBrand: true,
+      canRelease: true,
+    });
+  });
+
+  // A claim held by a brand the caller cannot edit: the claim is DISCLOSED (otherwise the
+  // refusal is unexplainable) but its holder is not named, and it must not read as movable.
+  it('marks a cross-brand claim the caller cannot take, without naming the holder', () => {
+    const map = buildClaimMap(
+      [
+        {
+          adset_id: 'x1',
+          portfolio_id: null,
+          portfolio_name: null,
+          same_brand: false,
+          can_release: false,
+        },
+      ],
+      null,
+    );
+    expect(map.get('x1')).toEqual({
+      portfolioId: null,
+      portfolioName: null,
+      sameBrand: false,
+      canRelease: false,
+    });
+  });
+
+  // Cross-brand but edit-qualified: a real move, named, and takeable.
+  it('keeps a cross-brand claim the caller CAN take fully named', () => {
+    const map = buildClaimMap(
+      [
+        {
+          adset_id: 'x2',
+          portfolio_id: 'p-agency',
+          portfolio_name: 'Agency · Leads',
+          same_brand: false,
+          can_release: true,
+        },
+      ],
+      null,
+    );
+    expect(map.get('x2')).toMatchObject({
+      portfolioName: 'Agency · Leads',
+      sameBrand: false,
+      canRelease: true,
+    });
+  });
+
+  // The "another portfolio" fallback is only honest for a SAME-brand claim — inventing it for a
+  // brand the caller cannot see would assert a holder that was deliberately withheld.
+  it('does not invent a label for an unnameable cross-brand claim', () => {
+    const map = buildClaimMap(
+      [
+        {
+          adset_id: 'x3',
+          portfolio_id: null,
+          portfolio_name: '  ',
+          same_brand: false,
+          can_release: false,
+        },
+      ],
+      null,
+    );
+    expect(map.get('x3')?.portfolioName).toBeNull();
   });
 
   // An ad set already enrolled here is not moving; badging it would invent a conflict.
@@ -538,6 +605,21 @@ describe('previewMoves', () => {
     ],
     null,
   );
+
+  // A claim the caller cannot release is NOT a move this save will make — it is the reason the
+  // save would be refused. Promising it here would be a lie the enroll then contradicts.
+  it('excludes claims the caller cannot release', () => {
+    const mixed = buildClaimMap(
+      [
+        { adset_id: 'm1', portfolio_id: 'p1', portfolio_name: 'Mine', same_brand: true, can_release: true },
+        { adset_id: 'm2', portfolio_id: null, portfolio_name: null, same_brand: false, can_release: false },
+      ],
+      null,
+    );
+    expect(previewMoves(['m1', 'm2'], mixed)).toEqual([
+      { portfolioName: 'Mine', adsetIds: ['m1'] },
+    ]);
+  });
 
   it('groups the moves by the portfolio that loses them, biggest first', () => {
     expect(previewMoves(['a1', 'a2', 'a3'], claims)).toEqual([

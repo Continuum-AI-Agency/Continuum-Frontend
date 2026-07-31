@@ -56,10 +56,11 @@ import { PAID_SETUP_CONNECT_HREF } from '../../paid-setup-diagnostics';
 import { BudgetHint, SetupAdvisor, TargetHint, useSetupAdvice } from '../advisor/SetupAdvisor';
 import { currencySymbol, deriveEfficiency, formatCpa, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
-import { buildCboCampaignSections } from '../picker/campaignGroups';
+import { buildCboCampaignSections, buildClaimMap, previewMoves } from '../picker/campaignGroups';
 import { buildProjectedConversions } from '../preview/projectedConversion';
 import { applyModeExplainer, applyModePill } from '../reportModel';
 import {
+  useOptimizerAccountEnrollments,
   useOptimizerAccountSnapshots,
   useOptimizerAdAccounts,
   useOptimizerMutations,
@@ -712,6 +713,16 @@ export function PortfolioCreateForm({
   const [cpaTarget, setCpaTarget] = React.useState('');
   const [selectedAdsetIds, setSelectedAdsetIds] = React.useState<string[]>([]);
 
+  // Who else holds each ad set's single active enrollment, across the whole account and across
+  // brands. There is no current portfolio yet (this form is creating one), so nothing is
+  // filtered out. `blockedSelected` is the subset the operator has picked but is not entitled
+  // to take — enroll would refuse those with 42501, so the form says so before the save.
+  const accountEnrollmentsRead = useOptimizerAccountEnrollments(brandId, adAccountId);
+  const claims = React.useMemo(
+    () => buildClaimMap(accountEnrollmentsRead.data, null),
+    [accountEnrollmentsRead.data],
+  );
+
   // Sum of the selected ad sets' current daily budgets — offered as the default
   // daily total when the operator hasn't typed one (they keep control).
   const selectedBudgetSum = React.useMemo(() => {
@@ -737,10 +748,30 @@ export function PortfolioCreateForm({
   const typedDaily = Number.parseFloat(dailyTotal);
   const effectiveDaily =
     Number.isFinite(typedDaily) && typedDaily > 0 ? typedDaily : selectedBudgetSum;
+  // Selected ad sets this operator is not entitled to take. Enroll refuses the WHOLE batch on
+  // any one of these (42501), so submitting with one selected can only fail — and it used to
+  // fail after the portfolio had already been created, leaving an empty one behind.
+  const blockedSelected = React.useMemo(
+    () =>
+      selectedAdsetIds.filter((id) => {
+        const claim = claims.get(id);
+        return claim ? !claim.canRelease : false;
+      }),
+    [selectedAdsetIds, claims],
+  );
+  const movesSelected = React.useMemo(
+    () => previewMoves(selectedAdsetIds, claims),
+    [selectedAdsetIds, claims],
+  );
+
   // A portfolio with no enrolled entities is INERT: the scheduler claims it every cycle and
   // skips with `no_adsets`, forever, while the UI shows an active portfolio that never
   // scores. Enrollment is what makes a portfolio real, so it is required to create one.
-  const canSubmit = name.trim().length > 0 && effectiveDaily > 0 && selectedAdsetIds.length > 0;
+  const canSubmit =
+    name.trim().length > 0 &&
+    effectiveDaily > 0 &&
+    selectedAdsetIds.length > 0 &&
+    blockedSelected.length === 0;
   const busy = create.isPending || enroll.isPending;
   const metric = getOptimizationMetricDefinition(objective);
 
@@ -834,10 +865,34 @@ export function PortfolioCreateForm({
             isError={snapshotsRead.isError}
             mode={level}
             objective={objective}
+            // Which OTHER portfolio already holds each ad set. The Manage panel has always had
+            // this; CREATE never did — so building a new portfolio was the one place an
+            // already-claimed ad set looked free right up until the save failed.
+            claims={claims}
             // The picker takes whatever height the pane has. It used to be capped at 60vh inside
             // a 672px column — the cap was doing the cramping, not the content.
             heightClassName="h-[22rem] lg:h-full lg:min-h-[24rem]"
           />
+          {blockedSelected.length > 0 ? (
+            <p
+              className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-2xs text-destructive"
+              role="alert"
+            >
+              {blockedSelected.length} selected{' '}
+              {blockedSelected.length === 1 ? 'ad set is' : 'ad sets are'} held by another
+              brand&rsquo;s portfolio you cannot edit. Deselect{' '}
+              {blockedSelected.length === 1 ? 'it' : 'them'}, or ask someone with access there to
+              release {blockedSelected.length === 1 ? 'it' : 'them'} first.
+            </p>
+          ) : null}
+          {movesSelected.length > 0 ? (
+            <p className="text-2xs text-muted-foreground" role="status">
+              {movesSelected
+                .map((move) => `${move.adsetIds.length} from ${move.portfolioName}`)
+                .join(' · ')}{' '}
+              will move into this portfolio.
+            </p>
+          ) : null}
         </div>
 
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
@@ -959,13 +1014,29 @@ export function PortfolioCreateForm({
             onUseTarget={setCpaTarget}
           />
 
+          {/* Show the SERVER's reason. This branch used to replace enroll.error.message with a
+              fixed "enrolling failed — press Create again" sentence, which is why a refusal that
+              names exactly which ad sets are held, and by whom, arrived as generic noise. Create
+              is idempotent per (brand, account, name), so the retry hint stays — it is just no
+              longer the only thing said. */}
           {create.isError || enroll.isError ? (
-            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {create.error instanceof Error
-                ? create.error.message
-                : enroll.error instanceof Error
-                  ? `Portfolio created, but enrolling the ${entityLabel} failed — press Create again to retry, or add them from Manage.`
-                  : 'Could not create the portfolio.'}
+            <p
+              className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+              role="alert"
+            >
+              {create.error instanceof Error ? (
+                create.error.message
+              ) : enroll.error instanceof Error ? (
+                <>
+                  {enroll.error.message}
+                  <span className="mt-1 block text-2xs opacity-80">
+                    The portfolio was created — fix the above and press Create again, or add the{' '}
+                    {entityLabel} from Manage.
+                  </span>
+                </>
+              ) : (
+                'Could not create the portfolio.'
+              )}
             </p>
           ) : null}
 

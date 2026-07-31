@@ -42,7 +42,8 @@ describe('parseSiblingClientKey', () => {
   });
 
   it('returns null when the suffix is not a publish platform', () => {
-    expect(parseSiblingClientKey('placement_1::tiktok')).toBeNull();
+    // youtube is the standing example of a platform drafts can name but nothing can publish.
+    expect(parseSiblingClientKey('placement_1::youtube')).toBeNull();
   });
 
   it('splits on the LAST separator so a source key containing "::" round-trips', () => {
@@ -74,7 +75,7 @@ describe('draftFanOutRequestSchema', () => {
   });
 
   it('rejects a platform with no publisher', () => {
-    expect(draftFanOutRequestSchema.safeParse({ platforms: ['tiktok'] }).success).toBe(false);
+    expect(draftFanOutRequestSchema.safeParse({ platforms: ['youtube'] }).success).toBe(false);
   });
 
   it('accepts a PARTIAL accounts map — the exhaustive z.record trap', () => {

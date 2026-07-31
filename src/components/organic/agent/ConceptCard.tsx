@@ -22,7 +22,7 @@ import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromPreviewUrls } from '@/components/chat/media/media';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { AgentArtifactCard, MetaRow, PlatformTag, StatusLabel } from './agentCardKit';
+import { AgentArtifactCard, MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 import { resolveConceptPreviewUrl } from './conceptPreview';
 import type { CheckpointState, PipelineCardState, PlanItem, PlanItemStatus } from './types';
 

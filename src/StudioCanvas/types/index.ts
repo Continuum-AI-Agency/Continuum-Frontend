@@ -49,6 +49,10 @@ export interface BaseNodeData extends Record<string, unknown> {
   isExecuting?: boolean;
   isComplete?: boolean;
   error?: string;
+  // The Backend's classification of `error`, when it sent one. Drives the node's
+  // guidance panel so the user is told what to change instead of the raw provider
+  // sentence. See utils/generationErrorCopy.
+  errorCode?: string;
   executionTime?: number;
   isToolbarVisible?: boolean;
   isTourSeed?: boolean;

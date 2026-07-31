@@ -34,7 +34,10 @@ export type DraftStatusPresentation = {
   frame: DraftStatusFrame;
 };
 
-export const DRAFT_STATUS_PRESENTATION: Record<OrganicDraftStatus, DraftStatusPresentation> = {
+// `satisfies` rather than a plain annotation: it still rejects a missing status (so a new
+// member of the union cannot ship unstyled) AND rejects a key that is not a status, which
+// an annotation silently allows.
+export const DRAFT_STATUS_PRESENTATION = {
   draft: {
     label: 'Draft',
     hint: 'Draft — not yet approved for posting',
@@ -78,11 +81,52 @@ export const DRAFT_STATUS_PRESENTATION: Record<OrganicDraftStatus, DraftStatusPr
     strip: 'bg-destructive',
     frame: 'danger',
   },
-};
+} satisfies Record<OrganicDraftStatus, DraftStatusPresentation>;
 
 export function draftStatusPresentation(status: OrganicDraftStatus): DraftStatusPresentation {
   return DRAFT_STATUS_PRESENTATION[status] ?? DRAFT_STATUS_PRESENTATION.draft;
 }
+
+/**
+ * Lifecycle order for the legend: authored -> seeded -> generating -> approved -> live,
+ * with the failure state last.
+ *
+ * Exported so the toolbar legend is DERIVED from the table the cards actually read. A
+ * hardcoded legend drifted into four separate falsehoods (violet claimed "Generating"
+ * when it means "Seeded", Scheduled was drawn as an unfilled outline, `placeholder` was
+ * missing entirely, and Failed was a solid destructive fill).
+ */
+export const DRAFT_STATUS_LEGEND_ORDER = [
+  'draft',
+  'placeholder',
+  'streaming',
+  'scheduled',
+  'published',
+  'failed',
+] as const satisfies readonly OrganicDraftStatus[];
+
+export type DraftStatusLegendEntry = {
+  status: OrganicDraftStatus;
+  /** The word the pill shows. */
+  label: string;
+  /** What the status means, in plain language — the legend's hint row. */
+  hint: string;
+};
+
+/** Every status, in legend order, with the exact words the planner's pills use. */
+export function draftStatusLegendEntries(): DraftStatusLegendEntry[] {
+  return DRAFT_STATUS_LEGEND_ORDER.map((status) => {
+    const { label, hint } = DRAFT_STATUS_PRESENTATION[status];
+    return { status, label, hint };
+  });
+}
+
+/**
+ * "Needs setup" is READINESS, not a status: a draft missing its caption or media still has
+ * status `draft`. The legend has to say so instead of listing it beside the six statuses.
+ */
+export const DRAFT_READINESS_LEGEND_NOTE =
+  '"Needs setup" is not a status — it flags a post that still needs a caption or media before it can be scheduled.';
 
 type FramePlatform = 'instagram' | 'linkedin' | 'facebook' | 'tiktok' | 'youtube' | 'twitter';
 

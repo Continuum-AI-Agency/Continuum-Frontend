@@ -12,7 +12,7 @@ import {
   AgentCardSummary,
   AgentCardTitle,
   StatusLabel,
-} from './agentCardKit';
+} from '@/components/shared/agent-cards/agentCardKit';
 
 function scoreTone(score: number): string {
   if (score >= 70) return 'text-emerald-600 dark:text-emerald-400';

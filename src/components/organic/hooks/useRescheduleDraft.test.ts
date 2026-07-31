@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import {
-  applyPlannerFutureFloor,
-  movePlannerDraftToDay,
-  plannerInstantFromDayTime,
-} from '@continuum/contracts';
+import { movePlannerDraftToDay, plannerInstantFromDayTime } from '@continuum/contracts';
 import { act, renderHook } from '@testing-library/react';
 
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { useCalendarStore } from '@/lib/organic/store';
 
-type RequestOptions = { path: string; method?: string; body?: { scheduled_date: string } };
+type RequestOptions = {
+  path: string;
+  method?: string;
+  body?: { dayId?: string; timeOfDay?: string };
+};
 
 const requestCalls: RequestOptions[] = [];
 let requestImpl: (opts: RequestOptions) => Promise<unknown> = async () => ({});
@@ -95,14 +95,18 @@ describe('useRescheduleDraft', () => {
 
     expect(requestCalls).toHaveLength(1);
     const body = requestCalls[0]?.body;
-    expect(requestCalls[0]?.path).toBe(`/api/organic/calendar/drafts/srv-a/reschedule`);
-    expect(body?.scheduled_date.slice(0, 10)).toBe(target);
-    expect(new Date(body?.scheduled_date ?? '').getHours()).toBe(17);
+    // The shared field-edit route, so a manual and an agent draft move identically.
+    expect(requestCalls[0]?.path).toBe(`/api/organic/calendar/drafts/srv-a/fields`);
+    expect(body?.dayId).toBe(target);
+    expect(body?.timeOfDay).toBe('17:00');
     // Optimistic move landed the draft on the target day.
     expect(findDraft('a')?.dayId).toBe(target);
   });
 
-  it('floors a past target to a future instant', async () => {
+  // The past guard now lives server-side, in the one place that composes the
+  // instant. The client sends the day and the time-of-day the user chose; inventing
+  // a floored timestamp here as well is what let the two sides disagree.
+  it('sends the target day and chip time verbatim, leaving the past guard to the server', async () => {
     seedDays([draft('a', { timeLabel: '9:00 AM' })]);
     const { result } = renderHook(() => useRescheduleDraft());
 
@@ -111,8 +115,8 @@ describe('useRescheduleDraft', () => {
     });
 
     expect(requestCalls).toHaveLength(1);
-    const iso = requestCalls[0]?.body?.scheduled_date ?? '';
-    expect(new Date(iso).getTime()).toBeGreaterThan(Date.now());
+    expect(requestCalls[0]?.body?.dayId).toBe('2020-01-01');
+    expect(requestCalls[0]?.body?.timeOfDay).toBe('09:00');
   });
 
   it('rolls back the draft to its origin day + label when the PATCH rejects', async () => {
@@ -134,10 +138,9 @@ describe('useRescheduleDraft', () => {
     expect(show.mock.calls[0]?.[0]?.variant).toBe('error');
   });
 
-  // Anti-drift: the instant this hook PATCHes must be the instant
-  // `planner_manage action=reschedule` would write for the same move. Both call the
-  // same two contract helpers, so this asserts the UI has not grown its own arithmetic.
-  it('normalizes through the shared @continuum/contracts planner schedule', async () => {
+  // Anti-drift: the canonical time-of-day this hook sends must be the one the
+  // Backend's own move helper derives, so the UI has not grown its own arithmetic.
+  it('normalizes the chip time through the shared @continuum/contracts vocabulary', async () => {
     seedDays([draft('a', { timeLabel: '5:00 PM' })]);
     const target = dayIdAhead(20);
     const { result } = renderHook(() => useRescheduleDraft());
@@ -146,25 +149,19 @@ describe('useRescheduleDraft', () => {
       await result.current.reschedule('a', target);
     });
 
-    const sent = requestCalls[0]?.body?.scheduled_date ?? '';
-    const viaContract = applyPlannerFutureFloor(
-      plannerInstantFromDayTime({ dayId: target, timeOfDay: '5:00 PM' }) ?? '',
-    );
-    expect(sent).toBe(viaContract);
-
-    // …and the Backend's move helper, given the instant the UI just wrote, keeps
-    // the same time-of-day when it moves the draft on again.
+    const sentTimeOfDay = requestCalls[0]?.body?.timeOfDay;
     const backendMove = movePlannerDraftToDay({
-      fromIso: sent,
-      targetDayId: dayIdAhead(21),
+      fromIso: plannerInstantFromDayTime({ dayId: FROM_DAY, timeOfDay: '5:00 PM' }),
+      targetDayId: target,
     });
-    expect(backendMove?.timeOfDay).toBe('17:00');
+    expect(sentTimeOfDay).toBe(backendMove?.timeOfDay);
+    expect(sentTimeOfDay).toBe('17:00');
   });
 
-  // Manual-origin drafts stay with the debounced autosave HERE (it re-persists
-  // slot_data.dayId, which is what the grid reads for them); the server-side
-  // equivalent lives in planner_manage, which rewrites that same slot key itself.
-  it('does NOT PATCH a manual-origin draft (autosave owns it)', async () => {
+  // A manual drag used to be left entirely to the browser autosave, which did not
+  // persist the move — so the draft silently snapped back to its original day. The
+  // field-edit route rewrites `slot_data.dayId` server-side, so it persists now.
+  it('DOES PATCH a manual-origin draft — the autosave never persisted the move', async () => {
     seedDays([draft('a', { origin: 'manual' })]);
     const target = dayIdAhead(20);
     const { result } = renderHook(() => useRescheduleDraft());
@@ -173,8 +170,8 @@ describe('useRescheduleDraft', () => {
       await result.current.reschedule('a', target);
     });
 
-    expect(requestCalls).toHaveLength(0);
-    // Optimistic move still applied.
+    expect(requestCalls).toHaveLength(1);
+    expect(requestCalls[0]?.path).toBe('/api/organic/calendar/drafts/srv-a/fields');
     expect(findDraft('a')?.dayId).toBe(target);
   });
 

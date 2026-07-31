@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentAttachment } from '@continuum/contracts';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentMentionReference } from '@/lib/agent-references';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
@@ -9,6 +9,7 @@ import { browserTimezone } from '@/lib/automations/schedule';
 import {
   type JainaChatStreamRequest,
   type JainaPlanAction,
+  type JainaScaffoldAction,
   jainaChatRequestSchema,
 } from '@/lib/jaina/schemas';
 import {
@@ -31,7 +32,17 @@ type JainaChatInput = {
   images?: AgentAttachment[];
   references?: AgentMentionReference[];
   planAction?: JainaPlanAction;
+  scaffoldAction?: JainaScaffoldAction;
   forceReportArtifact?: boolean;
+  /**
+   * Invoked when the request fails to reach the backend.
+   *
+   * `start()` resolves before the fetch settles, so a caller holding optimistic UI
+   * has no other way to learn it was dropped. Without this an approval that never
+   * arrived still renders as "Approved" — exactly the silence an approval gate
+   * exists to prevent.
+   */
+  onDispatchError?: (message: string) => void;
 };
 
 type StartResult = { error?: string };
@@ -206,6 +217,7 @@ export function useJainaChatStream() {
           canvas: input.canvas,
           clarification: input.clarificationId ? { id: input.clarificationId } : undefined,
           ...(input.planAction ? { plan_action: input.planAction } : {}),
+          ...(input.scaffoldAction ? { scaffold_action: input.scaffoldAction } : {}),
           context: {
             adAccountId: input.adAccountId,
             brandId: input.brandId,
@@ -223,6 +235,7 @@ export function useJainaChatStream() {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid request payload';
         setState((prev) => ({ ...prev, status: 'error', error: message }));
+        input.onDispatchError?.(message);
         return { error: message };
       }
 
@@ -360,6 +373,7 @@ export function useJainaChatStream() {
         const message = error instanceof Error ? error.message : 'Stream failed';
         if (!controller.signal.aborted) {
           setState((prev) => ({ ...prev, status: 'error', error: message }));
+          input.onDispatchError?.(message);
         }
         return { error: message };
       }

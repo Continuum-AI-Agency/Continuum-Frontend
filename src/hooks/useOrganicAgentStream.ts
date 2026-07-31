@@ -1,6 +1,13 @@
 'use client';
 
-import { AGENT_CHAT_STARTED, AGENT_RUN_QUEUED, type AgentRunStatus } from '@continuum/contracts';
+import {
+  AGENT_CHAT_STARTED,
+  AGENT_RUN_QUEUED,
+  type AgentRunEventDto,
+  type AgentRunStatus,
+  isTerminalAgentRunStatus,
+  runStatusFromFrameType,
+} from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   applyOrganicFrame,
@@ -31,6 +38,30 @@ const STREAM_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
  */
 export function resolveIdleRunStatus(receivedAnyFrame: boolean): AgentRunStatus {
   return receivedAnyFrame ? 'completed' : 'failed';
+}
+
+/**
+ * Lift a raw NDJSON frame into the store's log shape, or null when it cannot be logged.
+ *
+ * `seq` is the only required field: it is the dedupe key the two producers share, so a
+ * frame without one (the unenveloped `agent.run_queued` notice) has no safe place in the
+ * log. `eventId`/`ts` are only identity and display, so they are substituted rather than
+ * treated as fatal.
+ */
+export function toAgentRunEvent(frame: Record<string, unknown>): AgentRunEventDto | null {
+  const seq = typeof frame.seq === 'number' ? frame.seq : null;
+  const type = typeof frame.type === 'string' ? frame.type : null;
+  if (seq === null || !type) return null;
+  return {
+    eventId: typeof frame.eventId === 'string' ? frame.eventId : `evt_${seq}`,
+    seq,
+    ts: typeof frame.ts === 'string' ? frame.ts : new Date().toISOString(),
+    type,
+    data:
+      frame.data && typeof frame.data === 'object'
+        ? (frame.data as Record<string, unknown>)
+        : ({} as Record<string, unknown>),
+  };
 }
 
 type OrganicAgentStreamOptions = {
@@ -142,6 +173,10 @@ export function useOrganicAgentStream(
       let lastSeq = -1;
       let terminal = false;
       let receivedAnyFrame = false;
+      // The status the LAST terminal frame implies, mirroring how the store derives it.
+      // Organic emits a non-fatal `response.error` when a background-job drain times out and
+      // then still finishes the turn, so a later `completed` has to be allowed to win.
+      let terminalStatus: AgentRunStatus | null = null;
 
       /**
        * Idle watchdog. `composerBusy` is `isStreaming || viewedSessionStreaming`, and BOTH
@@ -182,6 +217,39 @@ export function useOrganicAgentStream(
         idleHandle = setTimeout(settleIdleRun, STREAM_IDLE_TIMEOUT_MS);
       };
 
+      /**
+       * The reader is the SECOND producer into the run's durable log — the store's
+       * "TWO PRODUCERS, ONE LOG" design. Without this the log had exactly one producer, the
+       * Realtime tailer, so a dropped postgres-changes subscription left the store record
+       * `running` forever: `isSessionStreaming` stayed true, "Continuum is working…" never
+       * cleared and the composer stayed disabled until the idle watchdog fired minutes later.
+       *
+       * Appending here makes the terminal frame settle the run the instant the stream ends,
+       * with no dependence on Realtime. Both producers dedupe by seq inside the store, so
+       * the tailer re-appending the same frame is a no-op.
+       */
+      const recordFrame = (event: Record<string, unknown>): void => {
+        if (!chatRunId) return;
+        const logged = toAgentRunEvent(event);
+        if (!logged) return;
+        terminalStatus = runStatusFromFrameType(logged.type) ?? terminalStatus;
+        useAgentRunStore.getState().appendEvents(chatRunId, [logged]);
+      };
+
+      /**
+       * Belt and braces for the composer lock. `recordFrame` already settles the run through
+       * the log, but a status derived from a log is one indirection away from the flag that
+       * disables the composer — so if the stream ended terminally and the record is somehow
+       * still non-terminal, stamp it directly. There is nothing else left to unlock it.
+       */
+      const settleTerminalRun = (): void => {
+        if (!terminalStatus || !chatRunId) return;
+        const store = useAgentRunStore.getState();
+        const record = store.runs[chatRunId];
+        if (!record || isTerminalAgentRunStatus(record.run.status)) return;
+        store.upsertRun({ ...record.run, status: terminalStatus });
+      };
+
       const dispatchParsed = (event: Record<string, unknown>): void => {
         const type = typeof event.type === 'string' ? event.type : undefined;
         // Any frame proves the stream is alive, so every frame re-arms the watchdog. Only
@@ -213,6 +281,7 @@ export function useOrganicAgentStream(
               createdAt: new Date().toISOString(),
             });
             opts?.onRunStarted?.(runIdFromEvent);
+            recordFrame(event);
           }
           return;
         }
@@ -228,6 +297,7 @@ export function useOrganicAgentStream(
           return;
         }
 
+        recordFrame(event);
         if (applyOrganicFrame(event, dispatch, mode, frameHandlers)) {
           terminal = true;
         }
@@ -288,6 +358,7 @@ export function useOrganicAgentStream(
             timezone: input.timezone,
             platformAccountIds: input.platformAccountIds,
             images: input.images,
+            locale: input.locale,
           }),
           signal: controller.signal,
         });
@@ -376,6 +447,7 @@ export function useOrganicAgentStream(
         return { error: message };
       } finally {
         clearIdleWatchdog();
+        settleTerminalRun();
         if (mode === 'chat') {
           // An aborted controller means an INTENTIONAL detach (session switch / unmount), not
           // a finished turn — the run lives on and the projection owns it now. Dispatching

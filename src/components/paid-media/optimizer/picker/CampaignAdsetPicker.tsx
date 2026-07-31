@@ -206,8 +206,13 @@ const AdsetRow = memo(function AdsetRow({
               </Badge>
             ) : null}
             {row.enrolledIn ? (
-              <Badge variant="outline" className="shrink-0 text-3xs">
-                In: {row.enrolledIn.portfolioName}
+              <Badge
+                variant={row.enrolledIn.canRelease ? 'outline' : 'warning'}
+                className="shrink-0 text-3xs"
+              >
+                {row.enrolledIn.portfolioName
+                  ? `In: ${row.enrolledIn.portfolioName}`
+                  : 'Claimed elsewhere'}
               </Badge>
             ) : null}
           </span>
@@ -230,10 +235,18 @@ const AdsetRow = memo(function AdsetRow({
             </span>
           ) : null}
           {/* An ad set holds exactly one active enrollment, so selecting a claimed one MOVES
-              it. Said before the save, not discovered after the other portfolio empties. */}
+              it. Said before the save, not discovered after the other portfolio empties — and
+              when the operator lacks edit rights on the holder, the save WILL be refused, so
+              that dead end is shown here rather than found the hard way. */}
           {row.enrolledIn ? (
-            <span className="mt-0.5 line-clamp-1 block text-2xs text-muted-foreground">
-              Selecting this moves it out of {row.enrolledIn.portfolioName}.
+            <span
+              className={`mt-0.5 line-clamp-1 block text-2xs ${
+                row.enrolledIn.canRelease ? 'text-muted-foreground' : 'text-warning'
+              }`}
+            >
+              {row.enrolledIn.canRelease
+                ? `Selecting this moves it out of ${row.enrolledIn.portfolioName}.`
+                : 'Another brand’s portfolio holds this. You need edit access there to move it.'}
             </span>
           ) : null}
         </label>

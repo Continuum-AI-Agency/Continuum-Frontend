@@ -11,14 +11,25 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { AgentButton, AgentDecisionCard, MetaRow, PlatformTag } from './agentCardKit';
+import { AgentButton, AgentDecisionCard, MetaRow, PlatformTag } from '@/components/shared/agent-cards/agentCardKit';
 import type { ToolApproval } from './types';
 
 type ContentInput = {
   platform?: string;
   format?: string;
+  /**
+   * The publishing tools send `scheduledFor` (see PublishInputSchema). The card only ever read
+   * `scheduledAt`/`scheduled_at`, so the date on a publish approval never rendered at all.
+   */
+  scheduledFor?: string;
   scheduledAt?: string;
   scheduled_at?: string;
+  /**
+   * The exact caption that will publish. The publishing tools' own descriptions tell the model
+   * "the user is approving this string" — yet it used to appear only inside a truncated JSON dump
+   * behind a 400ms hover delay. The one field the gate exists to show is now in the card body.
+   */
+  finalCaption?: string;
   angle?: string;
   topic?: string;
   description?: string;
@@ -68,7 +79,10 @@ export function ToolApprovalCard({
   const content = parseContentInput(approval.input);
   const platform = content.platform;
   const format = content.format;
-  const scheduledAt = formatScheduledAt(content.scheduledAt ?? content.scheduled_at);
+  const scheduledAt = formatScheduledAt(
+    content.scheduledFor ?? content.scheduledAt ?? content.scheduled_at,
+  );
+  const caption = content.finalCaption;
   const angle = content.angle ?? content.topic ?? content.description;
 
   return (
@@ -87,10 +101,20 @@ export function ToolApprovalCard({
                   )}
                 </div>
                 {scheduledAt && <MetaRow items={[scheduledAt]} className="text-xs" />}
-                {angle && (
+                {caption ? (
+                  <div>
+                    <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Caption
+                    </p>
+                    <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-muted/50 p-1.5 text-xs leading-relaxed text-foreground/90">
+                      {caption}
+                    </p>
+                  </div>
+                ) : null}
+                {angle && !caption && (
                   <p className="line-clamp-3 text-sm leading-relaxed text-foreground/80">{angle}</p>
                 )}
-                {!platform && !angle && (
+                {!platform && !angle && !caption && (
                   <p className="text-xs text-muted-foreground">{approval.toolName}</p>
                 )}
               </CardContent>

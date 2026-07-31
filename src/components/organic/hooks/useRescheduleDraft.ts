@@ -1,10 +1,5 @@
 'use client';
 
-import {
-  applyPlannerFutureFloor,
-  organicRescheduleDraftRequestSchema,
-  plannerInstantFromDayTime,
-} from '@continuum/contracts';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import {
@@ -13,8 +8,8 @@ import {
 } from '@/components/organic/primitives/calendar-utils';
 import type { OrganicCalendarDay } from '@/components/organic/primitives/types';
 import { useToast } from '@/components/ui/ToastProvider';
-import { request } from '@/lib/api/http';
 import { useCalendarStore } from '@/lib/organic/store';
+import { scheduleFieldPatch, useDraftFieldPersistence } from './useDraftFieldEditor';
 
 const DAY_ID_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 // Bulk selections can be large; persist a bounded number of PATCHes at a time so a
@@ -27,6 +22,7 @@ type RescheduleSnapshot = {
   dateLabel: string;
   timeLabel: string;
   backendDraftId?: string;
+  updatedAt?: string | null;
   origin?: 'manual' | 'agent';
 };
 
@@ -44,21 +40,12 @@ function snapshotDraft(days: OrganicCalendarDay[], draftId: string): RescheduleS
         dateLabel: found.dateLabel,
         timeLabel: found.timeLabel,
         backendDraftId: found.backendDraftId,
+        updatedAt: found.updatedAt,
         origin: found.origin,
       };
     }
   }
   return null;
-}
-
-// The new day keeps the chip's existing time-of-day; floor to the future if that lands
-// in the past. Both steps come from @continuum/contracts so a drag here and a
-// `planner_manage action=reschedule` call on the Backend normalize identically —
-// same time-of-day carry-over, same zone resolution, same past guard.
-function computeScheduledDate(targetDayId: string, timeLabel: string): string | null {
-  const built = plannerInstantFromDayTime({ dayId: targetDayId, timeOfDay: timeLabel });
-  if (!built) return null;
-  return applyPlannerFutureFloor(built);
 }
 
 function dateLabelForDay(days: OrganicCalendarDay[], targetDayId: string): string {
@@ -83,10 +70,14 @@ export type UseRescheduleDraftResult = {
 
 /**
  * Move one or many drafts to a new day: optimistic store move (keeping each chip's
- * time-of-day) plus a brand-scoped PATCH to persist the new scheduled_date. Manual-origin
- * drafts are excluded from the PATCH — they re-persist through the debounced browser
- * autosave (whose signature includes the dayId), so PATCHing them would double-write and
- * race that autosave. A rejected PATCH rolls its draft back to where it started.
+ * time-of-day) plus a brand-scoped PATCH through the shared field-edit path. A rejected
+ * PATCH rolls its draft back to where it started.
+ *
+ * Manual-origin drafts used to be excluded from the PATCH and left to the debounced
+ * browser autosave, on the theory that its signature covered the dayId. It did not
+ * persist the move, so a manual drag silently snapped back. The field-edit route
+ * rewrites a manual draft's `slot_data.dayId` server-side, so every origin now moves
+ * the same way.
  */
 export function useRescheduleDraft(): UseRescheduleDraftResult {
   const { show } = useToast();
@@ -98,21 +89,28 @@ export function useRescheduleDraft(): UseRescheduleDraftResult {
     })),
   );
 
+  const { persistDraftFields } = useDraftFieldPersistence();
+
   const persistDraft = React.useCallback(
-    async (snapshot: RescheduleSnapshot, scheduledDate: string): Promise<boolean> => {
-      if (!snapshot.backendDraftId || snapshot.origin === 'manual') return true;
-      try {
-        await request({
-          path: `/api/organic/calendar/drafts/${snapshot.backendDraftId}/reschedule`,
-          method: 'PATCH',
-          body: organicRescheduleDraftRequestSchema.parse({ scheduled_date: scheduledDate }),
-        });
-        return true;
-      } catch {
-        return false;
-      }
+    async (snapshot: RescheduleSnapshot, targetDayId: string): Promise<boolean> => {
+      if (!snapshot.backendDraftId) return true;
+      const patch = scheduleFieldPatch(targetDayId, snapshot.timeLabel);
+      if (!patch) return false;
+      // The field-edit route, not the reschedule route: it is what rewrites a
+      // manual draft's `slot_data.dayId` server-side. Manual drafts used to be
+      // excluded here entirely and left to the browser autosave, which is why a
+      // manual drag never persisted.
+      const result = await persistDraftFields(
+        {
+          id: snapshot.draftId,
+          backendDraftId: snapshot.backendDraftId,
+          updatedAt: snapshot.updatedAt,
+        },
+        patch,
+      );
+      return result.ok;
     },
-    [],
+    [persistDraftFields],
   );
 
   const rollback = React.useCallback(
@@ -130,14 +128,12 @@ export function useRescheduleDraft(): UseRescheduleDraftResult {
       const snapshot = snapshotDraft(days, draftId);
       if (!snapshot || snapshot.fromDayId === targetDayId) return;
 
-      const scheduledDate = computeScheduledDate(targetDayId, snapshot.timeLabel);
-      if (!scheduledDate) return;
       const nextDateLabel = dateLabelForDay(days, targetDayId);
 
       moveDraft(draftId, targetDayId);
       updateDraft(draftId, (draft) => ({ ...draft, dateLabel: nextDateLabel }));
 
-      const ok = await persistDraft(snapshot, scheduledDate);
+      const ok = await persistDraft(snapshot, targetDayId);
       if (!ok) {
         rollback(snapshot);
         show({
@@ -167,18 +163,9 @@ export function useRescheduleDraft(): UseRescheduleDraftResult {
         updateDraft(snapshot.draftId, (draft) => ({ ...draft, dateLabel: nextDateLabel }));
       }
 
-      const plans = snapshots
-        .map((snapshot) => {
-          const scheduledDate = computeScheduledDate(targetDayId, snapshot.timeLabel);
-          return scheduledDate ? { snapshot, scheduledDate } : null;
-        })
-        .filter(
-          (plan): plan is { snapshot: RescheduleSnapshot; scheduledDate: string } => plan !== null,
-        );
-
       const failures: RescheduleSnapshot[] = [];
-      await runChunked(plans, PERSIST_CONCURRENCY, async ({ snapshot, scheduledDate }) => {
-        const ok = await persistDraft(snapshot, scheduledDate);
+      await runChunked(snapshots, PERSIST_CONCURRENCY, async (snapshot) => {
+        const ok = await persistDraft(snapshot, targetDayId);
         if (!ok) failures.push(snapshot);
       });
 

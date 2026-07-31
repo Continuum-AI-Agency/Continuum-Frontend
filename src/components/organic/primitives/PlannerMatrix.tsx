@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { AddPostContextMenu } from './AddPostContextMenu';
@@ -44,6 +45,12 @@ type PlannerMatrixProps = {
 
 const EMPTY_DRAFTS: OrganicCalendarDraft[] = [];
 const EMPTY_POSTED_CONTENT: OrganicCalendarPostedContent[] = [];
+
+// A platform earns a row as soon as it has a draft or a published post, even when the
+// brand has no publishing connection for it. That row can only ever read, so it says so.
+function readOnlyPlatformNotice(platformLabel: string): string {
+  return `${platformLabel} is not connected for publishing, so nothing can be scheduled here. Posts already live on ${platformLabel} still appear in this row.`;
+}
 
 function DayHeader({
   dayId,
@@ -191,8 +198,11 @@ export function PlannerMatrix({
           </motion.div>
         ) : null}
       </AnimatePresence>
-      <div className="min-w-[58rem]">
-        <div className="grid grid-cols-[6rem_repeat(7,minmax(7.5rem,1fr))]">
+      {/* 6rem rail + 7 x 8.5rem day columns. The container above already scrolls
+          horizontally, so widening the day column costs nothing and buys every card
+          ~135px of content — enough for the status pill and "Enrich" to render whole. */}
+      <div className="min-w-[65.5rem]">
+        <div className="grid grid-cols-[6rem_repeat(7,minmax(8.5rem,1fr))]">
           <div className="sticky top-0 left-0 z-30 flex items-center justify-center border-r-2 border-b-2 border-border/50 bg-muted/50 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-foreground backdrop-blur">
             Platform
           </div>
@@ -247,9 +257,21 @@ export function PlannerMatrix({
                     soon
                   </Badge>
                 ) : !platform.canCreate ? (
-                  <Badge variant="muted" className="h-4 px-1 text-xs">
-                    view
-                  </Badge>
+                  // A bare "view" was the row's only content on an empty read-only channel,
+                  // which read as a stray word. The label says what the row IS and the
+                  // tooltip says why it cannot be scheduled.
+                  <TooltipProvider>
+                    <Tooltip delayDuration={150}>
+                      <TooltipTrigger asChild>
+                        <Badge variant="muted" className="h-4 cursor-help px-1 text-xs">
+                          Read-only
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[220px] text-xs">
+                        {readOnlyPlatformNotice(platform.label)}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 ) : null}
               </div>
 
@@ -301,6 +323,11 @@ export function PlannerMatrix({
                     isToday={day.id === todayId}
                     isLastColumn={dayIndex === days.length - 1}
                     isLastRow={platformIndex === visiblePlatforms.length - 1}
+                    readOnlyNotice={
+                      !platform.canCreate && dayIndex === 0
+                        ? readOnlyPlatformNotice(platform.label)
+                        : undefined
+                    }
                     onSelectDraft={onSelectDraft}
                     onToggleSelection={onToggleSelection}
                     onRegenerate={onRegenerate}

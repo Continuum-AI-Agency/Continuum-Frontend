@@ -1,10 +1,19 @@
 import {
+  applyPlannerFutureFloor,
   deriveOrganicMediaStage,
+  formatPlannerTimeOfDay,
   type OrganicMediaStage,
   organicMediaStageSchema,
   organicUgcSpecSchema,
+  PLANNER_DEFAULT_TIME_OF_DAY,
+  parsePlannerTimeOfDay,
   parseSiblingClientKey,
   plannerCompositionSchema,
+  plannerDraftHasCopy,
+  plannerInstantFromDayTime,
+  plannerTimeOfDayInZone,
+  resolvePlannerTimeZone,
+  toPlannerTimeLabel,
 } from '@continuum/contracts';
 import {
   makeCalendarDay,
@@ -312,16 +321,23 @@ function normalizePlatform(value: unknown): OrganicPlatformKey {
   return FALLBACK_PLATFORM;
 }
 
-/** Derive a "h:mm AM/PM" label from an ISO/timestamptz string's time part. */
-function formatIsoTimeLabel(iso: string | null): string | null {
+/**
+ * The chip label a stored instant reads as, in the viewer's zone.
+ *
+ * This replaces a regex that sliced the ISO string's literal `HH:MM` — i.e. read a
+ * UTC wall clock — so every draft stored as a `+00` timestamptz rendered in the
+ * wrong zone, and a midnight one rendered as the reported "12:00 AM".
+ */
+function timeLabelFromInstant(iso: string | null, timeZone?: string | null): string | null {
   if (!iso) return null;
-  const match = iso.match(/[T ](\d{2}):(\d{2})/);
-  if (!match) return null;
-  let hour = Number(match[1]);
-  const minute = match[2];
-  const meridiem = hour >= 12 ? 'PM' : 'AM';
-  hour = hour % 12 || 12;
-  return `${hour}:${minute} ${meridiem}`;
+  const timeOfDay = plannerTimeOfDayInZone(iso, timeZone);
+  return timeOfDay ? toPlannerTimeLabel(timeOfDay) : null;
+}
+
+/** A stored canonical `HH:mm` as the chip label, or null when there isn't one. */
+function toPlannerTimeLabelOrNull(timeOfDay: string | null): string | null {
+  if (!timeOfDay) return null;
+  return parsePlannerTimeOfDay(timeOfDay) ? toPlannerTimeLabel(timeOfDay) : null;
 }
 
 function mapSlotDataDraftId(slotData: Record<string, unknown>, rowId: string): string {
@@ -363,14 +379,47 @@ export function isDayIdInWeekRange(dayId: string, weekStartId: string): boolean 
   return diffDays >= 0 && diffDays <= 6;
 }
 
+/**
+ * The instant a draft's `(day, chip time)` pair names — never a bare calendar day.
+ *
+ * `scheduled_date` is a full `timestamptz` written verbatim. Writing `dayId` alone
+ * let Postgres coerce it to midnight UTC, which discarded the time the user chose
+ * on every autosave tick and made the panel render the draft back as "12:00 AM".
+ * Composing here, with the same contracts function the reschedule gesture uses,
+ * makes the two writers idempotent with respect to each other.
+ */
+function persistedScheduledDate(args: {
+  dayId: string;
+  timeLabel?: string | null;
+  timeZone?: string | null;
+  status: PersistedDraftStatus;
+}): string {
+  const timeOfDay = parsePlannerTimeOfDay(args.timeLabel);
+  const composed = plannerInstantFromDayTime({
+    dayId: args.dayId,
+    timeOfDay: timeOfDay ? formatPlannerTimeOfDay(timeOfDay) : PLANNER_DEFAULT_TIME_OF_DAY,
+    timeZone: args.timeZone,
+  });
+  // An unparseable day id is not a schedule we can improve on; keep the old
+  // behaviour rather than inventing an instant.
+  if (!composed) return args.dayId;
+  // The future floor exists to stop the publish poller firing the instant a row
+  // lands, so it applies ONLY to a status that arms the poller. Flooring a plain
+  // draft would silently relocate every past-dated draft to today — a user
+  // backfilling last month's calendar would watch their work jump forward.
+  return args.status === 'scheduled' ? applyPlannerFutureFloor(composed) : composed;
+}
+
 export function buildPersistedDraftPayload(args: {
   brandId: string;
   weekStartId: string;
   dayId: string;
   draft: OrganicCalendarDraft;
   platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>;
+  /** IANA zone the chip's time-of-day is read in. Defaults to the browser's. */
+  timeZone?: string | null;
 }): PersistedDraftWritePayload {
-  const { brandId, weekStartId, dayId, draft, platformAccountIds = {} } = args;
+  const { brandId, weekStartId, dayId, draft, platformAccountIds = {}, timeZone } = args;
   const primaryPlatform = normalizePlatform(draft.platforms[0]);
   const platformAccountId =
     draft.targetAccountId ?? platformAccountIds[primaryPlatform] ?? UNASSIGNED_PLATFORM_ACCOUNT_ID;
@@ -381,13 +430,20 @@ export function buildPersistedDraftPayload(args: {
     status,
     backendDraftId: undefined,
   };
+  const resolvedTimeZone = resolvePlannerTimeZone(timeZone);
+  const timeOfDay = parsePlannerTimeOfDay(draft.timeLabel);
 
   return {
     brand_id: brandId,
     platform: primaryPlatform,
     platform_account_id: platformAccountId,
     status,
-    scheduled_date: dayId,
+    scheduled_date: persistedScheduledDate({
+      dayId,
+      timeLabel: draft.timeLabel,
+      timeZone: resolvedTimeZone,
+      status,
+    }),
     // Stable identity == the draft's minted clientKey (fallback to its local id for
     // legacy drafts created before clientKey existed).
     client_key: draft.clientKey ?? draft.id,
@@ -396,6 +452,10 @@ export function buildPersistedDraftPayload(args: {
       weekStart: weekStartId,
       dayId,
       timeLabel: draft.timeLabel,
+      // Canonical HH:mm beside the display label, so a re-read never has to infer
+      // the time by slicing an ISO string (which reads a UTC wall clock).
+      timeOfDay: timeOfDay ? formatPlannerTimeOfDay(timeOfDay) : null,
+      timeZone: resolvedTimeZone,
       platform: primaryPlatform,
       // First-class: the enrichment ladder's generate-copy route grounds generation on
       // this trend. It must not have to reach into draftSnapshot, a frontend blob.
@@ -620,6 +680,7 @@ export function mapPersistedRowToCalendarEntry(
   const placementCopy = asRecord(placement.copy);
   const placementPlatform = asRecord(placement.platform);
   const placementCreative = asRecord(placement.creative);
+  const placementSchedule = asRecord(placement.schedule);
   const scheduledIso = readString(row.scheduled_date);
 
   const dayId = resolvePersistedRowDayId(row);
@@ -653,6 +714,7 @@ export function mapPersistedRowToCalendarEntry(
   const draft: OrganicCalendarDraft = {
     id: draftId,
     backendDraftId: row.id,
+    updatedAt: readString(row.updated_at) ?? null,
     // Canonical identity from the column (fallback: snapshot, else the local id).
     clientKey,
     groupId,
@@ -666,21 +728,32 @@ export function mapPersistedRowToCalendarEntry(
       readString(placementContent.titleTopic) ??
       'Saved draft',
     summary: readString(snapshot.summary) ?? '',
+    // content_json-first, matching the caption's ordering and for the same reason:
+    // it is the column the field-edit route writes, so it is where a user's chosen
+    // time actually lives. The slot/snapshot values are older browser-authored
+    // echoes; the instant is the last resort and is read in the viewer's zone.
     timeLabel:
+      toPlannerTimeLabelOrNull(readString(placementSchedule.timeOfDay)) ??
+      toPlannerTimeLabelOrNull(readString(slotData.timeOfDay)) ??
       readString(slotData.timeLabel) ??
       readString(snapshot.timeLabel) ??
-      formatIsoTimeLabel(scheduledIso) ??
+      timeLabelFromInstant(scheduledIso, readString(slotData.timeZone)) ??
       day.suggestedTimes[0] ??
-      '9:00 AM',
+      toPlannerTimeLabel(PLANNER_DEFAULT_TIME_OF_DAY),
     dateLabel: isUnscheduled ? '' : `${day.label}, ${day.dateLabel}`,
     status,
     mediaStage: resolveMediaStage(row.media_stage, placement),
-    // A non-empty content_json is the backend's own "this draft has generated copy"
-    // signal — the same predicate the generate-copy route's precondition uses.
-    hasCopy: Object.keys(placement).length > 0,
+    // "Does a caption exist", not "does content_json exist". The old predicate was
+    // the latter, so a hand-typed caption (which lands in slot_data on a legacy
+    // manual row) left the COPY chip unchecked, while a media-only attach checked it
+    // with no copy written at all. The second clause covers those legacy rows.
+    hasCopy: plannerDraftHasCopy(placement) || readString(slotData.caption) !== null,
     platforms,
     contentPlanId: readString(row.content_plan_id) ?? null,
-    format: readString(snapshot.format) ?? readString(placementContent.format) ?? 'Post',
+    // content_json-first for the same reason as the caption: the field-edit route
+    // writes there, so a user's chosen format lives there. A stale draftSnapshot
+    // format is what made a Reel-to-Carousel change revert on reload.
+    format: readString(placementContent.format) ?? readString(snapshot.format) ?? 'Post',
     objective: readString(snapshot.objective) ?? readString(placementContent.objective) ?? 'Draft',
     // content_json-first: it is canonical for copy — the publisher and the
     // scheduled worker read it, and planner manual edits persist there. The
@@ -704,7 +777,10 @@ export function mapPersistedRowToCalendarEntry(
     generationError: readString(snapshot.generationError) ?? undefined,
     instagram_post_id:
       readString(snapshot.instagram_post_id) ?? readString(row.instagram_post_id) ?? null,
-    creativeDirectionPrompt: readString(snapshot.creativeDirectionPrompt) ?? undefined,
+    creativeDirectionPrompt:
+      readString(placementCreative.creativeDirectionPrompt) ??
+      readString(snapshot.creativeDirectionPrompt) ??
+      undefined,
     thumbnailPrompt: readString(snapshot.thumbnailPrompt) ?? undefined,
     location: readString(snapshot.location) ?? undefined,
     slideCount: readNumber(snapshot.slideCount) ?? undefined,
@@ -719,7 +795,7 @@ export function mapPersistedRowToCalendarEntry(
     ),
     // Agent drafts have no draftSnapshot — their copy lives in content_json. Reading only the
     // snapshot is why they published with a caption but no hashtag block.
-    hashtags: restoreHashtags(snapshot.hashtags) ?? restoreHashtags(placementCopy.hashtags),
+    hashtags: restoreHashtags(placementCopy.hashtags) ?? restoreHashtags(snapshot.hashtags),
     assetHints: restoreAssetHints(snapshot.assetHints),
   };
 

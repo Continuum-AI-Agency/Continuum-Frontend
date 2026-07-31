@@ -9,7 +9,7 @@ import {
   ApproveRejectActions,
   MetaRow,
   PlatformTag,
-} from './agentCardKit';
+} from '@/components/shared/agent-cards/agentCardKit';
 import type { BulkContentPlan } from './types';
 
 function formatMix(plan: BulkContentPlan): string[] {

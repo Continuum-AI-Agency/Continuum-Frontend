@@ -48,6 +48,8 @@ import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { resolveDraftHook } from '@/lib/virality/draftHook';
 import { useDraftEnrichmentLadder } from '../hooks/useDraftEnrichmentLadder';
+import { scheduleFieldPatch, useDraftFieldEditor } from '../hooks/useDraftFieldEditor';
+import { useUnscheduleDraft } from '../hooks/useUnscheduleDraft';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
 import { BlueprintStoryboard, resolveStoryboardFrames } from './BlueprintStoryboard';
 import { CarouselSlideStrip } from './CarouselSlideStrip';
@@ -682,10 +684,10 @@ function ContextualPanel({
 
 function HashtagTiers({
   draft,
-  patchDraft,
+  onHashtagsChange,
 }: {
   draft: OrganicCalendarDraft;
-  patchDraft: (patch: Partial<OrganicCalendarDraft>) => void;
+  onHashtagsChange: (hashtags: OrganicCalendarDraft['hashtags']) => void;
 }) {
   return (
     <div className="space-y-2">
@@ -713,8 +715,9 @@ function HashtagTiers({
                     className="ml-0.5 rounded-full p-0.5 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
                     onClick={(e) => {
                       e.stopPropagation();
-                      patchDraft({
-                        hashtags: { ...draft.hashtags, [tier]: tags.filter((t) => t !== tag) },
+                      onHashtagsChange({
+                        ...draft.hashtags,
+                        [tier]: tags.filter((t) => t !== tag),
                       });
                     }}
                     aria-label={`Remove #${tag.replace(/^#/, '')}`}
@@ -731,7 +734,7 @@ function HashtagTiers({
         onAdd={(tag) => {
           const current = draft.hashtags ?? {};
           const medium = current.medium ?? [];
-          patchDraft({ hashtags: { ...current, medium: [...medium, tag] } });
+          onHashtagsChange({ ...current, medium: [...medium, tag] });
         }}
       />
     </div>
@@ -801,6 +804,11 @@ export function OrganicDraftPreview({
   onApprove,
 }: OrganicDraftPreviewProps) {
   const updateDraft = useCalendarStore((state) => state.updateDraft);
+  // The day this draft currently sits on. A time change is a schedule change, and the
+  // route composes the instant from (day, time-of-day) — so the day has to travel with it.
+  const dayId = useCalendarStore(
+    (state) => state.days.find((day) => day.slots.some((slot) => slot.id === draft.id))?.id ?? null,
+  );
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
   const editingDraftId = useCalendarStore((state) => state.editingDraftId);
   const setEditingDraftId = useCalendarStore((state) => state.setEditingDraftId);
@@ -893,11 +901,63 @@ export function OrganicDraftPreview({
     // Top-level DnD context — sub-contexts (CarouselSlideStrip) own their drag end.
   }, []);
 
-  const patchDraft = React.useCallback(
+  const fieldEditor = useDraftFieldEditor(draft);
+  // Un-scheduling has to reach the server or it has not happened: the poller goes on
+  // publishing a post whose card says "Draft". Shared with the calendar card's menu.
+  const { unschedule } = useUnscheduleDraft();
+
+  /**
+   * A store-only patch, for the handful of fields the field-edit route does not own.
+   *
+   * Every editable field used to go through here and stop here — the only writer was
+   * the browser autosave, which accepted manual-origin drafts only and did not even
+   * carry `format`, `hashtags` or `creativeDirectionPrompt` in its change signature.
+   * The next refetch replaced the day set and the edit was gone, silently. Anything
+   * the user can change now goes through `fieldEditor` instead.
+   */
+  const patchDraftLocally = React.useCallback(
     (patch: Partial<OrganicCalendarDraft>) => {
       updateDraft(draft.id, (current) => ({ ...current, ...patch }));
     },
     [draft.id, updateDraft],
+  );
+
+  const handleFormatChange = React.useCallback(
+    (value: string) => {
+      void fieldEditor.editField({ format: value }, ['format'], { format: value });
+    },
+    [fieldEditor],
+  );
+
+  const handleTimeChange = React.useCallback(
+    (value: string) => {
+      // An unscheduled draft has no day to compose an instant against; keep the label
+      // locally so the chip still reflects the choice when it is placed on a day.
+      const patch = dayId ? scheduleFieldPatch(dayId, value) : null;
+      if (!patch) {
+        patchDraftLocally({ timeLabel: value });
+        return;
+      }
+      void fieldEditor.editField(patch, ['schedule'], { timeLabel: value });
+    },
+    [fieldEditor, dayId, patchDraftLocally],
+  );
+
+  const handleHashtagsChange = React.useCallback(
+    (hashtags: OrganicCalendarDraft['hashtags']) => {
+      void fieldEditor.editField({ hashtags: hashtags ?? {} }, ['hashtags'], { hashtags });
+    },
+    [fieldEditor],
+  );
+
+  const handleCreativeDirectionChange = React.useCallback(
+    (value: string) => {
+      fieldEditor.queueFieldEdit({ creativeDirection: value }, ['creativeDirection'], {
+        creativeDirectionPrompt: value,
+        creativeIdea: value,
+      });
+    },
+    [fieldEditor],
   );
 
   const isApproveDisabled = draft.status === 'scheduled' || draft.status === 'streaming';
@@ -905,9 +965,12 @@ export function OrganicDraftPreview({
   // Bare-minimum gate for scheduling/publishing: caption + at least one media asset.
   const readiness = React.useMemo(() => evaluateDraftReadiness(draft), [draft]);
 
+  // Coalesced, not per-keystroke: a caption is typed, not picked.
   const handleCaptionChange = React.useCallback(
-    (value: string) => patchDraft({ captionPreview: value }),
-    [patchDraft],
+    (value: string) => {
+      fieldEditor.queueFieldEdit({ caption: value }, ['caption'], { captionPreview: value });
+    },
+    [fieldEditor],
   );
 
   const { publish, isPublishing, stage, pollingAttempt, tokenExpired } = usePublishDraft();
@@ -1248,7 +1311,9 @@ export function OrganicDraftPreview({
         onApproveSchedule={onApprove ? handleApprove : undefined}
         canSchedule={canMarkScheduled}
         isScheduled={draft.status === 'scheduled'}
-        onMoveBackToDraft={() => patchDraft({ status: 'draft' })}
+        onMoveBackToDraft={() => {
+          void unschedule(draft);
+        }}
         onPublish={canPublish ? () => publish(draft) : undefined}
         canPublish={canPublish}
         isPublishing={isPublishing}
@@ -1270,10 +1335,12 @@ export function OrganicDraftPreview({
           onPlatformsChange={(next) => {
             const platforms = next.filter((value) => isOrganicPlatformKey(value));
             if (platforms.length === 0) return;
-            patchDraft({ platforms });
+            // Platform selection drives the fan-out at approve time, not content_json,
+            // so it stays a local choice until the draft is approved.
+            patchDraftLocally({ platforms });
           }}
-          onFormatChange={(value) => patchDraft({ format: value })}
-          onTimeChange={(value) => patchDraft({ timeLabel: value })}
+          onFormatChange={handleFormatChange}
+          onTimeChange={handleTimeChange}
           actions={headerActions}
         />
 
@@ -1348,12 +1415,10 @@ export function OrganicDraftPreview({
               <ContextualPanel title="Creative direction" onClose={() => setCreativeOpen(false)}>
                 <InlinePreviewTextarea
                   value={creativeDirection}
-                  onChange={(event) =>
-                    patchDraft({
-                      creativeDirectionPrompt: event.target.value,
-                      creativeIdea: event.target.value,
-                    })
-                  }
+                  onChange={(event) => handleCreativeDirectionChange(event.target.value)}
+                  onBlur={() => {
+                    void fieldEditor.flush();
+                  }}
                   placeholder="Describe the hook, visual intent, and mood."
                   className="min-h-[5rem] text-sm leading-relaxed"
                 />
@@ -1362,7 +1427,7 @@ export function OrganicDraftPreview({
 
             {hashtagsOpen && (
               <ContextualPanel title="Hashtags" onClose={() => setHashtagsOpen(false)}>
-                <HashtagTiers draft={draft} patchDraft={patchDraft} />
+                <HashtagTiers draft={draft} onHashtagsChange={handleHashtagsChange} />
               </ContextualPanel>
             )}
 

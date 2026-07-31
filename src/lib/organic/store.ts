@@ -111,6 +111,27 @@ export type GenerationEntry = {
 
 export type GenerationEntryInput = Partial<GenerationEntry> & { jobId: string };
 
+/**
+ * A planner draft field whose write travels through the field-edit route. Named
+ * rather than free-form so the refetch merge can preserve exactly the fields a
+ * user is mid-edit on, and nothing else.
+ */
+export type DraftEditField =
+  | 'caption'
+  | 'hashtags'
+  | 'format'
+  | 'titleTopic'
+  | 'creativeDirection'
+  | 'schedule'
+  | 'media'
+  | 'platforms'
+  | 'status';
+
+export type PendingDraftEdit = {
+  fields: DraftEditField[];
+  startedAt: number;
+};
+
 interface CalendarState {
   days: OrganicCalendarDay[];
   ghosts: Record<string, number>;
@@ -166,6 +187,11 @@ interface CalendarState {
   dateRange: CalendarDateRange | null;
   // Calendar lens: show/hide drafts that belong to a bulk content plan ("planned").
   showPlanned: boolean;
+  // "Clear view" hides every post from the grid WITHOUT touching `days`. It used to
+  // empty `days[].slots`, which read as total loss of work (and reset the workflow rail
+  // and the planning banner, both derived from the draft count). Deliberately absent
+  // from PersistedCalendarState: a hidden grid must never survive a reload.
+  isViewCleared: boolean;
   // Cross-subtree signal: agent-side completion (bulk run done, single draft ready)
   // bumps this so the calendar workspace re-fetches persisted drafts from the backend.
   calendarRefetchNonce: number;
@@ -173,6 +199,12 @@ interface CalendarState {
   // delete by the persistence layer. Without this an agent-/teammate-created draft
   // would only vanish locally and reappear on the next refetch ("undeletable").
   pendingServerDeletes: string[];
+  // Field edits written optimistically and not yet acknowledged by the server, keyed
+  // by draft id. A refetch replaces `days` wholesale, so without this an edit made
+  // while its PATCH was in flight would be discarded by the server's older copy.
+  // Deliberately absent from PersistedCalendarState: in-flight state must never
+  // survive a reload.
+  pendingDraftEdits: Record<string, PendingDraftEdit>;
   eventHistory: EventHistory;
   backlogDrafts: OrganicCalendarDraft[];
 
@@ -188,6 +220,10 @@ interface CalendarState {
   // Drop ids from pendingServerDeletes once the persistence layer has deleted them
   // server-side (or confirmed there was nothing to delete).
   clearPendingServerDeletes: (backendIds: string[]) => void;
+  // Mark/unmark the fields of a draft whose write is in flight. Marking is additive
+  // so two concurrent edits to different fields of one draft cannot unmark each other.
+  markDraftEditPending: (draftId: string, fields: readonly DraftEditField[]) => void;
+  clearDraftEditPending: (draftId: string, fields: readonly DraftEditField[]) => void;
   setSelectedDraftId: (id: string | null) => void;
   setEditingDraftId: (id: string | null) => void;
   /**
@@ -234,7 +270,9 @@ interface CalendarState {
   addEvent: (event: StreamEvent) => void;
   clearEventHistory: () => void;
   clearGhosts: () => void;
-  clearCalendar: () => void;
+  /** Hide every post from the planner's views. Reversible, and never a delete. */
+  clearView: () => void;
+  restoreView: () => void;
   resetForBrandSwitch: () => void;
 
   addScheduledEvent: (date: string, event: Omit<ScheduledEvent, 'id'>) => void;
@@ -347,12 +385,47 @@ export const useCalendarStore = create<CalendarState>()(
       viewMode: 'month',
       dateRange: null,
       showPlanned: true,
+      isViewCleared: false,
       calendarRefetchNonce: 0,
       pendingServerDeletes: [],
+      pendingDraftEdits: {},
       eventHistory: [],
       backlogDrafts: [],
 
-      setDays: (days) => set({ days }),
+      // Every write that changes WHAT the planner is looking at also un-hides it: a new
+      // day set, a new timeframe, or a new view are all fresh things to see, and leaving
+      // them hidden would look like the load failed.
+      setDays: (days) => set({ days, isViewCleared: false }),
+
+      markDraftEditPending: (draftId, fields) =>
+        set((state) => {
+          const existing = state.pendingDraftEdits[draftId];
+          const merged = new Set([...(existing?.fields ?? []), ...fields]);
+          return {
+            pendingDraftEdits: {
+              ...state.pendingDraftEdits,
+              [draftId]: {
+                fields: [...merged],
+                startedAt: existing?.startedAt ?? Date.now(),
+              },
+            },
+          };
+        }),
+
+      clearDraftEditPending: (draftId, fields) =>
+        set((state) => {
+          const existing = state.pendingDraftEdits[draftId];
+          if (!existing) return {};
+          const settled = new Set(fields);
+          const remaining = existing.fields.filter((field) => !settled.has(field));
+          const next = { ...state.pendingDraftEdits };
+          if (remaining.length === 0) {
+            delete next[draftId];
+          } else {
+            next[draftId] = { ...existing, fields: remaining };
+          }
+          return { pendingDraftEdits: next };
+        }),
 
       updateDraft: (draftId, updater) =>
         set((state) => ({
@@ -603,18 +676,17 @@ export const useCalendarStore = create<CalendarState>()(
 
       clearGhosts: () => set({ ghosts: {} }),
 
-      clearCalendar: () =>
-        set((state) => ({
-          days: state.days.map((day) => ({ ...day, slots: [] })),
+      // A hidden post cannot stay in the preview panel, so the selection goes with it.
+      // Everything else — `days`, the grid status, the run history — is left standing.
+      clearView: () =>
+        set({
+          isViewCleared: true,
           selectedDraftId: null,
           editingDraftId: null,
           selectedDraftIds: [],
-          gridStatus: 'idle',
-          gridProgress: { percent: 0 },
-          gridError: null,
-          placementProgress: {},
-          eventHistory: [],
-        })),
+        }),
+
+      restoreView: () => set({ isViewCleared: false }),
 
       addScheduledEvent: (date, event) =>
         set((state) => {
@@ -673,8 +745,8 @@ export const useCalendarStore = create<CalendarState>()(
           return { scheduledEvents: newEvents };
         }),
 
-      setViewMode: (mode) => set({ viewMode: mode }),
-      setDateRange: (range) => set({ dateRange: range }),
+      setViewMode: (mode) => set({ viewMode: mode, isViewCleared: false }),
+      setDateRange: (range) => set({ dateRange: range, isViewCleared: false }),
       setShowPlanned: (value) => set({ showPlanned: value }),
       requestCalendarRefetch: () =>
         set((state) => ({ calendarRefetchNonce: state.calendarRefetchNonce + 1 })),
@@ -801,6 +873,7 @@ export const useCalendarStore = create<CalendarState>()(
           scheduledEvents: {},
           eventHistory: [],
           backlogDrafts: [],
+          isViewCleared: false,
         }),
     }),
     {

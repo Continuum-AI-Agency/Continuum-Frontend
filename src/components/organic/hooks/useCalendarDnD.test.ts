@@ -22,7 +22,7 @@ const DAYS: OrganicCalendarDay[] = [
 ];
 const DRAFTS: OrganicCalendarDraft[] = [];
 
-function dragOntoCell(selectedIds: string[]): void {
+function dragOntoCellId(overId: string, selectedIds: string[]): void {
   const { result } = renderHook(() =>
     useCalendarDnD(DAYS, DRAFTS, { instagram: 'acct-ig' }, selectedIds, {
       reschedule,
@@ -31,11 +31,15 @@ function dragOntoCell(selectedIds: string[]): void {
   );
   const event = {
     active: { id: 'd1', data: { current: { type: 'draft' } } },
-    over: { id: 'planner-cell::2026-08-10::instagram' },
+    over: { id: overId },
   } as unknown as DragEndEvent;
   act(() => {
     result.current.handleDragEnd(event);
   });
+}
+
+function dragOntoCell(selectedIds: string[]): void {
+  dragOntoCellId('planner-cell::2026-08-10::instagram', selectedIds);
 }
 
 describe('useCalendarDnD — multi-select drag', () => {
@@ -86,5 +90,39 @@ describe('useCalendarDnD — multi-select drag', () => {
     } as OrganicCalendarDraft);
     expect(next.platforms).toEqual(['instagram']);
     expect(next.targetAccountId).toBe('acct-ig');
+  });
+});
+
+// A month cell spans every platform, so its droppable id carries the day and no platform
+// segment. The drop must still land on the right day, and must NOT invent a channel.
+describe('useCalendarDnD — month-cell drop (no platform segment)', () => {
+  beforeEach(() => {
+    updateDraft.mockClear();
+    reschedule.mockClear();
+    rescheduleMany.mockClear();
+  });
+
+  afterEach(() => {
+    storeStub.useCalendarStore.mockImplementation(storeStub.useCalendarStore.defaultImplementation);
+  });
+
+  it('reschedules the day named by a platform-less planner-cell id', () => {
+    dragOntoCellId('planner-cell::2026-08-11', ['d1']);
+
+    expect(reschedule).toHaveBeenCalledTimes(1);
+    expect(reschedule).toHaveBeenCalledWith('d1', '2026-08-11');
+  });
+
+  it('leaves the draft on its own platform — a month cell names no channel', () => {
+    dragOntoCellId('planner-cell::2026-08-11', ['d1']);
+
+    expect(updateDraft).not.toHaveBeenCalled();
+  });
+
+  it('moves the whole selection from a month cell too', () => {
+    dragOntoCellId('planner-cell::2026-08-12', ['d1', 'd2']);
+
+    expect(rescheduleMany).toHaveBeenCalledWith(['d1', 'd2'], '2026-08-12');
+    expect(reschedule).not.toHaveBeenCalled();
   });
 });

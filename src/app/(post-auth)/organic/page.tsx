@@ -6,6 +6,7 @@ import { OrganicMetricsDashboardLazy } from '@/components/organic/OrganicMetrics
 import { OrganicNoticeBridge } from '@/components/organic/OrganicNoticeBridge';
 import { OrganicWorkspaceTabs } from '@/components/organic/OrganicWorkspaceTabs';
 import { OrganicCalendarWorkspace } from '@/components/organic/primitives/OrganicCalendarWorkspace';
+import { PlannerViewSkeleton } from '@/components/organic/primitives/PlannerViewSkeletons';
 import type { OrganicTrendGroup, OrganicTrendType } from '@/components/organic/primitives/types';
 import { fetchBrandInsights } from '@/lib/api/brandInsights.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
@@ -22,11 +23,17 @@ type OrganicPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-function OrganicContentSkeleton() {
+// The route-level fallback. It used to be one full-bleed grey block, which is what a view
+// switch looked like whenever a lazy planner view suspended past its own boundary. Sharing
+// the planner's shaped skeletons means this fallback is recognisable as the app loading —
+// and the testid lets a bench assert it is never attached while merely switching views.
+function OrganicContentSkeleton({ view }: { view: 'week' | 'month' | 'list' }) {
   return (
-    <div className="flex h-full w-full flex-col gap-3">
+    <div data-testid="organic-content-skeleton" className="flex h-full w-full flex-col gap-3">
       <div className="h-8 w-48 animate-pulse rounded-md bg-muted/70" />
-      <div className="min-h-0 flex-1 animate-pulse rounded-lg bg-muted/70" />
+      <div className="min-h-0 flex-1">
+        <PlannerViewSkeleton view={view} />
+      </div>
     </div>
   );
 }
@@ -354,6 +361,7 @@ async function OrganicContent({
             initialComposeTrendId={initialComposeTrendId}
             initialComposePlatform={initialComposePlatform}
             postedContentAccountsByPlatform={metricAccountsByPlatform}
+            insightsError={insightsError}
           />
         }
         metricsSlot={
@@ -445,7 +453,7 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
 
   return (
     <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full min-w-0 overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
-      <Suspense fallback={<OrganicContentSkeleton />}>
+      <Suspense fallback={<OrganicContentSkeleton view={initialView} />}>
         <OrganicContent
           initialSelectedDraftId={initialSelectedDraftId}
           initialWeekStart={initialWeekStart}

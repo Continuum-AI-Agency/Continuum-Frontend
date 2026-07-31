@@ -964,7 +964,8 @@ test.describe('organic planner list + draft preview', () => {
     const openWidth = await previewWidth();
     expect(openWidth).toBeGreaterThan(100);
 
-    await page.getByLabel('Collapse draft preview').click({ force: true });
+    // A plain click: the collapse button is no longer inside the separator's pointer capture.
+    await page.getByLabel('Collapse draft preview').click();
 
     // Zero, and STILL zero a second later. A single check would pass against the bug, because
     // the re-select effects fire on the very next render.
@@ -1245,7 +1246,7 @@ test.describe('organic planner list + draft preview', () => {
 
     // ---- (e) the COLLAPSED case: the intent has to re-open the panel ----
     await doneEditing.click();
-    await page.getByLabel('Collapse draft preview').click({ force: true });
+    await page.getByLabel('Collapse draft preview').click();
     await expect
       .poll(
         () =>

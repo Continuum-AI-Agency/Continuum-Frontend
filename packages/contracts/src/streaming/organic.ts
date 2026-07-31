@@ -540,6 +540,20 @@ const responseSourceSchema = z.object({
   data: z.record(z.string(), z.unknown()).optional(),
 });
 
+/**
+ * Which lane the runtime routed this turn into. Emitted once per turn, before the
+ * model runs, because the lane decides which tools are mounted at all — an ANSWER
+ * turn cannot reach generation. Without this frame the narrowing is invisible and
+ * a misclassification looks like the agent simply refusing to act.
+ */
+export const organicRequestLaneEnum = z.enum(['answer', 'ideate', 'execute']);
+export type OrganicRequestLane = z.infer<typeof organicRequestLaneEnum>;
+
+const responseLaneSchema = z.object({
+  type: z.literal('response.lane'),
+  data: z.object({ lane: organicRequestLaneEnum }).loose(),
+});
+
 const toolCallSchema = z.object({
   type: z.literal('tool.call'),
   data: z
@@ -903,6 +917,7 @@ export const organicStreamFrameSchema = z.discriminatedUnion('type', [
   responseErrorSchema,
   responseRetryingSchema,
   responseSourceSchema,
+  responseLaneSchema,
   toolCallSchema,
   toolResultSchema,
   toolApprovalRequiredSchema,
@@ -960,6 +975,8 @@ export type OrganicUiAeoSnapshotCardFrame = z.infer<typeof uiAeoSnapshotCardSche
 export type OrganicResponseRetryingFrame = z.infer<typeof responseRetryingSchema>;
 
 export type OrganicResponseErrorFrame = z.infer<typeof responseErrorSchema>;
+
+export type OrganicResponseLaneFrame = z.infer<typeof responseLaneSchema>;
 
 /**
  * Normalized display shape for a post fetched by any of the organic agent's

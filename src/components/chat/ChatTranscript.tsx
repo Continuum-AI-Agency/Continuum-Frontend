@@ -42,6 +42,10 @@ export function ChatTranscript({
   contentClassName,
   children,
 }: ChatTranscriptProps) {
+  // The gutter exists solely to keep the minimap off the text. Reserving it unconditionally
+  // narrowed every transcript that has no minimap — including the composer's own column.
+  const hasMinimap = showMinimap && anchors.length > 1;
+
   return (
     <MessageScrollerProvider
       autoScroll={isStreaming}
@@ -54,7 +58,8 @@ export function ChatTranscript({
         <MessageScrollerViewport preserveScrollOnPrepend>
           <MessageScrollerContent
             className={cn(
-              'mx-auto w-full max-w-[1600px] gap-6 px-4 py-4 pr-10 md:px-6 md:pr-12 lg:px-8 lg:pr-14',
+              'mx-auto w-full max-w-[1600px] gap-6 px-4 py-4 md:px-6 lg:px-8',
+              hasMinimap && 'pr-10 md:pr-12 lg:pr-14',
               contentClassName,
             )}
           >
@@ -64,7 +69,7 @@ export function ChatTranscript({
             {children}
           </MessageScrollerContent>
         </MessageScrollerViewport>
-        {showMinimap && anchors.length > 1 ? <ChatMinimap anchors={anchors} /> : null}
+        {hasMinimap ? <ChatMinimap anchors={anchors} /> : null}
       </MessageScroller>
     </MessageScrollerProvider>
   );

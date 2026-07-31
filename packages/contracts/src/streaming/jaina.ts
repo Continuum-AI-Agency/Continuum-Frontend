@@ -212,8 +212,25 @@ export type JainaStreamFrame = JainaStreamEvent<JainaStreamFrameType, Record<str
 // the full Zod migration moves the schemas themselves here.
 // ---------------------------------------------------------------------------
 
+/**
+ * The AI-SDK tool call this frame was emitted underneath, when it was emitted from
+ * inside a tool body rather than by the model's own stream.
+ *
+ * Its ABSENCE is the load-bearing part: a frame without it is an invocation the
+ * MODEL made, which is what any "how many tools ran" count wants. A frame with it
+ * is work done underneath one — a resolved Meta request, or one leg of a batch
+ * tool's fan-out. Before this existed, both looked identical on the wire and every
+ * consumer double-counted (the tool timeline in the UI, and the latency bench).
+ *
+ * Not collapsed into a single id on purpose: `get_top_ads_batch` legitimately runs
+ * sixteen sub-requests under one model call, and they must stay individually visible.
+ */
+type JainaToolFrameParentage = {
+  tool_call_id?: string;
+};
+
 /** data shape for type: "tool.call" (mirrors FE toolCallSchema). */
-export type JainaToolCallEventData = {
+export type JainaToolCallEventData = JainaToolFrameParentage & {
   id: string;
   name: string;
   args: Record<string, unknown>;
@@ -227,7 +244,7 @@ export type JainaToolCallEventData = {
 };
 
 /** data shape for type: "tool.result" (mirrors FE toolResultSchema). */
-export type JainaToolResultEventData = {
+export type JainaToolResultEventData = JainaToolFrameParentage & {
   id: string;
   name: string;
   ok: boolean;

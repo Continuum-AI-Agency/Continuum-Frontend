@@ -74,7 +74,12 @@ function BubbleContent({
     <Comp
       data-slot="bubble-content"
       className={cn(
-        'w-fit max-w-full min-w-0 overflow-hidden rounded-xl border border-transparent px-3 py-2 text-sm leading-relaxed wrap-break-word group-data-[align=end]/bubble:self-end [button]:text-left [button,a]:transition-colors [button,a]:outline-none [button,a]:focus-visible:border-ring [button,a]:focus-visible:ring-3 [button,a]:focus-visible:ring-ring/50',
+        // overflow-x-auto, not overflow-hidden: the bubble still has to CONTAIN a child wider
+        // than the column (a markdown table, a code block, a long unbroken URL) so it cannot
+        // push the transcript sideways, but hiding it simply truncated the answer with no way
+        // to read the rest. Scrolling keeps the containment and gives the reader the escape
+        // hatch. Text wrapping is unaffected — wrap-break-word below is what handles prose.
+        'w-fit max-w-full min-w-0 overflow-x-auto rounded-xl border border-transparent px-3 py-2 text-sm leading-relaxed wrap-break-word group-data-[align=end]/bubble:self-end [button]:text-left [button,a]:transition-colors [button,a]:outline-none [button,a]:focus-visible:border-ring [button,a]:focus-visible:ring-3 [button,a]:focus-visible:ring-ring/50',
         className,
       )}
       {...props}

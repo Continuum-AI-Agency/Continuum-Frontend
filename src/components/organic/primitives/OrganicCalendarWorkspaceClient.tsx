@@ -4,9 +4,10 @@ import {
   DEFAULT_REEL_VIDEO_BATCH_MAX,
   type OneShotPostResponse,
   type PublishPlatform,
+  resolvePlannerTimeZone,
 } from '@continuum/contracts';
 import { ChevronLeftIcon, Cross2Icon } from '@radix-ui/react-icons';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
@@ -15,15 +16,23 @@ import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDra
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelCollapseButton,
+  ResizablePanelGroup,
+} from '@/components/ui/resizable';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
+import { pluralize } from '@/lib/format/pluralize';
 import { readSavedAccountSelection } from '@/lib/organic/account-selection';
 import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { mapOneShotPostResponseToCalendarDraft } from '@/lib/organic/mapPlacementToDraft';
+import { writePlannerUrlState } from '@/lib/organic/plannerUrlState';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { type PlannerAccountOption, useCalendarStore } from '@/lib/organic/store';
 import type { Trend } from '@/lib/organic/trends';
@@ -54,6 +63,7 @@ import {
   startOfWeek,
   UNSCHEDULED_DAY_ID,
 } from './calendar-utils';
+import { DestructiveConfirmationProvider } from './DestructiveConfirmation';
 import { StatusBadge } from './DraftCardBadges';
 import {
   DraftDeletionConfirmationProvider,
@@ -61,6 +71,7 @@ import {
 } from './DraftDeletionConfirmation';
 import { OrganicCreativesPicker } from './OrganicCreativesPicker';
 import { OrganicDraftPreview } from './OrganicDraftPreview';
+import { ListViewSkeleton, MonthGridSkeleton, PlannerViewSkeleton } from './PlannerViewSkeletons';
 import { PlannerWorkflowRail, resolvePlannerStage } from './PlannerWorkflowRail';
 import { usePlannerDateAnchors } from './planner-date-anchor';
 import {
@@ -80,15 +91,33 @@ import type {
   OrganicTrendType,
 } from './types';
 
-const OrganicMonthlyCalendar = dynamic(() =>
-  import('./OrganicMonthlyCalendar').then((m) => m.OrganicMonthlyCalendar),
+// `loading` is not decoration: in the App Router, next/dynamic only creates a Suspense
+// boundary when `loading` or `ssr: false` is passed. Without one, a lazy view suspends all
+// the way to the ROUTE boundary and the whole planner is replaced by the page fallback —
+// that is the reported 10-13s "blank grey screen", and the Trends drawer's "opens nothing".
+const OrganicMonthlyCalendar = dynamic(
+  () => import('./OrganicMonthlyCalendar').then((m) => m.OrganicMonthlyCalendar),
+  { loading: () => <MonthGridSkeleton /> },
 );
-const OrganicListView = dynamic(() => import('./OrganicListView').then((m) => m.OrganicListView));
-const OrganicTrendsDrawer = dynamic(() =>
-  import('./OrganicTrendsDrawer').then((m) => m.OrganicTrendsDrawer),
+const OrganicListView = dynamic(() => import('./OrganicListView').then((m) => m.OrganicListView), {
+  loading: () => <ListViewSkeleton />,
+});
+// Gesture-gated: nothing renders it until the user opens Trends, so there is no server
+// pass worth having.
+const OrganicTrendsDrawer = dynamic(
+  () => import('./OrganicTrendsDrawer').then((m) => m.OrganicTrendsDrawer),
+  { ssr: false },
 );
 
+/** Warm the lazy view chunks so the SECOND view switch is instant. */
+function warmPlannerViewChunks(): void {
+  void import('./OrganicMonthlyCalendar');
+  void import('./OrganicListView');
+}
+
 const PREVIEW_LAYOUT_KEY = 'continuum:organic-planner:preview-percent';
+
+const WIDE_PLANNER_QUERY = '(min-width: 64rem)';
 
 type OrganicCalendarWorkspaceClientProps = {
   days: OrganicCalendarDay[];
@@ -110,6 +139,8 @@ type OrganicCalendarWorkspaceClientProps = {
   initialComposeTrendId?: string | null;
   initialComposePlatform?: OrganicPlatformKey | null;
   postedContentAccountsByPlatform?: CalendarPostAccountsByPlatform;
+  /** Why the server-side trend fetch failed, when it did — the Trends drawer says so. */
+  insightsError?: string | null;
 };
 
 const NOOP_STRING = (_id: string) => {};
@@ -123,7 +154,11 @@ function isSchedulablePlannerPlatform(
 export function OrganicCalendarWorkspaceClient(props: OrganicCalendarWorkspaceClientProps) {
   return (
     <DraftDeletionConfirmationProvider>
-      <OrganicCalendarWorkspaceInner {...props} />
+      {/* Publish and copy-rewrite already await requestDestructiveConfirmation. Unmounted,
+          the context default resolves true — so both fired on a single click, unasked. */}
+      <DestructiveConfirmationProvider>
+        <OrganicCalendarWorkspaceInner {...props} />
+      </DestructiveConfirmationProvider>
     </DraftDeletionConfirmationProvider>
   );
 }
@@ -145,6 +180,7 @@ function OrganicCalendarWorkspaceInner({
   initialComposeTrendId,
   initialComposePlatform,
   postedContentAccountsByPlatform,
+  insightsError,
 }: OrganicCalendarWorkspaceClientProps) {
   const { requestDraftDeletion } = useDraftDeletionConfirmation();
   const {
@@ -154,7 +190,9 @@ function OrganicCalendarWorkspaceInner({
     setPersistedWeekStartId,
     toggleTrend,
     bulkDeleteDrafts,
-    clearCalendar,
+    isViewCleared,
+    clearView,
+    restoreView,
     setSelectedDraftId,
     setSelectedDraftIds,
     selectedTrendIds,
@@ -183,7 +221,9 @@ function OrganicCalendarWorkspaceInner({
       setPersistedWeekStartId: state.setPersistedWeekStartId,
       toggleTrend: state.toggleTrend,
       bulkDeleteDrafts: state.bulkDeleteDrafts,
-      clearCalendar: state.clearCalendar,
+      isViewCleared: state.isViewCleared,
+      clearView: state.clearView,
+      restoreView: state.restoreView,
       setSelectedDraftId: state.setSelectedDraftId,
       setSelectedDraftIds: state.setSelectedDraftIds,
       selectedTrendIds: state.selectedTrendIds,
@@ -242,6 +282,13 @@ function OrganicCalendarWorkspaceInner({
     setAccountContext,
   ]);
 
+  // Dismissing the preview has to take `?draftId=` with it. While the param survived, the
+  // deep-link watcher below re-selected the draft on the very next render — which is why
+  // the panel could not be closed by the X, the chevron, or Escape.
+  const forgetDeepLinkedDraft = React.useCallback(() => {
+    writePlannerUrlState({ draftId: null, edit: null });
+  }, []);
+
   const {
     selectedId,
     selectedIds,
@@ -252,7 +299,7 @@ function OrganicCalendarWorkspaceInner({
     collapsePreview,
     expandPreview,
     isAutoSelectSuppressed,
-  } = useCalendarSelection(calendarDays);
+  } = useCalendarSelection(calendarDays, { onDismiss: forgetDeepLinkedDraft });
 
   const resolvedTrends = React.useMemo(() => {
     const merged = [
@@ -276,10 +323,36 @@ function OrganicCalendarWorkspaceInner({
   });
   const [trendsDrawerOpen, setTrendsDrawerOpen] = React.useState(false);
 
-  // Apply initialView from URL search param on mount (once)
+  // The URL seeds the view mode once, on mount. Guarded by a ref rather than an empty
+  // dependency array with a lint suppression, so the effect states its real dependencies.
+  const hasSeededViewFromUrlRef = React.useRef(false);
   React.useEffect(() => {
+    if (hasSeededViewFromUrlRef.current) return;
+    hasSeededViewFromUrlRef.current = true;
     if (initialView) setViewMode(initialView);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialView, setViewMode]);
+
+  // …and from then on the store is the sole writer and the URL is a projection of it. The
+  // first run is skipped because the store's value CAME from the URL; echoing it back would
+  // overwrite a param the user may still be arriving with.
+  const hasProjectedViewToUrlRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!hasProjectedViewToUrlRef.current) {
+      hasProjectedViewToUrlRef.current = true;
+      return;
+    }
+    writePlannerUrlState({ view: viewMode });
+  }, [viewMode]);
+
+  // The two views the user is not looking at, fetched while the tab is idle: a view switch
+  // then has no network cost at all.
+  React.useEffect(() => {
+    if (typeof window.requestIdleCallback === 'function') {
+      const idleHandle = window.requestIdleCallback(warmPlannerViewChunks);
+      return () => window.cancelIdleCallback(idleHandle);
+    }
+    const timer = window.setTimeout(warmPlannerViewChunks, 2_000);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const weekStartId = formatDayId(weekStart);
@@ -418,19 +491,22 @@ function OrganicCalendarWorkspaceInner({
 
   const drafts = React.useMemo(() => calendarDays.flatMap((day) => day.slots), [calendarDays]);
 
-  // "Planned" calendar lens: when off, hide bulk-plan drafts from the week/month
-  // grids (the list view still shows them, tagged). Default on.
+  // Two calendar lenses, both applied on the way to the SCREEN and never to `days`:
+  //   "Planned" — when off, hide bulk-plan drafts from the week/month grids (the list view
+  //               still shows them, tagged). Default on.
+  //   "Clear view" — hide everything. It used to empty `days[].slots`, which reset the
+  //               workflow rail and the planning banner and read as total loss of work.
+  // `drafts` below stays derived from the unfiltered set, which is what keeps the rail,
+  // the banner and the toolbar's counts honest while a lens is on.
   const showPlanned = useCalendarStore((state) => state.showPlanned);
-  const gridDays = React.useMemo(
-    () =>
-      showPlanned
-        ? calendarDays
-        : calendarDays.map((day) => ({
-            ...day,
-            slots: day.slots.filter((slot) => !slot.contentPlanId),
-          })),
-    [calendarDays, showPlanned],
-  );
+  const gridDays = React.useMemo(() => {
+    if (isViewCleared) return calendarDays.map((day) => ({ ...day, slots: [] }));
+    if (showPlanned) return calendarDays;
+    return calendarDays.map((day) => ({
+      ...day,
+      slots: day.slots.filter((slot) => !slot.contentPlanId),
+    }));
+  }, [calendarDays, isViewCleared, showPlanned]);
 
   // Week VIEW MODEL: exactly the 7 days of the current week, sliced from the full
   // loaded set (synthesizing any missing day) so the grid stays 7 columns wide.
@@ -652,9 +728,13 @@ function OrganicCalendarWorkspaceInner({
   );
 
   const weekTitle = React.useMemo(() => formatWeekHeading(weekStart), [weekStart]);
+  // The zone every scheduled time in this planner is expressed in. The app displayed it
+  // nowhere, which left every "9:00 AM" ambiguous to anyone not in the brand's zone.
+  const plannerTimeZone = React.useMemo(() => resolvePlannerTimeZone(null), []);
   const weekSubtitle = React.useMemo(
-    () => `${formatWeekRange(weekStart)} • ${schedulableChannels} scheduling channels`,
-    [schedulableChannels, weekStart],
+    () =>
+      `${formatWeekRange(weekStart)} • ${pluralize(schedulableChannels, 'scheduling channel')} • ${plannerTimeZone}`,
+    [plannerTimeZone, schedulableChannels, weekStart],
   );
 
   const createQuickDraft = React.useCallback(
@@ -1079,18 +1159,13 @@ function OrganicCalendarWorkspaceInner({
       failed,
     };
   }, [gridProgress.completed, gridProgress.failed, gridProgress.total]);
-  const [isWidePlanner, setIsWidePlanner] = React.useState(false);
+  // useSyncExternalStore-based, so it does not report `false` on the first client render and
+  // then flip. The old useState + effect pair flipped on every desktop load, and the flip
+  // used to remount the whole planner through the panel group's `key`.
+  const isWidePlanner = useMediaQuery(WIDE_PLANNER_QUERY);
   const [previewPercent] = React.useState(() =>
     Math.min(42, Math.max(24, getLocalStorageJSON(PREVIEW_LAYOUT_KEY, 32))),
   );
-
-  React.useEffect(() => {
-    const query = window.matchMedia('(min-width: 64rem)');
-    const update = () => setIsWidePlanner(query.matches);
-    update();
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
 
   const scheduledCount = React.useMemo(
     () =>
@@ -1108,13 +1183,21 @@ function OrganicCalendarWorkspaceInner({
     [visibleWeekDays],
   );
 
-  const layoutTransition = React.useMemo(
-    () => ({
-      duration: 0.28,
-      ease: [0.2, 0.8, 0.2, 1] as const,
-    }),
-    [],
-  );
+  // Hiding is reversible and the toast is where that promise is kept.
+  const handleClearView = React.useCallback(() => {
+    clearView();
+    show({
+      title: 'View cleared',
+      description: 'Posts are hidden from this view. Nothing was deleted.',
+      variant: 'info',
+      action: { label: 'Undo', onClick: restoreView },
+    });
+  }, [clearView, restoreView, show]);
+
+  const handlePreviewPercentChange = React.useCallback((percent: number) => {
+    setLocalStorageJSON(PREVIEW_LAYOUT_KEY, percent);
+  }, []);
+
   const previewTransition = React.useMemo(
     () => ({
       duration: 0.24,
@@ -1149,34 +1232,136 @@ function OrganicCalendarWorkspaceInner({
             ) : null
           }
         >
-          <ResizablePanelGroup
-            key={`${isWidePlanner ? 'wide' : 'narrow'}:${isPreviewOpen ? 'preview' : 'workspace'}`}
-            id="organic-planner-layout"
-            orientation={isWidePlanner ? 'horizontal' : 'vertical'}
-            defaultLayout={
-              isPreviewOpen
-                ? {
-                    'planner-workspace': 100 - (isWidePlanner ? previewPercent : 48),
-                    'planner-preview': isWidePlanner ? previewPercent : 48,
-                  }
-                : { 'planner-workspace': 100 }
+          {/* `layout` is gone from every panel child. It measures with getBoundingClientRect
+              on each commit and writes transforms; the group's ResizeObserver saw the size
+              change, re-laid out, and `layout` measured again — a self-feeding loop that
+              locked the page for 45s+ at 390x844, where the vertical preview claimed 48%. */}
+          <PlannerLayout
+            isWide={isWidePlanner}
+            previewPercent={previewPercent}
+            onPreviewPercentChange={handlePreviewPercentChange}
+            onCollapsePreview={collapsePreview}
+            preview={
+              isPreviewOpen ? (
+                <motion.aside
+                  role="complementary"
+                  aria-label="Draft preview"
+                  tabIndex={-1}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === 'Escape') clearAll();
+                  }}
+                  initial={{ opacity: 0, x: 28, scale: 0.98 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  transition={previewTransition}
+                  className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45"
+                >
+                  <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Post Preview
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      {previewDraft?.mediaSuggestion?.reel?.composition &&
+                      previewDraft.mediaSuggestion.reel.generated !== true ? (
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="sm"
+                          disabled={stitchingDraftIds.has(previewDraft.id)}
+                          onClick={() => handleStitchDraft(previewDraft.id)}
+                        >
+                          {stitchingDraftIds.has(previewDraft.id)
+                            ? 'Stitching…'
+                            : 'Ready to render'}
+                        </Button>
+                      ) : null}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                disabled={!brandProfileId || !previewDraft}
+                                onClick={handleOpenInAiStudio}
+                                style={
+                                  !brandProfileId || !previewDraft
+                                    ? { pointerEvents: 'none' }
+                                    : undefined
+                                }
+                              >
+                                {previewDraft?.mediaSuggestion?.reel?.composition
+                                  ? 'Edit in AI Studio'
+                                  : 'Open in AI Studio'}
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          {!brandProfileId ? (
+                            <TooltipContent>Select a brand to use AI Studio</TooltipContent>
+                          ) : null}
+                        </Tooltip>
+                      </TooltipProvider>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Close preview"
+                        onClick={clearAll}
+                      >
+                        <Cross2Icon className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* The preview's status reads from the same presentation map as the card's
+                      pill — one status, one hue, one word, wherever it is shown. */}
+                  {previewDraft ? (
+                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline">{previewDraft.platforms[0] ?? 'Unassigned'}</Badge>
+                      <StatusBadge status={previewDraft.status} format={previewDraft.format} />
+                      <Badge variant="outline">
+                        {previewDraft.dateLabel || 'Unscheduled'} ·{' '}
+                        {previewDraft.timeLabel || 'No time'}
+                      </Badge>
+                    </div>
+                  ) : null}
+
+                  <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
+                    {previewDraft ? (
+                      <OrganicDraftPreview
+                        draft={previewDraft}
+                        brandName={brandName}
+                        brandProfileId={brandProfileId}
+                        onApprove={(draftId) => {
+                          const target = drafts.find((draft) => draft.id === draftId);
+                          if (target) void approveAndSchedule(target);
+                        }}
+                      />
+                    ) : (
+                      // Selection is set but the draft has not resolved from the
+                      // current calendar set yet (a refetch/reconcile is in flight).
+                      // Show a neutral loading state — the panel re-renders with
+                      // content the moment the draft resolves, so no reload is needed.
+                      <div
+                        className="flex h-full flex-col gap-3 p-3"
+                        role="status"
+                        aria-busy="true"
+                        aria-label="Loading post preview"
+                      >
+                        <div className="h-24 w-full animate-pulse rounded-md bg-muted/70" />
+                        <div className="h-4 w-2/3 animate-pulse rounded bg-muted/70" />
+                        <div className="h-4 w-1/2 animate-pulse rounded bg-muted/70" />
+                        <div className="mt-auto h-9 w-full animate-pulse rounded-md bg-muted/70" />
+                      </div>
+                    )}
+                  </div>
+                </motion.aside>
+              ) : null
             }
-            onLayoutChanged={(layout, meta) => {
-              const nextPreviewPercent = layout['planner-preview'];
-              if (isWidePlanner && meta.isUserInteraction && nextPreviewPercent > 0) {
-                setLocalStorageJSON(PREVIEW_LAYOUT_KEY, nextPreviewPercent);
-              }
-            }}
-            className="h-full min-h-0 w-full"
-          >
-            <ResizablePanel id="planner-workspace" minSize={isPreviewOpen ? 55 : 100}>
-              <motion.section
-                layout
-                transition={layoutTransition}
-                className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden"
-              >
+            workspace={
+              <section className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden">
                 <PlannerWorkflowRail currentStage={plannerStage} insight={plannerInsight} />
-                <motion.div layout transition={layoutTransition}>
+                <div>
                   <CalendarToolbar
                     viewMode={viewMode}
                     onViewModeChange={handleViewModeChange}
@@ -1195,7 +1380,7 @@ function OrganicCalendarWorkspaceInner({
                         format: options.format,
                       })
                     }
-                    onClear={clearCalendar}
+                    onClear={handleClearView}
                     draftsCount={drafts.length}
                     slotProgress={slotProgress}
                     gridProgress={gridProgress}
@@ -1205,26 +1390,24 @@ function OrganicCalendarWorkspaceInner({
                     isFetchingPostedContent={isFetchingPostedContent}
                     onFetchPostedContent={fetchExternalPosts}
                   />
-                </motion.div>
+                </div>
 
-                <motion.div
-                  layout
-                  transition={layoutTransition}
-                  data-tour-id="organic-list-content"
-                  className="min-h-0 flex-1 overflow-hidden"
-                >
-                  <AnimatePresence mode="wait">
-                    {viewMode === 'week' && (
-                      <motion.div
-                        key="view-week"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="h-full"
-                      >
-                        {/* Trends live in the toolbar's drawer (OrganicTrendsDrawer), so the
-                        week grid takes the full vertical space instead of a 74/26 split. */}
+                {/* One local Suspense boundary and one keyed crossfade with NO exit.
+                    `AnimatePresence mode="wait"` serialised a 150ms exit BEFORE the entering
+                    child mounted, delaying the lazy chunk request and keeping the heavy
+                    outgoing tree alive across the swap. */}
+                <div data-tour-id="organic-list-content" className="min-h-0 flex-1 overflow-hidden">
+                  <React.Suspense fallback={<PlannerViewSkeleton view={viewMode} />}>
+                    <motion.div
+                      key={`view-${viewMode}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.15 }}
+                      className="h-full"
+                    >
+                      {viewMode === 'week' ? (
+                        /* Trends live in the toolbar's drawer (OrganicTrendsDrawer), so the
+                           week grid takes the full vertical space instead of a 74/26 split. */
                         <div data-tour-id="organic-calendar" className="h-full overflow-hidden">
                           <TimeGridCanvas
                             days={visibleWeekDays}
@@ -1259,25 +1442,16 @@ function OrganicCalendarWorkspaceInner({
                             onNativeDrop={handleNativeDrop}
                           />
                         </div>
-                      </motion.div>
-                    )}
-
-                    {viewMode === 'month' && (
-                      <motion.div
-                        key="view-month"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="h-full"
-                      >
+                      ) : viewMode === 'month' ? (
                         <OrganicMonthlyCalendar
                           days={gridDays}
                           monthAnchorDate={monthAnchorDate}
                           platforms={plannerPlatforms}
                           postedContent={postedContent}
                           selectedDraftId={selectedId}
+                          selectedDraftIds={selectedIds}
                           onSelectDraft={(id) => handleSelect(id, false)}
+                          onToggleSelection={(id) => handleSelect(id, true)}
                           onCreatePost={({ dayId, platformKey, status, mode, format }) =>
                             handleGoDraft({
                               dayId,
@@ -1292,18 +1466,7 @@ function OrganicCalendarWorkspaceInner({
                           onRegenerate={handleRegenerate}
                           onDeleteDraft={(id) => requestDraftDeletion([id], bulkDeleteDrafts)}
                         />
-                      </motion.div>
-                    )}
-
-                    {viewMode === 'list' && (
-                      <motion.div
-                        key="view-list"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="h-full"
-                      >
+                      ) : (
                         <OrganicListView
                           days={listDays}
                           platforms={plannerPlatforms}
@@ -1326,10 +1489,10 @@ function OrganicCalendarWorkspaceInner({
                           onDeleteBacklogDraft={deleteBacklogDraft}
                           onPromoteBacklogDraft={promoteBacklogDraft}
                         />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
+                      )}
+                    </motion.div>
+                  </React.Suspense>
+                </div>
 
                 <OrganicTrendsDrawer
                   open={trendsDrawerOpen}
@@ -1342,6 +1505,8 @@ function OrganicCalendarWorkspaceInner({
                   onGenerateFromTrend={handleGenerateFromTrend}
                   onFetch={brandProfileId ? refreshTrends : undefined}
                   isFetching={isFetchingTrends}
+                  insightsError={insightsError}
+                  brandProfileId={brandProfileId}
                 />
 
                 {brandProfileId && aiComposer && (
@@ -1359,154 +1524,14 @@ function OrganicCalendarWorkspaceInner({
                     onCreated={handleOneShotCreated}
                   />
                 )}
-              </motion.section>
-            </ResizablePanel>
-            {isPreviewOpen ? (
-              <>
-                <ResizableHandle
-                  withHandle
-                  collapseDirection={isWidePlanner ? 'right' : undefined}
-                  collapseLabel="Collapse draft preview"
-                  onCollapse={collapsePreview}
-                  className={isWidePlanner ? 'mx-1 bg-transparent' : 'my-1 bg-transparent'}
-                />
-                <ResizablePanel
-                  id="planner-preview"
-                  defaultSize={isWidePlanner ? previewPercent : 48}
-                  minSize={isWidePlanner ? '22rem' : '18rem'}
-                  maxSize={isWidePlanner ? '36rem' : '70%'}
-                  collapsible
-                  collapsedSize={0}
-                >
-                  <AnimatePresence initial={false}>
-                    <motion.aside
-                      key="preview-panel"
-                      layout
-                      role="complementary"
-                      aria-label="Draft preview"
-                      tabIndex={-1}
-                      onKeyDown={(e: React.KeyboardEvent) => {
-                        if (e.key === 'Escape') clearAll();
-                      }}
-                      initial={{ opacity: 0, x: 28, scale: 0.98 }}
-                      animate={{ opacity: 1, x: 0, scale: 1 }}
-                      exit={{ opacity: 0, x: 24, scale: 0.98 }}
-                      transition={previewTransition}
-                      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45"
-                    >
-                      <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Post Preview
-                        </p>
-                        <div className="flex items-center gap-1.5">
-                          {previewDraft?.mediaSuggestion?.reel?.composition &&
-                          previewDraft.mediaSuggestion.reel.generated !== true ? (
-                            <Button
-                              type="button"
-                              variant="default"
-                              size="sm"
-                              disabled={stitchingDraftIds.has(previewDraft.id)}
-                              onClick={() => handleStitchDraft(previewDraft.id)}
-                            >
-                              {stitchingDraftIds.has(previewDraft.id)
-                                ? 'Stitching…'
-                                : 'Ready to render'}
-                            </Button>
-                          ) : null}
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span>
-                                  <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={!brandProfileId || !previewDraft}
-                                    onClick={handleOpenInAiStudio}
-                                    style={
-                                      !brandProfileId || !previewDraft
-                                        ? { pointerEvents: 'none' }
-                                        : undefined
-                                    }
-                                  >
-                                    {previewDraft?.mediaSuggestion?.reel?.composition
-                                      ? 'Edit in AI Studio'
-                                      : 'Open in AI Studio'}
-                                  </Button>
-                                </span>
-                              </TooltipTrigger>
-                              {!brandProfileId ? (
-                                <TooltipContent>Select a brand to use AI Studio</TooltipContent>
-                              ) : null}
-                            </Tooltip>
-                          </TooltipProvider>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label="Close preview"
-                            onClick={clearAll}
-                          >
-                            <Cross2Icon className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* The preview's status reads from the same presentation map as the card's
-                          pill — one status, one hue, one word, wherever it is shown. */}
-                      {previewDraft ? (
-                        <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                          <Badge variant="outline">
-                            {previewDraft.platforms[0] ?? 'Unassigned'}
-                          </Badge>
-                          <StatusBadge status={previewDraft.status} format={previewDraft.format} />
-                          <Badge variant="outline">
-                            {previewDraft.dateLabel || 'Unscheduled'} ·{' '}
-                            {previewDraft.timeLabel || 'No time'}
-                          </Badge>
-                        </div>
-                      ) : null}
-
-                      <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
-                        {previewDraft ? (
-                          <OrganicDraftPreview
-                            draft={previewDraft}
-                            brandName={brandName}
-                            brandProfileId={brandProfileId}
-                            onApprove={(draftId) => {
-                              const target = drafts.find((draft) => draft.id === draftId);
-                              if (target) void approveAndSchedule(target);
-                            }}
-                          />
-                        ) : (
-                          // Selection is set but the draft has not resolved from the
-                          // current calendar set yet (a refetch/reconcile is in flight).
-                          // Show a neutral loading state — the panel re-renders with
-                          // content the moment the draft resolves, so no reload is needed.
-                          <div
-                            className="flex h-full flex-col gap-3 p-3"
-                            role="status"
-                            aria-busy="true"
-                            aria-label="Loading post preview"
-                          >
-                            <div className="h-24 w-full animate-pulse rounded-md bg-muted/70" />
-                            <div className="h-4 w-2/3 animate-pulse rounded bg-muted/70" />
-                            <div className="h-4 w-1/2 animate-pulse rounded bg-muted/70" />
-                            <div className="mt-auto h-9 w-full animate-pulse rounded-md bg-muted/70" />
-                          </div>
-                        )}
-                      </div>
-                    </motion.aside>
-                  </AnimatePresence>
-                </ResizablePanel>
-              </>
-            ) : null}
-          </ResizablePanelGroup>
+              </section>
+            }
+          />
         </CalendarDndContext>
 
-        {/* The collapse chevron lives on the resize handle, which unmounts with the
-            panel — so collapsing used to remove the only way back. This trigger
-            stays mounted for as long as a draft is selected. */}
+        {/* The collapse control lives inside the preview panel, which unmounts when the
+            panel collapses — so collapsing would otherwise remove the only way back. This
+            trigger stays mounted for as long as a draft is selected. */}
         {hasSelection && isPreviewCollapsed ? (
           <button
             type="button"
@@ -1559,5 +1584,111 @@ function OrganicCalendarWorkspaceInner({
         )}
       </div>
     </AiStudioHandoffProvider>
+  );
+}
+
+type PlannerLayoutProps = {
+  isWide: boolean;
+  workspace: React.ReactNode;
+  /** `null` when nothing is selected — the layout then gives the grid the whole surface. */
+  preview: React.ReactNode | null;
+  previewPercent: number;
+  onPreviewPercentChange: (percent: number) => void;
+  onCollapsePreview: () => void;
+};
+
+/**
+ * Two layouts, not one responsive one. Below `lg` there is no ResizablePanelGroup at all:
+ * its ResizeObserver is what locked the page for 45s+ at 390x844, and a 390px-wide phone has
+ * no room to drag a split anyway.
+ */
+function PlannerLayout({ isWide, ...props }: PlannerLayoutProps) {
+  return isWide ? <PlannerSplitLayout {...props} /> : <PlannerStackedLayout {...props} />;
+}
+
+function PlannerSplitLayout({
+  workspace,
+  preview,
+  previewPercent,
+  onPreviewPercentChange,
+  onCollapsePreview,
+}: Omit<PlannerLayoutProps, 'isWide'>) {
+  // No `key`: `orientation` and `defaultLayout` are props the group already re-lays-out on.
+  // Keying it remounted both lazy views and the dnd context on every breakpoint cross.
+  return (
+    <ResizablePanelGroup
+      id="organic-planner-layout"
+      orientation="horizontal"
+      defaultLayout={
+        preview
+          ? {
+              'planner-workspace': 100 - previewPercent,
+              'planner-preview': previewPercent,
+            }
+          : { 'planner-workspace': 100 }
+      }
+      onLayoutChanged={(layout, meta) => {
+        const nextPreviewPercent = layout['planner-preview'];
+        // Only a drag is a preference. A programmatic re-layout is not.
+        if (meta.isUserInteraction && nextPreviewPercent > 0) {
+          onPreviewPercentChange(nextPreviewPercent);
+        }
+      }}
+      className="h-full min-h-0 w-full"
+    >
+      <ResizablePanel id="planner-workspace" minSize={preview ? 55 : 100}>
+        {workspace}
+      </ResizablePanel>
+      {preview ? (
+        <>
+          <ResizableHandle withHandle className="mx-1 bg-transparent" />
+          <ResizablePanel
+            id="planner-preview"
+            defaultSize={previewPercent}
+            minSize="22rem"
+            maxSize="36rem"
+            collapsible
+            collapsedSize={0}
+          >
+            <div className="relative flex h-full min-h-0">
+              {preview}
+              <ResizablePanelCollapseButton
+                data-testid="planner-preview-collapse"
+                label="Collapse draft preview"
+                direction="right"
+                onClick={onCollapsePreview}
+              />
+            </div>
+          </ResizablePanel>
+        </>
+      ) : null}
+    </ResizablePanelGroup>
+  );
+}
+
+/**
+ * Inline rather than a Sheet on purpose: the planner's whole value is seeing the grid while
+ * editing a post, and a sheet covers the grid.
+ */
+function PlannerStackedLayout({
+  workspace,
+  preview,
+  onCollapsePreview,
+}: Omit<PlannerLayoutProps, 'isWide' | 'previewPercent' | 'onPreviewPercentChange'>) {
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <div className="min-h-0 flex-1 overflow-hidden">{workspace}</div>
+      {preview ? (
+        <div className="relative mt-1 flex h-[48dvh] max-h-[48dvh] min-h-0 shrink-0 flex-col border-t border-border/50 pt-1">
+          {preview}
+          <ResizablePanelCollapseButton
+            data-testid="planner-preview-collapse"
+            label="Collapse draft preview"
+            direction="down"
+            onClick={onCollapsePreview}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }

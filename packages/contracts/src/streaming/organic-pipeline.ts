@@ -566,6 +566,11 @@ export const organicCalendarPlacementSchema = z
     creative: z
       .object({
         creativeIdea: z.string().nullable().optional(),
+        // The user's own creative direction, as typed in the planner preview. Held
+        // alongside `creativeIdea` (the generated brief) so an edit survives a
+        // refetch and renders back into the panel it was typed in. Declared here
+        // because this object is `.strict()` — an undeclared key is a parse failure.
+        creativeDirectionPrompt: z.string().nullable().optional(),
         assetIds: z.array(z.string()).optional(),
         assetHints: z
           .array(
