@@ -51,6 +51,11 @@ export type AdminWorkflowLibraryRow = {
 export type AdminAuditLogEntry = {
   id: string;
   actor_user_id: string | null;
+  // Resolved server-side from admin_user_directory so the actor reads as a
+  // person (name/email), not a raw UUID; null for system/automated or
+  // unresolvable actors.
+  actor_email: string | null;
+  actor_name: string | null;
   action: string;
   target_type: string;
   target_id: string | null;

@@ -1,4 +1,5 @@
 import type {
+  AdminAuditLogEntry,
   AdminBrandOption,
   AdminWorkflowLibraryRow,
   PermissionRow,
@@ -201,4 +202,15 @@ export function buildAdminAuditRequestBody({ page, pageSize, action }: AdminAudi
   const body: { page: number; pageSize: number; action?: string } = { page, pageSize };
   if (action) body.action = action;
   return body;
+}
+
+type AuditActor = Pick<AdminAuditLogEntry, 'actor_name' | 'actor_email' | 'actor_user_id'>;
+
+// Identify an audit actor the way the rest of the admin console identifies a
+// user: name first, then email, matching the `name ?? email` convention used in
+// the Users directory. Falls back to the raw actor UUID when the actor isn't in
+// the directory (e.g. a since-deleted user), and to 'System' for actor-less
+// automated actions. Whitespace-only names/emails are treated as absent.
+export function auditActorLabel(actor: AuditActor): string {
+  return actor.actor_name?.trim() || actor.actor_email?.trim() || actor.actor_user_id || 'System';
 }

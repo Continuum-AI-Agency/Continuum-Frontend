@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  auditActorLabel,
   buildAdminAuditRequestBody,
   buildAdminTabParams,
   buildAdminUserListSearchParams,
@@ -110,6 +111,28 @@ describe('buildAdminAuditRequestBody', () => {
     expect(
       buildAdminAuditRequestBody({ page: 1, pageSize: 50, action: 'admin.user.set_admin' }),
     ).toEqual({ page: 1, pageSize: 50, action: 'admin.user.set_admin' });
+  });
+});
+
+describe('auditActorLabel', () => {
+  const base = { actor_name: null, actor_email: null, actor_user_id: null };
+
+  it('prefers name, then email, matching the Users tab convention', () => {
+    expect(auditActorLabel({ ...base, actor_name: 'Jane Doe', actor_email: 'jane@x.co' })).toBe(
+      'Jane Doe',
+    );
+    expect(auditActorLabel({ ...base, actor_email: 'jane@x.co' })).toBe('jane@x.co');
+  });
+
+  it('treats whitespace-only name/email as absent', () => {
+    expect(auditActorLabel({ ...base, actor_name: '   ', actor_email: 'jane@x.co' })).toBe(
+      'jane@x.co',
+    );
+  });
+
+  it('falls back to the raw actor id when unresolved, then to System', () => {
+    expect(auditActorLabel({ ...base, actor_user_id: 'a1b2c3' })).toBe('a1b2c3');
+    expect(auditActorLabel(base)).toBe('System');
   });
 });
 

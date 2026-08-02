@@ -26,6 +26,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransit
 import { AdminActionConfirmation } from '@/components/admin/AdminActionConfirmation';
 import {
   ADMIN_AUDIT_ACTIONS,
+  auditActorLabel,
   buildAdminAuditRequestBody,
   buildAdminPaginationRange,
   buildAdminTabParams,
@@ -1678,6 +1679,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                   const beforeJson = formatAuditJson(entry.before);
                   const afterJson = formatAuditJson(entry.after);
                   const metadataJson = formatAuditJson(entry.metadata);
+                  const actorLabel = auditActorLabel(entry);
+                  const actorEmailSecondary =
+                    entry.actor_email && entry.actor_email !== actorLabel
+                      ? entry.actor_email
+                      : null;
                   return (
                     <Fragment key={entry.id}>
                       <TableRow
@@ -1709,8 +1715,8 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                           <div className="text-sm font-medium text-primary">
                             {formatAuditActionLabel(entry.action)}
                           </div>
-                          <p className="max-w-[220px] truncate font-mono text-xs text-muted-foreground">
-                            Actor {entry.actor_user_id ?? 'unknown'}
+                          <p className="max-w-[220px] truncate text-xs text-muted-foreground">
+                            {actorLabel}
                           </p>
                         </TableCell>
                         <TableCell className="align-top">
@@ -1745,9 +1751,12 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                             <dl className="grid gap-2 text-xs sm:grid-cols-2">
                               <div>
                                 <dt className="text-muted-foreground">Actor</dt>
-                                <dd className="font-mono break-all text-primary">
-                                  {entry.actor_user_id ?? 'unknown'}
-                                </dd>
+                                <dd className="break-all text-primary">{actorLabel}</dd>
+                                {actorEmailSecondary ? (
+                                  <dd className="break-all text-xs text-muted-foreground">
+                                    {actorEmailSecondary}
+                                  </dd>
+                                ) : null}
                               </div>
                               <div>
                                 <dt className="text-muted-foreground">Request ID</dt>
