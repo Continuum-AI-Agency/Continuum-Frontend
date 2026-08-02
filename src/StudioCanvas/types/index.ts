@@ -49,6 +49,10 @@ export interface BaseNodeData extends Record<string, unknown> {
   isExecuting?: boolean;
   isComplete?: boolean;
   error?: string;
+  // The Backend's classification of `error`, when it sent one. Drives the node's
+  // guidance panel so the user is told what to change instead of the raw provider
+  // sentence. See utils/generationErrorCopy.
+  errorCode?: string;
   executionTime?: number;
   isToolbarVisible?: boolean;
   isTourSeed?: boolean;
@@ -140,6 +144,8 @@ export interface ImageNodeData extends BaseNodeData {
   // from the Library, uploaded on drop, or attached by an agent). Persisted so a
   // generation downstream of this node can be credited back to the asset that fed it.
   assetId?: string;
+  // Exact media.asset_versions id returned by Library registration.
+  assetVersionId?: string;
   sourcePath?: string;
   // Storage bucket for sourcePath, so a reference URL can be re-signed on load.
   bucket?: string;
@@ -159,6 +165,7 @@ export interface VideoNodeData extends BaseNodeData {
   fileName?: string;
   // media.assets id of the Library asset this node holds — see ImageNodeData.assetId.
   assetId?: string;
+  assetVersionId?: string;
   sourcePath?: string;
   bucket?: string;
   sourceUrl?: string;
@@ -171,6 +178,7 @@ export interface AudioNodeData extends BaseNodeData {
   audio?: string;
   fileName?: string;
   assetId?: string;
+  assetVersionId?: string;
   sourcePath?: string;
   bucket?: string;
   sourceUrl?: string;

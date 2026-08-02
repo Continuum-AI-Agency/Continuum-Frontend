@@ -2,6 +2,7 @@
 
 import {
   CalendarCheck,
+  Copy,
   Hash,
   MoreHorizontal,
   Send,
@@ -18,9 +19,13 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { DuplicateDayPicker } from './DuplicateDayPicker';
 
 /**
  * The ⋯ command menu for the previewer: global post actions that don't earn a
@@ -35,9 +40,11 @@ export function PostCommandMenu({
   canSchedule = false,
   isScheduled = false,
   onMoveBackToDraft,
+  onDuplicate,
   onPublish,
   canPublish = false,
   isPublishing = false,
+  publishBlockedReason,
   onOpenInStudio,
   onDelete,
 }: {
@@ -47,12 +54,19 @@ export function PostCommandMenu({
   canSchedule?: boolean;
   isScheduled?: boolean;
   onMoveBackToDraft?: () => void;
+  /** Clone this post onto another day. Same picker the calendar card uses. */
+  onDuplicate?: (dayId: string) => void;
   onPublish?: () => void;
   canPublish?: boolean;
   isPublishing?: boolean;
+  /** Non-null when the draft is not ready to publish. Renders the item disabled and says
+      why, instead of offering a click that usePublishDraft will refuse. */
+  publishBlockedReason?: string;
   onOpenInStudio?: () => void;
   onDelete: () => void;
 }) {
+  const [isDuplicateOpen, setIsDuplicateOpen] = React.useState(false);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -90,10 +104,37 @@ export function PostCommandMenu({
           </DropdownMenuItem>
         )}
 
+        {onDuplicate && (
+          <DropdownMenuSub open={isDuplicateOpen} onOpenChange={setIsDuplicateOpen}>
+            <DropdownMenuSubTrigger>
+              <Copy className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+              Duplicate…
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-auto p-3">
+              {/* The calendar card's picker, reused rather than reimplemented. */}
+              <DuplicateDayPicker
+                onSelect={(dayId) => {
+                  onDuplicate(dayId);
+                  setIsDuplicateOpen(false);
+                }}
+                onCancel={() => setIsDuplicateOpen(false)}
+              />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+
         {canPublish && onPublish && (
-          <DropdownMenuItem onSelect={onPublish} disabled={isPublishing}>
+          <DropdownMenuItem
+            onSelect={onPublish}
+            disabled={isPublishing || publishBlockedReason !== undefined}
+            title={publishBlockedReason}
+          >
             <Send className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-            {isPublishing ? 'Publishing…' : 'Publish to Instagram'}
+            {isPublishing
+              ? 'Publishing…'
+              : publishBlockedReason
+                ? 'Publish to Instagram — needs setup'
+                : 'Publish to Instagram'}
           </DropdownMenuItem>
         )}
         {onOpenInStudio && (

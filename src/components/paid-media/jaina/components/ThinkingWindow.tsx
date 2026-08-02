@@ -45,10 +45,17 @@ type ThinkingWindowProps = {
   isStreaming: boolean;
 };
 
+/**
+ * The single line the COLLAPSED view shows: the most recent thing Jaina actually said.
+ *
+ * `agent_narration` counts alongside `thinking`. While structured subagents run — up to
+ * 79% of a measured turn — narration is the only prose being produced, so excluding it
+ * left the collapsed ticker blank through the longest stretch of the turn.
+ */
 export function getLatestStreamingThought(reasoning: JainaProgressEntry[]): string | null {
   for (let i = reasoning.length - 1; i >= 0; i -= 1) {
     const entry = reasoning[i];
-    if (entry.stage !== 'thinking') continue;
+    if (entry.stage !== 'thinking' && entry.stage !== 'agent_narration') continue;
     const detail = toMarkdownDetail(entry.detail);
     if (detail) return detail;
   }
@@ -286,7 +293,11 @@ export function ThinkingWindow({
         </AnimatePresence>
       ) : null}
 
-      <ChainOfThoughtContent className="space-y-1 px-2 pb-3">
+      {/* Bounded and scrollable: with worker narration in the trace a heavy turn runs to
+          dozens of entries, and an unbounded trace pushes the answer itself off screen.
+          `overscroll-contain` keeps a scroll that reaches the end from chaining to the
+          conversation behind it. */}
+      <ChainOfThoughtContent className="max-h-[24rem] space-y-1 overflow-y-auto overscroll-contain px-2 pb-3">
         <ActiveAgentsPanel
           agents={agentSegments}
           toolCalls={toolCalls}

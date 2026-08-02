@@ -1,7 +1,7 @@
 'use client';
 
 import type { UiFetchedPost } from '@continuum/contracts';
-import { AgentCardEyebrow, AgentReceipt } from './agentCardKit';
+import { AgentCardEyebrow, AgentReceipt } from '@/components/shared/agent-cards/agentCardKit';
 import { PostContentCard } from './PostContentCard';
 
 type Props = {

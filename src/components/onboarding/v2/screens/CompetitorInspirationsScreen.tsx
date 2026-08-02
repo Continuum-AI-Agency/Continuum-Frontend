@@ -3,6 +3,7 @@
 import type {
   InspirationAd,
   InspirationPost,
+  OnboardingInspirationSelection,
   OnboardingInspirationsStreamFrame,
 } from '@continuum/contracts';
 import { useEffect, useRef, useState } from 'react';
@@ -10,10 +11,7 @@ import { Button } from '@/components/ui/button';
 import { streamInspirations } from '@/lib/onboarding/inspirationsClient';
 import { cn } from '@/lib/utils';
 
-export type SelectedInspiration = {
-  competitorName: string;
-  imageUrl: string;
-};
+export type SelectedInspiration = OnboardingInspirationSelection;
 
 type CompetitorCard = {
   name: string;
@@ -272,7 +270,7 @@ function PostCard({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={post.imageUrl}
-          alt=""
+          alt={`${competitorName} inspiration`}
           className="aspect-square w-full object-cover"
           loading="lazy"
         />

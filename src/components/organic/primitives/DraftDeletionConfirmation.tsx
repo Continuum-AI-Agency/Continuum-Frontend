@@ -52,7 +52,9 @@ export function DraftDeletionConfirmationProvider({ children }: { children: Reac
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {/* Destructive, so the confirm button matches the red menu item that opened it. */}
             <AlertDialogAction
+              variant="destructive"
               onClick={() => {
                 if (!request) return;
                 request.deleteDrafts(request.ids);

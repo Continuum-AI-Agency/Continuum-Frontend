@@ -16,6 +16,10 @@ type OrganicTrendsDrawerProps = {
   onGenerateFromTrend?: (trend: Trend) => void;
   onFetch?: () => void;
   isFetching?: boolean;
+  /** Set when the server-side trend fetch failed, so the workbench can say so. */
+  insightsError?: string | null;
+  /** Required by the workbench's per-trend citations query; without it, it stays disabled. */
+  brandProfileId?: string;
 };
 
 export function OrganicTrendsDrawer({
@@ -29,6 +33,8 @@ export function OrganicTrendsDrawer({
   onGenerateFromTrend,
   onFetch,
   isFetching,
+  insightsError,
+  brandProfileId,
 }: OrganicTrendsDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -49,6 +55,8 @@ export function OrganicTrendsDrawer({
             onGenerateFromTrend={onGenerateFromTrend}
             onFetch={onFetch}
             isFetching={isFetching}
+            insightsError={insightsError}
+            brandProfileId={brandProfileId}
           />
         </div>
       </SheetContent>

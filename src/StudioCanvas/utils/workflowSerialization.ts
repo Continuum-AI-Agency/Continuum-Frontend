@@ -18,6 +18,7 @@ const runtimeNodeKeys = [
   'isExecuting',
   'isComplete',
   'error',
+  'errorCode',
   'executionTime',
   'isToolbarVisible',
 ] as const;

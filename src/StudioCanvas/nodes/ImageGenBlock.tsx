@@ -8,7 +8,14 @@ import {
   supportsImageSize,
   variationIndexFromHandle,
 } from '@continuum/contracts';
-import { CopyIcon, DownloadIcon, ImageIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons';
+import {
+  CopyIcon,
+  DownloadIcon,
+  ExclamationTriangleIcon,
+  ImageIcon,
+  PlayIcon,
+  TrashIcon,
+} from '@radix-ui/react-icons';
 import {
   Handle,
   type HandleProps,
@@ -49,6 +56,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { cn } from '@/lib/utils';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
 import { GroundingChip } from '../components/GroundingChip';
+import { NodeStatus } from '../components/NodeStatus';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
@@ -60,6 +68,7 @@ import {
 import { toggleBrandPiece, toggleSkillId } from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
+import { generationErrorCopy } from '../utils/generationErrorCopy';
 import { resignCanvasNodes } from '../utils/resignCanvasNodes';
 
 // One or a full quadrant. Anything between would leave the 2x2 grid ragged and
@@ -238,6 +247,20 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
     await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
   }, [executionControls, id, brandId]);
 
+  // A failed run leaves the node with no preview at all (the run clears it before
+  // regenerating), so the failure is the ONLY thing left to show — and it stays
+  // shown. The toast that used to be the sole signal auto-dismissed after five
+  // seconds, which is how "no image returned, change your prompt" reached the user
+  // as an empty node.
+  const generationError = typeof data.error === 'string' ? data.error : undefined;
+  const errorCopy = generationError
+    ? generationErrorCopy(data.errorCode, generationError)
+    : undefined;
+
+  const handleDismissError = useCallback(() => {
+    useStudioStore.getState().updateNodeData(id, { error: undefined, errorCode: undefined });
+  }, [id]);
+
   const variationCount = data.variationCount ?? 1;
   const generatedVariations = data.generatedImages ?? [];
   const showVariationGrid = generatedVariations.length > 1;
@@ -333,6 +356,10 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
+          {/* Legible at any zoom, and it survives the toast: a run that failed is not
+              the same as a node nobody has run yet. */}
+          <NodeStatus status={errorCopy ? 'error' : 'idle'} errorMessage={generationError} />
+
           {/* Inside the card's top-left, not straddling its border: `-top-3` against a
               24px chip put exactly half of it outside the node (Airtable #229). */}
           <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
@@ -408,6 +435,33 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
               {data.isExecuting ? (
                 <div className="w-full h-full flex items-center justify-center bg-muted p-4">
                   <GenerationPulseLoader />
+                </div>
+              ) : errorCopy ? (
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-y-auto bg-destructive/5 p-4 text-center"
+                  data-testid="studio-image-node-error"
+                >
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <ExclamationTriangleIcon className="text-destructive" />
+                      </EmptyMedia>
+                      <EmptyTitle>{errorCopy.title}</EmptyTitle>
+                      <EmptyDescription>{errorCopy.guidance}</EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="nodrag"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDismissError();
+                    }}
+                  >
+                    Dismiss
+                  </Button>
                 </div>
               ) : showVariationGrid ? (
                 <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-0.5 bg-muted">

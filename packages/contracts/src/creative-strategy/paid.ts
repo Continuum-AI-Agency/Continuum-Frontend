@@ -455,3 +455,65 @@ export function buildCreativeRequestBrief(
     rebuildCraft: seed.rebuildCraft ?? false,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Pure selectors over a materialized creative report.
+//
+// These live in contracts, not in the frontend, because two consumers now read
+// the same paid_media.creative_reports row and must agree on what they mean: the
+// "What's Working" dashboard surfaces, and the automations `whats_working`
+// source that feeds a scheduled report. Re-expressing "thin evidence" or the
+// funnel filter server-side would let the dashboard and the emailed report
+// disagree about what is working, which is the one thing neither may do.
+//
+// Presentation stays in the frontend (labels, Tailwind classes, currency
+// formatting). Only the decisions travel.
+// ---------------------------------------------------------------------------
+
+export const FUNNEL_TABS = ['all', 'tof', 'mof', 'bof'] as const;
+export type FunnelTab = (typeof FUNNEL_TABS)[number];
+
+/**
+ * A cohort this small cannot separate the creative attribute from the single ad
+ * that happened to carry it: "100%, 1/1 ads" is arithmetically true and
+ * practically empty.
+ */
+export const MIN_TRUSTWORTHY_COHORT = 3;
+
+export const hasThinEvidence = (row: CreativeWinRateRow): boolean =>
+  row.eligibleAds < MIN_TRUSTWORTHY_COHORT || row.flags.includes('low_evidence');
+
+const matchesFunnel = (stage: PaidFunnelStage, funnel: FunnelTab): boolean =>
+  funnel === 'all' || stage === (funnel as PaidFunnelStage);
+
+/**
+ * Win-rate rows for the explorer table and the automation source. The
+ * `funnel_stage` dimension is dropped: it restates the funnel column rather than
+ * describing a creative attribute.
+ */
+export function selectWinRateRows(
+  report: PaidCreativeReport | null,
+  funnel: FunnelTab,
+  options: { hideThinEvidence?: boolean } = {},
+): CreativeWinRateRow[] {
+  const rows = (report?.winRates ?? [])
+    .filter((row) => row.dimension !== 'funnel_stage')
+    .filter((row) => matchesFunnel(row.funnelStage, funnel));
+  return options.hideThinEvidence ? rows.filter((row) => !hasThinEvidence(row)) : rows;
+}
+
+export type VerdictsByKind = Record<'kill' | 'scale' | 'iterate', PaidCreativeVerdict[]>;
+
+export function selectVerdictsByKind(
+  report: PaidCreativeReport | null,
+  funnel: FunnelTab,
+): VerdictsByKind {
+  const verdicts = (report?.verdicts ?? []).filter((verdict) =>
+    matchesFunnel(verdict.funnelStage, funnel),
+  );
+  return {
+    kill: verdicts.filter((verdict) => verdict.verdict === 'kill'),
+    scale: verdicts.filter((verdict) => verdict.verdict === 'scale'),
+    iterate: verdicts.filter((verdict) => verdict.verdict === 'iterate'),
+  };
+}

@@ -60,6 +60,12 @@ type TrendWorkbenchProps = {
   onFetch?: () => void;
   isFetching?: boolean;
   brandProfileId?: string;
+  /**
+   * Why the trend fetch failed, when it did. Without it an upstream failure and a brand
+   * that genuinely has no trends yet both rendered "No trends match this search." — which
+   * is true of neither, and is why the Trends drawer read as "opens nothing".
+   */
+  insightsError?: string | null;
 };
 
 // Only real (uuid) trends can anchor a durable one-shot job; seeded slug trends
@@ -536,6 +542,91 @@ const TrendTableRow = React.memo(function TrendTableRow({
   );
 });
 
+/**
+ * Three distinct facts, three distinct states. "No trends match this search." is correct
+ * only for the third — a non-empty set filtered down to nothing.
+ */
+function TrendWorkbenchEmptyState({
+  insightsError,
+  hasAnyTrend,
+  isFetching,
+  onFetch,
+}: {
+  insightsError?: string | null;
+  hasAnyTrend: boolean;
+  isFetching: boolean;
+  onFetch?: () => void;
+}) {
+  if (insightsError) {
+    return (
+      <div
+        data-testid="trend-workbench-error"
+        className="flex flex-col items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-center text-xs"
+      >
+        <p className="font-medium text-destructive">We could not load your trends.</p>
+        <p className="text-muted-foreground">{insightsError}</p>
+        {onFetch ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-2xs"
+            onClick={onFetch}
+            disabled={isFetching}
+          >
+            {isFetching ? (
+              <UpdateIcon className="mr-1 h-3 w-3 animate-spin" />
+            ) : (
+              <UpdateIcon className="mr-1 h-3 w-3" />
+            )}
+            {isFetching ? 'Retrying…' : 'Retry'}
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (!hasAnyTrend) {
+    return (
+      <div
+        data-testid="trend-workbench-empty"
+        className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border p-4 text-center text-xs"
+      >
+        <p className="font-medium text-foreground">We have not analysed your sector yet.</p>
+        <p className="text-muted-foreground">
+          Continuum scans your market for topics worth posting about. Run the first analysis to fill
+          this list.
+        </p>
+        {onFetch ? (
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 px-2 text-2xs"
+            onClick={onFetch}
+            disabled={isFetching}
+          >
+            {isFetching ? (
+              <UpdateIcon className="mr-1 h-3 w-3 animate-spin" />
+            ) : (
+              <LightningBoltIcon className="mr-1 h-3 w-3" />
+            )}
+            {isFetching ? 'Generating…' : 'Generate Trends'}
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-testid="trend-workbench-no-match"
+      className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground"
+    >
+      No trends match this search.
+    </div>
+  );
+}
+
 export function TrendWorkbench({
   trends,
   selectedTrendIds,
@@ -546,6 +637,7 @@ export function TrendWorkbench({
   onFetch,
   isFetching = false,
   brandProfileId,
+  insightsError,
 }: TrendWorkbenchProps) {
   const [query, setQuery] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState<TrendTypeFilter>('all');
@@ -838,9 +930,12 @@ export function TrendWorkbench({
         <ScrollArea className="min-h-0 flex-1 rounded-md bg-background/45 ring-1 ring-border/35">
           <div className="px-2 pb-2">
             {filteredTrends.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                No trends match this search.
-              </div>
+              <TrendWorkbenchEmptyState
+                insightsError={insightsError}
+                hasAnyTrend={trends.length > 0}
+                isFetching={isFetching}
+                onFetch={onFetch}
+              />
             ) : (
               <Table className="text-xs">
                 <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">

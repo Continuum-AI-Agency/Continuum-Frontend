@@ -116,6 +116,28 @@ function pgErrorCode(error: unknown): string | null {
   return null;
 }
 
+/** The reason an edge function actually gave.
+ *
+ *  supabase-js rejects any non-2xx with FunctionsHttpError, and its `.message` is the constant
+ *  "Edge Function returned a non-2xx status code" — the server's `{ error }` body lives on
+ *  `.context`, the undrained Response. Reading `.message` therefore reduces every distinct
+ *  failure (a dead Meta token, a portfolio that is not yours, ad sets held by a brand you
+ *  cannot edit) to one indistinguishable sentence. Falls back to `.message` when there is no
+ *  context to read, so a genuine network error still says something. */
+async function readEdgeErrorMessage(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown })?.context;
+  if (context instanceof Response) {
+    try {
+      const body = (await context.clone().json()) as { error?: unknown };
+      if (typeof body?.error === 'string' && body.error.trim().length > 0) return body.error;
+    } catch {
+      // Not JSON, or already consumed — fall through to the generic message.
+    }
+  }
+  const message = (error as { message?: unknown })?.message;
+  return typeof message === 'string' ? message : '';
+}
+
 // ── Query keys ──────────────────────────────────────────────────────────────
 
 export const optimizerQueryKeys = {
@@ -458,13 +480,12 @@ async function enrollAdsets(request: EnrollRequest): Promise<EnrollResult> {
     body: request,
   });
   if (error) {
-    // The edge forwards the real reason (a dead Meta token reads very differently from a
-    // portfolio that is not yours). Swallowing it behind one generic string is what made
-    // the duplicate-enrollment failure unreadable in the field.
-    const detail =
-      typeof error === 'object' && error !== null && 'message' in error
-        ? String((error as { message: unknown }).message)
-        : '';
+    // supabase-js rejects a non-2xx edge response with FunctionsHttpError, whose `.message` is
+    // ALWAYS the fixed string "Edge Function returned a non-2xx status code". The server's real
+    // reason — which ad sets are held, and that you lack edit access where they live — is only
+    // in the response body, reachable via error.context. Reading `.message` here is what made
+    // every enrollment failure read as one generic sentence no matter what actually happened.
+    const detail = await readEdgeErrorMessage(error);
     throw new OptimizerRpcError(
       detail.trim().length > 0 ? detail : 'Could not enroll these ad sets.',
       pgErrorCode(error),

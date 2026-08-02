@@ -6,11 +6,9 @@ import {
   ExclamationTriangleIcon,
   LightningBoltIcon,
   PlusIcon,
-  TrashIcon,
 } from '@radix-ui/react-icons';
 import { endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOfWeek } from 'date-fns';
-import { CalendarIcon, RefreshCw } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { CalendarIcon, EyeOff, RefreshCw } from 'lucide-react';
 import * as React from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Badge } from '@/components/ui/badge';
@@ -34,11 +32,19 @@ import { cn } from '@/lib/utils';
 import { DisabledControl } from '../DisabledControl';
 import { describeAddPlaceholderBlock, describeClearBlock } from '../disabledReasons';
 import { AddPostMenu } from './AddPostMenu';
+import { StatusBadge } from './DraftCardBadges';
+import { DRAFT_READINESS_LEGEND_NOTE, draftStatusLegendEntries } from './draft-card-styles';
 import { PlannerAccountSwitcher } from './PlannerAccountSwitcher';
 import type { CreatePostOptions } from './planner-platforms';
 
 const WEEK_OPTS = { weekStartsOn: 1 } as const; // Monday-started, matches the planner
 
+/**
+ * Derived from the same table the cards read (`DRAFT_STATUS_PRESENTATION`). The legend used
+ * to be hardcoded, and drifted into four separate falsehoods — violet was labelled
+ * "Generating" when it means "Seeded", Scheduled was drawn as an unfilled outline instead of
+ * teal, `placeholder` was missing entirely, and Failed was a solid destructive fill.
+ */
 function StatusLegend() {
   return (
     <Popover>
@@ -47,18 +53,19 @@ function StatusLegend() {
           Status legend
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-56">
+      <PopoverContent align="start" className="w-72">
         <div className="flex flex-col gap-2">
           <p className="text-xs font-semibold text-foreground">Post status</p>
-          <div className="flex flex-wrap gap-1.5">
-            <Badge variant="muted">Draft</Badge>
-            <Badge variant="violet">Generating</Badge>
-            <Badge variant="outline">Scheduled</Badge>
-            <Badge variant="success">Published</Badge>
-            <Badge variant="destructive">Failed</Badge>
-          </div>
-          <p className="text-2xs text-muted-foreground">
-            Every status is labeled; color is secondary.
+          <ul className="flex flex-col gap-1.5">
+            {draftStatusLegendEntries().map((entry) => (
+              <li key={entry.status} className="flex items-start gap-2">
+                <StatusBadge status={entry.status} className="shrink-0" />
+                <span className="text-2xs leading-snug text-muted-foreground">{entry.hint}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="border-t border-border/50 pt-2 text-2xs text-muted-foreground">
+            {DRAFT_READINESS_LEGEND_NOTE}
           </p>
         </div>
       </PopoverContent>
@@ -216,7 +223,6 @@ export function CalendarToolbar({
   isFetchingPostedContent = false,
   onFetchPostedContent,
 }: CalendarToolbarProps) {
-  const router = useRouter();
   const showPlanned = useCalendarStore((state) => state.showPlanned);
   const setShowPlanned = useCalendarStore((state) => state.setShowPlanned);
 
@@ -248,12 +254,11 @@ export function CalendarToolbar({
                         : 'h-7 rounded px-2.5 text-xs text-muted-foreground hover:text-foreground'
                     }
                     aria-pressed={viewMode === mode}
-                    onClick={() => {
-                      onViewModeChange(mode);
-                      const next = new URLSearchParams(window.location.search);
-                      next.set('view', mode);
-                      router.replace(`?${next.toString()}`, { scroll: false });
-                    }}
+                    // The store is the sole writer of the view mode; the workspace projects
+                    // it into the URL. `router.replace` here made the same commit a Next
+                    // transition, so React 19 kept the STALE view on screen — the reported
+                    // "List → Month still shows the list".
+                    onClick={() => onViewModeChange(mode)}
                   >
                     {mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : 'List'}
                   </Button>
@@ -276,15 +281,21 @@ export function CalendarToolbar({
               )}
               <StatusLegend />
               <Separator orientation="vertical" className="h-5" />
+              {/* This counts the user's SELECTION against its cap — a different quantity from
+                  the trend AVAILABILITY that Metrics and Home show from the same array. The
+                  old "0/5 TRENDS" said neither, so three surfaces read as three numbers for
+                  one word. */}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="outline" className="text-2xs uppercase tracking-wide">
-                    {scopeLabel} · {selectedTrendCount}
-                    {typeof maxTrendSelections === 'number' ? `/${maxTrendSelections}` : ''} trends
+                  <Badge variant="outline" className="text-2xs">
+                    Trends selected: {selectedTrendCount}
+                    {typeof maxTrendSelections === 'number' ? ` of ${maxTrendSelections}` : ''}
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent>
-                  Trend references selected for the current planning week
+                <TooltipContent className="max-w-xs">
+                  A trend is a topic Continuum found moving in your market. Selecting one tags it
+                  onto the posts you generate next. Open Trends to see what we found for your brand,
+                  or generate a fresh set there.
                 </TooltipContent>
               </Tooltip>
               {postedContentCount > 0 ? (
@@ -346,6 +357,8 @@ export function CalendarToolbar({
                   </Button>
                 </AddPostMenu>
               )}
+              {/* A trash icon labelled "Clear" on a control that only hides posts is the most
+                  trust-damaging thing in the planner. The act is a lens, so it looks like one. */}
               <DisabledControl hint={clearHint}>
                 <Button
                   type="button"
@@ -353,9 +366,10 @@ export function CalendarToolbar({
                   variant="outline"
                   disabled={isGenerating || draftsCount === 0}
                   onClick={onClear}
+                  title="Hides posts from this view. Nothing is deleted."
                 >
-                  <TrashIcon className="mr-1 h-3.5 w-3.5" />
-                  Clear
+                  <EyeOff className="mr-1 h-3.5 w-3.5" />
+                  Clear view
                 </Button>
               </DisabledControl>
             </div>
@@ -440,9 +454,9 @@ export function CalendarToolbar({
           Create content
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onClear}>
-          <TrashIcon className="mr-2 h-3.5 w-3.5" />
-          Clear current week
+        <ContextMenuItem onSelect={onClear}>
+          <EyeOff className="mr-2 h-3.5 w-3.5" />
+          Clear view
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

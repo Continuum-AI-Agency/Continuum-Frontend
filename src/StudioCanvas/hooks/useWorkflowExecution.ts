@@ -13,6 +13,7 @@ import type {
 } from '@/lib/types/chatImage';
 import type { ImageOutputItem, NodeOutput } from '../types/execution';
 import { parseDataUrl } from '../utils/dataUrl';
+import { generationErrorCopy } from '../utils/generationErrorCopy';
 import { resolveWorkflowInitUrl } from './resolveWorkflowInitUrl';
 
 export type OmniTurnResult = {
@@ -32,6 +33,8 @@ type ExecutionResult = {
   success: boolean;
   output?: NodeOutput;
   error?: string;
+  /** The Backend's classification of the failure, when it sent one. */
+  errorCode?: string;
 };
 
 export function useWorkflowExecution() {
@@ -129,6 +132,11 @@ export function useWorkflowExecution() {
         const decoder = new TextDecoder();
         let buffer = '';
         let finalOutput: NodeOutput | undefined;
+        // Held locally, NOT read back off streamState: this callback closes over the
+        // streamState of the render that created it, so the post-stream check below
+        // never saw the error it had just set and reported every backend failure as
+        // "No output received from generation".
+        let streamError: { message: string; code?: string } | undefined;
         // Sparse by design: keyed on the variation index the Backend stamps, so an
         // out-of-order or partially-failed batch still lands each image in its own slot.
         const imageVariations: Array<ImageOutputItem | undefined> = [];
@@ -174,6 +182,8 @@ export function useWorkflowExecution() {
                 bucket?: string;
                 mimeType?: string;
                 message?: string;
+                code?: string;
+                retryable?: boolean;
                 text?: string;
                 delta?: string;
                 progress?: number;
@@ -368,16 +378,11 @@ export function useWorkflowExecution() {
               }
 
               if (eventName === 'error') {
-                setStreamState((prev) => ({
-                  ...prev,
-                  status: 'error',
-                  error: parsed.message,
-                }));
-                show({
-                  title: 'Generation failed',
-                  description: parsed.message ?? 'Stream error',
-                  variant: 'error',
-                });
+                const message = parsed.message ?? 'Stream error';
+                streamError = { message, code: parsed.code };
+                setStreamState((prev) => ({ ...prev, status: 'error', error: message }));
+                const copy = generationErrorCopy(parsed.code, message);
+                show({ title: copy.title, description: copy.guidance, variant: 'error' });
               }
 
               if (eventName === 'complete') {
@@ -423,8 +428,8 @@ export function useWorkflowExecution() {
           return { success: true, output: finalOutput };
         }
 
-        if (streamState.status === 'error') {
-          return { success: false, error: streamState.error || 'Unknown stream error' };
+        if (streamError) {
+          return { success: false, error: streamError.message, errorCode: streamError.code };
         }
 
         return { success: false, error: 'No output received from generation' };
@@ -448,7 +453,7 @@ export function useWorkflowExecution() {
         activeReadersRef.current.delete(nodeId);
       }
     },
-    [streamState.status, streamState.error, show],
+    [show],
   );
 
   const executeGeneration = useCallback(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { applyOrganicFrame } from './applyOrganicFrame';
-import type { AgentJobState } from './types';
-import { initialPanelState, panelReducer } from './useOrganicAgentReducer';
+import type { AgentJobState, ConversationMessage } from './types';
+import { initialPanelState, mergeRestoredMessages, panelReducer } from './useOrganicAgentReducer';
 
 describe('useOrganicAgentReducer', () => {
   it('hydrates jobs from a valid array payload', () => {
@@ -482,6 +482,112 @@ describe('SESSION_SWITCH', () => {
     expect(state.sessionId).toBe('fresh-session');
     expect(state.messages).toHaveLength(0);
     expect(state.isHydrated).toBe(true);
+  });
+
+  // The panel fires history hydration on mount without waiting for the composer, so the
+  // page can land AFTER the user has typed. A full reset then deleted their message, the
+  // empty assistant bubble, and the streamingMessageId the deltas attach to — the turn
+  // answered into nothing.
+  it('preserves an in-flight turn when it re-hydrates the session already on screen', () => {
+    const submitted = panelReducer(
+      { ...initialPanelState(), sessionId: 'same-session', isHydrated: true },
+      { type: 'SUBMIT_USER_MESSAGE', content: 'How did last week do?', messageId: 'user-1' },
+    );
+    const streamingMessageId = submitted.streamingMessageId;
+    expect(streamingMessageId).not.toBeNull();
+
+    const hydrated = panelReducer(submitted, {
+      type: 'SESSION_SWITCH',
+      sessionId: 'same-session',
+      messages: [],
+    });
+
+    expect(hydrated.streamingMessageId).toBe(streamingMessageId);
+    expect(hydrated.messages.map((m) => m.id)).toEqual(['user-1', streamingMessageId as string]);
+    expect(hydrated.messages[0].content).toBe('How did last week do?');
+    expect(hydrated.messages[1].role).toBe('assistant');
+    expect(hydrated.isHydrated).toBe(true);
+  });
+
+  it('merges server history under an in-flight turn on the same session', () => {
+    const submitted = panelReducer(
+      {
+        ...initialPanelState(),
+        sessionId: 'same-session',
+        isHydrated: true,
+        messages: [{ id: 'old-1', role: 'user', content: 'first question' }],
+      },
+      { type: 'SUBMIT_USER_MESSAGE', content: 'second question', messageId: 'user-2' },
+    );
+
+    const hydrated = panelReducer(submitted, {
+      type: 'SESSION_SWITCH',
+      sessionId: 'same-session',
+      messages: [
+        { id: 'old-1', role: 'user', content: 'first question' },
+        { id: 'old-2', role: 'assistant', content: 'first answer' },
+      ],
+    });
+
+    expect(hydrated.messages.map((m) => m.id)).toEqual([
+      'old-1',
+      'old-2',
+      'user-2',
+      submitted.streamingMessageId as string,
+    ]);
+    expect(hydrated.streamingMessageId).toBe(submitted.streamingMessageId);
+  });
+
+  it('still fully resets when the switch is to a different session', () => {
+    const submitted = panelReducer(
+      { ...initialPanelState(), sessionId: 'session-a', isHydrated: true },
+      { type: 'SUBMIT_USER_MESSAGE', content: 'typed into A', messageId: 'user-a' },
+    );
+
+    const switched = panelReducer(submitted, {
+      type: 'SESSION_SWITCH',
+      sessionId: 'session-b',
+      messages: [],
+    });
+
+    expect(switched.sessionId).toBe('session-b');
+    expect(switched.messages).toEqual([]);
+    expect(switched.streamingMessageId).toBeNull();
+  });
+});
+
+describe('mergeRestoredMessages', () => {
+  const user = (id: string, content = id): ConversationMessage => ({
+    id,
+    role: 'user',
+    content,
+  });
+
+  it('takes the server page when there is nothing local', () => {
+    const restored = [user('a'), user('b')];
+    expect(mergeRestoredMessages([], restored)).toEqual(restored);
+  });
+
+  it('keeps a local-only in-flight message the server page does not have yet', () => {
+    const merged = mergeRestoredMessages([user('a'), user('live')], [user('a')]);
+    expect(merged.map((m) => m.id)).toEqual(['a', 'live']);
+  });
+
+  it('dedupes by id and lets the server version win for shared history', () => {
+    const merged = mergeRestoredMessages(
+      [user('a', 'local copy')],
+      [user('a', 'server copy'), user('b')],
+    );
+    expect(merged).toHaveLength(2);
+    expect(merged[0].content).toBe('server copy');
+  });
+
+  it('keeps earlier local-only messages ahead of the server page rather than moving them last', () => {
+    const merged = mergeRestoredMessages(
+      [user('older'), user('a'), user('live')],
+      [user('a'), user('b')],
+    );
+    expect(merged.map((m) => m.id)).toEqual(['older', 'a', 'b', 'live']);
   });
 });
 

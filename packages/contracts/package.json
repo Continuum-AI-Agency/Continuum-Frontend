@@ -21,6 +21,7 @@
     "./streaming/media": "./src/streaming/media.ts",
     "./streaming/competitor-spy": "./src/streaming/competitor-spy.ts",
     "./media": "./src/media/index.ts",
+    "./media-stream": "./src/media-stream/index.ts",
     "./documents": "./src/documents/index.ts",
     "./competitor-spy": "./src/competitor-spy/index.ts",
     "./organic": "./src/organic/index.ts",

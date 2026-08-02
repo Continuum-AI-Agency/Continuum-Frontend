@@ -99,6 +99,7 @@ mock.module('./DraftHoverCardContent', () => ({
   DraftHoverCardContent: () => <div data-testid="hover-preview" />,
 }));
 
+import { DRAFT_STATUS_PRESENTATION } from './draft-card-styles';
 import { OrganicListView } from './OrganicListView';
 import type { OrganicCalendarDay, OrganicCalendarDraft } from './types';
 
@@ -320,5 +321,28 @@ describe('OrganicListView', () => {
     for (const row of rows) {
       expect(row.getAttribute('tabindex')).toBe('0');
     }
+  });
+
+  // The list row used to carry its OWN status table — a third, contradicting copy: it
+  // called a seeded draft "Draft" and drew both scheduled and published in emerald.
+  describe('status pill', () => {
+    // The shared pill announces the canonical hint, which the row's section headings do
+    // not — so this finds the pill itself rather than any heading that shares its word.
+    const statusPill = (status: OrganicCalendarDraft['status']) =>
+      screen.getByLabelText(DRAFT_STATUS_PRESENTATION[status].hint);
+
+    it('says "Seeded" for a placeholder — the local table called it "Draft"', () => {
+      renderList({ days: [makeDay([makeDraft({ status: 'placeholder' })])] });
+
+      expect(statusPill('placeholder').textContent).toBe('Seeded');
+    });
+
+    it('reads every status word from the canonical table', () => {
+      for (const status of ['draft', 'scheduled', 'streaming', 'published', 'failed'] as const) {
+        cleanup();
+        renderList({ days: [makeDay([makeDraft({ status })])] });
+        expect(statusPill(status).textContent).toBe(DRAFT_STATUS_PRESENTATION[status].label);
+      }
+    });
   });
 });

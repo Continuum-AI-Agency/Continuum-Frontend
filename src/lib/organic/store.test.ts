@@ -87,16 +87,65 @@ describe('useCalendarStore', () => {
     expect(useCalendarStore.getState().gridStatus).toBe('complete_with_errors');
   });
 
-  it('clears the entire calendar', () => {
-    const d1 = createDraft('d1');
-    useCalendarStore.getState().addDraft('day-1', d1);
-    useCalendarStore.getState().setGridStatus('complete');
+  // "Clear view" is a lens, not a delete. It used to empty `days[].slots`, which read as
+  // total loss of work — and reset the workflow rail and the planning banner with it.
+  describe('clearView', () => {
+    it('hides the view without touching the drafts', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+      useCalendarStore.getState().setGridStatus('complete');
 
-    useCalendarStore.getState().clearCalendar();
+      useCalendarStore.getState().clearView();
 
-    const state = useCalendarStore.getState();
-    expect(state.days[0]?.slots).toHaveLength(0);
-    expect(state.gridStatus).toBe('idle');
+      const state = useCalendarStore.getState();
+      expect(state.isViewCleared).toBe(true);
+      expect(state.days[0]?.slots.map((slot) => slot.id)).toEqual(['d1']);
+      expect(state.gridStatus).toBe('complete');
+    });
+
+    it('drops the selection, because a hidden draft cannot stay in the preview', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+      useCalendarStore.getState().beginEditingDraft('d1');
+      useCalendarStore.getState().setSelectedDraftIds(['d1']);
+
+      useCalendarStore.getState().clearView();
+
+      const state = useCalendarStore.getState();
+      expect(state.selectedDraftId).toBeNull();
+      expect(state.editingDraftId).toBeNull();
+      expect(state.selectedDraftIds).toEqual([]);
+    });
+
+    it('is undone by restoreView', () => {
+      useCalendarStore.getState().clearView();
+      useCalendarStore.getState().restoreView();
+
+      expect(useCalendarStore.getState().isViewCleared).toBe(false);
+    });
+
+    it.each([
+      ['setDays', () => useCalendarStore.getState().setDays([])],
+      ['setDateRange', () => useCalendarStore.getState().setDateRange(null)],
+      ['setViewMode', () => useCalendarStore.getState().setViewMode('list')],
+      ['resetForBrandSwitch', () => useCalendarStore.getState().resetForBrandSwitch()],
+    ])('is reset by %s', (_name, act) => {
+      useCalendarStore.getState().clearView();
+
+      act();
+
+      expect(useCalendarStore.getState().isViewCleared).toBe(false);
+    });
+
+    // A grid the user hid must come back on reload; a hidden planner that survives a
+    // refresh is indistinguishable from a planner that lost its posts.
+    it('is absent from the persisted state', () => {
+      useCalendarStore.getState().clearView();
+
+      const partialize = useCalendarStore.persist.getOptions().partialize;
+      if (!partialize) throw new Error('the calendar store lost its partialize');
+      const persisted = partialize(useCalendarStore.getState()) as Record<string, unknown>;
+
+      expect(Object.keys(persisted)).not.toContain('isViewCleared');
+    });
   });
 
   it('strips backendDraftId when duplicating a draft', () => {
@@ -242,9 +291,9 @@ describe('useCalendarStore', () => {
       expect(useCalendarStore.getState().editingDraftId).toBe('d1');
     });
 
-    it('clears on clearCalendar and on a brand switch', () => {
+    it('clears on clearView and on a brand switch', () => {
       useCalendarStore.getState().beginEditingDraft('d1');
-      useCalendarStore.getState().clearCalendar();
+      useCalendarStore.getState().clearView();
       expect(useCalendarStore.getState().editingDraftId).toBeNull();
 
       useCalendarStore.getState().beginEditingDraft('d1');

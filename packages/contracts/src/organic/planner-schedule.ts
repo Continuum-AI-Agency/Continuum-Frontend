@@ -19,6 +19,17 @@ import { z } from 'zod';
 /** A past target floors to this far into the future rather than publishing instantly. */
 export const PLANNER_PAST_GUARD_FLOOR_MS = 5 * 60 * 1000;
 
+/**
+ * The hour a draft lands on when nobody has chosen one.
+ *
+ * Every path that creates a draft has to agree on this. They previously did not:
+ * manual creation used `9:00 AM`, the AI composer hardcoded noon UTC (a different
+ * wall-clock hour in every zone), a trend drop used `09:00`, and the browser
+ * autosave wrote a date with no time at all — which Postgres coerced to midnight
+ * and the panel then rendered back as "12:00 AM", the worst possible posting time.
+ */
+export const PLANNER_DEFAULT_TIME_OF_DAY: PlannerTimeOfDay = '09:00';
+
 /** The Planner's day identity: a bare calendar day, `YYYY-MM-DD`. */
 export const plannerDayIdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'day must be YYYY-MM-DD');
 export type PlannerDayId = z.infer<typeof plannerDayIdSchema>;
@@ -86,6 +97,21 @@ export function formatPlannerTimeOfDay(clock: PlannerClock): PlannerTimeOfDay {
   const hour = String(clock.hour).padStart(2, '0');
   const minute = String(clock.minute).padStart(2, '0');
   return `${hour}:${minute}`;
+}
+
+/**
+ * `17:30` as the planner's display label, `5:30 PM`.
+ *
+ * Shared because the browser previously derived this label by slicing an ISO
+ * string's literal `HH:MM` — i.e. reading a UTC wall clock — so every draft stored
+ * as a `+00` timestamptz rendered in the wrong zone, and a midnight one rendered
+ * as the notorious "12:00 AM".
+ */
+export function toPlannerTimeLabel(timeOfDay: string | null | undefined): string {
+  const clock = parsePlannerTimeOfDay(timeOfDay) ?? { hour: 9, minute: 0 };
+  const suffix = clock.hour >= 12 ? 'PM' : 'AM';
+  const hour = clock.hour % 12 || 12;
+  return `${hour}:${String(clock.minute).padStart(2, '0')} ${suffix}`;
 }
 
 interface PlannerDayParts {
@@ -186,6 +212,24 @@ export function plannerInstantFromDayTime(input: PlannerInstantInput): string | 
   const secondOffset = zoneOffsetMs(candidate, timeZone);
   const resolved = firstOffset === secondOffset ? candidate : naive - secondOffset;
   return new Date(resolved).toISOString();
+}
+
+/**
+ * The instant a day's DEFAULT posting time names in a zone, floored into the
+ * future. The one composition every "create a draft on this day" path uses, so a
+ * manual create, an AI-composer create and a trend drop all land on the same hour.
+ */
+export function plannerDefaultInstant(
+  dayId: string,
+  timeZone?: string | null,
+  options: PlannerFutureFloorOptions = {},
+): string | null {
+  const composed = plannerInstantFromDayTime({
+    dayId,
+    timeOfDay: PLANNER_DEFAULT_TIME_OF_DAY,
+    timeZone,
+  });
+  return composed ? applyPlannerFutureFloor(composed, options) : null;
 }
 
 /** The wall-clock `HH:mm` an instant reads as in a zone. */

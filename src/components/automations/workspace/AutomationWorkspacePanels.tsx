@@ -556,6 +556,7 @@ export function WebhookManager({
 
 export function WorkflowInspector({
   selected,
+  brandId,
   locked,
   validation,
   execution,
@@ -571,6 +572,12 @@ export function WorkflowInspector({
   onMessage,
 }: {
   selected: AutomationWorkflowNode | null;
+  /**
+   * Forwarded to every action picker. Without it each one falls back to its
+   * raw-id text field, which is the documented degrade path for an outage —
+   * not something a user should meet on the happy path.
+   */
+  brandId?: string;
   locked: boolean;
   validation: AutomationWorkflowValidation | null;
   execution?: WorkflowNodeExecutionView;
@@ -681,6 +688,7 @@ export function WorkflowInspector({
               <Label>Configuration</Label>
               <NodeConfigurationEditor
                 node={selected}
+                brandId={brandId}
                 disabled={locked}
                 sourceCapabilities={sourceCapabilities}
                 webhookDestinations={webhookDestinations}

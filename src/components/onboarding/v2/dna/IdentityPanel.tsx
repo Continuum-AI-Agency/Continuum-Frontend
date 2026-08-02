@@ -106,8 +106,8 @@ export function IdentityPanel({
           <SubsectionHeader title="Palette" chip={brandIdentityChip} />
           {resolved.colors.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {resolved.colors.map((hex) => (
-                <ColorSwatch key={hex} hex={hex} />
+              {resolved.colors.map((hex, index) => (
+                <ColorSwatch key={`${hex}-${index}`} hex={hex} />
               ))}
             </div>
           ) : (
@@ -119,8 +119,8 @@ export function IdentityPanel({
           <SubsectionHeader title="Typography" chip={brandIdentityChip} />
           {resolved.typography.primary || resolved.typography.secondary ? (
             <div className="flex gap-5">
-              <FontSample family={resolved.typography.primary} role="Primary" weight={700} />
-              <FontSample family={resolved.typography.secondary} role="Secondary" weight={400} />
+              <FontSample family={resolved.typography.primary} label="Primary" weight={700} />
+              <FontSample family={resolved.typography.secondary} label="Secondary" weight={400} />
             </div>
           ) : (
             <p className="text-sm italic text-muted-foreground">No fonts detected.</p>

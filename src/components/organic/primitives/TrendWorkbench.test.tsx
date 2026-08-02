@@ -229,6 +229,65 @@ describe('TrendWorkbench', () => {
     expect(screen.queryByLabelText('Generate content from this trend')).toBeNull();
   });
 
+  // A fetch failure, a brand with nothing analysed yet, and a search that matched nothing
+  // are three different facts. All three used to render "No trends match this search."
+  describe('empty states', () => {
+    it('reports a fetch failure and offers a retry', () => {
+      const onFetch = mock();
+      render(
+        <TrendWorkbench
+          trends={[]}
+          selectedTrendIds={[]}
+          activePlatforms={['instagram']}
+          onToggleTrend={mock()}
+          onFetch={onFetch}
+          insightsError="Upstream insights service returned 503"
+        />,
+      );
+
+      expect(screen.getByTestId('trend-workbench-error')).toBeTruthy();
+      expect(screen.getByText('Upstream insights service returned 503')).toBeTruthy();
+      expect(screen.queryByText('No trends match this search.')).toBeNull();
+
+      fireEvent.click(screen.getByText('Retry'));
+      expect(onFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('says the sector has not been analysed when there is nothing to show', () => {
+      render(
+        <TrendWorkbench
+          trends={[]}
+          selectedTrendIds={[]}
+          activePlatforms={['instagram']}
+          onToggleTrend={mock()}
+          onFetch={mock()}
+        />,
+      );
+
+      expect(screen.getByTestId('trend-workbench-empty')).toBeTruthy();
+      expect(screen.queryByText('No trends match this search.')).toBeNull();
+      expect(screen.queryByTestId('trend-workbench-error')).toBeNull();
+    });
+
+    it('says no match only when a non-empty set was filtered to nothing', () => {
+      render(
+        <TrendWorkbench
+          trends={trends}
+          selectedTrendIds={[]}
+          activePlatforms={['instagram']}
+          onToggleTrend={mock()}
+        />,
+      );
+
+      fireEvent.change(screen.getByPlaceholderText('Search trends • type / for presets'), {
+        target: { value: 'nothing here matches' },
+      });
+
+      expect(screen.getByTestId('trend-workbench-no-match')).toBeTruthy();
+      expect(screen.queryByTestId('trend-workbench-empty')).toBeNull();
+    });
+  });
+
   it('applies premade filters via slash command presets', () => {
     render(
       <TrendWorkbench

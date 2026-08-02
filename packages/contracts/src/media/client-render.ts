@@ -95,6 +95,21 @@ export const organicHyperframeClientRenderSpecSchema = z
     durationSeconds: z.number().positive(),
     width: z.number().int().positive(),
     height: z.number().int().positive(),
+    // Library assets the composition embeds as hf-asset://<id>. Carried as ids,
+    // not URLs, because the browser re-signs them at render time — a signature
+    // minted when the draft was written is long dead by then. Absent on
+    // compositions that embed no media.
+    assets: z
+      .array(
+        z
+          .object({
+            assetId: databaseUuidSchema,
+            kind: z.enum(['image', 'video', 'audio']),
+          })
+          .strict(),
+      )
+      .max(20)
+      .optional(),
     origin: renderOriginSchema,
   })
   .strict();

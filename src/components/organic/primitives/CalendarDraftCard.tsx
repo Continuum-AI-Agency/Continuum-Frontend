@@ -14,8 +14,10 @@ import { GalleryHorizontalEnd } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import Image from 'next/image';
 import * as React from 'react';
+import { useApproveScheduleDraft } from '@/components/organic/hooks/useApproveScheduleDraft';
 import { useProgressAnimation } from '@/components/organic/hooks/useProgressAnimation';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
+import { useUnscheduleDraft } from '@/components/organic/hooks/useUnscheduleDraft';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -30,6 +32,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isCarouselFormat, resolveCarouselSlideCount } from '@/lib/organic/carousel';
+import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { inferPublishPlatform } from '@/lib/organic/publish-utils';
 import { isValidTimeLabel, normalizeTimeLabel } from '@/lib/organic/scheduling';
@@ -121,6 +124,7 @@ export function CalendarDraftCard({
   onEnrich,
   onRealize,
   onStitch,
+  isDragging = false,
   onMouseEnter,
   onMouseLeave,
 }: {
@@ -138,6 +142,8 @@ export function CalendarDraftCard({
   onRealize?: (draftId: string) => void;
   /** Opens the shared render inbox for already-generated reel clips. */
   onStitch?: (draftId: string) => void;
+  /** From `useDraftDragHandle`. A pointer-up that ended a drag is not a selection click. */
+  isDragging?: boolean;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }) {
@@ -158,17 +164,23 @@ export function CalendarDraftCard({
   const [duplicatePickerOpen, setDuplicatePickerOpen] = React.useState(false);
   const [pendingTime, setPendingTime] = React.useState(draft.timeLabel);
   const [timeError, setTimeError] = React.useState<string | null>(null);
+  const [isHoverPreviewOpen, setIsHoverPreviewOpen] = React.useState(false);
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
   const { requestDraftDeletion } = useDraftDeletionConfirmation();
   const duplicateDraft = useCalendarStore((state) => state.duplicateDraft);
   const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
   const { publish, isPublishing } = usePublishDraft();
+  const { approveAndSchedule, isApproving } = useApproveScheduleDraft();
+  const { unschedule, isUnscheduling } = useUnscheduleDraft();
   const displayProgress = useProgressAnimation(draft.progress, draft.generationStage);
   const openInStudio = useOpenDraftInAiStudio();
   const publishPlatform = inferPublishPlatform(draft);
   const canPublish =
     publishPlatform !== null && draft.status !== 'published' && draft.status !== 'streaming';
+  // usePublishDraft enforces this; naming it here turns a click that silently refuses into
+  // a disabled item that says why.
+  const publishBlockedReason = evaluateDraftReadiness(draft).reason;
 
   const accentColor = resolvePlatformAccentColor(platform);
   const statusPresentation = draftStatusPresentation(draft.status);
@@ -207,6 +219,11 @@ export function CalendarDraftCard({
     draft.status !== 'placeholder' &&
     draft.status !== 'published';
   const showHoverPreview = draft.status !== 'streaming' && draft.status !== 'placeholder';
+
+  // Drag start has to close an already-open preview, not merely refuse to open a new one.
+  React.useEffect(() => {
+    if (isDragging) setIsHoverPreviewOpen(false);
+  }, [isDragging]);
 
   // Selection only — a quick edit (time preset, retry) should bring the draft into
   // the panel, not force the panel into edit mode.
@@ -262,6 +279,10 @@ export function CalendarDraftCard({
                 // Selecting a card must not also focus its day — the enclosing cell
                 // treats a click as "focus this day" for context-free create actions.
                 e.stopPropagation();
+                // A drag ends in a click on the card it started from. Without this the
+                // 8px activation threshold was the only thing separating "move this post"
+                // from "open this post", so any drag also swapped the preview panel.
+                if (isDragging) return;
                 if (e.shiftKey) {
                   onToggleSelection(draft.id);
                 } else {
@@ -324,9 +345,9 @@ export function CalendarDraftCard({
               <div className="relative z-10 pl-1">
                 {/* Header row: time | multi-select | regen | status pill. The row wraps so the
                     readable pill survives the narrowest planner column instead of being clipped. */}
-                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-2xs uppercase tracking-wider text-muted-foreground/70 font-bold">
+                <div className="mb-1.5 flex min-w-0 flex-wrap items-center justify-between gap-y-1">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-2xs uppercase tracking-wider text-muted-foreground/70 font-bold">
                       {draft.timeLabel}
                     </span>
                     {draft.titleTopic && (
@@ -569,8 +590,10 @@ export function CalendarDraftCard({
                     <MediaStagePill mediaStage="failed" />
                   </p>
                 ) : isTextOnlyDraft ? (
-                  <p className="mt-1.5 flex items-center gap-1.5">
-                    <span className="text-2xs italic text-muted-foreground/60">
+                  // The row wraps and the sentence truncates so the action keeps its full
+                  // width at the narrowest planner column — it used to render as "En…".
+                  <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className="min-w-0 truncate text-2xs italic text-muted-foreground/60">
                       Text only — no media yet
                     </span>
                     {onEnrich && draft.backendDraftId ? (
@@ -662,24 +685,18 @@ export function CalendarDraftCard({
             Time: Custom...
           </ContextMenuItem>
           <ContextMenuItem
-            disabled={!canMarkScheduled}
-            onSelect={() =>
-              canMarkScheduled &&
-              applyQuickEdit((currentDraft) => ({
-                ...currentDraft,
-                status: 'scheduled',
-              }))
-            }
+            disabled={!canMarkScheduled || isApproving}
+            onSelect={() => {
+              if (canMarkScheduled) void approveAndSchedule(draft);
+            }}
           >
             Approve & Schedule
           </ContextMenuItem>
           <ContextMenuItem
-            onSelect={() =>
-              applyQuickEdit((currentDraft) => ({
-                ...currentDraft,
-                status: 'draft',
-              }))
-            }
+            disabled={isUnscheduling}
+            onSelect={() => {
+              void unschedule(draft);
+            }}
           >
             Move back to draft
           </ContextMenuItem>
@@ -697,7 +714,11 @@ export function CalendarDraftCard({
             </ContextMenuItem>
           ) : null}
           {canPublish ? (
-            <ContextMenuItem disabled={isPublishing} onSelect={() => publish(draft)}>
+            <ContextMenuItem
+              disabled={isPublishing || publishBlockedReason !== null}
+              title={publishBlockedReason ?? undefined}
+              onSelect={() => publish(draft)}
+            >
               <svg
                 aria-hidden="true"
                 viewBox="0 0 24 24"
@@ -711,7 +732,9 @@ export function CalendarDraftCard({
               </svg>
               {isPublishing
                 ? 'Publishing…'
-                : `Publish to ${PUBLISH_PLATFORM_LABELS[publishPlatform ?? 'instagram']}`}
+                : publishBlockedReason
+                  ? `Publish to ${PUBLISH_PLATFORM_LABELS[publishPlatform ?? 'instagram']} — needs setup`
+                  : `Publish to ${PUBLISH_PLATFORM_LABELS[publishPlatform ?? 'instagram']}`}
             </ContextMenuItem>
           ) : null}
           {openInStudio && draft.status !== 'streaming' && draft.status !== 'placeholder' ? (
@@ -776,7 +799,17 @@ export function CalendarDraftCard({
   );
 
   const cardWithHover = showHoverPreview ? (
-    <HoverCard openDelay={400} closeDelay={120}>
+    // Controlled so a press-and-hold cannot pop the 272px preview under the cursor before
+    // the drag sensor's 8px threshold is crossed — the preview then swallowed the drag.
+    <HoverCard
+      open={isHoverPreviewOpen}
+      onOpenChange={(next) => {
+        if (isDragging) return;
+        setIsHoverPreviewOpen(next);
+      }}
+      openDelay={400}
+      closeDelay={120}
+    >
       <HoverCardTrigger asChild>{triggerButton}</HoverCardTrigger>
       <HoverCardContent
         side="right"

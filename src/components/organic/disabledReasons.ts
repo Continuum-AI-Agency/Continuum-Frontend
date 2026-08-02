@@ -19,17 +19,19 @@ export function describeAddPlaceholderBlock(input: { isGenerating: boolean }): D
   return null;
 }
 
+// "Clear view" hides posts from the planner's views; it deletes nothing. The copy has to
+// say so, or a disabled tooltip re-introduces the fear the control itself just shed.
 export function describeClearBlock(input: {
   isGenerating: boolean;
   draftsCount: number;
 }): DisabledHint | null {
   if (input.isGenerating) {
     return {
-      reason: 'Generation is running. Clearing is paused until it finishes.',
+      reason: 'Generation is running. Hiding posts is paused until it finishes.',
     };
   }
   if (input.draftsCount === 0) {
-    return { reason: 'There are no drafts on the calendar to clear yet.' };
+    return { reason: 'There are no posts in this view to hide yet.' };
   }
   return null;
 }

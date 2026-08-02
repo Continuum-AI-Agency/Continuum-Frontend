@@ -1,5 +1,20 @@
-import type { AgentDelegatedFrameData } from '@continuum/contracts';
-import { agentDelegatedFrameDataSchema } from '@continuum/contracts';
+import type {
+  AgentDelegatedFrameData,
+  JainaToolApprovalRequiredPayload,
+  JainaToolApprovalResolvedPayload,
+  JainaToolOutputDeniedPayload,
+  PaidScaffoldProgressPayload,
+  PaidScaffoldReceiptPayload,
+} from '@continuum/contracts';
+import {
+  agentDelegatedFrameDataSchema,
+  jainaToolApprovalRequiredPayloadSchema,
+  jainaToolApprovalResolvedPayloadSchema,
+  jainaToolOutputDeniedPayloadSchema,
+  paidScaffoldProgressPayloadSchema,
+  paidScaffoldProposedPayloadSchema,
+  paidScaffoldReceiptPayloadSchema,
+} from '@continuum/contracts';
 import { z } from 'zod';
 import type { JainaPlan } from '@/components/paid-media/jaina/types';
 import type { CampaignCanvasActionsEnvelope } from '@/lib/campaign-canvas/agent-actions';
@@ -8,6 +23,7 @@ import {
   adkEventSchema,
   agentCompleteEventSchema,
   agentEnvelopeSchema,
+  agentNarrationEventSchema,
   agentSpawnEventSchema,
   artifactDeltaSchema,
   type CheckpointBlockV2,
@@ -74,10 +90,16 @@ import {
   unwrapReportEnvelope,
 } from './unwrapping';
 
-// Block categories the Backend streams progressively as `response.block.delta`
-// previews. Others (metric_grid/insight_list/comparison) arrive only in the
-// final checkpoint report, so they are ignored mid-stream.
-const STREAMABLE_V2_DELTA_CATEGORIES = new Set(['chart', 'data_table']);
+// Every complete V2 block may arrive as a progressive preview. The final
+// checkpoint report remains authoritative and replaces these snapshots.
+const STREAMABLE_V2_DELTA_CATEGORIES = new Set([
+  'narrative',
+  'metric_grid',
+  'chart',
+  'data_table',
+  'insight_list',
+  'comparison',
+]);
 
 export type JainaStreamStatus = 'idle' | 'starting' | 'streaming' | 'complete' | 'error';
 
@@ -88,6 +110,8 @@ export type ActiveWorkerInfo = {
   lastToolState?: 'calling' | 'returned' | 'cached' | 'failed';
   outputBytes?: number;
   error?: string;
+  /** What this worker has reported so far, appended in arrival order. */
+  narration?: string[];
 };
 
 const compatibilityStreamEventSchema = z
@@ -181,6 +205,42 @@ export type JainaStreamState = {
    * the CALLER here: each entry renders as an "⇄ Asked Organic" transcript card.
    */
   delegations: AgentDelegatedFrameData[];
+  /** Approval gates this turn is waiting on, deduped by approvalId. */
+  pendingToolApprovals: JainaToolApprovalRequiredPayload[];
+  /** Resolutions keyed by approvalId, so a replayed 'required' cannot resurrect one. */
+  resolvedApprovals: Record<string, JainaToolApprovalResolvedPayload>;
+  deniedToolOutputs: JainaToolOutputDeniedPayload[];
+  scaffold: JainaScaffoldState | null;
+};
+
+export type JainaScaffoldNodeProgress = {
+  step: string;
+  status: 'started' | 'succeeded' | 'failed' | 'skipped';
+  entityId: string | null;
+  message: string | null;
+  index?: number;
+  total?: number;
+};
+
+export type JainaScaffoldState = {
+  /** `paid_scaffold_versions.id` — the key the node rows are filtered on. */
+  scaffoldId: string;
+  parentScaffoldId?: string;
+  brandId?: string;
+  adAccountId?: string | null;
+  approvalId?: string | null;
+  /** Ids + counts + a campaign skeleton. The rows come from Postgres, not from here. */
+  plan: unknown;
+  summary?: { campaigns?: number; adSets?: number; ads?: number };
+  /**
+   * Latest progress per node, keyed on `pathKey`. A MAP AND NOT AN ARRAY: a 50-ad-set
+   * build emits ~300 frames, and `useProjectedJainaRun` re-folds the entire durable
+   * log from scratch on every reattach. A keyed merge makes that fold idempotent by
+   * construction; an append would grow without bound on every replay.
+   */
+  progressByNode: Record<string, JainaScaffoldNodeProgress>;
+  lastProgress: { index?: number; total?: number } | null;
+  receipt: PaidScaffoldReceiptPayload | null;
 };
 
 export function createInitialJainaStreamState(): JainaStreamState {
@@ -213,6 +273,10 @@ export function createInitialJainaStreamState(): JainaStreamState {
     blockDeltasV2: [],
     reportArtifactJob: null,
     delegations: [],
+    pendingToolApprovals: [],
+    resolvedApprovals: {},
+    deniedToolOutputs: [],
+    scaffold: null,
   };
 }
 
@@ -780,10 +844,27 @@ export function normalizeCheckpointReportPayload(value: unknown): FrontendCheckp
       .filter((item): item is Record<string, unknown> => Boolean(item))
       .map((objective) => ({
         id: getNonEmptyString(objective.id) ?? '',
+        objective_key: getNonEmptyString(objective.objective_key) ?? null,
         title: getNonEmptyString(objective.title) ?? '',
+        description: getNonEmptyString(objective.description) ?? null,
         status: normalizeObjectiveStatus(objective.status),
         scope: getNonEmptyString(objective.scope) ?? null,
+        reason_code: getNonEmptyString(objective.reason_code) ?? null,
         details: getNonEmptyString(objective.details) ?? null,
+        attempt_count:
+          typeof objective.attempt_count === 'number' &&
+          Number.isInteger(objective.attempt_count) &&
+          objective.attempt_count >= 0
+            ? objective.attempt_count
+            : 0,
+        version:
+          typeof objective.version === 'number' &&
+          Number.isInteger(objective.version) &&
+          objective.version >= 0
+            ? objective.version
+            : 0,
+        not_before: getNonEmptyString(objective.not_before) ?? null,
+        last_attempt_at: getNonEmptyString(objective.last_attempt_at) ?? null,
         created_at: getNonEmptyString(objective.created_at) ?? new Date().toISOString(),
         updated_at: getNonEmptyString(objective.updated_at) ?? new Date().toISOString(),
       })),
@@ -1244,7 +1325,19 @@ function normalizeObjectiveStatus(value: unknown): JainaObjectiveStatus {
   if (['in_progress', 'in-progress', 'running', 'active', 'started'].includes(raw)) {
     return 'in_progress';
   }
-  if (['failed', 'error', 'errored', 'cancelled', 'canceled', 'blocked'].includes(raw)) {
+  if (['blocked', 'waiting', 'waiting_for_dependency'].includes(raw)) {
+    return 'blocked';
+  }
+  if (['deferred', 'retry_wait', 'scheduled'].includes(raw)) {
+    return 'deferred';
+  }
+  if (['partial', 'partially_completed'].includes(raw)) {
+    return 'partial';
+  }
+  if (['cancelled', 'canceled'].includes(raw)) {
+    return 'cancelled';
+  }
+  if (['failed', 'error', 'errored'].includes(raw)) {
     return 'failed';
   }
   return 'pending';
@@ -1271,9 +1364,26 @@ function normalizeObjectiveFromRecord(
   return {
     id,
     title,
-    description:
-      getNonEmptyString(record.description) ?? getNonEmptyString(record.summary) ?? undefined,
+    description: getNonEmptyString(record.description) ?? getNonEmptyString(record.summary) ?? null,
     status: normalizeObjectiveStatus(record.status),
+    objective_key: getNonEmptyString(record.objective_key) ?? null,
+    scope: getNonEmptyString(record.scope) ?? null,
+    reason_code: getNonEmptyString(record.reason_code) ?? null,
+    details: getNonEmptyString(record.details) ?? null,
+    attempt_count:
+      typeof record.attempt_count === 'number' &&
+      Number.isInteger(record.attempt_count) &&
+      record.attempt_count >= 0
+        ? record.attempt_count
+        : 0,
+    version:
+      typeof record.version === 'number' && Number.isInteger(record.version) && record.version >= 0
+        ? record.version
+        : 0,
+    not_before: getNonEmptyString(record.not_before) ?? null,
+    last_attempt_at: getNonEmptyString(record.last_attempt_at) ?? null,
+    created_at: getNonEmptyString(record.created_at),
+    updated_at: getNonEmptyString(record.updated_at),
   };
 }
 
@@ -1285,21 +1395,16 @@ function dedupeObjectives(objectives: JainaObjective[]): JainaObjective[] {
   return Array.from(map.values());
 }
 
-const snapshotObjectiveStatusRank: Record<JainaObjectiveStatus, number> = {
+const legacyObjectiveStatusRank: Record<JainaObjectiveStatus, number> = {
   pending: 0,
+  deferred: 1,
+  blocked: 2,
   in_progress: 1,
-  failed: 2,
-  completed: 3,
+  partial: 3,
+  failed: 3,
+  cancelled: 3,
+  completed: 4,
 };
-
-function mergeObjectiveSnapshotStatus(
-  existingStatus: JainaObjectiveStatus,
-  incomingStatus: JainaObjectiveStatus,
-): JainaObjectiveStatus {
-  return snapshotObjectiveStatusRank[incomingStatus] >= snapshotObjectiveStatusRank[existingStatus]
-    ? incomingStatus
-    : existingStatus;
-}
 
 function mergeObjectiveSnapshots(
   currentObjectives: JainaObjective[],
@@ -1332,7 +1437,17 @@ function mergeObjectiveSnapshots(
       id: targetId,
       title: incoming.title || existing.title,
       description: incoming.description ?? existing.description,
-      status: mergeObjectiveSnapshotStatus(existing.status, incoming.status),
+      status:
+        incoming.version > existing.version
+          ? incoming.status
+          : incoming.version < existing.version
+            ? existing.status
+            : incoming.version > 0 ||
+                legacyObjectiveStatusRank[incoming.status] >=
+                  legacyObjectiveStatusRank[existing.status]
+              ? incoming.status
+              : existing.status,
+      version: Math.max(existing.version, incoming.version),
     };
 
     byId.set(targetId, merged);
@@ -1342,21 +1457,94 @@ function mergeObjectiveSnapshots(
   return Array.from(byId.values());
 }
 
-function mergeExplicitObjectiveStatus(
-  existingStatus: JainaObjectiveStatus | undefined,
-  incomingStatus: JainaObjectiveStatus,
-): JainaObjectiveStatus {
-  if (existingStatus === 'completed' && incomingStatus !== 'completed') {
-    return 'completed';
-  }
-  return incomingStatus;
-}
-
 function looksLikePlanRecord(payload: Record<string, unknown>): boolean {
   const hasPlanId = typeof payload.plan_id === 'string' || typeof payload.id === 'string';
   const hasObjectives =
     Array.isArray(payload.objectives) || Array.isArray(payload.execution_objectives);
   return hasPlanId && hasObjectives;
+}
+
+/**
+ * Parses the markdown plan the Jaina runtime actually sends at plan-init
+ * (`renderObjectivePlanMarkdown`, orchestrator.ts). It arrives as ONE
+ * `response.plan.delta` about a second into a turn — the earliest moment Jaina can
+ * tell the user what she is about to do.
+ *
+ * It used to be dropped: the accumulated-delta parser runs `JSON.parse` (markdown
+ * throws) and the key/value parser bails on `!includes('=')` (the markdown has no
+ * `=`), so both returned null and the plan never rendered.
+ *
+ * Shape:
+ *   Plan: <title>
+ *   Intent: <intent> | Date: <date_preset> | Scope ceiling: <scope>
+ *
+ *   1. [<scope>] <task>[ depends on <ids>]
+ *      <description>
+ *      Why: <rationale>
+ *      Stop when: <success criteria>
+ */
+function parsePlanFromMarkdownDelta(delta: string, previous: JainaPlan | null): JainaPlan | null {
+  const trimmed = delta.trim();
+  // A plan ALWAYS opens with the `Plan:` header. Requiring it is what keeps ordinary
+  // assistant prose from being mistaken for a plan.
+  if (!trimmed || trimmed.startsWith('{') || trimmed.startsWith('[')) return null;
+  const lines = trimmed.split('\n');
+  const titleMatch = lines[0]?.match(/^Plan:\s*(.+)$/);
+  if (!titleMatch) return null;
+
+  const title = titleMatch[1].trim();
+  const metaMatch = trimmed.match(/^Intent:\s*(.+)$/m);
+  const description = metaMatch ? metaMatch[1].trim() : (previous?.description ?? '');
+
+  const steps: JainaPlan['steps'] = [];
+  let current: { title: string; description?: string; successCriteria?: string } | null = null;
+
+  const commitCurrent = () => {
+    if (!current) return;
+    steps.push({
+      title: current.title,
+      // Same precedence the JSON parser uses: an explicit description wins, and the
+      // success criteria stands in when the model wrote none.
+      description: current.description ?? current.successCriteria,
+      status: 'pending',
+    });
+    current = null;
+  };
+
+  for (const raw of lines.slice(1)) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    const objectiveMatch = line.match(/^\d+\.\s*(?:\[[^\]]*\]\s*)?(.+)$/);
+    if (objectiveMatch) {
+      commitCurrent();
+      // `depends on …` is dependency bookkeeping appended to the task sentence; it is
+      // not part of what the objective IS, so it does not belong in the step title.
+      current = { title: objectiveMatch[1].replace(/\s+depends on\s+.+$/i, '').trim() };
+      continue;
+    }
+    if (!current) continue;
+
+    const stopWhen = line.match(/^Stop when:\s*(.+)$/i);
+    if (stopWhen) {
+      current.successCriteria = stopWhen[1].trim();
+      continue;
+    }
+    // `Why:` is the model's rationale for itself, not a description of the work.
+    if (/^Why:\s*/i.test(line)) continue;
+    if (!current.description) current.description = line;
+  }
+  commitCurrent();
+
+  if (steps.length === 0) return null;
+
+  return {
+    id: previous?.id ?? 'plan-1',
+    title,
+    description,
+    status: previous?.status ?? 'pending',
+    steps,
+  };
 }
 
 function parsePlanFromKeyValueDelta(delta: string, previous: JainaPlan | null): JainaPlan | null {
@@ -1475,9 +1663,14 @@ function upsertObjective(
 
   const targetId = existingMatch?.id ?? normalized.id;
   const withTargetId: JainaObjective = {
+    ...existingMatch,
     ...normalized,
     id: targetId,
-    status: mergeExplicitObjectiveStatus(existingMatch?.status, normalized.status),
+    status:
+      existingMatch && normalized.version < existingMatch.version
+        ? existingMatch.status
+        : normalized.status,
+    version: Math.max(existingMatch?.version ?? 0, normalized.version),
   };
   const nextObjectives = currentObjectives.filter((objective) => objective.id !== targetId);
   nextObjectives.push(withTargetId);
@@ -1758,6 +1951,7 @@ export function reduceJainaStreamEvent(
       const nextPlanJson = `${state.planJson}${payload.delta}`;
       const nextPlan =
         parsePlanFromAccumulatedDelta(nextPlanJson, state.plan) ??
+        parsePlanFromMarkdownDelta(payload.delta, state.plan) ??
         parsePlanFromKeyValueDelta(payload.delta, state.plan);
       return {
         ...nextBase,
@@ -1883,7 +2077,7 @@ export function reduceJainaStreamEvent(
       const v2Parsed = responseBlockDeltaV2Schema.safeParse(event);
       if (v2Parsed.success && v2Parsed.data.data) {
         const v2Payload = v2Parsed.data.data;
-        // Contract: chart + data_table blocks stream progressively; skip others.
+        // Contract: every complete V2 block can stream progressively.
         if (
           v2Payload.block_category &&
           !STREAMABLE_V2_DELTA_CATEGORIES.has(v2Payload.block_category)
@@ -2669,6 +2863,47 @@ export function reduceJainaStreamEvent(
         ],
       };
     }
+    case 'agent.narration': {
+      const parsed = agentNarrationEventSchema.safeParse((event as { data?: unknown }).data ?? {});
+      if (!parsed.success || parsed.data.lines.length === 0) {
+        return nextBase;
+      }
+      const data = parsed.data;
+      const agentId = data.agent_id;
+      const displayName = data.display_name ?? data.agent_name ?? agentId ?? 'Jaina';
+      const texts = data.lines.map((line) => line.text);
+
+      // APPEND, never replace: the backend sends only what became stable since the
+      // last frame, so overwriting would discard everything reported before it.
+      const existingWorker = agentId ? state.activeWorkers[agentId] : undefined;
+      const activeWorkers = agentId
+        ? {
+            ...state.activeWorkers,
+            [agentId]: {
+              ...(existingWorker ?? { agentId, displayName }),
+              narration: [...(existingWorker?.narration ?? []), ...texts],
+            },
+          }
+        : state.activeWorkers;
+
+      return {
+        ...nextBase,
+        activeWorkers,
+        progress: [
+          ...state.progress,
+          ...data.lines.map((line) => ({
+            stage: 'agent_narration',
+            at: new Date().toISOString(),
+            detail: line.text,
+            data: {
+              agent_id: agentId,
+              display_name: displayName,
+              field: line.field,
+            },
+          })),
+        ],
+      };
+    }
     case 'agent.complete': {
       const parsed = agentCompleteEventSchema.safeParse((event as { data?: unknown }).data ?? {});
       if (!parsed.success) {
@@ -3326,9 +3561,144 @@ export function reduceJainaStreamEvent(
       }
       return { ...nextBase, status: 'complete' };
     }
+
+    // ---- Paid campaign scaffold + tool approvals -------------------------------
+    //
+    // Every arm below tolerates REPLAY and OUT-OF-ORDER delivery, because that is
+    // the normal case rather than the edge case: useProjectedJainaRun re-folds the
+    // whole durable frame log through this same reducer on every reattach.
+    case 'tool.approval_required': {
+      const parsed = jainaToolApprovalRequiredPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success) return nextBase;
+      const approval = parsed.data;
+      // Already answered — a replayed 'required' must not resurrect the buttons.
+      if (state.resolvedApprovals[approval.approvalId]) return nextBase;
+      if (state.pendingToolApprovals.some((entry) => entry.approvalId === approval.approvalId)) {
+        return nextBase;
+      }
+      return { ...nextBase, pendingToolApprovals: [...state.pendingToolApprovals, approval] };
+    }
+
+    case 'tool.approval_resolved': {
+      const parsed = jainaToolApprovalResolvedPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success) return nextBase;
+      const resolution = parsed.data;
+      return {
+        ...nextBase,
+        pendingToolApprovals: state.pendingToolApprovals.filter(
+          (entry) => entry.approvalId !== resolution.approvalId,
+        ),
+        resolvedApprovals: {
+          ...state.resolvedApprovals,
+          [resolution.approvalId]: resolution,
+        },
+      };
+    }
+
+    case 'tool.output_denied': {
+      const parsed = jainaToolOutputDeniedPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success) return nextBase;
+      const denial = parsed.data;
+      return {
+        ...nextBase,
+        deniedToolOutputs: [...state.deniedToolOutputs, denial],
+        // `approvalId` is legitimately absent on a resume (fresh emitter), so only
+        // clear the pending entry when the frame actually names one.
+        pendingToolApprovals: denial.approvalId
+          ? state.pendingToolApprovals.filter((entry) => entry.approvalId !== denial.approvalId)
+          : state.pendingToolApprovals,
+      };
+    }
+
+    case 'paid.scaffold_proposed': {
+      const parsed = paidScaffoldProposedPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success) return nextBase;
+      const proposal = parsed.data;
+      // A repeat of the SAME proposal (replay) keeps progress; a genuinely new
+      // scaffold version starts clean.
+      const sameScaffold = state.scaffold?.scaffoldId === proposal.scaffoldId;
+      const extra = proposal as Record<string, unknown>;
+      return {
+        ...nextBase,
+        scaffold: {
+          scaffoldId: proposal.scaffoldId,
+          ...(typeof extra.parentScaffoldId === 'string'
+            ? { parentScaffoldId: extra.parentScaffoldId }
+            : {}),
+          ...(proposal.brandId ? { brandId: proposal.brandId } : {}),
+          adAccountId: proposal.adAccountId ?? null,
+          approvalId: proposal.approvalId ?? null,
+          plan: proposal.plan,
+          ...(proposal.summary ? { summary: proposal.summary } : {}),
+          progressByNode: sameScaffold ? (state.scaffold?.progressByNode ?? {}) : {},
+          lastProgress: sameScaffold ? (state.scaffold?.lastProgress ?? null) : null,
+          receipt: sameScaffold ? (state.scaffold?.receipt ?? null) : null,
+        },
+      };
+    }
+
+    case 'paid.scaffold_progress': {
+      const parsed = paidScaffoldProgressPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success || !state.scaffold) return nextBase;
+      const progress = parsed.data;
+      if (progress.scaffoldId !== state.scaffold.scaffoldId) return nextBase;
+      return {
+        ...nextBase,
+        scaffold: {
+          ...state.scaffold,
+          progressByNode: {
+            ...state.scaffold.progressByNode,
+            [scaffoldProgressKey(progress)]: {
+              step: progress.step,
+              status: progress.status,
+              entityId: progress.entityId ?? null,
+              message: progress.message ?? null,
+              ...(progress.index === undefined ? {} : { index: progress.index }),
+              ...(progress.total === undefined ? {} : { total: progress.total }),
+            },
+          },
+          lastProgress: {
+            ...(progress.index === undefined ? {} : { index: progress.index }),
+            ...(progress.total === undefined ? {} : { total: progress.total }),
+          },
+        },
+      };
+    }
+
+    case 'paid.scaffold_receipt': {
+      const parsed = paidScaffoldReceiptPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success || !state.scaffold) return nextBase;
+      if (parsed.data.scaffoldId !== state.scaffold.scaffoldId) return nextBase;
+      return { ...nextBase, scaffold: { ...state.scaffold, receipt: parsed.data } };
+    }
+
     default:
       return nextBase;
   }
+}
+
+/**
+ * The row a progress frame belongs to.
+ *
+ * `pathKey` is the only stable identity: `entityId` is the platform id and is null
+ * until the object exists, and `index` is a walk ordinal that stops meaning anything
+ * once a table is sorted or filtered. Gate-level phases touch no node, so they fall
+ * back to a per-step key rather than colliding on one.
+ */
+function scaffoldProgressKey(progress: PaidScaffoldProgressPayload): string {
+  return progress.pathKey ?? `${progress.step}#${progress.index ?? 0}`;
 }
 
 function buildProgressDetail(data: ProgressEventData): string | undefined {
@@ -3551,7 +3921,13 @@ function formatTableItems(value: unknown): string[] {
 export function hasRenderableStreamContent(
   state: Pick<
     JainaStreamState,
-    'report' | 'reportAssembly' | 'responseText' | 'pendingClarification' | 'plan'
+    | 'report'
+    | 'reportAssembly'
+    | 'responseText'
+    | 'pendingClarification'
+    | 'plan'
+    | 'scaffold'
+    | 'pendingToolApprovals'
   >,
 ): boolean {
   return Boolean(
@@ -3559,6 +3935,11 @@ export function hasRenderableStreamContent(
       state.reportAssembly ||
       (state.responseText && state.responseText.trim().length > 0) ||
       state.pendingClarification ||
-      state.plan,
+      state.plan ||
+      // A turn that proposes a scaffold and stops to await a human is a COMPLETE
+      // turn. Without these two the stream is finalized as 'error' and the gate the
+      // user is meant to answer renders as a failure.
+      state.scaffold ||
+      state.pendingToolApprovals.length > 0,
   );
 }

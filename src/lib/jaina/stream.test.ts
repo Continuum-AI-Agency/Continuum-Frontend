@@ -2662,15 +2662,25 @@ describe('reduceJainaStreamEvent data_table progressive preview', () => {
     expect(state.reportV2?.blocks?.[0]?.title).toBe('Campaign spend');
   });
 
-  it('still skips non-streamable categories (e.g. metric_grid) mid-stream', () => {
-    // The gate is the `block_category` tag (the Backend sets it from the block's
-    // category). A non-streamable tag is ignored during streaming and only
-    // arrives in the final checkpoint report.
-    const state = reduceJainaStreamEvent(
-      createInitialJainaStreamState(),
-      dataTableDelta(1, 'metric_grid') as never,
-    );
+  it('streams metric_grid blocks before the final checkpoint report', () => {
+    const state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+      type: 'response.block.delta',
+      data: {
+        sequence: 1,
+        source: 'structured_output',
+        agent: 'Jaina_blocks',
+        block_category: 'metric_grid',
+        block: {
+          block_id: 'metrics_1',
+          category: 'metric_grid',
+          scope: 'account',
+          title: 'Key metrics',
+          priority: 'primary',
+          metrics: [{ label: 'ROAS', value: 3.2, format: 'multiplier' }],
+        },
+      },
+    } as never);
     expect(state.status).not.toBe('error');
-    expect(state.reportV2 ?? null).toBeNull();
+    expect(state.reportV2?.blocks?.[0]?.category).toBe('metric_grid');
   });
 });

@@ -331,7 +331,23 @@ export function mapConversationMessageRow(
     ...(Array.isArray(row.reasoning) ? { reasoning: row.reasoning } : {}),
     ...(Array.isArray(row.tool_calls) ? { toolCalls: row.tool_calls } : {}),
     ...(Array.isArray(row.tool_results) ? { toolResults: row.tool_results } : {}),
-    ...(row.artifacts !== undefined ? { artifacts: row.artifacts } : {}),
+    // `row.artifacts` is a top-level column the conversation API does NOT send — it
+    // selects id/session_id/role/content/created_at/metadata and nothing else — so
+    // generated media never survived a reload by this route. The Backend persists it
+    // inside `metadata.artifacts` instead, which IS returned; fall back to that.
+    ...(row.artifacts !== undefined
+      ? { artifacts: row.artifacts }
+      : row.metadata &&
+          typeof row.metadata === 'object' &&
+          !Array.isArray(row.metadata) &&
+          (row.metadata as Record<string, unknown>).artifacts !== undefined
+        ? {
+            artifacts: (row.metadata as Record<string, unknown>).artifacts as Record<
+              string,
+              unknown
+            >,
+          }
+        : {}),
     ...(row.pending_clarification !== undefined
       ? { pendingClarification: row.pending_clarification }
       : {}),

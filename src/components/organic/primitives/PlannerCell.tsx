@@ -30,6 +30,9 @@ type PlannerCellProps = {
   isLastColumn: boolean;
   isLastRow: boolean;
   isToday?: boolean;
+  /** Why a read-only channel cannot be scheduled here. Rendered once per row, in its
+      first empty cell, so the row is not just seven blanks. */
+  readOnlyNotice?: string;
   onSelectDraft: (id: string) => void;
   onToggleSelection: (id: string) => void;
   onRegenerate: (draftId: string) => void;
@@ -58,6 +61,7 @@ export const PlannerCell = React.memo(function PlannerCell({
   isLastColumn,
   isLastRow,
   isToday = false,
+  readOnlyNotice,
   onSelectDraft,
   onToggleSelection,
   onRegenerate,
@@ -193,23 +197,28 @@ export const PlannerCell = React.memo(function PlannerCell({
             Soon
           </div>
         ) : canCreate ? (
+          // Every creatable cell offers the SAME labelled affordance. A cell that already
+          // held a post used to get an icon-only button hidden at `opacity-0` until hover,
+          // so in a week where only the weekend was empty "+ Create" looked day-of-week
+          // conditional. Occupied cells keep it dimmed at rest so the cards still lead.
           <AddPostMenu dayId={dayId} platformKey={platform.key} onCreatePost={onCreatePost}>
             <Button
               type="button"
               variant="outline"
-              size={isEmptyCell ? 'sm' : 'icon-sm'}
+              size="sm"
               className={cn(
-                'mx-auto transition-opacity duration-150',
-                isEmptyCell
-                  ? 'w-full border-dashed text-muted-foreground'
-                  : 'opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100',
+                'mx-auto w-full border-dashed text-muted-foreground transition-opacity duration-150',
+                !isEmptyCell &&
+                  'opacity-60 hover:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100',
               )}
               aria-label={`Add post for ${dayId} ${platform.label}`}
             >
-              <Plus data-icon={isEmptyCell ? 'inline-start' : undefined} />
-              {isEmptyCell ? 'Create' : null}
+              <Plus data-icon="inline-start" />
+              Create
             </Button>
           </AddPostMenu>
+        ) : readOnlyNotice && isEmptyCell ? (
+          <p className="text-2xs leading-snug text-muted-foreground opacity-80">{readOnlyNotice}</p>
         ) : null}
       </div>
     </div>

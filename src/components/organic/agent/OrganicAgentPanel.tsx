@@ -85,7 +85,7 @@ import { describeComposerBlock } from '../disabledReasons';
 import { ActiveStagesPanel } from './ActiveStagesPanel';
 import { AeoSnapshotCard } from './AeoSnapshotCard';
 import { AgentWorkingIndicator } from './AgentWorkingIndicator';
-import { AgentButton } from './agentCardKit';
+import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
 import { BulkPlanCard } from './BulkPlanCard';
 import { BulkRunPanel } from './BulkRunPanel';
 import { ConceptPlan } from './ConceptPlan';
@@ -100,7 +100,7 @@ import { ToolCallPipelineCards } from './PipelinePlacementGrid';
 import { PostContentCardGrid } from './PostContentCardGrid';
 import { PromptPickerButton } from './PromptPickerButton';
 import { buildPlannerDraftDeepLink, presentAgentMessage } from './presentAgentMessage';
-import { restoreSessionFromMessages } from './restoreSession';
+import { type RestoredSession, restoreSessionFromMessages } from './restoreSession';
 import { SkillPickerButton } from './SkillPickerButton';
 import { SkillProposalCard } from './SkillProposalCard';
 import { ToolApprovalCard } from './ToolApprovalCard';
@@ -206,8 +206,27 @@ const STARTER_PROMPTS = [
   'Draft an Instagram reel',
 ];
 
+// Lane-neutral on purpose. The old example ("Plan me 3 posts this week on the beauty trend")
+// was an EXECUTE-lane instruction in English shown to every brand, which primed generation
+// even when the reader only wanted to know how last week went.
+const COMPOSER_PLACEHOLDER = 'Ask about performance, or plan what comes next…';
+
+// Wide children a markdown answer can legitimately contain — a code block, a data table —
+// scroll inside their own box. Anything else and the bubble either clips the answer or the
+// answer pushes the whole transcript sideways.
+const ASSISTANT_MARKDOWN_CLASS =
+  'text-base leading-7 text-foreground text-pretty [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_a]:break-words [&_code]:break-words';
+
 function resolveTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+// The reader's BCP-47 locale, so the agent replies in the language they are working in.
+// Undefined outside the browser and on the rare UA that omits it — the Backend field is
+// optional, so omitting it is a valid request rather than something to fake a default for.
+function resolveLocale(): string | undefined {
+  if (typeof navigator === 'undefined') return undefined;
+  return navigator.language || undefined;
 }
 
 // ISO date (YYYY-MM-DD) of the Monday at or before today, in local time.
@@ -440,6 +459,7 @@ export function OrganicAgentPanel({
     isLoadingSessions,
     isLoadingMessages,
     activeSessionId,
+    activeSessionIsNew,
     startNewSession,
     selectSession,
     refreshSessions,
@@ -463,22 +483,30 @@ export function OrganicAgentPanel({
 
   // A restored page carries more than messages: the cards and bulk runs it replays have to reach
   // the reducer too, whether the page is the first one or an older one paged in behind the cursor.
-  const applyRestoredPage = useCallback(
-    (messages: OrganicSessionMessage[], into: 'SESSION_SWITCH' | 'PREPEND_MESSAGES') => {
+  const applyRestoredCards = useCallback((restored: RestoredSession) => {
+    restored.pipelineCards.forEach((card) => dispatch({ type: 'PIPELINE_CARD', card }));
+    restored.bulkRuns.forEach((run) => dispatch({ type: 'BULK_RUN_START', run }));
+  }, []);
+
+  // The session id is an ARGUMENT, not a closure read: this lands after an await, and reading
+  // the current activeSessionId here would file a page under whichever session the user had
+  // switched to in the meantime.
+  const hydrateSessionPage = useCallback(
+    (sessionId: string, messages: OrganicSessionMessage[]) => {
       const restored = restoreSessionFromMessages(messages);
-      if (into === 'SESSION_SWITCH') {
-        dispatch({
-          type: 'SESSION_SWITCH',
-          sessionId: activeSessionId ?? '',
-          messages: restored.messages,
-        });
-      } else {
-        dispatch({ type: 'PREPEND_MESSAGES', messages: restored.messages });
-      }
-      restored.pipelineCards.forEach((card) => dispatch({ type: 'PIPELINE_CARD', card }));
-      restored.bulkRuns.forEach((run) => dispatch({ type: 'BULK_RUN_START', run }));
+      dispatch({ type: 'SESSION_SWITCH', sessionId, messages: restored.messages });
+      applyRestoredCards(restored);
     },
-    [activeSessionId],
+    [applyRestoredCards],
+  );
+
+  const prependEarlierPage = useCallback(
+    (messages: OrganicSessionMessage[]) => {
+      const restored = restoreSessionFromMessages(messages);
+      dispatch({ type: 'PREPEND_MESSAGES', messages: restored.messages });
+      applyRestoredCards(restored);
+    },
+    [applyRestoredCards],
   );
 
   const { hasEarlier, isLoadingEarlier, loadEarlier, setEarlierCursor } =
@@ -491,21 +519,40 @@ export function OrganicAgentPanel({
         },
         [activeSessionId, brandId],
       ),
-      applyPage: useCallback(
-        (messages: OrganicSessionMessage[]) => applyRestoredPage(messages, 'PREPEND_MESSAGES'),
-        [applyRestoredPage],
-      ),
+      applyPage: prependEarlierPage,
     });
 
-  // Load messages when activeSessionId is set by the hook on initial fetch
+  // Hydrate the transcript for whichever session the sessions hook settled on.
+  //
+  // History is BEST EFFORT and the live transcript outranks it. A locally minted session has
+  // no server row yet, so fetching it returns an empty page that used to wipe anything typed
+  // while it was in flight; a fetch still running when the user switches away must not land
+  // in the new session's transcript either.
   useEffect(() => {
-    if (!activeSessionId) return;
-    selectSession(activeSessionId).then((page) => {
-      applyRestoredPage(page.messages, 'SESSION_SWITCH');
-      setEarlierCursor(page.nextCursor);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSessionId]);
+    const sessionId = activeSessionId;
+    if (!sessionId) return;
+
+    if (activeSessionIsNew) {
+      // Nothing to restore, but the reducer still needs the session bound and marked
+      // hydrated — the projected-run fold and the jobs hydration both wait on that.
+      dispatch({ type: 'SESSION_SWITCH', sessionId, messages: [] });
+      setEarlierCursor(null);
+      return;
+    }
+
+    let cancelled = false;
+    selectSession(sessionId)
+      .then((page) => {
+        if (cancelled) return;
+        hydrateSessionPage(sessionId, page.messages);
+        setEarlierCursor(page.nextCursor);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, activeSessionIsNew, selectSession, hydrateSessionPage, setEarlierCursor]);
 
   // Converge this session's jobs + inline pipeline cards to the durable job rows.
   // The worker emits its ui.pipeline_card frames minutes after the chat stream
@@ -602,13 +649,10 @@ export function OrganicAgentPanel({
       clearGenerations();
       dispatch({ type: 'LOAD_MESSAGES_START' });
       const page = await selectSession(sessionId);
-      const restored = restoreSessionFromMessages(page.messages);
-      dispatch({ type: 'SESSION_SWITCH', sessionId, messages: restored.messages });
-      restored.pipelineCards.forEach((card) => dispatch({ type: 'PIPELINE_CARD', card }));
-      restored.bulkRuns.forEach((run) => dispatch({ type: 'BULK_RUN_START', run }));
+      hydrateSessionPage(sessionId, page.messages);
       setEarlierCursor(page.nextCursor);
     },
-    [detach, selectSession, clearGenerations],
+    [detach, selectSession, clearGenerations, hydrateSessionPage, setEarlierCursor],
   );
 
   const debouncedRefreshSessions = useCallback(() => {
@@ -694,6 +738,7 @@ export function OrganicAgentPanel({
         references: resolvedReferences,
         weekStart: currentWeekStartIso(),
         timezone: resolveTimezone(),
+        locale: resolveLocale(),
         platformAccountIds,
         images,
       })
@@ -780,7 +825,18 @@ export function OrganicAgentPanel({
         platformAccountIds,
       })
         .then(() => debouncedRefreshSessions())
-        .catch(() => {});
+        .catch(() => {
+          // The card was removed optimistically. Swallowing this left the user believing they had
+          // approved (or denied) a publish that the agent never heard about — the worst possible
+          // silence on a gate. Put it back so the decision can actually be made.
+          dispatch({ type: 'TOOL_APPROVAL_ADD', approval });
+          show({
+            title: approved ? 'Approval not delivered' : 'Denial not delivered',
+            description:
+              'The agent did not receive your decision. Nothing was published — please answer again.',
+            variant: 'error',
+          });
+        });
     },
     [
       state.sessionId,
@@ -790,6 +846,7 @@ export function OrganicAgentPanel({
       start,
       activeSessionId,
       debouncedRefreshSessions,
+      show,
     ],
   );
 
@@ -1519,7 +1576,10 @@ export function OrganicAgentPanel({
         onSearchSessions={searchSessions}
         onUpdateSessionTags={updateSessionTags}
       />
-      <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
+      {/* min-w-0: without it this column is sized by its widest child, and PromptInput (skill and
+          prompt pickers, attachment chips, mention pills) cannot shrink below its content width —
+          so the composer grew past the panel instead of the pickers collapsing. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 p-3">
         {activeSession ? (
           <ChatProvenanceBanner
             initiator={activeSession.initiator}
@@ -1577,7 +1637,7 @@ export function OrganicAgentPanel({
                         msg.content ? (
                           <SafeMarkdown
                             content={presentAgentMessage(msg.content)}
-                            className="text-base leading-7 text-foreground text-pretty"
+                            className={ASSISTANT_MARKDOWN_CLASS}
                             mode={msg.id === state.streamingMessageId ? 'streaming' : 'static'}
                             isAnimating={msg.id === state.streamingMessageId}
                           />
@@ -1945,7 +2005,7 @@ export function OrganicAgentPanel({
                 />
               </>
             }
-            placeholder="Plan me 3 posts this week on the beauty trend…"
+            placeholder={COMPOSER_PLACEHOLDER}
           />
           {composerHint ? (
             <p className="mt-1 px-1 text-xs text-muted-foreground/80 text-pretty">

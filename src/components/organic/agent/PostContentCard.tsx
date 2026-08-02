@@ -8,7 +8,7 @@ import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromFetchedPost } from '@/components/chat/media/media';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { MetaRow, PlatformTag, StatusLabel } from './agentCardKit';
+import { MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 
 const PLATFORM_GRADIENTS: Record<string, string> = {
   instagram: 'from-purple-600 to-pink-500',

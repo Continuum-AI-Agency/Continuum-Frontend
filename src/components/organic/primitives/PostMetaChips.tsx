@@ -1,5 +1,7 @@
 'use client';
 
+import { formatPlannerTimeOfDay, parsePlannerTimeOfDay } from '@continuum/contracts';
+import { Check } from 'lucide-react';
 import * as React from 'react';
 
 import {
@@ -36,6 +38,26 @@ const chipClass =
 
 function Sep() {
   return <span className="select-none text-muted-foreground/40">·</span>;
+}
+
+/**
+ * Whether two time labels name the same clock time.
+ *
+ * A raw `===` against `draft.timeLabel` marked nothing active for any label the presets
+ * do not spell identically — `09:00 AM`, `9:00 am`, the canonical `09:00`, or the
+ * persistence layer's `12:00 AM` fallback. Both sides normalize through the contracts
+ * parser, which is the same one the backend uses.
+ */
+function isSameClockTime(a: string, b: string): boolean {
+  const left = parsePlannerTimeOfDay(a);
+  const right = parsePlannerTimeOfDay(b);
+  if (!left || !right) return false;
+  return formatPlannerTimeOfDay(left) === formatPlannerTimeOfDay(right);
+}
+
+/** Case- and whitespace-insensitive, so a stored `reel` still marks the Reel option. */
+function isSameFormat(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
 function platformLabel(platform: OrganicPlatformKey): string {
@@ -107,21 +129,25 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
           Posting time
         </p>
         <div className="mb-2 flex flex-wrap gap-1">
-          {QUICK_TIME_OPTIONS.map((time) => (
-            <button
-              key={time}
-              type="button"
-              onClick={() => commit(time)}
-              className={cn(
-                'rounded-md border px-2 py-1 text-xs transition-colors duration-150',
-                time === value
-                  ? 'border-primary/40 bg-primary/10 text-primary'
-                  : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground',
-              )}
-            >
-              {time}
-            </button>
-          ))}
+          {QUICK_TIME_OPTIONS.map((time) => {
+            const isActive = isSameClockTime(time, value);
+            return (
+              <button
+                key={time}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => commit(time)}
+                className={cn(
+                  'rounded-md border px-2 py-1 text-xs transition-colors duration-150',
+                  isActive
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground',
+                )}
+              >
+                {time}
+              </button>
+            );
+          })}
         </div>
         <Input
           value={pending}
@@ -232,9 +258,18 @@ export function PostMetaChips({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-36">
+          {/* The format menu marked no current value at all, so it read as "pick one"
+              rather than "this is the one". */}
           {FORMAT_OPTIONS.map((option) => (
-            <DropdownMenuItem key={option} onSelect={() => onFormatChange(option)}>
+            <DropdownMenuItem
+              key={option}
+              onSelect={() => onFormatChange(option)}
+              className="justify-between"
+            >
               {option}
+              {isSameFormat(option, format) ? (
+                <Check className="size-3.5 text-primary" aria-label="Current format" />
+              ) : null}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>

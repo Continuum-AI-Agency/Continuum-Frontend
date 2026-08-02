@@ -11,6 +11,7 @@ export * from './envelope';
 export * from './hyperframes';
 export * from './jaina';
 export * from './jaina-report';
+export * from './jaina-scaffold';
 export * from './media';
 export * from './ndjson';
 export * from './omni-gen';

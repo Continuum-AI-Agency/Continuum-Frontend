@@ -156,6 +156,46 @@ export const VIDEO_GENERATOR_MODEL_LABELS: Record<VideoGeneratorModel, string> =
   'seedance-2.0': 'Seedance 2.0',
 };
 
+/**
+ * Who hosts the model. Menus group by this so a provider's models are never split
+ * across a flat list — every video-model picker renders the same grouping.
+ */
+export type VideoGeneratorProvider = 'google' | 'fal';
+
+export const VIDEO_GENERATOR_PROVIDER_LABELS: Record<VideoGeneratorProvider, string> = {
+  google: 'Google',
+  fal: 'Fal',
+};
+
+const VIDEO_GENERATOR_PROVIDER_BY_MODEL: Record<VideoGeneratorModel, VideoGeneratorProvider> = {
+  'veo-3.1': 'google',
+  'veo-3.1-fast': 'google',
+  'veo-3.1-lite': 'google',
+  'kling-omni': 'fal',
+  'pixverse-v6': 'fal',
+  'seedance-2.0': 'fal',
+};
+
+export const getVideoGeneratorProvider = (model: VideoGeneratorModel): VideoGeneratorProvider =>
+  VIDEO_GENERATOR_PROVIDER_BY_MODEL[model];
+
+export type VideoGeneratorModelGroup = {
+  provider: VideoGeneratorProvider;
+  label: string;
+  models: readonly VideoGeneratorModel[];
+};
+
+const VIDEO_GENERATOR_PROVIDER_ORDER: readonly VideoGeneratorProvider[] = ['google', 'fal'];
+
+export const VIDEO_GENERATOR_MODEL_GROUPS: readonly VideoGeneratorModelGroup[] =
+  VIDEO_GENERATOR_PROVIDER_ORDER.map((provider) => ({
+    provider,
+    label: VIDEO_GENERATOR_PROVIDER_LABELS[provider],
+    models: VIDEO_GENERATOR_MODELS.filter(
+      (model) => VIDEO_GENERATOR_PROVIDER_BY_MODEL[model] === provider,
+    ),
+  }));
+
 const VIDEO_GENERATOR_NODE_TYPES = new Set(['videoGen', 'veoDirector', 'veoFast']);
 
 export const VIDEO_IMAGE_REFERENCE_HANDLES = ['ref-image', 'ref-images'] as const;

@@ -75,6 +75,13 @@ export type OrganicCalendarDraft = {
   generationError?: string;
   generationAttempts?: number;
   backendDraftId?: string;
+  /**
+   * The row's `updated_at` as last read. Sent as the field-edit route's
+   * optimistic-concurrency token so a stale tab cannot silently overwrite a
+   * teammate's or the agent's newer edit — the write fails with `stale_draft`
+   * instead, and the planner reconciles.
+   */
+  updatedAt?: string | null;
   // Immutable per-brand identity, minted once at create and carried across
   // FE<->BE so a draft is enriched in place (UPSERT on (brand_id, client_key))
   // instead of duplicated. Stable across refetches, unlike `id`.
@@ -135,7 +142,14 @@ export type OrganicCalendarDraft = {
       mp4Url?: string | null;
       mp4Status?: 'pending' | 'ready' | 'failed' | null;
       error?: string | null;
+      /** Legacy scene graph. Null on everything the composition agent writes. */
       spec?: unknown;
+      /** Authored render size and length; `spec` no longer carries them. */
+      width?: number | null;
+      height?: number | null;
+      durationSeconds?: number | null;
+      /** Library assets embedded as hf-asset://, re-signed at render time. */
+      sourceAssets?: Array<{ assetId: string; kind: 'image' | 'video' | 'audio' }> | null;
     } | null;
     // Persisted 512px Stage-2 blueprint storyboard preview frames. Durable
     // bucket+storagePath references; storageUrl is a transient signed value the

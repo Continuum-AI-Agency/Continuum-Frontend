@@ -77,6 +77,12 @@ describe('OrganicWorkspaceTabs', () => {
 
     fireEvent.click(findElementByExactText(container, 'Planner'));
 
-    expect(replaceStateMock).toHaveBeenCalledWith(null, '', '?tab=planner');
+    // Written through the single planner URL writer, which keeps the current path and any
+    // param the planner does not own.
+    expect(replaceStateMock).toHaveBeenCalledWith(
+      null,
+      '',
+      `${window.location.pathname}?tab=planner`,
+    );
   });
 });

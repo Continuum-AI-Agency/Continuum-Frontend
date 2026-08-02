@@ -58,8 +58,8 @@ import {
   getVideoGeneratorTargetHandles,
   resolveVideoGeneratorModel,
   resolveVideoGeneratorReferenceMode,
+  VIDEO_GENERATOR_MODEL_GROUPS,
   VIDEO_GENERATOR_MODEL_LABELS,
-  VIDEO_GENERATOR_MODELS,
   VIDEO_GENERATOR_REFERENCE_MODE_LABELS,
   type VideoGeneratorModel,
   type VideoGeneratorReferenceMode,
@@ -622,14 +622,21 @@ export function VideoGenBlock({
           <ContextMenuSub>
             <ContextMenuSubTrigger>Model</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-44">
-              {VIDEO_GENERATOR_MODELS.map((option) => (
-                <ContextMenuCheckboxItem
-                  key={option}
-                  checked={model === option}
-                  onClick={() => handleModelChange(option)}
-                >
-                  {VIDEO_GENERATOR_MODEL_LABELS[option]}
-                </ContextMenuCheckboxItem>
+              {VIDEO_GENERATOR_MODEL_GROUPS.map((group) => (
+                <ContextMenuSub key={group.provider}>
+                  <ContextMenuSubTrigger>{group.label}</ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="w-44">
+                    {group.models.map((option) => (
+                      <ContextMenuCheckboxItem
+                        key={option}
+                        checked={model === option}
+                        onClick={() => handleModelChange(option)}
+                      >
+                        {VIDEO_GENERATOR_MODEL_LABELS[option]}
+                      </ContextMenuCheckboxItem>
+                    ))}
+                  </ContextMenuSubContent>
+                </ContextMenuSub>
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>

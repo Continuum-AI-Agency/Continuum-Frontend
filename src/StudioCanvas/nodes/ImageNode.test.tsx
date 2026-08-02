@@ -7,22 +7,30 @@ import { useStudioStore } from '../stores/useStudioStore';
 import { ImageNode } from './ImageNode';
 
 const updateNodeData = mock();
+const triggerSave = mock();
 let originalUpdateNodeData: any;
+let originalTriggerSave: any;
 
 describe('ImageNode', () => {
   beforeEach(() => {
     originalUpdateNodeData = useStudioStore.getState().updateNodeData;
+    originalTriggerSave = useStudioStore.getState().triggerSave;
     useStudioStore.setState({
       nodes: [],
       edges: [],
       updateNodeData,
+      triggerSave,
     });
     updateNodeData.mockClear();
+    triggerSave.mockClear();
   });
 
   afterEach(() => {
     if (originalUpdateNodeData) {
-      useStudioStore.setState({ updateNodeData: originalUpdateNodeData });
+      useStudioStore.setState({
+        updateNodeData: originalUpdateNodeData,
+        triggerSave: originalTriggerSave,
+      });
     }
     cleanup();
   });
@@ -112,6 +120,36 @@ describe('ImageNode', () => {
         sourceUrl: undefined,
       });
     });
+  });
+
+  it('does not save a selected data-url preview before durable upload', async () => {
+    const { container } = render(
+      <ToastProvider>
+        <ReactFlowProvider>
+          <ImageNode {...defaultProps} />
+        </ReactFlowProvider>
+      </ToastProvider>,
+    );
+    const input = container.querySelector('#file-1') as HTMLInputElement;
+    const file = new (window as unknown as { File: typeof File }).File(
+      [new Uint8Array([1, 2, 3])],
+      'reference.png',
+      { type: 'image/png' },
+    );
+
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(updateNodeData).toHaveBeenCalledWith(
+        '1',
+        expect.objectContaining({
+          image: expect.stringContaining('data:image/png;base64,'),
+          originalImage: expect.stringContaining('data:image/png;base64,'),
+          fileName: 'reference.png',
+        }),
+      );
+    });
+    expect(triggerSave).not.toHaveBeenCalled();
   });
 
   it('should clear a reference image from the quick action button', async () => {

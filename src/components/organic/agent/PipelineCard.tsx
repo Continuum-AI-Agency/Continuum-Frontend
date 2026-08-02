@@ -30,7 +30,7 @@ import { Progress } from '@/components/ui/progress';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { useDraftRealizedImages, useDraftStoryboard } from '../hooks/useDraftStoryboard';
-import { AgentArtifactCard, MetaRow, PlatformTag, StatusLabel } from './agentCardKit';
+import { AgentArtifactCard, MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 import type {
   CheckpointState,
   PipelineCardState,

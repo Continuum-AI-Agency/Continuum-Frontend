@@ -57,6 +57,15 @@ describe('toggleBrandPiece', () => {
     expect(toggleBrandPiece([], 'full')).toEqual(['full']);
   });
 
+  it('clears a partial selection in one click via the full toggle', () => {
+    expect(toggleBrandPiece(['colors'], 'full')).toEqual([]);
+    expect(toggleBrandPiece(['colors', 'voice'], 'full')).toEqual([]);
+  });
+
+  it('turns the default-on (undefined) state off', () => {
+    expect(toggleBrandPiece(undefined, 'full')).toEqual([]);
+  });
+
   it('unchecking one piece from full drops to the other six', () => {
     const next = toggleBrandPiece(['full'], 'logo');
     expect(next).not.toContain('logo');

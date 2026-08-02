@@ -46,7 +46,7 @@ export async function POST(request: Request) {
   // the caller's brand, so no service-role bypass is needed.
   const { data, error } = await mediaSchema(supabase)
     .from('assets')
-    .select('storage_path, bucket')
+    .select('storage_path, bucket, thumbnail_path')
     .eq('id', assetId)
     .eq('brand_id', brandId)
     .is('deleted_at', null)
@@ -56,11 +56,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
   }
 
-  const row = data as { storage_path: string; bucket: string };
+  const row = data as { storage_path: string; bucket: string; thumbnail_path: string | null };
   const signedUrl = await mintSignedUrl(row.storage_path, row.bucket);
   if (!signedUrl) {
     return NextResponse.json({ error: 'Sign failed' }, { status: 500 });
   }
 
-  return NextResponse.json({ signedUrl });
+  // The poster rides along because a VIDEO whose signed URL expired needs both back:
+  // re-signing only the MP4 leaves ChatMediaThumb with no still to paint or to degrade
+  // to, so a recovered video would still look broken. Additive — existing callers read
+  // `signedUrl` and ignore this.
+  const thumbnailUrl = row.thumbnail_path
+    ? await mintSignedUrl(row.thumbnail_path, row.bucket)
+    : null;
+
+  return NextResponse.json({ signedUrl, thumbnailUrl });
 }

@@ -176,6 +176,53 @@ describe('PostMetaChips', () => {
     expect(onTimeChange).toHaveBeenCalledWith('1:00 PM');
   });
 
+  // L-03: the preset compared `time === draft.timeLabel` as a RAW STRING, so any label the
+  // presets do not spell identically marked nothing active — including the persistence
+  // layer's own `09:00` and its "12:00 AM" fallback.
+  describe('active value marking', () => {
+    const preset = (label: string) => screen.getByRole('button', { name: label });
+
+    it('marks the preset that matches the stored label exactly', () => {
+      setup({ timeLabel: '9:00 AM' });
+      expect(preset('9:00 AM').getAttribute('aria-pressed')).toBe('true');
+      expect(preset('1:00 PM').getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('marks the preset for a non-canonical stored label', () => {
+      setup({ timeLabel: '09:00 AM' });
+      expect(preset('9:00 AM').getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('marks the preset for the canonical 24-hour label the backend persists', () => {
+      setup({ timeLabel: '17:00' });
+      expect(preset('5:00 PM').getAttribute('aria-pressed')).toBe('true');
+      expect(preset('9:00 AM').getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('marks nothing active for a stored label that is not a preset', () => {
+      setup({ timeLabel: '12:00 AM' });
+      for (const label of ['9:00 AM', '1:00 PM', '5:00 PM']) {
+        expect(preset(label).getAttribute('aria-pressed')).toBe('false');
+      }
+    });
+
+    it('marks exactly the current format, which the menu used not to indicate at all', () => {
+      setup({ format: 'Reel' });
+
+      const marks = screen.getAllByLabelText('Current format');
+      expect(marks).toHaveLength(1);
+      expect(marks[0].closest('button')?.textContent).toBe('Reel');
+    });
+
+    it('marks the current format for a differently-cased stored value', () => {
+      setup({ format: 'carousel' });
+
+      const marks = screen.getAllByLabelText('Current format');
+      expect(marks).toHaveLength(1);
+      expect(marks[0].closest('button')?.textContent).toBe('Carousel');
+    });
+  });
+
   it('renders the trailing actions slot', () => {
     setup({ actions: <button type="button">Menu</button> });
     expect(screen.getByText('Menu')).toBeTruthy();

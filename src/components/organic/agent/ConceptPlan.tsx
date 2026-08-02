@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'motion/react';
 import { useRef, useState } from 'react';
-import { AgentButton } from './agentCardKit';
+import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
 import { ConceptCard } from './ConceptCard';
 import type { PipelineCardState, PlanItem, PlanItemStatus, UiPlanCard } from './types';
 

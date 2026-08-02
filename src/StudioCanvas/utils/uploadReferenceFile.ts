@@ -4,9 +4,10 @@
 //
 // Signed URL is the source of truth: after upload the node carries a signed URL +
 // storage path/bucket (re-signed on load). On failure the node keeps whatever
-// local base64 preview it already has (emergency fallback), shows "error", and
-// records the server's error message in referenceError so the badge can surface
-// the real reason on hover.
+// local base64 preview it already has for the current session and retry, shows
+// "error", and records the server's error message in referenceError so the badge
+// can surface the real reason on hover. Failed uploads are intentionally not
+// saved: workflow persistence strips base64 payloads.
 //
 // Uploads go through the library-upload edge function (uploadMediaAsset): the
 // browser PUTs straight to storage and the row is registered server-side, so a
@@ -14,17 +15,13 @@
 // injected so the orchestration is testable without the network.
 
 import { MEDIA_LIBRARY_BUCKET, uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
-import type {
-  AudioNodeData,
-  CanvasDocument,
-  DocumentNodeData,
-  ImageNodeData,
-  VideoNodeData,
-} from '../types';
+import type { AudioNodeData, ImageNodeData, VideoNodeData } from '../types';
 
 export const REFERENCE_UPLOAD_BUCKET = MEDIA_LIBRARY_BUCKET;
 
 export interface UploadReferenceResult {
+  assetId: string;
+  assetVersionId: string;
   signedUrl: string;
   storagePath: string;
   bucket: string;
@@ -32,15 +29,35 @@ export interface UploadReferenceResult {
 
 type UpdateNodeData = (
   id: string,
-  data: Partial<ImageNodeData & VideoNodeData & AudioNodeData & DocumentNodeData>,
+  data: Partial<ImageNodeData & VideoNodeData & AudioNodeData>,
 ) => void;
 
 export interface UploadReferenceDeps {
   updateNodeData: UpdateNodeData;
+  triggerSave?: () => void;
   uploadAsset?: (params: {
     file: File;
     brandId: string;
-  }) => Promise<{ assetId: string; storagePath: string; signedUrl: string }>;
+  }) => Promise<{
+    assetId: string;
+    versionId: string;
+    storagePath: string;
+    signedUrl: string;
+  }>;
+}
+
+export async function stageAndUploadReferenceFile(
+  params: {
+    nodeId: string;
+    file: File;
+    brandId: string;
+    field?: 'image' | 'video' | 'audio';
+    previewData: Partial<ImageNodeData & VideoNodeData & AudioNodeData>;
+  },
+  deps: UploadReferenceDeps,
+): Promise<UploadReferenceResult | null> {
+  deps.updateNodeData(params.nodeId, params.previewData);
+  return uploadReferenceFile(params, deps);
 }
 
 export async function uploadReferenceFile(
@@ -55,59 +72,29 @@ export async function uploadReferenceFile(
   try {
     // The upload registers a library asset row; keeping its id on the node is what
     // lets a generation downstream be credited back to this reference.
-    const { assetId, storagePath, signedUrl } = await uploadAsset({ file, brandId });
+    const { assetId, versionId, storagePath, signedUrl } = await uploadAsset({ file, brandId });
     deps.updateNodeData(nodeId, {
       [field]: signedUrl,
       assetId,
+      assetVersionId: versionId,
       sourcePath: storagePath,
       bucket: REFERENCE_UPLOAD_BUCKET,
       sourceUrl: signedUrl,
       referenceStatus: 'ready',
       referenceError: undefined,
     } as Partial<ImageNodeData & VideoNodeData & AudioNodeData>);
-    return { signedUrl, storagePath, bucket: REFERENCE_UPLOAD_BUCKET };
+    deps.triggerSave?.();
+    return {
+      assetId,
+      assetVersionId: versionId,
+      signedUrl,
+      storagePath,
+      bucket: REFERENCE_UPLOAD_BUCKET,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload failed';
     console.warn('[studio] uploadReferenceFile failed; keeping local preview', err);
     deps.updateNodeData(nodeId, { referenceStatus: 'error', referenceError: message });
-    return null;
-  }
-}
-
-// Deprecated: DocumentNode now routes local uploads through the embed_document
-// pipeline (src/StudioCanvas/nodes/DocumentNode.tsx → /api/ai-studio/documents).
-// Kept for any caller that has not yet migrated; safe to remove once unused.
-export async function uploadDocumentReference(
-  params: { nodeId: string; docIndex: number; file: File; brandId: string },
-  deps: {
-    getDocuments: () => CanvasDocument[];
-    updateNodeData: (id: string, data: Partial<DocumentNodeData>) => void;
-    uploadAsset?: (params: {
-      file: File;
-      brandId: string;
-    }) => Promise<{ assetId: string; storagePath: string; signedUrl: string }>;
-  },
-): Promise<UploadReferenceResult | null> {
-  const { nodeId, docIndex, file, brandId } = params;
-  const uploadAsset = deps.uploadAsset ?? ((p) => uploadMediaAsset(p));
-
-  try {
-    const { storagePath, signedUrl } = await uploadAsset({ file, brandId });
-    const docs = [...deps.getDocuments()];
-    if (docIndex < docs.length) {
-      docs[docIndex] = {
-        ...docs[docIndex],
-        sourceUrl: signedUrl,
-        storagePath,
-        bucket: REFERENCE_UPLOAD_BUCKET,
-        // Strip base64 content after successful upload to keep saved canvas lean.
-        content: undefined,
-      };
-    }
-    deps.updateNodeData(nodeId, { documents: docs });
-    return { signedUrl, storagePath, bucket: REFERENCE_UPLOAD_BUCKET };
-  } catch (err) {
-    console.warn('[studio] uploadDocumentReference failed; keeping base64 fallback', err);
     return null;
   }
 }

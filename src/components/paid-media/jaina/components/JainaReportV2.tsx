@@ -22,6 +22,7 @@ const OBJECTIVE_STATUS_STYLE: Record<ExecutionObjective['status'], string> = {
   blocked: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   deferred: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400',
   partial: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
+  cancelled: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400',
   pending: 'bg-muted text-muted-foreground',
 };
 

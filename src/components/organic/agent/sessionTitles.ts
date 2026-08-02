@@ -3,8 +3,13 @@ import type { OrganicSession } from '@/lib/organic/agent-sessions';
 const UUID_PATTERN =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/giu;
 
+// `preview` before `lastMessagePreview`: preview is stamped from the FIRST USER MESSAGE when
+// the session is created, while the Backend overwrites lastMessagePreview with the newest
+// turn. Reading the latter first made every row's title the user's question until the answer
+// arrived and then the answer's first sentence — a chat list that renamed itself.
 export function toShortSessionTitle(session: OrganicSession): string {
-  const source = session.title?.trim() || session.lastMessagePreview?.trim() || '';
+  const source =
+    session.title?.trim() || session.preview?.trim() || session.lastMessagePreview?.trim() || '';
   const compact = source
     .replace(UUID_PATTERN, 'draft')
     .replace(/[*_`#>]/g, '')

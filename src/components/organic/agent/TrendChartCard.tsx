@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { AgentReceipt } from './agentCardKit';
+import { AgentReceipt } from '@/components/shared/agent-cards/agentCardKit';
 import type { UiTrendChart } from './types';
 
 const SIGNAL_TYPE_LABELS: Record<string, string> = {

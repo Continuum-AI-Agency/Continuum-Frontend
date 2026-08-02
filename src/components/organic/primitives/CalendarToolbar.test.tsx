@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
 import type { CalendarToolbar as CalendarToolbarType } from './CalendarToolbar';
+import { DRAFT_STATUS_PRESENTATION } from './draft-card-styles';
+import type { OrganicDraftStatus } from './types';
 
 type CalendarToolbarProps = Parameters<typeof CalendarToolbarType>[0];
 
@@ -34,12 +36,14 @@ mock.module('@/components/ui/button', () => ({
     children,
     disabled,
     onClick,
+    title,
     'aria-label': ariaLabel,
     'aria-pressed': ariaPressed,
   }: {
     children?: ReactNode;
     disabled?: boolean;
     onClick?: () => void;
+    title?: string;
     'aria-label'?: string;
     'aria-pressed'?: boolean;
   }) => (
@@ -47,6 +51,7 @@ mock.module('@/components/ui/button', () => ({
       type="button"
       disabled={disabled}
       onClick={onClick}
+      title={title}
       aria-label={ariaLabel}
       aria-pressed={ariaPressed}
     >
@@ -171,15 +176,26 @@ describe('CalendarToolbar', () => {
     expect(listButton.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('calls onViewModeChange when a view mode button is clicked', () => {
+  // The store is the sole writer of the view mode. The toolbar's own `router.replace` made
+  // the swap a Next transition, which is why React 19 kept the stale view on screen.
+  it('reports a view change and writes no URL of its own', () => {
     const onViewModeChange = mock();
-    const { container } = render(<CalendarToolbar {...defaultProps({ onViewModeChange })} />);
+    const replaceState = mock(() => {});
+    const originalReplaceState = window.history.replaceState;
+    window.history.replaceState = replaceState as unknown as typeof window.history.replaceState;
 
-    const buttons = Array.from(container.querySelectorAll('button[aria-pressed]'));
-    const monthButton = buttons.find((b) => b.textContent?.trim() === 'Month')!;
-    fireEvent.click(monthButton);
+    try {
+      const { container } = render(<CalendarToolbar {...defaultProps({ onViewModeChange })} />);
 
-    expect(onViewModeChange).toHaveBeenCalledWith('month');
+      const buttons = Array.from(container.querySelectorAll('button[aria-pressed]'));
+      const monthButton = buttons.find((b) => b.textContent?.trim() === 'Month')!;
+      fireEvent.click(monthButton);
+
+      expect(onViewModeChange).toHaveBeenCalledWith('month');
+      expect(replaceState).not.toHaveBeenCalled();
+    } finally {
+      window.history.replaceState = originalReplaceState;
+    }
   });
 
   it('renders progress bar when slotProgress is provided', () => {
@@ -286,9 +302,9 @@ describe('CalendarToolbar', () => {
     expect(onDateRangeChange).toHaveBeenCalledWith(null);
   });
 
-  it('explains why Clear is disabled when there are no drafts', () => {
+  it('explains why Clear view is disabled when the view is empty', () => {
     const { container } = render(<CalendarToolbar {...defaultProps({ draftsCount: 0 })} />);
-    expect(container.textContent).toContain('There are no drafts on the calendar to clear yet.');
+    expect(container.textContent).toContain('There are no posts in this view to hide yet.');
   });
 
   it('explains that controls are paused while generation is running', () => {
@@ -298,7 +314,7 @@ describe('CalendarToolbar', () => {
 
   it('shows no disabled reason when Clear is actionable', () => {
     const { container } = render(<CalendarToolbar {...defaultProps()} />);
-    expect(container.textContent).not.toContain('no drafts on the calendar');
+    expect(container.textContent).not.toContain('no posts in this view');
     expect(container.textContent).not.toContain('paused until it finishes');
   });
 
@@ -319,6 +335,50 @@ describe('CalendarToolbar', () => {
   it('hides planning-mode guidance once drafts exist', () => {
     const { container } = render(<CalendarToolbar {...defaultProps()} />);
     expect(container.textContent).not.toContain('Planning mode');
+  });
+
+  // The legend is DERIVED from the table the cards read. Hardcoded, it drifted into four
+  // falsehoods and omitted `placeholder` entirely.
+  it('lists every draft status with the words the cards use', () => {
+    const { container } = render(<CalendarToolbar {...defaultProps()} />);
+
+    const statuses = Object.keys(DRAFT_STATUS_PRESENTATION) as OrganicDraftStatus[];
+    const legendItems = Array.from(container.querySelectorAll('li'));
+
+    expect(legendItems).toHaveLength(statuses.length);
+    for (const status of statuses) {
+      const { label, hint } = DRAFT_STATUS_PRESENTATION[status];
+      const entry = legendItems.find((item) => item.textContent?.includes(hint));
+      expect(entry, `the legend has no entry for "${status}"`).toBeTruthy();
+      expect(entry?.textContent).toContain(label);
+    }
+  });
+
+  it('separates readiness from status in the legend', () => {
+    const { container } = render(<CalendarToolbar {...defaultProps()} />);
+    expect(container.textContent).toContain('"Needs setup" is not a status');
+  });
+
+  it('presents the clear control as a view lens, never as a delete', () => {
+    const onClear = mock();
+    const { container } = render(<CalendarToolbar {...defaultProps({ onClear })} />);
+
+    const clearButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Clear view',
+    );
+    expect(clearButton).toBeTruthy();
+    expect(clearButton?.getAttribute('title')).toBe(
+      'Hides posts from this view. Nothing is deleted.',
+    );
+    expect(container.textContent).not.toContain('Clear current week');
+
+    fireEvent.click(clearButton!);
+    expect(onClear).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the quantity the trends chip counts', () => {
+    const { container } = render(<CalendarToolbar {...defaultProps({ selectedTrendCount: 2 })} />);
+    expect(container.textContent).toContain('Trends selected: 2 of 5');
   });
 
   it('offers one clearly named content creation action', () => {

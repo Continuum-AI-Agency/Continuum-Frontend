@@ -24,7 +24,11 @@ const AnimatedShaderBackground = dynamic(
   { ssr: false },
 );
 
-import type { AgentSessionListFilters } from '@continuum/contracts';
+import type {
+  AgentSessionListFilters,
+  JainaToolApprovalRequiredPayload,
+  PaidScaffoldGate,
+} from '@continuum/contracts';
 import { updateAgentSessionTagsResponseSchema } from '@continuum/contracts';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useCampaignAI } from '@/CampaignCanvas/hooks/useCampaignAI';
@@ -54,6 +58,7 @@ import { useCollapsibleConversations } from '@/components/chat/collapsibleConver
 import { PromptInput } from '@/components/chat/prompt-input';
 import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { prependUnseen, useEarlierHistory } from '@/components/chat/useEarlierHistory';
+import type { ScaffoldDecision } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useJainaChatStream } from '@/hooks/useJainaChatStream';
@@ -84,6 +89,8 @@ import {
 import {
   frontendCheckpointReportSchema,
   type JainaPlanAction,
+  type JainaObjectiveStatus,
+  type JainaScaffoldAction,
   reportAssemblySchema,
 } from '@/lib/jaina/schemas';
 import type { JainaStreamState } from '@/lib/jaina/stream';
@@ -96,6 +103,17 @@ import { JainaConversationSidebar } from './components/JainaConversationSidebar'
 import { JainaEmptyState } from './components/JainaEmptyState';
 import { JainaHeader } from './components/JainaHeader';
 import { JainaMessageItem } from './components/JainaMessageItem';
+
+/**
+ * Tool name to database gate. The database enforces gate ORDER, so a wrong mapping
+ * would not fail loudly — it would open the wrong gate.
+ */
+const SCAFFOLD_GATE_BY_TOOL_NAME: Record<string, PaidScaffoldGate> = {
+  paid_scaffold_build: 'build',
+  paid_scaffold_populate: 'populate',
+  paid_scaffold_activate: 'activate',
+};
+
 import type { PlanFeedbackPayload } from './components/PlanSection';
 import { deriveJainaAnchors, milestonesForJainaMessage } from './deriveJainaAnchors';
 import {
@@ -533,6 +551,7 @@ function deriveObjectivesFromReport(
   const objectives = parsedReport.data.execution_objectives
     .filter((objective) => typeof objective?.id === 'string' && objective.id.trim().length > 0)
     .map((objective) => ({
+      ...objective,
       id: objective.id,
       title: objective.title || objective.id,
       status: normalizePersistedObjectiveStatus(objective.status),
@@ -671,13 +690,14 @@ function normalizePersistedObjectiveStatus(
   return 'pending';
 }
 
-const messageObjectiveStatusRank: Record<
-  'pending' | 'in_progress' | 'completed' | 'failed',
-  number
-> = {
+const messageObjectiveStatusRank: Record<JainaObjectiveStatus, number> = {
   pending: 0,
   in_progress: 1,
+  deferred: 1,
+  partial: 2,
+  blocked: 2,
   failed: 2,
+  cancelled: 2,
   completed: 3,
 };
 
@@ -761,6 +781,7 @@ function deriveObjectivesFromPersistedSources(input: {
   const objectives = parsedReport.data.execution_objectives
     .filter((objective) => typeof objective?.id === 'string' && objective.id.trim().length > 0)
     .map((objective) => ({
+      ...objective,
       id: objective.id,
       title: objective.title || objective.id,
       status: normalizePersistedObjectiveStatus(objective.status),
@@ -1128,6 +1149,9 @@ export function JainaChatSurface({
   const [pendingReportArtifactResponseId, setPendingReportArtifactResponseId] = React.useState<
     string | null
   >(null);
+  const [optimisticScaffoldDecisions, setOptimisticScaffoldDecisions] = React.useState<
+    Record<string, ScaffoldDecision>
+  >({});
   const [sessionId, setSessionId] = React.useState<string>(() => createJainaSessionId());
   const attachments = useChatAttachments({ brandId: brandProfileId, sessionId });
   const pendingClarificationId = state.pendingClarification?.id;
@@ -2015,6 +2039,12 @@ export function JainaChatSurface({
         pendingClarification: state.pendingClarification ?? undefined,
         objectives: state.objectives,
         delegations: state.delegations,
+        // Keeps the scaffold card on screen once the turn ends and the stream state
+        // is no longer the source. On reload it comes back through the durable
+        // run-event projection instead.
+        scaffold: state.scaffold ?? undefined,
+        pendingToolApprovals: state.pendingToolApprovals,
+        resolvedApprovals: state.resolvedApprovals,
       });
 
       persistedAssistantResponseIdsRef.current.add(completedResponseId);
@@ -2067,6 +2097,12 @@ export function JainaChatSurface({
         pendingClarification: state.pendingClarification ?? undefined,
         objectives: state.objectives,
         delegations: state.delegations,
+        // Keeps the scaffold card on screen once the turn ends and the stream state
+        // is no longer the source. On reload it comes back through the durable
+        // run-event projection instead.
+        scaffold: state.scaffold ?? undefined,
+        pendingToolApprovals: state.pendingToolApprovals,
+        resolvedApprovals: state.resolvedApprovals,
       }));
 
       persistedAssistantResponseIdsRef.current.add(failedResponseId);
@@ -2428,8 +2464,10 @@ export function JainaChatSurface({
       images?: Array<{ url: string; name?: string; mediaType?: string }>;
       references?: AgentMentionReference[];
       planAction?: JainaPlanAction;
+      scaffoldAction?: JainaScaffoldAction;
       forceReportArtifact?: boolean;
       silentUserMessage?: boolean;
+      onDispatchError?: (message: string) => void;
     }) => {
       const query = input.query.trim();
       if (!query) return false;
@@ -2534,7 +2572,9 @@ export function JainaChatSurface({
         images: input.images,
         references: input.references,
         planAction: input.planAction,
+        scaffoldAction: input.scaffoldAction,
         forceReportArtifact: input.forceReportArtifact,
+        onDispatchError: input.onDispatchError,
       }).then((result) => {
         if (result.error) {
           if (input.forceReportArtifact) {
@@ -2920,6 +2960,56 @@ export function JainaChatSurface({
     [dispatchMessage],
   );
 
+  /**
+   * A human's answer to a paid-scaffold gate.
+   *
+   * The optimistic layer lives HERE and not in the reducer: `JainaStreamState` is
+   * owned by useJainaChatStream and is reset wholesale by the very `start()` call
+   * that carries the decision, so a reducer-held optimistic value would be wiped the
+   * instant it was set. `onDispatchError` rolls it back — without that a dropped
+   * request leaves a card reading "Approved" while nothing happened, which is exactly
+   * the silence the gate exists to prevent.
+   */
+  const handleScaffoldDecision = React.useCallback(
+    (approval: JainaToolApprovalRequiredPayload, decision: ScaffoldDecision) => {
+      const gate = SCAFFOLD_GATE_BY_TOOL_NAME[approval.toolName];
+      const input = approval.input as { scaffold_version_id?: unknown } | null;
+      const scaffoldVersionId =
+        input && typeof input.scaffold_version_id === 'string' ? input.scaffold_version_id : null;
+      if (!gate || !scaffoldVersionId) return;
+
+      setOptimisticScaffoldDecisions((prev) => ({ ...prev, [approval.approvalId]: decision }));
+
+      void dispatchMessage({
+        // The backend reads the typed field; this string exists only because the
+        // request schema requires a non-empty query, and silentUserMessage hides it.
+        query: decision === 'approve' ? 'Approved.' : 'Declined.',
+        canvas: false,
+        silentUserMessage: true,
+        scaffoldAction: {
+          decision,
+          approval_id: approval.approvalId,
+          scaffold_version_id: scaffoldVersionId,
+          gate,
+          tool_call_id: approval.toolCallId,
+        },
+        onDispatchError: () => {
+          setOptimisticScaffoldDecisions((prev) => {
+            const next = { ...prev };
+            delete next[approval.approvalId];
+            return next;
+          });
+          show({
+            title: decision === 'approve' ? 'Approval not delivered' : 'Decision not delivered',
+            description: 'Jaina did not receive it. Nothing was created — please answer again.',
+            variant: 'error',
+          });
+        },
+      });
+    },
+    [dispatchMessage, show],
+  );
+
   const handleClearMemory = React.useCallback(async () => {
     if (!adAccountId) return;
     try {
@@ -3107,6 +3197,8 @@ export function JainaChatSurface({
                       onSuggestionClick={handleSubmit}
                       onPlanFeedback={handlePlanFeedback}
                       onFocusInput={handleFocusInput}
+                      onScaffoldDecision={handleScaffoldDecision}
+                      optimisticScaffoldDecisions={optimisticScaffoldDecisions}
                       onRegenerate={
                         precedingUserMessage
                           ? () => handleSubmit(precedingUserMessage.content)

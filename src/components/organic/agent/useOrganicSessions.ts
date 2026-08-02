@@ -21,6 +21,13 @@ export function useOrganicSessions(
   isLoadingSessions: boolean;
   isLoadingMessages: boolean;
   activeSessionId: string | null;
+  /**
+   * True while the active id is one this hook MINTED and the server has never seen — the
+   * cold-start fallback and every `startNewSession()`. The composer needs an id before the
+   * first turn is sent, but fetching history for one that does not exist server-side returns
+   * an empty page, and callers that treat an empty page as authoritative wipe the transcript.
+   */
+  activeSessionIsNew: boolean;
   startNewSession: () => string;
   selectSession: (id: string) => Promise<OrganicMessagePage>;
   refreshSessions: () => Promise<void>;
@@ -32,6 +39,7 @@ export function useOrganicSessions(
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionIsNew, setActiveSessionIsNew] = useState(false);
   const deepLinkSessionIdRef = useRef(initialSessionId ?? null);
 
   useEffect(() => {
@@ -42,11 +50,19 @@ export function useOrganicSessions(
     const deepLinkSessionId = deepLinkSessionIdRef.current;
     deepLinkSessionIdRef.current = null;
 
+    // A brand with no conversations still needs an id for the composer, so one is minted —
+    // and flagged, because it names nothing on the server.
+    const adopt = (persistedSessionId: string | undefined) => {
+      const resolved = deepLinkSessionId ?? persistedSessionId;
+      setActiveSessionIsNew(!resolved);
+      setActiveSessionId(resolved ?? crypto.randomUUID());
+      setIsLoadingSessions(false);
+    };
+
     const cached = useOrganicSessionStore.getState().getFreshSessions(brandId);
     if (cached) {
       setSessions(cached);
-      setActiveSessionId(deepLinkSessionId ?? cached[0]?.sessionId ?? crypto.randomUUID());
-      setIsLoadingSessions(false);
+      adopt(cached[0]?.sessionId);
       return;
     }
 
@@ -55,8 +71,7 @@ export function useOrganicSessions(
       if (cancelled) return;
       useOrganicSessionStore.getState().setSessions(brandId, fetched);
       setSessions(fetched);
-      setActiveSessionId(deepLinkSessionId ?? fetched[0]?.sessionId ?? crypto.randomUUID());
-      setIsLoadingSessions(false);
+      adopt(fetched[0]?.sessionId);
     });
 
     return () => {
@@ -67,12 +82,17 @@ export function useOrganicSessions(
   const startNewSession = useCallback((): string => {
     const id = crypto.randomUUID();
     setActiveSessionId(id);
+    setActiveSessionIsNew(true);
     return id;
   }, []);
 
   const selectSession = useCallback(
     async (sessionId: string): Promise<OrganicMessagePage> => {
       setActiveSessionId(sessionId);
+      // Cleared with the id rather than on resolve: callers switch on this flag in the same
+      // render pass, and a flag that lagged the id by one render would make them treat a
+      // persisted conversation as brand new and skip restoring it.
+      setActiveSessionIsNew(false);
       setIsLoadingMessages(true);
       try {
         return await fetchOrganicSessionMessagePage(sessionId, brandId);
@@ -133,6 +153,7 @@ export function useOrganicSessions(
     isLoadingSessions,
     isLoadingMessages,
     activeSessionId,
+    activeSessionIsNew,
     startNewSession,
     selectSession,
     refreshSessions,

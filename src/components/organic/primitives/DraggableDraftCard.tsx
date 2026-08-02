@@ -1,11 +1,10 @@
 'use client';
 
-import { useDraggable } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
 import { motion, useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import { CalendarDraftCard } from './CalendarDraftCard';
 import type { OrganicCalendarDraft } from './types';
+import { useDraftDragHandle } from './useDraftDragHandle';
 
 interface DraggableDraftCardProps {
   draft: OrganicCalendarDraft;
@@ -35,16 +34,7 @@ function DraggableDraftCardComponent({
   onPreview,
 }: DraggableDraftCardProps) {
   const reduceMotion = useReducedMotion();
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: draft.id,
-    data: { type: 'draft' },
-  });
-
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 50 : 'auto',
-  };
+  const { attributes, listeners, setNodeRef, isDragging, style } = useDraftDragHandle(draft.id);
 
   return (
     <motion.div
@@ -78,6 +68,7 @@ function DraggableDraftCardComponent({
         onEnrich={onEnrich}
         onRealize={onRealize}
         onStitch={onStitch}
+        isDragging={isDragging}
         onMouseEnter={() => onPreview?.(draft)}
         onMouseLeave={() => onPreview?.(null)}
       />

@@ -17,7 +17,13 @@ import { cn } from '@/lib/utils';
 import { deltaTone, formatDateTime } from '../organic-format';
 import {
   buildPostMetricSeries,
+  countNumericSeriesPoints,
+  POST_COMPARISON_UNLOCK_COPY,
+  POST_HISTORY_ACCOUNT_STANDIN_COPY,
+  POST_HISTORY_EMPTY_COPY,
+  POST_HISTORY_TRACKED_DAYS,
   type PostMetricKey,
+  postHistoryProgressCopy,
   postPeriodComparisons,
 } from '../organic-metrics-utils';
 import { getCardMetricSet, resolveCardMediaKind } from './cardMetricSet';
@@ -43,14 +49,16 @@ export function resolveSeriesKey(descriptorKeys: Array<string | undefined>): Pos
 
 export type QuickLookTrendState = 'post' | 'account' | 'empty';
 
-// Chooses which trend to show: the per-post series when it has enough points,
-// otherwise the account trend as context, otherwise an empty hint.
+// Chooses which trend to show: the per-post series when it carries enough real
+// points, otherwise the account trend as context, otherwise an empty hint. Counts
+// are of *reported* points, not axis slots — a window padded with unreported days
+// must not pass for a series.
 export function resolveTrendState(
-  seriesLength: number,
-  accountSeriesLength: number,
+  postPointCount: number,
+  accountPointCount: number,
 ): QuickLookTrendState {
-  if (seriesLength > 1) return 'post';
-  if (accountSeriesLength > 1) return 'account';
+  if (postPointCount > 1) return 'post';
+  if (accountPointCount > 1) return 'account';
   return 'empty';
 }
 
@@ -60,7 +68,7 @@ export function PostQuickLook({
   loading = false,
 }: {
   post: OrganicPost;
-  accountSeries?: Array<{ date: string; value: number }>;
+  accountSeries?: Array<{ date: string; value: number | undefined }>;
   loading?: boolean;
 }) {
   const kind = resolveCardMediaKind(post);
@@ -81,7 +89,10 @@ export function PostQuickLook({
   // so it can't index the comparisons map — fall back to a flat tone for it.
   const comparisonKey = seriesKey === 'reach' ? undefined : seriesKey;
   const tone = deltaTone(comparisonKey ? comparisons[comparisonKey]?.percentageChange : undefined);
-  const trendState = resolveTrendState(series.length, accountSeries?.length ?? 0);
+  const trendState = resolveTrendState(
+    countNumericSeriesPoints(series),
+    countNumericSeriesPoints(accountSeries ?? []),
+  );
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -122,10 +133,9 @@ export function PostQuickLook({
         ) : (
           <>
             <p className="text-2xs leading-snug text-muted-foreground">
-              All-time totals{' '}
               {Object.keys(comparisons).length > 0
-                ? '· deltas vs prior 7d'
-                : '· deltas unlock after 14 days of history'}
+                ? 'All-time totals · change shown vs the previous 7 days'
+                : `All-time totals · ${POST_COMPARISON_UNLOCK_COPY}`}
             </p>
             <div
               className={cn('grid gap-1.5', primary.length >= 3 ? 'grid-cols-3' : 'grid-cols-2')}
@@ -182,17 +192,16 @@ export function PostQuickLook({
                 className="w-full"
                 ariaLabel={`${seriesKey} 7-day trend`}
               />
-              {trendDays < 7 ? (
+              {trendDays < POST_HISTORY_TRACKED_DAYS ? (
                 <p className="text-xs leading-snug text-muted-foreground">
-                  Building per-post history ({trendDays}/7 days tracked).
+                  {postHistoryProgressCopy(trendDays)}
                 </p>
               ) : null}
             </div>
           ) : trendState === 'account' ? (
             <div className="space-y-1">
               <p className="text-xs leading-snug text-muted-foreground">
-                Per-post trend builds over time ({trendDays}/7 days). Showing the account trend
-                meanwhile.
+                {POST_HISTORY_ACCOUNT_STANDIN_COPY} {postHistoryProgressCopy(trendDays)}
               </p>
               <Sparkline
                 values={(accountSeries ?? []).map((point) => point.value)}
@@ -204,9 +213,7 @@ export function PostQuickLook({
               />
             </div>
           ) : (
-            <p className="text-xs leading-snug text-muted-foreground">
-              Per-post trend builds over time. Check back tomorrow once a second day is tracked.
-            </p>
+            <p className="text-xs leading-snug text-muted-foreground">{POST_HISTORY_EMPTY_COPY}</p>
           )}
         </div>
 

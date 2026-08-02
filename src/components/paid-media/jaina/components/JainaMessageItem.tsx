@@ -1,5 +1,6 @@
 'use client';
 
+import type { JainaToolApprovalRequiredPayload } from '@continuum/contracts';
 import { motion } from 'motion/react';
 import * as React from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
@@ -7,6 +8,10 @@ import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
+import {
+  PaidScaffoldCard,
+  type ScaffoldDecision,
+} from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import {
   type CreativeArtifact,
@@ -104,6 +109,12 @@ type JainaMessageItemProps = {
   onPlanFeedback?: (payload: PlanFeedbackPayload) => void;
   onRegenerate?: () => void;
   onFocusInput?: () => void;
+  onScaffoldDecision?: (
+    approval: JainaToolApprovalRequiredPayload,
+    decision: ScaffoldDecision,
+  ) => void;
+  /** Decisions submitted but not yet echoed back by a tool.approval_resolved frame. */
+  optimisticScaffoldDecisions?: Record<string, ScaffoldDecision>;
 };
 
 export function JainaMessageItem({
@@ -114,6 +125,8 @@ export function JainaMessageItem({
   onPlanFeedback,
   onRegenerate,
   onFocusInput,
+  onScaffoldDecision,
+  optimisticScaffoldDecisions,
 }: JainaMessageItemProps) {
   const isStreaming = message.id === activeResponseId;
 
@@ -124,6 +137,25 @@ export function JainaMessageItem({
   // Cross-agent calls: live from the stream state while the turn runs, then
   // from the message once it is persisted with the turn.
   const delegations = isStreaming ? state.delegations : message.delegations;
+  // The scaffold and its gate. Live from the stream while the turn runs; on reload
+  // they come back through the durable run-event projection, which re-folds the same
+  // frames through the same reducer.
+  const scaffold = isStreaming ? state.scaffold : (message.scaffold ?? null);
+  const pendingApprovals = isStreaming
+    ? state.pendingToolApprovals
+    : (message.pendingToolApprovals ?? []);
+  const resolvedApprovals = isStreaming
+    ? state.resolvedApprovals
+    : (message.resolvedApprovals ?? {});
+  const scaffoldApproval =
+    pendingApprovals.find((entry) => entry.toolName.startsWith('paid_scaffold_')) ?? null;
+  const scaffoldResolution = scaffoldApproval
+    ? (resolvedApprovals[scaffoldApproval.approvalId] ?? null)
+    : null;
+  const scaffoldDenial =
+    (isStreaming ? state.deniedToolOutputs : []).find((entry) =>
+      entry.toolName.startsWith('paid_scaffold_'),
+    ) ?? null;
   const report = isStreaming ? state.report : message.report;
   const reportV2 = isStreaming ? state.reportV2 : message.reportV2;
   const plan = message.plan;
@@ -256,6 +288,22 @@ export function JainaMessageItem({
             ) : null}
 
             <ObjectivesQueue objectives={objectives ?? []} isStreaming={isStreaming} />
+
+            {scaffold ? (
+              <PaidScaffoldCard
+                scaffold={scaffold}
+                approval={scaffoldApproval}
+                resolution={scaffoldResolution}
+                denial={scaffoldDenial}
+                optimisticDecision={
+                  scaffoldApproval
+                    ? (optimisticScaffoldDecisions?.[scaffoldApproval.approvalId] ?? null)
+                    : null
+                }
+                isStreaming={isStreaming}
+                {...(onScaffoldDecision ? { onDecide: onScaffoldDecision } : {})}
+              />
+            ) : null}
 
             <AudienceGroupApprovalCard
               toolResults={toolResults ?? []}

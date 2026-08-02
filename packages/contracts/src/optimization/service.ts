@@ -318,6 +318,10 @@ export const EnrollMovedAdsetSchema = z.object({
   adset_id: z.string(),
   from_portfolio_id: z.string().uuid(),
   from_portfolio_name: z.string().nullable().optional(),
+  /** The ad set came from a DIFFERENT brand's portfolio. Permitted only when the caller is
+   *  edit-qualified there, and always disclosed — a silent cross-brand steal would be worse
+   *  than the refusal it replaced. */
+  cross_brand: z.boolean().optional(),
 });
 export type EnrollMovedAdset = z.infer<typeof EnrollMovedAdsetSchema>;
 
@@ -681,6 +685,11 @@ export const PortfolioSuggestionSchema = z.object({
    *  baseline". Consumers treat 0 as absent (suggestionToPortfolioConfig drops falsy). */
   cpa_target: z.number().nonnegative().optional(),
   adset_ids: z.array(z.string()),
+  /** id→name for the suggestion's entities, resolved from the same snapshot read that
+   *  produced the grouping. A suggestion used to carry ids only, so accepting one enrolled
+   *  nameless rows and the dashboard rendered raw Meta ids until a backfill healed them.
+   *  Optional because an older deployed suggest edge does not send it. */
+  adset_names: z.record(z.string(), z.string()).optional(),
   summary: z.object({
     adsets: z.number().int().nonnegative(),
     spend14: z.number(),
@@ -1044,6 +1053,13 @@ export const PortfolioAdsetSchema = z.object({
   adset_id: z.string(),
   adset_name: z.string().nullable(),
   active: z.boolean(),
+  /** Last cycle at which this ad set appeared in the account's live ACTIVE fleet. */
+  last_seen_at: z.string().nullable().optional(),
+  /** Set once the ad set STOPPED appearing there — paused, deleted, or flipped to CBO in Ads
+   *  Manager. It stays enrolled (releasing a claim is a human decision) but the optimizer can
+   *  no longer score it, so the roster must say so rather than presenting it as live.
+   *  Optional: older deployments of the read do not return it. */
+  missing_since: z.string().nullable().optional(),
 });
 export type PortfolioAdset = z.infer<typeof PortfolioAdsetSchema>;
 
@@ -1053,8 +1069,16 @@ export type PortfolioAdset = z.infer<typeof PortfolioAdsetSchema>;
  *  needs it to say what will move. */
 export const AccountEnrollmentSchema = z.object({
   adset_id: z.string(),
-  portfolio_id: z.string().uuid(),
+  /** Null when the claim belongs to a brand this caller cannot see — the claim is still
+   *  reported (a refusal you cannot observe is unactionable) but its holder is not named. */
+  portfolio_id: z.string().uuid().nullable(),
   portfolio_name: z.string().nullable(),
+  /** Whether the holding portfolio belongs to the brand being asked about. */
+  same_brand: z.boolean().default(true),
+  /** Whether THIS caller may take the ad set — true when they are edit-qualified
+   *  (owner/admin/operator) on the holding brand. False means enroll will refuse with 42501,
+   *  so the picker can block the selection instead of letting the save fail. */
+  can_release: z.boolean().default(true),
 });
 export type AccountEnrollment = z.infer<typeof AccountEnrollmentSchema>;
 

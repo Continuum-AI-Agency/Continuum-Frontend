@@ -13,38 +13,25 @@ import {
 } from '@continuum/contracts';
 import * as React from 'react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
-import { getApiBaseUrl } from '@/lib/api/config';
-import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useCalendarStore } from '@/lib/organic/store';
+import { useDraftFieldPersistence } from './useDraftFieldEditor';
 
 /**
- * Writes the draft's media through to `content_json` — the field the publisher and the
- * scheduled worker read.
+ * Media reaches `content_json` — the field the publisher and the scheduled worker
+ * read — through the shared field-edit path, not a hand-rolled fetch.
  *
- * Without this, an assignment lived only in the browser store: the calendar autosave owns
- * manually-authored drafts only (an allowlist that exists to stop duplicate posts), so on an
- * agent draft the user's creative never reached the database, and publish used the headless
- * generation. `mediaStatus: user_supplied` is what stops the next refetch from overwriting it.
+ * Two failures made an assignment store-only before that. The browser autosave
+ * accepts `origin === 'manual'` drafts only, so on an agent draft the user's creative
+ * never reached the database and publish fell back to the headless generation. And the
+ * hand-rolled PATCH this hook used targeted the generic draft route, whose handler
+ * validated `content_json` and then never forwarded it — so even for a manual draft
+ * the write was a silent no-op. `mediaStatus: user_supplied` is what stops the next
+ * refetch from overwriting the result.
  */
-async function persistDraftMedia(draft: OrganicCalendarDraft): Promise<void> {
-  if (!draft.backendDraftId) return;
 
-  const token = await getBrowserAccessToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  await fetch(`${getApiBaseUrl()}/api/organic/calendar/drafts/${draft.backendDraftId}`, {
-    method: 'PATCH',
-    headers,
-    // A partial placement — the backend merges it onto the existing content_json.
-    body: JSON.stringify({
-      content_json: {
-        publishingAssets: draft.publishingAssets ?? [],
-        creative: { mediaSuggestion: draft.mediaSuggestion ?? {} },
-      },
-    }),
-  });
-}
+/** The media fields a failed write has to put back. */
+type MediaSnapshot = Pick<OrganicCalendarDraft, 'mediaSuggestion' | 'publishingAssets'>;
 
 export type SlotTarget =
   | { kind: 'single' }
@@ -123,6 +110,8 @@ function validateKindForTarget(
 
 export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementResult {
   const updateDraft = useCalendarStore((s) => s.updateDraft);
+  const { persistDraftFields } = useDraftFieldPersistence();
+  const { show } = useToast();
   const [undoSnapshot, setUndoSnapshot] = React.useState<Partial<OrganicCalendarDraft> | null>(
     null,
   );
@@ -131,20 +120,57 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
   /**
    * Runs a store mutation and writes the resulting media through to content_json. Every
    * placement op goes through here, so an assignment can never be store-only again.
+   *
+   * The write is awaited internally rather than fired and forgotten: the previous
+   * version issued a bare `fetch` with no `await`, no `.catch` and no `response.ok`
+   * check, so a rejected attach left the media on screen and nowhere else. On failure
+   * the previous media is restored and the user is told.
    */
   const applyMedia = React.useCallback(
     (mutate: (current: OrganicCalendarDraft) => OrganicCalendarDraft) => {
-      let next: OrganicCalendarDraft | null = null;
-      let changed = false;
+      // A holder rather than plain `let`s: control-flow analysis does not track
+      // assignments made inside a callback, so a captured `let` reads as its
+      // initializer type afterwards.
+      const captured: {
+        next: OrganicCalendarDraft | null;
+        previous: MediaSnapshot | null;
+      } = { next: null, previous: null };
+
       updateDraft(draftId, (current) => {
-        next = mutate(current);
-        changed = next !== current;
+        const next = mutate(current);
+        // A validation no-op returns the draft untouched — nothing to write through.
+        if (next !== current) {
+          captured.previous = {
+            mediaSuggestion: current.mediaSuggestion,
+            publishingAssets: current.publishingAssets,
+          };
+          captured.next = next;
+        }
         return next;
       });
-      // A validation no-op returns the draft untouched — nothing to write through.
-      if (changed && next) void persistDraftMedia(next);
+
+      const next: OrganicCalendarDraft | null = captured.next;
+      const previous: MediaSnapshot | null = captured.previous;
+      if (!next) return;
+
+      void persistDraftFields(next, {
+        media: {
+          publishingAssets: next.publishingAssets ?? [],
+          mediaSuggestion: next.mediaSuggestion ?? undefined,
+        },
+      }).then((result) => {
+        if (result.ok) return;
+        if (previous) updateDraft(draftId, (current) => ({ ...current, ...previous }));
+        show({
+          title: 'Media not saved',
+          description: result.stale
+            ? 'This post changed elsewhere. Reopen it and try again.'
+            : result.message,
+          variant: 'error',
+        });
+      });
     },
-    [draftId, updateDraft],
+    [draftId, updateDraft, persistDraftFields, show],
   );
 
   const place = React.useCallback(

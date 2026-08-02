@@ -20,7 +20,7 @@ const TONE_STROKE: Record<SparklineTone, string> = {
 // finite points (the component then renders a flat baseline). Kept separate so
 // it is unit-testable without a DOM.
 export function sparklinePoints(
-  values: number[],
+  values: ReadonlyArray<number | undefined>,
   width: number,
   height: number,
 ): { points: string; lastX: number; lastY: number } | null {
@@ -42,7 +42,7 @@ export function sparklinePoints(
 }
 
 type SparklineProps = {
-  values: number[];
+  values: ReadonlyArray<number | undefined>;
   tone?: SparklineTone;
   width?: number;
   height?: number;

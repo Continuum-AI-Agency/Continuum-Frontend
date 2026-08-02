@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paidAdFunnelStageSchema } from './brief';
+import { paidAdFormatSchema, paidAdFunnelStageSchema } from './brief';
 
 // The Library tag that marks a creative as ready to be launched as a paid ad. The
 // creative sub-agent applies it (Phase 1); the optimizer pulls creatives carrying
@@ -27,9 +27,50 @@ export const adIntentSchema = z.object({
   // 0-100 virality overall that cleared the gate; null if the score was pending.
   viralityScore: z.number().min(0).max(100).nullable().default(null),
   source: adIntentSourceSchema,
+  // Which creative format this ad-ready asset IS. The optimizer reads it at launch
+  // to decide which Meta creative shape to build (a video creative needs a poster
+  // image_hash, a static does not), so format provenance has to survive the tag —
+  // before this field it died in the placement builder. Defaulted so any AdIntent
+  // shaped before it existed still parses.
+  format: paidAdFormatSchema.default('reel'),
   // The paid-creative run that produced this; null for ad-hoc tags.
   sourceRunId: z.string().nullable().default(null),
   // For promotions: the winning organic media.assets id this ad reuses.
   sourceOrganicAssetId: z.string().nullable().default(null),
 });
 export type AdIntent = z.infer<typeof adIntentSchema>;
+
+/**
+ * The discriminator every downstream reader keys on to tell a paid shadow draft
+ * from a real organic one.
+ *
+ * It lives in contracts rather than in `App/paid-creative/**` for one specific
+ * reason: `readDirectionSourceDrafts` (App/organic/data/supabase.ts) has to exclude
+ * paid rows, and an organic module importing from the paid module would invert the
+ * dependency — organic is the spine, paid is the caller. Contracts is the only
+ * place both sides may import from.
+ */
+export const PAID_CREATIVE_SURFACE = 'paid_ad_creative' as const;
+
+/**
+ * The stamp a paid run writes onto its shadow draft's `content_json.origin`, so a
+ * completed render can be traced back to the run that paid for it.
+ */
+export const paidCreativeOriginSchema = z.object({
+  surface: z.literal(PAID_CREATIVE_SURFACE),
+  adIntent: adIntentSchema,
+  stampedAt: z.string(),
+});
+export type PaidCreativeOrigin = z.infer<typeof paidCreativeOriginSchema>;
+
+/**
+ * Cheap structural predicate over an unvalidated `content_json`: is this row a paid
+ * shadow draft? Deliberately does NOT parse the whole origin — a reader that only
+ * needs to skip the row should not fail open on an AdIntent shape it never reads.
+ */
+export function isPaidCreativeSurface(contentJson: unknown): boolean {
+  if (!contentJson || typeof contentJson !== 'object') return false;
+  const origin = (contentJson as { origin?: unknown }).origin;
+  if (!origin || typeof origin !== 'object') return false;
+  return (origin as { surface?: unknown }).surface === PAID_CREATIVE_SURFACE;
+}

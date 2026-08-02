@@ -19,8 +19,8 @@ export function TypographyCard({ primary, secondary, chip }: Props) {
       <CardContent>
         {primary || secondary ? (
           <div className="flex gap-5">
-            <FontSample family={primary} role="Primary" weight={700} />
-            <FontSample family={secondary} role="Secondary" weight={400} />
+            <FontSample family={primary} label="Primary" weight={700} />
+            <FontSample family={secondary} label="Secondary" weight={400} />
           </div>
         ) : (
           <p className="text-sm italic text-[#94a3b8]">No fonts detected.</p>

@@ -56,8 +56,19 @@ export type AdsetPickItem = {
   enrolledIn: AdsetClaim | null;
 };
 
-/** Which portfolio currently owns an ad set's active enrollment. */
-export type AdsetClaim = { portfolioId: string; portfolioName: string };
+/** Which portfolio currently owns an ad set's active enrollment.
+ *
+ *  `canRelease` is the difference between "selecting this moves it" and "selecting this will be
+ *  REFUSED": taking a claimed ad set requires edit rights on the brand holding it, so a claim
+ *  held by a brand the operator cannot edit is a dead end the picker must show up front rather
+ *  than let the save discover. `portfolioId`/`portfolioName` are null in exactly that case —
+ *  the claim is disclosed, its holder is not. */
+export type AdsetClaim = {
+  portfolioId: string | null;
+  portfolioName: string | null;
+  sameBrand: boolean;
+  canRelease: boolean;
+};
 
 /** adset_id → owning portfolio, for every ACTIVE enrollment on the account. */
 export type AdsetClaimMap = ReadonlyMap<string, AdsetClaim>;
@@ -212,24 +223,37 @@ export function buildCampaignSections(
 export function buildClaimMap(
   enrollments: ReadonlyArray<{
     adset_id: string;
-    portfolio_id: string;
+    portfolio_id: string | null;
     portfolio_name: string | null;
+    same_brand?: boolean;
+    can_release?: boolean;
   }>,
   currentPortfolioId: string | null,
 ): AdsetClaimMap {
   const map = new Map<string, AdsetClaim>();
   for (const row of enrollments) {
-    if (row.portfolio_id === currentPortfolioId) continue;
+    if (row.portfolio_id !== null && row.portfolio_id === currentPortfolioId) continue;
+    const sameBrand = row.same_brand ?? true;
     map.set(row.adset_id, {
       portfolioId: row.portfolio_id,
-      portfolioName: row.portfolio_name?.trim() || 'another portfolio',
+      // A cross-brand holder the caller cannot see has no name to show. Saying "another
+      // portfolio" there would be a guess; saying which BRAND-space it sits in is the honest
+      // amount of detail, and it is what makes the refusal legible.
+      portfolioName: row.portfolio_name?.trim() || (sameBrand ? 'another portfolio' : null),
+      sameBrand,
+      canRelease: row.can_release ?? true,
     });
   }
   return map;
 }
 
 /** The ad sets a save would take from other portfolios, grouped by which portfolio loses
- *  them — the sentence the confirm step needs ("3 ad sets will move out of Prospecting Q3"). */
+ *  them — the sentence the confirm step needs ("3 ad sets will move out of Prospecting Q3").
+ *
+ *  Claims the caller CANNOT release are excluded: those are not moves this save will make, they
+ *  are the reason it would be refused. Listing them here would promise something that cannot
+ *  happen; they get their own blocking message. Claims whose holder cannot be named are
+ *  likewise skipped — there is no portfolio to attribute the move to. */
 export function previewMoves(
   selectedIds: ReadonlyArray<string>,
   claims: AdsetClaimMap,
@@ -237,10 +261,11 @@ export function previewMoves(
   const byPortfolio = new Map<string, { portfolioName: string; adsetIds: string[] }>();
   for (const id of selectedIds) {
     const claim = claims.get(id);
-    if (!claim) continue;
+    if (!claim || !claim.canRelease) continue;
+    if (!claim.portfolioId || !claim.portfolioName) continue;
     const bucket = byPortfolio.get(claim.portfolioId) ?? {
       portfolioName: claim.portfolioName,
-      adsetIds: [],
+      adsetIds: [] as string[],
     };
     bucket.adsetIds.push(id);
     byPortfolio.set(claim.portfolioId, bucket);

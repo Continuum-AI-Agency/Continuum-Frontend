@@ -11,8 +11,12 @@ import {
 } from '@/components/organic/agent/streamEventParser';
 import type { AgentChatInput } from '@/components/organic/agent/types';
 import type { PanelAction } from '@/components/organic/agent/useOrganicAgentReducer';
-import { resolveIdleRunStatus, useOrganicAgentStream } from '@/hooks/useOrganicAgentStream';
-import { useAgentRunStore } from '@/lib/agents/runStore';
+import {
+  resolveIdleRunStatus,
+  toAgentRunEvent,
+  useOrganicAgentStream,
+} from '@/hooks/useOrganicAgentStream';
+import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
 
 describe('normalizeToolCallEvent', () => {
   it('uses camelCase tool fields when present', () => {
@@ -799,6 +803,203 @@ describe('useOrganicAgentStream resume loop', () => {
 
       view.unmount();
     });
+  });
+});
+
+// Bug #221. The store's status only ever advanced through `appendEvents`, and the ONLY
+// producer of that was the Realtime tailer. Drop that terminal INSERT — unsubscribed,
+// RLS-blocked, dead socket — and `isSessionStreaming` stayed true forever: "Continuum is
+// working…" never cleared and the composer stayed disabled until the 5-minute watchdog.
+// The live reader is the second producer the store was always designed for (TWO PRODUCERS,
+// ONE LOG), so the terminal frame must settle the run with NO Realtime involvement at all.
+describe('useOrganicAgentStream store append', () => {
+  const encoder = new TextEncoder();
+  const line = (obj: Record<string, unknown>) => encoder.encode(`${JSON.stringify(obj)}\n`);
+
+  const streamOf = (lines: Uint8Array[]): ReadableStream<Uint8Array> => {
+    let index = 0;
+    return new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (index < lines.length) {
+          controller.enqueue(lines[index]);
+          index += 1;
+          return;
+        }
+        controller.close();
+      },
+    });
+  };
+
+  const okResponse = (body: ReadableStream<Uint8Array>): Response =>
+    ({ ok: true, status: 200, body, text: async () => '' }) as unknown as Response;
+
+  const renderStreamHook = (dispatch: (action: PanelAction) => void) => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    const result: { current: ReturnType<typeof useOrganicAgentStream> | null } = { current: null };
+    const Harness = () => {
+      result.current = useOrganicAgentStream(dispatch);
+      return null;
+    };
+    act(() => {
+      root.render(createElement(Harness));
+    });
+    return {
+      result: result as { current: ReturnType<typeof useOrganicAgentStream> },
+      unmount: () => {
+        act(() => {
+          root.unmount();
+        });
+      },
+    };
+  };
+
+  const actEnvironment = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const realActEnvironment = actEnvironment.IS_REACT_ACT_ENVIRONMENT;
+  const realFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
+    useAgentRunStore.getState().reset();
+  });
+
+  afterEach(() => {
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = realActEnvironment;
+    globalThis.fetch = realFetch;
+  });
+
+  it('settles the run and unlocks the session from the terminal frame alone', async () => {
+    globalThis.fetch = (async () =>
+      okResponse(
+        streamOf([
+          line({
+            type: 'agent.chat_started',
+            seq: 0,
+            eventId: 'evt_0',
+            ts: '2026-07-30T00:00:00.000Z',
+            data: { runId: 'run_append', sessionId: 'sess_append' },
+          }),
+          line({
+            type: 'response.output_text.delta',
+            seq: 1,
+            eventId: 'evt_1',
+            ts: '2026-07-30T00:00:01.000Z',
+            data: { delta: 'hi' },
+          }),
+          line({
+            type: 'response.done',
+            seq: 2,
+            eventId: 'evt_2',
+            ts: '2026-07-30T00:00:02.000Z',
+            data: {},
+          }),
+        ]),
+      )) as typeof fetch;
+
+    const view = renderStreamHook(() => {});
+    await act(async () => {
+      await view.result.current.start({
+        brandId: 'brand_append',
+        sessionId: 'sess_append',
+        messages: [{ id: 'u1', role: 'user', content: 'hi' }],
+      });
+    });
+
+    const record = useAgentRunStore.getState().runs.run_append;
+    expect(record).toBeTruthy();
+    expect(record!.run.status).toBe('completed');
+    expect(isTerminalAgentRunStatus(record!.run.status)).toBe(true);
+    // The reader is the producer here: every enveloped frame lands in the log with its
+    // real seq, which is what makes the terminal status derivable without Realtime.
+    expect(record!.events.map((e) => e.seq)).toEqual([0, 1, 2]);
+    expect(record!.lastSeq).toBe(2);
+    expect(isSessionStreaming('sess_append')(useAgentRunStore.getState())).toBe(false);
+
+    view.unmount();
+  });
+
+  it('is idempotent against the Realtime tailer appending the same frame', async () => {
+    globalThis.fetch = (async () =>
+      okResponse(
+        streamOf([
+          line({
+            type: 'agent.chat_started',
+            seq: 0,
+            eventId: 'evt_0',
+            ts: '2026-07-30T00:00:00.000Z',
+            data: { runId: 'run_dupe', sessionId: 'sess_dupe' },
+          }),
+          line({
+            type: 'response.done',
+            seq: 1,
+            eventId: 'evt_1',
+            ts: '2026-07-30T00:00:01.000Z',
+            data: {},
+          }),
+        ]),
+      )) as typeof fetch;
+
+    const view = renderStreamHook(() => {});
+    await act(async () => {
+      await view.result.current.start({
+        brandId: 'brand_dupe',
+        sessionId: 'sess_dupe',
+        messages: [{ id: 'u1', role: 'user', content: 'hi' }],
+      });
+    });
+
+    const before = useAgentRunStore.getState().runs.run_dupe!.events;
+    // Exactly what the durable tailer replays over the boundary frame.
+    useAgentRunStore.getState().appendEvents('run_dupe', [
+      {
+        eventId: 'evt_1',
+        seq: 1,
+        ts: '2026-07-30T00:00:01.000Z',
+        type: 'response.done',
+        data: {},
+      },
+    ]);
+    const after = useAgentRunStore.getState().runs.run_dupe!.events;
+
+    expect(after).toBe(before);
+    expect(after.map((e) => e.seq)).toEqual([0, 1]);
+
+    view.unmount();
+  });
+});
+
+describe('toAgentRunEvent', () => {
+  it('lifts an enveloped NDJSON frame into a store event', () => {
+    expect(
+      toAgentRunEvent({
+        type: 'response.done',
+        seq: 4,
+        eventId: 'evt_4',
+        ts: '2026-07-30T00:00:00.000Z',
+        data: { ok: true },
+      }),
+    ).toEqual({
+      eventId: 'evt_4',
+      seq: 4,
+      ts: '2026-07-30T00:00:00.000Z',
+      type: 'response.done',
+      data: { ok: true },
+    });
+  });
+
+  it('rejects a frame with no seq — seq is the dedupe key the two producers share', () => {
+    expect(toAgentRunEvent({ type: 'agent.run_queued', data: {} })).toBeNull();
+  });
+
+  it('rejects a frame with no type', () => {
+    expect(toAgentRunEvent({ seq: 1, data: {} })).toBeNull();
+  });
+
+  it('substitutes an envelope for a frame that lost its eventId or ts in transit', () => {
+    const event = toAgentRunEvent({ type: 'response.output_text.delta', seq: 7 });
+    expect(event?.eventId).toBe('evt_7');
+    expect(typeof event?.ts).toBe('string');
+    expect(event?.data).toEqual({});
   });
 });
 

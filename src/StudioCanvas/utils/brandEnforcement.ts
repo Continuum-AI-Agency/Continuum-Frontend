@@ -146,15 +146,17 @@ export function brandBookAvailability(
   return { full: Object.values(concrete).some(Boolean), ...concrete };
 }
 
-// Pure toggle used by the context menu. "full" flips the whole book on/off;
-// toggling a concrete piece expands the current selection to concrete pieces,
-// flips that one, and re-normalizes to "full" when all are selected.
+// Pure toggle used by the grounding popover. "full" is the master switch —
+// enforcement on in any form (whole book OR a partial selection) turns it all off,
+// so the user can always clear in one click; off turns the whole book on. Toggling
+// a concrete piece expands the current selection to concrete pieces, flips that
+// one, and re-normalizes to "full" when all are selected.
 export function toggleBrandPiece(
   pieces: BrandBookPieceKind[] | undefined,
   kind: BrandBookPieceKind,
 ): BrandBookPieceKind[] {
   if (kind === 'full') {
-    return isEntireBookEnforced(pieces) ? [] : ['full'];
+    return isBrandEnforced(pieces) ? [] : DEFAULT_BRAND_BOOK_PIECES;
   }
 
   const effective = effectiveBrandBookPieces(pieces);

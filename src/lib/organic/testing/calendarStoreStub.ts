@@ -10,12 +10,27 @@ import { mock } from 'bun:test';
  *
  * So: known keys come from `state`, everything else answers with a no-op mock, and the
  * zustand static handles (`getState` / `setState`) stay present.
+ *
+ * The no-op-mock fallback only works for keys a hook CALLS. A selector that reads a
+ * collection (`state.days.find(...)`) gets a function and throws, so the store's
+ * collection-shaped keys carry empty defaults instead. Absent an explicit `state`
+ * entry, reading them yields an empty collection rather than a callable.
  */
+const EMPTY_COLLECTIONS: Record<string, unknown> = {
+  days: [],
+  backlogDrafts: [],
+  selectedDraftIds: [],
+  pendingServerDeletes: [],
+  eventHistory: [],
+  pendingDraftEdits: {},
+};
+
 export function createCalendarStoreStub(state: Record<string, unknown> = {}) {
   const fallbacks = new Map<string, () => void>();
   const proxied = new Proxy(state, {
     get: (target, key: string) => {
       if (key in target) return target[key];
+      if (key in EMPTY_COLLECTIONS) return EMPTY_COLLECTIONS[key];
       if (!fallbacks.has(key)) fallbacks.set(key, mock());
       return fallbacks.get(key);
     },

@@ -74,7 +74,7 @@ describe('resolveGroupPublishTargets', () => {
     expect(targets).toEqual([{ draftId: 'row-linkedin', platform: 'linkedin' }]);
   });
 
-  it('drops members with no persisted row and members on unpublishable platforms', () => {
+  it('drops members with no persisted row while retaining publishable platforms', () => {
     const targets = resolveGroupPublishTargets(
       makeDraft({
         platforms: ['instagram', 'facebook', 'tiktok'],
@@ -86,7 +86,10 @@ describe('resolveGroupPublishTargets', () => {
       }),
     );
 
-    expect(targets).toEqual([{ draftId: 'row-facebook', platform: 'facebook' }]);
+    expect(targets).toEqual([
+      { draftId: 'row-facebook', platform: 'facebook' },
+      { draftId: 'row-tiktok', platform: 'tiktok' },
+    ]);
   });
 
   it('collapses a duplicated platform onto its first member so a group cannot double-post', () => {
@@ -102,8 +105,8 @@ describe('resolveGroupPublishTargets', () => {
     expect(targets).toEqual([{ draftId: 'row-first', platform: 'instagram' }]);
   });
 
-  it('leaves the single-draft path (inferPublishPlatform) intact', () => {
+  it('infers the publish platform for single-draft publishing', () => {
     expect(inferPublishPlatform(makeDraft({ platforms: ['linkedin'] }))).toBe('linkedin');
-    expect(inferPublishPlatform(makeDraft({ platforms: ['tiktok'] }))).toBeNull();
+    expect(inferPublishPlatform(makeDraft({ platforms: ['tiktok'] }))).toBe('tiktok');
   });
 });

@@ -1,8 +1,11 @@
 import { z } from 'zod';
+import { brandBookPieceKindSchema } from './brand-enforcement';
 
 export const HYPERFRAMES_AGENT_NODE_TYPE = 'hyperframesAgent' as const;
 export const HYPERFRAMES_AGENT_MODEL = 'gemini-3.5-flash-lite' as const;
 export const HYPERFRAMES_AGENT_MEDIA_LIMIT = 20;
+/** Creative-direction skills a single turn may carry, matching the other generator nodes. */
+export const HYPERFRAMES_AGENT_SKILL_LIMIT = 3;
 
 export const hyperframesAspectRatioSchema = z.enum(['16:9', '9:16', '1:1']);
 export const hyperframesResolutionSchema = z.enum(['720p', '1080p']);
@@ -42,6 +45,11 @@ export const hyperframesAgentNodeDataSchema = z
     durationSeconds: z.number().int().min(5).max(30).default(10),
     fps: z.literal(30).default(30),
     resolution: hyperframesResolutionSchema.default('1080p'),
+    // Grounding selection persisted on the node, same as the other generators.
+    // Optional rather than defaulted so parsing an existing node does not
+    // silently write empty arrays into saved canvases.
+    skillIds: z.array(z.string().min(1)).max(HYPERFRAMES_AGENT_SKILL_LIMIT).optional(),
+    brandBookPieces: z.array(brandBookPieceKindSchema).max(8).optional(),
     status: hyperframesAgentStatusSchema.default('idle'),
     sessionId: z.string().min(1).optional(),
     activeRunId: z.string().min(1).optional(),
@@ -63,9 +71,12 @@ export const hyperframesAgentTurnRequestSchema = z
     sessionId: z.string().min(1).optional(),
     canvasId: z.string().min(1),
     nodeId: z.string().min(1),
-    nodeRevision: z.number().int().nonnegative(),
     prompt: z.string().trim().min(1).max(20_000),
     assets: z.array(hyperframesAgentAssetRefSchema).max(HYPERFRAMES_AGENT_MEDIA_LIMIT).default([]),
+    // Grounding selection, same shape the other generator nodes send. Without
+    // these the composition agent is the only ungrounded generator in the Studio.
+    skillIds: z.array(z.string().min(1)).max(HYPERFRAMES_AGENT_SKILL_LIMIT).default([]),
+    brandBookPieces: z.array(brandBookPieceKindSchema).max(8).default([]),
     aspectRatio: hyperframesAspectRatioSchema.default('16:9'),
     durationSeconds: z.number().int().min(5).max(30).default(10),
     resolution: hyperframesResolutionSchema.default('1080p'),
@@ -92,7 +103,10 @@ export const hyperframesCompositionRevisionSchema = z
     parentRevisionId: z.string().min(1).nullable(),
     fingerprint: z.string().length(64),
     compositionStorage: hyperframesStoragePointerSchema,
-    model: z.literal(HYPERFRAMES_AGENT_MODEL),
+    // A revision records WHICH model made it — a historical fact, not a validated
+    // choice. Pinning it to a literal made every past revision unreadable the day
+    // the agent's model changed.
+    model: z.string().min(1),
     aspectRatio: hyperframesAspectRatioSchema,
     width: z.number().int().positive(),
     height: z.number().int().positive(),
@@ -211,6 +225,10 @@ export const hyperframesAgentEventSchema = z.discriminatedUnion('type', [
       accepted: z.boolean(),
       warnings: z.array(z.string()),
       pass: z.number().int().min(0).max(2),
+      // Recorded on every review, not only rejections — otherwise craft is only
+      // measurable when it fails, and two runs cannot be compared. Optional so
+      // events written before this field stay replayable.
+      craftScore: z.number().int().min(1).max(10).optional(),
     }),
   }),
   z.object({

@@ -1,9 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act, cleanup, fireEvent, renderHook, screen } from '@testing-library/react';
 import * as React from 'react';
+import { DestructiveConfirmationProvider } from '@/components/organic/primitives/DestructiveConfirmation';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useDraftEnrichmentLadder } from './useDraftEnrichmentLadder';
+
+// happy-dom does not expose SyntaxError on its window object, which crashes
+// @testing-library/dom's querySelectorAll internals.
+(globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
+  SyntaxError;
+Object.assign(globalThis, {
+  MutationObserver: window.MutationObserver,
+  ResizeObserver: window.ResizeObserver,
+});
 
 // No mock.module here: it is process-wide in bun, so two spec files mocking the same
 // module clobber each other in a batch run. Stubbing fetch keeps this file isolated AND
@@ -42,6 +52,15 @@ const makeDraft = (over: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDra
 const wrapper = ({ children }: { children: React.ReactNode }) =>
   React.createElement(ToastProvider, null, children);
 
+// The rewrite confirmation is answered through the REAL provider, not a module mock:
+// mock.module is process-wide in bun and would leak into every sibling spec.
+const confirmingWrapper = ({ children }: { children: React.ReactNode }) =>
+  React.createElement(
+    ToastProvider,
+    null,
+    React.createElement(DestructiveConfirmationProvider, null, children),
+  );
+
 // Takes the full props object: a `= BRAND_ID` default would still apply when a test
 // passes `undefined` explicitly, quietly defeating the no-brand case.
 const ladderFor = (
@@ -57,13 +76,16 @@ const ladderFor = (
     { wrapper },
   ).result.current;
 
-// `run()` is fire-and-forget, and the request it starts awaits a dynamic import
-// (getBrowserAccessToken). Yielding a macrotask lets the fetch land inside this test
-// instead of leaking into the next one's assertions.
+// `run()` is fire-and-forget, and the request it starts first resolves a token.
+// getBrowserAccessToken finds no Supabase session here, and it retries once after a 300ms
+// delay before giving up — so a single macrotask yield returns before the fetch is even
+// attempted, and every assertion on `calls` saw an empty array.
+const TOKEN_RETRY_GRACE_MS = 400;
+
 const settle = async (dispatch: () => void) => {
   await act(async () => {
     dispatch();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, TOKEN_RETRY_GRACE_MS));
   });
 };
 
@@ -82,6 +104,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  cleanup();
 });
 
 describe('useDraftEnrichmentLadder stage derivation', () => {
@@ -216,6 +239,50 @@ describe('useDraftEnrichmentLadder rewrite', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toContain('/generate-copy');
     expect(calls[0].body).toEqual({ brandId: BRAND_ID, regenerate: true });
+  });
+
+  // A rewrite discards the caption and hashtags that are already there. It used to fire on
+  // a single click with nothing asked.
+  describe('confirmation', () => {
+    const renderWithConfirmation = () => {
+      const draft = makeDraft({ hasCopy: true, mediaStage: 'text_only' });
+      return renderHook(
+        () =>
+          useDraftEnrichmentLadder(draft, {
+            brandProfileId: BRAND_ID,
+            onMediaStep: onMediaStepMock,
+          }),
+        { wrapper: confirmingWrapper },
+      );
+    };
+
+    it('asks before rewriting, and does not enqueue until answered', async () => {
+      const { result } = renderWithConfirmation();
+
+      await settle(() => result.current.rewriteCopy());
+
+      expect(calls).toHaveLength(0);
+      expect(screen.getByText('Rewrite the copy?')).toBeTruthy();
+    });
+
+    it('no-ops when the confirmation is declined', async () => {
+      const { result } = renderWithConfirmation();
+      await settle(() => result.current.rewriteCopy());
+
+      await settle(() => fireEvent.click(screen.getByText('Cancel')));
+
+      expect(calls).toHaveLength(0);
+    });
+
+    it('enqueues the destructive rewrite once confirmed', async () => {
+      const { result } = renderWithConfirmation();
+      await settle(() => result.current.rewriteCopy());
+
+      await settle(() => fireEvent.click(screen.getByText('Rewrite copy')));
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0].body).toEqual({ brandId: BRAND_ID, regenerate: true });
+    });
   });
 
   it('does not throw when the Backend rejects the enqueue', async () => {

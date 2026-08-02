@@ -2,7 +2,7 @@
 
 import {
   AUTOMATION_PLANNER_UPSERT_DEFAULTS,
-  AUTOMATION_SOURCE_LIFECYCLE,
+  AUTOMATION_REGISTERED_NATIVE_OUTPUT_CONTRACT_IDS,
   type AutomationActionNodeType,
   type AutomationAiStudioGenerator,
   type AutomationCapabilitiesResponse,
@@ -13,7 +13,7 @@ import {
   type AutomationWorkflowNode,
   automationAgentCapabilitySchema,
   automationAiStudioGeneratorSchema,
-  automationSourceKindSchema,
+  isRegisteredNativeOutputContractId,
   parseAutomationSourceQuery,
   resolveAutomationAiStudioGenerateConfig,
   resolveAutomationLibrarySaveConfig,
@@ -62,6 +62,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { getApiUrl } from '@/lib/api/config';
+import { buildAutomationSourceOptions } from '@/lib/automations/source-options';
 import { cn } from '@/lib/utils';
 import { AiStudioRoomPicker } from './pickers/AiStudioRoomPicker';
 import { LibraryCollectionPicker } from './pickers/LibraryCollectionPicker';
@@ -130,6 +131,24 @@ const formatterStarters: PromptStarter[] = [
     text: 'Prioritize the decision, evidence, risks, and next actions. Keep every field concise and preserve the source labels.',
   },
 ];
+
+const NATIVE_CONTRACT_LABELS: Record<string, string> = {
+  'report.document': 'Report document',
+  'webhook.payload': 'Webhook payload',
+  'planner.draft': 'Planner draft',
+};
+
+/**
+ * Derived from the registry rather than hand-listed. The hand-listed version
+ * omitted `planner.draft`, which IS registered — so the formatter could never
+ * be pointed at it and the content-to-planner chain was unbuildable in the UI
+ * despite the adapter being wired. Deriving means registered and offerable
+ * cannot drift apart again in either direction.
+ */
+const NATIVE_CONTRACT_OPTIONS = AUTOMATION_REGISTERED_NATIVE_OUTPUT_CONTRACT_IDS.map((id) => ({
+  value: id,
+  label: NATIVE_CONTRACT_LABELS[id] ?? id,
+}));
 
 const textList = (value: string): string[] =>
   value
@@ -461,13 +480,6 @@ function Toggle({
   );
 }
 
-const sourceOptions = automationSourceKindSchema.options.map((source) => ({
-  value: source,
-  label: source.replaceAll('_', ' '),
-  disabled: false,
-  preview: AUTOMATION_SOURCE_LIFECYCLE[source] === 'preview',
-}));
-
 function SourceEditor({
   node,
   disabled,
@@ -508,6 +520,12 @@ function SourceEditor({
       ? parseAutomationSourceQuery('connected_platform', config.query)
       : null;
   const capability = sourceCapabilities?.sources.find((item) => item.source === config.source);
+  // Server truth, with the bundled enum as the "capabilities have not loaded"
+  // fallback so the editor still works offline or mid-fetch.
+  const sourceOptions = buildAutomationSourceOptions({
+    capabilities: sourceCapabilities,
+    selected: config.source,
+  });
   const patchQuery = (patch: Record<string, unknown>) =>
     onChange({ ...config, query: { ...query, ...patch } });
 
@@ -1037,13 +1055,9 @@ export function NodeConfigurationEditor({
               node.config.contract.kind === 'native' ? node.config.contract.contractId : 'custom'
             }
             disabled={disabled}
-            options={[
-              { value: 'report.document', label: 'Report document' },
-              { value: 'webhook.payload', label: 'Webhook payload' },
-              { value: 'custom', label: 'Custom JSON schema' },
-            ]}
+            options={[...NATIVE_CONTRACT_OPTIONS, { value: 'custom', label: 'Custom JSON schema' }]}
             onChange={(contractId) => {
-              if (contractId === 'report.document' || contractId === 'webhook.payload') {
+              if (isRegisteredNativeOutputContractId(contractId)) {
                 onChange({
                   ...node.config,
                   contract: { kind: 'native', contractId, version: 1 },
@@ -1153,6 +1167,11 @@ export function NodeConfigurationEditor({
             disabled={disabled}
             onChange={(title) => onChange({ ...node.config, title })}
           />
+          <p className="text-[11px] leading-4 text-muted-foreground">
+            The title heads the rendered report. Objective, audience and sections describe the
+            report you want written — they shape the upstream formatter&rsquo;s target rather than
+            this step. A formatter that returns complete markdown is passed through as authored.
+          </p>
           <PromptField
             label="Objective"
             value={node.config.objective}

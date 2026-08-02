@@ -112,8 +112,15 @@ export function BrandTrendsHeaderModule({
             >
               <LineChart className="size-3.5" aria-hidden />
               Trends
-              {signalCount > 0 ? (
-                <Badge variant="secondary" className="h-4 px-1 text-[10px] tabular-nums">
+              {/* The badge counts trends, so it is gated on trends. Gating it on the
+                  wider signal count (trends + events + questions) rendered a literal
+                  "0" beside a chip that had just been shown for having signals. */}
+              {trends.length > 0 ? (
+                <Badge
+                  variant="secondary"
+                  className="h-4 px-1 text-[10px] tabular-nums"
+                  aria-label={`${trends.length} trends available`}
+                >
                   {trends.length}
                 </Badge>
               ) : null}

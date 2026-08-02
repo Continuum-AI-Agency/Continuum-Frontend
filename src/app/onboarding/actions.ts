@@ -102,10 +102,36 @@ export async function resetOnboardingStateAction(brandId: string): Promise<Onboa
 }
 
 export async function completeOnboardingAction(brandId: string): Promise<OnboardingState> {
+  const user = await getClaimsIdentity();
   const state = await applyOnboardingPatch(brandId, {
     completedAt: new Date().toISOString(),
-    step: 2,
+    step: 6,
   });
+
+  // Completion analytics are emitted only after the durable completion write.
+  // A failed persistence attempt must never be counted as a completed onboarding.
+  if (user?.id) {
+    const integrationCount = Object.values(state.connections ?? {}).reduce(
+      (count, connection) =>
+        count + connection.accounts.filter((account) => account.selected).length,
+      0,
+    );
+    after(async () => {
+      const posthog = getPostHogClient();
+      try {
+        posthog.capture({
+          distinctId: user.id,
+          event: 'onboarding_completed',
+          properties: {
+            brand_id: brandId,
+            integration_count: integrationCount,
+          },
+        });
+      } finally {
+        await posthog.shutdown();
+      }
+    });
+  }
 
   // Warm the dashboard caches the first-value report reads, so the email that the
   // completedAt trigger just enqueued has full data and the dashboard the user is
@@ -135,8 +161,11 @@ export async function approveOnboardingAndStartAnalysisAction(
   const supabase = await createSupabaseServerClient();
   const user = await getClaimsIdentity();
   const userId = user?.id;
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (!userId) {
+  if (!userId || !session?.access_token) {
     throw new Error('User session not found');
   }
 
@@ -154,6 +183,7 @@ export async function approveOnboardingAndStartAnalysisAction(
   const approved = await approveOnboardingBrandProfile({
     payload,
     idempotencyKey: options?.idempotencyKey,
+    accessToken: session.access_token,
   });
   console.info('[approveOnboardingAndStartAnalysisAction] Brand profile approved', {
     brandId,
@@ -219,17 +249,6 @@ export async function approveOnboardingAndStartAnalysisAction(
       });
     }
   });
-
-  const posthog = getPostHogClient();
-  posthog.capture({
-    distinctId: userId,
-    event: 'onboarding_completed',
-    properties: {
-      brand_id: brandId,
-      integration_count: payload.runContext.integration_account_ids.length,
-    },
-  });
-  await posthog.shutdown();
 }
 
 export async function approveAndLaunchOnboardingAction(

@@ -8,6 +8,7 @@ import {
   getStudioPortMetadata,
   getTargetHandleConnectionLimit,
   getVideoGeneratorImageReferenceHandle,
+  getVideoGeneratorProvider,
   getVideoGeneratorReferenceMode,
   getVideoGeneratorReferenceModes,
   getVideoGeneratorTargetHandles,
@@ -26,7 +27,9 @@ import {
   supportsVideoGeneratorReferenceImages,
   TIMELINE_MEDIA_INPUT_HANDLE,
   TIMELINE_MEDIA_POOL_LIMIT,
+  VIDEO_GENERATOR_MODEL_GROUPS,
   VIDEO_GENERATOR_MODELS,
+  VIDEO_GENERATOR_PROVIDER_LABELS,
   VIDEO_GENERATOR_REFERENCE_MODE_LABELS,
   validateConnection,
   variationIndexFromHandle,
@@ -381,6 +384,32 @@ describe('video generator reference modes', () => {
     expect(VIDEO_GENERATOR_REFERENCE_MODE_LABELS.frames).toBeTruthy();
     expect(VIDEO_GENERATOR_REFERENCE_MODE_LABELS.images).toBeTruthy();
     expect(VIDEO_GENERATOR_REFERENCE_MODE_LABELS.omni).toBeTruthy();
+  });
+});
+
+describe('video generator provider groups', () => {
+  it('places every model in exactly one provider group', () => {
+    const grouped = VIDEO_GENERATOR_MODEL_GROUPS.flatMap((group) => group.models);
+    expect([...grouped].sort()).toEqual([...VIDEO_GENERATOR_MODELS].sort());
+    expect(new Set(grouped).size).toBe(grouped.length);
+  });
+
+  it('groups the fal-hosted models together and the google models together', () => {
+    const byProvider = new Map(
+      VIDEO_GENERATOR_MODEL_GROUPS.map((group) => [group.provider, group.models]),
+    );
+    expect(byProvider.get('fal')).toEqual(['kling-omni', 'pixverse-v6', 'seedance-2.0']);
+    expect(byProvider.get('google')).toEqual(['veo-3.1-fast', 'veo-3.1-lite', 'veo-3.1']);
+  });
+
+  it('agrees with getVideoGeneratorProvider and labels every provider', () => {
+    for (const group of VIDEO_GENERATOR_MODEL_GROUPS) {
+      expect(VIDEO_GENERATOR_PROVIDER_LABELS[group.provider]).toBeTruthy();
+      expect(group.label).toBe(VIDEO_GENERATOR_PROVIDER_LABELS[group.provider]);
+      for (const model of group.models) {
+        expect(getVideoGeneratorProvider(model)).toBe(group.provider);
+      }
+    }
   });
 });
 

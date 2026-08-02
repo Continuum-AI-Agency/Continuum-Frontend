@@ -73,14 +73,15 @@ export function resolveGroupPublishTargets(draft: OrganicCalendarDraft): GroupPu
 }
 
 // ── Shared publish-stream plumbing ──────────────────────────────────────────
-// Single-draft publish (usePublishDraft) and group publish (usePublishGroup) consume the
-// SAME backend SSE stream and the same failure codes. These live here so the two hooks
-// cannot drift into two parsers and two copies of the user-facing error copy.
+// The publish SSE frames and their failure codes are parsed here rather than in the hook, so the
+// stream parser and the user-facing error copy exist once.
 
+// Keyed by PublishPlatform, so a newly publishable platform cannot reach the UI unnamed.
 const PLATFORM_LABELS: Record<PublishPlatform, string> = {
   instagram: 'Instagram',
   facebook: 'Facebook',
   linkedin: 'LinkedIn',
+  tiktok: 'TikTok',
 };
 
 export function publishPlatformLabel(platform: PublishPlatform | undefined | null): string {

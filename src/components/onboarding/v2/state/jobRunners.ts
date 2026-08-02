@@ -1,20 +1,29 @@
 import type { OnboardingGeneratedImage } from '@continuum/contracts';
 import { generateBrandInsights } from '@/lib/api/brandInsights.client';
 import { runStrategicAnalysis } from '@/lib/api/strategicAnalyses.client';
+import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { getOnboardingAgentBaseUrl } from '@/lib/onboarding/agentClient';
 import { persistOnboardingBrandKit, streamGeneration } from '@/lib/onboarding/inspirationsClient';
 import type { ScrapeResult } from '@/lib/onboarding/scrape';
 import { timing, trackOnboardingEvent } from '@/lib/onboarding/telemetry';
 
-export async function runScrape(url: string, signal: AbortSignal): Promise<ScrapeResult> {
+export async function runScrape(
+  brandId: string,
+  url: string,
+  signal: AbortSignal,
+): Promise<ScrapeResult> {
   const t = timing();
   trackOnboardingEvent('onboarding_scrape_started', { url });
   try {
     const base = getOnboardingAgentBaseUrl();
+    const token = await getBrowserAccessToken();
     const response = await fetch(`${base}/onboarding/brand-profiles/scrape`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ brand_id: brandId, url }),
       signal,
     });
     if (!response.ok) {

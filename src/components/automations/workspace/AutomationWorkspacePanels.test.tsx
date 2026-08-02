@@ -10,6 +10,7 @@ import type {
   AutomationWorkflowDefinition,
   AutomationWorkflowNode,
 } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -264,5 +265,64 @@ describe('WorkflowInspector capability resolution', () => {
     // The selected node is an `instruction`, which the server said nothing
     // about, so the bundled answer stands and no availability badge appears.
     expect(screen.queryByText('Unavailable')).toBeNull();
+  });
+});
+
+// A prop that is simply never forwarded fails silently. `NodeConfigurationEditor`
+// has always accepted `brandId` and handed it to all five action pickers, but
+// `WorkflowInspector` did not declare it and no caller passed one — so every
+// picker in production rendered its raw-id fallback, which is the deliberate
+// degrade path for an outage and therefore looks intentional rather than broken.
+//
+// The assertion keys on the no-brand reason specifically, not on "is it
+// degraded": with a brand in scope the picker may still degrade because the
+// fetch failed, and that is a different sentence and a different bug.
+describe('WorkflowInspector brand scope', () => {
+  const NO_BRAND = /No brand is in scope/i;
+  const realFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  const renderPlannerInspector = (brandId?: string) => {
+    globalThis.fetch = mock(async () => new Response('{}', { status: 500 })) as typeof fetch;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <TooltipProvider>
+          <WorkflowInspector
+            selected={createAutomationWorkflowNode({
+              type: 'action.planner_upsert',
+              id: 'planner',
+              position: { x: 0, y: 0 },
+            })}
+            brandId={brandId}
+            locked={false}
+            validation={{ ok: true, issues: [], definitionHash: 'hash' }}
+            evidence={[]}
+            nodeRuns={[]}
+            checks={[]}
+            actionReceipts={[]}
+            sourceCapabilities={null}
+            webhookDestinations={[]}
+            webhookEndpoints={[]}
+            onPatch={mock(() => {})}
+            onSelectIssue={mock(() => {})}
+            onMessage={mock(() => {})}
+          />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+  };
+
+  test('forwards the brand through to the action pickers', () => {
+    renderPlannerInspector('11111111-1111-4111-8111-111111111111');
+    expect(screen.queryByText(NO_BRAND)).toBeNull();
+  });
+
+  test('claims no brand only when there genuinely is none', () => {
+    renderPlannerInspector(undefined);
+    expect(screen.getByText(NO_BRAND)).toBeTruthy();
   });
 });

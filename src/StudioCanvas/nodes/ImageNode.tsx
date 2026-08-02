@@ -73,7 +73,10 @@ import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from '../utils/a
 import { parseDataUrl } from '../utils/dataUrl';
 import { resolveCollisions } from '../utils/nodeCollisions';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import { uploadReferenceFile } from '../utils/uploadReferenceFile';
+import {
+  stageAndUploadReferenceFile,
+  uploadReferenceFile,
+} from '../utils/uploadReferenceFile';
 import { referenceStatusBadge } from './referenceStatusBadge';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
@@ -261,11 +264,36 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   // (processing -> ready/error badge). The base64 preview set by applyPreviewImage
   // remains the emergency fallback if the upload fails.
   const uploadLocalReference = useCallback(
-    (file: File) => {
-      if (!brandId) return;
-      void uploadReferenceFile({ nodeId: id, file, brandId, field: 'image' }, { updateNodeData });
+    (
+      file: File,
+      previewData?: {
+        image: string;
+        originalImage: string;
+        markupLayer?: undefined;
+        hasMarkup: false;
+        fileName: string;
+        assetId?: undefined;
+        assetVersionId?: undefined;
+        sourcePath?: undefined;
+        bucket?: undefined;
+        sourceUrl?: undefined;
+      },
+    ) => {
+      if (!brandId) {
+        if (previewData) updateNodeData(id, previewData);
+        return;
+      }
+      const deps = { updateNodeData, triggerSave };
+      if (previewData) {
+        void stageAndUploadReferenceFile(
+          { nodeId: id, file, brandId, field: 'image', previewData },
+          deps,
+        );
+        return;
+      }
+      void uploadReferenceFile({ nodeId: id, file, brandId, field: 'image' }, deps);
     },
-    [brandId, id, updateNodeData],
+    [brandId, id, triggerSave, updateNodeData],
   );
 
   const handleFileUpload = useCallback(
@@ -275,13 +303,24 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
         const reader = new FileReader();
         reader.onloadend = () => {
           const result = reader.result as string;
-          void applyPreviewImage({ src: result, fileName: file.name });
-          uploadLocalReference(file);
+          setPreview(result);
+          uploadLocalReference(file, {
+            image: result,
+            originalImage: result,
+            markupLayer: undefined,
+            hasMarkup: false,
+            fileName: file.name,
+            assetId: undefined,
+            assetVersionId: undefined,
+            sourcePath: undefined,
+            bucket: undefined,
+            sourceUrl: undefined,
+          });
         };
         reader.readAsDataURL(file);
       }
     },
-    [applyPreviewImage, uploadLocalReference],
+    [uploadLocalReference],
   );
 
   // Retry a failed upload from the retained local preview (the base64 the node
@@ -338,8 +377,19 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
         }
         try {
           const result = await fileToDataUrl(file);
-          applyPreviewImage({ src: result, fileName: file.name });
-          uploadLocalReference(file);
+          setPreview(result);
+          uploadLocalReference(file, {
+            image: result,
+            originalImage: result,
+            markupLayer: undefined,
+            hasMarkup: false,
+            fileName: file.name,
+            assetId: undefined,
+            assetVersionId: undefined,
+            sourcePath: undefined,
+            bucket: undefined,
+            sourceUrl: undefined,
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to read dropped file';
           show({

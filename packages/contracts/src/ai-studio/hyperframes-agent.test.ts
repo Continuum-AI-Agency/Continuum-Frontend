@@ -29,7 +29,6 @@ describe('HyperFrames agent contracts', () => {
     const parsed = hyperframesAgentTurnRequestSchema.safeParse({
       canvasId: 'canvas_1',
       nodeId: 'node_1',
-      nodeRevision: 4,
       prompt: 'Cut a kinetic launch video',
       assets: [
         { assetId: 'image_1', kind: 'image' },
@@ -51,7 +50,6 @@ describe('HyperFrames agent contracts', () => {
       hyperframesAgentTurnRequestSchema.safeParse({
         canvasId: 'canvas_1',
         nodeId: 'node_1',
-        nodeRevision: 1,
         prompt: 'Use everything',
         assets,
       }).success,

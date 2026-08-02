@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "jobId": "job-zip-export-1",
+  "result": {
+    "storeId": "continuum-archive",
+    "bucket": "media-export",
+    "key": "11111111-1111-4111-8111-111111111111/exports/2026-07-29-library.zip",
+    "bytes": 15728912,
+    "entryCount": 3,
+    "zip64": false,
+    "entries": [
+      {
+        "path": "renders/hero.mp4",
+        "uncompressedSize": 14680064,
+        "compressedSize": 14680064,
+        "crc32": 2711724873
+      },
+      {
+        "path": "renders/naïve — 日本語.png",
+        "uncompressedSize": 786432,
+        "compressedSize": 786432,
+        "crc32": 145206914
+      },
+      {
+        "path": "external/reference.jpg",
+        "uncompressedSize": 262144,
+        "compressedSize": 262144,
+        "crc32": 4294967295
+      }
+    ]
+  },
+  "metrics": {
+    "durationMs": 9310,
+    "bytesIn": 15728640,
+    "bytesOut": 15728912,
+    "peakRssBytes": 188743680,
+    "uploadMemoryCeilingBytes": 150994944
+  }
+}

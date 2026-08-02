@@ -8,6 +8,8 @@
 // ranker), which is one of this pipeline's data sources.
 
 export * from './analysis';
+export * from './angleSynthesis';
+export * from './angles';
 export * from './insight';
 export * from './paid';
 export * from './taxonomy';

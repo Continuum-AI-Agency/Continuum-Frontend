@@ -57,32 +57,51 @@ import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
 import { PinToAgentButton } from '@/components/organic/agent/PinToAgentButton';
 import { CreativeStrategyCard } from '@/components/organic/CreativeStrategyCard';
 import { PostQuickLook } from '@/components/organic/cards/PostQuickLook';
-import { OrganicCompareView } from '@/components/organic/compare/OrganicCompareView';
+import {
+  type CompareExportSelection,
+  OrganicCompareView,
+} from '@/components/organic/compare/OrganicCompareView';
 import { OrganicAwarenessReportView } from '@/components/organic/OrganicAwarenessReportView';
 import {
+  articleFor,
+  formatCompactNumber,
+  formatDateRangeLabel,
   formatDateTime,
   formatNumber,
   formatPercentChange,
   formatRate,
   formatShortDate,
+  NO_DATA,
   trendDirection,
 } from '@/components/organic/organic-format';
 import {
+  buildDateAlignedSeries,
   buildPostMetricSeries,
   calculateHookRate,
+  countNumericSeriesPoints,
+  DRILLDOWN_WINDOW_DAYS,
   type DrilldownWindow,
+  dayOverDayComparisonFromTrends,
   filterPostsByYoutubeType,
   formatWatchTime,
   isTrendKeyGraphable,
   isYouTubeShort,
+  latestNumericDate,
   POST_GALLERY_MAX_DAYS,
+  POST_HISTORY_ACCOUNT_STANDIN_COPY,
+  POST_HISTORY_EMPTY_COPY,
+  POST_HISTORY_TRACKED_DAYS,
   type PostMetricKey,
+  type PostSeriesPoint,
   type PostSortKey,
+  postHistoryProgressCopy,
   postPeriodComparisons,
-  postWindowDays,
   postWindowRange,
+  resolveReportViewState,
   sortPosts,
   summarizeYoutubeTypeMetrics,
+  trendLineShape,
+  windowEndingOn,
   type YoutubePostTypeFilter,
 } from '@/components/organic/organic-metrics-utils';
 import {
@@ -121,14 +140,16 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOrganicInsights } from '@/hooks/useOrganicInsights';
 import { isAllZeroPost, useOrganicPostDetail } from '@/hooks/useOrganicPostDetail';
 import { kpiMetricToMentionSuggestion } from '@/lib/agent/kpi-mentions';
-import { fetchOrganicAnalytics } from '@/lib/api/organicAnalytics.client';
+import {
+  fetchOrganicAnalytics,
+  isOrganicAnalyticsCancellation,
+} from '@/lib/api/organicAnalytics.client';
 import { useAccountSelectionStore } from '@/lib/integrations/accountSelectionStore';
 import { hookRateTextColor } from '@/lib/organic/hook-rate-color';
 import type { OrganicComputedInsight } from '@/lib/organic/organic-insights.types';
 import { consumePrefetched } from '@/lib/prefetch/organic-metrics-cache';
 import type { OrganicMetricsBrandInsights } from '@/lib/schemas/brandInsights';
 import type {
-  AudienceBreakdown,
   AudienceDemographicEntry,
   ContentTypePerformance,
   MetricComparison,
@@ -336,79 +357,68 @@ function resolveProfileVisits(metrics: OrganicMetrics) {
   return metrics.profileVisits24h ?? metrics.profileVisitsYesterday;
 }
 
-function percentageChange(current: number, previous: number) {
-  if (previous === 0) return current > 0 ? 100 : 0;
-  return Number((((current - previous) / Math.abs(previous)) * 100).toFixed(1));
-}
+// Which window a delta actually describes. The backend emits both a
+// period-over-period map (`comparison`) and a day-over-day one
+// (`comparisonDaily`); labelling the second as the first is what put "vs previous
+// period" beside a one-day swing.
+type ComparisonBasis = 'period' | 'day';
 
-function fallbackComparisonFromTrends(
-  data: OrganicMetricsResponse,
+type BasisComparison = { comparison: MetricComparison; basis: ComparisonBasis };
+
+const COMPARISON_BASIS_LABEL: Record<ComparisonBasis, string> = {
+  period: 'vs previous period',
+  day: 'vs previous day',
+};
+
+function comparisonFromMap(
+  map: OrganicMetricsResponse['comparison'],
   metricKey: keyof OrganicMetrics,
 ): MetricComparison | undefined {
-  const trendKey = ACCOUNT_TREND_MAP[metricKey];
-  if (!trendKey) return undefined;
-
-  const trends = (data.trends ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
-  const numericPoints = trends
-    .map((trend) => trend[trendKey])
-    .filter((value): value is number => typeof value === 'number');
-  if (numericPoints.length < 2) return undefined;
-
-  const current = numericPoints[numericPoints.length - 1];
-  const previous = numericPoints[numericPoints.length - 2];
-  if (current === undefined || previous === undefined) return undefined;
-
-  return {
-    current,
-    previous,
-    percentageChange: percentageChange(current, previous),
-  };
+  if (!map) return undefined;
+  if (metricKey === 'profileVisits24h') {
+    return map.profileVisits24h ?? map.profileVisitsYesterday;
+  }
+  return map[metricKey];
 }
 
+// Prefers the true period-over-period comparison. Falls back to the backend's own
+// day-over-day map, and only then to a day-over-day read of the daily series —
+// each step carries the basis forward so the adjacent label never overstates the
+// window it covers.
 function metricComparisonFor(
   data: OrganicMetricsResponse,
   metricKey: keyof OrganicMetrics,
-): MetricComparison | null | undefined {
-  if (metricKey === 'profileVisits24h') {
-    return data.comparison?.profileVisits24h ?? data.comparison?.profileVisitsYesterday;
-  }
-  return data.comparison?.[metricKey] ?? fallbackComparisonFromTrends(data, metricKey);
+): BasisComparison | null {
+  const period = comparisonFromMap(data.comparison, metricKey);
+  if (period) return { comparison: period, basis: 'period' };
+
+  const daily = comparisonFromMap(data.comparisonDaily, metricKey);
+  if (daily) return { comparison: daily, basis: 'day' };
+
+  const derived = dayOverDayComparisonFromTrends(data.trends, ACCOUNT_TREND_MAP[metricKey]);
+  return derived ? { comparison: derived, basis: 'day' } : null;
 }
 
+// The drilldown keeps its own window, independent of the range filter above, and
+// anchors it to the range's last reported day. Building the axis from calendar
+// dates (rather than from the last N points a metric happens to have) is what
+// stops two metrics rendering two different date spans under one shared label.
 function buildAccountMetricSeries(params: {
   data: OrganicMetricsResponse;
   metricKey: keyof OrganicMetrics;
   window: DrilldownWindow;
 }) {
   const { data, metricKey, window } = params;
-  const days = window === '30d' ? 30 : 7;
-  const trends = (data.trends ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
   const trendKey = ACCOUNT_TREND_MAP[metricKey];
+  if (!trendKey) return [];
 
-  if (trendKey) {
-    const points = trends
-      .map((trend) => ({
-        date: trend.date,
-        value: trend[trendKey],
-        boosted: Boolean(trend.boosted),
-      }))
-      .filter(
-        (trend): trend is { date: string; value: number; boosted: boolean } =>
-          typeof trend.value === 'number',
-      );
-
-    if (points.length === 0) return [];
-
-    return points
-      .map((trend) => ({
-        date: trend.date,
-        value: trend.value,
-        boosted: trend.boosted,
-      }))
-      .slice(Math.max(0, points.length - days));
-  }
-
-  return [];
+  const axis = windowEndingOn(data.range.until, DRILLDOWN_WINDOW_DAYS[window]);
+  return buildDateAlignedSeries({
+    trends: data.trends,
+    trendKey,
+    since: axis.since,
+    until: axis.until,
+  });
 }
 
 function isVideoPost(post: OrganicPost) {
@@ -432,6 +442,17 @@ function getPostPreviewUrl(post: OrganicPost) {
   );
 }
 
+// The three numbers the gallery exists to show. Rendered on the card face because
+// per-post performance is the only reason to open this view, and the card used to
+// carry none of it.
+function postFaceMetrics(post: OrganicPost): MetricStripItem[] {
+  return [
+    { label: 'Reach', value: formatCompactNumber(post.metrics?.reach) },
+    { label: 'Views', value: formatCompactNumber(post.metrics?.views) },
+    { label: 'Engagement', value: formatCompactNumber(post.metrics?.totalInteractions) },
+  ];
+}
+
 function PostGalleryCard({
   post,
   selected,
@@ -453,17 +474,10 @@ function PostGalleryCard({
   const isThumbnailOnlyVideo = platform === 'tiktok' || platform === 'youtube';
   const video = !isThumbnailOnlyVideo && isVideoPost(post);
   const carousel = isCarouselPost(post);
-  const mediaHeightClass = selected
-    ? video
-      ? 'h-[280px] sm:h-[320px]'
-      : carousel
-        ? 'h-[250px] sm:h-[290px]'
-        : 'h-[260px] sm:h-[300px]'
-    : video
-      ? 'h-[220px] sm:h-[260px]'
-      : carousel
-        ? 'h-[190px] sm:h-[220px]'
-        : 'h-[210px] sm:h-[240px]';
+  // One aspect-ratio frame for every card instead of six fixed pixel heights. In a
+  // fluid auto-fit grid a fixed height and a ratio-driven child disagree by
+  // definition, and the parent's overflow-hidden then crops the media. A ratio box
+  // scales with the column, so nothing is clipped and the grid stays even.
   const reelData: ReelItem[] = preview
     ? [
         {
@@ -492,15 +506,12 @@ function PostGalleryCard({
           : 'hover:-translate-y-0.5 hover:shadow-md',
       )}
     >
-      <div
-        className={cn(
-          'relative flex w-full items-center justify-center overflow-hidden bg-black/90 ring-1 ring-black/10 dark:ring-white/10',
-          mediaHeightClass,
-        )}
-      >
+      <div className="relative flex aspect-[4/5] w-full items-center justify-center overflow-hidden bg-black/90 ring-1 ring-black/10 dark:ring-white/10">
         {preview ? (
           video && !isThumbnailOnlyVideo ? (
-            <Reel className="h-full w-full" data={reelData} defaultMuted>
+            // aspect-auto defeats the Reel root's own aspect-[9/16] so the video
+            // letterboxes inside this frame instead of overflowing and being cropped.
+            <Reel className="h-full w-full aspect-auto" data={reelData} defaultMuted>
               <ReelContent>
                 {(item) => (
                   <ReelVideo
@@ -575,6 +586,17 @@ function PostGalleryCard({
           </Pill>
         ) : null}
       </div>
+
+      <div className="px-2.5 py-2">
+        {loading && isAllZeroPost(post) ? (
+          <Skeleton className="h-4 w-full rounded" />
+        ) : (
+          <MetricStrip items={postFaceMetrics(post)} />
+        )}
+        <span className="mt-1 block text-2xs text-muted-foreground">
+          {formatDateTime(post.timestamp)}
+        </span>
+      </div>
     </motion.button>
   );
 }
@@ -624,14 +646,14 @@ function TikTokEmbed({ videoId, permalink }: { videoId: string; permalink: strin
 // is lifetime-to-date only (no period comparison exists for it — see
 // PostComparisonKey). The other metrics show the backend-computed
 // period-over-period total (current 7d vs prior 7d) once 14 days of history
-// are tracked; until then they read "Building…" rather than substituting the
+// are tracked; until then they read as absent rather than substituting the
 // lifetime total under a "(7d)" label.
 function buildPostSnapshotStripItems(
   post: OrganicPost,
   metricComparisons: Partial<Record<string, MetricComparison>>,
 ): MetricStripItem[] {
   const windowed = (key: 'views' | 'engagement' | 'comments') =>
-    metricComparisons[key] ? formatNumber(metricComparisons[key]?.current) : 'Building…';
+    metricComparisons[key] ? formatNumber(metricComparisons[key]?.current) : NO_DATA;
 
   const items: MetricStripItem[] = [
     {
@@ -694,8 +716,8 @@ function PostSnapshotPanel({
   post: OrganicPost;
   selectedMetric: PostMetricKey;
   onMetricSelect: (metric: PostMetricKey) => void;
-  series: Array<{ date: string; value: number }>;
-  accountSeries?: Array<{ date: string; value: number }>;
+  series: PostSeriesPoint[];
+  accountSeries?: PostSeriesPoint[];
   loading: boolean;
   onRecoverMedia?: (postId: string) => void;
   platform?: MetricsPlatform;
@@ -714,6 +736,10 @@ function PostSnapshotPanel({
   // Show skeletons only while the detail fetch is in flight AND the base post has
   // no metrics yet, so an already-populated post is never hidden behind a loader.
   const metricsPending = loading && isAllZeroPost(post);
+  const postLine = trendLineShape(countNumericSeriesPoints(series));
+  const accountLine = trendLineShape(countNumericSeriesPoints(accountSeries ?? []));
+  const hasPostSeries = countNumericSeriesPoints(series) > 0;
+  const hasAccountSeries = countNumericSeriesPoints(accountSeries ?? []) > 0;
 
   return (
     <motion.aside
@@ -744,7 +770,7 @@ function PostSnapshotPanel({
             ) : preview ? (
               video ? (
                 <Reel
-                  className="max-h-[320px] min-h-[180px] w-full"
+                  className="aspect-auto max-h-[320px] min-h-[180px] w-full"
                   data={[
                     {
                       id: `${post.id}-snapshot`,
@@ -825,7 +851,7 @@ function PostSnapshotPanel({
             </div>
             {metricsPending ? (
               <Skeleton className="h-24 w-full rounded-lg" />
-            ) : series.length > 0 ? (
+            ) : hasPostSeries ? (
               <>
                 <ChartContainer config={drilldownChartConfig} className="h-24 w-full">
                   <LineChart data={series}>
@@ -834,11 +860,12 @@ function PostSnapshotPanel({
                     <YAxis hide />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Line
-                      type="monotone"
+                      type={postLine.curve}
                       dataKey="value"
                       stroke="var(--color-value)"
                       strokeWidth={2}
-                      dot={false}
+                      dot={postLine.showDots ? { r: 3 } : false}
+                      connectNulls
                     />
                     {post.boostedAt ? (
                       <ReferenceLine
@@ -850,17 +877,16 @@ function PostSnapshotPanel({
                     ) : null}
                   </LineChart>
                 </ChartContainer>
-                {trendDays < 7 ? (
+                {trendDays < POST_HISTORY_TRACKED_DAYS ? (
                   <span className="mt-1 block text-xs text-muted-foreground">
-                    Building per-post history — {trendDays}/7 days tracked.
+                    {postHistoryProgressCopy(trendDays)}
                   </span>
                 ) : null}
               </>
-            ) : accountSeries && accountSeries.length > 0 ? (
+            ) : hasAccountSeries ? (
               <div className="space-y-1">
                 <span className="block text-xs text-muted-foreground">
-                  Per-post trend builds over time ({trendDays}/7 days). Showing the account trend
-                  meanwhile.
+                  {POST_HISTORY_ACCOUNT_STANDIN_COPY} {postHistoryProgressCopy(trendDays)}
                 </span>
                 <ChartContainer config={drilldownChartConfig} className="h-24 w-full">
                   <LineChart data={accountSeries}>
@@ -869,19 +895,18 @@ function PostSnapshotPanel({
                     <YAxis hide />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Line
-                      type="monotone"
+                      type={accountLine.curve}
                       dataKey="value"
                       stroke="var(--color-value)"
                       strokeWidth={2}
-                      dot={false}
+                      dot={accountLine.showDots ? { r: 3 } : false}
+                      connectNulls
                     />
                   </LineChart>
                 </ChartContainer>
               </div>
             ) : (
-              <span className="text-xs text-muted-foreground">
-                Per-post trend builds over time. Check back tomorrow once a second day is tracked.
-              </span>
+              <span className="text-xs text-muted-foreground">{POST_HISTORY_EMPTY_COPY}</span>
             )}
           </div>
 
@@ -899,7 +924,7 @@ function PostSnapshotPanel({
 function MetricCard({
   label,
   value,
-  comparison,
+  basisComparison,
   compact = false,
   active = false,
   onClick,
@@ -912,7 +937,7 @@ function MetricCard({
 }: {
   label: string;
   value: number | undefined;
-  comparison?: MetricComparison | null;
+  basisComparison?: BasisComparison | null;
   compact?: boolean;
   active?: boolean;
   onClick?: () => void;
@@ -923,8 +948,14 @@ function MetricCard({
   platform?: string;
   rangePreset?: string;
 }) {
+  const comparison = basisComparison?.comparison ?? null;
   const pctChange = comparison?.percentageChange;
   const direction = trendDirection(pctChange);
+  // No comparison ran, so nothing is claimed. A 'FLAT' chip beside a missing
+  // delta asserted a measured no-change that never happened.
+  const basisLabel = basisComparison
+    ? COMPARISON_BASIS_LABEL[basisComparison.basis]
+    : 'no comparison available';
   const interactive = Boolean(onClick);
   const hasInsights = insights && insights.length > 0;
   const pinSuggestion =
@@ -979,7 +1010,7 @@ function MetricCard({
               />
             ) : null}
           </div>
-          {!compact && (
+          {!compact && direction !== 'unknown' ? (
             <span
               className={cn(
                 'rounded px-2 py-0.5 text-xs font-medium uppercase tracking-wide',
@@ -988,9 +1019,9 @@ function MetricCard({
                 direction === 'flat' ? 'bg-muted text-muted-foreground' : '',
               )}
             >
-              {direction}
+              {direction === 'flat' ? 'no change' : direction}
             </span>
-          )}
+          ) : null}
         </div>
         <span
           className={cn(
@@ -1001,18 +1032,20 @@ function MetricCard({
           {format === 'percent'
             ? typeof value === 'number'
               ? `${value.toFixed(1)}%`
-              : '—'
+              : NO_DATA
             : formatNumber(value)}
         </span>
         {compact ? (
           <span
             className={cn(
               'block text-xs leading-none font-medium',
-              pctChange === undefined
+              direction === 'unknown'
                 ? 'text-muted-foreground'
-                : pctChange >= 0
-                  ? 'text-success'
-                  : 'text-destructive',
+                : direction === 'down'
+                  ? 'text-destructive'
+                  : direction === 'up'
+                    ? 'text-success'
+                    : 'text-muted-foreground',
             )}
           >
             {formatPercentChange(pctChange)}
@@ -1022,16 +1055,18 @@ function MetricCard({
             <span
               className={cn(
                 'text-xs leading-none font-medium',
-                pctChange === undefined
+                direction === 'unknown'
                   ? 'text-muted-foreground'
-                  : pctChange >= 0
-                    ? 'text-success'
-                    : 'text-destructive',
+                  : direction === 'down'
+                    ? 'text-destructive'
+                    : direction === 'up'
+                      ? 'text-success'
+                      : 'text-muted-foreground',
               )}
             >
               {formatPercentChange(pctChange)}
             </span>
-            <span className="text-xs text-muted-foreground leading-none">vs previous period</span>
+            <span className="text-xs text-muted-foreground leading-none">{basisLabel}</span>
           </div>
         )}
       </button>
@@ -1096,7 +1131,7 @@ function YoutubeTypeSummaryStrip({
     { label: 'Comments', value: formatNumber(summary.comments) },
     {
       label: 'Avg view %',
-      value: summary.avgHookRate !== undefined ? `${summary.avgHookRate.toFixed(1)}%` : '-',
+      value: summary.avgHookRate !== undefined ? `${summary.avgHookRate.toFixed(1)}%` : NO_DATA,
     },
   ];
   return (
@@ -1150,8 +1185,16 @@ function YoutubeContentTypeSplitCard({ performance }: { performance: ContentType
   );
 }
 
+// A side the platform never reported stays undefined rather than becoming 0 —
+// "0 followers" and "we don't know" are different claims, and the card used to
+// make the first one on behalf of the second.
+type PartialAudienceBreakdown = {
+  followers: number | undefined;
+  nonFollowers: number | undefined;
+};
+
 type AudienceCardProps = {
-  audienceBreakdown: AudienceBreakdown;
+  audienceBreakdown: PartialAudienceBreakdown;
   audienceTotal: number;
   genderDemographics: Array<AudienceDemographicEntry & { fill: string }>;
   ageDemographics: AudienceDemographicEntry[];
@@ -1171,9 +1214,14 @@ function AudienceCard({
   demographicsLoading,
   hidden,
 }: AudienceCardProps) {
-  const followersPct = audienceTotal > 0 ? (audienceBreakdown.followers / audienceTotal) * 100 : 0;
+  const followers = audienceBreakdown.followers;
+  const nonFollowers = audienceBreakdown.nonFollowers;
+  const followersPct =
+    audienceTotal > 0 && followers !== undefined ? (followers / audienceTotal) * 100 : undefined;
   const nonFollowersPct =
-    audienceTotal > 0 ? (audienceBreakdown.nonFollowers / audienceTotal) * 100 : 0;
+    audienceTotal > 0 && nonFollowers !== undefined
+      ? (nonFollowers / audienceTotal) * 100
+      : undefined;
 
   const genderTotal = genderDemographics.reduce((sum, entry) => sum + entry.value, 0);
   const genderLeadEntry =
@@ -1209,7 +1257,7 @@ function AudienceCard({
               <>
                 <Gauge
                   orientation="arc"
-                  value={followersPct}
+                  value={followersPct ?? 0}
                   centerValue={audienceTotal}
                   defaultLabel="Total Audience"
                   activeFill="var(--primary)"
@@ -1220,11 +1268,11 @@ function AudienceCard({
                   items={[
                     {
                       label: 'Followers',
-                      value: `${formatNumber(audienceBreakdown.followers)} · ${formatRate(followersPct)}`,
+                      value: `${formatNumber(followers)} · ${formatRate(followersPct)}`,
                     },
                     {
                       label: 'Non-followers',
-                      value: `${formatNumber(audienceBreakdown.nonFollowers)} · ${formatRate(nonFollowersPct)}`,
+                      value: `${formatNumber(nonFollowers)} · ${formatRate(nonFollowersPct)}`,
                     },
                   ]}
                 />
@@ -1272,7 +1320,7 @@ function AudienceCard({
                                 y={(viewBox.cy ?? 0) - 8}
                                 className="fill-foreground text-lg font-semibold"
                               >
-                                {genderLeadPct !== null ? formatRate(genderLeadPct) : '—'}
+                                {genderLeadPct !== null ? formatRate(genderLeadPct) : NO_DATA}
                               </tspan>
                               <tspan
                                 x={viewBox.cx}
@@ -1377,7 +1425,8 @@ function Dashboard({
   hasMorePosts,
   loadingMorePosts,
   onLoadMorePosts,
-  nextPostWindowDays,
+  nextPostWindowRange,
+  loadMorePostsError,
   demographicsLoading = false,
   brandId,
   integrationAccountId,
@@ -1395,7 +1444,8 @@ function Dashboard({
   hasMorePosts?: boolean;
   loadingMorePosts?: boolean;
   onLoadMorePosts?: () => void;
-  nextPostWindowDays?: number | null;
+  nextPostWindowRange?: { from: string; to: string } | null;
+  loadMorePostsError?: string | null;
   demographicsLoading?: boolean;
   brandId: string;
   integrationAccountId: string;
@@ -1413,6 +1463,10 @@ function Dashboard({
   const [drilldownWindow, setDrilldownWindow] = React.useState<DrilldownWindow>('7d');
   const [postSortKey, setPostSortKey] = React.useState<PostSortKey>('recent');
   const [showPostFlags, setShowPostFlags] = React.useState(true);
+  // Hover quick-look is suppressed for the selected post: the side snapshot panel
+  // is the same numbers in a persistent surface, and having both open at once is
+  // what made them collide over the scrolled-to card.
+  const [hoveredPostId, setHoveredPostId] = React.useState<string | null>(null);
 
   // Fetch organic insights (KPI tooltips) + the assembled AI-Awareness report.
   const {
@@ -1445,9 +1499,9 @@ function Dashboard({
 
   const metrics = data.metrics;
   const profileVisits24h = resolveProfileVisits(metrics);
-  const audienceBreakdown = data.audienceBreakdown ?? {
-    followers: metrics.followerReach ?? 0,
-    nonFollowers: metrics.nonFollowerReach ?? 0,
+  const audienceBreakdown: PartialAudienceBreakdown = data.audienceBreakdown ?? {
+    followers: metrics.followerReach,
+    nonFollowers: metrics.nonFollowerReach,
   };
 
   React.useEffect(() => {
@@ -1525,8 +1579,25 @@ function Dashboard({
     String(selectedAccountMetric);
   const isAccountView = viewMode === 'account';
   const isPostsView = viewMode === 'posts';
+  const accountLineShape = trendLineShape(countNumericSeriesPoints(accountSeries));
+  const accountAxisWindow = windowEndingOn(
+    data.range.until,
+    DRILLDOWN_WINDOW_DAYS[drilldownWindow],
+  );
+  const accountAxisLabelRange = {
+    from: accountAxisWindow.since,
+    to: accountAxisWindow.until,
+  };
+  // The platforms report with a lag, so the newest axis day is routinely empty.
+  // Stating the last day that reported keeps that from reading as a broken filter.
+  const dataCurrentThrough = latestNumericDate(accountSeries);
 
-  const audienceTotal = Math.max(0, audienceBreakdown.followers + audienceBreakdown.nonFollowers);
+  // Sums only the sides that were actually reported, so a single missing side
+  // does not silently halve the total.
+  const audienceTotal = Math.max(
+    0,
+    (audienceBreakdown.followers ?? 0) + (audienceBreakdown.nonFollowers ?? 0),
+  );
   const genderDemographics = (data.audienceDemographics?.gender ?? []).map((entry) => ({
     ...entry,
     fill: demographicColor(entry.label),
@@ -1546,11 +1617,17 @@ function Dashboard({
     if (!selectedPostId) return;
     const card = postCardRefs.current[selectedPostId];
     if (!card) return;
-    card.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    // 'nearest' scrolls only as far as needed. Centring yanked the card under the
+    // panel that had just opened beside it.
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
   }, [selectedPostId, viewMode]);
 
+  // Auto-load stands down while a failure is on screen: the sentinel is still in
+  // view after a failed fetch, so re-arming unconditionally would retry in a tight
+  // loop. Clearing the error (via Retry) re-runs this effect and re-observes.
   React.useEffect(() => {
-    if (!isPostsView || !hasMorePosts || loadingMorePosts || !onLoadMorePosts) return;
+    if (!isPostsView || !hasMorePosts || loadingMorePosts || loadMorePostsError) return;
+    if (!onLoadMorePosts) return;
     const root = scrollRootRef.current;
     const target = postsLoadSentinelRef.current;
     if (!root || !target) return;
@@ -1571,7 +1648,14 @@ function Dashboard({
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMorePosts, isPostsView, loadingMorePosts, onLoadMorePosts]);
+  }, [
+    hasMorePosts,
+    isPostsView,
+    loadMorePostsError,
+    loadingMorePosts,
+    onLoadMorePosts,
+    scrollRootRef,
+  ]);
 
   return (
     <div className="flex flex-col gap-2 min-h-0 pb-6">
@@ -1610,7 +1694,7 @@ function Dashboard({
                 label={metric.label}
                 value={metric.key === 'profileVisits24h' ? profileVisits24h : metrics[metric.key]}
                 format={metric.format}
-                comparison={metricComparisonFor(data, metric.key)}
+                basisComparison={metricComparisonFor(data, metric.key)}
                 active={selectedAccountMetric === metric.key}
                 ariaLabel={`Account metric ${metric.label}`}
                 metricKey={String(metric.key)}
@@ -1636,11 +1720,14 @@ function Dashboard({
             title="Metric Drilldown"
             meta={
               <span className="text-xs text-muted-foreground">
-                {selectedAccountMetricLabel} ({drilldownWindow})
+                {selectedAccountMetricLabel} · {formatDateRangeLabel(accountAxisLabelRange)}
               </span>
             }
             action={
               <div className="flex items-center gap-2">
+                <span className="hidden text-2xs uppercase tracking-wide text-muted-foreground sm:inline">
+                  Chart window
+                </span>
                 {visiblePosts.length > 0 ? (
                   <label
                     htmlFor="organic-account-post-flags"
@@ -1690,43 +1777,51 @@ function Dashboard({
             }
           />
           <div className="p-3">
-            {accountSeries.length === 0 ? (
+            {dataCurrentThrough === undefined ? (
               <span className="text-sm text-muted-foreground">
                 No metric history is available for this metric in the selected window.
               </span>
             ) : (
-              <ChartContainer
-                config={drilldownChartConfig}
-                className="h-[min(42vh,24rem)] min-h-64 w-full"
-              >
-                <LineChart data={accountSeries}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={(value) => formatShortDate(value)}
-                    minTickGap={20}
-                  />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke="var(--color-value)"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  {(data.boostedEvents ?? []).map((event) => (
-                    <ReferenceLine
-                      key={event.id}
-                      x={event.date}
-                      stroke="#ef4444"
-                      strokeDasharray="4 4"
-                      label={{ value: 'Boost', position: 'top', fill: '#ef4444', fontSize: 10 }}
+              <>
+                <span className="mb-2 block text-xs text-muted-foreground">
+                  This chart keeps its own {drilldownWindow === '30d' ? '30-day' : '7-day'} window,
+                  separate from the range filter above. Data current through{' '}
+                  {formatShortDate(dataCurrentThrough)}.
+                </span>
+                <ChartContainer
+                  config={drilldownChartConfig}
+                  className="h-[min(42vh,24rem)] min-h-64 w-full"
+                >
+                  <LineChart data={accountSeries}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(value) => formatShortDate(value)}
+                      minTickGap={20}
                     />
-                  ))}
-                  {renderPostActivityReferenceLines(accountActivityDays)}
-                </LineChart>
-              </ChartContainer>
+                    <YAxis />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line
+                      type={accountLineShape.curve}
+                      dataKey="value"
+                      stroke="var(--color-value)"
+                      strokeWidth={2}
+                      dot={accountLineShape.showDots ? { r: 3.5 } : false}
+                      connectNulls
+                    />
+                    {(data.boostedEvents ?? []).map((event) => (
+                      <ReferenceLine
+                        key={event.id}
+                        x={event.date}
+                        stroke="#ef4444"
+                        strokeDasharray="4 4"
+                        label={{ value: 'Boost', position: 'top', fill: '#ef4444', fontSize: 10 }}
+                      />
+                    ))}
+                    {renderPostActivityReferenceLines(accountActivityDays)}
+                  </LineChart>
+                </ChartContainer>
+              </>
             )}
           </div>
         </div>
@@ -1793,23 +1888,29 @@ function Dashboard({
                     )}
                   >
                     <motion.div layout className="min-w-0">
-                      <div className="flex items-center justify-end mb-2 px-1 gap-2">
-                        <span className="text-xs text-muted-foreground">Sort</span>
-                        <Select
-                          value={postSortKey}
-                          onValueChange={(v) => setPostSortKey(v as PostSortKey)}
-                        >
-                          <SelectTrigger size="sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="recent">Recent</SelectItem>
-                            <SelectItem value="hookRate">Hook Rate</SelectItem>
-                            <SelectItem value="views">Views</SelectItem>
-                            <SelectItem value="reach">Reach</SelectItem>
-                            <SelectItem value="engagement">Engagement</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
+                        <span className="text-xs text-muted-foreground text-pretty">
+                          Posts load newest first and go deeper as you scroll, so this view does not
+                          follow the range filter above.
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Sort</span>
+                          <Select
+                            value={postSortKey}
+                            onValueChange={(v) => setPostSortKey(v as PostSortKey)}
+                          >
+                            <SelectTrigger size="sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="recent">Recent</SelectItem>
+                              <SelectItem value="hookRate">Hook Rate</SelectItem>
+                              <SelectItem value="views">Views</SelectItem>
+                              <SelectItem value="reach">Reach</SelectItem>
+                              <SelectItem value="engagement">Engagement</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       <div className="mx-auto w-full px-1">
                         <div
@@ -1836,9 +1937,18 @@ function Dashboard({
                                 className="min-w-0"
                               >
                                 <HoverCard
+                                  // Hover is the *preview* path only. Once the post
+                                  // is selected the side snapshot panel owns the
+                                  // deep dive, so the floating quick-look closes
+                                  // instead of overlapping it. The quick-look still
+                                  // earns its place on hover: it carries the
+                                  // media-type-adaptive metric set and per-metric
+                                  // definitions that the panel's strip does not.
+                                  open={hoveredPostId === post.id && selectedPostId !== post.id}
                                   openDelay={150}
                                   closeDelay={120}
                                   onOpenChange={(open) => {
+                                    setHoveredPostId(open ? post.id : null);
                                     // Hovering pre-fetches the post's full detail
                                     // (fetch-on-view); the request is de-duped upstream.
                                     if (open) onRequestPostDetail?.(post.id);
@@ -1876,13 +1986,28 @@ function Dashboard({
                         </div>
                         <div ref={postsLoadSentinelRef} className="h-2 w-full" aria-hidden />
                         <div className="flex items-center justify-center py-4">
-                          {loadingMorePosts ? (
+                          {loadMorePostsError ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <span className="text-xs text-destructive text-pretty">
+                                {loadMorePostsError}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => onLoadMorePosts?.()}
+                              >
+                                <ReloadIcon className="mr-1.5" aria-hidden />
+                                Retry
+                              </Button>
+                            </div>
+                          ) : loadingMorePosts ? (
                             <span className="text-xs text-muted-foreground">
-                              Loading previous {nextPostWindowDays ?? 0}d...
+                              Loading {formatDateRangeLabel(nextPostWindowRange)}...
                             </span>
                           ) : hasMorePosts ? (
                             <span className="text-xs text-muted-foreground">
-                              Scroll for previous {nextPostWindowDays ?? 0}d
+                              Scroll to load {formatDateRangeLabel(nextPostWindowRange)}
                             </span>
                           ) : (
                             <span className="text-xs text-muted-foreground">
@@ -1949,6 +2074,13 @@ export function OrganicMetricsDashboard({
   const [postWindowOffset, setPostWindowOffset] = React.useState(0);
   const [hasMorePostWindows, setHasMorePostWindows] = React.useState(false);
   const [loadingMorePostWindows, setLoadingMorePostWindows] = React.useState(false);
+  const [postWindowError, setPostWindowError] = React.useState<string | null>(null);
+  // Cancels the in-flight deep-window fetch on unmount and on account/view switch,
+  // so a slow window can never resolve into a tree that has moved on.
+  const postWindowAbortRef = React.useRef<AbortController | null>(null);
+  // Compare mode owns its own multi-account selection; the export action needs to
+  // see it to work outside the single-account views.
+  const [compareSelection, setCompareSelection] = React.useState<CompareExportSelection>([]);
   const [selectedAccountByPlatform, setSelectedAccountByPlatform] = React.useState<{
     instagram: string | null;
     facebook: string | null;
@@ -2035,21 +2167,29 @@ export function OrganicMetricsDashboard({
   }, [platform, selectedAccountId]);
 
   const fetchPostsWindow = React.useCallback(
-    async (params: { accountId: string; windowOffset: number; forceRefresh: boolean }) => {
-      const { accountId, windowOffset, forceRefresh } = params;
+    async (params: {
+      accountId: string;
+      windowOffset: number;
+      forceRefresh: boolean;
+      signal?: AbortSignal;
+    }) => {
+      const { accountId, windowOffset, forceRefresh, signal } = params;
       const window = postWindowRange(windowOffset);
       if (!window) return null;
-      return fetchOrganicAnalytics({
-        brandId,
-        integrationAccountId: accountId,
-        platform,
-        range: {
-          preset: 'custom',
-          custom: { from: window.from, to: window.to },
+      return fetchOrganicAnalytics(
+        {
+          brandId,
+          integrationAccountId: accountId,
+          platform,
+          range: {
+            preset: 'custom',
+            custom: { from: window.from, to: window.to },
+          },
+          scope: 'posts',
+          forceRefresh,
         },
-        scope: 'posts',
-        forceRefresh,
-      });
+        { signal },
+      );
     },
     [brandId, platform],
   );
@@ -2060,11 +2200,15 @@ export function OrganicMetricsDashboard({
     // switches so re-selecting a post is instant; useOrganicPostDetail resets
     // its own in-flight gating refs on the same platform/account change, so
     // only the gallery scaffolding resets here.
+    postWindowAbortRef.current?.abort();
     setPostGalleryPosts([]);
     setPostWindowOffset(0);
     setHasMorePostWindows(false);
     setLoadingMorePostWindows(false);
+    setPostWindowError(null);
   }, [platform, selectedAccountId, viewMode]);
+
+  React.useEffect(() => () => postWindowAbortRef.current?.abort(), []);
 
   // Thin gallery-specific wrapper: gates on posts view mode, then merges the
   // resolved post into postGalleryPosts (mergePosts keeps the previously
@@ -2091,12 +2235,18 @@ export function OrganicMetricsDashboard({
     }
     const nextOffset = postWindowOffset + 1;
 
+    postWindowAbortRef.current?.abort();
+    const controller = new AbortController();
+    postWindowAbortRef.current = controller;
+
     setLoadingMorePostWindows(true);
+    setPostWindowError(null);
     try {
       const data = await fetchPostsWindow({
         accountId: selectedAccountId,
         windowOffset: nextOffset,
         forceRefresh: false,
+        signal: controller.signal,
       });
       if (!data) {
         setHasMorePostWindows(false);
@@ -2107,8 +2257,18 @@ export function OrganicMetricsDashboard({
       setPostWindowOffset(nextOffset);
       setHasMorePostWindows(postWindowRange(nextOffset + 1) !== null);
     } catch (error) {
-      console.error('[OrganicMetricsDashboard] Failed to load previous post window', error);
+      // A cancellation is the reader moving on, not a failure to report. Anything
+      // else has to reach the feed: swallowing it left the footer stuck on
+      // "Loading previous 30d..." with no state, no retry, and no explanation.
+      if (isOrganicAnalyticsCancellation(error)) return;
+      const window = postWindowRange(nextOffset);
+      setPostWindowError(
+        error instanceof Error
+          ? error.message
+          : `Could not load posts from ${formatDateRangeLabel(window)}.`,
+      );
     } finally {
+      if (postWindowAbortRef.current === controller) postWindowAbortRef.current = null;
       setLoadingMorePostWindows(false);
     }
   }, [
@@ -2128,9 +2288,25 @@ export function OrganicMetricsDashboard({
     setReloadTick((tick) => tick + 1);
   }, [viewMode, resetPostDetails]);
 
+  // Which account an export would cover. In Compare that is the compare
+  // selection, not the single-account picker — the export control used to be
+  // unmounted there purely because it read the wrong selection.
+  const exportTarget = React.useMemo(() => {
+    if (viewMode !== 'compare') {
+      return selectedAccountId
+        ? { platform, accountId: selectedAccountId, name: selectedAccount?.name ?? null }
+        : null;
+    }
+    const [only] = compareSelection;
+    return compareSelection.length === 1 && only
+      ? { platform: only.platform, accountId: only.integrationAccountId, name: only.name }
+      : null;
+  }, [compareSelection, platform, selectedAccount?.name, selectedAccountId, viewMode]);
+
   const handleExportReport = React.useCallback(
     async (format: 'csv' | 'html') => {
-      if (!selectedAccountId) return;
+      if (!exportTarget) return;
+      const { platform: exportPlatform, accountId: exportAccountId } = exportTarget;
 
       setReportError(null);
       setExportingReportFormat(format);
@@ -2138,16 +2314,16 @@ export function OrganicMetricsDashboard({
         const [accountData, postsData] = await Promise.all([
           fetchOrganicAnalytics({
             brandId,
-            integrationAccountId: selectedAccountId,
-            platform,
+            integrationAccountId: exportAccountId,
+            platform: exportPlatform,
             range: { preset: 'last_30d' },
             scope: 'account',
             forceRefresh: false,
           }),
           fetchOrganicAnalytics({
             brandId,
-            integrationAccountId: selectedAccountId,
-            platform,
+            integrationAccountId: exportAccountId,
+            platform: exportPlatform,
             range: { preset: 'last_30d' },
             scope: 'posts',
             forceRefresh: false,
@@ -2169,8 +2345,8 @@ export function OrganicMetricsDashboard({
               try {
                 const detailData = await fetchOrganicAnalytics({
                   brandId,
-                  integrationAccountId: selectedAccountId,
-                  platform,
+                  integrationAccountId: exportAccountId,
+                  platform: exportPlatform,
                   range: { preset: 'last_30d' },
                   scope: 'posts',
                   selectedPostId: postId,
@@ -2192,8 +2368,8 @@ export function OrganicMetricsDashboard({
 
         const reportPosts = mergePosts(postsData.posts ?? [], detailedPosts);
         const reportPayload = {
-          platform,
-          accountName: selectedAccount?.name ?? accountData.accountId,
+          platform: exportPlatform,
+          accountName: exportTarget.name ?? accountData.accountId,
           generatedAt: new Date().toISOString(),
           accountRangeSince: accountData.range.since,
           accountRangeUntil: accountData.range.until,
@@ -2207,14 +2383,14 @@ export function OrganicMetricsDashboard({
           const html = buildOrganicReportHtml(reportPayload);
           downloadTextFile({
             content: html,
-            fileName: `continuum-${platform}-organic-report-${dateTag}.html`,
+            fileName: `continuum-${exportPlatform}-organic-report-${dateTag}.html`,
             mimeType: 'text/html;charset=utf-8;',
           });
         } else {
           const csv = buildOrganicReportCsv(reportPayload);
           downloadTextFile({
             content: csv,
-            fileName: `continuum-${platform}-organic-report-${dateTag}.csv`,
+            fileName: `continuum-${exportPlatform}-organic-report-${dateTag}.csv`,
             mimeType: 'text/csv;charset=utf-8;',
           });
         }
@@ -2225,7 +2401,7 @@ export function OrganicMetricsDashboard({
         setExportingReportFormat(null);
       }
     },
-    [brandId, platform, selectedAccount?.name, selectedAccountId],
+    [brandId, exportTarget],
   );
 
   React.useEffect(() => {
@@ -2453,12 +2629,17 @@ export function OrganicMetricsDashboard({
     } as OrganicMetricsResponse;
   }, [viewMode, state, kpisState, demographicsState, postGalleryPosts, accountPosts]);
 
-  const isLoadingView =
-    viewMode === 'compare'
-      ? false
-      : viewMode === 'posts'
-        ? state.status === 'loading'
-        : kpisState.status === 'loading';
+  // 'idle' with an account selected means "a load is about to start", not "pick an
+  // account". Switching out of Compare renders one commit in that shape before the
+  // load effect re-runs, and the empty state used to claim nothing was selected
+  // while the picker plainly showed a selection.
+  const sectionStatus = viewMode === 'posts' ? state.status : kpisState.status;
+  const reportViewState = resolveReportViewState({
+    status: sectionStatus,
+    hasAccount: Boolean(selectedAccountId),
+    hasData: dashboardData !== null,
+  });
+  const isLoadingView = viewMode === 'compare' ? false : reportViewState === 'loading';
   const viewError =
     viewMode === 'compare'
       ? null
@@ -2475,6 +2656,31 @@ export function OrganicMetricsDashboard({
           : null;
   const demographicsLoading = demographicsState.status === 'loading';
 
+  // The report builders assemble one account's metrics, posts, and trends, so a
+  // multi-account compare selection has nothing to render into. The control stays
+  // mounted either way and says exactly what to narrow.
+  const exportBlockHint = React.useMemo(() => {
+    if (viewMode === 'compare' && compareSelection.length > 1) {
+      return {
+        reason: `A report covers one account at a time, and ${compareSelection.length} are selected here.`,
+        unlocks: 'CSV, HTML, and Continuum Report email for a single account',
+      };
+    }
+    return describeExportBlock({
+      hasAccount: Boolean(exportTarget),
+      isLoading: isLoadingView,
+      isExporting: exportingReportFormat !== null,
+      platformLabel: PLATFORM_LABELS[platform],
+    });
+  }, [
+    compareSelection.length,
+    exportTarget,
+    exportingReportFormat,
+    isLoadingView,
+    platform,
+    viewMode,
+  ]);
+
   return (
     <section
       data-tour-id="organic-metrics-dashboard"
@@ -2486,23 +2692,36 @@ export function OrganicMetricsDashboard({
         </Pill>
 
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <Select
-            value={rangePreset}
-            onValueChange={(value) =>
-              startTransition(() => setRangePreset(value as OrganicDateRangePreset))
+          <DisabledControl
+            side="bottom"
+            hint={
+              viewMode === 'posts'
+                ? {
+                    reason:
+                      'Post performance loads newest first and goes deeper as you scroll, so it does not use this range.',
+                    unlocks: 'date ranges on Overview and Compare accounts',
+                  }
+                : null
             }
           >
-            <SelectTrigger className="h-8 w-[7.5rem] text-xs" disabled={viewMode === 'posts'}>
-              {rangeLabel(rangePreset)}
-            </SelectTrigger>
-            <SelectContent>
-              {RANGE_OPTIONS.map((preset) => (
-                <SelectItem key={preset} value={preset}>
-                  {rangeLabel(preset)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select
+              value={rangePreset}
+              onValueChange={(value) =>
+                startTransition(() => setRangePreset(value as OrganicDateRangePreset))
+              }
+            >
+              <SelectTrigger className="h-8 w-[7.5rem] text-xs" disabled={viewMode === 'posts'}>
+                {rangeLabel(rangePreset)}
+              </SelectTrigger>
+              <SelectContent>
+                {RANGE_OPTIONS.map((preset) => (
+                  <SelectItem key={preset} value={preset}>
+                    {rangeLabel(preset)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </DisabledControl>
 
           <div className="flex items-center gap-2">
             <span className="hidden text-2xs font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
@@ -2580,16 +2799,13 @@ export function OrganicMetricsDashboard({
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <BrandTrendsHeaderModule brandId={brandId} brandInsights={brandInsights} />
-
           <Separator orientation="vertical" className="h-5" />
-
-          {viewMode !== 'compare' && dashboardData?.fetchedAt ? (
+          {dashboardData?.fetchedAt ? (
             <FreshnessBadge
               side="bottom"
               freshness={freshnessFromSyncedAt(dashboardData.fetchedAt)}
             />
           ) : null}
-
           <DisabledControl
             side="bottom"
             hint={
@@ -2617,67 +2833,57 @@ export function OrganicMetricsDashboard({
               <ReloadIcon className={cn(isLoadingView && 'animate-spin')} />
             </Button>
           </DisabledControl>
-
-          {viewMode !== 'compare' ? (
-            <DisabledControl
-              side="bottom"
-              hint={describeExportBlock({
-                hasAccount: Boolean(selectedAccountId),
-                isLoading: isLoadingView,
-                isExporting: exportingReportFormat !== null,
-                platformLabel: PLATFORM_LABELS[platform],
-              })}
-            >
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
-                    aria-label="Open organic report export or email options"
-                    className="h-8 px-2 text-xs"
-                  >
-                    <DownloadIcon
-                      className={cn(exportingReportFormat !== null && 'animate-pulse')}
-                    />
-                    {exportingReportFormat !== null ? 'Exporting…' : 'Export or Email'}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      void handleExportReport('csv');
-                    }}
-                    disabled={exportingReportFormat !== null}
-                  >
-                    Export CSV
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      void handleExportReport('html');
-                    }}
-                    disabled={exportingReportFormat !== null}
-                  >
-                    Export HTML
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setReportEmailOpen(true);
-                    }}
-                    disabled={exportingReportFormat !== null}
-                  >
-                    <PaperPlaneIcon className="mr-2 h-3.5 w-3.5" aria-hidden />
-                    Email Continuum Report
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <SendContinuumReportDialog
-                brandId={brandId}
-                open={reportEmailOpen}
-                onOpenChange={setReportEmailOpen}
-              />
-            </DisabledControl>
-          ) : null}
+          {/* Mounted in every view, including Compare. Whether it can run is a
+              capability question (does the selection resolve to one account?), not a
+              reason to hide the control. */}
+          <DisabledControl side="bottom" hint={exportBlockHint}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  disabled={!exportTarget || isLoadingView || exportingReportFormat !== null}
+                  aria-label="Open organic report export or email options"
+                  className="h-8 px-2 text-xs"
+                >
+                  <DownloadIcon className={cn(exportingReportFormat !== null && 'animate-pulse')} />
+                  {exportingReportFormat !== null ? 'Exporting…' : 'Export or Email'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void handleExportReport('csv');
+                  }}
+                  disabled={exportingReportFormat !== null}
+                >
+                  Export CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void handleExportReport('html');
+                  }}
+                  disabled={exportingReportFormat !== null}
+                >
+                  Export HTML
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setReportEmailOpen(true);
+                  }}
+                  disabled={exportingReportFormat !== null}
+                >
+                  <PaperPlaneIcon className="mr-2 h-3.5 w-3.5" aria-hidden />
+                  Email Continuum Report
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <SendContinuumReportDialog
+              brandId={brandId}
+              open={reportEmailOpen}
+              onOpenChange={setReportEmailOpen}
+            />
+          </DisabledControl>
         </div>
       </div>
 
@@ -2721,12 +2927,13 @@ export function OrganicMetricsDashboard({
             rangePreset={rangePreset}
             reloadTick={reloadTick}
             forceRefreshOnTick
+            onSelectionChange={setCompareSelection}
           />
         ) : platformAccounts.length === 0 ? (
           <Alert className="border-secondary/30 bg-secondary/10">
-            <AlertDescription className="text-secondary text-pretty">
-              No {platform} account is connected for this brand yet. Connect one in Integrations to
-              unlock reporting.
+            <AlertDescription className="text-foreground text-pretty">
+              No {PLATFORM_LABELS[platform]} account is connected for this brand yet. Connect one in
+              Integrations to unlock reporting.
             </AlertDescription>
           </Alert>
         ) : (
@@ -2756,7 +2963,7 @@ export function OrganicMetricsDashboard({
                   retryAfter={viewError.retryAfter}
                 />
               </motion.div>
-            ) : dashboardData ? (
+            ) : reportViewState === 'ready' && dashboardData ? (
               <motion.div
                 key="dashboard"
                 initial={{ opacity: 0 }}
@@ -2774,7 +2981,8 @@ export function OrganicMetricsDashboard({
                   hasMorePosts={hasMorePostWindows}
                   loadingMorePosts={loadingMorePostWindows}
                   onLoadMorePosts={loadMorePostWindow}
-                  nextPostWindowDays={postWindowDays(postWindowOffset + 1)}
+                  nextPostWindowRange={postWindowRange(postWindowOffset + 1)}
+                  loadMorePostsError={postWindowError}
                   demographicsLoading={demographicsLoading}
                   brandId={brandId}
                   integrationAccountId={selectedAccountId ?? ''}
@@ -2792,8 +3000,9 @@ export function OrganicMetricsDashboard({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18 }}
               >
-                <span className="text-sm text-muted-foreground text-pretty">
-                  Select an account above to load organic reporting and post-level performance.
+                <span className="text-sm text-foreground text-pretty">
+                  Choose {articleFor(PLATFORM_LABELS[platform])} {PLATFORM_LABELS[platform]} account
+                  above to see your report.
                 </span>
               </motion.div>
             )}

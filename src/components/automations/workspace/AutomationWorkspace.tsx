@@ -1367,6 +1367,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                       inspector={
                         <WorkflowInspector
                           selected={selected}
+                          brandId={automation.brandId}
                           locked={locked}
                           validation={validation}
                           execution={selectedExecution}

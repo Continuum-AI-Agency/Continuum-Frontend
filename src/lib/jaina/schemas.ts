@@ -1,6 +1,6 @@
 import {
-  agentDelegatedFrameSchema,
   agentAttachmentSchema,
+  agentDelegatedFrameSchema,
   checkpointBlockV2LenientSchema,
   blockBaseSchema as contractBlockBaseSchema,
   chartBlockBaseSchema as contractChartBlockBaseSchema,
@@ -12,10 +12,19 @@ import {
   degradeToNarrativeBlockV2 as contractDegradeToNarrativeBlockV2,
   insightListBlockSchema as contractInsightListBlockSchema,
   insightListItemSchema as contractInsightListItemSchema,
+  jainaExecutionObjectiveSchema as contractJainaExecutionObjectiveSchema,
+  jainaExecutionObjectiveStatusSchema as contractJainaExecutionObjectiveStatusSchema,
   metricGridBlockSchema as contractMetricGridBlockSchema,
   metricItemSchema as contractMetricItemSchema,
   narrativeBlockSchema as contractNarrativeBlockSchema,
   tableColumnSchema as contractTableColumnSchema,
+  jainaScaffoldActionSchema,
+  jainaToolApprovalRequiredPayloadSchema,
+  jainaToolApprovalResolvedPayloadSchema,
+  jainaToolOutputDeniedPayloadSchema,
+  paidScaffoldProgressPayloadSchema,
+  paidScaffoldProposedPayloadSchema,
+  paidScaffoldReceiptPayloadSchema,
 } from '@continuum/contracts';
 import { z } from 'zod';
 import { agentMentionMetadataSchema, agentMentionReferenceSchema } from '@/lib/agent-references';
@@ -53,6 +62,10 @@ export const jainaPlanActionSchema = z.object({
 
 export type JainaPlanAction = z.infer<typeof jainaPlanActionSchema>;
 
+/** Re-exported from contracts so callers import one name from one place. */
+export type JainaScaffoldAction = z.infer<typeof jainaScaffoldActionSchema>;
+export { jainaScaffoldActionSchema };
+
 export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
   include_thoughts: z.boolean().optional(),
@@ -66,6 +79,15 @@ export const jainaChatRequestSchema = z.object({
     })
     .optional(),
   plan_action: jainaPlanActionSchema.optional(),
+  /**
+   * A human's answer to a paid-scaffold approval gate.
+   *
+   * THIS LINE IS LOAD-BEARING. `jainaChatRequestSchema` is a stripping `z.object`
+   * and `useJainaChatStream` parses through it BEFORE `JSON.stringify`, so an
+   * undeclared field vanishes with no type error, no runtime error and no log — and
+   * the Next route is a pure passthrough that would not catch it either.
+   */
+  scaffold_action: jainaScaffoldActionSchema.optional(),
   context: z.object({
     adAccountId: z.string().min(1),
     brandId: z.string().min(1),
@@ -207,24 +229,7 @@ export const frontendBudgetSchema = z
   })
   .passthrough();
 
-export const executionObjectiveSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  // Mirrors the Backend objective lifecycle (richer than the original 4 states).
-  status: z.enum([
-    'pending',
-    'in_progress',
-    'completed',
-    'failed',
-    'blocked',
-    'deferred',
-    'partial',
-  ]),
-  scope: z.string().nullable(),
-  details: z.string().nullable(),
-  created_at: z.string(),
-  updated_at: z.string(),
-});
+export const executionObjectiveSchema = contractJainaExecutionObjectiveSchema;
 
 export type ExecutionObjective = z.infer<typeof executionObjectiveSchema>;
 
@@ -851,6 +856,25 @@ export const agentCompleteEventSchema = z.object({
 });
 export type AgentCompleteEventData = z.infer<typeof agentCompleteEventSchema>;
 
+// A structured worker's findings as its object streams. `lines` are INCREMENTS —
+// each frame carries only what became stable since the last one — so consumers
+// APPEND. Replacing prior lines for the same agent_id would drop findings.
+export const agentNarrationEventSchema = z.object({
+  agent_id: z.string().nullable(),
+  parent_agent_id: z.string().nullable().optional(),
+  agent_name: z.string().nullable().optional(),
+  display_name: z.string().nullable().optional(),
+  lines: z
+    .array(
+      z.object({
+        field: z.enum(['findings', 'insights', 'evidence', 'recommendations']),
+        text: z.string(),
+      }),
+    )
+    .default([]),
+});
+export type AgentNarrationEventData = z.infer<typeof agentNarrationEventSchema>;
+
 export const canvasContextLoadedEventSchema = z.object({}).passthrough();
 
 export const agentEnvelopeSchema = streamEventSchema(
@@ -1090,6 +1114,7 @@ export type JainaStreamEvent =
   | z.infer<typeof agentDelegatedFrameSchema>
   | { type: 'agent.spawn'; data: AgentSpawnEventData }
   | { type: 'agent.complete'; data: AgentCompleteEventData }
+  | { type: 'agent.narration'; data: AgentNarrationEventData }
   | { type: 'canvas.context.loaded'; data: Record<string, unknown> }
   | z.infer<typeof responseCheckpointReportSchema>
   | z.infer<typeof responseBlockDeltaSchema>
@@ -1103,7 +1128,47 @@ export type JainaStreamEvent =
   | z.infer<typeof responseContentPartDoneSchema>
   | z.infer<typeof responseOutputItemDoneSchema>
   | z.infer<typeof responseDoneSchema>
+  | z.infer<typeof toolApprovalRequiredSchema>
+  | z.infer<typeof toolApprovalResolvedSchema>
+  | z.infer<typeof toolOutputDeniedSchema>
+  | z.infer<typeof paidScaffoldProposedSchema>
+  | z.infer<typeof paidScaffoldProgressSchema>
+  | z.infer<typeof paidScaffoldReceiptSchema>
   | z.infer<typeof streamErrorSchema>;
+
+/**
+ * Paid campaign scaffold + tool approval frames.
+ *
+ * The payload schemas come from `@continuum/contracts` — never re-declared here.
+ * Each must be added in THREE places: declared below, added to the `JainaStreamEvent`
+ * type union, and added to the runtime `z.union` array. Miss the third and
+ * `parseJainaStreamEventValue` drops the frame with a `console.warn` and nothing
+ * else fails; `stream.scaffold.test.ts` exists to catch exactly that.
+ */
+export const toolApprovalRequiredSchema = streamEventSchema(
+  'tool.approval_required',
+  jainaToolApprovalRequiredPayloadSchema,
+);
+export const toolApprovalResolvedSchema = streamEventSchema(
+  'tool.approval_resolved',
+  jainaToolApprovalResolvedPayloadSchema,
+);
+export const toolOutputDeniedSchema = streamEventSchema(
+  'tool.output_denied',
+  jainaToolOutputDeniedPayloadSchema,
+);
+export const paidScaffoldProposedSchema = streamEventSchema(
+  'paid.scaffold_proposed',
+  paidScaffoldProposedPayloadSchema,
+);
+export const paidScaffoldProgressSchema = streamEventSchema(
+  'paid.scaffold_progress',
+  paidScaffoldProgressPayloadSchema,
+);
+export const paidScaffoldReceiptSchema = streamEventSchema(
+  'paid.scaffold_receipt',
+  paidScaffoldReceiptPayloadSchema,
+);
 
 export const jainaStreamEventSchema = z.union([
   responseCreatedSchema,
@@ -1124,6 +1189,7 @@ export const jainaStreamEventSchema = z.union([
   agentDelegatedFrameSchema,
   z.object({ type: z.literal('agent.spawn'), data: agentSpawnEventSchema }),
   z.object({ type: z.literal('agent.complete'), data: agentCompleteEventSchema }),
+  z.object({ type: z.literal('agent.narration'), data: agentNarrationEventSchema }),
   z.object({ type: z.literal('canvas.context.loaded'), data: z.record(z.string(), z.unknown()) }),
   responseCheckpointReportSchema,
   responseBlockDeltaSchema,
@@ -1137,6 +1203,12 @@ export const jainaStreamEventSchema = z.union([
   responseContentPartDoneSchema,
   responseOutputItemDoneSchema,
   responseDoneSchema,
+  toolApprovalRequiredSchema,
+  toolApprovalResolvedSchema,
+  toolOutputDeniedSchema,
+  paidScaffoldProposedSchema,
+  paidScaffoldProgressSchema,
+  paidScaffoldReceiptSchema,
   streamErrorSchema,
 ]);
 
@@ -1199,6 +1271,25 @@ export const creativeArtifactSchema = z.object({
   call_to_action: z.string().optional(),
   platform: z.enum(['facebook', 'instagram', 'tiktok', 'google']).optional(),
   format: z.enum(['image', 'video', 'carousel']).optional(),
+  // The media.assets id behind `url`. Signed storage URLs are hour-scale, so a
+  // conversation reopened tomorrow renders the fallback tile with no way back; this is
+  // what lets CreativeCard re-sign on failure. Absent for Meta-CDN creatives, which are
+  // not ours to re-sign.
+  asset_id: z.string().optional(),
+  // The remaining cards of a CAROUSEL. `url` above stays the cover, so every existing
+  // consumer is untouched. One artifact with slides rather than N flat artifacts:
+  // CreativesSection is a strip of independent tiles, so N would read as N separate ads.
+  slides: z
+    .array(
+      z.object({
+        url: z.string().url(),
+        thumbnail_url: z.string().url().optional(),
+        asset_id: z.string().optional(),
+        caption: z.string().optional(),
+      }),
+    )
+    .max(10)
+    .optional(),
 });
 
 export type CreativeArtifact = z.infer<typeof creativeArtifactSchema>;
@@ -1217,15 +1308,25 @@ export const artifactDeltaSchema = z.object({
 
 export type ArtifactDeltaEventData = z.infer<typeof artifactDeltaSchema>;
 
-export const jainaObjectiveStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'failed']);
+export const jainaObjectiveStatusSchema = contractJainaExecutionObjectiveStatusSchema;
 
 export type JainaObjectiveStatus = z.infer<typeof jainaObjectiveStatusSchema>;
 
 export const jainaObjectiveSchema = z.object({
   id: z.string(),
   title: z.string(),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   status: jainaObjectiveStatusSchema,
+  objective_key: z.string().nullable().optional(),
+  scope: z.string().nullable().optional(),
+  reason_code: z.string().nullable().optional(),
+  details: z.string().nullable().optional(),
+  attempt_count: z.number().int().nonnegative().default(0),
+  version: z.number().int().nonnegative().default(0),
+  not_before: z.string().nullable().optional(),
+  last_attempt_at: z.string().nullable().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
 });
 
 export type JainaObjective = z.infer<typeof jainaObjectiveSchema>;

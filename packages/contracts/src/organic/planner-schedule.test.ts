@@ -4,14 +4,17 @@ import {
   formatPlannerTimeOfDay,
   isValidPlannerTimeZone,
   movePlannerDraftToDay,
+  PLANNER_DEFAULT_TIME_OF_DAY,
   PLANNER_PAST_GUARD_FLOOR_MS,
   parsePlannerDayId,
   parsePlannerTimeOfDay,
   plannerDayIdInZone,
+  plannerDefaultInstant,
   plannerInstantFromDayTime,
   plannerTimeOfDayInZone,
   plannerTimeOfDaySchema,
   plannerTimeZoneSchema,
+  toPlannerTimeLabel,
 } from './planner-schedule';
 
 describe('parsePlannerTimeOfDay', () => {
@@ -204,5 +207,59 @@ describe('time zone validation', () => {
     expect(isValidPlannerTimeZone('Mars/Olympus_Mons')).toBe(false);
     expect(plannerTimeZoneSchema.safeParse('Europe/London').success).toBe(true);
     expect(plannerTimeZoneSchema.safeParse('Nowhere/Nothing').success).toBe(false);
+  });
+});
+
+describe('toPlannerTimeLabel', () => {
+  it('renders the planner chip label for each half of the clock', () => {
+    expect(toPlannerTimeLabel('17:30')).toBe('5:30 PM');
+    expect(toPlannerTimeLabel('09:00')).toBe('9:00 AM');
+    expect(toPlannerTimeLabel('23:59')).toBe('11:59 PM');
+  });
+
+  it('renders midnight and noon as 12, not 0', () => {
+    expect(toPlannerTimeLabel('00:00')).toBe('12:00 AM');
+    expect(toPlannerTimeLabel('12:00')).toBe('12:00 PM');
+  });
+
+  it('round-trips its own display label', () => {
+    expect(toPlannerTimeLabel('5:30 PM')).toBe('5:30 PM');
+  });
+
+  it('falls back to the planner default rather than throwing on junk', () => {
+    expect(toPlannerTimeLabel('not a time')).toBe('9:00 AM');
+    expect(toPlannerTimeLabel(null)).toBe('9:00 AM');
+    expect(toPlannerTimeLabel(undefined)).toBe('9:00 AM');
+  });
+});
+
+describe('plannerDefaultInstant', () => {
+  it('composes the default hour in the requested zone', () => {
+    expect(
+      plannerDefaultInstant('2030-06-10', 'UTC', { nowMs: Date.parse('2030-01-01T00:00:00Z') }),
+    ).toBe('2030-06-10T09:00:00.000Z');
+  });
+
+  it('is the same instant as composing the default explicitly', () => {
+    const explicit = plannerInstantFromDayTime({
+      dayId: '2030-06-10',
+      timeOfDay: PLANNER_DEFAULT_TIME_OF_DAY,
+      timeZone: 'America/New_York',
+    });
+    expect(
+      plannerDefaultInstant('2030-06-10', 'America/New_York', {
+        nowMs: Date.parse('2030-01-01T00:00:00Z'),
+      }),
+    ).toBe(explicit);
+  });
+
+  it('floors a past day forward so the publish poller does not fire on arrival', () => {
+    const nowMs = Date.parse('2030-06-10T18:00:00Z');
+    const instant = plannerDefaultInstant('2030-06-10', 'UTC', { nowMs });
+    expect(Date.parse(instant as string)).toBeGreaterThan(nowMs);
+  });
+
+  it('returns null for an impossible day', () => {
+    expect(plannerDefaultInstant('2030-02-30', 'UTC')).toBeNull();
   });
 });

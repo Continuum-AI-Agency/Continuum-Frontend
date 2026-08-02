@@ -738,26 +738,12 @@ test.describe('ai studio canvas geometry', () => {
     await promptBox.fill('Add one prompt node wired into one image generator, nothing else.');
     await promptBox.press('Enter');
 
-    // A completed turn offers Run in TWO places, and only one of them exists at a time: the
-    // slim card (`composer-card-run`) when the chat is collapsed, the transcript's own button
-    // (`composer-turn-run`) when it is expanded. The composer auto-expands the first time the
-    // room streams, so waiting on the card alone hangs forever.
-    await expect
-      .poll(
-        async () =>
-          (await page.getByTestId('composer-turn-run').count()) +
-          (await page.getByTestId('composer-card-run').count()),
-        { timeout: 240_000, intervals: [1000, 2000, 5000] },
-      )
-      .toBeGreaterThan(0);
-
-    const collapseChat = page.getByRole('button', { name: 'Collapse composer chat' });
-    if ((await collapseChat.count()) > 0) {
-      await collapseChat.first().click({ force: true });
-    }
-
     const run = page.getByTestId('composer-card-run');
-    await expect(run, 'the collapsed composer card offers no Run').toBeVisible({ timeout: 30_000 });
+    await expect(run, 'the collapsed composer card offers no Run').toBeVisible({
+      timeout: 240_000,
+    });
+    await expect(page.getByRole('button', { name: 'Expand composer chat' })).toBeVisible();
+    await expect(page.getByTestId('composer-turn-run')).toHaveCount(0);
 
     // The agent's nodes arrive through canvas_sessions + realtime, not through the stream.
     await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 60_000 });

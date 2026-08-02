@@ -97,6 +97,15 @@ type CreativeLike = {
   headline?: string;
   post_copy?: string;
   format?: string;
+  /** The media.assets id behind `url`, when the asset is ours to re-sign. */
+  asset_id?: string;
+  /** A carousel's cards after the cover. Absent for single-asset creatives. */
+  slides?: Array<{
+    url: string;
+    thumbnail_url?: string;
+    asset_id?: string;
+    caption?: string;
+  }>;
 };
 
 export function mediaFromCreative(creative: CreativeLike): ChatMedia {
@@ -110,6 +119,40 @@ export function mediaFromCreative(creative: CreativeLike): ChatMedia {
     caption: creative.post_copy,
     badge: kind === 'video' ? 'Video' : undefined,
   };
+}
+
+/**
+ * Every card of a creative: the cover, then a carousel's remaining slides.
+ *
+ * A generated carousel arrives as ONE artifact whose extra cards ride on `slides` —
+ * because `CreativesSection` is a strip of independent tiles, so emitting one artifact
+ * per slide would read as N separate ads and the header would count them as N
+ * creatives. This is the same shape `mediaListFromAdsetAd` already solved for Meta ads,
+ * including the rule that a slide carries NO position badge: `ChatMediaCarousel` owns
+ * the "k/N" counter, and a slide with its own would print the number twice.
+ *
+ * Returns a single-item list for a non-carousel, which `ChatMediaCarousel` renders as a
+ * bare thumb with no chrome — so wiring this in changes nothing for existing creatives.
+ */
+export function mediaListFromCreative(creative: CreativeLike): ChatMedia[] {
+  const cover = mediaFromCreative(creative);
+  const slides = creative.slides ?? [];
+  if (slides.length === 0) return [cover];
+
+  return [
+    { ...cover, badge: undefined },
+    ...slides.map((slide, index): ChatMedia => {
+      const kind = resolveMediaKind({ format: creative.format, url: slide.url });
+      return {
+        id: slide.asset_id ?? `${creative.id}:slide:${index + 1}`,
+        url: slide.url,
+        thumbnailUrl: slide.thumbnail_url,
+        kind,
+        name: creative.headline,
+        caption: slide.caption,
+      };
+    }),
+  ];
 }
 
 type FetchedPostLike = {

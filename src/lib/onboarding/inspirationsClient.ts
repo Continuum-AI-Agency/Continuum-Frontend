@@ -4,6 +4,7 @@
 
 import {
   type OnboardingGenerationStreamFrame,
+  type OnboardingInspirationSelection,
   type OnboardingInspirationsStreamFrame,
   onboardingGenerationStreamFrameSchema,
   onboardingInspirationsStreamFrameSchema,
@@ -110,6 +111,7 @@ const getSupabaseFunctionsConfig = (): { url: string; anonKey: string } => {
 
 export const streamGeneration = async (params: {
   brandId: string;
+  selectedInspiration?: OnboardingInspirationSelection | null;
   referenceImageUrl?: string | null;
   competitorName?: string | null;
   signal?: AbortSignal;
@@ -126,8 +128,9 @@ export const streamGeneration = async (params: {
     },
     body: JSON.stringify({
       brandId: params.brandId,
-      referenceImageUrl: params.referenceImageUrl ?? null,
-      competitorName: params.competitorName ?? null,
+      referenceAssetId: null,
+      referenceImageUrl: params.selectedInspiration?.imageUrl ?? params.referenceImageUrl ?? null,
+      competitorName: params.selectedInspiration?.competitorName ?? params.competitorName ?? null,
     }),
     signal: params.signal,
   });

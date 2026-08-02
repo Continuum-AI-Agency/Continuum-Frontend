@@ -10,7 +10,7 @@
  */
 import { z } from 'zod';
 
-export const publishPlatformSchema = z.enum(['instagram', 'facebook', 'linkedin']);
+export const publishPlatformSchema = z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']);
 export type PublishPlatform = z.infer<typeof publishPlatformSchema>;
 
 export const publishFormatSchema = z.enum(['POST', 'REEL', 'CAROUSEL']);
@@ -38,7 +38,16 @@ export interface CaptionCapability {
 export interface PlatformCapability {
   readonly formats: Readonly<Record<PublishFormat, boolean>>;
   readonly carousel: { readonly min: number; readonly max: number };
+  /** The platform's transport for formats not named in `mediaTransportByFormat`. */
   readonly mediaTransport: PublishMediaTransport;
+  /**
+   * Per-format overrides, for platforms whose transport is not uniform.
+   *
+   * TikTok is the reason this exists: its video endpoint accepts a FILE_UPLOAD of raw bytes,
+   * but its photo endpoint is PULL_FROM_URL only — and it rejects URLs on domains the developer
+   * has not verified, so photo posts must be served from a domain we own.
+   */
+  readonly mediaTransportByFormat?: Readonly<Partial<Record<PublishFormat, PublishMediaTransport>>>;
   readonly caption: CaptionCapability;
 }
 
@@ -65,7 +74,31 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     // LinkedIn ugcPost commentary.
     caption: { maxLength: 3000, maxHashtags: 30 },
   },
+  tiktok: {
+    // REEL is the native shape (a video). POST is a single-image photo post and CAROUSEL a
+    // multi-image photo post, both via /post/publish/content/init with media_type=PHOTO.
+    formats: { POST: true, REEL: true, CAROUSEL: true },
+    // TikTok photo posts accept up to 35 images.
+    carousel: { min: 2, max: 35 },
+    // Video uploads push raw bytes (FILE_UPLOAD): PULL_FROM_URL would need TikTok to fetch our
+    // Supabase signed URL, and TikTok rejects unverified domains with url_ownership_unverified.
+    mediaTransport: 'bytes',
+    // Photo posts have no FILE_UPLOAD option at all — they are PULL_FROM_URL only, which is why
+    // they must be served through a domain verified with TikTok.
+    mediaTransportByFormat: { POST: 'url', CAROUSEL: 'url' },
+    // TikTok caps the video caption ("title") at 2,200 UTF-16 runes.
+    caption: { maxLength: 2200, maxHashtags: 30 },
+  },
 };
+
+/** The transport a specific platform+format pair uses. */
+export function mediaTransportFor(
+  platform: PublishPlatform,
+  format: PublishFormat,
+): PublishMediaTransport {
+  const capability = PLATFORM_CAPABILITIES[platform];
+  return capability.mediaTransportByFormat?.[format] ?? capability.mediaTransport;
+}
 
 export function supportsFormat(platform: PublishPlatform, format: PublishFormat): boolean {
   return PLATFORM_CAPABILITIES[platform].formats[format];
@@ -128,6 +161,16 @@ export const publishErrorCodeSchema = z.enum([
   'hyperframe_mp4_not_ready',
   // The draft's format is not offered by its platform.
   'unsupported_format',
+  // Human-in-the-loop gate reasons (see publishGate.ts). These are not faults — they mean the
+  // publish is waiting on a person, so the surface must prompt rather than report an error.
+  //
+  // `confirmation_required` — no confirmation accompanied the publish.
+  // `confirmation_stale`    — a confirmation was given, but the caption/account/platform/format
+  //                            changed since, so it no longer describes what would go out.
+  // `not_approved`          — the draft reached the publisher having never been approved.
+  'confirmation_required',
+  'confirmation_stale',
+  'not_approved',
   'unknown',
 ]);
 export type PublishErrorCode = z.infer<typeof publishErrorCodeSchema>;

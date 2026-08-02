@@ -1,11 +1,11 @@
-import { z } from "zod";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { z } from 'zod';
 
-import { hexColorSchema } from "./_shared";
-import { emojiUsageSchema } from "./brand-voice";
-import { type BrandPalette, type BrandTypography } from "./website-summary";
-import { type BrandDna, renderBrandBibleMarkdown, toBrandDna } from "./brand-dna";
-import { type BrandReportResult } from "./brand-report";
+import { hexColorSchema } from './_shared';
+import { type BrandDna, renderBrandBibleMarkdown, toBrandDna } from './brand-dna';
+import type { BrandReportResult } from './brand-report';
+import { emojiUsageSchema } from './brand-voice';
+import type { BrandPalette, BrandTypography } from './website-summary';
 
 // The brand.md token primitive — the machine-readable head of brand.md (YAML
 // front matter). It is a SUPERSET brand primitive: visual tokens (colors,
@@ -16,9 +16,9 @@ import { type BrandReportResult } from "./brand-report";
 // normative values; the prose body provides human-readable context.
 
 const canonicalHex = (value: unknown): unknown =>
-  typeof value === "string" ? `#${value.trim().replace(/^#+/, "").toLowerCase()}` : value;
+  typeof value === 'string' ? `#${value.trim().replace(/^#+/, '').toLowerCase()}` : value;
 
-export const brandColorRoleEnum = z.enum(["primary", "secondary", "accent", "background", "text"]);
+export const brandColorRoleEnum = z.enum(['primary', 'secondary', 'accent', 'background', 'text']);
 export type BrandColorRole = z.infer<typeof brandColorRoleEnum>;
 
 // VISUAL token. `value` is canonicalized to lowercase `#rrggbb` so a mis-cased
@@ -30,7 +30,7 @@ export const brandColorTokenSchema = z.object({
 });
 export type BrandColorToken = z.infer<typeof brandColorTokenSchema>;
 
-export const brandFontRoleEnum = z.enum(["display", "body"]);
+export const brandFontRoleEnum = z.enum(['display', 'body']);
 
 // VISUAL token — fonts for text rendered ON creatives (not website chrome).
 export const brandFontTokenSchema = z.object({
@@ -40,13 +40,13 @@ export const brandFontTokenSchema = z.object({
 });
 export type BrandFontToken = z.infer<typeof brandFontTokenSchema>;
 
-export const brandLogoTreatmentEnum = z.enum(["palette-only", "logo"]);
+export const brandLogoTreatmentEnum = z.enum(['palette-only', 'logo']);
 
 // VISUAL token. `treatment_default` mirrors decideBrandTreatment's "align with
 // brand vision, not always slap the logo" default.
 export const brandLogoTokenSchema = z.object({
   storage_path: z.string().min(1).nullable().default(null),
-  treatment_default: brandLogoTreatmentEnum.default("palette-only"),
+  treatment_default: brandLogoTreatmentEnum.default('palette-only'),
 });
 export type BrandLogoToken = z.infer<typeof brandLogoTokenSchema>;
 
@@ -121,11 +121,31 @@ export function parseBrandMd(input: string): ParsedBrandMd {
   }
 }
 
+// Shared FE↔BE edit boundary. Prose-only documents remain valid, but once a
+// front-matter fence is present it must preserve a usable structured token set.
+// This prevents an invalid manual edit from silently nulling the Brand Book
+// fields that generation and settings cards consume.
+export const brandMdSaveRequestSchema = z
+  .object({
+    brand_md: z.string().min(1).max(200_000),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.brand_md.trimStart().startsWith('---') && !parseBrandMd(value.brand_md).tokens) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['brand_md'],
+        message: 'brand.md front matter is invalid',
+      });
+    }
+  });
+export type BrandMdSaveRequest = z.infer<typeof brandMdSaveRequestSchema>;
+
 function omitEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (value === null || value === undefined) continue;
-    if (typeof value === "string" && value.length === 0) continue;
+    if (typeof value === 'string' && value.length === 0) continue;
     if (Array.isArray(value) && value.length === 0) continue;
     out[key] = value;
   }
@@ -140,11 +160,18 @@ function tokensToPlain(tokens: BrandMdTokens): Record<string, unknown> {
     brand_name: tokens.brand_name,
   };
   if (tokens.colors.length > 0)
-    out.colors = tokens.colors.map((c) => omitEmpty({ value: c.value, role: c.role, name: c.name }));
+    out.colors = tokens.colors.map((c) =>
+      omitEmpty({ value: c.value, role: c.role, name: c.name }),
+    );
   if (tokens.typography.length > 0)
-    out.typography = tokens.typography.map((f) => omitEmpty({ family: f.family, role: f.role, note: f.note }));
+    out.typography = tokens.typography.map((f) =>
+      omitEmpty({ family: f.family, role: f.role, note: f.note }),
+    );
   if (tokens.logo) {
-    const logo = omitEmpty({ storage_path: tokens.logo.storage_path, treatment_default: tokens.logo.treatment_default });
+    const logo = omitEmpty({
+      storage_path: tokens.logo.storage_path,
+      treatment_default: tokens.logo.treatment_default,
+    });
     if (Object.keys(logo).length > 0) out.logo = logo;
   }
   if (tokens.voice) {
@@ -174,7 +201,10 @@ function tokensToPlain(tokens: BrandMdTokens): Record<string, unknown> {
     if (Object.keys(imagery).length > 0) out.imagery = imagery;
   }
   if (tokens.audience) {
-    const audience = omitEmpty({ primary_summary: tokens.audience.primary_summary, anchors: tokens.audience.anchors });
+    const audience = omitEmpty({
+      primary_summary: tokens.audience.primary_summary,
+      anchors: tokens.audience.anchors,
+    });
     if (Object.keys(audience).length > 0) out.audience = audience;
   }
   return out;
@@ -193,44 +223,59 @@ export function assembleBrandMd(args: {
   result: BrandReportResult;
   bodyOverride?: string;
 }): string {
-  return serializeBrandMd({ tokens: args.tokens, body: args.bodyOverride ?? renderBrandBibleMarkdown(args.result) });
+  return serializeBrandMd({
+    tokens: args.tokens,
+    body: args.bodyOverride ?? renderBrandBibleMarkdown(args.result),
+  });
 }
 
 const COLOR_ROLES = brandColorRoleEnum.options;
 
-function extractColors(palette: BrandPalette | null | undefined, kitColors: string[]): Array<{ value: string; role: BrandColorRole }> {
+function extractColors(
+  palette: BrandPalette | null | undefined,
+  kitColors: string[],
+): Array<{ value: string; role: BrandColorRole }> {
   const fromPalette = COLOR_ROLES.flatMap((role) => {
     const value = palette?.[role];
-    return typeof value === "string" && value.trim().length > 0 ? [{ value, role }] : [];
+    return typeof value === 'string' && value.trim().length > 0 ? [{ value, role }] : [];
   });
   if (fromPalette.length > 0) return fromPalette;
   return kitColors
-    .filter((value) => typeof value === "string" && value.trim().length > 0)
+    .filter((value) => typeof value === 'string' && value.trim().length > 0)
     .slice(0, COLOR_ROLES.length)
     .map((value, index) => ({ value, role: COLOR_ROLES[index] }));
 }
 
-function extractTypography(typography: BrandTypography | null | undefined): Array<{ family: string; role: "display" | "body" }> {
-  const out: Array<{ family: string; role: "display" | "body" }> = [];
-  if (typography?.primary) out.push({ family: typography.primary, role: "display" });
-  if (typography?.secondary) out.push({ family: typography.secondary, role: "body" });
+function extractTypography(
+  typography: BrandTypography | null | undefined,
+): Array<{ family: string; role: 'display' | 'body' }> {
+  const out: Array<{ family: string; role: 'display' | 'body' }> = [];
+  if (typography?.primary) out.push({ family: typography.primary, role: 'display' });
+  if (typography?.secondary) out.push({ family: typography.secondary, role: 'body' });
   return out;
 }
 
 function extractVoice(dna: BrandDna): z.input<typeof brandVoiceTokenSchema> | null {
   const tone = dna.voice?.tone ?? undefined;
   const style = dna.voice?.voice_style ?? undefined;
-  const emoji_usage = dna.guidelines?.formatting?.emoji_usage ?? dna.voice?.emoji_usage ?? undefined;
+  const emoji_usage =
+    dna.guidelines?.formatting?.emoji_usage ?? dna.voice?.emoji_usage ?? undefined;
   const power_verbs = dna.voice?.power_verbs ?? [];
-  const banned_words = dna.guidelines?.messaging_guardrails?.banned_words ?? dna.voice?.banned_words ?? [];
-  if (!tone && !style && !emoji_usage && power_verbs.length === 0 && banned_words.length === 0) return null;
+  const banned_words =
+    dna.guidelines?.messaging_guardrails?.banned_words ?? dna.voice?.banned_words ?? [];
+  if (!tone && !style && !emoji_usage && power_verbs.length === 0 && banned_words.length === 0)
+    return null;
   return { tone, style, emoji_usage, power_verbs, banned_words };
 }
 
 function extractPersonality(dna: BrandDna): z.input<typeof brandPersonalityTokenSchema> | null {
   const personality = dna.strategy?.personality;
   if (!personality) return null;
-  return { archetype: personality.archetype ?? undefined, traits: personality.traits ?? [], descriptors: personality.descriptors ?? [] };
+  return {
+    archetype: personality.archetype ?? undefined,
+    traits: personality.traits ?? [],
+    descriptors: personality.descriptors ?? [],
+  };
 }
 
 function extractAudience(dna: BrandDna): z.input<typeof brandAudienceTokenSchema> | null {
@@ -254,7 +299,7 @@ export function extractBrandTokens(
     brand_name: dna.brand_name,
     colors: extractColors(dna.palette, kit?.colors ?? []),
     typography: extractTypography(dna.typography),
-    logo: logoPath ? { storage_path: logoPath, treatment_default: "palette-only" } : null,
+    logo: logoPath ? { storage_path: logoPath, treatment_default: 'palette-only' } : null,
     voice: extractVoice(dna),
     personality: extractPersonality(dna),
     imagery: null,

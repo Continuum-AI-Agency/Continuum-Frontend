@@ -1,3 +1,4 @@
+import { pluralize } from '@/lib/format/pluralize';
 import type { BrandInsightsTrend } from '@/lib/schemas/brandInsights';
 
 const PEEK_TREND_LIMIT = 3;
@@ -9,10 +10,6 @@ type BrandTrendsPeekProps = {
   weekLabel?: string;
   isStale?: boolean;
 };
-
-function pluralize(count: number, noun: string) {
-  return `${count} ${noun}${count === 1 ? '' : 's'}`;
-}
 
 export function BrandTrendsPeek({
   trends,

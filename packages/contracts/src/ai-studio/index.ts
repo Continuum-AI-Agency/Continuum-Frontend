@@ -8,6 +8,7 @@ export * from './canvas-render';
 export * from './contact-sheet';
 export * from './editor-project-v2';
 export * from './format-workflows';
+export * from './generation-error';
 export * from './hyperframes-agent';
 export * from './image-size';
 export * from './model-catalog';

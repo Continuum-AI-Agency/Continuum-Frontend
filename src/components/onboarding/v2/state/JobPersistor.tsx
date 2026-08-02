@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { internalizeLogo } from '@/lib/onboarding/internalizeLogo';
 import { type ScrapeResult, scrapeSchema } from '@/lib/onboarding/scrape';
@@ -18,30 +18,61 @@ export function JobPersistor() {
   const { jobs } = useBackgroundJobs();
   const { brandId, updateState } = useOnboarding();
   const persisted = useRef<Set<JobKey>>(new Set());
+  const persisting = useRef<Set<JobKey>>(new Set());
   const logoInternalized = useRef<Set<string>>(new Set());
+  const logoInternalizing = useRef<Set<string>>(new Set());
+  const [retryVersion, scheduleRetry] = useReducer((version: number) => version + 1, 0);
 
   useEffect(() => {
     (Object.keys(jobs) as JobKey[]).forEach((key) => {
-      if (jobs[key].status !== 'done' || persisted.current.has(key)) return;
+      if (
+        jobs[key].status !== 'done' ||
+        persisted.current.has(key) ||
+        persisting.current.has(key)
+      ) {
+        return;
+      }
       const patch = patchFor(key, jobs[key].data);
       if (!patch) return;
-      persisted.current.add(key);
-      void updateState(patch);
+      persisting.current.add(key);
+      void updateState(patch)
+        .then(() => {
+          persisted.current.add(key);
+        })
+        .catch(() => {
+          window.setTimeout(scheduleRetry, 1_000);
+        })
+        .finally(() => {
+          persisting.current.delete(key);
+        });
 
       if (key === 'scrape') {
         const scrape = parseScrape(jobs[key].data);
         const logoUrl = scrape?.logoUrl;
-        if (logoUrl && /^https?:\/\//i.test(logoUrl) && !logoInternalized.current.has(logoUrl)) {
-          logoInternalized.current.add(logoUrl);
-          void internalizeLogo(brandId, logoUrl).then((storagePath) => {
-            if (storagePath) {
-              void updateState({ brand: { logoPath: storagePath } });
-            }
-          });
+        if (
+          logoUrl &&
+          /^https?:\/\//i.test(logoUrl) &&
+          !logoInternalized.current.has(logoUrl) &&
+          !logoInternalizing.current.has(logoUrl)
+        ) {
+          logoInternalizing.current.add(logoUrl);
+          void internalizeLogo(brandId, logoUrl)
+            .then(async (storagePath) => {
+              if (storagePath) {
+                await updateState({ brand: { logoPath: storagePath } });
+              }
+              logoInternalized.current.add(logoUrl);
+            })
+            .catch(() => {
+              window.setTimeout(scheduleRetry, 1_000);
+            })
+            .finally(() => {
+              logoInternalizing.current.delete(logoUrl);
+            });
         }
       }
     });
-  }, [jobs, brandId, updateState]);
+  }, [jobs, brandId, retryVersion, updateState]);
 
   return null;
 }

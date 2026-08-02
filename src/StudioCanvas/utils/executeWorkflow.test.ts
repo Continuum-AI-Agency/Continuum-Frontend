@@ -334,10 +334,19 @@ describe('executeWorkflow', () => {
     expect(veoNode?.data.generatedVideo).toBe('video_url');
   });
 
-  it('should include image reference outputs in generation payloads', async () => {
+  it('keeps a failed-upload base64 preview usable for generation in the current session', async () => {
     const dataUrl = 'data:image/png;base64,ref_base64';
     const nodes: StudioNode[] = [
-      { id: 'img', position: { x: 0, y: 0 }, data: { image: dataUrl }, type: 'image' },
+      {
+        id: 'img',
+        position: { x: 0, y: 0 },
+        data: {
+          image: dataUrl,
+          referenceStatus: 'error',
+          referenceError: 'Upload failed',
+        },
+        type: 'image',
+      },
       { id: 'txt', position: { x: 0, y: 0 }, data: { value: 'prompt' }, type: 'string' },
       { id: 'nano', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
     ];

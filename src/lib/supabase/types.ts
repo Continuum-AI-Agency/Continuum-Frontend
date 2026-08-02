@@ -3310,12 +3310,12 @@ export type Database = {
         Row: {
           brand_id: string
           created_at: string
+          deadline_at: string | null
           error_message: string | null
           finished_at: string | null
           id: string
           idempotency_key: string | null
           last_seq: number | null
-          node_revision: number
           request: Json
           session_id: string
           started_at: string | null
@@ -3325,12 +3325,12 @@ export type Database = {
         Insert: {
           brand_id: string
           created_at?: string
+          deadline_at?: string | null
           error_message?: string | null
           finished_at?: string | null
           id?: string
           idempotency_key?: string | null
           last_seq?: number | null
-          node_revision: number
           request?: Json
           session_id: string
           started_at?: string | null
@@ -3340,12 +3340,12 @@ export type Database = {
         Update: {
           brand_id?: string
           created_at?: string
+          deadline_at?: string | null
           error_message?: string | null
           finished_at?: string | null
           id?: string
           idempotency_key?: string | null
           last_seq?: number | null
-          node_revision?: number
           request?: Json
           session_id?: string
           started_at?: string | null
@@ -3601,6 +3601,78 @@ export type Database = {
             columns: ["current_version_id"]
             isOneToOne: false
             referencedRelation: "audience_group_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audience_personas: {
+        Row: {
+          ad_account_id: string | null
+          as_of: string
+          audience_node_id: string
+          brand_id: string
+          confidence: number | null
+          content_hash: string
+          created_at: string
+          dimension: string
+          flags: string[]
+          id: string
+          observed_at: string
+          persona_key: string
+          proposed_targeting: Json | null
+          report: Json
+          segment: string
+          window: string
+        }
+        Insert: {
+          ad_account_id?: string | null
+          as_of: string
+          audience_node_id: string
+          brand_id: string
+          confidence?: number | null
+          content_hash: string
+          created_at?: string
+          dimension: string
+          flags?: string[]
+          id?: string
+          observed_at?: string
+          persona_key: string
+          proposed_targeting?: Json | null
+          report: Json
+          segment: string
+          window: string
+        }
+        Update: {
+          ad_account_id?: string | null
+          as_of?: string
+          audience_node_id?: string
+          brand_id?: string
+          confidence?: number | null
+          content_hash?: string
+          created_at?: string
+          dimension?: string
+          flags?: string[]
+          id?: string
+          observed_at?: string
+          persona_key?: string
+          proposed_targeting?: Json | null
+          report?: Json
+          segment?: string
+          window?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audience_personas_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "audience_personas_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -6253,6 +6325,91 @@ export type Database = {
           },
         ]
       }
+      creative_concepts: {
+        Row: {
+          angle_id: string
+          angle_scope: string
+          brand_id: string
+          content_hash: string
+          created_at: string
+          description: string | null
+          embedding: string | null
+          embedding_model: string
+          grounded_on: Json
+          id: string
+          label: string
+          merged_into_id: string | null
+          minted_by: string
+          minted_model: string | null
+          slug: string
+          status: string
+          updated_at: string
+          vocab_version: number
+        }
+        Insert: {
+          angle_id: string
+          angle_scope: string
+          brand_id: string
+          content_hash: string
+          created_at?: string
+          description?: string | null
+          embedding?: string | null
+          embedding_model?: string
+          grounded_on?: Json
+          id?: string
+          label: string
+          merged_into_id?: string | null
+          minted_by: string
+          minted_model?: string | null
+          slug: string
+          status?: string
+          updated_at?: string
+          vocab_version?: number
+        }
+        Update: {
+          angle_id?: string
+          angle_scope?: string
+          brand_id?: string
+          content_hash?: string
+          created_at?: string
+          description?: string | null
+          embedding?: string | null
+          embedding_model?: string
+          grounded_on?: Json
+          id?: string
+          label?: string
+          merged_into_id?: string | null
+          minted_by?: string
+          minted_model?: string | null
+          slug?: string
+          status?: string
+          updated_at?: string
+          vocab_version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_concepts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "creative_concepts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_concepts_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "creative_concepts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creative_strategy_insights: {
         Row: {
           archetype: string | null
@@ -7070,6 +7227,416 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_scaffold_gate_approvals: {
+        Row: {
+          approval_expires_at: string
+          approval_token_hash: string
+          approved_at: string | null
+          approved_by: string | null
+          brand_id: string
+          content_hash: string
+          created_at: string
+          created_by: string
+          gate: string
+          id: string
+          resume_expires_at: string
+          resume_messages: Json
+          sdk_approval_id: string
+          sdk_tool_call_id: string
+          sdk_tool_name: string
+          status: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          approval_expires_at: string
+          approval_token_hash: string
+          approved_at?: string | null
+          approved_by?: string | null
+          brand_id: string
+          content_hash: string
+          created_at?: string
+          created_by: string
+          gate: string
+          id?: string
+          resume_expires_at: string
+          resume_messages: Json
+          sdk_approval_id: string
+          sdk_tool_call_id: string
+          sdk_tool_name: string
+          status?: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          approval_expires_at?: string
+          approval_token_hash?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          brand_id?: string
+          content_hash?: string
+          created_at?: string
+          created_by?: string
+          gate?: string
+          id?: string
+          resume_expires_at?: string
+          resume_messages?: Json
+          sdk_approval_id?: string
+          sdk_tool_call_id?: string
+          sdk_tool_name?: string
+          status?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_scaffold_gate_approvals_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "paid_scaffold_gate_approvals_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_scaffold_gate_approvals_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "paid_scaffold_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_scaffold_nodes: {
+        Row: {
+          activated_at: string | null
+          angle_key: string | null
+          attempt: number
+          brand_id: string
+          concept_key: string | null
+          created_at: string
+          created_status: string
+          error_message: string | null
+          id: string
+          inherit_angle_key: string | null
+          inherit_parent_id: string | null
+          inherit_product_key: string | null
+          level: string
+          meta_creative_id: string | null
+          meta_object_id: string | null
+          name: string
+          ordinal: number
+          parent_id: string | null
+          path_key: string
+          payload: Json
+          product_key: string | null
+          provider_snapshot: Json | null
+          status: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          activated_at?: string | null
+          angle_key?: string | null
+          attempt?: number
+          brand_id: string
+          concept_key?: string | null
+          created_at?: string
+          created_status?: string
+          error_message?: string | null
+          id?: string
+          inherit_angle_key?: string | null
+          inherit_parent_id?: string | null
+          inherit_product_key?: string | null
+          level: string
+          meta_creative_id?: string | null
+          meta_object_id?: string | null
+          name: string
+          ordinal: number
+          parent_id?: string | null
+          path_key: string
+          payload?: Json
+          product_key?: string | null
+          provider_snapshot?: Json | null
+          status?: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          activated_at?: string | null
+          angle_key?: string | null
+          attempt?: number
+          brand_id?: string
+          concept_key?: string | null
+          created_at?: string
+          created_status?: string
+          error_message?: string | null
+          id?: string
+          inherit_angle_key?: string | null
+          inherit_parent_id?: string | null
+          inherit_product_key?: string | null
+          level?: string
+          meta_creative_id?: string | null
+          meta_object_id?: string | null
+          name?: string
+          ordinal?: number
+          parent_id?: string | null
+          path_key?: string
+          payload?: Json
+          product_key?: string | null
+          provider_snapshot?: Json | null
+          status?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_scaffold_nodes_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "paid_scaffold_nodes_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_scaffold_nodes_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "paid_scaffold_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_scaffold_nodes_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "paid_scaffold_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scaffold_ad_inherits_adset_product_and_angle"
+            columns: [
+              "inherit_parent_id",
+              "inherit_product_key",
+              "inherit_angle_key",
+            ]
+            isOneToOne: false
+            referencedRelation: "paid_scaffold_nodes"
+            referencedColumns: ["id", "product_key", "angle_key"]
+          },
+        ]
+      }
+      paid_scaffold_operations: {
+        Row: {
+          actor_id: string
+          attempt: number
+          brand_id: string
+          completed_at: string | null
+          gate: string
+          id: string
+          operation_id: string
+          receipt: Json | null
+          reconciliation: Json | null
+          request_hash: string
+          started_at: string
+          status: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          actor_id: string
+          attempt?: number
+          brand_id: string
+          completed_at?: string | null
+          gate: string
+          id?: string
+          operation_id: string
+          receipt?: Json | null
+          reconciliation?: Json | null
+          request_hash: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          actor_id?: string
+          attempt?: number
+          brand_id?: string
+          completed_at?: string | null
+          gate?: string
+          id?: string
+          operation_id?: string
+          receipt?: Json | null
+          reconciliation?: Json | null
+          request_hash?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_scaffold_operations_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "paid_scaffold_operations_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_scaffold_operations_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "paid_scaffold_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_scaffold_versions: {
+        Row: {
+          brand_id: string
+          content_hash: string
+          created_at: string
+          created_by: string
+          id: string
+          lifecycle: string
+          manifest: Json
+          naming_schema_id: string | null
+          naming_schema_version: number | null
+          scaffold_id: string
+          special_ad_categories: string[]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          brand_id: string
+          content_hash: string
+          created_at?: string
+          created_by: string
+          id?: string
+          lifecycle?: string
+          manifest: Json
+          naming_schema_id?: string | null
+          naming_schema_version?: number | null
+          scaffold_id: string
+          special_ad_categories?: string[]
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          brand_id?: string
+          content_hash?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          lifecycle?: string
+          manifest?: Json
+          naming_schema_id?: string | null
+          naming_schema_version?: number | null
+          scaffold_id?: string
+          special_ad_categories?: string[]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_scaffold_versions_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "paid_scaffold_versions_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_scaffold_versions_scaffold_id_fkey"
+            columns: ["scaffold_id"]
+            isOneToOne: false
+            referencedRelation: "paid_scaffolds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_scaffolds: {
+        Row: {
+          ad_account_id: string
+          archived_at: string | null
+          brand_id: string
+          created_at: string
+          created_by: string
+          current_version_id: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          archived_at?: string | null
+          brand_id: string
+          created_at?: string
+          created_by: string
+          current_version_id?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          archived_at?: string | null
+          brand_id?: string
+          created_at?: string
+          created_by?: string
+          current_version_id?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_scaffolds_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "paid_scaffolds_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_scaffolds_current_version_fk"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "paid_scaffold_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -8955,6 +9522,14 @@ export type Database = {
         }
         Returns: string
       }
+      automation_trigger_run_rejection: {
+        Args: {
+          p_automation_id: string
+          p_trigger: string
+          p_trigger_node_id: string
+        }
+        Returns: string
+      }
       brand_report_embeddings_match: {
         Args: {
           p_brand_profile_id: string
@@ -9210,6 +9785,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      claim_paid_scaffold_gate: {
+        Args: {
+          p_approval_token_hash: string
+          p_content_hash: string
+          p_gate: string
+          p_user_id?: string
+          p_version_id: string
+        }
+        Returns: Json
+      }
       cleanup_old_canvas_sessions: { Args: never; Returns: undefined }
       cleanup_old_chat_messages: { Args: never; Returns: undefined }
       complete_audience_group_publish: {
@@ -9288,6 +9873,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      complete_paid_scaffold_gate: {
+        Args: {
+          p_gate: string
+          p_receipt?: Json
+          p_user_id?: string
+          p_version_id: string
+        }
+        Returns: Json
+      }
       create_audience_group_draft: {
         Args: {
           p_ad_account_id: string
@@ -9340,6 +9934,22 @@ export type Database = {
       }
       create_canvas_workspace: {
         Args: { p_brand_profile_id: string; p_name: string; p_user_id?: string }
+        Returns: Json
+      }
+      create_paid_scaffold_draft: {
+        Args: {
+          p_ad_account_id: string
+          p_brand_id: string
+          p_content_hash: string
+          p_manifest: Json
+          p_name: string
+          p_naming_schema_id?: string
+          p_naming_schema_version?: number
+          p_nodes: Json
+          p_scaffold_id?: string
+          p_special_ad_categories?: string[]
+          p_user_id?: string
+        }
         Returns: Json
       }
       decrypt_token: { Args: { ct: string }; Returns: string }
@@ -9628,6 +10238,22 @@ export type Database = {
           tags: string[]
         }[]
       }
+      open_paid_scaffold_gate: {
+        Args: {
+          p_approval_expires_at: string
+          p_approval_token_hash: string
+          p_content_hash: string
+          p_gate: string
+          p_resume_expires_at: string
+          p_resume_messages: Json
+          p_sdk_approval_id: string
+          p_sdk_tool_call_id: string
+          p_sdk_tool_name: string
+          p_user_id?: string
+          p_version_id: string
+        }
+        Returns: Json
+      }
       publish_automation_workflow: {
         Args: {
           p_automation_id: string
@@ -9660,6 +10286,19 @@ export type Database = {
           p_error_message?: string
           p_member_key: string
           p_meta_audience_id?: string
+          p_provider_snapshot?: Json
+          p_status: string
+          p_user_id?: string
+          p_version_id: string
+        }
+        Returns: undefined
+      }
+      record_paid_scaffold_node_result: {
+        Args: {
+          p_error_message?: string
+          p_meta_creative_id?: string
+          p_meta_object_id?: string
+          p_path_key: string
           p_provider_snapshot?: Json
           p_status: string
           p_user_id?: string
@@ -14968,6 +15607,7 @@ export type Database = {
           finish_reason: string | null
           id: string
           input_tokens: number | null
+          lane: string | null
           outcome: string
           output_tokens: number | null
           run_id: string | null
@@ -14985,6 +15625,7 @@ export type Database = {
           finish_reason?: string | null
           id?: string
           input_tokens?: number | null
+          lane?: string | null
           outcome: string
           output_tokens?: number | null
           run_id?: string | null
@@ -15002,6 +15643,7 @@ export type Database = {
           finish_reason?: string | null
           id?: string
           input_tokens?: number | null
+          lane?: string | null
           outcome?: string
           output_tokens?: number | null
           run_id?: string | null
@@ -16257,13 +16899,81 @@ export type Database = {
   }
   paid_media: {
     Tables: {
+      ad_breakdown_daily: {
+        Row: {
+          actions: Json
+          ad_account_id: string
+          ad_id: string
+          adset_id: string | null
+          as_of: string
+          attribution_setting: string | null
+          brand_id: string
+          breakdown_kind: string
+          breakdown_value: string
+          clicks: number
+          date: string
+          impressions: number
+          link_clicks: number
+          observed_at: string
+          spend: number
+          video_p25: number | null
+          video_p75: number | null
+          video_thruplays: number | null
+        }
+        Insert: {
+          actions?: Json
+          ad_account_id: string
+          ad_id: string
+          adset_id?: string | null
+          as_of: string
+          attribution_setting?: string | null
+          brand_id: string
+          breakdown_kind: string
+          breakdown_value: string
+          clicks?: number
+          date: string
+          impressions?: number
+          link_clicks?: number
+          observed_at?: string
+          spend?: number
+          video_p25?: number | null
+          video_p75?: number | null
+          video_thruplays?: number | null
+        }
+        Update: {
+          actions?: Json
+          ad_account_id?: string
+          ad_id?: string
+          adset_id?: string | null
+          as_of?: string
+          attribution_setting?: string | null
+          brand_id?: string
+          breakdown_kind?: string
+          breakdown_value?: string
+          clicks?: number
+          date?: string
+          impressions?: number
+          link_clicks?: number
+          observed_at?: string
+          spend?: number
+          video_p25?: number | null
+          video_p75?: number | null
+          video_thruplays?: number | null
+        }
+        Relationships: []
+      }
       ad_creatives: {
         Row: {
           ad_account_id: string
           analysis_model: string | null
           analyzed_at: string | null
+          angle_id: string | null
+          angle_label: string | null
+          angle_scope: string | null
+          angle_vocab_version: number
           body: string | null
           brand_id: string
+          concept_id: string | null
           content_hash: string
           created_at: string
           creative_id: string
@@ -16277,21 +16987,29 @@ export type Database = {
           match_status: string
           matched_at: string | null
           media_bytes_hash: string | null
+          opening_frame_type: string | null
           permalink_url: string | null
           poster_url: string | null
+          proof_type: string | null
           status: string
           taxonomy_version: number
           thumbnail_url: string | null
           title: string | null
           transcript: string | null
+          value_prop_type: string | null
           video_id: string | null
         }
         Insert: {
           ad_account_id: string
           analysis_model?: string | null
           analyzed_at?: string | null
+          angle_id?: string | null
+          angle_label?: string | null
+          angle_scope?: string | null
+          angle_vocab_version?: number
           body?: string | null
           brand_id: string
+          concept_id?: string | null
           content_hash: string
           created_at?: string
           creative_id: string
@@ -16305,21 +17023,29 @@ export type Database = {
           match_status?: string
           matched_at?: string | null
           media_bytes_hash?: string | null
+          opening_frame_type?: string | null
           permalink_url?: string | null
           poster_url?: string | null
+          proof_type?: string | null
           status?: string
           taxonomy_version?: number
           thumbnail_url?: string | null
           title?: string | null
           transcript?: string | null
+          value_prop_type?: string | null
           video_id?: string | null
         }
         Update: {
           ad_account_id?: string
           analysis_model?: string | null
           analyzed_at?: string | null
+          angle_id?: string | null
+          angle_label?: string | null
+          angle_scope?: string | null
+          angle_vocab_version?: number
           body?: string | null
           brand_id?: string
+          concept_id?: string | null
           content_hash?: string
           created_at?: string
           creative_id?: string
@@ -16333,13 +17059,16 @@ export type Database = {
           match_status?: string
           matched_at?: string | null
           media_bytes_hash?: string | null
+          opening_frame_type?: string | null
           permalink_url?: string | null
           poster_url?: string | null
+          proof_type?: string | null
           status?: string
           taxonomy_version?: number
           thumbnail_url?: string | null
           title?: string | null
           transcript?: string | null
+          value_prop_type?: string | null
           video_id?: string | null
         }
         Relationships: []
@@ -16429,6 +17158,87 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      adset_targeting_snapshots: {
+        Row: {
+          ad_account_id: string
+          adset_id: string
+          age_max: number | null
+          age_min: number | null
+          audience_cell_node_id: string
+          audience_group_version_id: string | null
+          bid_strategy: string | null
+          billing_event: string | null
+          brand_id: string
+          content_hash: string
+          created_at: string
+          custom_audience_ids: string[]
+          device_platforms: string[] | null
+          excluded_custom_audience_ids: string[]
+          genders: number[] | null
+          geo_node_ids: string[]
+          id: string
+          observed_at: string
+          optimization_goal: string | null
+          placements: string[] | null
+          publisher_platforms: string[] | null
+          referenced_node_ids: string[]
+          source: string
+          targeting_spec: Json
+        }
+        Insert: {
+          ad_account_id: string
+          adset_id: string
+          age_max?: number | null
+          age_min?: number | null
+          audience_cell_node_id: string
+          audience_group_version_id?: string | null
+          bid_strategy?: string | null
+          billing_event?: string | null
+          brand_id: string
+          content_hash: string
+          created_at?: string
+          custom_audience_ids?: string[]
+          device_platforms?: string[] | null
+          excluded_custom_audience_ids?: string[]
+          genders?: number[] | null
+          geo_node_ids?: string[]
+          id?: string
+          observed_at?: string
+          optimization_goal?: string | null
+          placements?: string[] | null
+          publisher_platforms?: string[] | null
+          referenced_node_ids?: string[]
+          source?: string
+          targeting_spec: Json
+        }
+        Update: {
+          ad_account_id?: string
+          adset_id?: string
+          age_max?: number | null
+          age_min?: number | null
+          audience_cell_node_id?: string
+          audience_group_version_id?: string | null
+          bid_strategy?: string | null
+          billing_event?: string | null
+          brand_id?: string
+          content_hash?: string
+          created_at?: string
+          custom_audience_ids?: string[]
+          device_platforms?: string[] | null
+          excluded_custom_audience_ids?: string[]
+          genders?: number[] | null
+          geo_node_ids?: string[]
+          id?: string
+          observed_at?: string
+          optimization_goal?: string | null
+          placements?: string[] | null
+          publisher_platforms?: string[] | null
+          referenced_node_ids?: string[]
+          source?: string
+          targeting_spec?: Json
+        }
+        Relationships: []
       }
       creative_label_jobs: {
         Row: {
@@ -20360,18 +21170,19 @@ export type Database = {
         Returns: {
           ad_account_id: string
           apply_mode: string
-          apply_mode_changed_by: string
-          autopilot_paused: boolean
           brand_id: string
+          budget_source: string
           config: Json
           cpa_target: number
           daily_total: number
           id: string
           level: string
-          max_change_pct_per_cycle: number
-          max_daily_apply_minor: number
+          lookback_window: string
           mode: string
           objective: string
+          period_budget: number
+          period_end: string
+          period_start: string
         }[]
       }
       optimizer_claim_next_creative_swap_job: {
@@ -20467,7 +21278,7 @@ export type Database = {
       }
       optimizer_enroll_adset: {
         Args: { p_adsets: Json; p_portfolio_id: string }
-        Returns: number
+        Returns: Json
       }
       optimizer_expire_stale_recommendations: {
         Args: { p_days?: number }
@@ -20597,6 +21408,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      optimizer_get_timeline_events: {
+        Args: { p_limit?: number; p_portfolio_id: string }
+        Returns: Json
+      }
       optimizer_grant_approve_recommendation: {
         Args: { p_rec_id: string; p_rule_id: string }
         Returns: boolean
@@ -20608,6 +21423,16 @@ export type Database = {
           p_worker_id: string
         }
         Returns: boolean
+      }
+      optimizer_list_account_enrollments: {
+        Args: { p_ad_account_id?: string; p_brand_id: string }
+        Returns: {
+          adset_id: string
+          can_release: boolean
+          portfolio_id: string
+          portfolio_name: string
+          same_brand: boolean
+        }[]
       }
       optimizer_list_archived_portfolios: {
         Args: { p_brand_id: string }
@@ -20631,6 +21456,8 @@ export type Database = {
           active: boolean
           adset_id: string
           adset_name: string
+          last_seen_at: string
+          missing_since: string
         }[]
       }
       optimizer_list_portfolios: { Args: { p_brand_id: string }; Returns: Json }
@@ -20643,23 +21470,32 @@ export type Database = {
         Returns: {
           ad_account_id: string
           apply_mode: string
-          apply_mode_changed_by: string
-          autopilot_paused: boolean
           brand_id: string
+          budget_source: string
           config: Json
           cpa_target: number
           daily_total: number
           id: string
           level: string
-          max_change_pct_per_cycle: number
-          max_daily_apply_minor: number
+          lookback_window: string
           mode: string
           objective: string
+          period_budget: number
+          period_end: string
+          period_start: string
         }[]
       }
       optimizer_mark_apply_results: {
         Args: { p_results: Json; p_run_id: string }
         Returns: number
+      }
+      optimizer_mark_roster_presence: {
+        Args: {
+          p_portfolio_id: string
+          p_seen_at: string
+          p_seen_ids: string[]
+        }
+        Returns: Json
       }
       optimizer_reconcile_cycle_items: {
         Args: { p_run_id: string }

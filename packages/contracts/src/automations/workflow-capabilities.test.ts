@@ -60,6 +60,42 @@ describe('automation capability manifest', () => {
     expect(AUTOMATION_SOURCE_LIFECYCLE.live_web).toBe('preview');
   });
 
+  // Shape, not values — the same discipline the action lifecycle test above
+  // records. Which sources are production is a backend fact pinned by
+  // App/automations/__tests__/source-registry.spec.ts, where it is checked
+  // against the resolver wiring rather than against a copy of this constant.
+  test('assigns every source kind a legal lifecycle', () => {
+    const kinds = Object.keys(AUTOMATION_SOURCE_LIFECYCLE);
+    expect(kinds.length).toBeGreaterThan(0);
+    for (const kind of kinds) {
+      expect(['production', 'preview']).toContain(
+        AUTOMATION_SOURCE_LIFECYCLE[kind as keyof typeof AUTOMATION_SOURCE_LIFECYCLE],
+      );
+    }
+  });
+
+  // The rollout discipline, made machine-checkable. A backend that ships a new
+  // source kind before the frontend knows it must not take the whole
+  // capabilities response down with it: the response is `.strict()` and the
+  // frontend `.parse()`s it, so one unrecognized row would throw, leave
+  // capabilities null, and silently drop every availability gate to "ready".
+  test('tolerates a source kind this build does not know', () => {
+    const parsed = automationCapabilitiesResponseSchema.parse({
+      generatedAt: new Date().toISOString(),
+      mcpReadTools: [],
+      sources: [
+        {
+          source: 'a_kind_shipped_after_this_build',
+          lifecycle: 'production',
+          availability: 'ready',
+          reason: null,
+        },
+      ],
+    });
+
+    expect(parsed.sources[0]?.source).toBe('a_kind_shipped_after_this_build');
+  });
+
   test('validates brand-scoped availability', () => {
     expect(
       automationCapabilitiesResponseSchema.parse({

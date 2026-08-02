@@ -2,10 +2,13 @@
 
 import type { PublishEvent } from '@continuum/contracts';
 import * as React from 'react';
+import { useDestructiveConfirmation } from '@/components/organic/primitives/DestructiveConfirmation';
+import { PublishIntentSummary } from '@/components/organic/primitives/PublishIntentSummary';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { classifyOrganicError } from '@/lib/organic/error-handling';
 import {
   buildPublishBody,
@@ -21,6 +24,38 @@ import { useCalendarStore } from '@/lib/organic/store';
 type ProcessingEvent = Extract<PublishEvent, { type: 'processing' }>;
 type PublishedEvent = Extract<PublishEvent, { type: 'published' }>;
 type FailedEvent = Extract<PublishEvent, { type: 'failed' }>;
+
+/**
+ * What /publish-intent reports: the verdict, the facts that will actually be sent, and the hash
+ * the backend binds a confirmation to. `intent_hash` is null when the post is not publishable —
+ * there is nothing legitimate to confirm.
+ */
+type PublishIntent = {
+  publishable: boolean;
+  blockers: { reason: string; message: string }[];
+  platform: string;
+  format: string;
+  account: { id: string | null; source: string };
+  caption: { present: boolean; length: number; preview: string | null };
+  media: { count: number; required: number; source: string };
+  intent_hash: string | null;
+};
+
+async function fetchPublishIntent(backendDraftId: string): Promise<PublishIntent | null> {
+  try {
+    const token = await getBrowserAccessToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/organic/calendar/drafts/${backendDraftId}/publish-intent`,
+      { method: 'POST', headers, body: JSON.stringify({}) },
+    );
+    if (!response.ok) return null;
+    return (await response.json()) as PublishIntent;
+  } catch {
+    return null;
+  }
+}
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -42,6 +77,7 @@ export function usePublishDraft(): UsePublishDraftResult {
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const accountContext = useCalendarStore((state) => state.accountContext);
   const { show } = useToast();
+  const { requestDestructiveConfirmation } = useDestructiveConfirmation();
 
   const [isPublishing, setIsPublishing] = React.useState(false);
   const [stage, setStage] = React.useState<PublishProgressStage | null>(null);
@@ -55,6 +91,59 @@ export function usePublishDraft(): UsePublishDraftResult {
 
   const publish = React.useCallback(
     async (draft: OrganicCalendarDraft) => {
+      // The invariant lives HERE, not on the buttons. Four surfaces call this hook (the
+      // preview footer, the card context menu, the hover card and the command menu) and
+      // only the footer used to check readiness — so "Publish to Instagram" was live on a
+      // draft with NEEDS SETUP and no media. Both gates run before any network call.
+      const platform = inferPublishPlatform(draft);
+      if (!platform) {
+        const message = 'This draft has no platform we can publish to.';
+        setError(message);
+        show({ title: 'Publishing failed', description: message, variant: 'error' });
+        return;
+      }
+
+      const readiness = evaluateDraftReadiness(draft);
+      if (!readiness.ready) {
+        const message = readiness.reason ?? 'This post is not ready to publish yet.';
+        setError(message);
+        show({ title: 'Not ready to publish', description: message, variant: 'error' });
+        return;
+      }
+
+      // Recorded before the preflight so `retryPublish()` still works when it is the preflight
+      // that failed — otherwise a transient blip on the intent request left the user with an
+      // error and a Retry button that did nothing.
+      lastDraftRef.current = draft;
+
+      // Ask the server what will ACTUALLY be sent, show the user exactly that, and carry the hash
+      // it binds to. A confirmation obtained against this caption/account cannot be redeemed for
+      // a different one — so the dialog cannot show one thing and publish another.
+      let intent: PublishIntent | null = null;
+      if (draft.backendDraftId) {
+        intent = await fetchPublishIntent(draft.backendDraftId);
+        if (!intent) {
+          const message = 'Could not check this post before publishing. Please try again.';
+          setError(message);
+          show({ title: 'Publishing failed', description: message, variant: 'error' });
+          return;
+        }
+      }
+
+      const confirmed = await requestDestructiveConfirmation({
+        title: `Publish to ${publishPlatformLabel(platform)}?`,
+        description:
+          intent?.publishable === false
+            ? 'This post is not ready to publish yet.'
+            : 'This posts publicly right away and cannot be undone from Continuum. Review the caption and account below.',
+        confirmLabel: `Publish to ${publishPlatformLabel(platform)}`,
+        confirmDisabled: intent ? !intent.publishable || !intent.intent_hash : false,
+        // createElement rather than JSX: this hook is a .ts module, and the summary is a real
+        // component so it stays testable and reusable on its own.
+        ...(intent ? { details: React.createElement(PublishIntentSummary, { intent }) } : {}),
+      });
+      if (!confirmed) return;
+
       lastDraftRef.current = draft;
       setIsPublishing(true);
       setStage(null);
@@ -65,11 +154,15 @@ export function usePublishDraft(): UsePublishDraftResult {
       try {
         const token = await getBrowserAccessToken();
 
-        const platform = inferPublishPlatform(draft);
-        if (!platform) throw new Error('This draft has no platform we can publish to');
         const accountId = accountContext.accountIds[platform] ?? null;
 
-        const body = buildPublishBody(draft, platform, accountId, accountContext.brandId);
+        // The hash the user's confirmation was taken against. The backend recomputes it from the
+        // row at publish time and refuses a mismatch, so a draft edited between the dialog and
+        // this request cannot be published on the strength of the old approval.
+        const body = {
+          ...buildPublishBody(draft, platform, accountId, accountContext.brandId),
+          ...(intent?.intent_hash ? { confirmationHash: intent.intent_hash } : {}),
+        };
 
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers.Authorization = `Bearer ${token}`;
@@ -205,7 +298,7 @@ export function usePublishDraft(): UsePublishDraftResult {
         setStage(null);
       }
     },
-    [updateDraft, accountContext, show],
+    [updateDraft, accountContext, show, requestDestructiveConfirmation],
   );
 
   // The ONLY retry: the user asked for it. A publish is never replayed by a timer.

@@ -11,7 +11,11 @@
 // statistically-supported attribute COMBINATIONS (support/confidence/lift)
 // from quantitative per-ad performance. No content analysis is duplicated.
 //
-// STATUS: UNWIRED STUB (see rules/types.ts). Nothing calls this yet.
+// STATUS: WIRED. Continuum-Backend/App/paid-creative-intel/analysis/reportAssembler.ts
+// imports `mineCreativeCombos` (with `MinableItem`) from '@continuum/optimization-engine',
+// builds one item per labeled ad — score = d30 conversions-per-dollar, attributes =
+// hook/asset/theme/funnel from ad_creatives.labels — and calls it while assembling the
+// creative-intel report; rules with lift > 1 become the report's `CreativeLiftRule[]`.
 // ---------------------------------------------------------------------------
 
 /** One ad (or ad set) with a performance score and its attribute tags.

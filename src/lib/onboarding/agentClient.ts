@@ -35,6 +35,7 @@ import {
 } from '@continuum/contracts';
 import { z } from 'zod';
 import { getApiBaseUrl } from '@/lib/api/config';
+import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import type { ScrapeResult } from '@/lib/onboarding/scrape';
 
 export type {
@@ -115,6 +116,17 @@ function buildUrl(path: string): string {
     return base;
   }
   return `${base}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+async function withOnboardingAuthorization(
+  headers: Record<string, string> = {},
+  accessToken?: string,
+): Promise<Record<string, string>> {
+  const token = accessToken ?? (await getBrowserAccessToken());
+  return {
+    ...headers,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 }
 
 const integrationProviderSchema = z.enum([
@@ -534,7 +546,10 @@ export async function runOnboardingPreview(
 ): Promise<RunOnboardingPreviewResult> {
   const response = await fetch(buildUrl('/onboarding/brand-profiles/preview'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    headers: await withOnboardingAuthorization({
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    }),
     body: JSON.stringify({
       brandProfile: options.payload.brandProfile,
       runContext: options.payload.runContext,
@@ -576,7 +591,7 @@ export async function resumeOnboardingPreview(
     rich?: boolean;
   } = {},
 ): Promise<ConsumerResult> {
-  const headers: Record<string, string> = { Accept: 'text/event-stream' };
+  const headers = await withOnboardingAuthorization({ Accept: 'text/event-stream' });
   if (typeof options.lastEventId === 'number' && options.lastEventId > 0) {
     headers['Last-Event-ID'] = String(options.lastEventId);
   }
@@ -601,7 +616,12 @@ export async function fetchPreviewLatest(
 ): Promise<PreviewLatest | null> {
   const response = await fetch(
     buildUrl(`/onboarding/brand-profiles/${encodeURIComponent(brandId)}/preview/latest`),
-    { method: 'GET', cache: 'no-store', signal: options?.signal },
+    {
+      method: 'GET',
+      headers: await withOnboardingAuthorization(),
+      cache: 'no-store',
+      signal: options?.signal,
+    },
   );
   if (response.status === 404) return null;
   await assertOk(response);
@@ -614,7 +634,12 @@ export async function fetchPreviewStatus(
 ): Promise<PreviewStatusSnapshot | null> {
   const response = await fetch(
     buildUrl(`/onboarding/brand-profiles/preview/${encodeURIComponent(runId)}/status`),
-    { method: 'GET', cache: 'no-store', signal: options?.signal },
+    {
+      method: 'GET',
+      headers: await withOnboardingAuthorization(),
+      cache: 'no-store',
+      signal: options?.signal,
+    },
   );
   if (response.status === 404) return null;
   await assertOk(response);
@@ -630,6 +655,7 @@ export async function fetchPreviewSnapshot(
   }`;
   const response = await fetch(buildUrl(path), {
     method: 'GET',
+    headers: await withOnboardingAuthorization(),
     cache: 'no-store',
     signal: options?.signal,
   });
@@ -1086,6 +1112,7 @@ type ApproveOptions = {
   payload: AgentRequestPayload;
   signal?: AbortSignal;
   idempotencyKey?: string;
+  accessToken?: string;
 };
 
 export async function approveOnboardingBrandProfile(
@@ -1098,7 +1125,7 @@ export async function approveOnboardingBrandProfile(
 
   const response = await fetch(buildUrl('/onboarding/brand-profiles/approve'), {
     method: 'POST',
-    headers: approveHeaders,
+    headers: await withOnboardingAuthorization(approveHeaders, options.accessToken),
     body: JSON.stringify({
       brandProfile: options.payload.brandProfile,
       runContext: options.payload.runContext,

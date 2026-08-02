@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { createBrandSkill } from '@/lib/organic/skills';
-import { AgentButton, AgentCardEyebrow, AgentCardTitle, AgentDecisionCard } from './agentCardKit';
+import { AgentButton, AgentCardEyebrow, AgentCardTitle, AgentDecisionCard } from '@/components/shared/agent-cards/agentCardKit';
 import type { SkillProposalCardData } from './types';
 
 type Props = {

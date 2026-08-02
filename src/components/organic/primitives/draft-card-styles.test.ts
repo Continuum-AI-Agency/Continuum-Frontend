@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  DRAFT_READINESS_LEGEND_NOTE,
+  DRAFT_STATUS_LEGEND_ORDER,
   DRAFT_STATUS_PRESENTATION,
+  type DraftStatusPresentation,
+  draftStatusLegendEntries,
   draftStatusPresentation,
   statusFrameClasses,
 } from './draft-card-styles';
@@ -17,8 +21,15 @@ const ALL_STATUSES: OrganicDraftStatus[] = [
 
 describe('draft status presentation (the single source of truth)', () => {
   it('covers every draft status', () => {
+    // Compile-time half of the guard: the table is `satisfies Record<OrganicDraftStatus, …>`
+    // in source, so a new member of the union fails the build. This assignment is the same
+    // check from the consumer side, and the key-set assertion below is the runtime half —
+    // together they make a silently unstyled status impossible.
+    const exhaustive: Record<OrganicDraftStatus, DraftStatusPresentation> =
+      DRAFT_STATUS_PRESENTATION;
+
     for (const status of ALL_STATUSES) {
-      expect(DRAFT_STATUS_PRESENTATION[status]).toBeDefined();
+      expect(exhaustive[status]).toBeDefined();
     }
     expect(Object.keys(DRAFT_STATUS_PRESENTATION).sort()).toEqual([...ALL_STATUSES].sort());
   });
@@ -48,6 +59,42 @@ describe('draft status presentation (the single source of truth)', () => {
       expect(label.length).toBeGreaterThan(0);
       expect(hint.length).toBeGreaterThan(label.length);
     }
+  });
+});
+
+// The toolbar legend used to hardcode its own five badges and got four facts wrong. These
+// lock the derived API it now reads instead.
+describe('legend API', () => {
+  it('lists every status, so no status can be omitted from the legend', () => {
+    expect([...DRAFT_STATUS_LEGEND_ORDER].sort()).toEqual([...ALL_STATUSES].sort());
+  });
+
+  it('includes placeholder — the status the hardcoded legend left out entirely', () => {
+    expect(DRAFT_STATUS_LEGEND_ORDER).toContain('placeholder');
+  });
+
+  it('carries the exact words the planner pills use', () => {
+    const entries = draftStatusLegendEntries();
+
+    expect(entries.map((entry) => entry.label)).toEqual(
+      DRAFT_STATUS_LEGEND_ORDER.map((status) => draftStatusPresentation(status).label),
+    );
+    expect(entries.every((entry) => entry.hint.length > entry.label.length)).toBe(true);
+  });
+
+  it('names violet "Seeded" and amber "Generating" — the legend had them swapped', () => {
+    const byStatus = new Map(draftStatusLegendEntries().map((entry) => [entry.status, entry]));
+
+    expect(byStatus.get('placeholder')?.label).toBe('Seeded');
+    expect(draftStatusPresentation('placeholder').tone).toBe('violet');
+    expect(byStatus.get('streaming')?.label).toBe('Generating');
+    expect(draftStatusPresentation('streaming').tone).toBe('warning');
+  });
+
+  it('says "Needs setup" is readiness rather than listing it as a status', () => {
+    expect(DRAFT_STATUS_LEGEND_ORDER).not.toContain('needs_setup' as OrganicDraftStatus);
+    expect(DRAFT_READINESS_LEGEND_NOTE).toContain('not a status');
+    expect(draftStatusLegendEntries().some((entry) => entry.label === 'Needs setup')).toBe(false);
   });
 });
 

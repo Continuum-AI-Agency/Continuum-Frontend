@@ -1,83 +1,98 @@
-import { describe, expect, it } from "bun:test";
-
+import { describe, expect, it } from 'bun:test';
+import { organicStreamFrameSchema, pipelineStageEnum } from './organic';
 import {
   organicBrandTreatmentSchema,
   organicMediaBrandGroundingSchema,
   organicMediaSuggestionSchema,
-} from "./organic-pipeline";
-import { organicStreamFrameSchema, pipelineStageEnum } from "./organic";
+} from './organic-pipeline';
 
-describe("organicMediaBrandGroundingSchema", () => {
-  it("accepts a palette-only treatment with no references (the default)", () => {
+describe('organicMediaBrandGroundingSchema', () => {
+  it('accepts a palette-only treatment with no references (the default)', () => {
     const parsed = organicMediaBrandGroundingSchema.safeParse({
-      treatment: "palette-only",
-      palette: ["#0A0A0A", "#F2F2F2"],
+      treatment: 'palette-only',
+      palette: ['#0A0A0A', '#F2F2F2'],
     });
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.references).toBeUndefined();
   });
 
-  it("accepts a logo treatment with a durable reference handle", () => {
+  it('accepts a logo treatment with a durable reference handle', () => {
     const parsed = organicMediaBrandGroundingSchema.safeParse({
-      treatment: "logo",
+      treatment: 'logo',
       references: [
-        { kind: "logo", bucket: "brand-profile-assets", storagePath: "b/branding/logo.png" },
+        { kind: 'logo', bucket: 'brand-profile-assets', storagePath: 'b/branding/logo.png' },
       ],
-      rationale: "Branded product announcement warrants the mark.",
+      rationale: 'Branded product announcement warrants the mark.',
     });
     expect(parsed.success).toBe(true);
   });
 
-  it("rejects an unknown treatment", () => {
-    expect(organicBrandTreatmentSchema.safeParse("watermark").success).toBe(false);
+  it('rejects an unknown treatment', () => {
+    expect(organicBrandTreatmentSchema.safeParse('watermark').success).toBe(false);
   });
 
-  it("rejects a reference with no storagePath", () => {
+  it('rejects a reference with no storagePath', () => {
     const parsed = organicMediaBrandGroundingSchema.safeParse({
-      treatment: "reference-creative",
-      references: [{ kind: "creative" }],
+      treatment: 'reference-creative',
+      references: [{ kind: 'creative' }],
     });
     expect(parsed.success).toBe(false);
   });
 });
 
-describe("organicMediaSuggestionSchema brandGrounding", () => {
-  it("carries brandGrounding alongside the blueprint readiness flags", () => {
+describe('organicMediaSuggestionSchema brandGrounding', () => {
+  it('carries brandGrounding alongside the blueprint readiness flags', () => {
     const parsed = organicMediaSuggestionSchema.safeParse({
-      mediaStatus: "pending",
+      mediaStatus: 'pending',
       textReady: true,
       blueprintReady: true,
-      brandGrounding: { treatment: "palette-only", palette: ["#123456"] },
+      brandGrounding: { treatment: 'palette-only', palette: ['#123456'] },
     });
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.brandGrounding?.treatment).toBe("palette-only");
+    if (parsed.success) expect(parsed.data.brandGrounding?.treatment).toBe('palette-only');
   });
 
-  it("remains valid with brandGrounding omitted (back-compat)", () => {
-    const parsed = organicMediaSuggestionSchema.safeParse({ mediaStatus: "pending" });
+  it('remains valid with brandGrounding omitted (back-compat)', () => {
+    const parsed = organicMediaSuggestionSchema.safeParse({ mediaStatus: 'pending' });
     expect(parsed.success).toBe(true);
   });
 });
 
-describe("organic three-stage frames", () => {
+describe('organic three-stage frames', () => {
   it("includes 'blueprint' as a pipeline stage between draft and assets", () => {
     expect(pipelineStageEnum.options).toEqual([
-      "strategist",
-      "concept",
-      "draft",
-      "blueprint",
-      "assets",
-      "quality",
-      "merge",
+      'strategist',
+      'concept',
+      'draft',
+      'blueprint',
+      'assets',
+      'quality',
+      'merge',
     ]);
   });
 
-  it("parses a draft.blueprint_ready chat frame", () => {
+  it('parses a draft.blueprint_ready chat frame', () => {
     const parsed = organicStreamFrameSchema.safeParse({
-      type: "draft.blueprint_ready",
-      data: { jobId: "job_1", brandId: "brand_1", draftId: "draft_1" },
+      type: 'draft.blueprint_ready',
+      data: {
+        jobId: 'job_1',
+        brandId: 'brand_1',
+        draftId: 'draft_1',
+        // Required: it is the preview-approval token. The blueprint worker always emits
+        // it, and a frame without one strands the draft on "awaiting media choice" with
+        // nothing to click — which is why the schema refuses it rather than defaulting.
+        previewRevision: 'rev_1',
+      },
     });
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.type).toBe("draft.blueprint_ready");
+    if (parsed.success) expect(parsed.data.type).toBe('draft.blueprint_ready');
+  });
+
+  it('refuses a draft.blueprint_ready frame with no preview revision', () => {
+    const parsed = organicStreamFrameSchema.safeParse({
+      type: 'draft.blueprint_ready',
+      data: { jobId: 'job_1', brandId: 'brand_1', draftId: 'draft_1' },
+    });
+    expect(parsed.success).toBe(false);
   });
 });
