@@ -24,8 +24,9 @@ const AUDIT_SCHEMA = 'brand_profiles';
 const AUDIT_TABLE = 'admin_audit_log';
 
 // Unique marker so the bench finds and purges exactly its own row, never a real one. `target_id`
-// is a free-text column, so a readable marker is both a valid value and an easy locator.
-const RUN_MARKER = `bench-audit-${Date.now()}`;
+// is a free-text column, so a readable marker is both a valid value and an easy locator. A random
+// UUID (as in seedAuditRow) makes it collision-resistant across concurrent runs.
+const RUN_MARKER = `bench-audit-${Date.now()}-${crypto.randomUUID()}`;
 
 // The seeded row's action drives the filter assertion: filtering to a DIFFERENT known action must
 // drop it, and returning to "All actions" must bring it back.
@@ -63,7 +64,22 @@ async function seedAuditRow(supabase: SupabaseClient): Promise<void> {
 }
 
 async function purgeAuditRow(supabase: SupabaseClient): Promise<void> {
-  await supabase.schema(AUDIT_SCHEMA).from(AUDIT_TABLE).delete().eq('target_id', RUN_MARKER);
+  await supabase
+    .schema(AUDIT_SCHEMA)
+    .from(AUDIT_TABLE)
+    .delete()
+    .eq('target_id', RUN_MARKER)
+    .throwOnError();
+}
+
+function isLocalSupabaseTarget(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) return false;
+  try {
+    return ['localhost', '127.0.0.1'].includes(new URL(url).hostname);
+  } catch {
+    return false;
+  }
 }
 
 function assertLocalTarget(baseURL: string | undefined): void {
@@ -76,11 +92,15 @@ function assertLocalTarget(baseURL: string | undefined): void {
 }
 
 test.describe('admin audit log', () => {
+  // Never write to a non-local Supabase: the seed/purge use the service role against
+  // NEXT_PUBLIC_SUPABASE_URL, so guard the hooks the same way the tests guard baseURL.
   test.beforeAll(async () => {
+    if (!isLocalSupabaseTarget()) return;
     await seedAuditRow(admin());
   });
 
   test.afterAll(async () => {
+    if (!isLocalSupabaseTarget()) return;
     await purgeAuditRow(admin());
   });
 

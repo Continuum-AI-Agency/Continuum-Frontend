@@ -97,11 +97,11 @@ describe('formatAuditActionLabel', () => {
 
 describe('buildAdminAuditRequestBody', () => {
   it('omits the action filter when unset', () => {
-    expect(buildAdminAuditRequestBody({ page: 1, pageSize: 50 })).toEqual({
+    expect(buildAdminAuditRequestBody({ page: 1, pageSize: 50 })).toStrictEqual({
       page: 1,
       pageSize: 50,
     });
-    expect(buildAdminAuditRequestBody({ page: 2, pageSize: 25, action: null })).toEqual({
+    expect(buildAdminAuditRequestBody({ page: 2, pageSize: 25, action: null })).toStrictEqual({
       page: 2,
       pageSize: 25,
     });

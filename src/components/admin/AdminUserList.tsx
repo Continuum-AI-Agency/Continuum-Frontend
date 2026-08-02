@@ -224,6 +224,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const [auditActionFilter, setAuditActionFilter] = useState<string>(AUDIT_ACTION_ALL);
   const [auditPagination, setAuditPagination] = useState<AdminAuditPagination | null>(null);
   const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
+  // Monotonic request id so a slow older audit fetch can't overwrite the state of
+  // a newer one (rapid filter/page changes) or clear loading while a newer is pending.
+  const auditRequestSeqRef = useRef(0);
   const [reportBrandId, setReportBrandId] = useState('');
   const [reportRecipientEmail, setReportRecipientEmail] = useState('');
   const [reportSmokeResult, setReportSmokeResult] = useState<FirstValueReportSmokeResponse | null>(
@@ -561,6 +564,8 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   }
 
   async function loadAuditEntries(page: number, action: string) {
+    const seq = (auditRequestSeqRef.current += 1);
+    const isCurrent = () => seq === auditRequestSeqRef.current;
     setIsAuditLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke<AdminAuditResponse>(
@@ -575,16 +580,18 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         },
       );
       if (error) throw new Error(error.message);
+      if (!isCurrent()) return;
       setAuditEntries(data?.entries ?? []);
       setAuditPagination(data?.pagination ?? null);
     } catch (error) {
+      if (!isCurrent()) return;
       show({
         title: 'Unable to load audit log',
         description: error instanceof Error ? error.message : 'Audit request failed.',
         variant: 'error',
       });
     } finally {
-      setIsAuditLoading(false);
+      if (isCurrent()) setIsAuditLoading(false);
     }
   }
 
