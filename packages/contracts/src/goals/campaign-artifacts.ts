@@ -1,5 +1,15 @@
 import { z } from 'zod';
 import {
+  trialArmSchema,
+  trialDecisionSchema,
+  trialDimensionKeySchema,
+  trialFenceSchema,
+  trialGraduationStrategySchema,
+  trialMetricSchema,
+  trialRoundSchema,
+  trialVariantResultSchema,
+} from '../trial-reels/index';
+import {
   goalActorSchema,
   goalDecisionSchema,
   goalEvidenceSchema,
@@ -29,6 +39,14 @@ export const CAMPAIGN_ARTIFACT_TYPES = [
   'partnership-creator-brief',
   'localization-plan',
   'experiment-plan',
+  // Trial reels. These live in the same registry as the campaign artifacts, rather than in
+  // a parallel one, because `goalArtifactDefinitionSchema` resolves an artifact's content
+  // schema and checklist FROM this enum — a Goal template cannot reference an artifact type
+  // that is not a member. A second registry would mean a second template system.
+  'trial-reels-charter',
+  'trial-hypothesis-ledger',
+  'trial-round-ledger',
+  'trial-winner-report',
 ] as const;
 
 export const campaignArtifactTypeSchema = z.enum(CAMPAIGN_ARTIFACT_TYPES);
@@ -542,6 +560,126 @@ export const experimentPlanDataSchema = z
     },
   );
 
+// --- trial reels -----------------------------------------------------------------------
+// A trial reel goes only to non-followers, so the search for a winning angle/hook/CTA costs
+// nothing. These four artifacts are the trial's paper trail: what winning means, what space
+// we searched, everything we actually observed, and what we can and cannot claim at the end.
+
+export const trialReelsCharterDataSchema = z
+  .object({
+    outcome: z
+      .object({
+        businessOutcome: textSchema.max(2_000),
+        /** The sentence the trial has to be able to finish. Stated up front so a
+         *  disappointing result cannot be re-narrated into a success afterwards. */
+        whatWinningMeans: textSchema.max(2_000),
+      })
+      .strict(),
+    primaryMetric: trialMetricSchema,
+    arms: z
+      .object({
+        /** Discovery. Always on — it is the free half. */
+        organicTrialReels: z.literal(true),
+        /** Confirmation. Re-tests the surviving coordinate inside one paid ad set. */
+        paidConfirmation: z.boolean(),
+      })
+      .strict(),
+    fence: trialFenceSchema,
+    graduationStrategy: trialGraduationStrategySchema,
+    decisionRights: z.array(decisionRightSchema).min(1).max(20),
+  })
+  .strict();
+
+export const trialHypothesisLedgerDataSchema = z
+  .object({
+    space: z
+      .array(
+        z
+          .object({
+            dimension: trialDimensionKeySchema,
+            candidates: z
+              .array(
+                z
+                  .object({
+                    value: textSchema.max(120),
+                    rationale: textSchema.max(2_000),
+                    evidenceIds: z.array(idSchema).max(100).default([]),
+                  })
+                  .strict(),
+              )
+              .min(1)
+              .max(50),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(10),
+    priorBeliefs: z.array(campaignEvidenceBackedStatementSchema).max(50).default([]),
+    /** Deliberately not tested, and why. An untested option that nobody recorded as a
+     *  choice reads later as an oversight. */
+    excluded: z
+      .array(z.object({ value: textSchema.max(120), reason: textSchema.max(1_000) }).strict())
+      .max(100)
+      .default([]),
+  })
+  .strict();
+
+/**
+ * Append-only. Every variant of every round is recorded here — winners, laggards, and the
+ * ones that never accumulated enough exposure to judge.
+ *
+ * Recording only the winners would produce a selected sample, which is worse than no record
+ * at all because it LOOKS like data. This is the same reason `strategy.match_proposals` logs
+ * a slate at display time rather than on accept.
+ */
+export const trialRoundLedgerDataSchema = z
+  .object({
+    arm: trialArmSchema,
+    metric: trialMetricSchema,
+    fence: trialFenceSchema,
+    rounds: z.array(trialRoundSchema).max(50),
+    decisions: z.array(trialDecisionSchema).max(50).default([]),
+    spentTotal: z.number().nonnegative().default(0),
+  })
+  .strict();
+
+export const trialWinnerReportDataSchema = z
+  .object({
+    outcome: z.enum(['converged', 'exhausted']),
+    decision: trialDecisionSchema,
+    /** `null` on an exhausted trial that never found one. */
+    winner: trialVariantResultSchema.nullable(),
+    confirmingRounds: z.number().int().nonnegative(),
+    /**
+     * What this trial could NOT establish — required, never empty.
+     *
+     * A trial that ends without saying what it failed to learn reads as though it settled
+     * everything it touched. Silence is the failure mode this field exists to prevent.
+     */
+    notLearned: z.array(textSchema.max(1_000)).min(1).max(50),
+    graduation: z
+      .object({
+        graduated: z.boolean(),
+        graduatedMediaId: idSchema.nullable().default(null),
+        approvedBy: goalActorSchema.nullable().default(null),
+      })
+      .strict(),
+    /** The handoff into the PAUSED-first paid scaffold, when a confirmation arm was run. */
+    paidConfirmation: z
+      .object({
+        scaffoldId: idSchema.nullable().default(null),
+        adsetId: idSchema.nullable().default(null),
+      })
+      .strict()
+      .nullable()
+      .default(null),
+  })
+  .strict()
+  .refine((report) => report.outcome !== 'converged' || report.winner !== null, {
+    path: ['winner'],
+    message: 'A converged trial must name the coordinate it converged on.',
+  });
+
 export const campaignArtifactSchemaRegistry = {
   'campaign-charter': campaignCharterDataSchema,
   'research-dossier': researchDossierDataSchema,
@@ -559,6 +697,10 @@ export const campaignArtifactSchemaRegistry = {
   'partnership-creator-brief': partnershipCreatorBriefDataSchema,
   'localization-plan': localizationPlanDataSchema,
   'experiment-plan': experimentPlanDataSchema,
+  'trial-reels-charter': trialReelsCharterDataSchema,
+  'trial-hypothesis-ledger': trialHypothesisLedgerDataSchema,
+  'trial-round-ledger': trialRoundLedgerDataSchema,
+  'trial-winner-report': trialWinnerReportDataSchema,
 } as const satisfies Record<CampaignArtifactType, z.ZodTypeAny>;
 
 export const goalChecklistCollectionPolicySchema = z.enum([
@@ -620,6 +762,10 @@ type ChecklistSeed = {
   capability: string;
   policy: GoalChecklistCollectionPolicy;
   approvalCapability?: string;
+  /** The noun the generated question refers to. Not every Goal template is a campaign — a
+   *  trial reels Goal asking "…for this campaign" is asking about something that does not
+   *  exist. */
+  subject?: string;
 };
 
 const requirement = (seed: ChecklistSeed): GoalChecklistRequirementDefinition =>
@@ -628,7 +774,7 @@ const requirement = (seed: ChecklistSeed): GoalChecklistRequirementDefinition =>
     sectionId: seed.id,
     path: seed.path,
     label: seed.label,
-    question: `Provide or confirm ${seed.label.toLowerCase()} for this campaign.`,
+    question: `Provide or confirm ${seed.label.toLowerCase()} for this ${seed.subject ?? 'campaign'}.`,
     ownerCapabilities: [seed.capability],
     approvalCapabilities: seed.approvalCapability ? [seed.approvalCapability] : [],
     collectionPolicy: seed.policy,
@@ -644,8 +790,11 @@ const requirement = (seed: ChecklistSeed): GoalChecklistRequirementDefinition =>
 const requirements = (
   capability: string,
   entries: Array<[string, string, string, GoalChecklistCollectionPolicy]>,
+  subject?: string,
 ): GoalChecklistRequirementDefinition[] =>
-  entries.map(([id, path, label, policy]) => requirement({ id, path, label, capability, policy }));
+  entries.map(([id, path, label, policy]) =>
+    requirement({ id, path, label, capability, policy, subject }),
+  );
 
 export const campaignChecklistRegistry: Readonly<
   Record<CampaignArtifactType, readonly GoalChecklistRequirementDefinition[]>
@@ -912,6 +1061,80 @@ export const campaignChecklistRegistry: Readonly<
       'stakeholder_required',
     ],
   ]),
+  'trial-reels-charter': requirements(
+    'strategy',
+    [
+      [
+        'outcome',
+        '/data/outcome',
+        'Desired outcome and what winning means',
+        'stakeholder_required',
+      ],
+      [
+        'metric',
+        '/data/primaryMetric',
+        'Primary metric the trial ranks on',
+        'stakeholder_required',
+      ],
+      ['arms', '/data/arms', 'Which arms run (organic, paid confirmation)', 'stakeholder_required'],
+      [
+        'fence',
+        '/data/fence',
+        'Trial fence (rounds, variants, floors, caps)',
+        'stakeholder_required',
+      ],
+      [
+        'graduation',
+        '/data/graduationStrategy',
+        'Graduation strategy for a winning reel',
+        'stakeholder_required',
+      ],
+      [
+        'decision-rights',
+        '/data/decisionRights',
+        'Who approves slates and graduation',
+        'stakeholder_required',
+      ],
+    ],
+    'trial',
+  ),
+  'trial-hypothesis-ledger': requirements(
+    'creative',
+    [
+      ['space', '/data/space', 'The creative space to search', 'stakeholder_required'],
+      ['priors', '/data/priorBeliefs', 'Evidence-backed prior beliefs', 'evidence_required'],
+      ['excluded', '/data/excluded', 'Options deliberately not tested', 'stakeholder_required'],
+    ],
+    'trial',
+  ),
+  'trial-round-ledger': requirements(
+    'measurement',
+    [
+      ['rounds', '/data/rounds', 'Every round and every variant observed', 'authoritative_system'],
+      ['decisions', '/data/decisions', 'The engine verdict recorded per round', 'derived'],
+    ],
+    'trial',
+  ),
+  'trial-winner-report': requirements(
+    'strategy',
+    [
+      ['outcome', '/data/outcome', 'Whether the trial converged or was exhausted', 'derived'],
+      ['winner', '/data/winner', 'The winning coordinate, if one was proven', 'derived'],
+      [
+        'not-learned',
+        '/data/notLearned',
+        'What this trial could not establish',
+        'stakeholder_required',
+      ],
+      [
+        'graduation',
+        '/data/graduation',
+        'Graduation of the winner to followers',
+        'approval_required',
+      ],
+    ],
+    'trial',
+  ),
 });
 
 export const campaignFieldProvenanceSourceSchema = z.discriminatedUnion('kind', [

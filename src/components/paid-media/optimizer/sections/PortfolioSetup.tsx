@@ -57,12 +57,14 @@ import { BudgetHint, SetupAdvisor, TargetHint, useSetupAdvice } from '../advisor
 import { currencySymbol, deriveEfficiency, formatCpa, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildCboCampaignSections, buildClaimMap, previewMoves } from '../picker/campaignGroups';
+import { buildPortfolioPickerEntities } from '../picker/portfolioPickerEntities';
 import { buildProjectedConversions } from '../preview/projectedConversion';
 import { applyModeExplainer, applyModePill } from '../reportModel';
 import {
   useOptimizerAccountEnrollments,
   useOptimizerAccountSnapshots,
   useOptimizerAdAccounts,
+  useOptimizerAdsetInventory,
   useOptimizerMutations,
   useOptimizerSuggestions,
 } from '../useOptimizerData';
@@ -701,6 +703,7 @@ export function PortfolioCreateForm({
 }) {
   const { create, enroll, run } = useOptimizerMutations(brandId, adAccountId);
   const snapshotsRead = useOptimizerAccountSnapshots(brandId, adAccountId, level);
+  const inventoryRead = useOptimizerAdsetInventory(brandId, adAccountId, level === 'adset');
 
   const [name, setName] = React.useState('');
   const [objective, setObjective] = React.useState<OptimizationObjective>('purchase');
@@ -722,15 +725,35 @@ export function PortfolioCreateForm({
     () => buildClaimMap(accountEnrollmentsRead.data, null),
     [accountEnrollmentsRead.data],
   );
+  const pickerEntities = React.useMemo(
+    () =>
+      level === 'adset'
+        ? buildPortfolioPickerEntities({
+            snapshots: snapshotsRead.data,
+            inventory: inventoryRead.data,
+            enrolled: [],
+          })
+        : snapshotsRead.data,
+    [inventoryRead.data, level, snapshotsRead.data],
+  );
 
   // Sum of the selected ad sets' current daily budgets — offered as the default
   // daily total when the operator hasn't typed one (they keep control).
   const selectedBudgetSum = React.useMemo(() => {
     const ids = new Set(selectedAdsetIds);
-    return snapshotsRead.data
-      .filter((snapshot) => ids.has(snapshot.id))
-      .reduce((sum, snapshot) => sum + (snapshot.currentBudget ?? 0), 0);
-  }, [snapshotsRead.data, selectedAdsetIds]);
+    return pickerEntities
+      .filter((entity) => ids.has(entity.id))
+      .reduce((sum, entity) => sum + (entity.currentBudget ?? 0), 0);
+  }, [pickerEntities, selectedAdsetIds]);
+  const selectedInactiveCount = React.useMemo(() => {
+    const selected = new Set(selectedAdsetIds);
+    return pickerEntities.filter(
+      (entity) =>
+        selected.has(entity.id) &&
+        'providerLifecycle' in entity &&
+        entity.providerLifecycle !== 'active',
+    ).length;
+  }, [pickerEntities, selectedAdsetIds]);
 
   // What the engine will actually do with this selection, under this objective, at this budget
   // and target. Deterministic and recomputed on every change — it is the only place in the
@@ -805,7 +828,7 @@ export function PortfolioCreateForm({
           // stay put with the error visible rather than navigating to an inert portfolio;
           // create is idempotent (unique name per account), so pressing Create again retries
           // the enroll against the same portfolio.
-          const nameById = new Map(snapshotsRead.data.map((s) => [s.id, s.name]));
+          const nameById = new Map(pickerEntities.map((entity) => [entity.id, entity.name]));
           const adset_names: Record<string, string> = {};
           for (const id of selectedAdsetIds) {
             const adsetName = nameById.get(id);
@@ -854,17 +877,30 @@ export function PortfolioCreateForm({
         <div className="flex min-h-0 flex-col gap-1.5">
           <Label>{level === 'campaign' ? 'Campaigns to enroll' : 'Ad sets to enroll'}</Label>
           <CampaignAdsetPicker
-            snapshots={snapshotsRead.data}
+            entities={pickerEntities}
             selectedAdsetIds={selectedAdsetIds}
             onChange={setSelectedAdsetIds}
             brandId={brandId}
             accountId={adAccountId}
             currency={currency}
             disabled={busy}
-            isLoading={snapshotsRead.isLoading}
+            isLoading={snapshotsRead.isLoading || (level === 'adset' && inventoryRead.isLoading)}
             isError={snapshotsRead.isError}
             mode={level}
             objective={objective}
+            inventoryFreshness={
+              level === 'adset'
+                ? {
+                    fetchedAt: inventoryRead.fetchedAt,
+                    refresh: inventoryRead.refresh,
+                    canRefresh: inventoryRead.canRefresh,
+                    isRefreshing: inventoryRead.isRefreshing,
+                    partial: inventoryRead.partial,
+                    truncated: inventoryRead.truncated,
+                    isError: inventoryRead.isError,
+                  }
+                : undefined
+            }
             // Which OTHER portfolio already holds each ad set. The Manage panel has always had
             // this; CREATE never did — so building a new portfolio was the one place an
             // already-claimed ad set looked free right up until the save failed.
@@ -873,6 +909,13 @@ export function PortfolioCreateForm({
             // a 672px column — the cap was doing the cramping, not the content.
             heightClassName="h-[22rem] lg:h-full lg:min-h-[24rem]"
           />
+          {selectedInactiveCount > 0 ? (
+            <p className="text-2xs text-warning">
+              {selectedInactiveCount} selected inactive{' '}
+              {selectedInactiveCount === 1 ? 'ad set is' : 'ad sets are'} held until Meta reports
+              them active.
+            </p>
+          ) : null}
           {blockedSelected.length > 0 ? (
             <p
               className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-2xs text-destructive"

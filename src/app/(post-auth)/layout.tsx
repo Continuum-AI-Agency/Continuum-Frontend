@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
-import { AgentRunsProvider } from '@/components/agents/AgentRunsProvider';
 import { MixpanelInit } from '@/components/analytics/MixpanelInit';
 import { GalaxyBackgroundLazy } from '@/components/ui/GalaxyBackgroundLazy';
 import { NavigationTransition } from '@/components/ui/NavigationTransition';
@@ -60,24 +59,20 @@ export default function DashboardLayout({
   return (
     <ReactQueryProvider>
       <ToastProvider>
-        {/* Above the router on purpose: an agent run registered here keeps streaming
-            while you navigate away, open another session, or close the chat panel. */}
         <StudioRenderProvider>
-          <AgentRunsProvider>
-            <GalaxyBackgroundLazy intensity={1} speed="glacial" />
-            <div
-              className="min-h-dvh overflow-hidden"
-              style={{
-                backgroundColor: 'var(--background)',
-                color: 'var(--foreground)',
-              }}
-            >
-              <MixpanelInit />
-              <Suspense fallback={<DashboardLayoutFallback />}>
-                <DashboardLayoutContent>{children}</DashboardLayoutContent>
-              </Suspense>
-            </div>
-          </AgentRunsProvider>
+          <GalaxyBackgroundLazy intensity={1} speed="glacial" />
+          <div
+            className="min-h-dvh overflow-hidden"
+            style={{
+              backgroundColor: 'var(--background)',
+              color: 'var(--foreground)',
+            }}
+          >
+            <MixpanelInit />
+            <Suspense fallback={<DashboardLayoutFallback />}>
+              <DashboardLayoutContent>{children}</DashboardLayoutContent>
+            </Suspense>
+          </div>
         </StudioRenderProvider>
       </ToastProvider>
     </ReactQueryProvider>

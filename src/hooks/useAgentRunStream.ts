@@ -38,6 +38,9 @@ type RunEventSource = {
  */
 export type RunEventAgentKind = AgentKind;
 
+export const shouldForgetUnavailableRun = (status: number): boolean =>
+  status === 403 || status === 404;
+
 const RUN_EVENT_SOURCES: Record<RunEventAgentKind, RunEventSource> = {
   organic: {
     schema: 'organic',
@@ -124,6 +127,7 @@ export function useAgentRunStream(
   enabled = true,
 ): void {
   const appendEvents = useAgentRunStore((state) => state.appendEvents);
+  const forgetRun = useAgentRunStore((state) => state.forgetRun);
 
   useEffect(() => {
     if (!runId || !enabled) return;
@@ -163,6 +167,10 @@ export function useAgentRunStream(
           const response = await fetch(source.eventsUrl(runId, -1), {
             headers: { Accept: 'application/x-ndjson', Authorization: `Bearer ${token}` },
           });
+          if (shouldForgetUnavailableRun(response.status)) {
+            forgetRun(runId);
+            return;
+          }
           if (!response.ok || !response.body || cancelled) return;
 
           const batch: AgentRunEventDto[] = [];
@@ -184,7 +192,7 @@ export function useAgentRunStream(
       cancelled = true;
       unsubscribe();
     };
-  }, [runId, agent, enabled, appendEvents]);
+  }, [runId, agent, enabled, appendEvents, forgetRun]);
 }
 
 export { isTerminalAgentRunStatus };

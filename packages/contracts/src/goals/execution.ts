@@ -42,5 +42,20 @@ export const goalExecutionResumeCauseSchema = z.discriminatedUnion('kind', [
       priorRunId: idSchema,
     })
     .strict(),
+  /**
+   * Time passed, and that was the whole cause.
+   *
+   * Distinct from `request_resolved` because nobody answered anything: a Goal can park on
+   * the world rather than on a teammate — a creative trial waiting days for views to
+   * accumulate before its round can be measured. Carries no `requestId`, and the wakeup row
+   * behind it has none either.
+   */
+  z
+    .object({
+      kind: z.literal('timer_elapsed'),
+      wakeupId: idSchema,
+      scheduledFor: z.iso.datetime({ offset: true }),
+    })
+    .strict(),
 ]);
 export type GoalExecutionResumeCause = z.infer<typeof goalExecutionResumeCauseSchema>;

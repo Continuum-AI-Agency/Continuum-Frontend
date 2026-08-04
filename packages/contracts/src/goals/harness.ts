@@ -4,6 +4,13 @@ import { goalExecutionRefSchema, goalExecutionResumeCauseSchema } from './execut
 export const goalHarnessStatusSchema = z.enum([
   'running',
   'waiting_for_input',
+  /**
+   * Parked on the world rather than on a teammate — a published trial round waiting for
+   * views to accumulate before it can be measured. Distinct from `waiting_for_input`
+   * because there is no request outstanding and nobody to chase: the supervisor must not
+   * surface it as "waiting on a teammate", and escalation must not fire against it.
+   */
+  'waiting_for_timer',
   'completed',
   'failed',
   'cancelled',
@@ -32,12 +39,18 @@ export const goalHarnessWakeupSchema = z
     wakeupId: z.string().uuid(),
     goalId: z.string().min(1),
     harnessRunId: z.string().min(1),
-    requestId: z.string().min(1),
-    triggerKind: z.enum(['resolved', 'cancelled', 'expired']),
+    /** Null only for `scheduled` wakeups, where time passing is the cause and there is no
+     *  request to point at. Mirrors the DB's `goal_run_wakeups_request_presence_check`. */
+    requestId: z.string().min(1).nullable(),
+    triggerKind: z.enum(['resolved', 'cancelled', 'expired', 'scheduled']),
     dedupeKey: z.string().min(1),
     attempts: z.number().int().nonnegative(),
   })
-  .strict();
+  .strict()
+  .refine((wakeup) => (wakeup.triggerKind === 'scheduled') === (wakeup.requestId === null), {
+    path: ['requestId'],
+    message: 'A scheduled wakeup carries no request; every other kind must name one.',
+  });
 export type GoalHarnessWakeup = z.infer<typeof goalHarnessWakeupSchema>;
 
 export const goalExecutionPacketSchema = z

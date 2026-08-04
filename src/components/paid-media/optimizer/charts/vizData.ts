@@ -217,6 +217,28 @@ export function projectionEndpoint(projection: ProjectionPoint[]): number | null
   return last ? Math.round(last.value) : null;
 }
 
+// ── Goldilocks zone (target band) ────────────────────────────────────────────
+// Portfolios that set an explicit cpa_target get a shaded "at or below target"
+// band on the hero timeline. The engine's own meetsTarget test is the same
+// predicate (`portfolioCpp <= cpaTarget` in runCycle) — so the band is the visual
+// of that rule, not a second invented tolerance. Portfolios without a target
+// (engine default $50 is a silent floor, not a brand north-star) stay unbanded.
+
+export type GoldilocksZone = {
+  /** Lower cost bound (always 0 — free is always inside the good zone). */
+  y1: number;
+  /** Upper cost bound — the portfolio's target CPA/CPL/CPM in display units. */
+  y2: number;
+};
+
+/** Map a portfolio target cost into a ReferenceArea Y band, or null when unset. */
+export function goldilocksZone(targetCpa: number | null | undefined): GoldilocksZone | null {
+  if (typeof targetCpa !== 'number' || !Number.isFinite(targetCpa) || targetCpa <= 0) {
+    return null;
+  }
+  return { y1: 0, y2: targetCpa };
+}
+
 // ── Pacing snapshot ──────────────────────────────────────────────────────────
 // Reduces the engine PacingResult + PacingState (loose jsonb on the run) to the
 // three numbers the pacing gauge needs: how much of the period budget is spent,

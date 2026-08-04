@@ -195,10 +195,7 @@ function DraftChip({
         className="p-0 border-none bg-transparent shadow-none"
         avoidCollisions
       >
-        <DraftHoverCardContent
-          draft={draft}
-          onRegenerate={onRegenerate ? () => onRegenerate(draft.id) : undefined}
-        />
+        <DraftHoverCardContent draft={draft} />
       </HoverCardContent>
     </HoverCard>
   );

@@ -28,6 +28,7 @@ const KIND_LABEL: Record<ClientRenderJob['kind'], string> = {
   organic_hyperframe: 'Organic HyperFrame',
   planner_reel: 'Planner reel',
   mcp_clip_batch: 'UGC clip batch',
+  timeline_editor: 'Video Editor master',
 };
 
 export function LibraryRenderQueue() {

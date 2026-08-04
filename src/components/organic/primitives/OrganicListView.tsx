@@ -149,13 +149,7 @@ function DraftRowThumbnail({ draft: persistedDraft }: { draft: OrganicCalendarDr
  * `shift` can actually correct. The explicit width matches the card the content
  * renders, so the collision box is not 48px wider than what the user sees.
  */
-function DraftRowHoverPreview({
-  draft,
-  onRegenerate,
-}: {
-  draft: OrganicCalendarDraft;
-  onRegenerate?: () => void;
-}) {
+function DraftRowHoverPreview({ draft }: { draft: OrganicCalendarDraft }) {
   return (
     <HoverCardContent
       side="bottom"
@@ -163,12 +157,9 @@ function DraftRowHoverPreview({
       sideOffset={4}
       collisionPadding={12}
       avoidCollisions
-      className="w-[272px] border-none bg-transparent p-0 shadow-none"
+      className="w-[208px] border-none bg-transparent p-0 shadow-none"
     >
-      <DraftHoverCardContent
-        draft={draft}
-        onRegenerate={onRegenerate ? () => onRegenerate() : undefined}
-      />
+      <DraftHoverCardContent draft={draft} />
     </HoverCardContent>
   );
 }
@@ -272,7 +263,7 @@ const DraftRow = React.memo(function DraftRow({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      <DraftRowHoverPreview draft={draft} onRegenerate={onRegenerate} />
+      <DraftRowHoverPreview draft={draft} />
     </HoverCard>
   );
 });

@@ -12,6 +12,11 @@ const noopMutation = () => ({
   isPending: false,
 });
 
+const enrolledRows = [
+  { adset_id: 'as-1', adset_name: 'Set One' },
+  { adset_id: 'as-paused', adset_name: 'Paused Set' },
+];
+
 mock.module('../useOptimizerData', () => ({
   useOptimizerMutations: () => ({
     update: noopMutation(),
@@ -21,8 +26,33 @@ mock.module('../useOptimizerData', () => ({
     setPaused: noopMutation(),
   }),
   useOptimizerEnrolledAdsets: () => ({
-    data: [{ adset_id: 'as-1', adset_name: 'Set One' }],
+    data: enrolledRows,
     isLoading: false,
+  }),
+  useOptimizerAccountEnrollments: () => ({ data: [], isLoading: false, isError: false }),
+  useOptimizerAdsetInventory: () => ({
+    data: [
+      {
+        id: 'as-paused',
+        name: 'Paused Set',
+        campaignId: 'c-1',
+        campaignName: 'Campaign',
+        configuredStatus: 'PAUSED',
+        effectiveStatus: 'PAUSED',
+        lifecycle: 'recoverable',
+        currentBudget: 25,
+        optimizationGoal: 'OFFSITE_CONVERSIONS',
+        adCount: 1,
+      },
+    ],
+    fetchedAt: null,
+    partial: false,
+    truncated: false,
+    refresh: () => {},
+    canRefresh: true,
+    isRefreshing: false,
+    isLoading: false,
+    isError: false,
   }),
   useOptimizerAccountSnapshots: () => ({
     // as-1 declares it buys leads; a purchase portfolio prices purchases, so switching would
@@ -38,7 +68,31 @@ mock.module('../useOptimizerData', () => ({
 
 // The picker is a heavy virtualized tree; stub it so this suite is only about the config form.
 mock.module('../picker/CampaignAdsetPicker', () => ({
-  CampaignAdsetPicker: () => <div data-testid="picker" />,
+  CampaignAdsetPicker: ({
+    entities,
+    selectedAdsetIds,
+    onChange,
+  }: {
+    entities: { id: string; name: string; providerLifecycle?: string }[];
+    selectedAdsetIds: string[];
+    onChange: (ids: string[]) => void;
+  }) => (
+    <div data-testid="picker">
+      {entities.map((entity) => (
+        <div key={entity.id}>
+          {entity.name} {entity.providerLifecycle}
+          {entity.id === 'as-paused' ? (
+            <button
+              type="button"
+              onClick={() => onChange(selectedAdsetIds.filter((id) => id !== entity.id))}
+            >
+              Remove paused set
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  ),
 }));
 
 const { PortfolioManagePanel, adsetsThatStopMatching } = await import('./PortfolioManagePanel');
@@ -119,5 +173,14 @@ describe('PortfolioManagePanel — config form', () => {
     fireEvent.click(screen.getByText('Suggest 20%'));
     const maxPct = screen.getByLabelText(/Max change per cycle/) as HTMLInputElement;
     expect(maxPct.value).toBe('20');
+  });
+
+  it('keeps an enrolled paused ad set visible and lets the operator remove it', () => {
+    renderPanel();
+
+    expect(screen.getByText(/Paused Set recoverable/)).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove paused set' }));
+
+    expect(document.body.textContent).toContain('1 to remove');
   });
 });

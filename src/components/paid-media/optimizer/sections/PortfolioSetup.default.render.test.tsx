@@ -37,6 +37,17 @@ mock.module('../useOptimizerData', () => ({
     isError: false,
   }),
   useOptimizerAccountSnapshots: () => ({ data: [], isLoading: false, isError: false }),
+  useOptimizerAdsetInventory: () => ({
+    data: [],
+    fetchedAt: null,
+    partial: false,
+    truncated: false,
+    refresh: () => {},
+    canRefresh: true,
+    isRefreshing: false,
+    isLoading: false,
+    isError: false,
+  }),
   useOptimizerMutations: () => ({
     create: { mutate: createMutate, isPending: false },
     enroll: { mutate: mock(() => {}), isPending: false },

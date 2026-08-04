@@ -56,10 +56,12 @@ import { cn } from '@/lib/utils';
 import { currencySymbol, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
+import { buildPortfolioPickerEntities } from '../picker/portfolioPickerEntities';
 import { applyModeExplainer, applyModePill, freezeLabel } from '../reportModel';
 import {
   useOptimizerAccountEnrollments,
   useOptimizerAccountSnapshots,
+  useOptimizerAdsetInventory,
   useOptimizerEnrolledAdsets,
   useOptimizerMutations,
 } from '../useOptimizerData';
@@ -173,6 +175,7 @@ export function PortfolioManagePanel({
   );
   const enrolledRead = useOptimizerEnrolledAdsets(portfolio.id);
   const snapshotsRead = useOptimizerAccountSnapshots(brandId, adAccountId, level);
+  const inventoryRead = useOptimizerAdsetInventory(brandId, adAccountId, level === 'adset');
   // Who else holds each ad set's single active enrollment. Drives the picker's "In: X" badge
   // and the move confirmation, so a claimed ad set is a disclosed decision rather than a 409.
   const accountEnrollmentsRead = useOptimizerAccountEnrollments(brandId, adAccountId);
@@ -229,6 +232,17 @@ export function PortfolioManagePanel({
     [enrolledRead.data],
   );
   const selectedAdsetIds = selection ?? enrolledIds;
+  const pickerEntities = useMemo(
+    () =>
+      level === 'adset'
+        ? buildPortfolioPickerEntities({
+            snapshots: snapshotsRead.data,
+            inventory: inventoryRead.data,
+            enrolled: enrolledRead.data,
+          })
+        : snapshotsRead.data,
+    [enrolledRead.data, inventoryRead.data, level, snapshotsRead.data],
+  );
 
   // Ad sets that will STOP matching the KPI if the objective changes: an enrolled ad set that
   // declares it buys a different result (kpiField ≠ the new objective's). Ad sets that declare
@@ -298,10 +312,10 @@ export function PortfolioManagePanel({
   // wants a fixed target that matches reality today.
   const selectedBudgetSum = useMemo(() => {
     const selected = new Set(selectedAdsetIds);
-    return snapshotsRead.data
-      .filter((snapshot) => selected.has(snapshot.id))
-      .reduce((sum, snapshot) => sum + (snapshot.currentBudget ?? 0), 0);
-  }, [snapshotsRead.data, selectedAdsetIds]);
+    return pickerEntities
+      .filter((entity) => selected.has(entity.id))
+      .reduce((sum, entity) => sum + (entity.currentBudget ?? 0), 0);
+  }, [pickerEntities, selectedAdsetIds]);
 
   const lookbackHint = useMemo(
     () =>
@@ -358,7 +372,7 @@ export function PortfolioManagePanel({
         await update.mutateAsync({ portfolio_id: portfolio.id, patch });
       }
       if (toAdd.length > 0) {
-        const nameById = new Map(snapshotsRead.data.map((s) => [s.id, s.name]));
+        const nameById = new Map(pickerEntities.map((entity) => [entity.id, entity.name]));
         const adset_names: Record<string, string> = {};
         for (const id of toAdd) {
           const name = nameById.get(id);
@@ -840,16 +854,33 @@ export function PortfolioManagePanel({
       <div className="space-y-1.5">
         <Label>{level === 'campaign' ? 'Enrolled campaigns' : 'Enrolled ad sets'}</Label>
         <CampaignAdsetPicker
-          snapshots={snapshotsRead.data}
+          entities={pickerEntities}
           selectedAdsetIds={selectedAdsetIds}
           onChange={setSelection}
           brandId={brandId}
           accountId={adAccountId}
           currency={currency}
           disabled={saving}
-          isLoading={snapshotsRead.isLoading || enrolledRead.isLoading}
+          isLoading={
+            snapshotsRead.isLoading ||
+            enrolledRead.isLoading ||
+            (level === 'adset' && inventoryRead.isLoading)
+          }
           isError={snapshotsRead.isError}
           mode={level}
+          inventoryFreshness={
+            level === 'adset'
+              ? {
+                  fetchedAt: inventoryRead.fetchedAt,
+                  refresh: inventoryRead.refresh,
+                  canRefresh: inventoryRead.canRefresh,
+                  isRefreshing: inventoryRead.isRefreshing,
+                  partial: inventoryRead.partial,
+                  truncated: inventoryRead.truncated,
+                  isError: inventoryRead.isError,
+                }
+              : undefined
+          }
         />
         {toAdd.length > 0 || toRemove.length > 0 ? (
           <p className="text-2xs text-muted-foreground">

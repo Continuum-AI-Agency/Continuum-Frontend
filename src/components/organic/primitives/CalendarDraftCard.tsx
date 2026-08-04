@@ -817,7 +817,7 @@ export function CalendarDraftCard({
         className="p-0 border-none bg-transparent shadow-none"
         avoidCollisions
       >
-        <DraftHoverCardContent draft={draft} onRegenerate={onRegenerate} />
+        <DraftHoverCardContent draft={draft} />
       </HoverCardContent>
     </HoverCard>
   ) : (

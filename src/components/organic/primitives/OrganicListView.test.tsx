@@ -270,7 +270,7 @@ describe('OrganicListView', () => {
     expect(content.getAttribute('data-side')).toBe('bottom');
     expect(content.getAttribute('data-align')).toBe('start');
     expect(content.getAttribute('data-collision-padding')).toBe('12');
-    expect(content.className).toContain('w-[272px]');
+    expect(content.className).toContain('w-[208px]');
     expect(content.className).not.toContain('w-80');
   });
 

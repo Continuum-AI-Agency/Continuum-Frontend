@@ -433,6 +433,8 @@ describe('selection helpers', () => {
       eligible: 3,
       held: 1,
       mismatch: 0,
+      inactive: 0,
+      terminal: 0,
     });
   });
 });
@@ -611,8 +613,20 @@ describe('previewMoves', () => {
   it('excludes claims the caller cannot release', () => {
     const mixed = buildClaimMap(
       [
-        { adset_id: 'm1', portfolio_id: 'p1', portfolio_name: 'Mine', same_brand: true, can_release: true },
-        { adset_id: 'm2', portfolio_id: null, portfolio_name: null, same_brand: false, can_release: false },
+        {
+          adset_id: 'm1',
+          portfolio_id: 'p1',
+          portfolio_name: 'Mine',
+          same_brand: true,
+          can_release: true,
+        },
+        {
+          adset_id: 'm2',
+          portfolio_id: null,
+          portfolio_name: null,
+          same_brand: false,
+          can_release: false,
+        },
       ],
       null,
     );

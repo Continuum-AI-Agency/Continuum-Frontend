@@ -26,6 +26,7 @@ import { applyOrganicFrame } from './applyOrganicFrame';
 import type { PanelAction } from './useOrganicAgentReducer';
 
 type ProjectedRunParams = {
+  brandId: string;
   sessionId: string | null;
   dispatch: React.Dispatch<PanelAction>;
   /** History must land first, or the projection appends its assistant turn above the user's. */
@@ -35,6 +36,7 @@ type ProjectedRunParams = {
 };
 
 export function useProjectedRun({
+  brandId,
   sessionId,
   dispatch,
   isHydrated,
@@ -63,6 +65,7 @@ export function useProjectedRun({
     if (!sessionId || !isHydrated || !record) return;
 
     const { run, events } = record;
+    if (run.brandId !== brandId) return;
     if (run.runId === liveRunId) return;
     if (declined.current.has(run.runId)) return;
 
@@ -81,5 +84,5 @@ export function useProjectedRun({
       projectedSeq.current = event.seq;
       applyOrganicFrame({ type: event.type, data: event.data }, dispatch, 'chat');
     }
-  }, [sessionId, isHydrated, record, liveRunId, dispatch]);
+  }, [brandId, sessionId, isHydrated, record, liveRunId, dispatch]);
 }

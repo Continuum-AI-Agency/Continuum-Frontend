@@ -14,7 +14,6 @@ import {
   type AdDailyTrend,
   AdDailyTrendsResponseSchema,
   type AdSetSnapshot,
-  AdSetSnapshotSchema,
   type AdsetAd,
   AdsetAdsResponseSchema,
   type AdsetCreativeWinRateRow,
@@ -43,6 +42,8 @@ import {
   type EnrollRequest,
   type EnrollResult,
   EnrollResultSchema,
+  OptimizerAdsetInventoryEnvelopeSchema,
+  type OptimizerAdsetInventoryItem,
   type OptimizerInsightRequest,
   type OptimizerInsightResponse,
   OptimizerInsightResponseSchema,
@@ -74,6 +75,7 @@ import { z } from 'zod';
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { recommendationInsightKey } from './insightKey';
+import { type AccountSnapshotsResult, parseOptimizerSnapshotEnvelope } from './snapshotEnvelope';
 
 // The optimizer RPCs/edge functions are not yet in the generated Supabase types
 // (they deploy later), so the client is treated as loosely typed at this single
@@ -157,6 +159,8 @@ export const optimizerQueryKeys = {
     adAccountId: string | null,
     level: PortfolioLevel = 'adset',
   ) => ['optimizer', 'snapshots', brandId, adAccountId ?? 'all', level] as const,
+  adsetInventory: (brandId: string, adAccountId: string | null) =>
+    ['optimizer', 'adset-inventory', brandId, adAccountId ?? 'all'] as const,
   enrolledAdsets: (portfolioId: string) => ['optimizer', 'enrolled-adsets', portfolioId] as const,
   accountEnrollments: (brandId: string, accountId: string) =>
     ['optimizer', 'account-enrollments', brandId, accountId] as const,
@@ -366,13 +370,12 @@ async function fetchSuggestions(
  *  snapshot's id is the campaign id and campaignId is self-referential). The edge
  *  accepts a user JWT (web app), so this runs client-side with no service key.
  *  Feeds the client-side "what-if" dry-run (runs the pure engine in the browser). */
-/** The snapshot fleet plus `fetchedAt` — the ISO instant the edge read from Meta
+/** The snapshot fleet plus observational metadata: `fetchedAt` is the ISO instant Meta was
+ * read, and `budgetSummary` is the account/per-campaign ABO daily total. The summary stays
+ * beside the snapshots and is never passed into the preview engine.
+ *
  *  (baked into the reporting_cache payload, so a cache HIT still reports the ORIGINAL
- *  read time). Wire shape stays loose: `fetchedAt` is narrowed to a string-or-null on
- *  read; an older cache row written before the envelope carried it resolves to null,
- *  which the freshness chip renders as "cached · age unknown" rather than a fake age. */
-type AccountSnapshotsResult = { snapshots: AdSetSnapshot[]; fetchedAt: string | null };
-
+ *  read time). Older cache rows written before either metadata field resolve to null. */
 async function fetchAccountSnapshots(
   brandId: string,
   accountId: string,
@@ -383,12 +386,15 @@ async function fetchAccountSnapshots(
     body: { platform: 'meta', scope, brandId, accountId, forceRefresh },
   });
   if (error) throw new Error(`paid-media-metrics ${scope} unreachable`);
-  const snapshots = (data as { snapshots?: unknown })?.snapshots ?? [];
-  const rawFetchedAt = (data as { fetchedAt?: unknown })?.fetchedAt;
-  return {
-    snapshots: z.array(AdSetSnapshotSchema).catch([]).parse(snapshots),
-    fetchedAt: typeof rawFetchedAt === 'string' && rawFetchedAt.length > 0 ? rawFetchedAt : null,
-  };
+  return parseOptimizerSnapshotEnvelope(data ?? {});
+}
+
+async function fetchAdsetInventory(brandId: string, accountId: string, forceRefresh = false) {
+  const { data, error } = await getClient().functions.invoke('paid-media-metrics', {
+    body: { platform: 'meta', scope: 'adset_inventory', brandId, accountId, forceRefresh },
+  });
+  if (error) throw new Error('paid-media-metrics adset_inventory unreachable');
+  return OptimizerAdsetInventoryEnvelopeSchema.parse(data ?? {});
 }
 
 /** The active ad sets currently enrolled in a portfolio (id + name) — reads the
@@ -1149,6 +1155,65 @@ export function useOptimizerAccountSnapshots(
     ...query,
     data: query.data?.snapshots ?? EMPTY_SNAPSHOTS,
     fetchedAt: query.data?.fetchedAt ?? null,
+    budgetSummary: query.data?.budgetSummary ?? null,
+    refresh,
+    canRefresh,
+    isRefreshing: query.isFetching,
+  };
+}
+
+/** Account-wide Meta membership inventory. Separate from snapshots so paused/terminal rows
+ * can power portfolio editing without ever becoming engine input. */
+export function useOptimizerAdsetInventory(
+  brandId: string,
+  adAccountId: string | null,
+  enabled = true,
+) {
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(
+    () => optimizerQueryKeys.adsetInventory(brandId, adAccountId),
+    [brandId, adAccountId],
+  );
+  const canQuery = enabled && Boolean(brandId && adAccountId);
+  const query = useQuery({
+    queryKey,
+    queryFn: () => withReadTimeout(fetchAdsetInventory(brandId, adAccountId as string, false)),
+    enabled: canQuery,
+    staleTime: TEN_MINUTES,
+    gcTime: THIRTY_MINUTES,
+    retry: 1,
+  });
+
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [, forceCooldownTick] = useState(0);
+  useEffect(() => {
+    const remaining = cooldownUntil - Date.now();
+    if (remaining <= 0) return;
+    const timer = globalThis.setTimeout(
+      () => forceCooldownTick((value) => value + 1),
+      remaining + 50,
+    );
+    return () => globalThis.clearTimeout(timer);
+  }, [cooldownUntil]);
+
+  const inCooldown = Date.now() < cooldownUntil;
+  const canRefresh = canQuery && !inCooldown && !query.isFetching;
+  const refresh = useCallback(() => {
+    if (!canQuery || !adAccountId || Date.now() < cooldownUntil) return;
+    setCooldownUntil(Date.now() + SNAPSHOTS_REFRESH_COOLDOWN_MS);
+    void queryClient.fetchQuery({
+      queryKey,
+      queryFn: () => withReadTimeout(fetchAdsetInventory(brandId, adAccountId, true)),
+      staleTime: 0,
+    });
+  }, [adAccountId, brandId, canQuery, cooldownUntil, queryClient, queryKey]);
+
+  return {
+    ...query,
+    data: (query.data?.adsets ?? []) as OptimizerAdsetInventoryItem[],
+    fetchedAt: query.data?.fetchedAt ?? null,
+    partial: query.data?.partial ?? false,
+    truncated: query.data?.truncated ?? false,
     refresh,
     canRefresh,
     isRefreshing: query.isFetching,

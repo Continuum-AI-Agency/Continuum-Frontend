@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  AboBudgetSummarySchema,
   AdsetBudgetSchema,
   AdsetStatusWouldWriteSchema,
   ApplyAdsetStatusRequestSchema,
@@ -22,6 +23,7 @@ import {
   EnrollRequestSchema,
   EnrollResultSchema,
   getOptimizationMetricDefinition,
+  OptimizerSnapshotsEnvelopeSchema,
   OptimizerStatusSchema,
   ParsedCycleRunReportSchema,
   PortfolioConfigSchema,
@@ -46,6 +48,47 @@ const SNAPSHOT = {
   ageDays: 30,
   windows: { d3: ZERO_WINDOW, d7: ZERO_WINDOW, d14: ZERO_WINDOW },
 };
+
+describe('OptimizerSnapshotsEnvelopeSchema', () => {
+  test('carries a read-only ABO daily-budget total for the account and each campaign', () => {
+    const parsed = OptimizerSnapshotsEnvelopeSchema.parse({
+      snapshots: [SNAPSHOT],
+      fetchedAt: '2026-08-01T12:00:00.000Z',
+      budgetSummary: {
+        currency: 'USD',
+        activeDailyTotal: 125.5,
+        campaigns: [
+          {
+            campaignId: 'campaign-1',
+            campaignName: 'Prospecting',
+            activeDailyBudgetTotal: 125.5,
+            activeAdsetCount: 3,
+          },
+        ],
+      },
+    });
+
+    expect(AboBudgetSummarySchema.parse(parsed.budgetSummary)).toEqual({
+      currency: 'USD',
+      activeDailyTotal: 125.5,
+      campaigns: [
+        {
+          campaignId: 'campaign-1',
+          campaignName: 'Prospecting',
+          activeDailyBudgetTotal: 125.5,
+          activeAdsetCount: 3,
+        },
+      ],
+    });
+  });
+
+  test('keeps older cached snapshot envelopes compatible', () => {
+    const parsed = OptimizerSnapshotsEnvelopeSchema.parse({ snapshots: [SNAPSHOT] });
+
+    expect(parsed.budgetSummary).toBeNull();
+    expect(parsed.fetchedAt).toBeNull();
+  });
+});
 
 describe('ApplyModeSchema', () => {
   test('accepts the three autonomy tiers (observe < recommend < autopilot)', () => {

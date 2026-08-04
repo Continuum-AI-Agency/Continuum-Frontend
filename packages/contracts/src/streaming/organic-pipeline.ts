@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { imageSizeSchema } from '../ai-studio/image-size';
 import { artDirectionSchema } from '../creative/art-direction';
 import { organicUgcSpecSchema } from '../media/reel-video';
 
@@ -20,7 +21,7 @@ export const organicMediaGenerationContextSchema = z
       .object({
         provider: z.string().min(1),
         model: z.string().min(1),
-        imageSize: z.literal('512px'),
+        imageSize: imageSizeSchema,
       })
       .strict(),
     placement: z

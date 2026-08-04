@@ -195,6 +195,38 @@ export type BudgetSource = z.infer<typeof BudgetSourceSchema>;
 export const LookbackWindowSchema = z.enum(['d7', 'd14', 'd30']);
 export type LookbackWindow = z.infer<typeof LookbackWindowSchema>;
 
+/** One ABO campaign's observable daily pool: the sum of its ACTIVE ad sets that own a
+ * daily_budget. Read-only metadata; it is deliberately not part of AdSetSnapshotSchema so
+ * the optimization engine cannot accidentally treat it as an allocation input. */
+export const AboCampaignBudgetSummarySchema = z.object({
+  campaignId: z.string().min(1),
+  campaignName: z.string().nullable(),
+  activeDailyBudgetTotal: z.number().nonnegative(),
+  activeAdsetCount: z.number().int().nonnegative(),
+});
+export type AboCampaignBudgetSummary = z.infer<typeof AboCampaignBudgetSummarySchema>;
+
+/** Account-level observational rollup returned beside the ad-set snapshot fleet. All money
+ * is in MAJOR units of `currency`, matching AdSetSnapshot.currentBudget. */
+export const AboBudgetSummarySchema = z.object({
+  currency: z.string().regex(/^[A-Z]{3}$/),
+  activeDailyTotal: z.number().nonnegative(),
+  campaigns: z.array(AboCampaignBudgetSummarySchema),
+});
+export type AboBudgetSummary = z.infer<typeof AboBudgetSummarySchema>;
+
+/** The paid-media-metrics snapshot envelope. `snapshots` stays unknown here so each consumer
+ * can preserve its existing per-row malformed-data policy. Nullable defaults keep cache rows
+ * written before budget summaries/freshness metadata backward compatible. */
+export const OptimizerSnapshotsEnvelopeSchema = z
+  .object({
+    snapshots: z.array(z.unknown()).catch([]).default([]),
+    fetchedAt: z.string().datetime().nullable().catch(null).default(null),
+    budgetSummary: AboBudgetSummarySchema.nullable().catch(null).default(null),
+  })
+  .loose();
+export type OptimizerSnapshotsEnvelope = z.infer<typeof OptimizerSnapshotsEnvelopeSchema>;
+
 /** Input to create a portfolio (maps to optimizer_create_portfolio's p_config). */
 export const PortfolioConfigSchema = z.object({
   name: z.string().min(1),

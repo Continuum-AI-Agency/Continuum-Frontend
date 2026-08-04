@@ -14,12 +14,14 @@
 
 import {
   type AgentRunDto,
+  activeAgentRunsQuerySchema,
   activeAgentRunsResponseSchema,
   isTerminalAgentRunStatus,
 } from '@continuum/contracts';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useToast } from '@/components/ui/ToastProvider';
 import { type RunEventAgentKind, useAgentRunStream } from '@/hooks/useAgentRunStream';
 import { selectLiveRuns, useAgentRunStore } from '@/lib/agents/runStore';
@@ -117,11 +119,13 @@ function useCompletionToasts(): void {
   }, [runs, show, router, viewingSessionId]);
 }
 
-async function fetchActiveRuns(): Promise<AgentRunDto[]> {
+async function fetchActiveRuns(brandId: string): Promise<AgentRunDto[]> {
   const token = await getBrowserAccessToken();
   if (!token) return [];
 
-  const response = await fetch(`${getApiBaseUrl()}/api/agents/runs/active`, {
+  const query = activeAgentRunsQuerySchema.parse({ brandId });
+  const params = new URLSearchParams(query);
+  const response = await fetch(`${getApiBaseUrl()}/api/agents/runs/active?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) return [];
@@ -131,25 +135,37 @@ async function fetchActiveRuns(): Promise<AgentRunDto[]> {
 }
 
 export function AgentRunsProvider({ children }: { children: React.ReactNode }) {
+  const { activeBrandId, user } = useActiveBrandContext();
+  const userId = user?.id;
   const upsertRun = useAgentRunStore((state) => state.upsertRun);
+  const resetRuns = useAgentRunStore((state) => state.reset);
   // useShallow: selectLiveRuns builds a fresh array every call, and an unstable snapshot
   // identity sends Zustand into an infinite re-render loop.
-  const liveRuns = useAgentRunStore(useShallow(selectLiveRuns));
+  const liveRuns = useAgentRunStore(useShallow(selectLiveRuns)).filter(
+    (run) => run.brandId === activeBrandId,
+  );
 
   useCompletionToasts();
 
-  // Find the runs that were already going before this page existed — the ones started
-  // before a navigation, a reload, or in another tab.
+  // Tear down the prior tenant synchronously, before descendants can attach tails for it.
+  useLayoutEffect(() => {
+    resetRuns();
+  }, [activeBrandId, userId, resetRuns]);
+
+  // Find only the runs that belong to the active tenant and current identity.
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
-    void fetchActiveRuns().then((runs) => {
+    void fetchActiveRuns(activeBrandId).then((runs) => {
       if (cancelled) return;
-      for (const run of runs) upsertRun(run);
+      for (const run of runs) {
+        if (run.brandId === activeBrandId) upsertRun(run);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [upsertRun]);
+  }, [activeBrandId, userId, upsertRun]);
 
   return (
     <>

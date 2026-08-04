@@ -10,6 +10,7 @@ import type { AdSetSnapshot, OptimizationObjective, PortfolioLevel } from '@cont
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import { deriveCpa } from '../format';
 import { freezeLabel } from '../reportModel';
+import type { PortfolioPickerEntity } from './portfolioPickerEntities';
 
 const UNGROUPED_ID = '__ungrouped__';
 const UNGROUPED_LABEL = 'Ungrouped';
@@ -24,6 +25,8 @@ export type AdsetPickItem = {
   id: string;
   name: string;
   eligible: boolean;
+  /** Inactive recoverable rows are addable even though the optimizer cannot score them yet. */
+  canAdd: boolean;
   // Visible inline reason when NOT eligible (never tooltip-only); null when eligible.
   reason: string | null;
   currentBudget: number;
@@ -54,6 +57,8 @@ export type AdsetPickItem = {
   // confirmation are what make it a decision rather than a surprise. Null when unclaimed or
   // when the claim is this same portfolio.
   enrolledIn: AdsetClaim | null;
+  providerLifecycle: PortfolioPickerEntity['providerLifecycle'] | null;
+  providerStatus: string | null;
 };
 
 /** Which portfolio currently owns an ad set's active enrollment.
@@ -92,7 +97,13 @@ export type CampaignSection = {
   mismatchCount: number;
 };
 
-function events14Of(snapshot: AdSetSnapshot): number {
+export type PortfolioPickerSource = AdSetSnapshot | PortfolioPickerEntity;
+
+function isPickerEntity(source: PortfolioPickerSource): source is PortfolioPickerEntity {
+  return 'providerLifecycle' in source;
+}
+
+function events14Of(snapshot: PortfolioPickerSource): number {
   const d14 = snapshot.windows?.d14;
   if (!d14) return 0;
   return Math.max(
@@ -108,21 +119,39 @@ function events14Of(snapshot: AdSetSnapshot): number {
 // freeze: an ABO campaign (unsupported_budget in campaign mode) must read as
 // ABO, not as the ad-set-context "CBO/lifetime" freezeLabel. Every other freeze
 // keeps the shared freezeLabel wording, falling back to the mode default.
-function heldReason(snapshot: AdSetSnapshot, mode: PortfolioLevel): string {
+function providerHeldReason(source: PortfolioPickerEntity): string | null {
+  const status = source.providerStatus?.replaceAll('_', ' ').toLowerCase();
+  if (source.providerLifecycle === 'active') return null;
+  if (source.providerLifecycle === 'recoverable') {
+    return `${status ? `${status[0].toUpperCase()}${status.slice(1)}` : 'Inactive'} on Meta — held until active.`;
+  }
+  if (source.providerLifecycle === 'archived') return 'Archived on Meta — remove-only.';
+  if (source.providerLifecycle === 'deleted') return 'Deleted on Meta — remove-only.';
+  return 'Meta status unavailable — remove-only.';
+}
+
+function heldReason(snapshot: PortfolioPickerSource, mode: PortfolioLevel): string {
+  if (isPickerEntity(snapshot)) {
+    const providerReason = providerHeldReason(snapshot);
+    if (providerReason) return providerReason;
+  }
   const fallbackReason = mode === 'campaign' ? CAMPAIGN_HELD_REASON : ADSET_HELD_REASON;
   if (mode === 'campaign' && snapshot.freezeReason === 'unsupported_budget') return fallbackReason;
   return freezeLabel(snapshot.freezeReason)?.label ?? fallbackReason;
 }
 
 function toPickItem(
-  snapshot: AdSetSnapshot,
+  snapshot: PortfolioPickerSource,
   mode: PortfolioLevel,
   objective?: OptimizationObjective,
   claims: AdsetClaimMap = NO_CLAIMS,
 ): AdsetPickItem {
   const currentBudget = snapshot.currentBudget ?? 0;
-  const frozen = snapshot.status === 'frozen' || snapshot.freeze === true;
-  const eligible = currentBudget > 0 && !frozen;
+  const frozen = isPickerEntity(snapshot)
+    ? !snapshot.optimizable
+    : snapshot.status === 'frozen' || snapshot.freeze === true;
+  const eligible = isPickerEntity(snapshot) ? snapshot.optimizable : currentBudget > 0 && !frozen;
+  const canAdd = isPickerEntity(snapshot) ? snapshot.canAdd : eligible;
   const reason = eligible ? null : heldReason(snapshot, mode);
   const spend14 = snapshot.windows?.d14?.spend ?? 0;
 
@@ -145,6 +174,7 @@ function toPickItem(
     id: snapshot.id,
     name: snapshot.name?.trim() || snapshot.id,
     eligible,
+    canAdd,
     reason,
     currentBudget,
     spend14,
@@ -156,6 +186,8 @@ function toPickItem(
     mismatch: Boolean(objectiveKpi && kpiField && kpiField !== objectiveKpi),
     kpiField,
     enrolledIn: claims.get(snapshot.id) ?? null,
+    providerLifecycle: isPickerEntity(snapshot) ? snapshot.providerLifecycle : null,
+    providerStatus: isPickerEntity(snapshot) ? snapshot.providerStatus : null,
   };
 }
 
@@ -163,6 +195,7 @@ function toPickItem(
 // so the actionable, high-spend rows surface at the top of each campaign.
 function compareAdsets(a: AdsetPickItem, b: AdsetPickItem): number {
   if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
+  if (a.canAdd !== b.canAdd) return a.canAdd ? -1 : 1;
   if (b.spend14 !== a.spend14) return b.spend14 - a.spend14;
   return a.name.localeCompare(b.name);
 }
@@ -173,7 +206,7 @@ function compareAdsets(a: AdsetPickItem, b: AdsetPickItem): number {
 // is self-referential (campaignId === id), so every section holds exactly one row
 // (the campaign itself) — the held-reason copy switches to campaign wording.
 export function buildCampaignSections(
-  snapshots: AdSetSnapshot[],
+  snapshots: PortfolioPickerSource[],
   mode: PortfolioLevel = 'adset',
   objective?: OptimizationObjective,
   claims: AdsetClaimMap = NO_CLAIMS,
@@ -308,7 +341,7 @@ export function sectionEligibleIds(adsets: AdsetPickItem[]): string[] {
 // pieces the virtualized picker is built from — kept here so a bench can exercise them without
 // React.
 
-export type PickerChip = 'eligible' | 'spending' | 'held' | 'mismatch';
+export type PickerChip = 'eligible' | 'spending' | 'held' | 'mismatch' | 'inactive' | 'terminal';
 
 /** One rendered line: either a campaign group header, or an ad set under it. The virtualizer
  *  indexes THIS — a flat list is the only thing a windowing library can measure. */
@@ -322,6 +355,10 @@ function matchesChips(item: AdsetPickItem, chips: readonly PickerChip[]): boolea
     if (chip === 'eligible') return item.eligible;
     if (chip === 'spending') return item.spend14 > 0;
     if (chip === 'held') return !item.eligible;
+    if (chip === 'inactive') return item.providerLifecycle === 'recoverable';
+    if (chip === 'terminal') {
+      return ['archived', 'deleted', 'unknown'].includes(item.providerLifecycle ?? '');
+    }
     return item.mismatch;
   });
 }
@@ -419,6 +456,8 @@ export function pickerCounts(sections: CampaignSection[]): {
   eligible: number;
   held: number;
   mismatch: number;
+  inactive: number;
+  terminal: number;
 } {
   const items = sections.flatMap((section) => section.adsets);
   return {
@@ -426,5 +465,9 @@ export function pickerCounts(sections: CampaignSection[]): {
     eligible: items.filter((item) => item.eligible).length,
     held: items.filter((item) => !item.eligible).length,
     mismatch: items.filter((item) => item.mismatch).length,
+    inactive: items.filter((item) => item.providerLifecycle === 'recoverable').length,
+    terminal: items.filter((item) =>
+      ['archived', 'deleted', 'unknown'].includes(item.providerLifecycle ?? ''),
+    ).length,
   };
 }

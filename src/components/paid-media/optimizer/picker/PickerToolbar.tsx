@@ -36,6 +36,8 @@ const CHIPS: { value: PickerChip; label: string; hint: string }[] = [
   { value: 'spending', label: 'Spending', hint: 'Spent something in the last 14 days' },
   { value: 'held', label: 'Held', hint: 'Budget lives at the campaign level, or ingest froze it' },
   { value: 'mismatch', label: 'Wrong KPI', hint: 'Buys a different event than this objective' },
+  { value: 'inactive', label: 'Inactive', hint: 'Recoverable Meta ad sets held until active' },
+  { value: 'terminal', label: 'Archived/deleted', hint: 'Terminal or unavailable Meta ad sets' },
 ];
 
 export function PickerToolbar({
@@ -51,7 +53,14 @@ export function PickerToolbar({
   onSelectTop,
 }: {
   sections: CampaignSection[];
-  counts: { total: number; eligible: number; held: number; mismatch: number };
+  counts: {
+    total: number;
+    eligible: number;
+    held: number;
+    mismatch: number;
+    inactive: number;
+    terminal: number;
+  };
   query: string;
   chips: PickerChip[];
   selectedCount: number;
@@ -108,7 +117,7 @@ export function PickerToolbar({
                         key={item.id}
                         value={`${item.name} ${item.id}`}
                         keywords={[item.id, section.campaignName]}
-                        disabled={!item.eligible}
+                        disabled={!item.canAdd}
                         onSelect={() => {
                           onJumpTo(item.id);
                           setJumpOpen(false);
@@ -117,7 +126,9 @@ export function PickerToolbar({
                       >
                         <span className="truncate">{item.name}</span>
                         {!item.eligible ? (
-                          <span className="ml-auto shrink-0 text-2xs text-warning">held</span>
+                          <span className="ml-auto shrink-0 text-2xs text-warning">
+                            {item.providerStatus?.replaceAll('_', ' ').toLowerCase() ?? 'held'}
+                          </span>
                         ) : item.mismatch ? (
                           <span className="ml-auto shrink-0 text-2xs text-warning">wrong KPI</span>
                         ) : null}
@@ -153,7 +164,9 @@ export function PickerToolbar({
           className="gap-1"
         >
           {CHIPS.map((chip) =>
-            chip.value === 'mismatch' && !hasMismatch ? null : (
+            (chip.value === 'mismatch' && !hasMismatch) ||
+            (chip.value === 'inactive' && counts.inactive === 0) ||
+            (chip.value === 'terminal' && counts.terminal === 0) ? null : (
               <ToggleGroupItem
                 key={chip.value}
                 value={chip.value}
@@ -174,6 +187,8 @@ export function PickerToolbar({
           {hasMismatch ? (
             <span className={cn('text-warning')}> · {counts.mismatch} wrong KPI</span>
           ) : null}
+          {counts.inactive > 0 ? <span> · {counts.inactive} inactive</span> : null}
+          {counts.terminal > 0 ? <span> · {counts.terminal} archived/deleted</span> : null}
           {selectedCount > 0 ? (
             <span className="text-foreground"> · {selectedCount} selected</span>
           ) : null}

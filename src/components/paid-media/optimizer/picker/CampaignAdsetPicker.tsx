@@ -36,7 +36,7 @@
 // header is dropped and every campaign renders as a single selectable row — the row IS the
 // entity.
 
-import type { AdSetSnapshot, OptimizationObjective, PortfolioLevel } from '@continuum/contracts';
+import type { OptimizationObjective, PortfolioLevel } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -76,6 +76,7 @@ import {
   flattenRows,
   type PickerChip,
   type PickerRow,
+  type PortfolioPickerSource,
   pickerCounts,
   sectionEligibleIds,
   sectionsMatching,
@@ -94,7 +95,7 @@ const GRID_COLS =
   'grid grid-cols-[2rem_minmax(0,1fr)_6.5rem_6.5rem_5.5rem_3.5rem_2rem] items-center gap-2 px-3';
 
 type CampaignAdsetPickerProps = {
-  snapshots: AdSetSnapshot[];
+  entities: PortfolioPickerSource[];
   selectedAdsetIds: string[];
   onChange: (ids: string[]) => void;
   brandId: string;
@@ -113,6 +114,15 @@ type CampaignAdsetPickerProps = {
   /** How tall the scroll region is. The default suits an inline form; the two-pane builder
    *  passes h-full and gives the picker the whole pane. */
   heightClassName?: string;
+  inventoryFreshness?: {
+    fetchedAt: string | null;
+    refresh: () => void;
+    canRefresh: boolean;
+    isRefreshing: boolean;
+    partial: boolean;
+    truncated: boolean;
+    isError: boolean;
+  };
 };
 
 function safeId(value: string): string {
@@ -161,7 +171,7 @@ const AdsetRow = memo(function AdsetRow({
         <Checkbox
           id={controlId}
           checked={checked}
-          disabled={disabled || !row.eligible}
+          disabled={disabled || (!row.canAdd && !checked)}
           aria-label={row.name}
           onCheckedChange={(value) => onToggle(row.id, value === true)}
         />
@@ -170,7 +180,10 @@ const AdsetRow = memo(function AdsetRow({
       <TableCell className="p-0 min-w-0">
         <label
           htmlFor={controlId}
-          className={cn('block min-w-0', row.eligible ? 'cursor-pointer' : 'cursor-not-allowed')}
+          className={cn(
+            'block min-w-0',
+            row.canAdd || checked ? 'cursor-pointer' : 'cursor-not-allowed',
+          )}
         >
           <span className="flex items-center gap-1.5">
             {/* Name-first: the raw Meta id lives in the tooltip, never inline, so the
@@ -195,7 +208,12 @@ const AdsetRow = memo(function AdsetRow({
                 {BUDGET_TYPE_LABEL[row.budgetType]}
               </Badge>
             ) : null}
-            {!row.eligible ? (
+            {row.providerLifecycle && row.providerLifecycle !== 'active' ? (
+              <Badge variant="warning" className="shrink-0 text-3xs">
+                {row.providerStatus?.replaceAll('_', ' ').toLowerCase() ?? 'Unknown status'}
+              </Badge>
+            ) : null}
+            {!row.eligible && (!row.providerLifecycle || row.providerLifecycle === 'active') ? (
               <Badge variant="warning" className="shrink-0 text-3xs">
                 Held
               </Badge>
@@ -253,7 +271,7 @@ const AdsetRow = memo(function AdsetRow({
       </TableCell>
 
       <TableCell className="p-0 text-right text-xs tabular-nums">
-        {row.eligible ? formatCurrency(row.currentBudget, currency) : DASH}
+        {row.currentBudget > 0 ? formatCurrency(row.currentBudget, currency) : DASH}
       </TableCell>
       <TableCell className="p-0 text-right text-xs tabular-nums">
         {money(row.spend14, currency)}
@@ -374,7 +392,7 @@ function CampaignHeaderRow({
 }
 
 export function CampaignAdsetPicker({
-  snapshots,
+  entities,
   selectedAdsetIds,
   onChange,
   brandId,
@@ -387,6 +405,7 @@ export function CampaignAdsetPicker({
   objective,
   claims,
   heightClassName = 'h-[24rem]',
+  inventoryFreshness,
 }: CampaignAdsetPickerProps) {
   const [query, setQuery] = useState('');
   const [chips, setChips] = useState<PickerChip[]>([]);
@@ -403,8 +422,8 @@ export function CampaignAdsetPicker({
   );
 
   const sections = useMemo(
-    () => buildCampaignSections(snapshots, mode, objective, claims),
-    [snapshots, mode, objective, claims],
+    () => buildCampaignSections(entities, mode, objective, claims),
+    [entities, mode, objective, claims],
   );
   const counts = useMemo(() => pickerCounts(sections), [sections]);
   const selectedIds = useMemo(() => new Set(selectedAdsetIds), [selectedAdsetIds]);
@@ -534,19 +553,42 @@ export function CampaignAdsetPicker({
   const metric = objective ? getOptimizationMetricDefinition(objective) : null;
   const virtualRows = virtualizer.getVirtualItems();
 
-  const showFreshness = !isLoading && !isError && (Boolean(fetchedAt) || snapshots.length > 0);
+  const combinedFetchedAt =
+    [fetchedAt, inventoryFreshness?.fetchedAt]
+      .filter((value): value is string => Boolean(value))
+      .sort()[0] ?? null;
+  const refreshAll = () => {
+    refresh();
+    inventoryFreshness?.refresh();
+  };
+  const combinedCanRefresh = canRefresh && (inventoryFreshness?.canRefresh ?? true);
+  const combinedIsRefreshing = isRefreshing || (inventoryFreshness?.isRefreshing ?? false);
+  const showFreshness =
+    !isLoading && !isError && (Boolean(combinedFetchedAt) || entities.length > 0);
 
   return (
     <div className="flex min-h-0 flex-col gap-2">
       {showFreshness ? (
         <div className="flex items-center justify-end">
           <DataFreshnessChip
-            fetchedAt={fetchedAt}
-            onRefresh={refresh}
-            canRefresh={canRefresh}
-            isRefreshing={isRefreshing}
+            fetchedAt={combinedFetchedAt}
+            onRefresh={refreshAll}
+            canRefresh={combinedCanRefresh}
+            isRefreshing={combinedIsRefreshing}
           />
         </div>
+      ) : null}
+
+      {inventoryFreshness?.isError ? (
+        <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
+          Inactive Meta ad sets are temporarily unavailable. Active and already-enrolled rows remain
+          editable.
+        </p>
+      ) : null}
+      {inventoryFreshness?.partial || inventoryFreshness?.truncated ? (
+        <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
+          Meta returned a partial ad-set inventory. Refresh before making broad membership changes.
+        </p>
       ) : null}
 
       {!isCampaignMode ? (
@@ -567,8 +609,9 @@ export function CampaignAdsetPicker({
       {counts.eligible === 0 ? (
         <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
           <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden="true" />
-          None of these {isCampaignMode ? 'campaigns' : 'ad sets'} own a budget the optimizer can
-          move — they are managed at the campaign level (CBO or lifetime).
+          {counts.inactive > 0 && !isCampaignMode
+            ? 'No active ad sets are currently optimizable. Inactive rows may be enrolled, but remain held until Meta reports them active.'
+            : `None of these ${isCampaignMode ? 'campaigns' : 'ad sets'} own a budget the optimizer can move — they are managed at the campaign level (CBO or lifetime).`}
         </p>
       ) : null}
 

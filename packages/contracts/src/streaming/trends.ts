@@ -7,6 +7,7 @@ import { z } from 'zod';
 // drift independently. See root AGENTS.md section 4 (Shared contracts).
 
 export const trendsStageSchema = z.enum([
+  'awaiting_brand_context',
   'awaiting_strategic_analysis',
   'queued',
   'scraping',
@@ -25,6 +26,7 @@ export type TrendsStage = z.infer<typeof trendsStageSchema>;
 export const TRENDS_STAGE_ORDER = trendsStageSchema.options;
 
 export const TRENDS_STAGE_LABELS: Record<TrendsStage, string> = {
+  awaiting_brand_context: 'Awaiting Brand Context',
   awaiting_strategic_analysis: 'Awaiting Strategic Analysis',
   queued: 'Queued',
   scraping: 'Scraping',
@@ -42,6 +44,7 @@ export const TRENDS_STAGE_LABELS: Record<TrendsStage, string> = {
 // The Frontend interpolates a smooth bar between consecutive anchors. Keep in
 // sync with setProgress(...) calls in metaHarvesterWorkflow.ts.
 export const TRENDS_STAGE_PROGRESS: Record<TrendsStage, number> = {
+  awaiting_brand_context: 1,
   awaiting_strategic_analysis: 1,
   queued: 1,
   scraping: 8,
@@ -129,6 +132,12 @@ export const trendsGenerationTelemetrySchema = z.object({
     queries: z.array(z.string()),
     provider_outcomes: z.array(z.unknown()),
     warnings: z.array(z.string()),
+    event_discovery: z.object({
+      status: z.enum(['verified_events', 'no_verified_events']),
+      calendar_item_count: z.number().int().nonnegative(),
+      dated_calendar_item_count: z.number().int().nonnegative(),
+      verified_event_count: z.number().int().nonnegative(),
+    }),
     /** Proof + speed of the GOOGLE_SEARCH grounding call (absent when it did not run). */
     grounding: z
       .object({

@@ -33,7 +33,7 @@ const done = (seq: number): AgentRunEventDto => ({
   data: {},
 });
 
-function project(liveRunId: string | null = null, isHydrated = true) {
+function project(liveRunId: string | null = null, isHydrated = true, brandId = 'brand_1') {
   const actions: PanelAction[] = [];
   const view = renderHook(() =>
     useProjectedRun({
@@ -41,6 +41,7 @@ function project(liveRunId: string | null = null, isHydrated = true) {
       dispatch: (action) => actions.push(action),
       isHydrated,
       liveRunId,
+      brandId,
     }),
   );
   return { actions, view };
@@ -130,6 +131,16 @@ describe('useProjectedRun', () => {
     store.appendEvents('run_1', [delta(1, 'a')]);
 
     const { actions } = project(null, false);
+
+    expect(actions).toEqual([]);
+  });
+
+  it('never projects a run from another brand into the active Planner session', () => {
+    const store = useAgentRunStore.getState();
+    store.upsertRun(run({ brandId: 'brand_2' }));
+    store.appendEvents('run_1', [delta(1, 'wrong tenant')]);
+
+    const { actions } = project(null, true, 'brand_1');
 
     expect(actions).toEqual([]);
   });

@@ -26,6 +26,7 @@ import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { useEarlierHistory } from '@/components/chat/useEarlierHistory';
 import { useCalendarRunStream } from '@/components/organic/hooks/useCalendarRunStream';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
+import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -85,7 +86,6 @@ import { describeComposerBlock } from '../disabledReasons';
 import { ActiveStagesPanel } from './ActiveStagesPanel';
 import { AeoSnapshotCard } from './AeoSnapshotCard';
 import { AgentWorkingIndicator } from './AgentWorkingIndicator';
-import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
 import { BulkPlanCard } from './BulkPlanCard';
 import { BulkRunPanel } from './BulkRunPanel';
 import { ConceptPlan } from './ConceptPlan';
@@ -361,6 +361,7 @@ export function OrganicAgentPanel({
   // which has no assistant message yet (that is only persisted when the run ENDS), and shows
   // a question with no answer and no sign anything is happening.
   useProjectedRun({
+    brandId,
     sessionId: state.sessionId,
     dispatch,
     isHydrated: state.isHydrated,

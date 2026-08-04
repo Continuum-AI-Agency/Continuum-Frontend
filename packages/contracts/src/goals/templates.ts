@@ -754,8 +754,161 @@ export const campaignCreationTemplate = goalTemplateSchema.parse({
   ],
 });
 
+export const TRIAL_REELS_TEMPLATE_ID = 'trial-reels' as const;
+
+/**
+ * A converging creative trial.
+ *
+ * Unlike Campaign Creation — where the artifact set IS the work and each artifact is
+ * produced once — this template has one artifact that is written over and over: the round
+ * ledger. Its work node stays alive across every round, parking between them while trials
+ * are in market and waking on a timer once views have accumulated. Rounds are unbounded, so
+ * they cannot be modelled as artifacts (a template's artifact list is fixed when it parses);
+ * they live in the harness checkpoint instead.
+ *
+ * The human is in the loop at exactly two places, both of them approvals routed through the
+ * capability owner's Slack/Teams: the variant slate for each round, and the graduation of a
+ * winner to followers.
+ */
+export const trialReelsTemplate = goalTemplateSchema.parse({
+  id: TRIAL_REELS_TEMPLATE_ID,
+  version: 1,
+  title: 'Trial Reels',
+  description:
+    'Find a winning creative angle, hook, and call to action by running rounds of Instagram trial reels against non-followers until the evidence names a winner or the trial runs out of road.',
+  workstreams: [
+    {
+      id: 'trial-charter',
+      title: 'Trial Charter',
+      objective:
+        'Fix the desired outcome, the metric the trial ranks on, the fence it may never exceed, and who approves each round.',
+      requiredCapabilities: ['strategy'],
+      artifactIds: ['trial-reels-charter'],
+      dependencyIds: [],
+    },
+    {
+      id: 'trial-hypothesis',
+      title: 'Hypothesis Space',
+      objective:
+        'Enumerate the angles, hooks, calls to action, and opening frames worth testing, grounded in what the brand already knows — and record what is deliberately excluded.',
+      requiredCapabilities: ['creative', 'strategy'],
+      artifactIds: ['trial-hypothesis-ledger'],
+      dependencyIds: ['trial-charter'],
+    },
+    {
+      id: 'trial-execution',
+      title: 'Trial Execution',
+      objective:
+        'Run rounds of trial reels against the hypothesis space, recording every variant observed — winners, laggards, and the ones that never got enough delivery to judge.',
+      requiredCapabilities: ['creative', 'measurement'],
+      artifactIds: ['trial-round-ledger'],
+      dependencyIds: ['trial-hypothesis'],
+    },
+    {
+      id: 'trial-verdict',
+      title: 'Verdict',
+      objective:
+        'State what the trial proved, what it could not establish, and whether the winner graduates to followers and into a paid confirmation test.',
+      requiredCapabilities: ['strategy', 'measurement'],
+      artifactIds: ['trial-winner-report'],
+      dependencyIds: ['trial-execution'],
+    },
+  ],
+  artifacts: [
+    {
+      id: 'trial-reels-charter',
+      title: 'Trial Charter',
+      description:
+        'The desired outcome, the primary metric, the arms in play, and the fence the loop may never exceed.',
+      category: 'objective',
+      format: 'json',
+      requirement: 'core',
+      activation: { kind: 'always' },
+      ownerCapabilities: ['strategy'],
+      approvalCapabilities: ['strategy'],
+      requiredSections: [
+        { id: 'outcome', title: 'Desired outcome' },
+        { id: 'metric', title: 'Primary metric' },
+        { id: 'fence', title: 'Fence' },
+        { id: 'decision-rights', title: 'Decision rights' },
+      ],
+      defaultDependencies: [],
+    },
+    {
+      id: 'trial-hypothesis-ledger',
+      title: 'Hypothesis Ledger',
+      description:
+        'The creative space the trial will search, the prior beliefs behind it, and the options deliberately left untested.',
+      category: 'creative',
+      format: 'json',
+      requirement: 'core',
+      activation: { kind: 'always' },
+      ownerCapabilities: ['creative', 'strategy'],
+      approvalCapabilities: ['strategy'],
+      requiredSections: [
+        { id: 'space', title: 'Search space' },
+        { id: 'priors', title: 'Prior beliefs' },
+        { id: 'excluded', title: 'Deliberately excluded' },
+      ],
+      defaultDependencies: ['trial-reels-charter'],
+    },
+    {
+      id: 'trial-round-ledger',
+      title: 'Round Ledger',
+      description:
+        'Append-only record of every round and every variant observed. Recording only the winners would produce a selected sample, which is worse than no record at all because it looks like data.',
+      category: 'measurement',
+      format: 'json',
+      requirement: 'core',
+      activation: { kind: 'always' },
+      ownerCapabilities: ['measurement', 'creative'],
+      approvalCapabilities: ['strategy'],
+      requiredSections: [
+        { id: 'rounds', title: 'Rounds' },
+        { id: 'decisions', title: 'Verdict per round' },
+      ],
+      defaultDependencies: ['trial-hypothesis-ledger'],
+    },
+    {
+      id: 'trial-winner-report',
+      title: 'Winner Report',
+      description:
+        'What the trial proved, what it could not establish, and the graduation and paid-confirmation handoff.',
+      category: 'learning',
+      format: 'json',
+      requirement: 'core',
+      activation: { kind: 'always' },
+      ownerCapabilities: ['strategy', 'measurement'],
+      approvalCapabilities: ['strategy'],
+      requiredSections: [
+        { id: 'outcome', title: 'Outcome' },
+        { id: 'winner', title: 'Winning coordinate' },
+        { id: 'not-learned', title: 'What this trial could not establish' },
+        { id: 'graduation', title: 'Graduation' },
+      ],
+      defaultDependencies: ['trial-round-ledger'],
+    },
+  ],
+  readiness: {
+    requiredArtifactIds: [
+      'trial-reels-charter',
+      'trial-hypothesis-ledger',
+      'trial-round-ledger',
+      'trial-winner-report',
+    ],
+    requiredCapabilities: ['strategy', 'creative', 'measurement'],
+    // Discovery runs on organic trial reels, which cost nothing. Budget authorization is
+    // required only when the operator opts into the paid confirmation arm, and that is
+    // gated separately by the paid scaffold's own approval gates.
+    requiresBudgetAuthorization: false,
+    requiresComplianceApproval: false,
+    requiresMeasurementQa: true,
+  },
+});
+
 export const goalTemplateRegistry: Readonly<Record<string, GoalTemplate>> = Object.freeze({
   [CAMPAIGN_CREATION_TEMPLATE_ID]: campaignCreationTemplate,
+  [TRIAL_REELS_TEMPLATE_ID]: trialReelsTemplate,
 });
 
 /** @deprecated Use campaignCreationTemplate. */

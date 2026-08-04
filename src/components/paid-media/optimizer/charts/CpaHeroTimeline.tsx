@@ -4,9 +4,11 @@
 // the whole story in one interaction. The cost line is engine-derived from
 // spend/results; a dashed ProjectionLine continues it toward the target (or
 // the recent trend) with a hollow terminal marker at the actual→projected hand-off;
-// pins on the axis mark cycles where the optimizer acted; and hovering any cycle
-// opens a rich card with that cycle's cost + spend + results AND the actions
-// taken — metrics and pinned events in one panel, the reference-screenshot pattern.
+// a ReferenceArea goldilocks band (0 → cpa_target) marks the engine's meetsTarget
+// zone when the portfolio has an explicit target; pins on the axis mark cycles
+// where the optimizer acted; and hovering any cycle opens a rich card with that
+// cycle's cost + spend + results AND the actions taken — metrics and pinned
+// events in one panel, the reference-screenshot pattern.
 //
 // There is deliberately NO spend bar layer. Spend and cost-per-result are different
 // units, and ComposedChart cannot separate them: tryAppendSeriesBar (composed-chart.tsx)
@@ -26,6 +28,7 @@ import { Grid } from '@/components/charts/grid';
 import { Line } from '@/components/charts/line';
 import { LineSeriesTerminalMarker } from '@/components/charts/line-series-terminal-marker';
 import { ProjectionLine } from '@/components/charts/projection-line';
+import { ReferenceArea } from '@/components/charts/reference-area';
 import { ChartTooltip } from '@/components/charts/tooltip';
 import { XAxis } from '@/components/charts/x-axis';
 import { YAxis } from '@/components/charts/y-axis';
@@ -36,6 +39,7 @@ import {
   buildCpaHeroPoints,
   buildCpaProjection,
   type CpaHeroPoint,
+  goldilocksZone,
   projectionEndpoint,
 } from './vizData';
 
@@ -75,6 +79,9 @@ export function CpaHeroTimeline({
   const last = points.at(-1)?.cpa ?? null;
   const projectedEnd = projectionEndpoint(projection);
   const band = bandMeta(confidenceBand);
+  // Goldilocks only when the portfolio set an explicit target — same gate the
+  // engine uses for meetsTarget. Silent engine default ($50) is never drawn.
+  const zone = goldilocksZone(targetCpa);
 
   return (
     <div className="space-y-2">
@@ -115,6 +122,20 @@ export function CpaHeroTimeline({
           xDataKey="date"
         >
           <Grid horizontal />
+          {zone ? (
+            <ReferenceArea
+              axisLabelColor="var(--success)"
+              pattern="diagonal"
+              patternColor="color-mix(in oklch, var(--success) 22%, transparent)"
+              patternScale={0.75}
+              patternStrokeWidth={1.25}
+              showMarkers
+              stroke="color-mix(in oklch, var(--success) 55%, transparent)"
+              strokeStyle="dashed"
+              y1={zone.y1}
+              y2={zone.y2}
+            />
+          ) : null}
           <Line dataKey="cpa" stroke="var(--chart-2)" strokeWidth={2.5} />
           {hasProjection ? (
             <>
@@ -146,7 +167,11 @@ export function CpaHeroTimeline({
         </ComposedChart>
       </div>
 
-      <HeroLegend costLabel={metric.costLabel} hasProjection={hasProjection} />
+      <HeroLegend
+        costLabel={metric.costLabel}
+        hasProjection={hasProjection}
+        hasZone={zone != null}
+      />
     </div>
   );
 }
@@ -306,7 +331,15 @@ function HeroTooltip({
   );
 }
 
-function HeroLegend({ hasProjection, costLabel }: { hasProjection: boolean; costLabel: string }) {
+function HeroLegend({
+  hasProjection,
+  hasZone,
+  costLabel,
+}: {
+  hasProjection: boolean;
+  hasZone: boolean;
+  costLabel: string;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-3xs text-muted-foreground">
       <span className="inline-flex items-center gap-1.5">
@@ -320,6 +353,18 @@ function HeroLegend({ hasProjection, costLabel }: { hasProjection: boolean; cost
             style={{ borderColor: 'var(--chart-4)' }}
           />
           Projected
+        </span>
+      ) : null}
+      {hasZone ? (
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="size-2.5 rounded-[2px] border border-dashed"
+            style={{
+              borderColor: 'color-mix(in oklch, var(--success) 55%, transparent)',
+              background: 'color-mix(in oklch, var(--success) 18%, transparent)',
+            }}
+          />
+          On target (≤ target)
         </span>
       ) : null}
       {(['cycle', 'applied', 'status', 'config'] as const).map((kind) => {

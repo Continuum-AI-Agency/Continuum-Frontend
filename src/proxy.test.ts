@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'bun:test';
-import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server';
-import { config } from './proxy';
+import { readFileSync } from 'node:fs';
+import { authRedirectTarget, config, isProtectedRoute } from './proxy-config';
 
 function proxyMatches(url: string) {
-  return unstable_doesMiddlewareMatch({ config, url });
+  const pathname = new URL(url, 'https://app.trycontinuum.ai').pathname;
+  return new RegExp(`^${config.matcher[0]}$`).test(pathname);
 }
 
 describe('proxy matcher', () => {
+  it('keeps the tested matcher identical to the statically analyzable Next.js config', () => {
+    const productionSource = readFileSync(new URL('./proxy.ts', import.meta.url), 'utf8');
+    const escapedMatcher = JSON.stringify(config.matcher[0]).slice(1, -1);
+    expect(productionSource).toContain(`'${escapedMatcher}'`);
+  });
+
   it('does not run for Vercel internals and host-level probes', () => {
     expect(proxyMatches('/_vercel/insights/view')).toBe(false);
     expect(proxyMatches('/_vercel/speed-insights/vitals')).toBe(false);
@@ -32,7 +39,15 @@ describe('proxy matcher', () => {
     expect(proxyMatches('/dashboard')).toBe(true);
     expect(proxyMatches('/scale/campaign-canvas')).toBe(true);
     expect(proxyMatches('/settings?section=integrations')).toBe(true);
+    expect(proxyMatches('/open/planner?brandId=brand-1')).toBe(true);
     // only /share/<token> is public; lookalike prefixes keep session handling
     expect(proxyMatches('/shared-reports')).toBe(true);
+  });
+
+  it('preserves the complete Planner handoff through login', () => {
+    expect(isProtectedRoute('/open/planner')).toBe(true);
+    expect(
+      authRedirectTarget({ pathname: '/open/planner', search: '?brandId=brand-1&draftId=draft-1' }),
+    ).toBe('/open/planner?brandId=brand-1&draftId=draft-1');
   });
 });

@@ -9,6 +9,7 @@ import {
   buildConversionFunnel,
   buildCpaHeroPoints,
   buildCpaProjection,
+  goldilocksZone,
   mergeAdDailyByMetric,
   pacingSnapshot,
   projectionEndpoint,
@@ -156,6 +157,20 @@ describe('buildCpaProjection', () => {
   it('heads for the target CPA when one is provided', () => {
     const projection = buildCpaProjection(points, { targetCpa: 10 });
     expect(projectionEndpoint(projection)).toBe(10);
+  });
+});
+
+describe('goldilocksZone', () => {
+  it('returns a 0→target band when the portfolio set a positive target', () => {
+    expect(goldilocksZone(40)).toEqual({ y1: 0, y2: 40 });
+  });
+
+  it('stays null when the target is unset, zero, or non-finite', () => {
+    expect(goldilocksZone(null)).toBeNull();
+    expect(goldilocksZone(undefined)).toBeNull();
+    expect(goldilocksZone(0)).toBeNull();
+    expect(goldilocksZone(-12)).toBeNull();
+    expect(goldilocksZone(Number.NaN)).toBeNull();
   });
 });
 

@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 import { applySupabaseCookies, getSupabaseCookieOptions } from './lib/supabase/cookies';
+import { authRedirectTarget, isProtectedRoute } from './proxy-config';
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -53,18 +54,9 @@ export async function proxy(request: NextRequest) {
   const isAuthPage =
     request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/signup');
 
-  const isProtectedRoute =
-    request.nextUrl.pathname.startsWith('/dashboard') ||
-    request.nextUrl.pathname.startsWith('/organic') ||
-    request.nextUrl.pathname.startsWith('/scale') ||
-    request.nextUrl.pathname.startsWith('/paid-media') ||
-    request.nextUrl.pathname.startsWith('/ai-studio') ||
-    request.nextUrl.pathname.startsWith('/integrations') ||
-    request.nextUrl.pathname.startsWith('/settings');
-
-  if (!user && isProtectedRoute) {
+  if (!user && isProtectedRoute(request.nextUrl.pathname)) {
     const redirectUrl = new URL('/login', request.url);
-    redirectUrl.searchParams.set('redirectTo', request.nextUrl.pathname);
+    redirectUrl.searchParams.set('redirectTo', authRedirectTarget(request.nextUrl));
     return NextResponse.redirect(redirectUrl);
   }
 
@@ -76,8 +68,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // share/.* is the anonymous share-link viewer: the token is the credential,
-  // so no Supabase session handling should run for it.
+  // Keep this literal statically analyzable by Next.js. Its behavior is covered
+  // by the equivalent pure config in proxy-config.ts.
   matcher: [
     '/((?!_next/static|_next/image|_vercel(?:/.*)?|share/.*|favicon.ico|robots.txt|sitemap.xml|manifest.json|icon.png|apple-icon.png|socket\\.io(?:/.*)?|\\.well-known/appspecific(?:/.*)?|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|json|js|css|map)$).*)',
   ],
