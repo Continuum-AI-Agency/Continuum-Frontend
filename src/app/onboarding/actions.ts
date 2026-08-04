@@ -217,6 +217,20 @@ export async function approveOnboardingAndStartAnalysisAction(
     }
   });
 
+  // Approval synchronizes the canonical brand report. Trends starts only after
+  // that durable boundary; the Backend will hold it until the matching strategic
+  // analysis is complete.
+  after(async () => {
+    try {
+      const { startBrandInsightsServer } = await import('@/lib/api/brandInsights.server');
+      await startBrandInsightsServer(brandId);
+    } catch (error) {
+      log.error('[approveOnboardingAndStartAnalysisAction] trends kickoff failed', error, {
+        brandId,
+      });
+    }
+  });
+
   if (process.env.NEXT_PUBLIC_ONBOARDING_INSPIRATIONS_ENABLED !== 'false') {
     after(async () => {
       try {

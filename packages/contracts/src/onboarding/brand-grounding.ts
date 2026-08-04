@@ -1,9 +1,8 @@
-import { z } from "zod";
-
-import { brandGuidelinesSchema } from "./brand-guidelines";
-import { brandBookDocumentSchema } from "./brand-book";
-import { brandMdTokensSchema } from "./brand-md";
-import { readinessSummarySchema } from "./readiness-summary";
+import { z } from 'zod';
+import { brandBookDocumentSchema } from './brand-book';
+import { brandGuidelinesSchema } from './brand-guidelines';
+import { brandMdTokensSchema } from './brand-md';
+import { readinessSummarySchema } from './readiness-summary';
 
 // The single grounding CONTRACT every generator consumes. Onboarding produces
 // several grounding artifacts (Firecrawl scrape -> brand report -> readiness ->
@@ -19,11 +18,7 @@ import { readinessSummarySchema } from "./readiness-summary";
 // One ranked retrieval result from a within-brand semantic search. `ref` is the
 // source-row identifier callers cite (document_id, guideline tag id, or brand
 // report embedding id) so a generation can attribute what it grounded on.
-export const groundingHitSourceSchema = z.enum([
-  "guideline",
-  "document",
-  "brand_report",
-]);
+export const groundingHitSourceSchema = z.enum(['guideline', 'document', 'brand_report']);
 export type GroundingHitSource = z.infer<typeof groundingHitSourceSchema>;
 
 export const groundingHitSchema = z.object({

@@ -35,6 +35,17 @@ test('buildBrandInsightsProgressSteps supports awaiting_strategic_analysis stage
   assert.equal(statuses.queued, 'pending');
 });
 
+test('buildBrandInsightsProgressSteps supports awaiting_brand_context stage', () => {
+  const steps = buildBrandInsightsProgressSteps({
+    stage: 'awaiting_brand_context',
+    status: 'pending',
+  });
+  const statuses = Object.fromEntries(steps.map((step) => [step.id, step.status]));
+
+  assert.equal(statuses.awaiting_brand_context, 'current');
+  assert.equal(statuses.queued, 'pending');
+});
+
 test('buildBrandInsightsProgressSteps derives terminal stage from status when stage is missing', () => {
   const completed = buildBrandInsightsProgressSteps({ status: 'completed' });
   const failed = buildBrandInsightsProgressSteps({ status: 'failed' });

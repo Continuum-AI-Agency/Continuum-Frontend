@@ -1,10 +1,10 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { documentCategorySchema, toDocumentCategory } from "../documents/category";
-import { brandReportResultSchema } from "./brand-report";
-import { brandDnaSchema } from "./brand-dna";
-import { brandMdTokensSchema } from "./brand-md";
-import { readinessAnalysisSchema } from "./readiness";
+import { documentCategorySchema, toDocumentCategory } from '../documents/category';
+import { brandDnaSchema } from './brand-dna';
+import { brandMdTokensSchema } from './brand-md';
+import { brandReportResultSchema } from './brand-report';
+import { readinessAnalysisSchema } from './readiness';
 
 // Response envelope for the durable Brand Book read (the `get-brand-book` edge
 // function, read by the Settings -> Brand Book viewer and the MCP brand_knowledge
@@ -21,7 +21,7 @@ import { readinessAnalysisSchema } from "./readiness";
 // The back-compat top-level fields (composite/brand_md/brand_tokens/documents)
 // are hydrated from `assembled.report` so older readers keep working.
 
-export const brandBookStatusSchema = z.enum(["assembling", "ready", "error"]);
+export const brandBookStatusSchema = z.enum(['assembling', 'ready', 'error']);
 export type BrandBookStatus = z.infer<typeof brandBookStatusSchema>;
 
 export const brandBookDocumentSchema = z.object({
@@ -93,7 +93,7 @@ export type BrandBookAssembled = z.infer<typeof brandBookAssembledSchema>;
 export const brandBookResponseSchema = z.object({
   brand_id: z.string(),
   // Materialization state. `present` is true only when status === 'ready'.
-  status: brandBookStatusSchema.default("assembling"),
+  status: brandBookStatusSchema.default('assembling'),
   present: z.boolean().default(false),
   refreshed_at: z.string().nullable().default(null),
   // True when a source changed after the last successful assemble (last-good

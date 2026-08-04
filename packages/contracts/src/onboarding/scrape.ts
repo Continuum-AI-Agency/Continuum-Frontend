@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { httpUrlSchema, hexColorSchema } from "./_shared";
+import { z } from 'zod';
+import { hexColorSchema, httpUrlSchema } from './_shared';
 
 /**
  * Frontend-supplied scrape: deterministic source-of-truth for colors and typography.
@@ -24,7 +24,7 @@ export const scrapeSchema = z
       .partial()
       .nullable()
       .optional(),
-    colorScheme: z.enum(["light", "dark"]).nullable().optional(),
+    colorScheme: z.enum(['light', 'dark']).nullable().optional(),
     hero_copy: z
       .object({
         headline: z.string().max(400).nullable().optional(),

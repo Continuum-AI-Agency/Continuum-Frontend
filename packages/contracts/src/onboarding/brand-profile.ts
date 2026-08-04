@@ -1,7 +1,7 @@
-import { z } from "zod";
-import { httpUrlSchema } from "./_shared";
-import { brandVoiceSchema } from "./brand-voice";
-import { targetAudienceSchema } from "./target-audience";
+import { z } from 'zod';
+import { httpUrlSchema } from './_shared';
+import { brandVoiceSchema } from './brand-voice';
+import { targetAudienceSchema } from './target-audience';
 
 export const brandProfileSchema = z
   .object({

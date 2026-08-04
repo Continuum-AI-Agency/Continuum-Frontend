@@ -49,12 +49,7 @@ import {
 } from './state/agentPreview';
 import { BackgroundJobsProvider, useBackgroundJobs } from './state/BackgroundJobsProvider';
 import { JobPersistor } from './state/JobPersistor';
-import {
-  runCreativePrewarm,
-  runScrape,
-  runStrategicPrewarm,
-  runTrendsPrewarm,
-} from './state/jobRunners';
+import { runCreativePrewarm, runScrape } from './state/jobRunners';
 
 type ScreenIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -571,24 +566,6 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     if (prewarmedRef.current) return;
     prewarmedRef.current = true;
     router.prefetch('/dashboard');
-    void (async () => {
-      try {
-        await start('trendsPrewarm', () => runTrendsPrewarm(brandId));
-      } catch (error) {
-        // Best-effort prewarm: dashboard has its own fetcher fallback.
-        console.warn('[onboarding] trends prewarm failed', error);
-      }
-    })();
-    // Kick competitor strategic analysis in parallel with trends, the moment the
-    // brand profile is finished — independent of approval. Best-effort; failures
-    // must never block the inspirations/generation finale.
-    void (async () => {
-      try {
-        await start('strategicPrewarm', () => runStrategicPrewarm(brandId));
-      } catch (error) {
-        console.warn('[onboarding] strategic analysis prewarm failed', error);
-      }
-    })();
     // Generate the first on-brand creatives now too — decoupled from the strategic
     // analysis, grounded in the brand profile. Persists the kit (colors) first.
     if (INSPIRATIONS_ENABLED) {

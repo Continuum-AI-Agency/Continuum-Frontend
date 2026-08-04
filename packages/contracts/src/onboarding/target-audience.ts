@@ -1,6 +1,6 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { coerceStringArray } from "./brand-voice";
+import { coerceStringArray } from './brand-voice';
 
 const AUDIENCE_BULLET_MAX = 420;
 const AUDIENCE_BULLETS_MAX = 18;
@@ -27,10 +27,10 @@ const bulletArray = (maxItems: number) =>
     .optional();
 
 export const audienceJourneyStageEnum = z.enum([
-  "awareness",
-  "consideration",
-  "decision",
-  "implementation",
+  'awareness',
+  'consideration',
+  'decision',
+  'implementation',
 ]);
 export type AudienceJourneyStage = z.infer<typeof audienceJourneyStageEnum>;
 

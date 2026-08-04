@@ -1,3 +1,4 @@
+import { trendsStageSchema } from '@continuum/contracts';
 import { z } from 'zod';
 
 import {
@@ -248,11 +249,24 @@ const backendReadWeekSchema = z
   })
   .passthrough();
 
-const backendGenerationInsightsSnapshotSchema = z.object({
-  trends: z.array(backendTrendSchema).default([]),
-  events: z.array(backendEventSchema).default([]),
-  questions: z.array(backendQuestionSchema).default([]),
-});
+const backendGenerationInsightsSnapshotSchema = z
+  .object({
+    trends: z.array(backendTrendSchema).optional(),
+    events: z.array(backendEventSchema).optional(),
+    questions: z.array(backendQuestionSchema).optional(),
+  })
+  .passthrough()
+  .refine(
+    (data) =>
+      data.trends !== undefined || data.events !== undefined || data.questions !== undefined,
+    { message: 'Payload is not a direct generation-insights snapshot' },
+  )
+  .transform((data) => ({
+    ...data,
+    trends: data.trends ?? [],
+    events: data.events ?? [],
+    questions: data.questions ?? [],
+  }));
 
 const backendReadDataSchema = z
   .object({
@@ -344,6 +358,13 @@ const backendGenerationResponseSchema = z.object({
           runId: z.string().nullish(),
         })
         .nullish(),
+      brand_context: z
+        .object({
+          required: z.boolean().nullish(),
+          status: z.string().nullish(),
+          blockers: z.array(z.string()).nullish(),
+        })
+        .nullish(),
     })
     .nullish(),
   data: z
@@ -360,6 +381,7 @@ const backendGenerationResponseSchema = z.object({
       from_cache: z.boolean().nullish(),
       fromCache: z.boolean().nullish(),
       status: z.string().nullish(),
+      stage: trendsStageSchema.nullish(),
       counts: backendTotalsSchema.nullish(),
       persisted: backendTotalsSchema.nullish(),
       dependency: z
@@ -378,6 +400,13 @@ const backendGenerationResponseSchema = z.object({
               status: z.string().nullish(),
               run_id: z.string().nullish(),
               runId: z.string().nullish(),
+            })
+            .nullish(),
+          brand_context: z
+            .object({
+              required: z.boolean().nullish(),
+              status: z.string().nullish(),
+              blockers: z.array(z.string()).nullish(),
             })
             .nullish(),
         })
@@ -1142,6 +1171,8 @@ export function mapBackendGenerationResponse(payload: unknown) {
     parsed.dependency?.strategic_analysis ??
     parsed.dependency?.strategicAnalysis ??
     undefined;
+  const brandContextDependency =
+    data?.dependency?.brand_context ?? parsed.dependency?.brand_context ?? undefined;
 
   const innerJobStatus = data?.status;
   const isRunningJob =
@@ -1165,12 +1196,20 @@ export function mapBackendGenerationResponse(payload: unknown) {
           : parsed.status === 'pending' || parsed.status === 'running'
             ? parsed.status
             : undefined,
+      stage: data?.stage ?? undefined,
       brandId: data?.brand_id ?? data?.brandId ?? data?.platform_account_id ?? undefined,
       dependencyStrategicAnalysis: strategicDependency
         ? {
             required: strategicDependency.required ?? undefined,
             status: strategicDependency.status ?? undefined,
             runId: strategicDependency.run_id ?? strategicDependency.runId ?? null,
+          }
+        : undefined,
+      dependencyBrandContext: brandContextDependency
+        ? {
+            required: brandContextDependency.required ?? undefined,
+            status: brandContextDependency.status ?? undefined,
+            blockers: brandContextDependency.blockers ?? [],
           }
         : undefined,
       stream: mapStream(data?.stream),

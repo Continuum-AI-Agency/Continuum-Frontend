@@ -1,14 +1,15 @@
 'use client';
 
-import type { BaseTickContentProps } from 'recharts';
-import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart } from 'recharts';
-import {
-  type ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from '@/components/ui/chart';
-import type { ReadinessAnalysis, ReadinessDimension } from '@/lib/onboarding/agentClient';
+// Brand readiness as a bklit radar: seven dimensions on a 0–100 domain, polygon
+// tinted by the overall score band (teal / amber / rose). Labels carry the
+// rounded score so the operator can read absolute values without a tooltip.
+
+import { RadarArea } from '@/components/charts/radar-area';
+import { RadarAxis } from '@/components/charts/radar-axis';
+import { RadarChart } from '@/components/charts/radar-chart';
+import { RadarGrid } from '@/components/charts/radar-grid';
+import { RadarLabels } from '@/components/charts/radar-labels';
+import type { ReadinessAnalysis } from '@/lib/onboarding/agentClient';
 import { BAND_STYLES, bandFor } from './ScoreBadge';
 import { DIMENSION_DISPLAY_ORDER, DIMENSION_LABELS } from './utils';
 
@@ -16,81 +17,37 @@ type Props = {
   readiness: ReadinessAnalysis;
 };
 
-type RadarDatum = {
-  dimension: ReadinessDimension;
-  label: string;
-  score: number;
-  rationale: string;
-};
-
-function renderDimensionTick(scoreByLabel: Map<string, number>) {
-  return function DimensionTick({ x, y, textAnchor, payload }: BaseTickContentProps) {
-    const label = String(payload.value);
-    const score = scoreByLabel.get(label);
-    return (
-      <text
-        x={x}
-        y={y}
-        textAnchor={textAnchor}
-        dy={4}
-        className="fill-muted-foreground text-[10px]"
-      >
-        {label}
-        {score != null ? ` · ${Math.round(score)}` : ''}
-      </text>
-    );
-  };
-}
-
 export function ReadinessRadarChart({ readiness }: Props) {
-  const radarData: RadarDatum[] = DIMENSION_DISPLAY_ORDER.map((dim) => {
-    const d = readiness.dimensions[dim];
-    return { dimension: dim, label: DIMENSION_LABELS[dim], score: d.score, rationale: d.rationale };
+  const seriesColor = BAND_STYLES[bandFor(readiness.overall_score)].pip;
+
+  const metrics = DIMENSION_DISPLAY_ORDER.map((dim) => {
+    const score = readiness.dimensions[dim].score;
+    return {
+      key: dim,
+      label: `${DIMENSION_LABELS[dim]} · ${Math.round(score)}`,
+    };
   });
-  const scoreByLabel = new Map(radarData.map((d) => [d.label, d.score]));
 
-  const overallScore = readiness.overall_score;
-  const band = bandFor(overallScore);
-  const seriesColor = BAND_STYLES[band].pip;
-
-  const chartConfig: ChartConfig = {
-    score: { label: 'Score', color: seriesColor },
-  };
+  const data = [
+    {
+      label: 'Readiness',
+      color: seriesColor,
+      values: Object.fromEntries(
+        DIMENSION_DISPLAY_ORDER.map((dim) => [dim, readiness.dimensions[dim].score]),
+      ) as Record<string, number>,
+    },
+  ];
 
   return (
-    <ChartContainer config={chartConfig} className="h-[240px] w-full">
-      <RadarChart data={radarData}>
-        <PolarGrid />
-        <PolarAngleAxis dataKey="label" tick={renderDimensionTick(scoreByLabel)} />
-        <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-        <ChartTooltip
-          content={
-            <ChartTooltipContent
-              labelFormatter={(value, tooltipPayload) => {
-                const row = tooltipPayload?.[0]?.payload as RadarDatum | undefined;
-                return (
-                  <span className="flex flex-col gap-0.5">
-                    <span className="font-medium text-foreground">{row?.label ?? value}</span>
-                    {row?.rationale ? (
-                      <span className="max-w-[220px] text-2xs font-normal text-muted-foreground">
-                        {row.rationale}
-                      </span>
-                    ) : null}
-                  </span>
-                );
-              }}
-            />
-          }
-        />
-        <Radar
-          dataKey="score"
-          stroke="var(--color-score)"
-          strokeWidth={2}
-          fill="var(--color-score)"
-          fillOpacity={0.18}
-          dot={{ r: 5, fill: 'var(--color-score)', stroke: 'var(--background)', strokeWidth: 2 }}
-        />
+    <div className="mx-auto aspect-square w-full max-w-[280px]" data-testid="readiness-radar">
+      <RadarChart data={data} levels={4} margin={52} metrics={metrics}>
+        <RadarGrid />
+        <RadarAxis />
+        <RadarLabels fontSize={10} offset={22} />
+        {data.map((series, index) => (
+          <RadarArea index={index} key={series.label} />
+        ))}
       </RadarChart>
-    </ChartContainer>
+    </div>
   );
 }

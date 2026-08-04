@@ -3,6 +3,7 @@ import {
   questionSignalSchema,
   signalPlatformRecommendationSchema,
   trendSignalSchema,
+  trendsStageSchema,
   trendsWeekSummarySchema,
 } from '@continuum/contracts';
 import { z } from 'zod';
@@ -129,13 +130,21 @@ export const brandInsightsStrategicDependencySchema = z.object({
   runId: z.string().nullable().optional(),
 });
 
+export const brandInsightsBrandContextDependencySchema = z.object({
+  required: z.boolean().optional(),
+  status: z.string().optional(),
+  blockers: z.array(z.string()).default([]),
+});
+
 export const brandInsightsGenerationQueuedSchema = z.object({
   status: z.literal('processing'),
   generationId: z.string().optional(),
   jobId: z.string().optional(),
   jobStatus: z.enum(['pending', 'running', 'completed', 'failed']).optional(),
+  stage: trendsStageSchema.optional(),
   brandId: z.string().optional(),
   dependencyStrategicAnalysis: brandInsightsStrategicDependencySchema.optional(),
+  dependencyBrandContext: brandInsightsBrandContextDependencySchema.optional(),
   stream: brandInsightsJobStreamSchema.optional(),
   fallbackPollUrl: z.string().optional(),
   message: z.string().optional(),

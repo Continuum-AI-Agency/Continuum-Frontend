@@ -1,10 +1,23 @@
 'use client';
 
+import type { BrandBookResponse } from '@continuum/contracts';
+import { Download, FileText, Package } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/components/ui/ToastProvider';
 import { deepenBrandBook } from '@/lib/api/brandBook.client';
+import {
+  buildBrandSystemExport,
+  downloadBrandBookPdf,
+  downloadBrandSystemArchive,
+} from '@/lib/brands/brand-system-export';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useBrandMdDirtyOptional } from './BrandMdDirtyContext';
 
@@ -14,11 +27,19 @@ import { useBrandMdDirtyOptional } from './BrandMdDirtyContext';
  * content into the composite. Replaces the orphaned StrategicAnalysisRealtime
  * plumbing — this one watches the canonical composite the viewer actually reads.
  */
-export function BrandBookActions({ brandId }: { brandId: string }) {
+export function BrandBookActions({
+  brandBook,
+  brandName,
+}: {
+  brandBook: BrandBookResponse;
+  brandName: string;
+}) {
+  const brandId = brandBook.brand_id;
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const router = useRouter();
   const { show } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [exporting, setExporting] = useState<'zip' | 'pdf' | null>(null);
   // Suppress auto-refresh while the user has unsaved edits in BrandMdEditor —
   // a Realtime-triggered router.refresh() would wipe in-flight draft content.
   const editorIsDirty = useBrandMdDirtyOptional();
@@ -79,9 +100,77 @@ export function BrandBookActions({ brandId }: { brandId: string }) {
     });
   };
 
+  const handleExport = async (format: 'zip' | 'pdf') => {
+    if (editorIsDirty || exporting) return;
+    setExporting(format);
+    try {
+      const exported = await buildBrandSystemExport({ brandBook, brandName });
+      if (format === 'zip') downloadBrandSystemArchive(exported);
+      else downloadBrandBookPdf(exported);
+
+      const warningCount = exported.manifest.warnings.length;
+      show({
+        title: format === 'zip' ? 'Brand system exported' : 'Brand Book PDF exported',
+        description:
+          warningCount > 0
+            ? `${warningCount} optional item could not be included. See manifest.json for details.`
+            : format === 'zip'
+              ? 'Includes portable tokens, normalized knowledge, available assets, and PDF.'
+              : 'Your current saved Brand Book is ready to share.',
+        variant: 'success',
+      });
+    } catch (error) {
+      show({
+        title: 'Export failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
-    <Button onClick={handleDeepen} disabled={isPending} variant="secondary">
-      {isPending ? 'Starting…' : 'Deepen analysis'}
-    </Button>
+    <div className="flex items-center gap-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            disabled={editorIsDirty || exporting !== null}
+            title={editorIsDirty ? 'Save or discard brand.md edits before exporting.' : undefined}
+          >
+            <Download aria-hidden />
+            {exporting ? 'Exporting…' : 'Export'}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem
+            disabled={editorIsDirty || exporting !== null}
+            onSelect={() => void handleExport('zip')}
+          >
+            <Package aria-hidden />
+            <span className="flex flex-col">
+              <span>Download brand system</span>
+              <span className="text-xs text-muted-foreground">
+                ZIP with tokens, assets, and PDF
+              </span>
+            </span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={editorIsDirty || exporting !== null}
+            onSelect={() => void handleExport('pdf')}
+          >
+            <FileText aria-hidden />
+            <span className="flex flex-col">
+              <span>Download PDF</span>
+              <span className="text-xs text-muted-foreground">Shareable Brand Book</span>
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button onClick={handleDeepen} disabled={isPending} variant="secondary">
+        {isPending ? 'Starting…' : 'Deepen analysis'}
+      </Button>
+    </div>
   );
 }

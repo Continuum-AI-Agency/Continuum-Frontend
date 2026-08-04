@@ -1,10 +1,10 @@
 import type {
-  BrandReportSection,
   BackendSectionStatus,
   BrandReportEnrichSection,
   BrandReportResult,
+  BrandReportSection,
   OnboardingReportStructured,
-} from "./brand-report";
+} from './brand-report';
 
 /**
  * SSE envelope grammar for the brand-report preview stream. Every event carries
@@ -34,37 +34,37 @@ import type {
  * `embedding` reports terminal embedding-target lifecycle (post-`complete`).
  */
 export type BrandReportProgressEvent =
-  | { kind: "run"; run_id: string; reused: boolean; seq?: number }
-  | { kind: "ping"; ts?: string | number; seq?: number }
-  | { kind: "data"; section: BrandReportSection; data: unknown; seq?: number }
-  | { kind: "stream"; section: BrandReportSection; delta: string; seq?: number }
+  | { kind: 'run'; run_id: string; reused: boolean; seq?: number }
+  | { kind: 'ping'; ts?: string | number; seq?: number }
+  | { kind: 'data'; section: BrandReportSection; data: unknown; seq?: number }
+  | { kind: 'stream'; section: BrandReportSection; delta: string; seq?: number }
   | {
-      kind: "status";
+      kind: 'status';
       section: BrandReportSection;
       status: BackendSectionStatus;
       error?: string;
       seq?: number;
     }
-  | { kind: "spark"; section: BrandReportSection; label: string; seq?: number }
-  | { kind: "structured"; data: OnboardingReportStructured; seq?: number }
+  | { kind: 'spark'; section: BrandReportSection; label: string; seq?: number }
+  | { kind: 'structured'; data: OnboardingReportStructured; seq?: number }
   | {
-      kind: "embedding";
+      kind: 'embedding';
       target: string;
       status: string;
       error?: string;
       seq?: number;
     }
   | {
-      kind: "complete";
-      phase: "preview";
-      status: "ok" | "partial" | "error";
+      kind: 'complete';
+      phase: 'preview';
+      status: 'ok' | 'partial' | 'error';
       result?: BrandReportResult;
       seq?: number;
     }
-  | { kind: "enrich"; section: BrandReportEnrichSection; data: unknown; seq?: number }
-  | { kind: "error"; message: string; seq?: number };
+  | { kind: 'enrich'; section: BrandReportEnrichSection; data: unknown; seq?: number }
+  | { kind: 'error'; message: string; seq?: number };
 
-export type BrandReportProgressEventKind = BrandReportProgressEvent["kind"];
+export type BrandReportProgressEventKind = BrandReportProgressEvent['kind'];
 
 /**
  * Use in an exhaustive switch on `BrandReportProgressEvent['kind']` to force a

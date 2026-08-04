@@ -71,6 +71,11 @@ mock.module('@/lib/posthog-server', () => ({
   }),
 }));
 
+const mockStartBrandInsightsServer = mock(() => Promise.resolve());
+mock.module('@/lib/api/brandInsights.server', () => ({
+  startBrandInsightsServer: mockStartBrandInsightsServer,
+}));
+
 import { approveAndLaunchOnboardingAction } from '@/app/onboarding/actions';
 import { approveOnboardingBrandProfile } from '@/lib/onboarding/agentClient';
 import { fetchOnboardingState } from '@/lib/onboarding/storage';
@@ -132,6 +137,7 @@ describe('approveAndLaunchOnboardingAction', () => {
     (approveOnboardingBrandProfile as unknown as ReturnType<typeof mock>).mockClear();
     mockApplyBrandProfileIntegrationAccountsServer.mockClear();
     mockRunStrategicAnalysisServer.mockClear();
+    mockStartBrandInsightsServer.mockClear();
     posthogCaptureMock.mockClear();
     bpiaRowsMock.mockReset();
     bpiaRowsMock.mockResolvedValue({ data: [], error: null });
@@ -202,5 +208,18 @@ describe('approveAndLaunchOnboardingAction', () => {
     expect(mockRunStrategicAnalysisServer).toHaveBeenCalledWith(
       expect.objectContaining({ brandId }),
     );
+    expect(mockStartBrandInsightsServer).toHaveBeenCalledTimes(1);
+    expect(mockStartBrandInsightsServer).toHaveBeenCalledWith(brandId);
+  });
+
+  it('does not start Trends when brand approval fails', async () => {
+    const approvalMock = approveOnboardingBrandProfile as unknown as ReturnType<typeof mock>;
+    approvalMock.mockRejectedValueOnce(new Error('approval failed'));
+
+    await expect(approveAndLaunchOnboardingAction(brandId)).rejects.toThrow('approval failed');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockRunStrategicAnalysisServer).not.toHaveBeenCalled();
+    expect(mockStartBrandInsightsServer).not.toHaveBeenCalled();
   });
 });

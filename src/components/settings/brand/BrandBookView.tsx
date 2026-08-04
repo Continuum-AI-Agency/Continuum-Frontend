@@ -666,7 +666,7 @@ export function BrandBookView({
               </div>
               <div className="flex items-center gap-2">
                 {badge ? <Badge variant={badge.variant}>{badge.label}</Badge> : null}
-                <BrandBookActions brandId={brandBook.brand_id} />
+                <BrandBookActions brandBook={brandBook} brandName={brandName} />
               </div>
             </div>
           </CardHeader>

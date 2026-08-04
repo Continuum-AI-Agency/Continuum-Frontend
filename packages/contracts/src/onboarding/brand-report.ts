@@ -1,28 +1,28 @@
-import { z } from "zod";
-import { httpUrlSchema, integrationProviderEnum } from "./_shared";
-import { targetAudienceSchema } from "./target-audience";
-import { websiteSummarySchema } from "./website-summary";
-import { businessSummarySchema } from "./business-summary";
-import { brandStrategySchema } from "./brand-strategy";
-import { brandGuidelinesSchema } from "./brand-guidelines";
-import { brandProfileSchema, type BrandProfile } from "./brand-profile";
-import { readinessAnalysisSchema, type ReadinessAnalysis } from "./readiness";
-import { firstImpressionSchema, type FirstImpression } from "./first-impression";
-import { brandDeepSchema } from "./brand-deep";
+import { z } from 'zod';
+import { httpUrlSchema, integrationProviderEnum } from './_shared';
+import { brandDeepSchema } from './brand-deep';
+import { brandGuidelinesSchema } from './brand-guidelines';
+import { type BrandProfile, brandProfileSchema } from './brand-profile';
+import { brandStrategySchema } from './brand-strategy';
+import { businessSummarySchema } from './business-summary';
+import { type FirstImpression, firstImpressionSchema } from './first-impression';
+import { type ReadinessAnalysis, readinessAnalysisSchema } from './readiness';
+import { targetAudienceSchema } from './target-audience';
+import { websiteSummarySchema } from './website-summary';
 
 // Single-source section enum — both the Backend (runSection) and the Frontend
 // response interpreter derive from this Zod enum (no parallel hand-rolled
 // unions). Adding a section here flows to both sides.
 export const brandReportSectionSchema = z.enum([
-  "brand_profile",
-  "voice",
-  "audience",
-  "website",
-  "business",
-  "strategy",
-  "guidelines",
-  "readiness",
-  "first_impression",
+  'brand_profile',
+  'voice',
+  'audience',
+  'website',
+  'business',
+  'strategy',
+  'guidelines',
+  'readiness',
+  'first_impression',
 ]);
 export type BrandReportSection = z.infer<typeof brandReportSectionSchema>;
 
@@ -33,17 +33,17 @@ export type BrandReportSection = z.infer<typeof brandReportSectionSchema>;
 export const brandReportEnrichSectionSchema = z.union([
   brandReportSectionSchema,
   z.enum([
-    "audit.voice",
-    "audit.audience",
-    "audit.website",
-    "audit.business",
-    "audit.strategy",
-    "audit.guidelines",
-    "deep.narrative",
-    "deep.messaging",
-    "deep.product",
-    "deep.personas",
-    "deep.competition",
+    'audit.voice',
+    'audit.audience',
+    'audit.website',
+    'audit.business',
+    'audit.strategy',
+    'audit.guidelines',
+    'deep.narrative',
+    'deep.messaging',
+    'deep.product',
+    'deep.personas',
+    'deep.competition',
   ]),
 ]);
 
@@ -62,7 +62,7 @@ export const brandReportEnrichSectionSchema = z.union([
  * FE may compose a local superset (e.g. add `"idle"` for a not-yet-started state)
  * but must not relabel any of the four backend states.
  */
-export type BackendSectionStatus = "running" | "done" | "skipped" | "error";
+export type BackendSectionStatus = 'running' | 'done' | 'skipped' | 'error';
 
 export type BrandReportEnrichSection = z.infer<typeof brandReportEnrichSectionSchema>;
 
@@ -73,7 +73,7 @@ export type BrandReportEnrichSection = z.infer<typeof brandReportEnrichSectionSc
  */
 export const sectionAuditSchema = z.object({
   score: z.number().int().min(0).max(100),
-  severity: z.enum(["low", "medium", "high"]),
+  severity: z.enum(['low', 'medium', 'high']),
   findings: z
     .array(
       z.object({
@@ -129,21 +129,21 @@ export type GroundingCitations = Record<string, GroundingCitation[]>;
 export const connectedAccountSchema = z.object({
   platform: integrationProviderEnum,
   primary_url: httpUrlSchema.nullable().optional(),
-  notes: z.string().max(600).default(""),
+  notes: z.string().max(600).default(''),
 });
 export type ConnectedAccount = z.infer<typeof connectedAccountSchema>;
 
 export const documentsSummarySchema = z.object({
   primary_topics: z.array(z.string().min(1).max(120)).max(15).default([]),
   secondary_topics: z.array(z.string().min(1).max(120)).max(15).default([]),
-  notes: z.string().max(600).default(""),
+  notes: z.string().max(600).default(''),
 });
 export type DocumentsSummary = z.infer<typeof documentsSummarySchema>;
 
 export const competitorSnapshotSchema = z.object({
   name: z.string().min(1).max(120),
   reason: z.string().max(300).nullable().optional(),
-  source: z.enum(["generated", "retrieval", "scrape", "manual"]).default("generated"),
+  source: z.enum(['generated', 'retrieval', 'scrape', 'manual']).default('generated'),
 });
 export type CompetitorSnapshot = z.infer<typeof competitorSnapshotSchema>;
 
@@ -198,4 +198,4 @@ export const brandReportResultSchema = z.object({
 });
 export type BrandReportResult = z.infer<typeof brandReportResultSchema>;
 
-export type BrandReportStatus = "ok" | "partial" | "error";
+export type BrandReportStatus = 'ok' | 'partial' | 'error';

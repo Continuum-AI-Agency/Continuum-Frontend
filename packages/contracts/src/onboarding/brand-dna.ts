@@ -1,15 +1,15 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { httpUrlSchema } from "./_shared";
-import { brandPaletteSchema, brandTypographySchema } from "./website-summary";
-import { brandVoiceSchema } from "./brand-voice";
-import { targetAudienceSchema } from "./target-audience";
-import { brandStrategySchema } from "./brand-strategy";
-import { brandGuidelinesSchema } from "./brand-guidelines";
-import { READINESS_DIMENSIONS } from "./readiness";
-import type { BrandProfile } from "./brand-profile";
-import type { BrandReportResult } from "./brand-report";
-import type { BrandDeep } from "./brand-deep";
+import { httpUrlSchema } from './_shared';
+import type { BrandDeep } from './brand-deep';
+import { brandGuidelinesSchema } from './brand-guidelines';
+import type { BrandProfile } from './brand-profile';
+import type { BrandReportResult } from './brand-report';
+import { brandStrategySchema } from './brand-strategy';
+import { brandVoiceSchema } from './brand-voice';
+import { READINESS_DIMENSIONS } from './readiness';
+import { targetAudienceSchema } from './target-audience';
+import { brandPaletteSchema, brandTypographySchema } from './website-summary';
 
 // Canonical, agent-facing brand identity — the "brand.md" the whole app grounds
 // on. It is a PROJECTION of the onboarding report (the same fields, flattened to
@@ -41,7 +41,7 @@ export type BrandDna = z.infer<typeof brandDnaSchema>;
 // signed URL by the read path (getBrandDna), not by this pure projection.
 function extractLogoUrl(profile: BrandProfile): string | null {
   const candidate = (profile as Record<string, unknown>).logo_url;
-  return typeof candidate === "string" && candidate.trim().length > 0 ? candidate : null;
+  return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate : null;
 }
 
 export function toBrandDna(result: BrandReportResult): BrandDna {
@@ -66,24 +66,27 @@ export function toBrandDna(result: BrandReportResult): BrandDna {
 
 function pushSection(lines: string[], heading: string, body: string[]): void {
   if (body.length === 0) return;
-  lines.push("", heading, ...body);
+  lines.push('', heading, ...body);
 }
 
 function mdTable(header: string[], rows: string[][]): string[] {
-  const head = `| ${header.join(" | ")} |`;
-  const sep = `| ${header.map(() => "---").join(" | ")} |`;
-  return [head, sep, ...rows.map((r) => `| ${r.join(" | ")} |`)];
+  const head = `| ${header.join(' | ')} |`;
+  const sep = `| ${header.map(() => '---').join(' | ')} |`;
+  return [head, sep, ...rows.map((r) => `| ${r.join(' | ')} |`)];
 }
 
 // Sentinel a T2 section emits when its deep content has not landed yet. Exported
 // so a structured consumer (the Brand Book viewer) can detect pending state
 // without string-sniffing.
-export const DEEP_PENDING_LABEL = "_Pending deep analysis._";
+export const DEEP_PENDING_LABEL = '_Pending deep analysis._';
 
 // A T2 sub-section always renders SOMETHING in the full bible: its content when
 // the deep pass produced it, otherwise a pending stub — so the document shows
 // the full structure with explicit "filling in later" markers.
-function renderDeep(result: BrandReportResult | undefined, project: (deep: BrandDeep) => string[]): string[] {
+function renderDeep(
+  result: BrandReportResult | undefined,
+  project: (deep: BrandDeep) => string[],
+): string[] {
   const deep = result?.deep ?? null;
   if (!deep) return [DEEP_PENDING_LABEL];
   const body = project(deep);
@@ -99,10 +102,10 @@ function renderDeep(result: BrandReportResult | undefined, project: (deep: Brand
 // is a single entry here. `render` returns body lines (empty => the section is
 // omitted, except T2 sub-sections which render a pending stub in full mode).
 // ---------------------------------------------------------------------------
-export type BrandBibleTier = "T0" | "T1" | "T2";
+export type BrandBibleTier = 'T0' | 'T1' | 'T2';
 
 export interface BrandBibleRenderContext {
-  mode: "lean" | "full";
+  mode: 'lean' | 'full';
   dna: BrandDna;
   result?: BrandReportResult;
 }
@@ -117,9 +120,9 @@ export interface BrandBibleSection {
 
 export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
   {
-    id: "positioning",
-    title: "## Positioning",
-    tier: "T0",
+    id: 'positioning',
+    title: '## Positioning',
+    tier: 'T0',
     includeInGrounding: true,
     render: ({ dna }) => {
       const out: string[] = [];
@@ -136,18 +139,18 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
     },
   },
   {
-    id: "brand_pillars",
-    title: "## Brand pillars",
-    tier: "T0",
+    id: 'brand_pillars',
+    title: '## Brand pillars',
+    tier: 'T0',
     includeInGrounding: true,
     render: ({ dna }) =>
       dna.strategy?.message_pillars?.map((mp) => `- ${mp.pillar}: ${mp.description}`) ??
       dna.brand_pillars.map((name) => `- ${name}`),
   },
   {
-    id: "voice",
-    title: "## Voice",
-    tier: "T0",
+    id: 'voice',
+    title: '## Voice',
+    tier: 'T0',
     includeInGrounding: true,
     render: ({ dna }) => {
       const out: string[] = [];
@@ -155,25 +158,25 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
       if (dna.voice?.tone) out.push(`Tone: ${dna.voice.tone}`);
       if (dna.voice?.voice_style) out.push(`Style: ${dna.voice.voice_style}`);
       const vr = dna.guidelines?.voice_rules;
-      if (vr && vr.dos.length > 0) out.push(`Do: ${vr.dos.join("; ")}`);
-      if (vr && vr.donts.length > 0) out.push(`Don't: ${vr.donts.join("; ")}`);
+      if (vr && vr.dos.length > 0) out.push(`Do: ${vr.dos.join('; ')}`);
+      if (vr && vr.donts.length > 0) out.push(`Don't: ${vr.donts.join('; ')}`);
       const banned =
         dna.guidelines?.messaging_guardrails.banned_words ?? dna.voice?.banned_words ?? [];
-      if (banned.length > 0) out.push(`Banned words: ${banned.join(", ")}`);
+      if (banned.length > 0) out.push(`Banned words: ${banned.join(', ')}`);
       return out;
     },
   },
   {
-    id: "audience",
-    title: "## Audience",
-    tier: "T0",
+    id: 'audience',
+    title: '## Audience',
+    tier: 'T0',
     includeInGrounding: true,
     render: ({ dna }) => (dna.audience?.summary ? [dna.audience.summary] : []),
   },
   {
-    id: "promise",
-    title: "## Promise",
-    tier: "T0",
+    id: 'promise',
+    title: '## Promise',
+    tier: 'T0',
     includeInGrounding: true,
     render: ({ dna }) => {
       const out: string[] = [];
@@ -183,9 +186,9 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
     },
   },
   {
-    id: "visual_identity",
-    title: "## Visual identity",
-    tier: "T0",
+    id: 'visual_identity',
+    title: '## Visual identity',
+    tier: 'T0',
     includeInGrounding: true,
     render: ({ dna }) => {
       const out: string[] = [];
@@ -193,22 +196,22 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
         const colors = [dna.palette.primary, dna.palette.secondary, dna.palette.accent].filter(
           (c): c is string => Boolean(c),
         );
-        if (colors.length > 0) out.push(`Palette: ${colors.join(", ")}`);
+        if (colors.length > 0) out.push(`Palette: ${colors.join(', ')}`);
       }
       if (dna.typography?.primary || dna.typography?.secondary) {
         const fonts = [dna.typography.primary, dna.typography.secondary].filter((f): f is string =>
           Boolean(f),
         );
-        out.push(`Typography: ${fonts.join(" / ")}`);
+        out.push(`Typography: ${fonts.join(' / ')}`);
       }
       return out;
     },
   },
   // --- full-only (not injected into the lean grounding block) ---------------
   {
-    id: "personas",
-    title: "## Personas",
-    tier: "T0",
+    id: 'personas',
+    title: '## Personas',
+    tier: 'T0',
     includeInGrounding: false,
     render: ({ dna }) => {
       const segments = dna.audience?.segments ?? [];
@@ -218,19 +221,19 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
         out.push(`### ${seg.name}`);
         if (seg.jtbd) out.push(`JTBD: ${seg.jtbd}`);
         if (seg.pains_verbatim && seg.pains_verbatim.length > 0)
-          out.push(`Pains: ${seg.pains_verbatim.join("; ")}`);
+          out.push(`Pains: ${seg.pains_verbatim.join('; ')}`);
         if (seg.buying_criteria && seg.buying_criteria.length > 0)
-          out.push(`Buying criteria: ${seg.buying_criteria.join("; ")}`);
+          out.push(`Buying criteria: ${seg.buying_criteria.join('; ')}`);
         if (seg.objections && seg.objections.length > 0)
-          out.push(`Objections: ${seg.objections.join("; ")}`);
+          out.push(`Objections: ${seg.objections.join('; ')}`);
       }
       return out;
     },
   },
   {
-    id: "messaging",
-    title: "## Messaging",
-    tier: "T0",
+    id: 'messaging',
+    title: '## Messaging',
+    tier: 'T0',
     includeInGrounding: false,
     render: ({ dna }) => {
       const strat = dna.strategy;
@@ -239,21 +242,21 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
       if (strat.value_proposition) out.push(`Value proposition: ${strat.value_proposition}`);
       if (strat.taglines?.primary) out.push(`Primary tagline: ${strat.taglines.primary}`);
       if (strat.taglines?.alternates && strat.taglines.alternates.length > 0)
-        out.push(`Alternate taglines: ${strat.taglines.alternates.join(" | ")}`);
+        out.push(`Alternate taglines: ${strat.taglines.alternates.join(' | ')}`);
       for (const mp of strat.message_pillars ?? []) {
         const proof =
           mp.proof_points && mp.proof_points.length > 0
-            ? ` (proof: ${mp.proof_points.join("; ")})`
-            : "";
+            ? ` (proof: ${mp.proof_points.join('; ')})`
+            : '';
         out.push(`- ${mp.pillar}: ${mp.description}${proof}`);
       }
       return out;
     },
   },
   {
-    id: "readiness",
-    title: "## Readiness",
-    tier: "T1",
+    id: 'readiness',
+    title: '## Readiness',
+    tier: 'T1',
     includeInGrounding: false,
     render: ({ result }) => {
       const r = result?.readiness;
@@ -262,13 +265,17 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
         const dim = r.dimensions[key];
         return [key, `${dim.score}`, dim.rationale];
       });
-      return [`Overall readiness: ${r.overall_score}/100`, "", ...mdTable(["Dimension", "Score", "Rationale"], rows)];
+      return [
+        `Overall readiness: ${r.overall_score}/100`,
+        '',
+        ...mdTable(['Dimension', 'Score', 'Rationale'], rows),
+      ];
     },
   },
   {
-    id: "section_scores",
-    title: "## Section scores",
-    tier: "T1",
+    id: 'section_scores',
+    title: '## Section scores',
+    tier: 'T1',
     includeInGrounding: false,
     render: ({ result }) => {
       const audits = result?.audits;
@@ -277,29 +284,29 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
       for (const [section, audit] of Object.entries(audits)) {
         if (audit) rows.push([section, `${audit.score}`, audit.severity]);
       }
-      return rows.length > 0 ? mdTable(["Section", "Score", "Severity"], rows) : [];
+      return rows.length > 0 ? mdTable(['Section', 'Score', 'Severity'], rows) : [];
     },
   },
   {
-    id: "deep_narrative",
-    title: "## Strategic narrative",
-    tier: "T2",
+    id: 'deep_narrative',
+    title: '## Strategic narrative',
+    tier: 'T2',
     includeInGrounding: false,
     render: ({ result }) =>
       renderDeep(result, (deep) => {
         const n = deep.strategic_narrative;
         if (!n) return [];
         const out: string[] = [];
-        if (n.mission.length > 0) out.push(`Mission: ${n.mission.join(" ")}`);
-        if (n.vision.length > 0) out.push(`Vision: ${n.vision.join(" ")}`);
-        if (n.core_values.length > 0) out.push(`Core values: ${n.core_values.join(", ")}`);
+        if (n.mission.length > 0) out.push(`Mission: ${n.mission.join(' ')}`);
+        if (n.vision.length > 0) out.push(`Vision: ${n.vision.join(' ')}`);
+        if (n.core_values.length > 0) out.push(`Core values: ${n.core_values.join(', ')}`);
         return out;
       }),
   },
   {
-    id: "deep_messaging",
-    title: "## Messaging system",
-    tier: "T2",
+    id: 'deep_messaging',
+    title: '## Messaging system',
+    tier: 'T2',
     includeInGrounding: false,
     render: ({ result }) =>
       renderDeep(result, (deep) => {
@@ -308,15 +315,17 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
         const out: string[] = [];
         if (m.summary) out.push(m.summary);
         if (m.positioning) out.push(`Positioning: ${m.positioning}`);
-        if (m.differentiators.length > 0) out.push(`Differentiators: ${m.differentiators.join("; ")}`);
-        if (m.recommendations.length > 0) out.push(`Recommendations: ${m.recommendations.join("; ")}`);
+        if (m.differentiators.length > 0)
+          out.push(`Differentiators: ${m.differentiators.join('; ')}`);
+        if (m.recommendations.length > 0)
+          out.push(`Recommendations: ${m.recommendations.join('; ')}`);
         return out;
       }),
   },
   {
-    id: "deep_product",
-    title: "## Product",
-    tier: "T2",
+    id: 'deep_product',
+    title: '## Product',
+    tier: 'T2',
     includeInGrounding: false,
     render: ({ result }) =>
       renderDeep(result, (deep) => {
@@ -325,15 +334,15 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
         const out: string[] = [];
         if (p.product_name) out.push(`Product: ${p.product_name}`);
         if (p.product_description) out.push(p.product_description);
-        if (p.product_features.length > 0) out.push(`Features: ${p.product_features.join("; ")}`);
-        if (p.product_benefits.length > 0) out.push(`Benefits: ${p.product_benefits.join("; ")}`);
+        if (p.product_features.length > 0) out.push(`Features: ${p.product_features.join('; ')}`);
+        if (p.product_benefits.length > 0) out.push(`Benefits: ${p.product_benefits.join('; ')}`);
         return out;
       }),
   },
   {
-    id: "deep_personas",
-    title: "## Deep personas",
-    tier: "T2",
+    id: 'deep_personas',
+    title: '## Deep personas',
+    tier: 'T2',
     includeInGrounding: false,
     render: ({ result }) =>
       renderDeep(result, (deep) => {
@@ -344,16 +353,16 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
         for (const seg of dp.segments) {
           out.push(`### ${seg.name}`);
           if (seg.description) out.push(seg.description);
-          if (seg.motivations.length > 0) out.push(`Motivations: ${seg.motivations.join("; ")}`);
-          if (seg.barriers.length > 0) out.push(`Barriers: ${seg.barriers.join("; ")}`);
+          if (seg.motivations.length > 0) out.push(`Motivations: ${seg.motivations.join('; ')}`);
+          if (seg.barriers.length > 0) out.push(`Barriers: ${seg.barriers.join('; ')}`);
         }
         return out;
       }),
   },
   {
-    id: "deep_competition",
-    title: "## Competitive frame",
-    tier: "T2",
+    id: 'deep_competition',
+    title: '## Competitive frame',
+    tier: 'T2',
     includeInGrounding: false,
     render: ({ result }) =>
       renderDeep(result, (deep) => {
@@ -361,7 +370,7 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
         if (!c) return [];
         const out: string[] = [];
         for (const comp of c.top_competitors) {
-          const bits = [comp.strategy_summary, comp.key_messaging].filter(Boolean).join(" — ");
+          const bits = [comp.strategy_summary, comp.key_messaging].filter(Boolean).join(' — ');
           out.push(bits ? `- ${comp.name}: ${bits}` : `- ${comp.name}`);
         }
         if (c.insights) out.push(`Insights: ${c.insights}`);
@@ -379,9 +388,9 @@ export function renderBrandDnaMarkdown(dna: BrandDna): string {
   if (dna.website_url) lines.push(`Website: ${dna.website_url}`);
   for (const section of BRAND_BIBLE_SECTIONS) {
     if (!section.includeInGrounding) continue;
-    pushSection(lines, section.title, section.render({ mode: "lean", dna }));
+    pushSection(lines, section.title, section.render({ mode: 'lean', dna }));
   }
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 // Full-fidelity Brand Book — every tier (T0 identity, T1 scores, T2 deep) plus a
@@ -393,11 +402,11 @@ export function renderBrandBibleMarkdown(result: BrandReportResult): string {
   const lines: string[] = [`# ${dna.brand_name} — Brand Book`];
   if (dna.website_url) lines.push(`Website: ${dna.website_url}`);
   for (const section of BRAND_BIBLE_SECTIONS) {
-    pushSection(lines, section.title, section.render({ mode: "full", dna, result }));
+    pushSection(lines, section.title, section.render({ mode: 'full', dna, result }));
   }
   const footer: string[] = [`Prompt version: ${result.prompt_version}`];
   const generatedAt = result.deep?.generated_at ?? result.readiness?.generated_at ?? null;
   if (generatedAt) footer.push(`Generated: ${generatedAt}`);
-  pushSection(lines, "## Governance", footer);
-  return lines.join("\n");
+  pushSection(lines, '## Governance', footer);
+  return lines.join('\n');
 }

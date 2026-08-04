@@ -1,28 +1,28 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 /**
  * Authoritative ordered list of readiness dimensions. Both the Zod parser and
  * any UI iteration order (e.g. ReadinessCard) must source from here.
  */
 export const readinessDimensionKey = z.enum([
-  "value_proposition",
-  "icp_clarity",
-  "customer_pains",
-  "success_metrics",
-  "positioning",
-  "messaging_coherence",
-  "brand_identity",
+  'value_proposition',
+  'icp_clarity',
+  'customer_pains',
+  'success_metrics',
+  'positioning',
+  'messaging_coherence',
+  'brand_identity',
 ]);
 export type ReadinessDimensionKey = z.infer<typeof readinessDimensionKey>;
 
 export const READINESS_DIMENSIONS: readonly ReadinessDimensionKey[] = [
-  "value_proposition",
-  "icp_clarity",
-  "customer_pains",
-  "success_metrics",
-  "positioning",
-  "messaging_coherence",
-  "brand_identity",
+  'value_proposition',
+  'icp_clarity',
+  'customer_pains',
+  'success_metrics',
+  'positioning',
+  'messaging_coherence',
+  'brand_identity',
 ] as const;
 
 export const readinessDimensionSchema = z.object({
@@ -38,7 +38,7 @@ export type ReadinessDimension = z.infer<typeof readinessDimensionSchema>;
 export const readinessFindingSchema = z.object({
   dimension: readinessDimensionKey,
   score: z.number().int().min(0).max(100),
-  severity: z.enum(["low", "medium", "high"]),
+  severity: z.enum(['low', 'medium', 'high']),
   headline: z.string().min(1).max(240),
   detail: z.string().min(1).max(360),
   recommendation: z.string().min(1).max(240),

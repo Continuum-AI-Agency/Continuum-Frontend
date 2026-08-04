@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 /** Optional 1-line tagline emitted under the rich UX header. */
 export const firstImpressionSchema = z.object({

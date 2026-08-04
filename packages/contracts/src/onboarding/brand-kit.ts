@@ -4,8 +4,8 @@
 // a portable Storage object at <brandId>/branding/brand-kit.json. The brand icon
 // lives at the deterministic Storage path <brandId>/branding/logo.<ext>.
 
-import { z } from "zod";
-import { brandTypographySchema } from "./website-summary";
+import { z } from 'zod';
+import { brandTypographySchema } from './website-summary';
 
 // Canonical brand-kit.json shape. Reuses the shared brandTypographySchema.
 export const brandKitSchema = z

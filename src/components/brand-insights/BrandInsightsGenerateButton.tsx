@@ -84,8 +84,12 @@ export function BrandInsightsGenerateButton({
 
   const progressSteps = useMemo(() => {
     const steps = buildBrandInsightsProgressSteps({ stage, status });
+    const showAwaitingBrandContext = stage === 'awaiting_brand_context';
     const showAwaitingStrategic = stage === 'awaiting_strategic_analysis';
     return steps.filter((step) => {
+      if (step.id === 'awaiting_brand_context' && !showAwaitingBrandContext) {
+        return false;
+      }
       if (step.id === 'awaiting_strategic_analysis' && !showAwaitingStrategic) {
         return false;
       }
@@ -142,11 +146,20 @@ export function BrandInsightsGenerateButton({
           const activeGenerationId = result.generationId;
           setGenerationId(activeGenerationId);
           setStatus(result.jobStatus ?? 'running');
+          const awaitingBrandContext =
+            result.jobStatus === 'pending' && result.dependencyBrandContext?.required === true;
           const awaitingStrategic =
             result.jobStatus === 'pending' &&
             (result.dependencyStrategicAnalysis?.required === true ||
               result.dependencyStrategicAnalysis?.status === 'pending');
-          setStage(awaitingStrategic ? 'awaiting_strategic_analysis' : 'queued');
+          setStage(
+            result.stage ??
+              (awaitingBrandContext
+                ? 'awaiting_brand_context'
+                : awaitingStrategic
+                  ? 'awaiting_strategic_analysis'
+                  : 'queued'),
+          );
           setStageMessage(result.message ?? null);
           stopTrackingRef.current?.();
           stopTrackingRef.current = subscribeToBrandInsightsJob({

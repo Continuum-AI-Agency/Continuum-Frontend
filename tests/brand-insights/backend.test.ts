@@ -306,6 +306,31 @@ test('mapBackendGenerationResponse supports pending/running start statuses with 
   assert.equal(pending.dependencyStrategicAnalysis?.runId, 'run-123');
 });
 
+test('mapBackendGenerationResponse preserves the canonical brand-context wait dependency', () => {
+  const pending = mapBackendGenerationResponse({
+    status: 'processing',
+    message: 'Trends job queued until brand context is ready',
+    data: {
+      generation_id: 'gen-pending',
+      job_id: 'gen-pending',
+      status: 'pending',
+      stage: 'awaiting_brand_context',
+      dependency: {
+        brand_context: {
+          required: true,
+          status: 'waiting',
+          blockers: ['strategic_analysis_not_completed'],
+        },
+      },
+    },
+  });
+
+  assert.equal(pending.status, 'processing');
+  assert.equal(pending.stage, 'awaiting_brand_context');
+  assert.equal(pending.dependencyBrandContext?.required, true);
+  assert.deepEqual(pending.dependencyBrandContext?.blockers, ['strategic_analysis_not_completed']);
+});
+
 test('mapBackendStatusResponse normalizes /api/trends job payloads', () => {
   const running = mapBackendStatusResponse({
     status: 'success',

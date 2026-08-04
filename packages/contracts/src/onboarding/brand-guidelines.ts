@@ -1,6 +1,6 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { emojiUsageSchema } from "./brand-voice";
+import { emojiUsageSchema } from './brand-voice';
 
 // Operational baseline guidelines — the enforceable content rules the downstream
 // organic/paid/AI-Studio agents apply post-by-post. This is the operational

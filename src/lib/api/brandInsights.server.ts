@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { currentWeekStartUtc } from '@continuum/contracts';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { ApiError, assertOk } from '@/lib/api/errors';
 import type { RequestOptions } from '@/lib/api/http.types';
@@ -137,4 +138,21 @@ export async function fetchBrandInsightsProfile(
   );
 
   return mapBackendProfileResponse(response);
+}
+
+export async function startBrandInsightsServer(brandId: string): Promise<void> {
+  const windowStartDate = currentWeekStartUtc();
+  const windowEndDate = new Date(windowStartDate.getTime() + 7 * 24 * 60 * 60 * 1_000);
+
+  await request({
+    path: '/api/trends/jobs/start',
+    method: 'POST',
+    body: {
+      brand_id: brandId,
+      week_start_date: windowStartDate.toISOString().slice(0, 10),
+      window_start: windowStartDate.toISOString(),
+      window_end: windowEndDate.toISOString(),
+    },
+    cache: 'no-store',
+  });
 }
