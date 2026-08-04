@@ -1,4 +1,4 @@
-import type { BrandBookPieceKind, Edge, ImageSize, StudioNode } from './index';
+import type { BrandBookPieceKind, BrandDirectionPiece, Edge, ImageSize, StudioNode } from './index';
 
 export type ExecutionStatus = 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
@@ -70,6 +70,8 @@ export interface EnrichPromptPayload {
   // rewrite is on-brand (services/studio-grounding.ts).
   skillIds?: string[];
   brandBookPieces?: BrandBookPieceKind[];
+  /** v2 compiler pieces; see `StudioCanvas/types/index.ts`. Tri-state. */
+  brandDirectionPieces?: BrandDirectionPiece[];
   context: {
     // A reference carries a signed `imageUrl` (preferred) OR inline base64 `data`
     // (fallback). The backend resolves the URL to bytes for the model.
@@ -115,6 +117,8 @@ export interface GenerationPayload {
   skillIds?: string[];
   // Brand-book pieces the Backend renders into an authoritative forced block.
   brandBookPieces?: BrandBookPieceKind[];
+  /** v2 compiler pieces; see `StudioCanvas/types/index.ts`. Tri-state. */
+  brandDirectionPieces?: BrandDirectionPiece[];
   // Library ids of the reference creatives. The Backend folds what they actually
   // EARNED into the prompt (<asset_performance>) so a variant is not made blind.
   referenceAssetIds?: string[];

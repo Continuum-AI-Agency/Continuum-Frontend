@@ -39,10 +39,7 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { VideoNodeData } from '../types';
 import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import {
-  stageAndUploadReferenceFile,
-  uploadReferenceFile,
-} from '../utils/uploadReferenceFile';
+import { stageAndUploadReferenceFile, uploadReferenceFile } from '../utils/uploadReferenceFile';
 import { referenceStatusBadge } from './referenceStatusBadge';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';

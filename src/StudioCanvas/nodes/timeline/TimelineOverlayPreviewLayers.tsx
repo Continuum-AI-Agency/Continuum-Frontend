@@ -27,13 +27,7 @@ function TextOverlays({ overlays }: { overlays: ResolvedTextOverlay[] }) {
   ));
 }
 
-function VideoLayer({
-  layer,
-  isPlaying,
-}: {
-  layer: OverlayPreviewLayer;
-  isPlaying: boolean;
-}) {
+function VideoLayer({ layer, isPlaying }: { layer: OverlayPreviewLayer; isPlaying: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {

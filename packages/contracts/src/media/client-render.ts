@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { editorProjectV2Schema } from '../ai-studio/editor-project-v2';
 import { pinnedLibraryAssetRefSchema } from './library-reference';
 
 // PostgreSQL's uuid type accepts legacy/non-versioned UUID values used by some
@@ -13,6 +14,7 @@ export const clientRenderJobKindSchema = z.enum([
   'organic_hyperframe',
   'planner_reel',
   'mcp_clip_batch',
+  'timeline_editor',
 ]);
 export type ClientRenderJobKind = z.infer<typeof clientRenderJobKindSchema>;
 
@@ -145,11 +147,48 @@ export const mcpClipBatchClientRenderSpecSchema = z
   })
   .strict();
 
+export const timelineEditorClientRenderSpecSchema = z
+  .object({
+    kind: z.literal('timeline_editor'),
+    projectId: databaseUuidSchema,
+    projectRevision: z.number().int().nonnegative(),
+    projectFingerprint: z.string().min(1).max(500),
+    // Render jobs are immutable snapshots. Embedding the exact revision keeps a
+    // claimed browser from accidentally rendering a newer project revision.
+    project: editorProjectV2Schema,
+    origin: renderOriginSchema,
+  })
+  .strict()
+  .superRefine((spec, context) => {
+    if (spec.project.projectId !== spec.projectId) {
+      context.addIssue({
+        code: 'custom',
+        path: ['project', 'projectId'],
+        message: 'Timeline render project id must match the execution snapshot.',
+      });
+    }
+    if (spec.project.revision !== spec.projectRevision) {
+      context.addIssue({
+        code: 'custom',
+        path: ['project', 'revision'],
+        message: 'Timeline render project revision must match the execution snapshot.',
+      });
+    }
+    if (spec.project.fingerprint !== spec.projectFingerprint) {
+      context.addIssue({
+        code: 'custom',
+        path: ['project', 'fingerprint'],
+        message: 'Timeline render project fingerprint must match the execution snapshot.',
+      });
+    }
+  });
+
 export const clientRenderExecutionSpecSchema = z.discriminatedUnion('kind', [
   hyperframesClientRenderSpecSchema,
   organicHyperframeClientRenderSpecSchema,
   plannerReelClientRenderSpecSchema,
   mcpClipBatchClientRenderSpecSchema,
+  timelineEditorClientRenderSpecSchema,
 ]);
 export type ClientRenderExecutionSpec = z.infer<typeof clientRenderExecutionSpecSchema>;
 

@@ -44,6 +44,8 @@ const NODE_PURPOSE: Record<StudioNodeType, string> = {
     'terminal sink — attaches image, carousel, or video creative to an existing organic Planner draft',
   paidPublisher:
     'terminal sink — replaces image, carousel, or video creative on an existing Meta ad',
+  apiRender:
+    'terminal sink — prepares a version-pinned API template render and PAUSED Meta delivery for explicit confirmation',
   image: 'a reference image already in the brand library or uploaded',
   video: 'a reference video already in the brand library or uploaded',
   audio: 'a reference audio file',

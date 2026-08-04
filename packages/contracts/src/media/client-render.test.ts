@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { createEditorProjectV2 } from '../ai-studio/editor-project-reducer';
 import {
   claimClientRenderJobRequestSchema,
   clientRenderExecutionSpecSchema,
@@ -40,6 +41,36 @@ describe('client render contracts', () => {
         origin: { label: 'UGC clip batch', viewHref: '/library' },
       }).kind,
     ).toBe('mcp_clip_batch');
+  });
+
+  it('pins the exact editor project revision into a timeline render job', () => {
+    const project = createEditorProjectV2({
+      projectId: '00000000-0000-4000-8000-000000000111',
+      title: 'Launch film',
+      width: 1080,
+      height: 1920,
+      now: '2026-08-01T12:00:00.000Z',
+    });
+    expect(
+      clientRenderExecutionSpecSchema.parse({
+        kind: 'timeline_editor',
+        projectId: project.projectId,
+        projectRevision: project.revision,
+        projectFingerprint: project.fingerprint,
+        project,
+        origin: { label: project.title, viewHref: '/ai-studio?videoProjectId=project' },
+      }).kind,
+    ).toBe('timeline_editor');
+    expect(() =>
+      clientRenderExecutionSpecSchema.parse({
+        kind: 'timeline_editor',
+        projectId: project.projectId,
+        projectRevision: project.revision + 1,
+        projectFingerprint: project.fingerprint,
+        project,
+        origin: { label: project.title, viewHref: '/ai-studio?videoProjectId=project' },
+      }),
+    ).toThrow();
   });
 
   it('requires a per-device identity and a capability probe at claim time', () => {

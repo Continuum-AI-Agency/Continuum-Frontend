@@ -7,6 +7,7 @@
 
 import {
   type BrandBookPieceKind,
+  type BrandDirectionPiece,
   type BrandMdTokens,
   expandBrandBookPieces,
 } from '@continuum/contracts';
@@ -79,17 +80,33 @@ export const BRAND_BOOK_PIECE_LABELS: Record<BrandBookPieceKind, string> = {
 // Compact one-line summary of a node's grounding for the chip label, e.g.
 // "Brand · Skills 2" (entire book), "Brand 3 · Skills 2" (partial), "Skills 2"
 // (brand off), or "Off" (nothing enforced). Pure — unit tested.
+/**
+ * The label on the Style control.
+ *
+ * "Style" rather than "Brand": what this control governs is how the output LOOKS, and the
+ * brand book is one of three sources feeding that — alongside creative direction and
+ * creative skills. Naming it after one of its inputs made the other two look like
+ * unrelated settings that happened to share a popover.
+ *
+ * `directionCount` is `null` when the caller expressed no preference, which is the
+ * tri-state's "everything the plan admits" and needs no badge. A number means the user
+ * narrowed it, and a narrowing nobody can see is a control nobody trusts.
+ */
 export function groundingChipLabel(
   pieces: BrandBookPieceKind[] | undefined,
   skillCount: number,
+  directionCount: number | null = null,
 ): string {
   const brandPart = isEntireBookEnforced(pieces)
-    ? 'Brand'
+    ? 'Style'
     : isBrandEnforced(pieces)
-      ? `Brand ${enforcedConcretePieces(pieces).length}`
+      ? `Style ${enforcedConcretePieces(pieces).length}`
       : null;
+  const directionPart = directionCount === null ? null : `Direction ${directionCount}`;
   const skillPart = skillCount > 0 ? `Skills ${skillCount}` : null;
-  const parts = [brandPart, skillPart].filter((part): part is string => part !== null);
+  const parts = [brandPart, directionPart, skillPart].filter(
+    (part): part is string => part !== null,
+  );
   return parts.length > 0 ? parts.join(' · ') : 'Off';
 }
 
@@ -179,4 +196,29 @@ export function toggleBrandPiece(
 export function toggleSkillId(skillIds: string[] | undefined, skillId: string): string[] {
   const current = skillIds ?? [];
   return current.includes(skillId) ? current.filter((id) => id !== skillId) : [...current, skillId];
+}
+
+/**
+ * Toggle one v2 creative-direction piece, preserving the tri-state.
+ *
+ * `undefined` means "no preference", which the compiler reads as every piece the plan
+ * admits. So the FIRST toggle has to materialise the full authored set and remove one from
+ * it — otherwise switching a piece off would land on `[piece]`, quietly turning eleven other
+ * pieces off as a side effect of touching one.
+ *
+ * `authored` is what the brand has actually written, which is the only correct starting set:
+ * expanding to the full thirteen-member vocabulary would select pieces this brand has no
+ * rules for, and the selection would then read as deliberate.
+ */
+export function toggleDirectionPiece(
+  selected: BrandDirectionPiece[] | undefined,
+  piece: BrandDirectionPiece,
+  authored: readonly BrandDirectionPiece[],
+): BrandDirectionPiece[] {
+  const current = selected ?? [...authored];
+  const next = current.includes(piece)
+    ? current.filter((entry) => entry !== piece)
+    : [...current, piece];
+  /* Authored order, so the same set always serialises identically. */
+  return authored.filter((entry) => next.includes(entry));
 }

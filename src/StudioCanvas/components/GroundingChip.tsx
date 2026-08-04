@@ -8,7 +8,7 @@
 // it is read-only — it surfaces the grounding inherited from the downstream
 // generator so "tele-fill" visibly shows it is brand-guarded + skill-aware.
 
-import type { BrandBookPieceKind } from '@continuum/contracts';
+import type { BrandBookPieceKind, BrandDirectionPiece } from '@continuum/contracts';
 import { ChevronDown, Gem } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -31,6 +31,9 @@ type Props = {
   editable?: boolean;
   onToggleSkill?: (skillId: string) => void;
   onTogglePiece?: (kind: BrandBookPieceKind) => void;
+  /** Tri-state: undefined = everything the plan admits, [] = none, a list narrows. */
+  brandDirectionPieces?: BrandDirectionPiece[];
+  onToggleDirectionPiece?: (piece: BrandDirectionPiece) => void;
   // Read-only → the chip surfaces grounding inherited by the enrich node.
   inherited?: boolean;
   className?: string;
@@ -40,16 +43,22 @@ export function GroundingChip({
   brandId,
   skillIds,
   brandBookPieces,
+  brandDirectionPieces,
   editable,
   onToggleSkill,
   onTogglePiece,
+  onToggleDirectionPiece,
   inherited,
   className,
 }: Props) {
   const ids = skillIds ?? [];
   const { all } = useBrandSkills(brandId);
   const selectedSkills = all.filter((skill) => ids.includes(skill.id));
-  const label = groundingChipLabel(brandBookPieces, ids.length);
+  const label = groundingChipLabel(
+    brandBookPieces,
+    ids.length,
+    brandDirectionPieces?.length ?? null,
+  );
   const enforced = isBrandEnforced(brandBookPieces);
   const pieces = enforcedConcretePieces(brandBookPieces);
 
@@ -71,6 +80,16 @@ export function GroundingChip({
             ))}
           </ul>
         )}
+      </div>
+      <div>
+        <p className="font-medium text-foreground">Creative direction</p>
+        <p className="text-muted-foreground">
+          {brandDirectionPieces === undefined
+            ? 'Everything this brand has authored'
+            : brandDirectionPieces.length === 0
+              ? 'Off'
+              : `${brandDirectionPieces.length} selected`}
+        </p>
       </div>
       <div>
         <p className="font-medium text-foreground">Creative skills</p>
@@ -140,8 +159,10 @@ export function GroundingChip({
             brandId={brandId}
             skillIds={ids}
             brandBookPieces={brandBookPieces}
+            brandDirectionPieces={brandDirectionPieces}
             onToggleSkill={(id) => onToggleSkill?.(id)}
             onTogglePiece={(kind) => onTogglePiece?.(kind)}
+            {...(onToggleDirectionPiece ? { onToggleDirectionPiece } : {})}
           />
         </PopoverContent>
       </Popover>

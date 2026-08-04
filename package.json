@@ -55,10 +55,14 @@
     "ai-studio:sniper:e2e:bench": "set -a; . ./.env.local; set +a; bun run e2e/ai-studio-image.bench.ts",
     "jaina:runs:bench": "set -a; . ./.env.local; set +a; bun run e2e/jaina-runs.bench.ts",
     "videoeditor:e2e:bench": "playwright test e2e/video-editor-playback.spec.ts --workers=1",
+    "videoeditor:render:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-v2-render.spec.ts --workers=1",
+    "videoeditor:ui:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-v2-ui.spec.ts --workers=1",
+    "videoeditor:v2:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-v2-ui.spec.ts e2e/video-editor-v2-render.spec.ts --workers=1",
     "planner:status:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/organic-planner-status.spec.ts --workers=1",
     "planner:composition:bench": "bun run e2e/planner-composition.bench.ts",
     "planner:preview:e2e:bench": "set -a; . ./.env.local; set +a; PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 NEXT_DIST_DIR=.next/planner-preview-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/organic-planner-preview.spec.ts --workers=1",
-    "changelog:e2e:bench": "bun test src/components/changelog/WhatsNewBell.bench.test.tsx"
+    "changelog:e2e:bench": "bun test src/components/changelog/WhatsNewBell.bench.test.tsx",
+    "brand-system:export:e2e:bench": "bun run e2e/brand-system-export.bench.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.17",
@@ -156,6 +160,7 @@
     "date-fns": "^4.1.0",
     "embla-carousel": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
+    "fflate": "^0.8.2",
     "geist": "^1.7.2",
     "html2canvas": "^1.4.1",
     "jotai": "^2.18.0",

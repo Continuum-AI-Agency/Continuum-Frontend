@@ -1,9 +1,6 @@
 import type React from 'react';
 import type { TimelineInputSource } from '../../types';
-import {
-  type ResolvedTextOverlay,
-  speedFor,
-} from '../../utils/render/effectSpec';
+import { type ResolvedTextOverlay, speedFor } from '../../utils/render/effectSpec';
 import type { TimelineDocument } from './adapter';
 import { evaluateTimelineScene } from './timelineScene';
 

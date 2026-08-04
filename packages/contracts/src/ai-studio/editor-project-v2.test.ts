@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  applyEditorCommandBatch,
   editorAnalysisManifestSchema,
   editorCommandBatchSchema,
   editorCommentDtoSchema,
@@ -226,6 +227,93 @@ describe('EditorProjectV2', () => {
     expect(parsed.tracks[0]?.enabled).toBe(true);
     expect(parsed.exportSettings.quality).toBe('high');
     expect(parsed.transitions[0]?.alignment).toBe('centered');
+    expect(parsed.production.workflowStage).toBe('assembly');
+    expect(parsed.production.shots).toEqual([]);
+  });
+
+  test('models a gated style, frame, motion, and master production', () => {
+    const parsed = editorProjectV2Schema.parse({
+      ...projectFixture(),
+      production: {
+        workflowStage: 'style_approval',
+        references: [
+          {
+            id: 'reference-1',
+            role: 'style',
+            asset: { assetId: 'asset-1', versionId: 'version-1' },
+          },
+        ],
+        styleContract: {
+          status: 'draft',
+          lockedText: 'Motivated warm light, restrained grain, lifted blacks.',
+          facets: {
+            lens: '35mm documentary proximity',
+            lighting: 'motivated warm practicals',
+            palette: 'warm amber and muted navy',
+            texture: 'fine grain',
+            contrast: 'lifted blacks',
+            blocking: 'intimate foreground action',
+            atmosphere: 'quiet urgency',
+          },
+          sourceReferenceIds: ['reference-1'],
+        },
+        shots: [
+          {
+            id: 'shot-1',
+            order: 0,
+            title: 'Hook',
+            brief: 'Creator reveals the product.',
+            subjectAction: 'The creator raises the product.',
+            cameraMove: 'Slow dolly in.',
+            inSceneEvent: 'The package catches the key light.',
+            targetDurationSec: 4,
+            takes: [],
+          },
+        ],
+      },
+    });
+
+    expect(parsed.production.references[0]?.asset.versionId).toBe('version-1');
+    expect(parsed.production.shots[0]?.selection).toEqual({});
+  });
+
+  test('rejects approvals from agents and enforces revision fingerprints', () => {
+    const project = editorProjectV2Schema.parse(projectFixture());
+    const commandBase = {
+      commandId: 'approve-style',
+      idempotencyKey: 'approve-style-1',
+      expectedRevision: project.revision,
+      issuedAt: now,
+      actor,
+    };
+    const batch = {
+      batchId: 'batch-approval',
+      projectId: project.projectId,
+      sequenceId: project.sequenceId,
+      idempotencyKey: 'batch-approval-1',
+      expectedRevision: project.revision,
+      expectedFingerprint: project.fingerprint,
+      atomic: true,
+      issuedAt: now,
+      actor,
+      commands: [{ ...commandBase, commandType: 'approve_style_contract' as const }],
+    };
+
+    expect(editorCommandBatchSchema.safeParse(batch).success).toBe(false);
+    expect(() =>
+      applyEditorCommandBatch(project, {
+        ...batch,
+        expectedFingerprint: 'stale-fingerprint',
+        actor: { actorId: 'user-1', actorType: 'user' },
+        commands: [
+          {
+            ...commandBase,
+            actor: { actorId: 'user-1', actorType: 'user' },
+            commandType: 'approve_style_contract' as const,
+          },
+        ],
+      }),
+    ).toThrow('fingerprint');
   });
 
   test('rejects unknown fields, duplicate clip ids, and references outside the project', () => {
@@ -266,6 +354,7 @@ describe('Editor commands', () => {
       sequenceId: 'sequence-main',
       idempotencyKey: 'batch-key-0001',
       expectedRevision: 7,
+      expectedFingerprint: 'fingerprint-7',
       issuedAt: now,
       actor,
       commands: [
@@ -304,6 +393,7 @@ describe('Editor commands', () => {
       sequenceId: 'sequence-main',
       idempotencyKey: 'batch-key-0001',
       expectedRevision: 7,
+      expectedFingerprint: 'fingerprint-7',
       issuedAt: now,
       actor,
       commands: [

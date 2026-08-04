@@ -89,6 +89,7 @@ import { CanvasRuntimeProvider } from '../contexts/CanvasRuntimeContext';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
 import { useTimelineRenderContinuations } from '../hooks/useTimelineRenderContinuations';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
+import { ApiRenderBlock } from '../nodes/ApiRenderBlock';
 import { AudioNode } from '../nodes/AudioNode';
 import { DocumentNode } from '../nodes/DocumentNode';
 import { ExtendVideoBlock } from '../nodes/ExtendVideoBlock';
@@ -152,6 +153,7 @@ type StudioCanvasNodeType =
   | 'timelineEditor'
   | 'organicPublisher'
   | 'paidPublisher'
+  | 'apiRender'
   | 'string'
   | 'note'
   | 'image'
@@ -281,6 +283,18 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
     ],
   },
   {
+    value: 'renders',
+    label: 'Render templates',
+    items: [
+      {
+        type: 'apiRender',
+        label: 'API Render',
+        desc: 'Discover a template, prepare variables, and hand off a PAUSED Meta delivery',
+        tag: 'Render',
+      },
+    ],
+  },
+  {
     value: 'publishing',
     label: 'Publishing',
     items: [
@@ -325,6 +339,7 @@ const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'timelineEditor',
   'organicPublisher',
   'paidPublisher',
+  'apiRender',
   'string',
   'note',
   'image',
@@ -391,7 +406,7 @@ const createNodeConfig = (
     return { data: { value: '' } };
   }
 
-  if (type === 'organicPublisher' || type === 'paidPublisher') {
+  if (type === 'organicPublisher' || type === 'paidPublisher' || type === 'apiRender') {
     return createNodeData(type);
   }
 
@@ -452,6 +467,7 @@ const nodeTypes = {
   timelineEditor: TimelineEditorBlock,
   organicPublisher: OrganicPublisherBlock,
   paidPublisher: PaidPublisherBlock,
+  apiRender: ApiRenderBlock,
   string: StringNode,
   note: NoteNode,
   image: ImageNode,

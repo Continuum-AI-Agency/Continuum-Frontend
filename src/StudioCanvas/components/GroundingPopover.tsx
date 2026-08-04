@@ -11,13 +11,14 @@
 // the content spills out of the popover instead of scrolling. Its viewport also
 // wraps children in a `display: table` div, which breaks the sticky headers.
 
-import type { BrandBookPieceKind } from '@continuum/contracts';
+import type { BrandBookPieceKind, BrandDirectionPiece } from '@continuum/contracts';
 import { Check, Wand2 } from 'lucide-react';
 import Link from 'next/link';
 import React from 'react';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandBook } from '@/lib/brands/useBrandBook.client';
+import { useBrandDirectionPieces } from '@/lib/brands/useBrandDirectionPieces.client';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import {
@@ -27,6 +28,29 @@ import {
   isBrandEnforced,
   isPieceEnforced,
 } from '../utils/brandEnforcement';
+
+/**
+ * Human labels for the v2 pieces.
+ *
+ * Every member is spelled out rather than de-kebabed at render time: `colour-behaviour` reads
+ * as "Colour behaviour" either way, but `brand-integration` is "Where the mark goes" to
+ * somebody briefing a poster, and a mechanical transform cannot know that.
+ */
+const DIRECTION_PIECE_LABELS: Record<BrandDirectionPiece, string> = {
+  'visual-thesis': 'Visual thesis',
+  composition: 'Composition',
+  'typography-behaviour': 'Typography behaviour',
+  'colour-behaviour': 'Colour behaviour',
+  photography: 'Photography',
+  'illustration-graphic': 'Illustration and graphics',
+  motion: 'Motion',
+  'people-characters': 'People and characters',
+  'product-world': 'The product in the world',
+  'brand-integration': 'Where the mark goes',
+  'brand-signature': 'Brand signature',
+  prohibition: 'Refusals',
+  'unclassified-direction': 'Unclassified direction',
+};
 
 function SectionHeader({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
@@ -95,15 +119,21 @@ export function GroundingPopover({
   brandId,
   skillIds,
   brandBookPieces,
+  brandDirectionPieces,
   onToggleSkill,
   onTogglePiece,
+  onToggleDirectionPiece,
 }: {
   brandId?: string;
   skillIds: string[];
   brandBookPieces: BrandBookPieceKind[] | undefined;
+  /** Tri-state: undefined = everything the plan admits, [] = none, a list narrows. */
+  brandDirectionPieces?: BrandDirectionPiece[] | undefined;
   onToggleSkill: (skillId: string) => void;
   onTogglePiece: (kind: BrandBookPieceKind) => void;
+  onToggleDirectionPiece?: (piece: BrandDirectionPiece) => void;
 }) {
+  const direction = useBrandDirectionPieces(brandId);
   const { brandTokens } = useBrandBook(brandId);
   const availability = React.useMemo(() => brandBookAvailability(brandTokens), [brandTokens]);
   const { all, isLoading } = useBrandSkills(brandId);
@@ -121,6 +151,16 @@ export function GroundingPopover({
     <TooltipProvider delayDuration={250}>
       <div className="max-h-[min(32rem,var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain p-2">
         <div className="flex flex-col gap-3">
+          {/*
+            One control, three sources. The brand book, the creative direction the brand
+            authored, and the creative skills all shape how the output LOOKS; presenting
+            them as sections of "Style" is what makes them read as one decision instead of
+            three unrelated switches that happen to share a popover.
+          */}
+          <p className="px-1.5 pt-0.5 font-medium text-foreground text-xs">Style</p>
+          <p className="-mt-2 px-1.5 text-[0.65rem] text-muted-foreground">
+            What this generation is allowed to draw on. Switch on only what this piece needs.
+          </p>
           <section>
             <SectionHeader title="Brand book">
               {brandEnforced ? (
@@ -162,6 +202,40 @@ export function GroundingPopover({
               </p>
             )}
           </section>
+
+          {onToggleDirectionPiece && direction.pieces.length > 0 ? (
+            <section>
+              <SectionHeader title="Creative direction">
+                <span className="text-[0.65rem] text-muted-foreground">
+                  {brandDirectionPieces === undefined
+                    ? 'all on'
+                    : `${brandDirectionPieces.length} on`}
+                </span>
+              </SectionHeader>
+              <p className="px-1.5 pb-1 text-[0.65rem] text-muted-foreground">
+                What the compiler is allowed to say. Only pieces this brand has authored appear.
+              </p>
+              {direction.pieces.map((entry) => (
+                <ToggleRow
+                  key={entry.piece}
+                  /* `undefined` is "no preference", which means every piece is in play. */
+                  checked={
+                    brandDirectionPieces === undefined || brandDirectionPieces.includes(entry.piece)
+                  }
+                  onToggle={() => onToggleDirectionPiece(entry.piece)}
+                  label={DIRECTION_PIECE_LABELS[entry.piece]}
+                  description={
+                    entry.approvedCount === 0
+                      ? 'Written but not approved — switching it on changes nothing yet.'
+                      : entry.gates
+                        ? 'Approved, and hard enough to reject a candidate.'
+                        : 'Approved. Shapes the prompt; does not reject.'
+                  }
+                  hint={entry.approvedCount === 0 ? 'not approved' : undefined}
+                />
+              ))}
+            </section>
+          ) : null}
 
           <section>
             <SectionHeader title="Creative skills">

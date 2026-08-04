@@ -1,10 +1,10 @@
 import { describe, expect, it, mock } from 'bun:test';
+import type { StudioNode } from '../types';
 import {
   REFERENCE_UPLOAD_BUCKET,
   stageAndUploadReferenceFile,
   uploadReferenceFile,
 } from './uploadReferenceFile';
-import type { StudioNode } from '../types';
 import { serializeWorkflowSnapshot } from './workflowSerialization';
 
 const makeFile = () => new File([new Uint8Array([1, 2, 3])], 'ref.png', { type: 'image/png' });

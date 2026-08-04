@@ -137,8 +137,9 @@ export function updateCaptionCue(
 // Cues are ordered and non-overlapping, and there are only a handful per clip, so
 // a linear scan per frame is cheap.
 export function findActiveCue(cues: CaptionCue[], outputTimeSec: number): CaptionCue | null {
-  for (const cue of cues) {
-    if (outputTimeSec >= cue.startSec && outputTimeSec < cue.endSec) return cue;
-  }
-  return null;
+  return findActiveCues(cues, outputTimeSec)[0] ?? null;
+}
+
+export function findActiveCues(cues: CaptionCue[], outputTimeSec: number): CaptionCue[] {
+  return cues.filter((cue) => outputTimeSec >= cue.startSec && outputTimeSec < cue.endSec);
 }

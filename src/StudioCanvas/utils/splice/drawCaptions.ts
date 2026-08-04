@@ -71,7 +71,8 @@ export function drawActiveCaption(
     ? `"${resolvedStyle.fontFamily}", ${FALLBACK_FONT_STACK}`
     : FALLBACK_FONT_STACK;
   ctx.save();
-  ctx.font = `700 ${fontPx}px ${fontStack}`;
+  const fontWeight = Math.max(100, Math.min(900, resolvedStyle.fontWeight ?? 700));
+  ctx.font = `${fontWeight} ${fontPx}px ${fontStack}`;
   ctx.textBaseline = 'alphabetic';
   ctx.lineJoin = 'round';
   ctx.lineWidth = Math.max(2, fontPx * (resolvedStyle.outlineWidthFrac ?? 0.18));
@@ -87,7 +88,22 @@ export function drawActiveCaption(
   const blockHeight = lines.length * lineHeight;
   let baselineY = targetHeight * position.yFrac - blockHeight / 2 + lineHeight;
   for (const line of lines) {
-    let x = targetWidth * position.xFrac - lineWidth(measure, line, spaceWidth) / 2;
+    const measuredLineWidth = lineWidth(measure, line, spaceWidth);
+    let x = targetWidth * position.xFrac - measuredLineWidth / 2;
+    if (resolvedStyle.backgroundColor) {
+      const paddingX = fontPx * 0.35;
+      const paddingY = fontPx * 0.18;
+      ctx.save();
+      ctx.globalAlpha = resolvedStyle.backgroundOpacity ?? 0.8;
+      ctx.fillStyle = resolvedStyle.backgroundColor;
+      ctx.fillRect(
+        x - paddingX,
+        baselineY - lineHeight + paddingY,
+        measuredLineWidth + paddingX * 2,
+        lineHeight,
+      );
+      ctx.restore();
+    }
     for (const word of line) {
       const active = outputTimeSec >= word.startSec && outputTimeSec < word.endSec;
       ctx.fillStyle = active ? resolvedStyle.highlightColor : resolvedStyle.textColor;

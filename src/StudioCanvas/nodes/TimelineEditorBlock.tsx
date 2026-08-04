@@ -1,4 +1,5 @@
 import {
+  editorCommandBatchSchema,
   TIMELINE_MEDIA_INPUT_HANDLE,
   TIMELINE_MEDIA_POOL_LIMIT,
   timelineAuthoringDocumentSchema,
@@ -39,6 +40,13 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  applyVideoProjectCommands,
+  createVideoProject,
+  getVideoProject,
+  getVideoProjectSummary,
+  resolveVideoProject,
+} from '@/lib/api/videoProjects.client';
 import { cn } from '@/lib/utils';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -48,6 +56,7 @@ import { downloadAsset } from '../utils/downloadAsset';
 import { TimelineEditorDialog } from './timeline/TimelineEditorDialog';
 import { useCanvasTimelineAdapter } from './timeline/useCanvasTimelineAdapter';
 import { useTimelineRender } from './timeline/useTimelineRender';
+import { VideoProductionWorkspaceDialog } from './timeline/VideoProductionWorkspaceDialog';
 
 // Compact launcher for the Video Editor (timelineEditor) break-point node. The
 // real editing happens in a full-screen dialog (TimelineEditorDialog); the node
@@ -100,9 +109,163 @@ export function TimelineEditorBlock({
 
   const [isHovered, setIsHovered] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  const projectSetup = useRef(false);
+  const seedSetup = useRef(false);
   const handledRenderRequests = useRef(new Set<string>());
 
   const edges = useEdges();
+
+  useEffect(() => {
+    if (!adapter.brandId || data.videoProjectId || projectSetup.current) return;
+    projectSetup.current = true;
+    let cancelled = false;
+    const binding = { bindingType: 'canvas_node' as const, externalId: id };
+    void (async () => {
+      let projectId = await resolveVideoProject({ brandId: adapter.brandId as string, binding });
+      if (!projectId) {
+        try {
+          const project = await createVideoProject({
+            brandId: adapter.brandId as string,
+            title:
+              typeof data.label === 'string' && data.label.trim() ? data.label : 'Video production',
+            width: 1080,
+            height: 1920,
+            binding,
+          });
+          projectId = project.projectId;
+        } catch (error) {
+          // A second tab may have won the unique binding race. Resolve once more
+          // before surfacing an error.
+          projectId = await resolveVideoProject({ brandId: adapter.brandId as string, binding });
+          if (!projectId) throw error;
+        }
+      }
+      if (cancelled) return;
+      const summary = await getVideoProjectSummary(projectId);
+      updateNode(id, (node) => ({
+        ...node,
+        data: {
+          ...(node.data as TimelineEditorNodeData),
+          videoProjectId: projectId,
+          videoProductionSummary: summary,
+        },
+      }));
+      triggerSave();
+    })().catch((error) => {
+      projectSetup.current = false;
+      if (cancelled) return;
+      show({
+        title: 'Video production unavailable',
+        description: error instanceof Error ? error.message : 'Could not create the project.',
+        variant: 'error',
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [adapter.brandId, data.label, data.videoProjectId, id, show, triggerSave, updateNode]);
+
+  useEffect(() => {
+    if (!data.videoProjectId) return;
+    const refresh = () =>
+      void getVideoProjectSummary(data.videoProjectId as string)
+        .then((summary) => {
+          updateNode(id, (node) => ({
+            ...node,
+            data: { ...(node.data as TimelineEditorNodeData), videoProductionSummary: summary },
+          }));
+        })
+        .catch(() => undefined);
+    refresh();
+    const interval = window.setInterval(refresh, 5_000);
+    return () => window.clearInterval(interval);
+  }, [data.videoProjectId, id, updateNode]);
+
+  useEffect(() => {
+    const seed = data.productionSeed;
+    if (!seed || !data.videoProjectId || data.videoProductionSeeded || seedSetup.current) return;
+    seedSetup.current = true;
+    let cancelled = false;
+    void (async () => {
+      const project = await getVideoProject(data.videoProjectId as string);
+      const poolById = new Map(adapter.pool.map((source) => [source.nodeId, source]));
+      const references = seed.references.flatMap((reference) => {
+        const source = poolById.get(reference.nodeId);
+        if (!source?.sourceAssetId || !source.sourceVersionId) return [];
+        return [
+          {
+            id: reference.nodeId,
+            role: reference.role,
+            asset: { assetId: source.sourceAssetId, versionId: source.sourceVersionId },
+            label: source.label,
+          },
+        ];
+      });
+      const commandDrafts = [
+        ...(references.length > 0 && project.production.references.length === 0
+          ? [{ commandType: 'set_production_references' as const, references }]
+          : []),
+        ...(project.production.shots.length === 0
+          ? seed.shots.map((shot) => ({
+              commandType: 'upsert_shot' as const,
+              shot: { ...shot, referenceIds: [], takes: [], selection: {} },
+            }))
+          : []),
+      ];
+      if (commandDrafts.length > 0) {
+        const issuedAt = new Date().toISOString();
+        const actor = { actorId: 'current-user', actorType: 'user' as const };
+        const batchId = crypto.randomUUID();
+        const batch = editorCommandBatchSchema.parse({
+          batchId,
+          projectId: project.projectId,
+          sequenceId: project.sequenceId,
+          idempotencyKey: `production-seed:${batchId}`,
+          expectedRevision: project.revision,
+          expectedFingerprint: project.fingerprint,
+          atomic: true,
+          issuedAt,
+          actor,
+          commands: commandDrafts.map((command) => {
+            const commandId = crypto.randomUUID();
+            return {
+              ...command,
+              commandId,
+              idempotencyKey: `production-seed-command:${commandId}`,
+              expectedRevision: project.revision,
+              issuedAt,
+              actor,
+            };
+          }),
+        });
+        await applyVideoProjectCommands(batch);
+      }
+      if (cancelled) return;
+      const fullyPinned = references.length === seed.references.length;
+      if (!fullyPinned) seedSetup.current = false;
+      updateNode(id, (node) => ({
+        ...node,
+        data: {
+          ...(node.data as TimelineEditorNodeData),
+          videoProductionSeeded: fullyPinned,
+        },
+      }));
+      triggerSave();
+    })().catch(() => {
+      seedSetup.current = false;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    adapter.pool,
+    data.productionSeed,
+    data.videoProductionSeeded,
+    data.videoProjectId,
+    id,
+    triggerSave,
+    updateNode,
+  ]);
 
   useEffect(() => {
     if (!support) return;
@@ -178,6 +341,7 @@ export function TimelineEditorBlock({
   );
 
   const clipCount = (data.items ?? []).length;
+  const production = data.videoProductionSummary;
   const isRunning = Boolean(data.isExecuting) || isRendering;
   const isAwaiting =
     Boolean((data as { awaitingInput?: boolean }).awaitingInput) && !data.committed;
@@ -237,7 +401,9 @@ export function TimelineEditorBlock({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => setEditorOpen(true)}
+                onClick={() => {
+                  setEditorOpen(true);
+                }}
                 title="Open editor"
               >
                 <Pencil2Icon className="h-4 w-4" />
@@ -246,9 +412,15 @@ export function TimelineEditorBlock({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => render()}
-                disabled={renderDisabled}
-                title="Render & Continue"
+                onClick={() => {
+                  if (data.videoProjectId) {
+                    setEditorOpen(true);
+                    return;
+                  }
+                  void render();
+                }}
+                disabled={data.videoProjectId ? false : renderDisabled}
+                title={data.videoProjectId ? 'Open production' : 'Render & Continue'}
               >
                 <PlayIcon className="h-4 w-4" />
               </Button>
@@ -269,8 +441,9 @@ export function TimelineEditorBlock({
                 <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
                   <span>Video Editor</span>
                   <span>
-                    {inputCount} input{inputCount === 1 ? '' : 's'} · {clipCount} clip
-                    {clipCount === 1 ? '' : 's'}
+                    {production
+                      ? `${production.approvedMasters}/${production.shotCount} masters`
+                      : `${inputCount} input${inputCount === 1 ? '' : 's'} · ${clipCount} clip${clipCount === 1 ? '' : 's'}`}
                   </span>
                 </div>
 
@@ -326,11 +499,17 @@ export function TimelineEditorBlock({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setEditorOpen(true)}
+                      onClick={() => {
+                        setEditorOpen(true);
+                      }}
                       className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
                     >
                       <VideoIcon className="h-6 w-6 opacity-30" />
-                      <span className="text-2xs">Double-click to open the editor</span>
+                      <span className="text-2xs">
+                        {production
+                          ? production.stage.replaceAll('_', ' ')
+                          : 'Double-click to open the editor'}
+                      </span>
                     </button>
                   )}
                 </div>
@@ -339,10 +518,12 @@ export function TimelineEditorBlock({
                   variant="default"
                   size="sm"
                   className="h-8 w-full justify-center text-xs"
-                  onClick={() => setEditorOpen(true)}
+                  onClick={() => {
+                    setEditorOpen(true);
+                  }}
                 >
                   <Pencil2Icon className="mr-1 h-3.5 w-3.5" />
-                  Open editor
+                  {production ? 'Open production' : 'Open editor'}
                 </Button>
               </NodeContent>
             </CanvasNode>
@@ -394,9 +575,15 @@ export function TimelineEditorBlock({
             <Pencil2Icon className="mr-2 h-4 w-4" />
             Open editor
           </ContextMenuItem>
-          <ContextMenuItem onClick={() => render()} disabled={renderDisabled}>
+          <ContextMenuItem
+            onClick={() => {
+              if (data.videoProjectId) setEditorOpen(true);
+              else void render();
+            }}
+            disabled={data.videoProjectId ? false : renderDisabled}
+          >
             <PlayIcon className="mr-2 h-4 w-4" />
-            Render &amp; Continue
+            {data.videoProjectId ? 'Open production' : 'Render & Continue'}
             <ContextMenuShortcut>R</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
@@ -421,7 +608,17 @@ export function TimelineEditorBlock({
       </ContextMenu>
 
       {editorOpen ? (
-        <TimelineEditorDialog adapter={adapter} open={editorOpen} onOpenChange={setEditorOpen} />
+        data.videoProjectId && adapter.brandId ? (
+          <VideoProductionWorkspaceDialog
+            projectId={data.videoProjectId}
+            brandId={adapter.brandId}
+            pool={adapter.pool}
+            open={editorOpen}
+            onOpenChange={setEditorOpen}
+          />
+        ) : (
+          <TimelineEditorDialog adapter={adapter} open={editorOpen} onOpenChange={setEditorOpen} />
+        )
       ) : null}
     </TooltipProvider>
   );

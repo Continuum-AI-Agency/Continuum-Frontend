@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
-import { planContactSheetFrames, shotContinuitySchema } from './contact-sheet';
+import { shotContinuitySchema } from './contact-sheet';
 import type { ConnectSpec, NodeSpec } from './workflow-builder';
-import type { TimelineItemSpec } from './workflow-graph';
 
 export const workflowModuleKindSchema = z.enum([
   'character_reference',
@@ -63,15 +62,8 @@ export type UgcTalkingHeadRecipe = z.infer<typeof ugcTalkingHeadRecipeSchema>;
 
 export interface CompiledUgcShot {
   id: string;
-  /** Static-framing prompt feeding this shot's storyboard panel. */
-  framePromptRef: string;
-  /** The panel itself — a clean vertical still. This is what the human reviews. */
-  frameRef: string;
-  /** Motion prompt feeding the clip. */
-  motionPromptRef: string;
-  videoRef: string;
-  /** Panel supplying the closing frame, when this shot match-cuts into the next. */
-  lastFramePanelRef?: string;
+  title: string;
+  brief: string;
 }
 
 export interface CompiledUgcTalkingHeadWorkflow {
@@ -87,9 +79,6 @@ const moduleData = (moduleId: string, moduleRole: string): Record<string, string
   workflowModuleRole: moduleRole,
 });
 
-const STORYBOARD_MODULE = 'ugc:storyboard';
-const SHOT_MODULE = 'ugc:shots';
-
 export function compileUgcTalkingHeadWorkflow(
   input: UgcTalkingHeadRecipe,
 ): CompiledUgcTalkingHeadWorkflow {
@@ -97,140 +86,46 @@ export function compileUgcTalkingHeadWorkflow(
   const nodes: NodeSpec[] = [];
   const connections: ConnectSpec[] = [];
   const shots: CompiledUgcShot[] = [];
-  const shotNodeRefs: string[] = [];
-  const storyboardNodeRefs: string[] = [];
-
-  const framePlan = planContactSheetFrames({
-    panelCount: recipe.shots.length,
-    continuity: recipe.shots.map((shot) => shot.continuity),
-  });
-
-  // Pass 1 — every panel, drawn from the SAME references. These are independent,
-  // so the canvas renders them in parallel and the human reviews the whole sheet
-  // before a single clip is paid for.
-  for (const shot of recipe.shots) {
-    const framePromptRef = `shot:${shot.id}:frame-prompt`;
-    const frameRef = `shot:${shot.id}:frame`;
-
-    nodes.push({
-      ref: framePromptRef,
-      type: 'string',
-      data: {
-        value: [
-          recipe.objective,
-          `Frame: ${shot.frameDirection}`,
-          'One clean vertical frame, single scene, no panels or collage.',
-          'Preserve the exact person from the character reference and the exact product from the product reference: face, hair, wardrobe, packaging geometry, colorway, and label all unchanged.',
-          'No captions, logos, watermarks, or rendered text of any kind.',
-        ].join('\n'),
-        ...moduleData(STORYBOARD_MODULE, `shot:${shot.id}:frame-prompt`),
-      },
-    });
-    nodes.push({
-      ref: frameRef,
-      type: 'nanoGen',
-      data: {
-        model: 'nano-banana-2',
-        positivePrompt: '',
-        aspectRatio: recipe.aspectRatio,
-        // Unlabelled, a row of generators reads as identical boxes. The role label
-        // is what turns the row into a contact sheet.
-        label: `Panel ${shot.id}`,
-        ...moduleData(STORYBOARD_MODULE, `shot:${shot.id}:frame`),
-      },
-    });
-    connections.push({ from_ref: framePromptRef, to_ref: frameRef, role: 'prompt' });
-
-    // Identity is locked HERE, on the still — not on the video. Veo takes frames
-    // XOR reference images, so this is the only place the references can act.
-    for (const characterRef of recipe.characterRefNodeIds) {
-      connections.push({ from_ref: characterRef, to_ref: frameRef, role: 'ref-images' });
-    }
-    for (const productRef of recipe.productRefNodeIds) {
-      connections.push({ from_ref: productRef, to_ref: frameRef, role: 'ref-images' });
-    }
-    storyboardNodeRefs.push(framePromptRef, frameRef);
-  }
-
-  // Pass 2 — animate each approved panel. Runs entirely in `frames` mode.
-  for (const [index, shot] of recipe.shots.entries()) {
-    const frameRef = `shot:${shot.id}:frame`;
-    const motionPromptRef = `shot:${shot.id}:motion-prompt`;
-    const videoRef = `shot:${shot.id}:video`;
-    const plan = framePlan[index];
-
-    nodes.push({
-      ref: motionPromptRef,
-      type: 'string',
-      data: {
-        value: [
-          `Animate this exact first frame. ${shot.visualDirection}`,
-          `The creator says clearly: ${shot.spokenLine}`,
-          'Hold the same person, product, wardrobe, location, lighting logic, and lens language as the frame.',
-          'Do not render captions, logos, or on-screen text.',
-        ].join('\n'),
-        ...moduleData(SHOT_MODULE, `shot:${shot.id}:motion-prompt`),
-      },
-    });
-    nodes.push({
-      ref: videoRef,
-      type: 'videoGen',
-      data: {
-        // `referenceMode` is deliberately omitted: veo-3.1-fast defaults to
-        // `frames`, the only mode exposing first-frame/last-frame. Naming
-        // veo-3.1 instead would default to `images` and reject the frame edge.
-        model: 'veo-3.1-fast',
-        prompt: '',
-        aspectRatio: recipe.aspectRatio,
-        durationSeconds: shot.durationSeconds,
-        // 1080p and above require an 8s duration; 720p accepts 4/6/8. A 4s shot
-        // at 1080p compiles green and then 400s at Run.
-        resolution: '720p',
-        label: `Clip ${shot.id}`,
-        ...moduleData(SHOT_MODULE, `shot:${shot.id}:video`),
-      },
-    });
-    connections.push({ from_ref: motionPromptRef, to_ref: videoRef, role: 'prompt' });
-    connections.push({ from_ref: frameRef, to_ref: videoRef, role: 'first-frame' });
-
-    const compiledShot: CompiledUgcShot = {
-      id: shot.id,
-      framePromptRef: `shot:${shot.id}:frame-prompt`,
-      frameRef,
-      motionPromptRef,
-      videoRef,
-    };
-
-    // Continuity without serialization: the closing frame is the NEXT shot's
-    // panel, which already exists. No frameExtract, no waiting on a render.
-    if (plan?.lastFramePanelIndex != null) {
-      const successor = recipe.shots[plan.lastFramePanelIndex];
-      const lastFramePanelRef = `shot:${successor.id}:frame`;
-      connections.push({ from_ref: lastFramePanelRef, to_ref: videoRef, role: 'last-frame' });
-      compiledShot.lastFramePanelRef = lastFramePanelRef;
-    }
-
-    shots.push(compiledShot);
-    shotNodeRefs.push(motionPromptRef, videoRef);
-  }
-
   const timelineRef = 'ugc:assembly:timeline';
-  const items: TimelineItemSpec[] = shots.map((shot, order) => ({
-    sourceNodeId: shot.videoRef,
-    order,
-    kind: 'video',
-  }));
+  shots.push(
+    ...recipe.shots.map((shot) => ({
+      id: shot.id,
+      title: `Shot ${shot.id}`,
+      brief: shot.frameDirection,
+    })),
+  );
   nodes.push({
     ref: timelineRef,
     type: 'timelineEditor',
     data: {
-      items,
+      items: [],
       committed: false,
+      productionSeed: {
+        recipe: 'ugc_talking_head',
+        objective: recipe.objective,
+        aspectRatio: recipe.aspectRatio,
+        references: [
+          ...recipe.characterRefNodeIds.map((nodeId) => ({ nodeId, role: 'character' })),
+          ...recipe.productRefNodeIds.map((nodeId) => ({ nodeId, role: 'product' })),
+        ],
+        shots: recipe.shots.map((shot, order) => ({
+          id: shot.id,
+          order,
+          title: `Shot ${order + 1}`,
+          brief: shot.frameDirection,
+          spokenLine: shot.spokenLine,
+          subjectAction: shot.frameDirection,
+          cameraMove: 'Slow controlled dolly in.',
+          inSceneEvent: shot.visualDirection,
+          continuity: shot.continuity,
+          targetDurationSec: shot.durationSeconds,
+        })),
+      },
       ...moduleData('ugc:assembly', 'timeline'),
     },
   });
-  for (const shot of shots) {
-    connections.push({ from_ref: shot.videoRef, to_ref: timelineRef, role: 'media-in' });
+  for (const reference of [...recipe.characterRefNodeIds, ...recipe.productRefNodeIds]) {
+    connections.push({ from_ref: reference, to_ref: timelineRef, role: 'media-in' });
   }
 
   return {
@@ -259,29 +154,11 @@ export function compileUgcTalkingHeadWorkflow(
       },
       {
         version: 1,
-        id: STORYBOARD_MODULE,
-        label: 'Storyboard contact sheet',
-        kind: 'shot_sequence',
-        nodeRefs: storyboardNodeRefs,
-        inputPorts: ['character-images', 'product-images'],
-        outputPorts: ['panels'],
-      },
-      {
-        version: 1,
-        id: SHOT_MODULE,
-        label: 'Talking-head shots',
-        kind: 'shot_sequence',
-        nodeRefs: shotNodeRefs,
-        inputPorts: ['panels'],
-        outputPorts: ['clips'],
-      },
-      {
-        version: 1,
         id: 'ugc:assembly',
         label: 'UGC assembly',
         kind: 'assembly',
         nodeRefs: [timelineRef],
-        inputPorts: ['clips'],
+        inputPorts: ['character-images', 'product-images'],
         outputPorts: ['final-video'],
       },
     ],

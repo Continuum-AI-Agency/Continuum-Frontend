@@ -384,6 +384,7 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
                 generatedVideoStoragePath: persisted.storagePath,
                 generatedVideoBucket: persisted.bucket,
                 renderOutputAssetId: persisted.assetId,
+                renderOutputAssetVersionId: persisted.versionId,
                 lastRenderJobId: context.jobId,
                 renderContinuation: {
                   jobId: context.jobId,

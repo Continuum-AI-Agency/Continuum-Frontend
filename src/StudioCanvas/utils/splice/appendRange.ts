@@ -6,7 +6,7 @@ import {
   speedFor,
 } from '../render/effectSpec';
 import { type FadeOverlay, transitionOverlayAt } from '../render/transitions';
-import { type CaptionCue, findActiveCue } from './captionCues';
+import { type CaptionCue, findActiveCues } from './captionCues';
 import { drawActiveCaption } from './drawCaptions';
 import { drawFrameComposition } from './frameComposition';
 import { drawClipFrame, drawFadeOverlay } from './frameDraw';
@@ -46,6 +46,10 @@ export type AppendRangeParams = {
   targetHeight: number;
   cumulativeOffset: number;
   muteAudio: boolean;
+  // When set, redraw decoded source frames on this exact output cadence. The
+  // source iterator remains sequential; low-rate frames are repeated and
+  // high/VFR frames are dropped onto the next cadence tick.
+  frameRate?: number;
   // Word-synced caption cues on the OUTPUT timeline (already re-mapped past removed
   // dead space). Omitted/null disables caption burn-in entirely (zero cost).
   cues?: CaptionCue[] | null;
@@ -84,6 +88,7 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
     targetHeight,
     cumulativeOffset,
     muteAudio,
+    frameRate,
     cues,
     captionStyle,
     effects,
@@ -107,48 +112,76 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
   const sourceSpan = range.endSec - range.startSec;
   const outputDurationSec = sourceSpan / speed;
   const overlays = resolveTextOverlays(effects);
+  let nextCadenceFrame = 0;
 
   const canvasSink = new mb.CanvasSink(videoTrack);
   for await (const wrapped of canvasSink.canvases(range.startSec, range.endSec)) {
     throwIfAborted(signal);
     const localTimestamp = wrapped.timestamp - range.startSec;
     if (localTimestamp < 0) continue;
-    const outputDuration = Math.max(wrapped.duration / speed, 1 / 240);
-    const outputTimestamp = cumulativeOffset + localTimestamp / speed;
-    const localOut = localTimestamp / speed;
-    const clipT = sourceSpan > 0 ? localTimestamp / sourceSpan : 0;
-    const fade = transitionOverlayAt(localOut, outputDurationSec, headFade, tailFade);
-    const cue = cues?.length ? findActiveCue(cues, outputTimestamp) : null;
-    await drawFrameComposition({
-      drawBase: () => {
-        drawClipFrame(
-          ctx,
-          wrapped.canvas,
-          sourceWidth,
-          sourceHeight,
-          targetWidth,
-          targetHeight,
-          effects,
-          clipT,
-        );
-        if (overlays.length > 0) drawTextOverlays(ctx, overlays, targetWidth, targetHeight);
-      },
-      ...(compositeOverlays ? { drawOverlays: () => compositeOverlays(ctx, outputTimestamp) } : {}),
-      ...(fade
-        ? {
-            drawColorTransition: () =>
-              drawFadeOverlay(ctx, fade.color, fade.alpha, targetWidth, targetHeight),
-          }
-        : {}),
-      ...(cue
-        ? {
-            drawCaption: () =>
-              drawActiveCaption(ctx, cue, outputTimestamp, targetWidth, targetHeight, captionStyle),
-          }
-        : {}),
-    });
-    await videoSource.add(outputTimestamp, outputDuration);
-    params.onRangeProgress?.((localTimestamp + wrapped.duration) / speed);
+    const sourceFrameEnd = Math.min(sourceSpan, localTimestamp + wrapped.duration);
+    const outputFrameEnd = sourceFrameEnd / speed;
+    const cadenceDuration = frameRate ? 1 / frameRate : undefined;
+    const nativeLocalOut = localTimestamp / speed;
+    if (cadenceDuration && nextCadenceFrame * cadenceDuration < nativeLocalOut - 1e-9) {
+      nextCadenceFrame = Math.ceil((nativeLocalOut - 1e-9) / cadenceDuration);
+    }
+
+    while (true) {
+      const localOut = cadenceDuration ? nextCadenceFrame * cadenceDuration : nativeLocalOut;
+      if (localOut >= outputFrameEnd - 1e-9 || localOut >= outputDurationSec - 1e-9) break;
+      const outputDuration = cadenceDuration
+        ? Math.min(cadenceDuration, outputDurationSec - localOut)
+        : Math.max(wrapped.duration / speed, 1 / 240);
+      const outputTimestamp = cumulativeOffset + localOut;
+      const clipT = outputDurationSec > 0 ? localOut / outputDurationSec : 0;
+      const fade = transitionOverlayAt(localOut, outputDurationSec, headFade, tailFade);
+      const activeCues = cues?.length ? findActiveCues(cues, outputTimestamp) : [];
+      await drawFrameComposition({
+        drawBase: () => {
+          drawClipFrame(
+            ctx,
+            wrapped.canvas,
+            sourceWidth,
+            sourceHeight,
+            targetWidth,
+            targetHeight,
+            effects,
+            clipT,
+          );
+          if (overlays.length > 0) drawTextOverlays(ctx, overlays, targetWidth, targetHeight);
+        },
+        ...(compositeOverlays
+          ? { drawOverlays: () => compositeOverlays(ctx, outputTimestamp) }
+          : {}),
+        ...(fade
+          ? {
+              drawColorTransition: () =>
+                drawFadeOverlay(ctx, fade.color, fade.alpha, targetWidth, targetHeight),
+            }
+          : {}),
+        ...(activeCues.length
+          ? {
+              drawCaption: () => {
+                for (const cue of activeCues) {
+                  drawActiveCaption(
+                    ctx,
+                    cue,
+                    outputTimestamp,
+                    targetWidth,
+                    targetHeight,
+                    captionStyle,
+                  );
+                }
+              },
+            }
+          : {}),
+      });
+      await videoSource.add(outputTimestamp, outputDuration);
+      params.onRangeProgress?.(localOut + outputDuration);
+      if (!cadenceDuration) break;
+      nextCadenceFrame += 1;
+    }
   }
   // The Video Editor mixdown owns all audio; skip inline audio entirely here.
   if (skipAudio) return;
@@ -274,7 +307,7 @@ export async function appendStill(params: AppendStillParams): Promise<void> {
     const duration = Math.min(frameDuration, durationSec - elapsed);
     const outputTimestamp = cumulativeOffset + elapsed;
     const fade = transitionOverlayAt(elapsed, durationSec, headFade, tailFade);
-    const cue = hasCaptions && cues ? findActiveCue(cues, outputTimestamp) : null;
+    const activeCues = hasCaptions && cues ? findActiveCues(cues, outputTimestamp) : [];
     await drawFrameComposition({
       drawBase: () => {
         if (perFrame) drawBase(durationSec > 0 ? elapsed / durationSec : 0);
@@ -286,10 +319,20 @@ export async function appendStill(params: AppendStillParams): Promise<void> {
               drawFadeOverlay(ctx, fade.color, fade.alpha, targetWidth, targetHeight),
           }
         : {}),
-      ...(cue
+      ...(activeCues.length
         ? {
-            drawCaption: () =>
-              drawActiveCaption(ctx, cue, outputTimestamp, targetWidth, targetHeight, captionStyle),
+            drawCaption: () => {
+              for (const cue of activeCues) {
+                drawActiveCaption(
+                  ctx,
+                  cue,
+                  outputTimestamp,
+                  targetWidth,
+                  targetHeight,
+                  captionStyle,
+                );
+              }
+            },
           }
         : {}),
     });

@@ -22,10 +22,10 @@ import {
   getVideoGeneratorReferenceModes,
   resolveVideoGeneratorModel,
   resolveVideoGeneratorReferenceMode,
-  variationIndexFromHandle,
   VIDEO_GENERATOR_MODELS,
   type VideoGeneratorModel,
   type VideoGeneratorReferenceMode,
+  variationIndexFromHandle,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render } from '@testing-library/react';

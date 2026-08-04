@@ -4,6 +4,7 @@ import {
   buildCaptionCues,
   type CaptionWord,
   findActiveCue,
+  findActiveCues,
   groupWordsIntoCues,
   rebaseWordsToOutput,
 } from './captionCues';
@@ -77,6 +78,13 @@ describe('groupWordsIntoCues', () => {
 });
 
 describe('buildCaptionCues + findActiveCue', () => {
+  it('returns every active lane so titles do not hide concurrent captions', () => {
+    const cues = [
+      { id: 'caption', startSec: 0, endSec: 2, words: [w('caption', 0, 2)] },
+      { id: 'title', startSec: 1, endSec: 3, words: [w('title', 1, 3)] },
+    ];
+    expect(findActiveCues(cues, 1.5).map((cue) => cue.id)).toEqual(['caption', 'title']);
+  });
   it('keeps captions continuous across a removed dead-space gap (the cut is seamless)', () => {
     // The 3s gap (2..5) between the two keep-ranges is removed, so "c" rebases to
     // output [2,3] — adjacent to "b" — and the three words stay one continuous cue.

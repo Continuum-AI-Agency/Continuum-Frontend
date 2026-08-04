@@ -12,6 +12,7 @@ import { MEDIA_LIBRARY_BUCKET, uploadMediaAsset } from '@/lib/library/uploadMedi
 
 export type PersistedTimelineRender = {
   assetId: string;
+  versionId: string;
   bucket: string;
   storagePath: string;
   signedUrl: string;
@@ -30,6 +31,7 @@ export async function persistTimelineRender(params: {
 
   return {
     assetId: result.assetId,
+    versionId: result.versionId,
     bucket: MEDIA_LIBRARY_BUCKET,
     storagePath: result.storagePath,
     signedUrl: result.signedUrl,

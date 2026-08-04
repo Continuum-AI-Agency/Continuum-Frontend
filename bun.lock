@@ -100,6 +100,7 @@
         "date-fns": "^4.1.0",
         "embla-carousel": "^8.6.0",
         "embla-carousel-react": "^8.6.0",
+        "fflate": "^0.8.2",
         "geist": "^1.7.2",
         "html2canvas": "^1.4.1",
         "jotai": "^2.18.0",

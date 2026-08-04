@@ -29,6 +29,7 @@ export const STUDIO_NODE_TYPES = [
   'hyperframesAgent',
   'organicPublisher',
   'paidPublisher',
+  'apiRender',
   'omniGen',
   'image',
   'video',
@@ -519,6 +520,30 @@ const publisherTargetHandles = (node: GraphNodeLike): string[] => {
   return publisherSlots(node).map((slot) => `${PUBLISH_ASSET_INPUT_PREFIX}${slot.id}`);
 };
 
+const apiRenderTargetHandles = (node: GraphNodeLike): string[] => {
+  const variables = (node.data as { variableDefinitions?: unknown })?.variableDefinitions;
+  if (!Array.isArray(variables)) return [];
+  return variables.flatMap((variable) => {
+    if (!variable || typeof variable !== 'object') return [];
+    const value = variable as { key?: unknown; kind?: unknown };
+    if (!['image', 'video'].includes(String(value.kind)) || typeof value.key !== 'string') return [];
+    return [`variable-${value.key}`];
+  });
+};
+
+const apiRenderVariableKindForHandle = (
+  node: GraphNodeLike,
+  handle: string,
+): 'image' | 'video' | null => {
+  const variables = (node.data as { variableDefinitions?: unknown })?.variableDefinitions;
+  if (!Array.isArray(variables)) return null;
+  const match = variables.find((variable) => {
+    if (!variable || typeof variable !== 'object') return false;
+    return `variable-${String((variable as { key?: unknown }).key ?? '')}` === handle;
+  }) as { kind?: unknown } | undefined;
+  return match?.kind === 'image' || match?.kind === 'video' ? match.kind : null;
+};
+
 const isImageReferenceHandle = (handleId?: string | null): boolean =>
   typeof handleId === 'string' && IMAGE_REFERENCE_HANDLE_SET.has(handleId);
 
@@ -596,6 +621,8 @@ export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
     case 'organicPublisher':
     case 'paidPublisher':
       return publisherTargetHandles(node);
+    case 'apiRender':
+      return apiRenderTargetHandles(node);
     case 'omniGen':
       return ['prompt-in', 'prompt', 'ref-images'];
     case 'string':
@@ -651,6 +678,7 @@ export function getTargetHandleConnectionLimit(
     publisherTargetHandles(node).includes(targetHandle)
   )
     return 1;
+  if (node.type === 'apiRender' && apiRenderTargetHandles(node).includes(targetHandle)) return 1;
   if (node.type === 'omniGen' && isImageReferenceHandle(targetHandle)) return 3;
 
   if (!isVideoGeneratorNode(node)) return undefined;
@@ -757,6 +785,11 @@ function isConnectionCompatible(
     if (format === 'image' && !isImageSource) return false;
     if (format === 'video' && !isVideoSource) return false;
     if (format === 'carousel' && !isImageSource && !isVideoSource) return false;
+  } else if (targetNode.type === 'apiRender') {
+    const kind = apiRenderVariableKindForHandle(targetNode, targetHandle);
+    if (kind === 'image' && !isImageProducingSource(sourceNode)) return false;
+    if (kind === 'video' && !isVideoProducingSource(sourceNode)) return false;
+    if (!kind) return false;
   } else if (targetNode.type === 'omniGen') {
     if (targetHandle === 'prompt' || targetHandle === 'prompt-in') {
       if (!isTextProducingSource(sourceNode)) return false;
@@ -1116,6 +1149,18 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
         },
         // Style is derived from the aspect ratio by createNodeData (nodeStyleFor);
         // 16:9 lands on the historical 400x225.
+      };
+    case 'apiRender':
+      return {
+        data: {
+          templateKey: null,
+          templateName: null,
+          contractHash: null,
+          variables: {},
+          delivery: null,
+          status: 'idle',
+        },
+        style: { width: 380, height: 520 },
       };
     case 'videoGen':
     case 'veoDirector':

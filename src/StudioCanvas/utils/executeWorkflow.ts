@@ -60,16 +60,17 @@ const isMediaNodeType = (nodeType: string | undefined): nodeType is string =>
 // media is delivered from the node itself (Attach to draft / Replace creative,
 // backed by the same publishing service as the studio_deliver MCP tool). Surfacing
 // them keeps a run from looking complete while its terminal node silently no-ops.
-const PUBLISHER_NODE_KINDS: Record<string, 'organic' | 'paid'> = {
+const PUBLISHER_NODE_KINDS: Record<string, 'organic' | 'paid' | 'render'> = {
   organicPublisher: 'organic',
   paidPublisher: 'paid',
+  apiRender: 'render',
 };
 
 export const PUBLISHER_HANDOFF_STATE = 'handoff — deliver via studio_deliver';
 
 export interface PublisherHandoff {
   nodeId: string;
-  kind: 'organic' | 'paid';
+  kind: 'organic' | 'paid' | 'render';
   state: string;
 }
 

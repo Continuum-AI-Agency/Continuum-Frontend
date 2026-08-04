@@ -513,6 +513,214 @@ export const editorExportSettingsSchema = z
   .strict();
 export type EditorExportSettings = z.infer<typeof editorExportSettingsSchema>;
 
+export const editorTimelineSnapshotSchema = z
+  .object({
+    sourceRevision: revisionNumberSchema,
+    sourceFingerprint: z.string().min(1).max(500),
+    durationSec: secondsSchema,
+    tracks: z.array(editorTrackSchema).max(200),
+    transitions: z.array(editorTransitionSchema).max(2_000),
+  })
+  .strict();
+export type EditorTimelineSnapshot = z.infer<typeof editorTimelineSnapshotSchema>;
+
+export const editorProductionStageSchema = z.enum([
+  'style_draft',
+  'style_approval',
+  'frame_generation',
+  'frame_approval',
+  'motion_generation',
+  'motion_approval',
+  'master_generation',
+  'master_approval',
+  'assembly',
+  'ready_to_render',
+  'rendering',
+  'complete',
+  'failed',
+]);
+export type EditorProductionStage = z.infer<typeof editorProductionStageSchema>;
+
+export const editorPinnedAssetRefSchema = z
+  .object({
+    assetId: editorIdSchema,
+    versionId: editorIdSchema,
+  })
+  .strict();
+export type EditorPinnedAssetRef = z.infer<typeof editorPinnedAssetRefSchema>;
+
+export const editorProductionReferenceSchema = z
+  .object({
+    id: editorIdSchema,
+    role: z.enum(['style', 'character', 'location', 'product', 'score', 'ambience']),
+    asset: editorPinnedAssetRefSchema,
+    label: z.string().min(1).max(500).optional(),
+  })
+  .strict();
+export type EditorProductionReference = z.infer<typeof editorProductionReferenceSchema>;
+
+export const editorStyleFacetsSchema = z
+  .object({
+    lens: z.string().min(1).max(1_000),
+    lighting: z.string().min(1).max(1_000),
+    palette: z.string().min(1).max(1_000),
+    texture: z.string().min(1).max(1_000),
+    contrast: z.string().min(1).max(1_000),
+    blocking: z.string().min(1).max(1_000),
+    atmosphere: z.string().min(1).max(1_000),
+    eraMarkers: z.string().min(1).max(1_000).optional(),
+  })
+  .strict();
+
+export const editorStyleContractSchema = z
+  .object({
+    status: z.enum(['draft', 'approved']),
+    lockedText: z.string().min(1).max(4_000),
+    facets: editorStyleFacetsSchema,
+    sourceReferenceIds: z.array(editorIdSchema).max(10),
+    approvedBy: editorActorRefSchema.optional(),
+    approvedAt: z.string().datetime().optional(),
+    approvedRevision: revisionNumberSchema.optional(),
+  })
+  .strict()
+  .superRefine((contract, context) => {
+    const hasApproval =
+      contract.approvedBy !== undefined ||
+      contract.approvedAt !== undefined ||
+      contract.approvedRevision !== undefined;
+    if (contract.status === 'approved' && !hasApproval) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['approvedBy'],
+        message: 'approved style contracts require approval metadata',
+      });
+    }
+    if (contract.status === 'draft' && hasApproval) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['status'],
+        message: 'draft style contracts cannot include approval metadata',
+      });
+    }
+    if (contract.approvedBy?.actorType === 'agent') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['approvedBy', 'actorType'],
+        message: 'agents cannot approve style contracts',
+      });
+    }
+  });
+export type EditorStyleContract = z.infer<typeof editorStyleContractSchema>;
+
+export const editorTakeSchema = z
+  .object({
+    id: editorIdSchema,
+    kind: z.enum(['frame', 'motion_draft', 'motion_master']),
+    status: z.enum(['pending', 'generating', 'ready', 'failed', 'stale']),
+    verdict: z.enum(['undecided', 'approved', 'rejected']),
+    prompt: z.string().min(1).max(20_000),
+    model: z.string().min(1).max(200),
+    settings: z.record(z.string().min(1).max(200), editorParameterValueSchema).default({}),
+    parentTakeId: editorIdSchema.optional(),
+    changedVariable: z.enum(['camera', 'lighting', 'speed', 'event_timing']).optional(),
+    jobId: editorIdSchema.optional(),
+    asset: editorPinnedAssetRefSchema.optional(),
+    error: z.string().min(1).max(2_000).optional(),
+    createdAt: z.string().datetime(),
+    createdBy: editorActorRefSchema,
+    reviewedAt: z.string().datetime().optional(),
+    reviewedBy: editorActorRefSchema.optional(),
+    reviewNote: z.string().min(1).max(2_000).optional(),
+  })
+  .strict()
+  .superRefine((take, context) => {
+    if (take.status === 'ready' && take.asset === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['asset'],
+        message: 'ready takes require a pinned Library asset',
+      });
+    }
+    if (take.status === 'failed' && take.error === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['error'],
+        message: 'failed takes require an error',
+      });
+    }
+    if (take.verdict !== 'undecided' && take.reviewedBy?.actorType !== 'user') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reviewedBy'],
+        message: 'take verdicts require a human reviewer',
+      });
+    }
+  });
+export type EditorTake = z.infer<typeof editorTakeSchema>;
+
+export const editorShotSchema = z
+  .object({
+    id: editorIdSchema,
+    order: z.number().int().nonnegative(),
+    title: z.string().min(1).max(500),
+    brief: z.string().min(1).max(4_000),
+    spokenLine: z.string().max(4_000).optional(),
+    subjectAction: z.string().min(1).max(2_000),
+    cameraMove: z.string().min(1).max(2_000),
+    inSceneEvent: z.string().min(1).max(2_000),
+    continuity: z.string().max(2_000).optional(),
+    targetDurationSec: z.union([z.literal(4), z.literal(6), z.literal(8)]),
+    referenceIds: z.array(editorIdSchema).max(20).default([]),
+    takes: z.array(editorTakeSchema).max(100),
+    selection: z
+      .object({
+        frameTakeId: editorIdSchema.optional(),
+        motionDraftTakeId: editorIdSchema.optional(),
+        motionMasterTakeId: editorIdSchema.optional(),
+      })
+      .strict()
+      .default({}),
+  })
+  .strict()
+  .superRefine((shot, context) => {
+    const takeById = new Map(shot.takes.map((take) => [take.id, take]));
+    const expectedKinds = [
+      ['frameTakeId', 'frame'],
+      ['motionDraftTakeId', 'motion_draft'],
+      ['motionMasterTakeId', 'motion_master'],
+    ] as const;
+    for (const [field, kind] of expectedKinds) {
+      const selectedId = shot.selection[field];
+      if (!selectedId) continue;
+      const take = takeById.get(selectedId);
+      if (!take || take.kind !== kind || take.verdict !== 'approved') {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['selection', field],
+          message: `selected ${kind} take must exist and be approved`,
+        });
+      }
+    }
+  });
+export type EditorShot = z.infer<typeof editorShotSchema>;
+
+export const editorProductionSchema = z
+  .object({
+    workflowStage: editorProductionStageSchema.default('assembly'),
+    references: z.array(editorProductionReferenceSchema).max(50).default([]),
+    styleContract: editorStyleContractSchema.nullable().default(null),
+    shots: z.array(editorShotSchema).max(200).default([]),
+    failureReason: z.string().min(1).max(2_000).optional(),
+  })
+  .strict()
+  .default({
+    workflowStage: 'assembly',
+    references: [],
+    styleContract: null,
+    shots: [],
+  });
+export type EditorProduction = z.infer<typeof editorProductionSchema>;
+
 export const editorProjectV2Schema = z
   .object({
     schemaVersion: z.literal(2),
@@ -527,6 +735,7 @@ export const editorProjectV2Schema = z
     sampleRateHz: z.number().int().min(8_000).max(192_000),
     tracks: z.array(editorTrackSchema).max(200),
     transitions: z.array(editorTransitionSchema).max(2_000).default([]),
+    production: editorProductionSchema,
     markers: z
       .array(
         z
@@ -714,6 +923,81 @@ export const editorCommandSchema = z.discriminatedUnion('commandType', [
       frameRate: editorFrameRateSchema.optional(),
     })
     .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('restore_timeline_snapshot'),
+      snapshot: editorTimelineSnapshotSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('set_production_references'),
+      references: z.array(editorProductionReferenceSchema).max(50),
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('set_style_contract'),
+      styleContract: editorStyleContractSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('approve_style_contract'),
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('upsert_shot'),
+      shot: editorShotSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('remove_shot'),
+      shotId: editorIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('record_take'),
+      shotId: editorIdSchema,
+      take: editorTakeSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('approve_take'),
+      shotId: editorIdSchema,
+      takeId: editorIdSchema,
+      reviewNote: z.string().min(1).max(2_000).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('reject_take'),
+      shotId: editorIdSchema,
+      takeId: editorIdSchema,
+      reviewNote: z.string().min(1).max(2_000),
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('set_production_stage'),
+      workflowStage: editorProductionStageSchema,
+      failureReason: z.string().min(1).max(2_000).optional(),
+    })
+    .strict(),
 ]);
 export type EditorCommand = z.infer<typeof editorCommandSchema>;
 
@@ -724,6 +1008,7 @@ export const editorCommandBatchSchema = z
     sequenceId: editorIdSchema,
     idempotencyKey: z.string().min(8).max(500),
     expectedRevision: revisionNumberSchema,
+    expectedFingerprint: z.string().min(1).max(500),
     atomic: z.boolean().default(true),
     issuedAt: z.string().datetime(),
     actor: editorActorRefSchema,
@@ -731,6 +1016,22 @@ export const editorCommandBatchSchema = z
   })
   .strict()
   .superRefine((batch, context) => {
+    if (
+      batch.commands.some(
+        (command) =>
+          (command.commandType === 'approve_style_contract' ||
+            command.commandType === 'approve_take' ||
+            command.commandType === 'reject_take' ||
+            command.commandType === 'restore_timeline_snapshot') &&
+          command.actor.actorType !== 'user',
+      )
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['commands'],
+        message: 'approval and rejection commands require a user actor',
+      });
+    }
     const commandIds = new Set<string>();
     const idempotencyKeys = new Set<string>();
     for (const [index, command] of batch.commands.entries()) {

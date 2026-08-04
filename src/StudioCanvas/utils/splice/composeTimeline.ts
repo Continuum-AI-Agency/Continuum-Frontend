@@ -80,6 +80,7 @@ export type TimelineAudioRenderItem = {
   startSec: number;
   trimStartSec?: number;
   trimEndSec?: number;
+  speed?: number;
   volume?: number;
   fadeInSec?: number;
   fadeOutSec?: number;
@@ -91,6 +92,9 @@ export type ComposeTimelineOptions = {
   audioTracks?: TimelineAudioRenderItem[];
   videoBitrate?: number;
   audioBitrate?: number;
+  // Nominal encoded packet cadence. Mediabunny uses this to resample source
+  // cadence (including VFR inputs) into the requested constant-rate track.
+  frameRate?: number;
   // Export-preset frame size. When both are set the timeline is letterboxed into
   // these dimensions (aspect conversion); otherwise the first clip's size is used.
   targetWidth?: number;
@@ -118,6 +122,7 @@ type PreparedOverlay = {
   volume: number;
   audioFadeInSec: number;
   audioFadeOutSec: number;
+  speed: number;
   effects?: ClipEffectSpec;
   dispose: () => void;
 };
@@ -129,6 +134,7 @@ export type PreparedTimelineAudio = {
   input: MbInput;
   sourceStartSec: number;
   sourceEndSec: number;
+  speed: number;
   outputStartSec: number;
   gain: number;
   fadeInSec: number;
@@ -140,7 +146,7 @@ export function buildAudioBedPlanItems(items: PreparedTimelineAudio[]): AudioPla
     input: item.input,
     sourceStartSec: item.sourceStartSec,
     sourceEndSec: item.sourceEndSec,
-    speed: 1,
+    speed: item.speed,
     outputStartSec: item.outputStartSec,
     gain: item.gain,
     fadeInSec: item.fadeInSec,
@@ -203,6 +209,7 @@ async function prepareOverlays(
         volume: 0,
         audioFadeInSec: 0,
         audioFadeOutSec: 0,
+        speed: 1,
         effects: overlay.effects,
         dispose: () => {
           try {
@@ -229,6 +236,7 @@ async function prepareOverlays(
     const trimStart = Math.max(0, overlay.trimStartSec ?? 0);
     const trimEnd =
       overlay.trimEndSec !== undefined ? Math.min(overlay.trimEndSec, fullDuration) : fullDuration;
+    const speed = speedFor(overlay.effects);
     const sink = new mb.CanvasSink(track);
     prepared.push({
       kind: 'video',
@@ -237,7 +245,7 @@ async function prepareOverlays(
         return wrapped ? { image: wrapped.canvas, width, height } : null;
       },
       startSec: overlay.startSec,
-      outputDurationSec: Math.max(0.1, trimEnd - trimStart),
+      outputDurationSec: Math.max(0.1, overlay.durationSec ?? (trimEnd - trimStart) / speed),
       sourceStartSec: trimStart,
       audioInput: input,
       sourceEndSec: trimEnd,
@@ -245,6 +253,7 @@ async function prepareOverlays(
       volume: typeof overlay.volume === 'number' && overlay.volume >= 0 ? overlay.volume : 1,
       audioFadeInSec: Math.max(0, overlay.audioFadeInSec ?? 0),
       audioFadeOutSec: Math.max(0, overlay.audioFadeOutSec ?? 0),
+      speed,
       effects: overlay.effects,
       dispose: () => disposeInput(input),
     });
@@ -363,7 +372,9 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
       codec: 'avc',
       bitrate: options.videoBitrate ?? DEFAULT_VIDEO_BITRATE,
     });
-    output.addVideoTrack(videoSource);
+    output.addVideoTrack(videoSource, {
+      ...(options.frameRate !== undefined ? { frameRate: options.frameRate } : {}),
+    });
     const audioSource = new mb.AudioSampleSource({
       codec: 'aac',
       bitrate: options.audioBitrate ?? DEFAULT_AUDIO_BITRATE,
@@ -400,6 +411,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         input,
         sourceStartSec,
         sourceEndSec,
+        speed: typeof bed.speed === 'number' && bed.speed > 0 ? bed.speed : 1,
         outputStartSec: Math.max(0, bed.startSec),
         gain: typeof bed.volume === 'number' && bed.volume >= 0 ? bed.volume : 1,
         fadeInSec: Math.max(0, bed.fadeInSec ?? 0),
@@ -413,7 +425,8 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
             for (const overlay of preparedOverlays) {
               const local = outputTimestampSec - overlay.startSec;
               if (local < 0 || local >= overlay.outputDurationSec) continue;
-              const sourceSec = overlay.kind === 'video' ? overlay.sourceStartSec + local : 0;
+              const sourceSec =
+                overlay.kind === 'video' ? overlay.sourceStartSec + local * overlay.speed : 0;
               const frame = await overlay.frameAt(sourceSec);
               if (!frame) continue;
               const t = overlay.outputDurationSec > 0 ? local / overlay.outputDurationSec : 0;
@@ -516,6 +529,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
             targetHeight,
             cumulativeOffset: place.soloStartSec,
             muteAudio: item.muteAudio,
+            frameRate: options.frameRate,
             effects: item.effects,
             headFade: item.headFade,
             tailFade: item.tailFade,
@@ -593,7 +607,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         input: overlay.audioInput,
         sourceStartSec: overlay.sourceStartSec,
         sourceEndSec: overlay.sourceEndSec,
-        speed: 1,
+        speed: overlay.speed,
         outputStartSec: overlay.startSec,
         gain: overlay.volume,
         fadeInSec: overlay.audioFadeInSec,

@@ -4,9 +4,9 @@ import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
 import { uploadCaptionAudio } from '@/lib/clips/clipClientCut';
+import type { TimelineInputSource, TimelineItem } from '../../types';
 import { extractTimelineAudioWav } from '../../utils/clip/extractTimelineAudioWav';
 import { groupWordsIntoCues } from '../../utils/splice/captionCues';
-import type { TimelineInputSource, TimelineItem } from '../../types';
 import type { TimelineEditorAdapter } from './adapter';
 
 // Auto-captions extract the output-time timeline audio, upload the WAV through the

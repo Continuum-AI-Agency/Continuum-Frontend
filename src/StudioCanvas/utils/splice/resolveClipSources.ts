@@ -137,6 +137,12 @@ function sourceAssetId(node: StudioNode): string | undefined {
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined;
 }
 
+function sourceVersionId(node: StudioNode): string | undefined {
+  const data = node.data as Record<string, unknown>;
+  const candidate = data.assetVersionId ?? data.renderOutputAssetVersionId;
+  return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined;
+}
+
 function readSourceKindAndUrl(node: StudioNode | undefined): {
   kind: 'video' | 'image' | 'audio';
   url?: string;
@@ -175,6 +181,7 @@ export function resolveTimelineInputPool(
       kind,
       label: deriveSourceLabel(node),
       ...(sourceAssetId(node) ? { sourceAssetId: sourceAssetId(node) } : {}),
+      ...(sourceVersionId(node) ? { sourceVersionId: sourceVersionId(node) } : {}),
       previewUrl: isUsableUrl(url) ? url : undefined,
     });
   }

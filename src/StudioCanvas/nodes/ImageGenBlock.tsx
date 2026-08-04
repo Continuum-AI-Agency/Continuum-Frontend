@@ -1,5 +1,6 @@
 import {
   type BrandBookPieceKind,
+  type BrandDirectionPiece,
   coerceImageSize,
   FIXED_IMAGE_PIXELS,
   getImageVariationHandleId,
@@ -53,6 +54,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useBrandDirectionPieces } from '@/lib/brands/useBrandDirectionPieces.client';
 import { cn } from '@/lib/utils';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
 import { GroundingChip } from '../components/GroundingChip';
@@ -65,7 +67,7 @@ import {
   IMAGE_GENERATOR_NODE_BOUNDS,
   snapNodeDimensionsToAspectRatio,
 } from '../utils/aspectRatioSizing';
-import { toggleBrandPiece, toggleSkillId } from '../utils/brandEnforcement';
+import { toggleBrandPiece, toggleDirectionPiece, toggleSkillId } from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { generationErrorCopy } from '../utils/generationErrorCopy';
@@ -209,6 +211,32 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       triggerSave();
     },
     [id, triggerSave, updateNode],
+  );
+
+  /*
+   * The compiler half of the same control. `authoredDirectionPieces` is what the brand has
+   * actually written, and it is the set the first toggle expands into — see
+   * `toggleDirectionPiece`, which is what keeps "no preference" from collapsing to a
+   * one-element selection the moment somebody switches one piece off.
+   */
+  const { pieces: authoredDirection } = useBrandDirectionPieces(brandId);
+  const handleToggleDirectionPiece = useCallback(
+    (piece: BrandDirectionPiece) => {
+      const authored = authoredDirection.map((entry) => entry.piece);
+      updateNode(id, (node) => ({
+        ...node,
+        data: {
+          ...(node.data as NanoGenNodeData),
+          brandDirectionPieces: toggleDirectionPiece(
+            (node.data as NanoGenNodeData).brandDirectionPieces,
+            piece,
+            authored,
+          ),
+        },
+      }));
+      triggerSave();
+    },
+    [authoredDirection, id, triggerSave, updateNode],
   );
 
   const handleVariationCountChange = useCallback(
@@ -370,6 +398,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
               editable
               onToggleSkill={handleToggleSkill}
               onTogglePiece={handleToggleBrandPiece}
+              brandDirectionPieces={data.brandDirectionPieces}
+              onToggleDirectionPiece={handleToggleDirectionPiece}
               className="bg-background/90 shadow-sm backdrop-blur-sm"
             />
           </div>

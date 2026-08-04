@@ -4,6 +4,7 @@ import { type BrandMdTokens, brandMdTokensSchema } from '../onboarding/brand-md'
 import {
   brandBookPieceKindSchema,
   brandEnforcementSchema,
+  DEFAULT_BRAND_BOOK_PIECES,
   expandBrandBookPieces,
   renderForcedBrandBlock,
 } from './brand-enforcement';
@@ -33,6 +34,27 @@ function makeTokens(overrides: Record<string, unknown> = {}): BrandMdTokens {
     ...overrides,
   });
 }
+
+describe('DEFAULT_BRAND_BOOK_PIECES', () => {
+  // The value the canvas has always shipped (StudioCanvas/utils/brandEnforcement.ts).
+  // It lives here so the Backend can apply it for callers that carry no node — a
+  // headless run must not be brand-blind while the canvas is fully enforced.
+  it('is the whole brand book', () => {
+    expect([...DEFAULT_BRAND_BOOK_PIECES]).toEqual(['full']);
+  });
+
+  it('expands to every concrete piece, logo included', () => {
+    expect(expandBrandBookPieces([...DEFAULT_BRAND_BOOK_PIECES])).toEqual([
+      'colors',
+      'typography',
+      'voice',
+      'imagery',
+      'personality',
+      'audience',
+      'logo',
+    ]);
+  });
+});
 
 describe('expandBrandBookPieces', () => {
   it('expands full to every concrete piece and drops the full sentinel', () => {

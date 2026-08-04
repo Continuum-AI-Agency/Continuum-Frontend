@@ -57,6 +57,7 @@ export type TimelineAudioWorkerItem = {
   startSec: number;
   trimStartSec?: number;
   trimEndSec?: number;
+  speed?: number;
   volume?: number;
   fadeInSec?: number;
   fadeOutSec?: number;
@@ -86,6 +87,7 @@ export type SpliceWorkerInbound =
       audioTracks?: TimelineAudioWorkerItem[];
       videoBitrate?: number;
       audioBitrate?: number;
+      frameRate?: number;
       targetWidth?: number;
       targetHeight?: number;
       // Auto-caption words (output-time) + style, burned in when present.

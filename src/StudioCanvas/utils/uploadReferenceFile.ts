@@ -35,10 +35,7 @@ type UpdateNodeData = (
 export interface UploadReferenceDeps {
   updateNodeData: UpdateNodeData;
   triggerSave?: () => void;
-  uploadAsset?: (params: {
-    file: File;
-    brandId: string;
-  }) => Promise<{
+  uploadAsset?: (params: { file: File; brandId: string }) => Promise<{
     assetId: string;
     versionId: string;
     storagePath: string;

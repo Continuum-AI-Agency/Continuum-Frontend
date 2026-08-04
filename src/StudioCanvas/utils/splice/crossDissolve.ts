@@ -7,7 +7,7 @@ import {
   overlapTransitionAt,
 } from '../render/transitions';
 import { throwIfAborted } from './appendRange';
-import { type CaptionCue, findActiveCue } from './captionCues';
+import { type CaptionCue, findActiveCues } from './captionCues';
 import { drawActiveCaption } from './drawCaptions';
 import { drawFrameComposition } from './frameComposition';
 import { drawEffectFrame } from './frameDraw';
@@ -179,7 +179,7 @@ export async function appendOverlapTransition(params: {
 
     const xform = overlapTransitionAt(type, t, targetWidth, targetHeight);
     const outputTimestamp = outputStart + u;
-    const cue = cues?.length ? findActiveCue(cues, outputTimestamp) : null;
+    const activeCues = cues?.length ? findActiveCues(cues, outputTimestamp) : [];
     await drawFrameComposition({
       drawBase: () => {
         ctx.filter = 'none';
@@ -211,10 +211,20 @@ export async function appendOverlapTransition(params: {
         }
       },
       ...(compositeOverlays ? { drawOverlays: () => compositeOverlays(ctx, outputTimestamp) } : {}),
-      ...(cue
+      ...(activeCues.length
         ? {
-            drawCaption: () =>
-              drawActiveCaption(ctx, cue, outputTimestamp, targetWidth, targetHeight, captionStyle),
+            drawCaption: () => {
+              for (const cue of activeCues) {
+                drawActiveCaption(
+                  ctx,
+                  cue,
+                  outputTimestamp,
+                  targetWidth,
+                  targetHeight,
+                  captionStyle,
+                );
+              }
+            },
           }
         : {}),
     });

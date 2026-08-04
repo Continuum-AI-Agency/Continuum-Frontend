@@ -1,10 +1,13 @@
 import type {
+  ApiRenderVariable,
   BrandBookPieceKind,
+  BrandDirectionPiece,
   CanvasPublishingFormat,
   CanvasPublishingSlot,
   CanvasRenderContinuation,
   CanvasTimelineRenderRequest,
   HyperframesAgentNodeData as ContractHyperframesAgentNodeData,
+  EditorProductionSummary,
   ImageGeneratorModel,
   ImageSize,
 } from '@continuum/contracts';
@@ -25,6 +28,7 @@ import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
 
 export type {
   BrandBookPieceKind,
+  BrandDirectionPiece,
   Connection,
   Edge,
   EdgeChange,
@@ -96,6 +100,18 @@ export interface NanoGenNodeData extends BaseNodeData {
   // Brand-book pieces enforced on this generation; the Backend renders them into
   // an authoritative forced block. Non-empty means the node is brand-enforced.
   brandBookPieces?: BrandBookPieceKind[];
+  /**
+   * Which v2 creative-direction pieces reach the COMPILER for this generation.
+   *
+   * A different switch from `brandBookPieces` above, not a rename. That one selects legacy
+   * brand-book sections rendered from `brand_tokens`; this one selects which approved
+   * BrandDirection rules the compiler and its gates see. The two vocabularies share no
+   * member, so both are carried.
+   *
+   * Tri-state, matching the Backend: `undefined` = everything the plan admits, `[]` = no
+   * brand direction at all, a list narrows.
+   */
+  brandDirectionPieces?: BrandDirectionPiece[];
   seed?: number;
   steps?: number;
   guidance?: number;
@@ -223,6 +239,18 @@ export interface VideoGenNodeData extends BaseNodeData {
   // Brand-book pieces enforced on this generation; the Backend renders them into
   // an authoritative forced block. Non-empty means the node is brand-enforced.
   brandBookPieces?: BrandBookPieceKind[];
+  /**
+   * Which v2 creative-direction pieces reach the COMPILER for this generation.
+   *
+   * A different switch from `brandBookPieces` above, not a rename. That one selects legacy
+   * brand-book sections rendered from `brand_tokens`; this one selects which approved
+   * BrandDirection rules the compiler and its gates see. The two vocabularies share no
+   * member, so both are carried.
+   *
+   * Tri-state, matching the Backend: `undefined` = everything the plan admits, `[]` = no
+   * brand direction at all, a list narrows.
+   */
+  brandDirectionPieces?: BrandDirectionPiece[];
   aspectRatio?: '16:9' | '9:16';
   resolution?: '720p' | '1080p' | '2K' | '4K' | '4k';
   durationSeconds?: 4 | 6 | 8;
@@ -255,6 +283,7 @@ export interface FrameExtractNodeData extends BaseNodeData {
   generatedImageUrl?: string;
   sourceTimestampMs?: number;
   sourceAssetId?: string;
+  sourceVersionId?: string;
   sourceAssetVersionId?: string;
 }
 
@@ -313,6 +342,7 @@ export interface TimelineInputSource {
   // are not asset ids; keeping both lets captioning and analysis use scoped
   // storage APIs without guessing from a React Flow id.
   sourceAssetId?: string;
+  sourceVersionId?: string;
   previewUrl?: string;
   // Known source duration (seconds), when the host already has it. Absent on the
   // canvas, where the editor probes the preview URL for it instead.
@@ -320,6 +350,31 @@ export interface TimelineInputSource {
 }
 
 export interface TimelineEditorNodeData extends BaseNodeData {
+  /** Durable brand-shared production project bound to this Canvas node. */
+  videoProjectId?: string;
+  videoProductionSummary?: EditorProductionSummary;
+  productionSeed?: {
+    recipe: 'ugc_talking_head';
+    objective: string;
+    aspectRatio: '9:16' | '16:9' | '1:1';
+    references: Array<{
+      nodeId: string;
+      role: 'style' | 'character' | 'location' | 'product' | 'score' | 'ambience';
+    }>;
+    shots: Array<{
+      id: string;
+      order: number;
+      title: string;
+      brief: string;
+      spokenLine?: string;
+      subjectAction: string;
+      cameraMove: string;
+      inSceneEvent: string;
+      continuity?: string;
+      targetDurationSec: 4 | 6 | 8;
+    }>;
+  };
+  videoProductionSeeded?: boolean;
   plannerCompositionId?: string;
   items: TimelineItem[];
   // Overlay layers composited over the base `items` track. Optional/additive so
@@ -381,6 +436,25 @@ export interface PublisherNodeData extends BaseNodeData {
   publishedAt?: string;
 }
 
+export interface ApiRenderNodeData extends BaseNodeData {
+  templateKey?: string | null;
+  templateName?: string | null;
+  contractHash?: string | null;
+  variableDefinitions?: ApiRenderVariable[];
+  variables: Record<string, string | number | boolean>;
+  delivery?: {
+    action: 'create';
+    adAccountId?: string;
+    campaignId?: string;
+    campaignName?: string;
+    adsetId?: string;
+    adsetName?: string;
+    adStatus: 'PAUSED';
+  } | null;
+  status: 'idle' | 'prepared' | 'submitting' | 'queued' | 'rendering' | 'finished' | 'failed';
+  latestJobId?: string;
+}
+
 // One clip in an Omni node's variation micro-library. The first is the
 // 'Original' generate; each subsequent one is an edit branched from the then-
 // active variation (its interactionId threads the next edit's
@@ -410,6 +484,18 @@ export interface OmniGenNodeData extends BaseNodeData {
   aspectRatio?: '16:9' | '9:16';
   skillIds?: string[];
   brandBookPieces?: BrandBookPieceKind[];
+  /**
+   * Which v2 creative-direction pieces reach the COMPILER for this generation.
+   *
+   * A different switch from `brandBookPieces` above, not a rename. That one selects legacy
+   * brand-book sections rendered from `brand_tokens`; this one selects which approved
+   * BrandDirection rules the compiler and its gates see. The two vocabularies share no
+   * member, so both are carried.
+   *
+   * Tri-state, matching the Backend: `undefined` = everything the plan admits, `[]` = no
+   * brand direction at all, a list narrows.
+   */
+  brandDirectionPieces?: BrandDirectionPiece[];
   variations?: OmniVariation[];
   activeVariationId?: string;
   previousInteractionId?: string;
@@ -428,6 +514,7 @@ export type StudioNodeData =
   | ExtendVideoNodeData
   | TimelineEditorNodeData
   | PublisherNodeData
+  | ApiRenderNodeData
   | ImageNodeData
   | VideoNodeData
   | AudioNodeData

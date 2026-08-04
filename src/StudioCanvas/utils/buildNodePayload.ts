@@ -626,6 +626,21 @@ export function buildNanoGenPayload(
     referenceAssetIds: referenceAssetIds.length > 0 ? referenceAssetIds : undefined,
     skillIds: data.skillIds && data.skillIds.length > 0 ? data.skillIds : undefined,
     brandBookPieces: effectiveBrandBookPieces(data.brandBookPieces),
+    /*
+     * The v2 creative-direction selection, passed through UNTOUCHED.
+     *
+     * Every other link in this chain already existed — the node stores it, the popover
+     * renders it, `toBackendPayload` maps it to `brand_direction_pieces`, the wire schema
+     * declares it and the Backend reads it on both compiler arms — and it was dropped here,
+     * so `request.brandPieces` was `undefined` on every production generation and the
+     * Creative direction toggle changed nothing at all.
+     *
+     * NOT run through a `??` or an `effective…` helper: this is a TRI-STATE. `undefined`
+     * means "no preference" and lets the plan admit everything; `[]` means the user
+     * switched every piece off. Coercing the empty array to `undefined` would turn "off"
+     * into "all", which is the one mistake this field cannot survive.
+     */
+    brandDirectionPieces: data.brandDirectionPieces,
   };
 }
 
@@ -887,6 +902,7 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
     num_images: payload.numImages,
     skill_ids: payload.skillIds,
     brand_book_pieces: payload.brandBookPieces,
+    brand_direction_pieces: payload.brandDirectionPieces,
     reference_asset_ids: payload.referenceAssetIds,
   };
 }

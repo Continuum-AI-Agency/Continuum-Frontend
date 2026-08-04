@@ -10,6 +10,7 @@ export type CaptionStyle = {
   // Brand display family, best-effort. Prepended to the renderer's system stack;
   // silently falls back when the family isn't available to the OffscreenCanvas.
   fontFamily?: string;
+  fontWeight?: number;
   fontSizeFrac?: number;
   outlineWidthFrac?: number;
   position?: CaptionPosition;

@@ -29,9 +29,7 @@ type TimelineHistoryKey = Pick<
   'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'
 >;
 
-export function resolveTimelineHistoryShortcut(
-  event: TimelineHistoryKey,
-): 'undo' | 'redo' | null {
+export function resolveTimelineHistoryShortcut(event: TimelineHistoryKey): 'undo' | 'redo' | null {
   if (event.altKey || (!event.metaKey && !event.ctrlKey)) return null;
   const key = event.key.toLowerCase();
   if (key === 'z') return event.shiftKey ? 'redo' : 'undo';

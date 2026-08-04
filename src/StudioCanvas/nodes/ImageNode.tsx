@@ -73,10 +73,7 @@ import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from '../utils/a
 import { parseDataUrl } from '../utils/dataUrl';
 import { resolveCollisions } from '../utils/nodeCollisions';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import {
-  stageAndUploadReferenceFile,
-  uploadReferenceFile,
-} from '../utils/uploadReferenceFile';
+import { stageAndUploadReferenceFile, uploadReferenceFile } from '../utils/uploadReferenceFile';
 import { referenceStatusBadge } from './referenceStatusBadge';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';

@@ -44,6 +44,7 @@ export type RunTimelineInWorkerOptions = {
   audioTracks?: TimelineAudioWorkerItem[];
   videoBitrate?: number;
   audioBitrate?: number;
+  frameRate?: number;
   targetWidth?: number;
   targetHeight?: number;
   captionCues?: CaptionCue[];
@@ -234,6 +235,7 @@ export function runTimelineInWorker(
     audioTracks,
     videoBitrate,
     audioBitrate,
+    frameRate,
     targetWidth,
     targetHeight,
     captionCues,
@@ -251,6 +253,7 @@ export function runTimelineInWorker(
       audioTracks,
       videoBitrate,
       audioBitrate,
+      frameRate,
       targetWidth,
       targetHeight,
       captionCues,

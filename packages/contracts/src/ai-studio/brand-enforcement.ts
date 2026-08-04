@@ -23,6 +23,18 @@ export const brandBookPieceKindSchema = z.enum([
 ]);
 export type BrandBookPieceKind = z.infer<typeof brandBookPieceKindSchema>;
 
+/**
+ * What a generation enforces when NOBODY made a choice: the whole brand book.
+ *
+ * Enforcement is default-ON, and the two states are distinguishable — `undefined`
+ * means "unspecified, apply this default"; an explicit `[]` means the user turned
+ * enforcement off. The Backend applies this in `resolveBrandEnforcement`, so a
+ * surface that simply omits the field (the headless AI Studio runner did, and shipped
+ * image generations with no `<brand_book>`, no brand colors and no logo) cannot end
+ * up brand-blind while the canvas is fully enforced.
+ */
+export const DEFAULT_BRAND_BOOK_PIECES: readonly BrandBookPieceKind[] = ['full'];
+
 // Attached to a canvas node / a generation request. A non-empty `pieces` array
 // means the node is brand-enforced.
 export const brandEnforcementSchema = z.object({
