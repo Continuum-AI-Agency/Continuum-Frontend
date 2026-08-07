@@ -44,6 +44,7 @@
     "check-cache": "node scripts/check-cache.mjs",
     "cache:clear": "rm -rf .next/cache node_modules/.cache",
     "chat:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/chat-shell.spec.ts --workers=1",
+    "admin:audit:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/admin-audit-log.spec.ts --workers=1",
     "login:password:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/login-password.spec.ts --workers=1",
     "tiktok:profile:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/tiktok-profile-header.spec.ts --workers=1",
     "planner:e2e:bench": "set -a; . ./.env.local; set +a; NEXT_DIST_DIR=.next/e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json PLAYWRIGHT_BASE_URL=http://localhost:3002 playwright test e2e/organic-planner-chat.spec.ts --workers=1",

@@ -51,6 +51,11 @@ export type AdminWorkflowLibraryRow = {
 export type AdminAuditLogEntry = {
   id: string;
   actor_user_id: string | null;
+  // Resolved server-side from admin_user_directory so the actor reads as a
+  // person (name/email), not a raw UUID; null for system/automated or
+  // unresolvable actors.
+  actor_email: string | null;
+  actor_name: string | null;
   action: string;
   target_type: string;
   target_id: string | null;
@@ -61,6 +66,19 @@ export type AdminAuditLogEntry = {
   request_id: string | null;
   status: 'success' | 'failed';
   created_at: string;
+};
+
+// Pagination envelope returned by the admin-audit-log edge function. Narrower
+// than AdminPagination (the user-list SSR shape) — the audit reader only sends
+// the fields it computes, so we type exactly those rather than reuse a wider
+// shape the endpoint never populates.
+export type AdminAuditPagination = {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
 };
 
 export type AdminPagination = {
