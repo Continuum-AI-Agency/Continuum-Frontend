@@ -134,6 +134,14 @@ export const agentRunEventsPageSchema = z.object({
 export type AgentRunEventsPage = z.infer<typeof agentRunEventsPageSchema>;
 
 /** GET /api/agents/runs/active?brandId= — what the app shell hydrates from on load. */
+export const activeAgentRunsQuerySchema = z
+  .object({
+    /** Optional only for rolling compatibility with older Frontend deployments. */
+    brandId: z.string().uuid().optional(),
+  })
+  .strict();
+export type ActiveAgentRunsQuery = z.infer<typeof activeAgentRunsQuerySchema>;
+
 export const activeAgentRunsResponseSchema = z.object({
   runs: z.array(agentRunDtoSchema),
 });

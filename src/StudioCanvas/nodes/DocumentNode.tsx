@@ -37,13 +37,8 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
-import {
-  isAcceptedDocumentMime,
-  MAX_DOCUMENT_BYTES,
-  MAX_DOCUMENT_MB,
-} from '@/lib/documents/uploadLimits';
-import { createBrandId } from '@/lib/onboarding/state';
-import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
+import { uploadBrandDocument } from '@/lib/documents/uploadBrandDocument';
+import { isAcceptedDocumentMime } from '@/lib/documents/uploadLimits';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -53,7 +48,6 @@ import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
-const STORAGE_BUCKET = 'brand-docs';
 
 // A minimal view of a brand_documents row as needed for the picker.
 type PlatformDocRow = {
@@ -91,57 +85,20 @@ function resolveDocStatus(
   return { status: state ?? 'ready' };
 }
 
-// Uploads a file directly to brand-docs storage, then POSTs metadata to
-// /api/ai-studio/documents to invoke embed_document.
+// Ingests a file into the brand-docs library and kicks off embed_document.
 // Returns the documentId on success; throws on failure.
+//
+// The upload sequence itself lives in uploadBrandDocument — this used to be a verbatim
+// copy of the one in useDocumentMutations, and the two had already drifted.
+// syncOnboardingState is false here: AI Studio ingest must never mutate an
+// already-onboarded brand's intake state.
 async function ingestDocumentFile(file: File, brandId: string): Promise<string> {
-  if (file.size > MAX_DOCUMENT_BYTES) {
-    throw new Error(`File exceeds ${MAX_DOCUMENT_MB} MB limit`);
-  }
-  if (!isAcceptedDocumentMime(file.type)) {
-    throw new Error(`Unsupported file type: ${file.type || 'unknown'}`);
-  }
-
-  const supabase = createSupabaseBrowserClient();
-  const documentId = createBrandId();
-  const sanitizedFileName = sanitizeStorageFileName(file.name);
-  const storagePath = `${brandId}/${documentId}/${sanitizedFileName}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(storagePath, file, { contentType: file.type || undefined, upsert: false });
-  if (uploadError) {
-    throw new Error(uploadError.message || `Failed to upload ${file.name}`);
-  }
-
-  try {
-    const response = await fetch('/api/ai-studio/documents', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        brandId,
-        documentId,
-        storagePath,
-        fileName: sanitizedFileName,
-        mimeType: file.type,
-        size: file.size,
-        source: 'upload',
-        category: 'misc',
-      }),
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(text || `Ingestion failed (${response.status})`);
-    }
-    return documentId;
-  } catch (err) {
-    // Remove the orphaned storage object if metadata recording failed.
-    await supabase.storage
-      .from(STORAGE_BUCKET)
-      .remove([storagePath])
-      .catch(() => undefined);
-    throw err;
-  }
+  const { documentId } = await uploadBrandDocument({
+    brandId,
+    file,
+    syncOnboardingState: false,
+  });
+  return documentId;
 }
 
 export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<DocumentNodeData>>) {

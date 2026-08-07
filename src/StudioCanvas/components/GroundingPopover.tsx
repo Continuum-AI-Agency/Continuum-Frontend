@@ -17,6 +17,7 @@ import Link from 'next/link';
 import React from 'react';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import type { DesignSection } from '@continuum/contracts';
 import { useBrandBook } from '@/lib/brands/useBrandBook.client';
 import { useBrandDirectionPieces } from '@/lib/brands/useBrandDirectionPieces.client';
 import { useBrandSkills } from '@/lib/organic/skills';
@@ -123,6 +124,9 @@ export function GroundingPopover({
   onToggleSkill,
   onTogglePiece,
   onToggleDirectionPiece,
+  designSystemSections,
+  designSections = [],
+  onToggleDesignSection,
 }: {
   brandId?: string;
   skillIds: string[];
@@ -132,6 +136,16 @@ export function GroundingPopover({
   onToggleSkill: (skillId: string) => void;
   onTogglePiece: (kind: BrandBookPieceKind) => void;
   onToggleDirectionPiece?: (piece: BrandDirectionPiece) => void;
+  /** `undefined` = no preference (all enabled sections apply); `[]` = off. */
+  designSystemSections?: DesignSection[] | undefined;
+  /** Sections this brand actually has, with enough context to explain each row. */
+  designSections?: Array<{
+    section: DesignSection;
+    title: string;
+    ruleCount: number;
+    gates: boolean;
+  }>;
+  onToggleDesignSection?: (section: DesignSection) => void;
 }) {
   const direction = useBrandDirectionPieces(brandId);
   const { brandTokens } = useBrandBook(brandId);
@@ -232,6 +246,42 @@ export function GroundingPopover({
                         : 'Approved. Shapes the prompt; does not reject.'
                   }
                   hint={entry.approvedCount === 0 ? 'not approved' : undefined}
+                />
+              ))}
+            </section>
+          ) : null}
+
+          {onToggleDesignSection && designSections.length > 0 ? (
+            <section>
+              <SectionHeader title="Design system">
+                <span className="text-[0.65rem] text-muted-foreground">
+                  {designSystemSections === undefined
+                    ? 'all on'
+                    : `${designSystemSections.length} on`}
+                </span>
+              </SectionHeader>
+              <p className="px-1.5 pb-1 text-[0.65rem] text-muted-foreground">
+                The brand&apos;s approved system. Outranks the brand book where they disagree.
+              </p>
+              {designSections.map((entry) => (
+                <ToggleRow
+                  key={entry.section}
+                  /* Same reading as every other control here: `undefined` is "no
+                     preference", which applies everything the brand left enabled. */
+                  checked={
+                    designSystemSections === undefined ||
+                    designSystemSections.includes(entry.section)
+                  }
+                  onToggle={() => onToggleDesignSection(entry.section)}
+                  label={entry.title}
+                  description={
+                    entry.ruleCount === 0
+                      ? 'No rules recorded — switching it on changes nothing yet.'
+                      : entry.gates
+                        ? `${entry.ruleCount} rules, hard enough to reject a candidate.`
+                        : `${entry.ruleCount} rules. Shapes the prompt; does not reject.`
+                  }
+                  hint={entry.ruleCount === 0 ? 'empty' : undefined}
                 />
               ))}
             </section>

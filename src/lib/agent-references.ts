@@ -1,6 +1,7 @@
 import type { AgentMentionReference } from '@continuum/contracts';
 
 export {
+  type AgentDocumentAttachment,
   type AgentMentionMetadata,
   type AgentMentionReference,
   agentMentionMetadataSchema,

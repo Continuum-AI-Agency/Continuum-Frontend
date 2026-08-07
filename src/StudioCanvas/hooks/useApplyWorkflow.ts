@@ -19,7 +19,7 @@ import { rehydrateWorkflowMediaNodes } from '../utils/rehydrateWorkflowMedia';
 import { normalizeWorkflowSnapshot } from '../utils/workflowSerialization';
 
 export function useApplyWorkflow() {
-  const { setNodes, setEdges, takeSnapshot, defaultEdgeType } = useStudioStore();
+  const { setNodes, setEdges, takeSnapshot, triggerSave, defaultEdgeType } = useStudioStore();
   const { fitView } = useReactFlow();
   const { show } = useToast();
 
@@ -64,6 +64,7 @@ export function useApplyWorkflow() {
       takeSnapshot();
       setNodes(merged.nodes as StudioNode[]);
       setEdges(merged.edges as Edge[]);
+      triggerSave();
       requestAnimationFrame(() => {
         fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 300 });
       });
@@ -74,6 +75,6 @@ export function useApplyWorkflow() {
         variant: 'success',
       });
     },
-    [defaultEdgeType, fitView, setEdges, setNodes, show, takeSnapshot],
+    [defaultEdgeType, fitView, setEdges, setNodes, show, takeSnapshot, triggerSave],
   );
 }

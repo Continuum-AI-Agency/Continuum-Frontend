@@ -8,7 +8,7 @@ let maybeSingleCallCount = 0;
 let upsertSingleResponse: any = null;
 let lastUpsertPayload: any = null;
 
-const mockSignRequest = mock(async () => [] as any[]);
+const mockSignRequest = mock(async () => ({ items: [] }) as any);
 
 const mockChannel = {
   on: mock(() => mockChannel),
@@ -78,6 +78,8 @@ mock.module('@/lib/api/http', () => ({
 const mockSetNodes = mock(() => {});
 const mockSetEdges = mock(() => {});
 const mockStore: any = {
+  brandId: null,
+  activeRoomId: null,
   nodes: [],
   edges: [],
   defaultEdgeType: 'bezier',
@@ -90,6 +92,8 @@ const mockStore: any = {
   resetForRoomSwitch: mock(() => {
     mockStore.nodes = [];
     mockStore.edges = [];
+    mockStore.brandId = null;
+    mockStore.activeRoomId = null;
     mockSetNodes([]);
     mockSetEdges([]);
   }),
@@ -109,7 +113,7 @@ describe('useCanvasRealtime', () => {
     upsertSingleResponse = null;
     lastUpsertPayload = null;
     mockSignRequest.mockReset();
-    mockSignRequest.mockImplementation(async () => [] as any[]);
+    mockSignRequest.mockImplementation(async () => ({ items: [] }) as any);
     mockStore.nodes = [];
     mockStore.edges = [];
     mockSetNodes.mockClear();
@@ -673,9 +677,12 @@ describe('useCanvasRealtime', () => {
   });
 
   it('re-signs merged media missing its signed url, once per durable pointer', async () => {
-    mockSignRequest.mockImplementation(async () => [
-      { bucket: 'canvas', path: 'gen/img.png', signedUrl: 'https://signed.test/img' },
-    ]);
+    mockSignRequest.mockImplementation(async () => ({
+      items: [
+        { bucket: 'media-library', path: 'gen/img.png', signedUrl: 'https://signed.test/img' },
+      ],
+      expiresIn: 3600,
+    }));
 
     renderHook(() => useCanvasRealtime('brand-1', 'room-1'));
     await act(async () => {
@@ -686,13 +693,12 @@ describe('useCanvasRealtime', () => {
       (c: any) => c[0] === 'postgres_changes',
     )[2];
     mockSetNodes.mockClear();
-    mockSignRequest.mockClear();
 
     const strippedNode = {
       id: 'gen-img',
       type: 'nanoGen',
       position: { x: 0, y: 0 },
-      data: { generatedImageStoragePath: 'gen/img.png', generatedImageBucket: 'canvas' },
+      data: { generatedImageStoragePath: 'gen/img.png', generatedImageBucket: 'media-library' },
     };
 
     await act(async () => {
@@ -708,7 +714,7 @@ describe('useCanvasRealtime', () => {
           editor_session_id: 'peer-1',
         },
       });
-      await new Promise((r) => setTimeout(r, 40));
+      await new Promise((r) => setTimeout(r, 100));
     });
 
     const resignedPayload = (mockSetNodes as any).mock.calls.at(-1)?.[0];
@@ -733,6 +739,22 @@ describe('useCanvasRealtime', () => {
     });
 
     expect(mockSignRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a canvas owned by a different room before the first database load', async () => {
+    mockStore.brandId = 'brand-1';
+    mockStore.activeRoomId = 'room-old';
+    mockStore.nodes = [
+      { id: 'stale', type: 'string', position: { x: 0, y: 0 }, data: { value: 'old room' } },
+    ];
+
+    renderHook(() => useCanvasRealtime('brand-1', 'room-new'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+
+    expect(mockStore.resetForRoomSwitch).toHaveBeenCalledTimes(1);
+    expect(mockStore.nodes).toEqual([]);
   });
 
   it('does not wipe a non-empty local canvas when no persisted row exists (solo)', async () => {

@@ -130,6 +130,12 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const saveInFlightRef = useRef<boolean>(false);
   const pendingBroadcastPayloadRef = useRef<CanvasUpdatePayload | null>(null);
   const loadedRoomKeyRef = useRef<string | null>(null);
+  const initialStore = useStudioStore.getState();
+  const initialStoreRoomKeyRef = useRef<string | null>(
+    initialStore.brandId && initialStore.activeRoomId
+      ? `${initialStore.brandId}:${initialStore.activeRoomId}`
+      : null,
+  );
   const syncLatestCanvasSessionRef = useRef<(() => Promise<void>) | null>(null);
   const refillMediaRef = useRef<((nodes: StudioNode[]) => Promise<void>) | null>(null);
   // Durable pointers (bucket\npath) already re-signed this mount — guards against
@@ -390,7 +396,11 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
     }
 
     const roomKey = `${brandProfileId}:${roomId}`;
-    const isRoomSwitch = loadedRoomKeyRef.current !== null && loadedRoomKeyRef.current !== roomKey;
+    const isRoomSwitch =
+      (loadedRoomKeyRef.current !== null && loadedRoomKeyRef.current !== roomKey) ||
+      (loadedRoomKeyRef.current === null &&
+        initialStoreRoomKeyRef.current !== null &&
+        initialStoreRoomKeyRef.current !== roomKey);
     loadedRoomKeyRef.current = roomKey;
     let cancelled = false;
 

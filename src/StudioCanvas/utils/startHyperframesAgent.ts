@@ -13,6 +13,7 @@ import { useAgentRunStore } from '@/lib/agents/runStore';
 import { startHyperframesTurn } from '@/lib/api/hyperframesAgent.client';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { HyperframesAgentNodeData, StudioNode } from '../types';
+import { effectiveBrandBookPieces } from './brandEnforcement';
 
 const assetIdFromNode = (node: StudioNode): string | null => {
   const data = node.data as Record<string, unknown>;
@@ -104,7 +105,10 @@ export async function startHyperframesAgentNode(params: {
     prompt,
     assets,
     skillIds: data.skillIds ?? [],
-    brandBookPieces: data.brandBookPieces ?? [],
+    // `?? []` here meant "brand enforcement off" — the node stores the selection as
+    // optional so an untouched canvas never writes into a saved graph, and every
+    // other generator resolves that absence through effectiveBrandBookPieces.
+    brandBookPieces: effectiveBrandBookPieces(data.brandBookPieces),
     aspectRatio: data.aspectRatio,
     durationSeconds: data.durationSeconds,
     resolution: data.resolution,

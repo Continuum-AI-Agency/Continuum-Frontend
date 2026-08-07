@@ -1,20 +1,41 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-export type CanvasRoom = {
-  id: string;
-  brand_profile_id: string;
-  name: string;
-  created_at: string;
-  created_by: string | null;
-  kind: 'general' | 'planner';
+const canvasRoomSchema = z
+  .object({
+    id: z.string().uuid(),
+    brand_profile_id: z.string().min(1),
+    name: z.string(),
+    created_at: z.string(),
+    created_by: z.string().nullable(),
+    kind: z.enum(['general', 'planner']),
+  })
+  .strict();
+
+export type CanvasRoom = z.infer<typeof canvasRoomSchema>;
+
+const createdWorkspaceSchema = z.object({
+  room_id: z.string().uuid(),
+  name: z.string(),
+  kind: z.literal('general'),
+  created_at: z.string(),
+});
+
+type WorkspaceRpcError = { message: string; code?: string };
+type WorkspaceRpcClient = {
+  rpc(
+    name: 'create_canvas_workspace',
+    args: { p_brand_profile_id: string; p_name: string },
+  ): Promise<{ data: unknown; error: WorkspaceRpcError | null }>;
 };
 
 export function useCanvasRooms(brandProfileId: string) {
   const supabase = createSupabaseBrowserClient();
+  const channelId = useId();
   const [rooms, setRooms] = useState<CanvasRoom[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -42,6 +63,60 @@ export function useCanvasRooms(brandProfileId: string) {
     fetchRooms();
   }, [fetchRooms]);
 
+  useEffect(() => {
+    if (!brandProfileId) return;
+
+    const receiveRoom = (payload: { new: unknown }) => {
+      const parsed = canvasRoomSchema.safeParse(payload.new);
+      if (!parsed.success || parsed.data.brand_profile_id !== brandProfileId) return;
+      setRooms((current) =>
+        [...current.filter((room) => room.id !== parsed.data.id), parsed.data].sort((a, b) =>
+          a.created_at.localeCompare(b.created_at),
+        ),
+      );
+    };
+
+    const channel = supabase
+      .channel(`canvas-rooms:${brandProfileId}:${channelId}`)
+      .on(
+        'postgres_changes' as any,
+        {
+          event: 'INSERT',
+          schema: 'brand_profiles',
+          table: 'canvas_rooms',
+          filter: `brand_profile_id=eq.${brandProfileId}`,
+        },
+        receiveRoom,
+      )
+      .on(
+        'postgres_changes' as any,
+        {
+          event: 'UPDATE',
+          schema: 'brand_profiles',
+          table: 'canvas_rooms',
+          filter: `brand_profile_id=eq.${brandProfileId}`,
+        },
+        receiveRoom,
+      )
+      .on(
+        'postgres_changes' as any,
+        { event: 'DELETE', schema: 'brand_profiles', table: 'canvas_rooms' },
+        (payload: { old: unknown }) => {
+          const deleted = z.object({ id: z.string().uuid() }).safeParse(payload.old);
+          if (deleted.success) {
+            setRooms((current) => current.filter((room) => room.id !== deleted.data.id));
+          }
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void fetchRooms();
+      });
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [brandProfileId, channelId, fetchRooms, supabase]);
+
   const createRoom = async (name: string) => {
     const generalRooms = rooms.filter((room) => room.kind !== 'planner');
     if (generalRooms.length >= 3) {
@@ -49,16 +124,13 @@ export function useCanvasRooms(brandProfileId: string) {
       return null;
     }
 
-    const { data, error } = await supabase
-      .schema('brand_profiles' as any)
-      .from('canvas_rooms' as any)
-      .insert({
-        brand_profile_id: brandProfileId,
-        name,
-        kind: 'general',
-      })
-      .select()
-      .single();
+    const workspaceClient = supabase.schema(
+      'brand_profiles' as never,
+    ) as unknown as WorkspaceRpcClient;
+    const { data, error } = await workspaceClient.rpc('create_canvas_workspace', {
+      p_brand_profile_id: brandProfileId,
+      p_name: name,
+    });
 
     if (error) {
       console.error('[Canvas Rooms] Create failed', error);
@@ -66,9 +138,23 @@ export function useCanvasRooms(brandProfileId: string) {
       return null;
     }
 
-    setRooms((prev) => [...prev, data as CanvasRoom]);
+    const parsed = createdWorkspaceSchema.safeParse(data);
+    if (!parsed.success) {
+      console.error('[Canvas Rooms] Create returned an invalid workspace', parsed.error.flatten());
+      toast.error('Failed to create workspace');
+      return null;
+    }
+    const room: CanvasRoom = {
+      id: parsed.data.room_id,
+      brand_profile_id: brandProfileId,
+      name: parsed.data.name,
+      created_at: parsed.data.created_at,
+      created_by: null,
+      kind: parsed.data.kind,
+    };
+    setRooms((prev) => [...prev, room]);
     toast.success('Workspace created');
-    return data as CanvasRoom;
+    return room;
   };
 
   const deleteRoom = async (roomId: string) => {

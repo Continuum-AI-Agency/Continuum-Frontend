@@ -3,6 +3,7 @@ import {
   AGENT_CHAT_STARTED,
   AGENT_RUN_QUEUED,
   type AgentRunEventDto,
+  activeAgentRunsQuerySchema,
   agentChatStartedFrameSchema,
   agentRunDtoSchema,
   agentRunEventDtoSchema,
@@ -166,6 +167,18 @@ describe('agentRunDtoSchema', () => {
       origin: { surface: 'ai-studio', roomId: 'room_1', nodeId: '' },
     });
     expect(parsed.success).toBe(false);
+  });
+});
+
+describe('activeAgentRunsQuerySchema', () => {
+  it('accepts an explicit UUID brand scope and keeps it optional for rolling deploys', () => {
+    const brandId = '148583e0-5538-462b-8d3a-acd25b80344e';
+    expect(activeAgentRunsQuerySchema.parse({ brandId })).toEqual({ brandId });
+    expect(activeAgentRunsQuerySchema.parse({})).toEqual({});
+  });
+
+  it('rejects malformed brand scopes at the shared HTTP boundary', () => {
+    expect(activeAgentRunsQuerySchema.safeParse({ brandId: 'easy-fit' }).success).toBe(false);
   });
 });
 

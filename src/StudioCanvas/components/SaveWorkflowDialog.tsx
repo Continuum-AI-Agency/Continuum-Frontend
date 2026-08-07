@@ -26,9 +26,10 @@ type SaveWorkflowFormValues = z.infer<typeof saveWorkflowSchema>;
 
 type SaveWorkflowDialogProps = {
   brandProfileId?: string;
+  roomId?: string;
 };
 
-export function SaveWorkflowDialog({ brandProfileId }: SaveWorkflowDialogProps) {
+export function SaveWorkflowDialog({ brandProfileId, roomId }: SaveWorkflowDialogProps) {
   const { nodes, edges, defaultEdgeType } = useStudioStore();
   const { show } = useToast();
   const [open, setOpen] = React.useState(false);
@@ -74,6 +75,10 @@ export function SaveWorkflowDialog({ brandProfileId }: SaveWorkflowDialogProps) 
         description: values.description?.trim() || undefined,
         nodes: snapshot.nodes,
         edges: snapshot.edges,
+        metadata: {
+          created_via: 'canvas_ui',
+          ...(roomId ? { source_room_id: roomId } : {}),
+        },
       });
       show({ title: 'Workflow saved', description: values.name, variant: 'success' });
       closePanel();

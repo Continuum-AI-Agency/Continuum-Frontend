@@ -76,7 +76,13 @@ export const hyperframesAgentTurnRequestSchema = z
     // Grounding selection, same shape the other generator nodes send. Without
     // these the composition agent is the only ungrounded generator in the Studio.
     skillIds: z.array(z.string().min(1)).max(HYPERFRAMES_AGENT_SKILL_LIMIT).default([]),
-    brandBookPieces: z.array(brandBookPieceKindSchema).max(8).default([]),
+    // Optional, NOT `.default([])`. `resolveBrandEnforcement` reads absence as
+    // DEFAULT_BRAND_BOOK_PIECES ("full") and an empty array as enforcement OFF, so
+    // defaulting here would silently strip every brand hex and typeface from the one
+    // generator that renders type itself. `skillIds` above may default to [] because
+    // `resolveHyperframesSkillIds` reads empty as "use the default skill"; the two
+    // fields look alike and mean opposite things when empty.
+    brandBookPieces: z.array(brandBookPieceKindSchema).max(8).optional(),
     aspectRatio: hyperframesAspectRatioSchema.default('16:9'),
     durationSeconds: z.number().int().min(5).max(30).default(10),
     resolution: hyperframesResolutionSchema.default('1080p'),

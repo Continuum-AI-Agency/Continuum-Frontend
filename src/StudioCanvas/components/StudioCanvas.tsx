@@ -28,7 +28,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Canvas } from '@/components/ai-elements/canvas';
@@ -73,6 +73,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/ToastProvider';
+import { canvasRoomHref } from '@/lib/ai-studio/canvasRoomLocation';
 import { inlineRemoteImage } from '@/lib/ai-studio/inlineRemoteImage';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
@@ -1916,12 +1917,24 @@ export function StudioCanvas({
   organicPlannerSeed,
 }: StudioCanvasProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentSearch = searchParams.toString();
   const { show } = useToast();
   const nodes = useStudioStore((state) => state.nodes);
   const { rooms, isLoading: roomsLoading } = useCanvasRooms(brandProfileId || '');
   const [activeRoomId, setActiveRoomId] = useState<string | undefined>(initialRoomId);
   const [isApplyingBack, setIsApplyingBack] = useState(false);
   const [selectedLinkedinNodeId, setSelectedLinkedinNodeId] = useState<string | null>(null);
+  const selectRoom = useCallback(
+    (roomId: string | undefined) => {
+      if (roomId !== activeRoomId) {
+        useStudioStore.getState().resetForRoomSwitch();
+      }
+      setActiveRoomId(roomId);
+      router.replace(canvasRoomHref(currentSearch, roomId), { scroll: false });
+    },
+    [activeRoomId, currentSearch, router],
+  );
   const workflowSpec = useMemo<WorkflowConceptSpec | null>(
     () =>
       organicPlannerSeed
@@ -2024,15 +2037,16 @@ export function StudioCanvas({
   useEffect(() => {
     if (previousBrandRef.current !== brandProfileId) {
       previousBrandRef.current = brandProfileId;
-      setActiveRoomId(undefined);
+      useStudioStore.getState().resetForBrandSwitch();
+      selectRoom(undefined);
     }
-  }, [brandProfileId]);
+  }, [brandProfileId, selectRoom]);
 
   useEffect(() => {
     if (!activeRoomId && rooms.length > 0) {
-      setActiveRoomId(rooms[0].id);
+      selectRoom(rooms[0].id);
     }
-  }, [activeRoomId, rooms]);
+  }, [activeRoomId, rooms, selectRoom]);
 
   const realtime = useCanvasRealtime(brandProfileId || '', activeRoomId);
   const canvasRuntime = useMemo(
@@ -2282,7 +2296,7 @@ export function StudioCanvas({
                 <CanvasRoomsTabs
                   brandProfileId={brandProfileId || ''}
                   activeRoomId={activeRoomId}
-                  onRoomChange={setActiveRoomId}
+                  onRoomChange={selectRoom}
                 />
               </div>
             </div>
@@ -2344,7 +2358,7 @@ export function StudioCanvas({
                 </>
               ) : null}
               <LoadWorkflowDialog brandProfileId={brandProfileId} />
-              <SaveWorkflowDialog brandProfileId={brandProfileId} />
+              <SaveWorkflowDialog brandProfileId={brandProfileId} roomId={activeRoomId} />
               <WorkflowLibrary />
               <Toolbar />
             </div>
