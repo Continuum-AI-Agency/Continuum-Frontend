@@ -2,7 +2,6 @@
 
 import dynamic from 'next/dynamic';
 import type React from 'react';
-import { AgentRunsProvider } from '@/components/agents/AgentRunsProvider';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { ClientRenderProvider } from '@/lib/client-render/ClientRenderProvider';
 import { DashboardHeader } from './dashboard-header';
@@ -15,6 +14,12 @@ import { BrandWelcomeBanner } from './welcome/BrandWelcomeBanner';
 
 const CommandPalette = dynamic(
   () => import('./navigation/CommandPalette').then((m) => ({ default: m.CommandPalette })),
+  { ssr: false },
+);
+
+const AgentRunsProvider = dynamic(
+  () =>
+    import('@/components/agents/AgentRunsProvider').then((m) => ({ default: m.AgentRunsProvider })),
   { ssr: false },
 );
 
