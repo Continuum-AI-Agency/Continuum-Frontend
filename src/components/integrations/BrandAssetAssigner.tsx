@@ -606,6 +606,20 @@ export function BrandAssetAssigner({
               'No Google Ads accounts were found for this account. They may live under a different Google identity.',
             variant: 'info',
           });
+        } else if (result.warning === 'ga4_scope_missing') {
+          show({
+            title: 'Connected, without Analytics',
+            description:
+              'Google Analytics access was not granted, so no GA4 properties were synced. Reconnect and approve Analytics to enable them.',
+            variant: 'info',
+          });
+        } else if (result.warning === 'ga4_enrichment_failed') {
+          show({
+            title: 'Connected, with a note',
+            description:
+              "Couldn't read your Google Analytics properties. Everything else connected fine.",
+            variant: 'info',
+          });
         } else if (result.warning === 'meta_partial_sync') {
           show({
             title: 'Connected, with a note',

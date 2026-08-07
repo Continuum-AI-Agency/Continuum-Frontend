@@ -42,6 +42,7 @@ import { fetchPulseRecipients } from '@/lib/brands/pulseRecipients';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import {
   createEmptyUserIntegrationSummary,
+  fetchProviderReconnectPrompts,
   fetchUserIntegrationSummary,
 } from '@/lib/integrations/userIntegrations';
 import type { AgentRequestPayload } from '@/lib/onboarding/agentClient';
@@ -345,6 +346,9 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     const userIntegrationSummary = user
       ? await fetchUserIntegrationSummary(user.id)
       : createEmptyUserIntegrationSummary();
+    const reconnectPrompts = user
+      ? await fetchProviderReconnectPrompts(user.id, userIntegrationSummary)
+      : [];
 
     activeSectionSlot = (
       <>
@@ -352,7 +356,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           title="Personal connections"
           description="OAuth providers tied to your account. Assign these to brands from the brand integrations panel."
         >
-          <UserConnectionsSwitcher integrations={userIntegrationSummary} />
+          <UserConnectionsSwitcher
+            integrations={userIntegrationSummary}
+            reconnectPrompts={reconnectPrompts}
+          />
         </SettingsSection>
         <SettingsSection
           title="Chat request delivery"
