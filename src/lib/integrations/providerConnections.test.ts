@@ -1,98 +1,71 @@
+// Google freezes a connection's granted scopes at consent time. Every Google
+// connection in production (17 of them, 2026-08-06) was authorized before
+// analytics.readonly joined GOOGLE_SCOPES, so the GA4 enumeration 403s on every
+// sync and prod holds ZERO ga4_property rows — with nothing telling the user
+// that only a fresh consent can fix it. These pin when we ask for one.
+
 import { describe, expect, it } from 'bun:test';
+import { GOOGLE_ANALYTICS_SCOPE, needsGoogleAnalyticsReconsent } from './providerConnections';
 
-import { getProviderConnectionSummary, hasProviderConnections } from './providerConnections';
-import type { UserIntegrationAccount, UserIntegrationSummary } from './userIntegrations';
+const OTHER_SCOPE = 'https://www.googleapis.com/auth/adwords';
 
-function account(overrides: Partial<UserIntegrationAccount>): UserIntegrationAccount {
-  return {
-    id: 'acct-1',
-    name: 'Account',
-    status: 'active',
-    externalAccountId: 'ext-1',
-    provider: 'google',
-    platformKey: 'youtube',
-    createdAt: null,
-    ...overrides,
-  };
-}
-
-function summaryOf(groups: Record<string, UserIntegrationAccount[]>): UserIntegrationSummary {
-  const withAccountsWrapper = Object.fromEntries(
-    Object.entries(groups).map(([key, accounts]) => [key, { accounts }]),
-  );
-  return withAccountsWrapper as unknown as UserIntegrationSummary;
-}
-
-describe('getProviderConnectionSummary / hasProviderConnections', () => {
-  it('reports not connected and no account names when nothing is linked', () => {
-    const summary = summaryOf({ youtube: [], googleAds: [] });
-
-    const result = getProviderConnectionSummary(summary, 'google');
-
-    expect(result.connected).toBe(false);
-    expect(result.accountNames).toEqual([]);
-    expect(hasProviderConnections(summary, 'google')).toBe(false);
+describe('needsGoogleAnalyticsReconsent', () => {
+  it('asks for reconsent when the sync reported the scope was never granted', () => {
+    expect(
+      needsGoogleAnalyticsReconsent(
+        { ga4_enrichment: { ok: false, error: 'scope_not_granted' } },
+        0,
+      ),
+    ).toBe(true);
   });
 
-  it('collects distinct account names across groups for the same provider', () => {
-    const summary = summaryOf({
-      youtube: [
-        account({ id: 'a1', name: 'Acme Channel', provider: 'google', platformKey: 'youtube' }),
-      ],
-      googleAds: [
-        account({ id: 'a2', name: 'Acme Ads', provider: 'google', platformKey: 'googleAds' }),
-      ],
-    });
-
-    const result = getProviderConnectionSummary(summary, 'google');
-
-    expect(result.connected).toBe(true);
-    expect(result.accountNames.sort()).toEqual(['Acme Ads', 'Acme Channel']);
+  it('stays quiet when enumeration succeeded but the user simply has no properties', () => {
+    expect(needsGoogleAnalyticsReconsent({ ga4_enrichment: { ok: true } }, 0)).toBe(false);
   });
 
-  it('dedupes repeated account names for the same identity', () => {
-    const summary = summaryOf({
-      youtube: [account({ id: 'a1', name: 'duane@continuumai.agency', provider: 'google' })],
-      googleAds: [account({ id: 'a2', name: 'duane@continuumai.agency', provider: 'google' })],
-    });
-
-    const result = getProviderConnectionSummary(summary, 'google');
-
-    expect(result.accountNames).toEqual(['duane@continuumai.agency']);
+  it('reads a recorded non-empty scope list as the granted set', () => {
+    expect(needsGoogleAnalyticsReconsent({ scopes: [OTHER_SCOPE] }, 0)).toBe(true);
+    expect(
+      needsGoogleAnalyticsReconsent({ scopes: [OTHER_SCOPE, GOOGLE_ANALYTICS_SCOPE] }, 0),
+    ).toBe(false);
   });
 
-  it('treats meta and facebook as the same provider identity', () => {
-    const summary = summaryOf({
-      facebook: [
-        account({ id: 'a1', name: 'Acme Page', provider: 'meta', platformKey: 'facebook' }),
-      ],
-    });
-
-    expect(hasProviderConnections(summary, 'facebook')).toBe(true);
-    expect(getProviderConnectionSummary(summary, 'facebook').accountNames).toEqual(['Acme Page']);
+  it('treats an empty scope list as unknown, not as missing', () => {
+    // Empty means Google returned no scope string. Falls through to the
+    // property-count inference rather than asserting a gap.
+    expect(needsGoogleAnalyticsReconsent({ scopes: [] }, 3)).toBe(false);
+    expect(needsGoogleAnalyticsReconsent({ scopes: [] }, 0)).toBe(true);
   });
 
-  it('does not cross-contaminate providers', () => {
-    const summary = summaryOf({
-      tiktok: [
-        account({ id: 'a1', name: 'Acme TikTok', provider: 'tiktok', platformKey: 'tiktok' }),
-      ],
-    });
-
-    expect(hasProviderConnections(summary, 'google')).toBe(false);
-    expect(getProviderConnectionSummary(summary, 'x').accountNames).toEqual([]);
+  it('infers from zero synced properties on connections predating the bookkeeping', () => {
+    // This is the case that covers every existing production connection: no
+    // ga4_enrichment metadata, no recorded scopes, no properties.
+    expect(needsGoogleAnalyticsReconsent({}, 0)).toBe(true);
   });
 
-  it('detects LinkedIn provider connections', () => {
-    const summary = summaryOf({
-      linkedin: [
-        account({ id: 'a1', name: 'Acme LinkedIn', provider: 'linkedin', platformKey: 'linkedin' }),
-      ],
-    });
+  it('self-clears once a property has actually synced', () => {
+    expect(needsGoogleAnalyticsReconsent({}, 1)).toBe(false);
+  });
 
-    expect(hasProviderConnections(summary, 'linkedin')).toBe(true);
-    expect(getProviderConnectionSummary(summary, 'linkedin').accountNames).toEqual([
-      'Acme LinkedIn',
-    ]);
+  it('prefers an explicit enrichment verdict over the property-count inference', () => {
+    // Succeeded with properties present but a stale/absent scope list: no nag.
+    expect(needsGoogleAnalyticsReconsent({ scopes: [], ga4_enrichment: { ok: true } }, 0)).toBe(
+      false,
+    );
+    // Scope gap reported even though properties exist from an earlier grant.
+    expect(
+      needsGoogleAnalyticsReconsent(
+        { ga4_enrichment: { ok: false, error: 'scope_not_granted' } },
+        5,
+      ),
+    ).toBe(true);
+  });
+
+  it('does not ask for reconsent on a transient enumeration failure', () => {
+    // A 500 from Google is not a scope problem; the property-count inference
+    // decides, so a user with properties already synced is left alone.
+    expect(
+      needsGoogleAnalyticsReconsent({ ga4_enrichment: { ok: false, error: 'backend error' } }, 2),
+    ).toBe(false);
   });
 });
