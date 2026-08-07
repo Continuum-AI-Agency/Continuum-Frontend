@@ -23,6 +23,8 @@ import {
   EnrollRequestSchema,
   EnrollResultSchema,
   getOptimizationMetricDefinition,
+  OptimizerAdsetInventoryEnvelopeSchema,
+  OptimizerAdsetInventoryItemSchema,
   OptimizerSnapshotsEnvelopeSchema,
   OptimizerStatusSchema,
   ParsedCycleRunReportSchema,
@@ -87,6 +89,45 @@ describe('OptimizerSnapshotsEnvelopeSchema', () => {
 
     expect(parsed.budgetSummary).toBeNull();
     expect(parsed.fetchedAt).toBeNull();
+  });
+});
+
+describe('OptimizerAdsetInventoryEnvelopeSchema', () => {
+  test('keeps provider lifecycle separate from optimizer snapshots', () => {
+    const parsed = OptimizerAdsetInventoryEnvelopeSchema.parse({
+      adsets: [
+        {
+          id: 'paused-1',
+          name: 'Paused prospecting',
+          campaignId: 'campaign-1',
+          campaignName: 'Prospecting',
+          configuredStatus: 'PAUSED',
+          effectiveStatus: 'PAUSED',
+          lifecycle: 'recoverable',
+          currentBudget: 42,
+          optimizationGoal: 'OFFSITE_CONVERSIONS',
+          adCount: 3,
+        },
+      ],
+      fetchedAt: '2026-08-03T12:00:00.000Z',
+      partial: false,
+      truncated: false,
+    });
+
+    expect(OptimizerAdsetInventoryItemSchema.parse(parsed.adsets[0])).toMatchObject({
+      id: 'paused-1',
+      lifecycle: 'recoverable',
+      effectiveStatus: 'PAUSED',
+    });
+    expect(parsed).not.toHaveProperty('snapshots');
+  });
+
+  test('defaults diagnostics for older or minimal inventory responses', () => {
+    const parsed = OptimizerAdsetInventoryEnvelopeSchema.parse({ adsets: [] });
+
+    expect(parsed.fetchedAt).toBeNull();
+    expect(parsed.partial).toBe(false);
+    expect(parsed.truncated).toBe(false);
   });
 });
 

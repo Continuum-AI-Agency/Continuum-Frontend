@@ -1,6 +1,6 @@
 'use client';
 
-import type { AgentAttachment } from '@continuum/contracts';
+import type { AgentAttachment, AgentDocumentAttachment } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentMentionReference } from '@/lib/agent-references';
 import { useAgentRunStore } from '@/lib/agents/runStore';
@@ -30,6 +30,11 @@ type JainaChatInput = {
   clarificationId?: string;
   userId?: string;
   images?: AgentAttachment[];
+  // Documents attached to the composer. Resolved to chunks server-side rather than
+  // sent as content, and kept out of `images` so they never reach the pixels path.
+  documents?: AgentDocumentAttachment[];
+  // Scopes which ephemeral documents this turn may resolve. Server-derived.
+  documentScopeKey?: string;
   references?: AgentMentionReference[];
   planAction?: JainaPlanAction;
   scaffoldAction?: JainaScaffoldAction;
@@ -230,6 +235,10 @@ export function useJainaChatStream() {
               ? { references: input.references }
               : {}),
             ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
+            ...(input.documents && input.documents.length > 0
+              ? { documents: input.documents }
+              : {}),
+            ...(input.documentScopeKey ? { documentScopeKey: input.documentScopeKey } : {}),
           },
         });
       } catch (error) {

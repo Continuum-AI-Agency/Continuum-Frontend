@@ -45,10 +45,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
+import { attributeTransfers, type TransferAttribution } from '../charts/chartData';
 import { formatCurrency } from '../format';
 import {
   actionRoute,
   applyModeExplainer,
+  budgetMoveWhy,
   creativeBriefForRec,
   notImplementedMessage,
   parseReport,
@@ -152,6 +154,45 @@ export function buildActionQueue(
   return rows.sort((a, b) => queueRank(a) - queueRank(b));
 }
 
+/** Who this ad set's budget came from, or went to. `direction` is from the row's point of
+ *  view: a cut ad set FUNDS others, a raised one is FUNDED BY them. */
+export type Counterparty = { adsetId: string; name: string | null; amount: number };
+
+/** Attribution → per-ad-set counterparty lists, largest first. Slivers under a dollar are
+ *  dropped here rather than in the pure function, which stays exact so its sums test cleanly. */
+export function buildCounterparties(
+  attribution: TransferAttribution,
+  nameById?: Map<string, string> | null,
+): Map<string, { direction: 'funds' | 'fundedBy'; parties: Counterparty[] }> {
+  const byAdset = new Map<string, { direction: 'funds' | 'fundedBy'; parties: Counterparty[] }>();
+  const name = (id: string) => resolveAdsetName({ adset_id: id }, nameById);
+
+  for (const transfer of attribution.transfers) {
+    if (transfer.amount < 1) continue;
+    const donor = byAdset.get(transfer.fromAdsetId) ?? { direction: 'funds' as const, parties: [] };
+    donor.parties.push({
+      adsetId: transfer.toAdsetId,
+      name: name(transfer.toAdsetId),
+      amount: transfer.amount,
+    });
+    byAdset.set(transfer.fromAdsetId, donor);
+
+    const recipient = byAdset.get(transfer.toAdsetId) ?? {
+      direction: 'fundedBy' as const,
+      parties: [],
+    };
+    recipient.parties.push({
+      adsetId: transfer.fromAdsetId,
+      name: name(transfer.fromAdsetId),
+      amount: transfer.amount,
+    });
+    byAdset.set(transfer.toAdsetId, recipient);
+  }
+
+  for (const entry of byAdset.values()) entry.parties.sort((a, b) => b.amount - a.amount);
+  return byAdset;
+}
+
 /** Sort key: needs-decision first, approved-awaiting-execute next, hidden last; within the
  *  needs-decision band, higher-severity recs rise. */
 function queueRank(row: QueueRow): number {
@@ -212,6 +253,44 @@ export function OptimizerActionsPortfolioGroup({
 
   const approvedBudgetCount = rows.filter((row) => row.route === 'budget' && row.approved).length;
   const approvedPauseCount = rows.filter((row) => row.route === 'pause' && row.approved).length;
+
+  // Attribution runs over the FULL allocation vector, not the queue rows: in autopilot only
+  // the over-cap items are 'held' and the rest are filtered out of the queue, but the whole
+  // vector is the only correct pro-rata denominator. So a held raise can legitimately read
+  // "funded by Cold Lookalike" where Cold Lookalike is not itself in the queue.
+  const attribution = React.useMemo(
+    () => attributeTransfers(report?.latest_items ?? []),
+    [report?.latest_items],
+  );
+  // Attribution knows only ad set IDs, so naming has to go through a map. cycle_items carry
+  // the authoritative adset_name (the performance RPC's join) and the enrolled roster is the
+  // fallback — same precedence resolveAdsetName documents, just flattened into one map.
+  const transferNameById = React.useMemo(() => {
+    const merged = new Map(nameById);
+    for (const item of report?.latest_items ?? []) {
+      const name = item.adset_name?.trim();
+      if (name) merged.set(item.adset_id, name);
+    }
+    return merged;
+  }, [nameById, report?.latest_items]);
+  const counterpartyById = React.useMemo(
+    () => buildCounterparties(attribution, transferNameById),
+    [attribution, transferNameById],
+  );
+
+  const selectableBudgetRows = rows.filter((row) => row.route === 'budget' && isSelectableRow(row));
+  const budgetGroupSelected =
+    selectableBudgetRows.length > 0 && selectableBudgetRows.every((row) => selected.has(row.key));
+  // What approving exactly the current selection does to total daily spend. Raw change_abs
+  // sum — no filtering — because that is literally the question. Selecting a conserved set
+  // reads flat; selecting only the raise reads +$15/day.
+  const selectedBudgetRows = rows.filter(
+    (row): row is BudgetQueueRow => row.route === 'budget' && selected.has(row.key),
+  );
+  const selectionNetDelta =
+    selectedBudgetRows.length === 0
+      ? null
+      : selectedBudgetRows.reduce((sum, row) => sum + (row.item.change_abs ?? 0), 0);
 
   if (performanceQuery.isLoading) return <Skeleton className="h-28 rounded-lg" />;
   if (rows.length === 0) return null;
@@ -331,6 +410,18 @@ export function OptimizerActionsPortfolioGroup({
     }
   };
 
+  const toggleBudgetGroup = () => {
+    if (writesBlocked) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const row of selectableBudgetRows) {
+        if (budgetGroupSelected) next.delete(row.key);
+        else next.add(row.key);
+      }
+      return next;
+    });
+  };
+
   const toggleRow = (row: QueueRow) => {
     if (!isSelectableRow(row) || writesBlocked) return;
     setSelected((prev) => {
@@ -384,6 +475,7 @@ export function OptimizerActionsPortfolioGroup({
         onToggleSelectAll={toggleSelectAll}
         pausePending={applyAdsetStatus.isPending}
         selectableCount={selectableVisible.length}
+        selectionNetDelta={selectionNetDelta}
         writesBlocked={writesBlocked}
       />
 
@@ -400,20 +492,41 @@ export function OptimizerActionsPortfolioGroup({
       ) : null}
 
       <ul className="space-y-2">
-        {visibleRows.map((row) => (
-          <QueueRowView
-            key={row.key}
-            brandId={brandId}
-            currency={null}
-            expanded={expanded === row.key}
-            failed={failedAdsets.has(row.adsetId)}
-            approving={approving.has(row.key)}
-            onToggleExpand={() => setExpanded(expanded === row.key ? null : row.key)}
-            onToggleSelect={() => toggleRow(row)}
-            row={row}
-            selected={selected.has(row.key)}
-            writesBlocked={writesBlocked}
-          />
+        {visibleRows.map((row, index) => (
+          <React.Fragment key={row.key}>
+            {/* The budget rows already sort into one contiguous block (queueRank gives them
+                all 10, and Array.sort is stable), so the header goes in front of the first
+                one rather than restructuring the queue. Gated on there being a real transfer
+                to describe — a cycle that only raises has no donor and nothing to group. */}
+            {attribution.transfers.length > 0 &&
+            row.route === 'budget' &&
+            visibleRows[index - 1]?.route !== 'budget' ? (
+              <BudgetTransferHeader
+                allSelected={budgetGroupSelected}
+                attribution={attribution}
+                currency={null}
+                mode={report?.latest_run?.mode ?? null}
+                nameById={transferNameById}
+                onToggleGroup={toggleBudgetGroup}
+                writesBlocked={writesBlocked}
+              />
+            ) : null}
+            <QueueRowView
+              brandId={brandId}
+              counterparty={
+                row.route === 'budget' ? (counterpartyById.get(row.adsetId) ?? null) : null
+              }
+              currency={null}
+              expanded={expanded === row.key}
+              failed={failedAdsets.has(row.adsetId)}
+              approving={approving.has(row.key)}
+              onToggleExpand={() => setExpanded(expanded === row.key ? null : row.key)}
+              onToggleSelect={() => toggleRow(row)}
+              row={row}
+              selected={selected.has(row.key)}
+              writesBlocked={writesBlocked}
+            />
+          </React.Fragment>
         ))}
       </ul>
 
@@ -533,6 +646,7 @@ function QueueToolbar({
   onToggleSelectAll,
   pausePending,
   selectableCount,
+  selectionNetDelta,
   writesBlocked,
 }: {
   activeFilters: Set<QueueRow['route']>;
@@ -550,6 +664,8 @@ function QueueToolbar({
   onToggleSelectAll: () => void;
   pausePending: boolean;
   selectableCount: number;
+  /** Net daily-spend change if the current selection is approved. null when none is. */
+  selectionNetDelta: number | null;
   writesBlocked: boolean;
 }) {
   return (
@@ -584,6 +700,16 @@ function QueueToolbar({
       </div>
 
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        {/* A cycle's budget moves are conserved as a set, so approving a strict subset moves
+            total spend. Sum the selection and say by how much rather than warning abstractly. */}
+        {selectionNetDelta == null ? null : Math.abs(selectionNetDelta) < 0.5 ? (
+          <span className="text-2xs text-muted-foreground">Spend stays flat</span>
+        ) : (
+          <span className="text-2xs text-warning tabular-nums">
+            Net {selectionNetDelta > 0 ? '+' : '−'}
+            {formatCurrency(Math.abs(selectionNetDelta), null)}/day
+          </span>
+        )}
         <Button
           className="h-7 px-2.5 text-xs"
           disabled={writesBlocked || !hasSelection || busyApprove}
@@ -635,6 +761,101 @@ function QueueToolbar({
   );
 }
 
+/** The one decision the solver actually made, said once above the rows it produced.
+ *
+ *  Nothing pairwise is stored: the engine emits a complete allocation vector where every
+ *  raise is already paid for by the cuts. Rendering that as N independent rows was the bug —
+ *  an operator could not see that taking $15 off one ad set is what funds the other. The rows
+ *  stay individually selectable, because approving a subset is legitimate; the header just
+ *  makes the coupling visible, and the toolbar says what a partial approval costs. */
+function BudgetTransferHeader({
+  attribution,
+  nameById,
+  currency,
+  mode,
+  allSelected,
+  onToggleGroup,
+  writesBlocked,
+}: {
+  attribution: TransferAttribution;
+  nameById?: Map<string, string> | null;
+  currency: string | null;
+  mode: string | null;
+  allSelected: boolean;
+  onToggleGroup: () => void;
+  writesBlocked: boolean;
+}) {
+  const { donors, recipients, moved, net } = attribution;
+  const name = (id: string) => resolveAdsetName({ adset_id: id }, nameById) ?? id;
+  const pair = donors.length === 1 && recipients.length === 1;
+
+  // net is ground truth for the items actually shown; mode only words the exception.
+  const conservation =
+    Math.abs(net) < 1
+      ? 'Total daily spend unchanged.'
+      : mode === 'scale'
+        ? `Total daily spend ${net > 0 ? '+' : '−'}${formatCurrency(Math.abs(net), currency)}/day — this cycle grows the pool.`
+        : `Total daily spend ${net > 0 ? '+' : '−'}${formatCurrency(Math.abs(net), currency)}/day — this is not a flat reallocation.`;
+
+  return (
+    <li className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+      <div className="flex items-start gap-2.5">
+        <Checkbox
+          aria-label="Select all budget moves in this cycle"
+          checked={allSelected}
+          className="mt-0.5"
+          disabled={writesBlocked}
+          onCheckedChange={onToggleGroup}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold tracking-tight">
+            {pair ? (
+              <>
+                Moving <span className="tabular-nums">{formatCurrency(moved, currency)}/day</span>{' '}
+                from {name(donors[0].adsetId)} into {name(recipients[0].adsetId)}
+              </>
+            ) : (
+              <>
+                Reallocating{' '}
+                <span className="tabular-nums">{formatCurrency(moved, currency)}/day</span> —{' '}
+                {donors.length} ad set{donors.length === 1 ? '' : 's'} fund {recipients.length}
+              </>
+            )}
+          </p>
+          <p className="mt-0.5 text-2xs text-muted-foreground">
+            {conservation} These moves are one decision — approving only some of them changes the
+            total.
+          </p>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+/** "← from Cold Lookalike $15" on a raised ad set, "→ to Retarget 30d $15" on a cut one. */
+function CounterpartyLine({
+  entry,
+  currency,
+  limit,
+}: {
+  entry: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] };
+  currency: string | null;
+  limit: number;
+}) {
+  const shown = entry.parties.slice(0, limit);
+  const rest = entry.parties.length - shown.length;
+  if (shown.length === 0) return null;
+  return (
+    <span className="text-3xs text-muted-foreground">
+      {entry.direction === 'funds' ? '→ funds ' : '← funded by '}
+      {shown
+        .map((party) => `${party.name ?? party.adsetId} ${formatCurrency(party.amount, currency)}`)
+        .join(' · ')}
+      {rest > 0 ? ` +${rest} more` : ''}
+    </span>
+  );
+}
+
 function QueueRowView({
   row,
   brandId,
@@ -644,6 +865,7 @@ function QueueRowView({
   failed,
   expanded,
   writesBlocked,
+  counterparty,
   onToggleSelect,
   onToggleExpand,
 }: {
@@ -655,6 +877,7 @@ function QueueRowView({
   failed: boolean;
   expanded: boolean;
   writesBlocked: boolean;
+  counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
   onToggleSelect: () => void;
   onToggleExpand: () => void;
 }) {
@@ -704,7 +927,7 @@ function QueueRowView({
               </Badge>
             ) : null}
           </div>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <AdSetIdLabel id={row.adsetId} />
             {row.route !== 'budget' && row.rec.severity ? (
               <Badge
@@ -713,6 +936,9 @@ function QueueRowView({
               >
                 {row.rec.severity}
               </Badge>
+            ) : null}
+            {counterparty ? (
+              <CounterpartyLine currency={currency} entry={counterparty} limit={1} />
             ) : null}
           </div>
         </div>
@@ -735,7 +961,7 @@ function QueueRowView({
         </button>
       </div>
 
-      {expanded ? <RowDetail row={row} currency={currency} /> : null}
+      {expanded ? <RowDetail row={row} currency={currency} counterparty={counterparty} /> : null}
     </li>
   );
 }
@@ -785,11 +1011,19 @@ function RowHeadline({
   );
 }
 
-function RowDetail({ row, currency }: { row: QueueRow; currency: string | null }) {
+function RowDetail({
+  row,
+  currency,
+  counterparty,
+}: {
+  row: QueueRow;
+  currency: string | null;
+  counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
+}) {
   return (
     <div className="mt-2 space-y-1.5 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-2xs text-muted-foreground">
       {row.route === 'budget' ? (
-        <BudgetDetail item={row.item} currency={currency} />
+        <BudgetDetail item={row.item} currency={currency} counterparty={counterparty} />
       ) : row.route === 'hidden' ? (
         <p>{notImplementedMessage(row.rec.kind)}</p>
       ) : row.route === 'creative' ? (
@@ -828,32 +1062,62 @@ function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
   );
 }
 
-function BudgetDetail({ item, currency }: { item: CycleItemRow; currency: string | null }) {
-  const diag = item.diagnostics ?? null;
-  const ci = diag?.ci ?? null;
+/** A budget move said as a sentence, then the numbers behind it. Everything here comes from
+ *  what cycle_items already persists, so it reads correctly on rows scored long before this
+ *  existed — no engine change, no re-run required. */
+function BudgetDetail({
+  item,
+  currency,
+  counterparty,
+}: {
+  item: CycleItemRow;
+  currency: string | null;
+  counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
+}) {
+  const why = budgetMoveWhy(item);
+  const windows = why?.windows ?? null;
+  const windowText = windows
+    ? (
+        [
+          windows.d3 != null ? `3d ${windows.d3.toFixed(2)}` : null,
+          windows.d7 != null ? `7d ${windows.d7.toFixed(2)}` : null,
+          windows.d14 != null ? `14d ${windows.d14.toFixed(2)}` : null,
+        ].filter(Boolean) as string[]
+      ).join(' / ')
+    : null;
+
   return (
     <>
+      {why ? (
+        <p>
+          <span className="font-medium text-foreground">Why:</span> {why.lead}
+          {why.windowsAgree === false ? ' The windows disagree, so treat it as provisional.' : ''}
+          {why.capped ? ' Truncated by the max-move-per-cycle guardrail.' : ''}
+        </p>
+      ) : null}
       <p>
         <span className="font-medium text-foreground">Before → after:</span>{' '}
         {formatCurrency(item.current_budget ?? 0, currency)} →{' '}
         {formatCurrency(item.final_budget ?? 0, currency)}
       </p>
-      {diag?.score3d != null || diag?.score7d != null ? (
+      {windowText ? (
         <p>
-          <span className="font-medium text-foreground">Score:</span>{' '}
-          {diag?.score3d != null ? `3d ${diag.score3d.toFixed(2)}` : ''}
-          {diag?.score3d != null && diag?.score7d != null ? ' · ' : ''}
-          {diag?.score7d != null ? `7d ${diag.score7d.toFixed(2)}` : ''}
+          <span className="font-medium text-foreground">Score:</span> {windowText}
         </p>
       ) : null}
-      {ci?.cpa != null ? (
+      {why?.cost ? (
         <p>
           <span className="font-medium text-foreground">Cost:</span>{' '}
-          {formatCurrency(ci.cpa, currency)}
-          {ci.lo != null && ci.hi != null
-            ? ` (likely ${formatCurrency(ci.lo, currency)}–${formatCurrency(ci.hi, currency)})`
+          {formatCurrency(why.cost.cpa, currency)}
+          {why.cost.lo != null && why.cost.hi != null
+            ? ` (likely ${formatCurrency(why.cost.lo, currency)}–${formatCurrency(why.cost.hi, currency)})`
             : ''}
-          {ci.events != null ? ` from ${ci.events} events` : ''}
+          {why.cost.events != null ? ` from ${why.cost.events} events` : ''}
+        </p>
+      ) : null}
+      {counterparty ? (
+        <p>
+          <CounterpartyLine currency={currency} entry={counterparty} limit={2} />
         </p>
       ) : null}
     </>

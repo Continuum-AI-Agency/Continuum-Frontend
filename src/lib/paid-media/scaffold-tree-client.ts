@@ -22,7 +22,7 @@ import type { PaidScaffoldNodeRow, ScaffoldNodeStatus } from '@/lib/paid-media/s
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 const NODE_COLUMNS =
-  'id,parent_id,level,ordinal,path_key,name,product_key,angle_key,concept_key,payload,status,meta_object_id,meta_creative_id,error_message,attempt';
+  'id,parent_id,level,ordinal,path_key,name,product_key,angle_key,concept_key,payload,status,meta_object_id,meta_creative_id,error_message,attempt,creative_asset_id,creative_media';
 
 const NODE_STATUSES: readonly ScaffoldNodeStatus[] = [
   'pending',
@@ -74,6 +74,8 @@ const toNodeRow = (raw: Record<string, unknown>): PaidScaffoldNodeRow => ({
   metaCreativeId: asNullableString(raw.meta_creative_id),
   errorMessage: asNullableString(raw.error_message),
   attempt: typeof raw.attempt === 'number' ? raw.attempt : 0,
+  creativeAssetId: asNullableString(raw.creative_asset_id),
+  creativeMedia: raw.creative_media === null ? null : asRecord(raw.creative_media),
 });
 
 /**

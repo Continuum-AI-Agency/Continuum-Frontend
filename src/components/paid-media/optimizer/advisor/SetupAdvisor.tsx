@@ -88,9 +88,15 @@ function Hint({
         size="sm"
         disabled={disabled}
         onClick={onUse}
-        className="h-5 shrink-0 px-1.5 text-2xs"
+        className="h-5 shrink-0 gap-1 px-1.5 text-2xs"
       >
         Use
+        <span
+          aria-hidden="true"
+          className="rounded border border-border/70 bg-background px-1 text-3xs"
+        >
+          ⇥
+        </span>
       </Button>
     </p>
   );

@@ -22,10 +22,19 @@ export function ScaffoldTreeCanvas({
   tree,
   selectedPathKey,
   onSelect,
+  inline = false,
 }: {
   tree: ScaffoldTree;
   selectedPathKey?: string | null;
   onSelect?: (pathKey: string) => void;
+  /**
+   * Set when the canvas sits INSIDE the chat transcript rather than in the expanded
+   * dialog. A React Flow that captures the wheel traps a reader scrolling past it —
+   * the page stops moving and the graph zooms instead. Inline therefore pans on drag
+   * and lets the wheel through; the dialog, which owns the whole viewport, keeps
+   * wheel-zoom.
+   */
+  inline?: boolean;
 }) {
   // Recomputed only when the merged tree identity changes — not per progress frame,
   // because buildScaffoldTree is itself memoized on (rows, overlay).
@@ -59,11 +68,15 @@ export function ScaffoldTreeCanvas({
           markerEnd: { type: MarkerType.ArrowClosed },
         }}
         minZoom={0.08}
+        zoomOnScroll={!inline}
+        preventScrolling={!inline}
         fitView
         fitViewOptions={{ padding: 0.15 }}
       >
         <Controls showInteractive={false} />
-        <MiniMap zoomable pannable className="!bg-background rounded-md border shadow-sm" />
+        {inline ? null : (
+          <MiniMap zoomable pannable className="!bg-background rounded-md border shadow-sm" />
+        )}
         <Panel position="top-left">
           <div className="rounded-md border bg-background/90 px-2.5 py-1.5 text-xs shadow-sm">
             <span className="font-medium">{tree.counts.adSets}</span> ad sets ·{' '}

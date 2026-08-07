@@ -8,9 +8,11 @@ import {
   buildCreativeRequestBrief,
   type CreativeRequestBrief,
   type CreativeVariationSeedInput,
+  type CycleItemRow,
   type CycleRunReport,
   type ParsedCycleRunReport,
   ParsedCycleRunReportSchema,
+  type RunConfidence,
 } from '@continuum/contracts';
 
 export function parseReport(
@@ -27,6 +29,131 @@ export function parseReport(
     latest_items: [],
     recommendations: [],
     history: [],
+  };
+}
+
+// ── Why the confidence score is what it is ───────────────────────────────────
+// score = predictiveness × sampleSize × consistency, so the SMALLEST term is the
+// answer to "why isn't this higher" — naming it is the whole point of the hover.
+//
+// predictiveness is NOT measured from the account: it is a static per-objective
+// constant in the engine config (cfg.predictiveness ?? 0.75). The copy says so,
+// because a number presented as evidence when it is a prior is a lie of omission.
+
+export type ConfidenceTerm = {
+  key: 'sampleSize' | 'consistency' | 'predictiveness';
+  label: string;
+  pct: number;
+  note: string;
+};
+
+export type ConfidenceExplanation = {
+  /** Weakest term first — the limiter leads. */
+  terms: ConfidenceTerm[];
+  limiter: ConfidenceTerm | null;
+  scorePct: number | null;
+};
+
+const asPct = (value: number | undefined): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? Math.round(value * 100) : null;
+
+export function explainConfidence(
+  confidence: RunConfidence | null | undefined,
+): ConfidenceExplanation | null {
+  if (!confidence) return null;
+
+  const events = confidence.events;
+  const eventLabel =
+    typeof events === 'number' && Number.isFinite(events)
+      ? `${Math.round(events)} conversion${Math.round(events) === 1 ? '' : 's'} in the last 14 days`
+      : 'how many conversions the trailing window carries';
+
+  const candidates: ConfidenceTerm[] = [];
+  const sample = asPct(confidence.sampleSize);
+  if (sample != null) {
+    candidates.push({ key: 'sampleSize', label: 'Sample', pct: sample, note: eventLabel });
+  }
+  const consistency = asPct(confidence.consistency);
+  if (consistency != null) {
+    candidates.push({
+      key: 'consistency',
+      label: 'Consistency',
+      pct: consistency,
+      note:
+        consistency >= 70
+          ? 'the 3d, 7d and 14d scores agree'
+          : 'the 3d, 7d and 14d scores disagree',
+    });
+  }
+  const predictive = asPct(confidence.predictiveness);
+  if (predictive != null) {
+    candidates.push({
+      key: 'predictiveness',
+      label: 'Predictive',
+      pct: predictive,
+      note: 'a calibrated prior for this objective — not measured on your account',
+    });
+  }
+
+  if (candidates.length === 0) return null;
+  const terms = [...candidates].sort((a, b) => a.pct - b.pct);
+  return { terms, limiter: terms[0] ?? null, scorePct: asPct(confidence.score) };
+}
+
+// ── Why one budget move happened ─────────────────────────────────────────────
+// Assembled entirely from what cycle_items already persists, so it works on rows
+// scored before this shipped. Numbers stay raw — the caller owns currency.
+
+export type BudgetMoveWhy = {
+  lead: string;
+  windows: { d3: number | null; d7: number | null; d14: number | null } | null;
+  windowsAgree: boolean | null;
+  cost: { cpa: number; lo: number | null; hi: number | null; events: number | null } | null;
+  capped: boolean;
+};
+
+const finite = (value: number | null | undefined): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+/** Null when the row is HELD — freezeLabel already explains those, and a held ad set
+ *  was left unchanged on purpose rather than scored into a move. */
+export function budgetMoveWhy(item: CycleItemRow): BudgetMoveWhy | null {
+  const diag = item.diagnostics ?? null;
+  if (diag?.freezeReason) return null;
+
+  const change = finite(item.change_abs) ?? 0;
+  if (change === 0) return null;
+
+  // The solver water-fills in proportion to each ad set's shrunk composite score, so a
+  // raise means exactly this: its score earned a bigger slice of the pool than the
+  // budget it currently holds. Not "it beat the average".
+  const lead =
+    change > 0
+      ? 'Earned a larger share of the pool than its current budget.'
+      : 'Earned a smaller share of the pool than its current budget.';
+
+  const d3 = finite(diag?.score3d);
+  const d7 = finite(diag?.score7d);
+  const d14 = finite(diag?.score14d);
+  const present = [d3, d7, d14].filter((value): value is number => value != null && value > 0);
+  // ponytail: max/min ratio, not the engine's coefficient of variation. Good enough to
+  // say "agree"/"disagree" in a sentence; use the engine's consistency term if this ever
+  // needs to be the same number the score was computed from.
+  const windowsAgree =
+    present.length >= 2 ? Math.max(...present) / Math.min(...present) <= 1.35 : null;
+
+  const ci = diag?.ci ?? null;
+  const cpa = finite(ci?.cpa);
+
+  return {
+    lead,
+    windows: d3 == null && d7 == null && d14 == null ? null : { d3, d7, d14 },
+    windowsAgree,
+    cost:
+      cpa == null
+        ? null
+        : { cpa, lo: finite(ci?.lo), hi: finite(ci?.hi), events: finite(ci?.events) },
+    capped: diag?.velocityCapped === true,
   };
 }
 

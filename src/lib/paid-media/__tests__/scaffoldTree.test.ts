@@ -29,6 +29,8 @@ const row = (overrides: Partial<PaidScaffoldNodeRow>): PaidScaffoldNodeRow => ({
   metaCreativeId: null,
   errorMessage: null,
   attempt: 0,
+  creativeAssetId: null,
+  creativeMedia: null,
   ...overrides,
 });
 
@@ -123,29 +125,57 @@ describe('buildScaffoldTree', () => {
     expect(tree.counts.created).toBe(1);
   });
 
+  const withAdSetPayload = (payload: Record<string, unknown>): PaidScaffoldNodeRow[] =>
+    smallTree().map((entry) => (entry.id === 'a1' ? { ...entry, payload } : entry));
+
   it('reads genuine choices out of payload and leaves them absent when unset', () => {
-    const rows = smallTree().map((entry) =>
-      entry.id === 'a1'
-        ? {
-            ...entry,
-            payload: {
-              optimization_goal: 'OFFSITE_CONVERSIONS',
-              funnel_stage: 'prospecting',
-              placement: ['facebook_feed', 'instagram_reels'],
-              billing_event: 'IMPRESSIONS',
-            },
-          }
-        : entry,
+    const tree = buildScaffoldTree(
+      withAdSetPayload({
+        objective: 'OUTCOME_SALES',
+        optimization_goal: 'OFFSITE_CONVERSIONS',
+        funnel_stage: 'prospecting',
+        placement: { mode: 'advantage_plus' },
+        billing_event: 'IMPRESSIONS',
+      }),
     );
-    const tree = buildScaffoldTree(rows);
+
     expect(tree.adSets[0].choices).toEqual({
+      objective: 'OUTCOME_SALES',
       optimizationGoal: 'OFFSITE_CONVERSIONS',
       funnelStage: 'prospecting',
-      placement: ['facebook_feed', 'instagram_reels'],
+      placement: ['Advantage+'],
     });
     expect(tree.adSets[0].derived.billingEvent).toBe('IMPRESSIONS');
-    // D-NODE-PAYLOAD is open, so an empty payload must not throw or invent values.
+    // Rows proposed before D-NODE-PAYLOAD was resolved carry `{}`, and must render as
+    // absent rather than throwing or inventing a value.
     expect(tree.adSets[1].choices).toEqual({});
+  });
+
+  /**
+   * `payload.placement` is Meta's placement CHOICE — a discriminated union, not a list.
+   * Reading it as an array of strings (which an earlier guess at this shape did) silently
+   * yields nothing at all, so the ad set renders as having no placement rather than as
+   * having automatic ones.
+   */
+  it('flattens manual placement surfaces and never confuses them with Advantage+', () => {
+    const tree = buildScaffoldTree(
+      withAdSetPayload({
+        placement: {
+          mode: 'manual',
+          publisher_platforms: ['instagram'],
+          instagram_positions: ['reels', 'stream'],
+        },
+      }),
+    );
+
+    expect(tree.adSets[0].choices.placement).toEqual(['instagram', 'ig:reels', 'ig:stream']);
+  });
+
+  it('carries the audience group through even when its targeting has not compiled', () => {
+    const tree = buildScaffoldTree(withAdSetPayload({ audience_group_version_id: 'agv-1' }));
+
+    expect(tree.adSets[0].derived.audienceGroupVersionId).toBe('agv-1');
+    expect(tree.adSets[0].derived.targeting).toBeUndefined();
   });
 
   it('handles a 50-ad-set scaffold', () => {

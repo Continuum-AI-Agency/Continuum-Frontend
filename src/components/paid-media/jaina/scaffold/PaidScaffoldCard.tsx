@@ -5,6 +5,7 @@ import type {
   JainaToolApprovalResolvedPayload,
   JainaToolOutputDeniedPayload,
 } from '@continuum/contracts';
+import { Maximize2, Network, Table2 } from 'lucide-react';
 import * as React from 'react';
 import {
   AgentCardBody,
@@ -14,6 +15,7 @@ import {
   ApproveRejectActions,
   StatusLabel,
 } from '@/components/shared/agent-cards/agentCardKit';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import type { JainaScaffoldState } from '@/lib/jaina/stream';
@@ -55,6 +57,58 @@ const summaryLine = (scaffold: JainaScaffoldState): string => {
   return `${parts.join(' · ')} — everything is created paused.`;
 };
 
+/**
+ * The graph is the DEFAULT view, and the table is the alternate.
+ *
+ * A scaffold's first question is structural — how many ad sets hang off this campaign,
+ * how the ads divide between them, which branch failed — and a table answers that by
+ * making the reader rebuild the tree in their head from indented rows. It was behind a
+ * ghost icon in the table header, which is where it was found least.
+ */
+type ScaffoldView = 'graph' | 'table';
+
+function ViewSwitch({
+  view,
+  onChange,
+  onExpand,
+}: {
+  view: ScaffoldView;
+  onChange: (next: ScaffoldView) => void;
+  onExpand: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-1 rounded-md border p-0.5">
+        {(
+          [
+            ['graph', 'Graph', Network],
+            ['table', 'Table', Table2],
+          ] as const
+        ).map(([value, label, Icon]) => (
+          <Button
+            key={value}
+            type="button"
+            variant={view === value ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 gap-1.5 px-2"
+            aria-pressed={view === value}
+            onClick={() => onChange(value)}
+          >
+            <Icon className="size-3.5" />
+            {label}
+          </Button>
+        ))}
+      </div>
+      {view === 'graph' ? (
+        <Button type="button" variant="ghost" size="sm" className="h-7 gap-1.5" onClick={onExpand}>
+          <Maximize2 className="size-3.5" />
+          Expand
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function PaidScaffoldCard({
   scaffold,
   approval,
@@ -74,6 +128,7 @@ export function PaidScaffoldCard({
 }) {
   const [canvasOpen, setCanvasOpen] = React.useState(false);
   const [selectedPathKey, setSelectedPathKey] = React.useState<string | null>(null);
+  const [view, setView] = React.useState<ScaffoldView>('graph');
 
   const { tree, isLoading, isError, error } = usePaidScaffoldTree({
     scaffoldVersionId: scaffold.scaffoldId,
@@ -117,11 +172,27 @@ export function PaidScaffoldCard({
               {error?.message ?? 'Could not load the scaffold.'}
             </p>
           ) : (
-            <ScaffoldAdSetTable
-              tree={tree}
-              isLoading={isLoading}
-              onOpenCanvas={tree ? () => setCanvasOpen(true) : undefined}
-            />
+            <div className="flex flex-col gap-2">
+              <ViewSwitch view={view} onChange={setView} onExpand={() => setCanvasOpen(true)} />
+              {view === 'graph' ? (
+                <div className="h-[380px] overflow-hidden rounded-md border">
+                  {tree ? (
+                    <ScaffoldTreeCanvas
+                      inline
+                      tree={tree}
+                      selectedPathKey={selectedPathKey}
+                      onSelect={setSelectedPathKey}
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+                      {isLoading ? 'Loading the scaffold…' : 'This scaffold has no nodes.'}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <ScaffoldAdSetTable tree={tree} isLoading={isLoading} />
+              )}
+            </div>
           )}
 
           {denial?.reason ? (

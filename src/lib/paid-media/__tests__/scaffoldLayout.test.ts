@@ -24,6 +24,8 @@ const row = (overrides: Partial<PaidScaffoldNodeRow>): PaidScaffoldNodeRow => ({
   metaCreativeId: null,
   errorMessage: null,
   attempt: 0,
+  creativeAssetId: null,
+  creativeMedia: null,
   ...overrides,
 });
 
@@ -153,5 +155,55 @@ describe('layoutScaffoldTree', () => {
     const layout = layoutScaffoldTree(buildScaffoldTree([]));
     expect(layout.nodes).toHaveLength(0);
     expect(layout.edges).toHaveLength(0);
+  });
+
+  /**
+   * The hover panel is the only place a reader learns what a node delivers, and it can
+   * read nothing but `node.data`. A level that reaches the canvas without its choices
+   * renders a hover with a title and nothing under it — which looks like missing data
+   * rather than a missing wire, so it is exactly the failure nobody reports.
+   */
+  it('carries the delivery detail every hover panel reads onto all three levels', () => {
+    const payload = {
+      objective: 'OUTCOME_SALES',
+      optimization_goal: 'OFFSITE_CONVERSIONS',
+      funnel_stage: 'prospecting',
+      placement: { mode: 'advantage_plus' },
+      targeting: { geo_locations: { countries: ['US'] } },
+      audience_group_version_id: 'agv-1',
+    };
+    const rows: PaidScaffoldNodeRow[] = [
+      row({
+        id: 'c',
+        level: 'campaign',
+        ordinal: 0,
+        pathKey: 'c0',
+        productKey: null,
+        angleKey: null,
+        payload: { objective: 'OUTCOME_SALES' },
+      }),
+      row({ id: 'a1', parentId: 'c', ordinal: 1, pathKey: 'c0/a1', payload }),
+      row({
+        id: 'ad1',
+        parentId: 'a1',
+        level: 'ad',
+        ordinal: 1,
+        pathKey: 'c0/a1/ad1',
+        conceptKey: 'hook-a',
+      }),
+    ];
+    const layout = layoutScaffoldTree(buildScaffoldTree(rows));
+
+    expect(nodeAt(layout, 'c0')?.data.choices).toMatchObject({ objective: 'OUTCOME_SALES' });
+    expect(nodeAt(layout, 'c0/a1')?.data.derived).toMatchObject({
+      audienceGroupVersionId: 'agv-1',
+    });
+
+    // An ad has no delivery settings of its own, so it must INHERIT its ad set's or a
+    // reader hovering an ad cannot tell who sees it.
+    const ad = nodeAt(layout, 'c0/a1/ad1');
+    expect(ad?.data.choices).toMatchObject({ optimizationGoal: 'OFFSITE_CONVERSIONS' });
+    expect(ad?.data.derived).toMatchObject({ audienceGroupVersionId: 'agv-1' });
+    expect(ad?.data.angleKey).toBe('value');
   });
 });

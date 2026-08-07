@@ -60,6 +60,7 @@ import { buildCboCampaignSections, buildClaimMap, previewMoves } from '../picker
 import { buildPortfolioPickerEntities } from '../picker/portfolioPickerEntities';
 import { buildProjectedConversions } from '../preview/projectedConversion';
 import { applyModeExplainer, applyModePill } from '../reportModel';
+import { acceptSuggestionOnTab, suggestionPlaceholder } from '../suggestInput';
 import {
   useOptimizerAccountEnrollments,
   useOptimizerAccountSnapshots,
@@ -1015,7 +1016,12 @@ export function PortfolioCreateForm({
                 inputMode="decimal"
                 value={dailyTotal}
                 onChange={(event) => setDailyTotal(event.target.value)}
-                placeholder={selectedBudgetSum > 0 ? String(Math.round(selectedBudgetSum)) : '4200'}
+                onKeyDown={acceptSuggestionOnTab(advice.suggestedDailyTotal, setDailyTotal)}
+                placeholder={suggestionPlaceholder(
+                  advice.suggestedDailyTotal ??
+                    (selectedBudgetSum > 0 ? Math.round(selectedBudgetSum) : null),
+                  '4200',
+                )}
               />
               <BudgetHint
                 advice={advice}
@@ -1036,7 +1042,11 @@ export function PortfolioCreateForm({
                 inputMode="decimal"
                 value={cpaTarget}
                 onChange={(event) => setCpaTarget(event.target.value)}
-                placeholder={metric.costLabel === 'CPM' ? '12' : '40'}
+                onKeyDown={acceptSuggestionOnTab(advice.suggestedTarget, setCpaTarget)}
+                placeholder={suggestionPlaceholder(
+                  advice.suggestedTarget,
+                  metric.costLabel === 'CPM' ? '12' : '40',
+                )}
               />
               <TargetHint
                 advice={advice}

@@ -500,3 +500,122 @@ describe('OptimizerActionsPortfolioGroup — confirm-dialog execute (Meta writes
     expect(approveAll.disabled).toBe(true);
   });
 });
+
+// A REBALANCE: one ad set is cut to fund another, exactly the shape the engine's conserved
+// allocation vector produces and that the queue used to render as two unrelated rows. The
+// donor is 'held' (autopilot parked it over the % cap) to prove grouping never costs a held
+// item its own approval path.
+const rebalanceReport = {
+  portfolio: {
+    id: '11111111-1111-4111-8111-111111111111',
+    name: 'Prospecting',
+    mode: 'balanced',
+    apply_mode: 'recommend',
+    status: 'active',
+  },
+  latest_run: { id: RUN_ID, cycle_ts: '2026-07-20T00:00:00Z', mode: 'balanced' },
+  latest_items: [
+    {
+      adset_id: 'as-cold',
+      adset_name: 'Cold Lookalike',
+      current_budget: 50,
+      final_budget: 35,
+      change_abs: -15,
+      change_pct: -0.3,
+      apply_status: 'held',
+      diagnostics: { score3d: 0.41, score7d: 0.38, score14d: 0.44 },
+    },
+    {
+      adset_id: 'as-retarget',
+      adset_name: 'Retarget 30d',
+      current_budget: 50,
+      final_budget: 65,
+      change_abs: 15,
+      change_pct: 0.3,
+      apply_status: null,
+    },
+  ],
+  recommendations: [],
+  history: [],
+};
+
+describe('a conserved rebalance reads as ONE decision without losing per-ad-set control', () => {
+  it('names both sides of a 1:1 transfer in the group header', () => {
+    activeReport = rebalanceReport;
+    const { container } = renderGroup();
+    // The whole point: the operator sees that cutting one ad set is what funds the other.
+    expect(container.textContent).toContain('Moving');
+    expect(container.textContent).toContain('from Cold Lookalike into Retarget 30d');
+    expect(container.textContent).toContain('Total daily spend unchanged');
+  });
+
+  it('keeps BOTH ad sets individually selectable, held one included', () => {
+    activeReport = rebalanceReport;
+    renderGroup();
+    expect(screen.getByLabelText('Select Cold Lookalike')).toBeTruthy();
+    expect(screen.getByLabelText('Select Retarget 30d')).toBeTruthy();
+    expect(screen.getByLabelText('Select all budget moves in this cycle')).toBeTruthy();
+  });
+
+  it('says what approving only one half costs, and that the pair is flat', () => {
+    activeReport = rebalanceReport;
+    const { container } = renderGroup();
+
+    fireEvent.click(screen.getByLabelText('Select Retarget 30d'));
+    expect(container.textContent).toContain('Net +$15/day');
+
+    fireEvent.click(screen.getByLabelText('Select Cold Lookalike'));
+    expect(container.textContent).toContain('Spend stays flat');
+    expect(container.textContent).not.toContain('Net +$15/day');
+  });
+
+  it('selects the whole group from the header checkbox, then clears it', () => {
+    activeReport = rebalanceReport;
+    const { container } = renderGroup();
+    const groupBox = screen.getByLabelText('Select all budget moves in this cycle');
+
+    fireEvent.click(groupBox);
+    expect(container.textContent).toContain('Spend stays flat');
+
+    fireEvent.click(groupBox);
+    expect(container.textContent).not.toContain('Spend stays flat');
+  });
+
+  it('approves the selected pair as ONE batched RPC carrying both ad set ids', () => {
+    activeReport = rebalanceReport;
+    renderGroup();
+    fireEvent.click(screen.getByLabelText('Select all budget moves in this cycle'));
+    fireEvent.click(screen.getByRole('button', { name: /approve selected/i }));
+
+    expect(requestApplyItemsMutate).toHaveBeenCalledTimes(1);
+    const payload = requestApplyItemsMutate.mock.calls[0][0] as {
+      run_id: string;
+      adset_ids: string[];
+    };
+    expect(payload.run_id).toBe(RUN_ID);
+    expect([...payload.adset_ids].sort()).toEqual(['as-cold', 'as-retarget']);
+  });
+
+  it('shows each row who it funds / who funded it', () => {
+    activeReport = rebalanceReport;
+    const { container } = renderGroup();
+    expect(container.textContent).toContain('→ funds Retarget 30d');
+    expect(container.textContent).toContain('← funded by Cold Lookalike');
+  });
+
+  it('explains a single move from the diagnostics already on the row', () => {
+    activeReport = rebalanceReport;
+    const { container } = renderGroup();
+    fireEvent.click(screen.getAllByLabelText('Show detail')[0]);
+    expect(container.textContent).toContain('smaller share of the pool');
+    expect(container.textContent).toContain('3d 0.41 / 7d 0.38 / 14d 0.44');
+  });
+
+  it('does NOT group a cycle that only raises — there is no donor and nothing to describe', () => {
+    // `report` (the default) has a lone +$30 move. A header there would invent a transfer.
+    const { container } = renderGroup();
+    expect(container.textContent).not.toContain('Reallocating');
+    expect(container.textContent).not.toContain('Moving');
+    expect(screen.queryByLabelText('Select all budget moves in this cycle')).toBeNull();
+  });
+});

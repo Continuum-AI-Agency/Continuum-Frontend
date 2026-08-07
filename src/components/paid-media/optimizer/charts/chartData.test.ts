@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import type { CpaSeriesPoint, CycleItemRow, PortfolioListItem } from '@continuum/contracts';
 import { freezeLabel, parseReport } from '../reportModel';
 import {
+  attributeTransfers,
   budgetByObjective,
   budgetByPortfolio,
   budgetMix,
@@ -93,6 +94,78 @@ describe('splitReallocation', () => {
       proposed: 60,
       changePct: 0.5,
     });
+  });
+});
+
+describe('attributeTransfers', () => {
+  it('is EXACT when one ad set funds one other', () => {
+    const attribution = attributeTransfers([
+      item({ adset_id: 'cold', change_abs: -15 }),
+      item({ adset_id: 'retarget', change_abs: 15 }),
+    ]);
+    expect(attribution.transfers).toEqual([
+      { fromAdsetId: 'cold', toAdsetId: 'retarget', amount: 15 },
+    ]);
+    expect(attribution.moved).toBe(15);
+    expect(attribution.net).toBe(0);
+  });
+
+  it('conserves both sides on an n-way vector: each donor gives its cut, each recipient gets its raise', () => {
+    const attribution = attributeTransfers([
+      item({ adset_id: 'd1', change_abs: -60 }),
+      item({ adset_id: 'd2', change_abs: -40 }),
+      item({ adset_id: 'r1', change_abs: 70 }),
+      item({ adset_id: 'r2', change_abs: 30 }),
+    ]);
+    const outflow = (id: string) =>
+      attribution.transfers
+        .filter((t) => t.fromAdsetId === id)
+        .reduce((sum, t) => sum + t.amount, 0);
+    const inflow = (id: string) =>
+      attribution.transfers.filter((t) => t.toAdsetId === id).reduce((sum, t) => sum + t.amount, 0);
+
+    expect(outflow('d1')).toBeCloseTo(60, 6);
+    expect(outflow('d2')).toBeCloseTo(40, 6);
+    expect(inflow('r1')).toBeCloseTo(70, 6);
+    expect(inflow('r2')).toBeCloseTo(30, 6);
+    expect(attribution.net).toBe(0);
+  });
+
+  it('attributes only the MATCHED amount when the pool grows, leaving the rest as net', () => {
+    // A 'scale' cycle: $100 freed, $150 handed out. A donor must never appear to give
+    // away more than it actually cut.
+    const attribution = attributeTransfers([
+      item({ adset_id: 'donor', change_abs: -100 }),
+      item({ adset_id: 'r1', change_abs: 100 }),
+      item({ adset_id: 'r2', change_abs: 50 }),
+    ]);
+    expect(attribution.moved).toBe(100);
+    expect(attribution.net).toBe(50);
+    const outflow = attribution.transfers.reduce((sum, t) => sum + t.amount, 0);
+    expect(outflow).toBeCloseTo(100, 6);
+    // Each recipient is funded pro-rata at 100/150 of its raise.
+    const inflow = (id: string) =>
+      attribution.transfers.filter((t) => t.toAdsetId === id).reduce((sum, t) => sum + t.amount, 0);
+    expect(inflow('r1')).toBeCloseTo(100 * (100 / 150), 6);
+    expect(inflow('r2')).toBeCloseTo(50 * (100 / 150), 6);
+  });
+
+  it('has nothing to attribute when every ad set only gains', () => {
+    const attribution = attributeTransfers([item({ adset_id: 'r1', change_abs: 30 })]);
+    expect(attribution.transfers).toEqual([]);
+    expect(attribution.moved).toBe(0);
+    expect(attribution.recipients).toHaveLength(1);
+    expect(attribution.donors).toEqual([]);
+  });
+
+  it('ignores held ad sets — their budget was left unchanged on purpose', () => {
+    const attribution = attributeTransfers([
+      item({ adset_id: 'cold', change_abs: -15 }),
+      item({ adset_id: 'retarget', change_abs: 15 }),
+      item({ adset_id: 'held', change_abs: 0, diagnostics: { freezeReason: 'no_conversions' } }),
+    ]);
+    expect(attribution.transfers).toHaveLength(1);
+    expect(attribution.donors.map((d) => d.adsetId)).toEqual(['cold']);
   });
 });
 

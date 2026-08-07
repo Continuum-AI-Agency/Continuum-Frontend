@@ -227,6 +227,45 @@ export const OptimizerSnapshotsEnvelopeSchema = z
   .loose();
 export type OptimizerSnapshotsEnvelope = z.infer<typeof OptimizerSnapshotsEnvelopeSchema>;
 
+/** Meta delivery lifecycle for account inventory. This is deliberately separate from
+ * AdSetStatusSchema: these values describe provider visibility, not engine scoring state. */
+export const OptimizerAdsetInventoryLifecycleSchema = z.enum([
+  'active',
+  'recoverable',
+  'archived',
+  'deleted',
+  'unknown',
+]);
+export type OptimizerAdsetInventoryLifecycle = z.infer<
+  typeof OptimizerAdsetInventoryLifecycleSchema
+>;
+
+/** One account-wide Meta ad set available to portfolio membership controls. Money is in
+ * account-currency MAJOR units. None of these rows are valid runCycle inputs. */
+export const OptimizerAdsetInventoryItemSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().nullable(),
+  campaignId: z.string().nullable(),
+  campaignName: z.string().nullable(),
+  configuredStatus: z.string().nullable(),
+  effectiveStatus: z.string().nullable(),
+  lifecycle: OptimizerAdsetInventoryLifecycleSchema,
+  currentBudget: z.number().nonnegative().nullable(),
+  optimizationGoal: z.string().nullable(),
+  adCount: z.number().int().nonnegative(),
+});
+export type OptimizerAdsetInventoryItem = z.infer<typeof OptimizerAdsetInventoryItemSchema>;
+
+/** Account inventory response. `partial` means a terminal-status supplement failed;
+ * `truncated` means Meta still exposed another page after the bounded pagination limit. */
+export const OptimizerAdsetInventoryEnvelopeSchema = z.object({
+  adsets: OptimizerAdsetInventoryItemSchema.array().catch([]).default([]),
+  fetchedAt: z.string().datetime().nullable().catch(null).default(null),
+  partial: z.boolean().catch(false).default(false),
+  truncated: z.boolean().catch(false).default(false),
+});
+export type OptimizerAdsetInventoryEnvelope = z.infer<typeof OptimizerAdsetInventoryEnvelopeSchema>;
+
 /** Input to create a portfolio (maps to optimizer_create_portfolio's p_config). */
 export const PortfolioConfigSchema = z.object({
   name: z.string().min(1),
@@ -462,6 +501,12 @@ export const CycleItemDiagnosticsSchema = z
   .object({
     score3d: z.number().optional(),
     score7d: z.number().optional(),
+    // Declared so the per-move "why" can quote all three windows and say whether they
+    // agree. Already present in the engine's ItemDiagnostics; this only types them.
+    score14d: z.number().optional(),
+    compositeScore: z.number().optional(),
+    portfolioShare: z.number().optional(),
+    velocityCapped: z.boolean().optional(),
     // When present, the ad set was HELD (budget unchanged on purpose) — the FE
     // renders a labeled "Held" state instead of a $0.00 change.
     freezeReason: FreezeReasonSchema.optional(),

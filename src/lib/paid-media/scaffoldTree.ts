@@ -37,15 +37,17 @@ export type PaidScaffoldNodeRow = {
   metaCreativeId: string | null;
   errorMessage: string | null;
   attempt: number;
+  creativeAssetId: string | null;
+  creativeMedia: Record<string, unknown> | null;
 };
 
 /**
  * The genuine choices a model or a human makes. Everything NOT here is derived
  * server-side and is read-only in the UI by construction.
  *
- * Read defensively: `paid_scaffold_nodes.payload` has no schema anywhere yet
- * (D-NODE-PAYLOAD is open — `z.record` breaks Gemini's tool-declaration converter,
- * so nothing model-facing writes it). These fields may legitimately be absent.
+ * Still read defensively. D-NODE-PAYLOAD is resolved and `paid_scaffold_propose` now
+ * writes these, but rows proposed before that change carry `payload = {}` and must
+ * render as absent rather than as a crash or a zero.
  */
 export type ScaffoldChoices = {
   objective?: string;
@@ -60,6 +62,8 @@ export type ScaffoldDerived = {
   targeting?: unknown;
   promotedObject?: unknown;
   specialAdCategories?: string[];
+  /** Which audience group `targeting` was compiled from. Provenance, not a choice. */
+  audienceGroupVersionId?: string;
 };
 
 export type ScaffoldAdRow = {
@@ -71,6 +75,9 @@ export type ScaffoldAdRow = {
   status: ScaffoldNodeStatus;
   metaCreativeId: string | null;
   errorMessage: string | null;
+  /** Set once a Library asset is attached through paid_scaffold_attach_creative. */
+  creativeAssetId: string | null;
+  creativeMedia: Record<string, unknown> | null;
 };
 
 export type ScaffoldAdSetRow = {
@@ -131,6 +138,28 @@ const readStringArray = (payload: Record<string, unknown>, key: string): string[
   return strings.length > 0 ? strings : undefined;
 };
 
+/**
+ * `payload.placement` is Meta's placement CHOICE — a discriminated union, not a list.
+ * Flattened to display strings here so every consumer (table cell, canvas node, hover)
+ * reads one shape and none of them has to know the union.
+ *
+ * `advantage_plus` names no surfaces on purpose: that is how Meta's automatic placement
+ * is requested, so "Advantage+" is the whole truth about where the ad set can deliver.
+ */
+const placementLabelsOf = (value: unknown): string[] | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const choice = value as Record<string, unknown>;
+  if (choice.mode === 'advantage_plus') return ['Advantage+'];
+  if (choice.mode !== 'manual') return undefined;
+  const labels = [
+    ...(readStringArray(choice, 'publisher_platforms') ?? []),
+    ...(readStringArray(choice, 'facebook_positions') ?? []).map((entry) => `fb:${entry}`),
+    ...(readStringArray(choice, 'instagram_positions') ?? []).map((entry) => `ig:${entry}`),
+    ...(readStringArray(choice, 'device_platforms') ?? []),
+  ];
+  return labels.length > 0 ? labels : undefined;
+};
+
 const choicesOf = (payload: Record<string, unknown>): ScaffoldChoices => ({
   ...(readString(payload, 'objective') ? { objective: readString(payload, 'objective') } : {}),
   ...(readString(payload, 'optimization_goal')
@@ -139,8 +168,8 @@ const choicesOf = (payload: Record<string, unknown>): ScaffoldChoices => ({
   ...(readString(payload, 'funnel_stage')
     ? { funnelStage: readString(payload, 'funnel_stage') }
     : {}),
-  ...(readStringArray(payload, 'placement')
-    ? { placement: readStringArray(payload, 'placement') }
+  ...(placementLabelsOf(payload.placement)
+    ? { placement: placementLabelsOf(payload.placement) }
     : {}),
 });
 
@@ -153,7 +182,35 @@ const derivedOf = (payload: Record<string, unknown>): ScaffoldDerived => ({
   ...(readStringArray(payload, 'special_ad_categories')
     ? { specialAdCategories: readStringArray(payload, 'special_ad_categories') }
     : {}),
+  ...(readString(payload, 'audience_group_version_id')
+    ? { audienceGroupVersionId: readString(payload, 'audience_group_version_id') }
+    : {}),
 });
+
+/**
+ * One line describing who an ad set delivers to, from a compiled targeting spec.
+ *
+ * Lives here rather than beside the table column because the canvas hover needs the
+ * identical sentence — two summaries of the same spec that disagreed would read as two
+ * different audiences.
+ */
+export const targetingSummary = (targeting: unknown): string | null => {
+  if (!targeting || typeof targeting !== 'object') return null;
+  const record = targeting as Record<string, unknown>;
+  const parts: string[] = [];
+  const included = record.custom_audiences;
+  const excluded = record.excluded_custom_audiences;
+  if (Array.isArray(included) && included.length > 0) parts.push(`${included.length} included`);
+  if (Array.isArray(excluded) && excluded.length > 0) parts.push(`${excluded.length} excluded`);
+  const countries = (record.geo_locations as Record<string, unknown> | undefined)?.countries;
+  if (Array.isArray(countries) && countries.length > 0) parts.push(countries.join('/'));
+  const ageMin = record.age_min;
+  const ageMax = record.age_max;
+  if (typeof ageMin === 'number' || typeof ageMax === 'number') {
+    parts.push(`${ageMin ?? '?'}–${ageMax ?? '?'}`);
+  }
+  return parts.length > 0 ? parts.join(' · ') : null;
+};
 
 /**
  * The precedence rule, stated once.
@@ -220,6 +277,8 @@ export const buildScaffoldTree = (
       status: statusOf(row),
       metaCreativeId: row.metaCreativeId,
       errorMessage: row.errorMessage,
+      creativeAssetId: row.creativeAssetId,
+      creativeMedia: row.creativeMedia,
     });
   }
 

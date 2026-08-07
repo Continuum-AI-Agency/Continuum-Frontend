@@ -4,8 +4,10 @@ import { FreezeReasonSchema } from '@continuum/contracts';
 import {
   actionRoute,
   applyModePill,
+  budgetMoveWhy,
   confidenceBand,
   creativeBriefForRec,
+  explainConfidence,
   freezeLabel,
   isExecutable,
   notImplementedMessage,
@@ -290,5 +292,146 @@ describe('creative-level recommendations', () => {
     // An older rec with no seed has no brief to render — the caller shows the plain reason.
     expect(creativeBriefForRec({ kind: 'variate_creative', reason: 'x', seed: null })).toBeNull();
     expect(creativeBriefForRec({ kind: 'variate_creative', reason: 'x', seed: {} })).toBeNull();
+  });
+});
+
+describe('explainConfidence names the term that is holding the score back', () => {
+  it('sorts weakest first and reports it as the limiter', () => {
+    // score is a PRODUCT, so the smallest factor is the honest answer to "why not higher".
+    const explanation = explainConfidence({
+      score: 0.26,
+      predictiveness: 0.75,
+      sampleSize: 0.38,
+      consistency: 0.91,
+      events: 12,
+      band: 'low',
+    });
+    expect(explanation?.limiter?.key).toBe('sampleSize');
+    expect(explanation?.terms.map((t) => t.key)).toEqual([
+      'sampleSize',
+      'predictiveness',
+      'consistency',
+    ]);
+    expect(explanation?.scorePct).toBe(26);
+  });
+
+  it('quotes the real event count in the sample note', () => {
+    const explanation = explainConfidence({ sampleSize: 0.38, events: 12 });
+    expect(explanation?.terms[0].note).toBe('12 conversions in the last 14 days');
+  });
+
+  it('singularizes a lone conversion', () => {
+    const explanation = explainConfidence({ sampleSize: 0.05, events: 1 });
+    expect(explanation?.terms[0].note).toBe('1 conversion in the last 14 days');
+  });
+
+  it('never presents predictiveness as measured — it is a per-objective prior', () => {
+    const explanation = explainConfidence({ predictiveness: 0.75 });
+    const predictive = explanation?.terms.find((t) => t.key === 'predictiveness');
+    expect(predictive?.note).toContain('prior');
+    expect(predictive?.note).toContain('not measured on your account');
+  });
+
+  it('flips the consistency note when the windows disagree', () => {
+    expect(explainConfidence({ consistency: 0.91 })?.terms[0].note).toContain('agree');
+    expect(explainConfidence({ consistency: 0.2 })?.terms[0].note).toContain('disagree');
+  });
+
+  it('returns null when the row carries no confidence signal at all', () => {
+    expect(explainConfidence(null)).toBeNull();
+    expect(explainConfidence(undefined)).toBeNull();
+    expect(explainConfidence({})).toBeNull();
+    expect(explainConfidence({ band: 'medium' })).toBeNull();
+  });
+});
+
+describe('budgetMoveWhy explains one move from what cycle_items already stores', () => {
+  it('reads a cut as a smaller share of the pool', () => {
+    const why = budgetMoveWhy({
+      adset_id: 'a',
+      current_budget: 50,
+      final_budget: 35,
+      change_abs: -15,
+      change_pct: -0.3,
+      diagnostics: { score3d: 0.41, score7d: 0.38, score14d: 0.44 },
+    });
+    expect(why?.lead).toContain('smaller share');
+    expect(why?.windows).toEqual({ d3: 0.41, d7: 0.38, d14: 0.44 });
+    expect(why?.windowsAgree).toBe(true);
+  });
+
+  it('reads a raise as a larger share of the pool', () => {
+    const why = budgetMoveWhy({
+      adset_id: 'b',
+      current_budget: 50,
+      final_budget: 65,
+      change_abs: 15,
+      change_pct: 0.3,
+      diagnostics: null,
+    });
+    expect(why?.lead).toContain('larger share');
+    expect(why?.windows).toBeNull();
+    expect(why?.windowsAgree).toBeNull();
+  });
+
+  it('flags disagreeing windows', () => {
+    const why = budgetMoveWhy({
+      adset_id: 'c',
+      current_budget: 50,
+      final_budget: 65,
+      change_abs: 15,
+      change_pct: 0.3,
+      diagnostics: { score3d: 0.1, score7d: 0.9 },
+    });
+    expect(why?.windowsAgree).toBe(false);
+  });
+
+  it('carries the cost interval and its event count', () => {
+    const why = budgetMoveWhy({
+      adset_id: 'd',
+      current_budget: 50,
+      final_budget: 35,
+      change_abs: -15,
+      change_pct: -0.3,
+      diagnostics: { ci: { cpa: 61, lo: 44, hi: 92, events: 14 } },
+    });
+    expect(why?.cost).toEqual({ cpa: 61, lo: 44, hi: 92, events: 14 });
+  });
+
+  it('says nothing about a HELD row — freezeLabel already owns that explanation', () => {
+    expect(
+      budgetMoveWhy({
+        adset_id: 'e',
+        current_budget: 50,
+        final_budget: 50,
+        change_abs: 0,
+        change_pct: 0,
+        diagnostics: { freezeReason: 'no_conversions' },
+      }),
+    ).toBeNull();
+  });
+
+  it('says nothing about a row that did not move', () => {
+    expect(
+      budgetMoveWhy({
+        adset_id: 'f',
+        current_budget: 50,
+        final_budget: 50,
+        change_abs: 0,
+        change_pct: 0,
+      }),
+    ).toBeNull();
+  });
+
+  it('reports the velocity cap when the guardrail truncated the move', () => {
+    const why = budgetMoveWhy({
+      adset_id: 'g',
+      current_budget: 50,
+      final_budget: 65,
+      change_abs: 15,
+      change_pct: 0.3,
+      diagnostics: { velocityCapped: true },
+    });
+    expect(why?.capped).toBe(true);
   });
 });

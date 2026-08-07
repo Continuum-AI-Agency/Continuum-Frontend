@@ -58,6 +58,7 @@ import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
 import { buildPortfolioPickerEntities } from '../picker/portfolioPickerEntities';
 import { applyModeExplainer, applyModePill, freezeLabel } from '../reportModel';
+import { acceptSuggestionOnTab, suggestionPlaceholder } from '../suggestInput';
 import {
   useOptimizerAccountEnrollments,
   useOptimizerAccountSnapshots,
@@ -72,6 +73,7 @@ const APPLY_MODES: ApplyMode[] = ['observe', 'recommend', 'autopilot'];
 const OBJECTIVES = OptimizationObjectiveSchema.options;
 /** The period the pacing gauge estimates against when no period budget is set. */
 const PACING_PERIOD_DAYS = 30;
+const SUGGESTED_MAX_CHANGE_PCT = '20';
 
 /** A flight window of `days` starting today, as plain ISO dates. Built in UTC so the start
  *  date is the day the operator sees, not a timezone-shifted neighbour. */
@@ -423,6 +425,13 @@ export function PortfolioManagePanel({
   const hasDaily = Number.isFinite(dailyNum) && dailyNum > 0;
   const mismatchLabel = freezeLabel('kpi_mismatch')?.label ?? 'Held · different goal';
 
+  // One definition per field, shared by the chip and the Tab accelerator so the value the
+  // chip advertises is exactly the value Tab fills in.
+  const suggestedDaily =
+    budgetSource === 'fixed' && selectedBudgetSum > 0 ? Math.round(selectedBudgetSum) : null;
+  const suggestedMaxDaily = hasDaily ? Math.round(dailyNum * 1.5) : null;
+  const suggestedPeriod = hasDaily ? Math.round(dailyNum * PACING_PERIOD_DAYS) : null;
+
   return (
     <div className="space-y-4">
       <Section title="Identity">
@@ -539,15 +548,17 @@ export function PortfolioManagePanel({
               id={`manage-daily-${portfolio.id}`}
               inputMode="decimal"
               onChange={(event) => setDailyTotal(event.target.value)}
+              onKeyDown={acceptSuggestionOnTab(suggestedDaily, setDailyTotal)}
+              placeholder={suggestionPlaceholder(suggestedDaily, '')}
               value={dailyTotal}
             />
             {/* The one field that must track the enrolled roster had the least help: nothing
                 re-derived it when the picker changed membership, so a portfolio kept
                 conserving a months-old sum. */}
-            {budgetSource === 'fixed' && selectedBudgetSum > 0 ? (
+            {suggestedDaily != null ? (
               <SuggestionChip
-                label={`Match current ${symbol}${Math.round(selectedBudgetSum).toLocaleString('en-US')}/day`}
-                onClick={() => setDailyTotal(String(Math.round(selectedBudgetSum)))}
+                label={`Match current ${symbol}${suggestedDaily.toLocaleString('en-US')}/day`}
+                onClick={() => setDailyTotal(String(suggestedDaily))}
               />
             ) : null}
             {budgetSource === 'observed' && selectedBudgetSum > 0 ? (
@@ -660,14 +671,16 @@ export function PortfolioManagePanel({
               inputMode="decimal"
               value={maxDailyApply}
               onChange={(event) => setMaxDailyApply(event.target.value)}
-              placeholder={
-                portfolio.max_daily_apply_minor ? 'leave blank to keep' : 'required for autopilot'
-              }
+              onKeyDown={acceptSuggestionOnTab(suggestedMaxDaily, setMaxDailyApply)}
+              placeholder={suggestionPlaceholder(
+                suggestedMaxDaily,
+                portfolio.max_daily_apply_minor ? 'leave blank to keep' : 'required for autopilot',
+              )}
             />
-            {hasDaily ? (
+            {suggestedMaxDaily != null ? (
               <SuggestionChip
-                label={`Suggest ${symbol}${Math.round(dailyNum * 1.5).toLocaleString('en-US')}`}
-                onClick={() => setMaxDailyApply(String(Math.round(dailyNum * 1.5)))}
+                label={`Suggest ${symbol}${suggestedMaxDaily.toLocaleString('en-US')}`}
+                onClick={() => setMaxDailyApply(String(suggestedMaxDaily))}
               />
             ) : null}
           </div>
@@ -678,13 +691,17 @@ export function PortfolioManagePanel({
               inputMode="decimal"
               value={maxChangePct}
               onChange={(event) => setMaxChangePct(event.target.value)}
+              onKeyDown={acceptSuggestionOnTab(SUGGESTED_MAX_CHANGE_PCT, setMaxChangePct)}
               placeholder={
                 portfolio.max_change_pct_per_cycle
                   ? 'leave blank to keep'
                   : 'required · larger changes held for approval'
               }
             />
-            <SuggestionChip label="Suggest 20%" onClick={() => setMaxChangePct('20')} />
+            <SuggestionChip
+              label={`Suggest ${SUGGESTED_MAX_CHANGE_PCT}%`}
+              onClick={() => setMaxChangePct(SUGGESTED_MAX_CHANGE_PCT)}
+            />
           </div>
         </div>
       </Section>
@@ -721,15 +738,16 @@ export function PortfolioManagePanel({
               inputMode="decimal"
               value={periodBudget}
               onChange={(event) => setPeriodBudget(event.target.value)}
-              placeholder="leave blank to keep"
+              onKeyDown={acceptSuggestionOnTab(suggestedPeriod, setPeriodBudget)}
+              placeholder={suggestionPlaceholder(suggestedPeriod, 'leave blank to keep')}
             />
             <p className="text-2xs text-muted-foreground">
               Sets the pacing target. Blank estimates it from the daily budget.
             </p>
-            {hasDaily ? (
+            {suggestedPeriod != null ? (
               <SuggestionChip
-                label={`Suggest ${symbol}${Math.round(dailyNum * PACING_PERIOD_DAYS).toLocaleString('en-US')} (${PACING_PERIOD_DAYS}d)`}
-                onClick={() => setPeriodBudget(String(Math.round(dailyNum * PACING_PERIOD_DAYS)))}
+                label={`Suggest ${symbol}${suggestedPeriod.toLocaleString('en-US')} (${PACING_PERIOD_DAYS}d)`}
+                onClick={() => setPeriodBudget(String(suggestedPeriod))}
               />
             ) : null}
           </div>
@@ -970,15 +988,19 @@ function Section({
 }
 
 /** A one-click default: fills the adjacent input with a suggested value. The input still owns
- *  the value, so the operator keeps control. */
+ *  the value, so the operator keeps control. The Tab glyph advertises the keyboard path —
+ *  pressing Tab in the (empty) field it sits under fills the same value. */
 function SuggestionChip({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-3xs text-muted-foreground transition-colors hover:bg-muted"
+      className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-3xs text-muted-foreground transition-colors hover:bg-muted"
     >
       {label}
+      <span aria-hidden="true" className="rounded border border-border/70 bg-background px-1">
+        ⇥
+      </span>
     </button>
   );
 }

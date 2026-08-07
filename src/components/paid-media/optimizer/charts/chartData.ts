@@ -94,6 +94,53 @@ export function splitReallocation(items: CycleItemRow[]): Reallocation {
   };
 }
 
+// ── Who funded whom ──────────────────────────────────────────────────────────
+// The solver is conservation-based: one cycle emits a COMPLETE allocation vector
+// where the raises are already paid for by the cuts. Nothing pairwise is stored,
+// because the offsetting is n-way and implicit in the vector — which is exactly
+// why the queue read as N unrelated recommendations.
+//
+// This reconstructs the coupling the only way a conserved pool supports: each
+// donor's cut is split across recipients in proportion to their gains. Exact when
+// one ad set funds one other; proportional otherwise.
+
+export type BudgetTransfer = { fromAdsetId: string; toAdsetId: string; amount: number };
+
+export type TransferAttribution = {
+  transfers: BudgetTransfer[];
+  /** Cutting ad sets, deepest cut first. */
+  donors: FlowRow[];
+  /** Gaining ad sets, largest raise first. */
+  recipients: FlowRow[];
+  /** Dollars actually changing hands — min(raised, cut). */
+  moved: number;
+  /** raised − cut. ~0 on a conserved run; positive means the pool grew. */
+  net: number;
+};
+
+export function attributeTransfers(items: CycleItemRow[]): TransferAttribution {
+  const { gaining, losing, totalMoved, totalFreed, net } = splitReallocation(items);
+  // Only the MATCHED amount is attributed. A 'scale' cycle that grows the pool must never
+  // show a donor giving away more than it cut — the shortfall belongs in `net`, visible,
+  // not smeared across the links.
+  const moved = Math.min(totalMoved, totalFreed);
+  if (moved <= 0 || gaining.length === 0 || losing.length === 0) {
+    return { transfers: [], donors: losing, recipients: gaining, moved: 0, net };
+  }
+
+  // ponytail: full donors × recipients. A portfolio is ~20 ad sets, so ≤100 links; cap to
+  // the top-3 donors per recipient if one ever exceeds ~50.
+  const transfers = losing.flatMap((donor) =>
+    gaining.map((recipient) => ({
+      fromAdsetId: donor.adsetId,
+      toAdsetId: recipient.adsetId,
+      amount: moved * (-donor.change / totalFreed) * (recipient.change / totalMoved),
+    })),
+  );
+
+  return { transfers, donors: losing, recipients: gaining, moved, net };
+}
+
 export type BudgetSlice = { name: string; daily: number };
 // Retained alias — the objective breakdown is one of the two mix dimensions.
 export type ObjectiveBudget = BudgetSlice;

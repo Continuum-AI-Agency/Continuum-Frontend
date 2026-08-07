@@ -68,6 +68,7 @@ import {
   useJainaRunStatusRealtime,
 } from '@/hooks/useJainaRunStatusRealtime';
 import type {
+  AgentDocumentAttachment,
   AgentMentionProvider,
   AgentMentionReference,
   AgentMentionSuggestion,
@@ -88,8 +89,8 @@ import {
 } from '@/lib/jaina/conversations';
 import {
   frontendCheckpointReportSchema,
-  type JainaPlanAction,
   type JainaObjectiveStatus,
+  type JainaPlanAction,
   type JainaScaffoldAction,
   reportAssemblySchema,
 } from '@/lib/jaina/schemas';
@@ -927,7 +928,13 @@ export function mergePersistedMessagesWithLocal(
           (lastPendingAssistant.reasoning?.length ?? 0) > 0 ||
           (lastPendingAssistant.toolCalls?.length ?? 0) > 0 ||
           (lastPendingAssistant.toolResults?.length ?? 0) > 0 ||
-          (lastPendingAssistant.objectives?.length ?? 0) > 0),
+          (lastPendingAssistant.objectives?.length ?? 0) > 0 ||
+          // A scaffold turn is rich state in its own right. It always carries toolCalls
+          // today, so this is belt-and-braces rather than a live bug — but the whole
+          // point of this predicate is that dropping the local copy loses whatever the
+          // persisted snapshot cannot rebuild, and the snapshot cannot rebuild a
+          // scaffold at all.
+          Boolean(lastPendingAssistant.scaffold)),
     );
     const persistedAssistantHasMeaningfulContent = Boolean(
       lastPersistedAssistant &&
@@ -1154,6 +1161,9 @@ export function JainaChatSurface({
   >({});
   const [sessionId, setSessionId] = React.useState<string>(() => createJainaSessionId());
   const attachments = useChatAttachments({ brandId: brandProfileId, sessionId });
+  // Lifted out under a distinct name: handleSubmit takes an `attachments` parameter
+  // that shadows the controller, so the scope key has to be captured here.
+  const attachmentScopeKey = attachments.scopeKey;
   const pendingClarificationId = state.pendingClarification?.id;
 
   // Per-viewed-session streaming from the app-level store: true when the conversation on screen
@@ -1892,6 +1902,12 @@ export function JainaChatSurface({
       toolCalls: projectedState.toolCalls,
       toolResults: projectedState.toolResults,
       pendingClarification: projectedState.pendingClarification ?? undefined,
+      // The scaffold and its gate. Omitting these was what made a reattach lose the
+      // scaffold card: the reducer folds the frames into projectedState correctly, and
+      // then the patch dropped them on the floor, leaving the turn as bare prose.
+      scaffold: projectedState.scaffold ?? undefined,
+      pendingToolApprovals: projectedState.pendingToolApprovals,
+      resolvedApprovals: projectedState.resolvedApprovals,
     };
 
     setMessages((previous) => {
@@ -2462,6 +2478,10 @@ export function JainaChatSurface({
       canvas: boolean;
       clarificationId?: string;
       images?: Array<{ url: string; name?: string; mediaType?: string }>;
+      // Kept separate from `images` on purpose — that field is the pixels path, where
+      // Jaina's media resolver warns on anything that is not an image.
+      documents?: AgentDocumentAttachment[];
+      documentScopeKey?: string;
       references?: AgentMentionReference[];
       planAction?: JainaPlanAction;
       scaffoldAction?: JainaScaffoldAction;
@@ -2570,6 +2590,8 @@ export function JainaChatSurface({
         clarificationId: input.clarificationId,
         userId: userId ?? undefined,
         images: input.images,
+        documents: input.documents,
+        documentScopeKey: input.documentScopeKey,
         references: input.references,
         planAction: input.planAction,
         scaffoldAction: input.scaffoldAction,
@@ -2646,6 +2668,9 @@ export function JainaChatSurface({
         'jaina',
       );
       const images = attachmentContext.attachments;
+      // Documents stay OUT of `images`: that field is the pixels path, where Jaina's
+      // media resolver emits an unsupported_media_kind warning for anything non-image.
+      const documents = attachmentContext.documents;
 
       const pendingPlanId = findPendingPlanId(messages);
 
@@ -2656,6 +2681,9 @@ export function JainaChatSurface({
         ...(resolvedReferences.length > 0 ? { references: resolvedReferences } : {}),
         forceReportArtifact: isJainaProMode,
         ...(images.length > 0 ? { images } : {}),
+        ...(documents.length > 0 ? { documents } : {}),
+        // Scopes which ephemeral documents this turn may resolve — server-derived.
+        ...(documents.length > 0 ? { documentScopeKey: attachmentScopeKey } : {}),
         ...(pendingPlanId
           ? {
               planAction: {

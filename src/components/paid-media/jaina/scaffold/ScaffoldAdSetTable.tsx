@@ -1,9 +1,7 @@
 'use client';
 
-import { Network } from 'lucide-react';
 import * as React from 'react';
 import { InsightDataTable } from '@/components/dashboard/datatable/InsightDataTable';
-import { Button } from '@/components/ui/button';
 import type { ScaffoldTree } from '@/lib/paid-media/scaffoldTree';
 import { ScaffoldAdList } from './ScaffoldAdList';
 import { buildScaffoldAdSetColumns, scaffoldAdSetSearchValue } from './scaffoldColumns';
@@ -24,11 +22,9 @@ import { buildScaffoldAdSetColumns, scaffoldAdSetSearchValue } from './scaffoldC
 export function ScaffoldAdSetTable({
   tree,
   isLoading,
-  onOpenCanvas,
 }: {
   tree: ScaffoldTree | null;
   isLoading: boolean;
-  onOpenCanvas?: () => void;
 }) {
   const columns = React.useMemo(() => buildScaffoldAdSetColumns(), []);
   const rows = tree?.adSets ?? [];
@@ -46,14 +42,6 @@ export function ScaffoldAdSetTable({
               counts.failed > 0 ? ` · ${counts.failed} failed` : ''
             }`
           : undefined
-      }
-      headerAction={
-        onOpenCanvas ? (
-          <Button variant="ghost" size="sm" onClick={onOpenCanvas}>
-            <Network className="size-3.5" />
-            Tree view
-          </Button>
-        ) : undefined
       }
       defaultSort={{ columnId: 'name', direction: 'asc' }}
       searchable

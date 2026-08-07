@@ -1,7 +1,11 @@
 'use client';
 
 import type { InsightColumn } from '@/components/dashboard/datatable/InsightDataTable';
-import { type ScaffoldAdSetRow, scaffoldStatusRank } from '@/lib/paid-media/scaffoldTree';
+import {
+  type ScaffoldAdSetRow,
+  scaffoldStatusRank,
+  targetingSummary,
+} from '@/lib/paid-media/scaffoldTree';
 import { DerivedEmpty, DerivedValue } from './DerivedValue';
 import { ScaffoldStatusPill } from './ScaffoldStatusPill';
 
@@ -25,19 +29,6 @@ const placementLabel = (placement: string[] | undefined) => {
   if (!placement || placement.length === 0) return null;
   const shown = placement.slice(0, 2).join(', ');
   return placement.length > 2 ? `${shown} +${placement.length - 2}` : shown;
-};
-
-const targetingSummary = (targeting: unknown): string | null => {
-  if (!targeting || typeof targeting !== 'object') return null;
-  const record = targeting as Record<string, unknown>;
-  const parts: string[] = [];
-  const included = record.custom_audiences;
-  const excluded = record.excluded_custom_audiences;
-  if (Array.isArray(included) && included.length > 0) parts.push(`${included.length} included`);
-  if (Array.isArray(excluded) && excluded.length > 0) parts.push(`${excluded.length} excluded`);
-  const countries = (record.geo_locations as Record<string, unknown> | undefined)?.countries;
-  if (Array.isArray(countries) && countries.length > 0) parts.push(countries.join('/'));
-  return parts.length > 0 ? parts.join(' · ') : null;
 };
 
 export const buildScaffoldAdSetColumns = (): InsightColumn<ScaffoldAdSetRow>[] => [
@@ -103,7 +94,10 @@ export const buildScaffoldAdSetColumns = (): InsightColumn<ScaffoldAdSetRow>[] =
           {row.derived.billingEvent}
         </DerivedValue>
       ) : (
-        <DerivedEmpty reason="Derived from the optimization goal once one is set." />
+        // Not a gap: the ad-set create schema REJECTS a billing_event key, because it is
+        // computed from the optimization goal at build time and any stored copy could
+        // only ever be redundant or wrong.
+        <DerivedEmpty reason="Computed from the optimization goal at build time." />
       ),
   },
   {

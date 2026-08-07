@@ -29,6 +29,7 @@
     "studio:veo-refs:e2e:bench": "set -a; . ./.env.local; set +a; PORT=3001 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 NEXT_DIST_DIR=.next/studio-veo-refs-e2e playwright test e2e/studio-veo-reference-connections.spec.ts --workers=1",
     "optimizer:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir coverage src/components/paid-media/optimizer",
     "optimizer:e2e:bench": "playwright test --config playwright.optimizer.config.ts --workers=1",
+    "optimizer:rebalance:e2e:bench": "playwright test --config playwright.optimizer-rebalance.config.ts --workers=1",
     "organic:metrics:compare:bench": "bun run src/lib/organic/organic-metrics-compare.bench.ts",
     "posthog:logs:bench": "NODE_ENV=production bun run src/lib/observability/posthog-logs.bench.ts",
     "trends:render:e2e:bench": "bun run src/lib/brand-insights/trends-render.bench.ts",

@@ -70,10 +70,19 @@ export const layoutScaffoldTree = (tree: ScaffoldTree): ScaffoldLayout => {
         position: { x, y: SCAFFOLD_LEVEL_GAP * 2 },
         data: {
           name: ad.name,
+          pathKey: ad.pathKey,
           conceptKey: ad.conceptKey,
           status: ad.status,
           metaCreativeId: ad.metaCreativeId,
           errorMessage: ad.errorMessage,
+          creativeAssetId: ad.creativeAssetId,
+          creativeMedia: ad.creativeMedia,
+          // An ad has no delivery settings of its own; it inherits its ad set's. Carried
+          // so a hover on an ad answers "who does this reach" without a second lookup.
+          productKey: adSet.productKey,
+          angleKey: adSet.angleKey,
+          choices: adSet.choices,
+          derived: adSet.derived,
         },
       });
       edges.push({
@@ -101,12 +110,15 @@ export const layoutScaffoldTree = (tree: ScaffoldTree): ScaffoldLayout => {
       position: { x: adSetCentre - SCAFFOLD_ADSET_WIDTH / 2, y: SCAFFOLD_LEVEL_GAP },
       data: {
         name: adSet.name,
+        pathKey: adSet.pathKey,
         productKey: adSet.productKey,
         angleKey: adSet.angleKey,
         status: adSet.status,
         adCount: adSet.ads.length,
+        metaObjectId: adSet.metaObjectId,
         errorMessage: adSet.errorMessage,
         choices: adSet.choices,
+        derived: adSet.derived,
       },
     });
   }
@@ -119,6 +131,7 @@ export const layoutScaffoldTree = (tree: ScaffoldTree): ScaffoldLayout => {
       position: { x: campaignCentre - SCAFFOLD_CAMPAIGN_WIDTH / 2, y: 0 },
       data: {
         name: tree.campaign.name,
+        pathKey: tree.campaign.pathKey,
         status: tree.campaign.status,
         metaObjectId: tree.campaign.metaObjectId,
         adSetCount: tree.counts.adSets,

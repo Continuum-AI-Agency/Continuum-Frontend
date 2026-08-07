@@ -371,7 +371,11 @@ export function PortfolioDetailWorkspace({
               <span className="text-2xs text-muted-foreground uppercase tracking-wide">
                 Confidence
               </span>
-              <ConfidenceBadge band={latestRun?.confidence?.band} score={confidenceScore} />
+              <ConfidenceBadge
+                band={latestRun?.confidence?.band}
+                confidence={latestRun?.confidence ?? null}
+                score={confidenceScore}
+              />
             </span>
           </div>
 
@@ -416,7 +420,13 @@ export function PortfolioDetailWorkspace({
 
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
             <OptimizerPanel
-              meta={<ConfidenceBadge band={latestRun?.confidence?.band} score={confidenceScore} />}
+              meta={
+                <ConfidenceBadge
+                  band={latestRun?.confidence?.band}
+                  confidence={latestRun?.confidence ?? null}
+                  score={confidenceScore}
+                />
+              }
               title="Confidence"
             >
               <ScoreRadar

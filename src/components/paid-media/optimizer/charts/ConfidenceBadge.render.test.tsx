@@ -46,4 +46,25 @@ describe('ConfidenceBadge', () => {
     const { getByTestId } = render(<ConfidenceBadge band="high" score={0.5} />);
     expect(getByTestId('confidence-meter').querySelectorAll('span').length).toBe(3);
   });
+
+  it('stays a static image with no hover affordance when there is nothing to explain', () => {
+    // Promising a "why" popover that would open empty is worse than not offering one.
+    const { queryByRole } = render(<ConfidenceBadge band="high" score={0.72} />);
+    expect(queryByRole('button')).toBeNull();
+    expect(queryByRole('img')).not.toBeNull();
+  });
+
+  it('becomes a hover explainer once a confidence row is passed', () => {
+    const { queryByRole } = render(
+      <ConfidenceBadge
+        band="low"
+        confidence={{ score: 0.26, predictiveness: 0.75, sampleSize: 0.38, consistency: 0.91 }}
+        score={0.26}
+      />,
+    );
+    const trigger = queryByRole('button');
+    expect(trigger).not.toBeNull();
+    expect(trigger?.getAttribute('aria-label')).toContain('Low');
+    expect(trigger?.getAttribute('aria-label')).toContain('26%');
+  });
 });
