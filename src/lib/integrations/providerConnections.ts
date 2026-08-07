@@ -44,3 +44,41 @@ export function hasProviderConnections(
 ): boolean {
   return getProviderConnectionSummary(summary, provider).connected;
 }
+
+export const GOOGLE_ANALYTICS_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
+
+export type GoogleIntegrationMetadata = {
+  scopes?: unknown;
+  ga4_enrichment?: { ok?: boolean; error?: string };
+};
+
+/**
+ * Whether a Google connection has to be re-consented before GA4 can ever sync.
+ *
+ * Google freezes a connection's granted scopes at consent time, so one
+ * authorized before `analytics.readonly` joined the requested set 403s on every
+ * subsequent sync and yields zero properties forever — silently, until this
+ * says otherwise. Lives here rather than in the server-only summary module so
+ * the decision is testable on its own.
+ */
+export function needsGoogleAnalyticsReconsent(
+  metadata: GoogleIntegrationMetadata,
+  syncedGa4PropertyCount: number,
+): boolean {
+  const enrichment = metadata.ga4_enrichment;
+
+  // The last sync told us outright that the grant is missing the scope.
+  if (enrichment?.error === 'scope_not_granted') return true;
+  // Or told us outright that it succeeded: zero properties then means the user
+  // genuinely has none, which is not something to nag about.
+  if (enrichment?.ok === true) return false;
+
+  // Recorded scopes, when non-empty, ARE the granted set. Empty means Google
+  // returned no scope string, which is unknown rather than missing.
+  const scopes = Array.isArray(metadata.scopes) ? (metadata.scopes as string[]) : [];
+  if (scopes.length > 0) return !scopes.includes(GOOGLE_ANALYTICS_SCOPE);
+
+  // Connections predating this bookkeeping: infer from the absence of any
+  // synced property. Self-clears as soon as one lands.
+  return syncedGa4PropertyCount === 0;
+}

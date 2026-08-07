@@ -2,6 +2,10 @@ import 'server-only';
 
 import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
 import { mapIntegrationTypeToPlatformKey } from '@/lib/integrations/platform';
+import {
+  type GoogleIntegrationMetadata,
+  needsGoogleAnalyticsReconsent,
+} from '@/lib/integrations/providerConnections';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export type UserIntegrationAccount = {
@@ -20,8 +24,6 @@ export type UserIntegrationSummary = Record<
     accounts: UserIntegrationAccount[];
   }
 >;
-
-const GOOGLE_ANALYTICS_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
 
 export type ProviderReconnectPrompt = {
   provider: 'google';
@@ -51,27 +53,13 @@ export async function fetchProviderReconnectPrompts(
   }
   if (!rows || rows.length === 0) return [];
 
-  const needsGoogleReconsent = rows.some((row) => {
-    const metadata = (row.metadata ?? {}) as {
-      scopes?: unknown;
-      ga4_enrichment?: { ok?: boolean; error?: string };
-    };
-    const enrichment = metadata.ga4_enrichment;
-
-    // Definitive: the last sync told us the grant is missing the scope.
-    if (enrichment?.error === 'scope_not_granted') return true;
-    // Definitive the other way: we successfully enumerated. Zero properties
-    // then means the user genuinely has none — never nag about that.
-    if (enrichment?.ok === true) return false;
-
-    // Recorded scopes, when present and non-empty, are the granted set.
-    const scopes = Array.isArray(metadata.scopes) ? (metadata.scopes as string[]) : [];
-    if (scopes.length > 0) return !scopes.includes(GOOGLE_ANALYTICS_SCOPE);
-
-    // Connections that predate this bookkeeping: infer from the absence of any
-    // synced GA4 property. Self-clears the moment one syncs successfully.
-    return summary.googleAnalytics.accounts.length === 0;
-  });
+  const syncedGa4PropertyCount = summary.googleAnalytics.accounts.length;
+  const needsGoogleReconsent = rows.some((row) =>
+    needsGoogleAnalyticsReconsent(
+      (row.metadata ?? {}) as GoogleIntegrationMetadata,
+      syncedGa4PropertyCount,
+    ),
+  );
 
   if (!needsGoogleReconsent) return [];
   return [
