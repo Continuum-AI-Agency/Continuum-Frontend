@@ -3,7 +3,6 @@
 import dynamic from 'next/dynamic';
 import type React from 'react';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { ClientRenderProvider } from '@/lib/client-render/ClientRenderProvider';
 import { DashboardHeader } from './dashboard-header';
 import { AppSidebar } from './navigation/AppSidebar';
 import { CommandPaletteProvider } from './navigation/CommandPaletteProvider';
@@ -20,6 +19,14 @@ const CommandPalette = dynamic(
 const AgentRunsProvider = dynamic(
   () =>
     import('@/components/agents/AgentRunsProvider').then((m) => ({ default: m.AgentRunsProvider })),
+  { ssr: false },
+);
+
+const ClientRenderProvider = dynamic(
+  () =>
+    import('@/lib/client-render/ClientRenderProvider').then((m) => ({
+      default: m.ClientRenderProvider,
+    })),
   { ssr: false },
 );
 
