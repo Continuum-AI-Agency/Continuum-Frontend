@@ -6,7 +6,7 @@
 // component onboarding-agnostic: callers supply the brand id, optional header
 // chrome, an optional footer, and an optional telemetry sink.
 
-import { Plug } from 'lucide-react';
+import { Loader2, Plug, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { type ReactNode, useCallback, useMemo, useState, useTransition } from 'react';
 import { applyBrandIntegrationAssignmentsAction } from '@/app/(post-auth)/settings/integrations/actions';
@@ -15,7 +15,11 @@ import {
   isProviderComingSoon,
   PLATFORM_ICONS,
   PLATFORM_LABELS,
+  PROVIDER_GROUP_DESCRIPTIONS,
   PROVIDER_GROUP_ICONS,
+  PROVIDER_GROUP_LABELS,
+  PROVIDER_GROUPS,
+  type ProviderGroup,
 } from '@/components/settings/shell/platformIcons';
 import {
   IntegrationSwitcher,
@@ -23,12 +27,15 @@ import {
   type IntegrationSwitcherItem,
   type IntegrationSwitcherTab,
 } from '@/components/shadcn-studio/card/integration-switcher';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useBrandAssignedAccountIds } from '@/hooks/useBrandAssignedAccountIds';
 import { useMetaAutoResync } from '@/hooks/useMetaAutoResync';
 import {
   assignBrandIntegrationAccount,
+  type LinkedInSyncMode,
   startGoogleSync,
   startLinkedInSync,
   startMetaSync,
@@ -40,7 +47,7 @@ import {
 } from '@/lib/api/integrations';
 import { isHigherPrivilegeRole, isReadOnlyMetaRole } from '@/lib/integrations/metaRole';
 import { mapIntegrationTypeToPlatformKey } from '@/lib/integrations/platform';
-import { openCenteredPopup, waitForPopupClosed } from '@/lib/popup';
+import { openCenteredPopup, waitForOAuthCompletion } from '@/lib/popup';
 import { cn } from '@/lib/utils';
 
 export type AssignerTrackEvent =
@@ -57,13 +64,13 @@ export type AssignerHeaderState = {
   clearing: boolean;
 };
 
-type ProviderGroup = 'meta' | 'google' | 'tiktok' | 'linkedin' | 'x';
-
-const META_GOOGLE_TIKTOK: Record<string, ProviderGroup> = {
-  meta: 'meta',
-  facebook: 'meta',
-  instagram: 'meta',
-  threads: 'meta',
+// Resolves both tab ids (a PlatformKey, or META_TAB_ID for the collapsed Meta
+// tab) and provider-group ids to the OAuth provider that owns them.
+const PROVIDER_GROUP_BY_ID: Record<string, ProviderGroup> = {
+  meta: 'facebook',
+  facebook: 'facebook',
+  instagram: 'facebook',
+  threads: 'facebook',
   googleAds: 'google',
   youtube: 'google',
   dv360: 'google',
@@ -74,16 +81,10 @@ const META_GOOGLE_TIKTOK: Record<string, ProviderGroup> = {
   x: 'x',
 };
 
-const SYNC_LABEL_BY_GROUP: Record<ProviderGroup, string> = {
-  meta: 'Meta',
-  google: 'Google',
-  tiktok: 'TikTok',
-  linkedin: 'LinkedIn',
-  x: 'X',
-};
-
 const META_PLATFORMS: ReadonlySet<PlatformKey> = new Set(['facebook', 'instagram', 'threads']);
 const META_TAB_ID = 'meta';
+
+type SyncOptions = { linkedinMode?: LinkedInSyncMode };
 
 const stagger = {
   hidden: { opacity: 0 },
@@ -100,7 +101,7 @@ function countAssetsForGroup(assets: UserIntegrationAssetRow[], group: ProviderG
   for (const asset of assets) {
     const platform = mapIntegrationTypeToPlatformKey(asset.type);
     if (!platform) continue;
-    if (META_GOOGLE_TIKTOK[platform] === group) count += 1;
+    if (PROVIDER_GROUP_BY_ID[platform] === group) count += 1;
   }
   return count;
 }
@@ -226,6 +227,124 @@ function buildMetaItems(
   }
 
   return { items, childrenByParent };
+}
+
+// The provider chips are derived from assets the user has already synced, so
+// they can never offer a provider that isn't connected yet. This is the one
+// control that can, and it has to hang off the populated tab row as well as the
+// empty state — otherwise a user with a single Meta connection is stuck with
+// Meta forever.
+function ProviderConnectMenu({
+  onConnect,
+  syncingGroups,
+  children,
+}: {
+  onConnect: (group: ProviderGroup, options?: SyncOptions) => void;
+  syncingGroups: Set<string>;
+  children?: ReactNode;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        {children ?? (
+          <button
+            type="button"
+            aria-label="Connect a provider"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        )}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-2">
+        <div className="px-2 py-1.5">
+          <p className="text-sm font-semibold text-foreground">Connect a provider</p>
+          <p className="text-xs text-muted-foreground">
+            Sign in to pull its accounts into the list above.
+          </p>
+        </div>
+        <div className="mt-1 space-y-1">
+          {PROVIDER_GROUPS.map((group) => {
+            const comingSoon = isProviderComingSoon(group);
+            const syncing = syncingGroups.has(group);
+            const Icon = PROVIDER_GROUP_ICONS[group];
+            return (
+              <div
+                key={group}
+                className={cn(
+                  'flex items-center gap-3 rounded-md px-2 py-2',
+                  comingSoon ? 'opacity-60' : 'hover:bg-muted/40',
+                )}
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {PROVIDER_GROUP_LABELS[group]}
+                    </p>
+                    {comingSoon ? (
+                      <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
+                        Coming soon
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {PROVIDER_GROUP_DESCRIPTIONS[group]}
+                  </p>
+                </div>
+                {comingSoon ? (
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled>
+                    Coming soon
+                  </Button>
+                ) : group === 'linkedin' ? (
+                  // LinkedIn Ads and LinkedIn Organic are separate OAuth apps
+                  // with separate scopes, so neither can stand in for the other.
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-xs"
+                      onClick={() => onConnect(group, { linkedinMode: 'paid' })}
+                      disabled={syncing}
+                    >
+                      <Plus className="h-3 w-3" />
+                      Ads
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-xs"
+                      onClick={() => onConnect(group, { linkedinMode: 'organic' })}
+                      disabled={syncing}
+                    >
+                      Organic
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-xs"
+                    onClick={() => onConnect(group)}
+                    disabled={syncing}
+                  >
+                    {syncing ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Plus className="h-3 w-3" />
+                    )}
+                    {syncing ? 'Connecting…' : 'Connect'}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export type BrandAssetAssignerProps = {
@@ -360,18 +479,20 @@ export function BrandAssetAssigner({
     [brandId, assignedIds, childrenByParent, refreshAssigned, show, markPending, onTrack],
   );
 
-  const markSyncing = useCallback((tabId: string, syncing: boolean) => {
+  const markSyncing = useCallback((ids: string[], syncing: boolean) => {
     setSyncingTabIds((prev) => {
       const draft = new Set(prev);
-      if (syncing) draft.add(tabId);
-      else draft.delete(tabId);
+      for (const id of ids) {
+        if (syncing) draft.add(id);
+        else draft.delete(id);
+      }
       return draft;
     });
   }, []);
 
   const handleSync = useCallback(
-    async (tabId: string) => {
-      const group = META_GOOGLE_TIKTOK[tabId];
+    async (tabId: string, options?: SyncOptions) => {
+      const group = PROVIDER_GROUP_BY_ID[tabId];
       if (!group) {
         show({
           title: 'Sync not supported',
@@ -381,9 +502,11 @@ export function BrandAssetAssigner({
         return;
       }
 
+      const providerLabel = PROVIDER_GROUP_LABELS[group];
+
       if (isProviderComingSoon(group)) {
         show({
-          title: `${SYNC_LABEL_BY_GROUP[group]} is coming soon`,
+          title: `${providerLabel} is coming soon`,
           description: "This integration isn't available yet.",
           variant: 'info',
         });
@@ -391,26 +514,33 @@ export function BrandAssetAssigner({
       }
 
       const beforeCount = countAssetsForGroup(userAssets, group);
+      const linkedinMode = options?.linkedinMode ?? 'paid';
 
-      markSyncing(tabId, true);
+      // Both ids are marked so the tab's own "Sync more from …" button and the
+      // connect menu's row show the same in-flight state.
+      markSyncing([tabId, group], true);
+      let cleanup: (() => void) | undefined;
       try {
         const callbackUrl = buildOAuthCallbackUrl(group, brandId);
-        const { url } =
-          group === 'meta'
+        const syncResponse =
+          group === 'facebook'
             ? await startMetaSync(callbackUrl)
             : group === 'tiktok'
               ? await startTikTokSync(callbackUrl)
               : group === 'linkedin'
-                ? await startLinkedInSync(callbackUrl, {
-                    mode: tabId === 'linkedin' ? 'organic' : 'paid',
-                  })
+                ? await startLinkedInSync(callbackUrl, { mode: linkedinMode })
                 : group === 'x'
                   ? await startXSync(callbackUrl)
                   : await startGoogleSync(callbackUrl);
+        const expectedState = 'state' in syncResponse ? syncResponse.state : null;
 
         onTrack?.('oauth_started', { provider: group });
 
-        const popup = openCenteredPopup(url, `Connect ${SYNC_LABEL_BY_GROUP[group]}`, 600, 700);
+        const popupTitle =
+          group === 'linkedin'
+            ? `Connect LinkedIn ${linkedinMode === 'organic' ? 'Organic' : 'Ads'}`
+            : `Connect ${providerLabel}`;
+        const popup = openCenteredPopup(syncResponse.url, popupTitle, 600, 700);
         if (!popup) {
           show({
             title: "Couldn't open OAuth popup",
@@ -419,19 +549,77 @@ export function BrandAssetAssigner({
           });
           return;
         }
-        await waitForPopupClosed(popup);
+
+        const abortCtrl = new AbortController();
+        const timeoutId = window.setTimeout(() => {
+          try {
+            popup.close();
+          } catch {
+            /* ignore */
+          }
+          abortCtrl.abort();
+        }, 120000);
+        cleanup = () => {
+          try {
+            abortCtrl.abort();
+          } catch {
+            /* ignore */
+          }
+          window.clearTimeout(timeoutId);
+        };
+
+        type Msg = {
+          type: string;
+          provider: string | null;
+          context?: string;
+          message?: string;
+          state?: string | null;
+          warning?: string | null;
+        };
+        // Races postMessage against the callback page's BroadcastChannel post,
+        // which is the only signal that survives Google's own
+        // Cross-Origin-Opener-Policy severing window.opener on the popup.
+        const result = await waitForOAuthCompletion<Msg>({
+          popup,
+          predicate: (m) =>
+            m.provider === group &&
+            m.context === brandId &&
+            (!expectedState || m.state === expectedState),
+          signal: abortCtrl.signal,
+        });
+        try {
+          popup.close();
+        } catch {
+          /* ignore */
+        }
+        cleanup();
+
         const refreshed = await refetchUserAssets();
         await refreshAssigned();
         const afterCount = countAssetsForGroup(refreshed.data ?? userAssets, group);
         const added = Math.max(0, afterCount - beforeCount);
-        const providerLabel = SYNC_LABEL_BY_GROUP[group];
-        if (added > 0) {
+
+        if (result.warning === 'no_ads_accounts' || result.warning === 'ads_enrichment_failed') {
+          show({
+            title: 'Connected, with a note',
+            description:
+              'No Google Ads accounts were found for this account. They may live under a different Google identity.',
+            variant: 'info',
+          });
+        } else if (result.warning === 'meta_partial_sync') {
+          show({
+            title: 'Connected, with a note',
+            description:
+              "Some Meta accounts may not have loaded. We'll keep trying — reopen this step in a moment if any are missing.",
+            variant: 'info',
+          });
+        } else if (added > 0) {
           show({
             title: `Connected ${providerLabel}`,
             description: `${added} account${added === 1 ? '' : 's'} found.`,
             variant: 'success',
           });
-        } else if (afterCount === beforeCount) {
+        } else {
           show({
             title: `${providerLabel} sync complete`,
             description:
@@ -446,12 +634,17 @@ export function BrandAssetAssigner({
           message: error instanceof Error ? error.message : 'Unknown error',
         });
         show({
-          title: "Couldn't start sync",
+          title: `Couldn't connect ${providerLabel}`,
           description: error instanceof Error ? error.message : 'Please try again.',
           variant: 'error',
         });
       } finally {
-        markSyncing(tabId, false);
+        try {
+          cleanup?.();
+        } catch {
+          /* ignore */
+        }
+        markSyncing([tabId, group], false);
       }
     },
     [brandId, markSyncing, refetchUserAssets, refreshAssigned, show, userAssets, onTrack],
@@ -474,9 +667,9 @@ export function BrandAssetAssigner({
   }, [brandId, refreshAssigned, show, onTrack]);
 
   const syncLabel = useCallback((tabId: string, hasItems: boolean) => {
-    const group = META_GOOGLE_TIKTOK[tabId];
+    const group = PROVIDER_GROUP_BY_ID[tabId];
     const providerLabel = group
-      ? SYNC_LABEL_BY_GROUP[group]
+      ? PROVIDER_GROUP_LABELS[group]
       : (PLATFORM_LABELS[tabId as PlatformKey] ?? tabId);
     return hasItems ? `Sync more from ${providerLabel}` : `Connect ${providerLabel}`;
   }, []);
@@ -548,27 +741,13 @@ export function BrandAssetAssigner({
             <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
               Connect a provider to start tagging its accounts to this brand.
             </p>
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              {(['meta', 'google', 'tiktok', 'x'] as ProviderGroup[]).map((group) => {
-                const comingSoon = isProviderComingSoon(group);
-                return (
-                  <Button
-                    key={group}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={comingSoon ? undefined : () => handleSync(group)}
-                    disabled={comingSoon || syncingTabIds.has(group)}
-                    className={cn(comingSoon && 'opacity-60')}
-                  >
-                    {comingSoon
-                      ? `${SYNC_LABEL_BY_GROUP[group]} — Coming soon`
-                      : syncingTabIds.has(group)
-                        ? `Connecting ${SYNC_LABEL_BY_GROUP[group]}…`
-                        : `Connect ${SYNC_LABEL_BY_GROUP[group]}`}
-                  </Button>
-                );
-              })}
+            <div className="mt-4 flex items-center justify-center">
+              <ProviderConnectMenu onConnect={handleSync} syncingGroups={syncingTabIds}>
+                <Button type="button" variant="outline" size="sm" className="gap-2">
+                  <Plus className="h-3.5 w-3.5" />
+                  Connect a provider
+                </Button>
+              </ProviderConnectMenu>
             </div>
           </div>
         ) : (
@@ -580,6 +759,9 @@ export function BrandAssetAssigner({
             onSyncClick={handleSync}
             syncLabel={syncLabel}
             syncingTabIds={syncingTabIds}
+            tabBarTrailing={
+              <ProviderConnectMenu onConnect={handleSync} syncingGroups={syncingTabIds} />
+            }
             className="max-w-none"
             maxItemHeight="50vh"
             emptyState={

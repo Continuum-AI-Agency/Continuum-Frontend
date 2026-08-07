@@ -1,6 +1,7 @@
 import type {
   AeoSnapshotCard,
   AgentAttachment,
+  AgentDocumentAttachment,
   AgentDelegatedFrameData,
   BulkContentPlan,
   MediaSearchResultsFrame,
@@ -226,8 +227,15 @@ export type AgentChatInput = {
   timezone?: string;
   platformAccountIds?: Record<string, string>;
   // Composer attachments, already uploaded and signed. The backend folds them into the same image
-  // path as @-mentioned library media.
+  // path as @-mentioned library media. IMAGES ONLY — a document here would be dropped by
+  // composerImagesToResolved, which is the bug this split exists to prevent.
   images?: AgentAttachment[];
+  // Documents attached to the composer. Travel as identities; the backend resolves their
+  // chunks through getDocumentChunks, the same path an @-mentioned document already uses.
+  documents?: AgentDocumentAttachment[];
+  // Scopes which ephemeral (one-off) documents this turn is allowed to resolve. A
+  // server-derived session key, never a model-produced value.
+  documentScopeKey?: string;
   // The reader's own BCP-47 locale, so the agent answers and drafts in the language they are
   // actually working in rather than defaulting to English.
   locale?: string;

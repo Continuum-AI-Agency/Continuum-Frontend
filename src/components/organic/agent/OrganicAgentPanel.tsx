@@ -720,13 +720,17 @@ export function OrganicAgentPanel({
         'organic',
       );
       const images = attachmentContext.attachments;
+      // Documents stay OUT of `images`. That field means pixels; the Backend resolves a
+      // document to its chunks from the `document` reference instead.
+      const documents = attachmentContext.documents;
       // Same shape the backend persists on the user turn, so the live transcript and a resumed one
       // render the attachment identically.
       const metadata =
-        resolvedReferences.length > 0 || images.length > 0
+        resolvedReferences.length > 0 || images.length > 0 || documents.length > 0
           ? {
               references: resolvedReferences,
               ...(images.length > 0 ? { attachments: images } : {}),
+              ...(documents.length > 0 ? { documents } : {}),
             }
           : undefined;
 
@@ -742,6 +746,10 @@ export function OrganicAgentPanel({
         locale: resolveLocale(),
         platformAccountIds,
         images,
+        documents,
+        // Scopes which ephemeral documents this turn may resolve. Derived from the
+        // session, never from anything the model produced.
+        documentScopeKey: attachments.scopeKey,
       })
         .then(() => debouncedRefreshSessions())
         .catch(() => {});

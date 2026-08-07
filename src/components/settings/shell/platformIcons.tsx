@@ -46,6 +46,16 @@ export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
 
 export type ProviderGroup = 'facebook' | 'google' | 'tiktok' | 'linkedin' | 'x';
 
+// Display order for every surface that offers a provider connect. Single list so
+// a newly supported provider reaches Settings and onboarding at the same time.
+export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
+  'facebook',
+  'google',
+  'tiktok',
+  'linkedin',
+  'x',
+];
+
 export const PROVIDER_GROUP_LABELS: Record<ProviderGroup, string> = {
   facebook: 'Meta',
   google: 'Google',

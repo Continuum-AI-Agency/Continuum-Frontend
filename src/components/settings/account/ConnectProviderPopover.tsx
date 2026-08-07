@@ -29,17 +29,21 @@ import {
   PROVIDER_GROUP_DESCRIPTIONS,
   PROVIDER_GROUP_ICONS,
   PROVIDER_GROUP_LABELS,
+  PROVIDER_GROUPS,
   type ProviderGroup,
 } from '../shell/platformIcons';
 
-const PROVIDERS: ProviderGroup[] = ['facebook', 'google', 'tiktok', 'linkedin', 'x'];
-
 type ConnectProviderPopoverProps = {
   integrations: UserIntegrationSummary;
+  reconnectPrompts?: ProviderReconnectPrompt[];
   children?: React.ReactNode;
 };
 
-export function ConnectProviderPopover({ integrations, children }: ConnectProviderPopoverProps) {
+export function ConnectProviderPopover({
+  integrations,
+  reconnectPrompts = [],
+  children,
+}: ConnectProviderPopoverProps) {
   const { show } = useToast();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -284,7 +288,7 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
           <p className="text-xs text-muted-foreground">OAuth providers tied to your account.</p>
         </div>
         <div className="mt-1 space-y-1">
-          {PROVIDERS.map((providerId) => {
+          {PROVIDER_GROUPS.map((providerId) => {
             const comingSoon = isProviderComingSoon(providerId);
             const connectionSummary = comingSoon
               ? null

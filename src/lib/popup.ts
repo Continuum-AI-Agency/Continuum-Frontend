@@ -157,6 +157,35 @@ export function waitForBroadcastMessage<T = unknown>(
   });
 }
 
+// Callback-page counterpart to waitForOAuthCompletion: emits the completion on
+// BOTH channels, because neither alone covers every provider. Google's own
+// `Cross-Origin-Opener-Policy: same-origin` header permanently severs
+// window.opener for the rest of the popup's life, so postMessage silently
+// no-ops and only the BroadcastChannel post (same-origin delivery, no window
+// reference needed) reaches the opener. Returns whether the opener was
+// reachable, so the caller closes the popup rather than stranding it on a
+// fallback redirect.
+export function publishOAuthCompletion(payload: unknown, targetOrigin: string): boolean {
+  try {
+    if (supportsBroadcastChannel()) {
+      const channel = new BroadcastChannel(OAUTH_BROADCAST_CHANNEL_NAME);
+      channel.postMessage(payload);
+      channel.close();
+    }
+  } catch (error) {
+    console.error('Failed to broadcast oauth completion', error);
+  }
+
+  if (!window.opener) return false;
+  try {
+    window.opener.postMessage(payload, targetOrigin);
+    return true;
+  } catch (error) {
+    console.error('Failed to notify oauth opener', error);
+    return false;
+  }
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

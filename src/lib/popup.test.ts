@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 
-import { OAUTH_BROADCAST_CHANNEL_NAME, waitForOAuthCompletion } from './popup';
+import {
+  OAUTH_BROADCAST_CHANNEL_NAME,
+  publishOAuthCompletion,
+  waitForOAuthCompletion,
+} from './popup';
 
 // waitForOAuthCompletion races a popup's completion signals (window
 // "message" + BroadcastChannel) against the popup being closed. It exists to
@@ -154,5 +158,48 @@ describe('waitForOAuthCompletion', () => {
     );
 
     await expect(resultPromise).rejects.toThrow('denied by user');
+  });
+});
+
+// publishOAuthCompletion is the callback page's half of the same contract. The
+// integrations callback page used to postMessage only, so a Google flow — whose
+// window.opener is severed by COOP — emitted nothing at all and stranded the
+// popup on a fallback redirect. It must broadcast regardless of the opener.
+describe('publishOAuthCompletion', () => {
+  const payload = { type: 'oauth:success', provider: 'google', context: 'brand-1' };
+
+  it('broadcasts and reports the opener unreachable when window.opener is null', async () => {
+    const original = Object.getOwnPropertyDescriptor(window, 'opener');
+    Object.defineProperty(window, 'opener', { value: null, configurable: true, writable: true });
+
+    const channel = new BroadcastChannel(OAUTH_BROADCAST_CHANNEL_NAME);
+    const received = new Promise<unknown>((resolve) => {
+      channel.addEventListener('message', (event) => resolve(event.data), { once: true });
+    });
+
+    try {
+      expect(publishOAuthCompletion(payload, window.location.origin)).toBe(false);
+      expect(await received).toMatchObject(payload);
+    } finally {
+      channel.close();
+      if (original) Object.defineProperty(window, 'opener', original);
+    }
+  });
+
+  it('posts to the opener and reports success when the opener survived', () => {
+    const original = Object.getOwnPropertyDescriptor(window, 'opener');
+    const posted: unknown[] = [];
+    Object.defineProperty(window, 'opener', {
+      value: { postMessage: (message: unknown) => posted.push(message) },
+      configurable: true,
+      writable: true,
+    });
+
+    try {
+      expect(publishOAuthCompletion(payload, window.location.origin)).toBe(true);
+      expect(posted).toEqual([payload]);
+    } finally {
+      if (original) Object.defineProperty(window, 'opener', original);
+    }
   });
 });

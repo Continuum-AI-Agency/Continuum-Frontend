@@ -358,6 +358,8 @@ export function useOrganicAgentStream(
             timezone: input.timezone,
             platformAccountIds: input.platformAccountIds,
             images: input.images,
+            documents: input.documents,
+            documentScopeKey: input.documentScopeKey,
             locale: input.locale,
           }),
           signal: controller.signal,

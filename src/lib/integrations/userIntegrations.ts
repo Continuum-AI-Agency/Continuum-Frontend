@@ -21,6 +21,69 @@ export type UserIntegrationSummary = Record<
   }
 >;
 
+const GOOGLE_ANALYTICS_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
+
+export type ProviderReconnectPrompt = {
+  provider: 'google';
+  title: string;
+  description: string;
+};
+
+// A Google connection authorized before analytics.readonly joined GOOGLE_SCOPES
+// keeps its original grant forever: the GA4 enumeration 403s on every sync and
+// the user gets zero Analytics properties with nothing telling them why. Only a
+// fresh consent fixes it, so the connect surfaces have to ask for one.
+export async function fetchProviderReconnectPrompts(
+  userId: string,
+  summary: UserIntegrationSummary,
+): Promise<ProviderReconnectPrompt[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data: rows, error } = await supabase
+    .schema('brand_profiles')
+    .from('user_integrations')
+    .select('provider, metadata')
+    .eq('user_id', userId)
+    .eq('provider', 'google');
+
+  if (error) {
+    console.error('[fetchProviderReconnectPrompts] user_integrations query failed', error);
+    return [];
+  }
+  if (!rows || rows.length === 0) return [];
+
+  const needsGoogleReconsent = rows.some((row) => {
+    const metadata = (row.metadata ?? {}) as {
+      scopes?: unknown;
+      ga4_enrichment?: { ok?: boolean; error?: string };
+    };
+    const enrichment = metadata.ga4_enrichment;
+
+    // Definitive: the last sync told us the grant is missing the scope.
+    if (enrichment?.error === 'scope_not_granted') return true;
+    // Definitive the other way: we successfully enumerated. Zero properties
+    // then means the user genuinely has none — never nag about that.
+    if (enrichment?.ok === true) return false;
+
+    // Recorded scopes, when present and non-empty, are the granted set.
+    const scopes = Array.isArray(metadata.scopes) ? (metadata.scopes as string[]) : [];
+    if (scopes.length > 0) return !scopes.includes(GOOGLE_ANALYTICS_SCOPE);
+
+    // Connections that predate this bookkeeping: infer from the absence of any
+    // synced GA4 property. Self-clears the moment one syncs successfully.
+    return summary.googleAnalytics.accounts.length === 0;
+  });
+
+  if (!needsGoogleReconsent) return [];
+  return [
+    {
+      provider: 'google',
+      title: 'Reconnect for Analytics',
+      description:
+        'This Google connection predates Analytics access. Reconnect to grant it and sync your GA4 properties.',
+    },
+  ];
+}
+
 export function createEmptyUserIntegrationSummary(): UserIntegrationSummary {
   return PLATFORM_KEYS.reduce((acc, key) => {
     acc[key] = { accounts: [] };

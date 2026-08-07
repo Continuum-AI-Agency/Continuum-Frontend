@@ -50,6 +50,10 @@ const STATUS_STYLE: Record<McpToolCallStatus, { label: string; className: string
     label: 'rate limited',
     className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   },
+  cancelled: {
+    label: 'cancelled',
+    className: 'bg-slate-500/15 text-slate-600 dark:text-slate-400',
+  },
 };
 
 function formatTimestamp(value: string): string {
@@ -57,43 +61,40 @@ function formatTimestamp(value: string): string {
   return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString();
 }
 
-function formatDuration(ms: number): string {
-  if (!Number.isFinite(ms)) return '—';
+function formatDuration(ms: number | null): string {
+  if (ms === null || !Number.isFinite(ms)) return '—';
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
 }
 
-function buildPath(cursor: string | null, status: StatusFilter): string {
+function buildPath(cursor: string | null, status: StatusFilter, tool: string): string {
   const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
   if (cursor) params.set('before', cursor);
   if (status !== 'all') params.set('status', status);
+  if (tool) params.set('tool', tool);
   return `/mcp/tool-calls?${params.toString()}`;
 }
 
 export function McpActivityTable() {
   const [status, setStatus] = React.useState<StatusFilter>('all');
   const [toolFilter, setToolFilter] = React.useState('');
+  const deferredToolFilter = React.useDeferredValue(toolFilter.trim());
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'created_at', desc: true }]);
 
   const query = useInfiniteQuery({
-    queryKey: ['mcp-tool-calls', status],
+    queryKey: ['mcp-tool-calls', status, deferredToolFilter],
     queryFn: ({ pageParam }) =>
       http.request<McpToolCallsResponse>({
-        path: buildPath(pageParam, status),
+        path: buildPath(pageParam, status, deferredToolFilter),
         schema: mcpToolCallsResponseSchema,
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor,
   });
 
-  const allRows = React.useMemo(
+  const rows = React.useMemo(
     () => query.data?.pages.flatMap((page) => page.items) ?? [],
     [query.data],
   );
-  const rows = React.useMemo(() => {
-    const needle = toolFilter.trim().toLowerCase();
-    if (!needle) return allRows;
-    return allRows.filter((r) => r.tool.toLowerCase().includes(needle));
-  }, [allRows, toolFilter]);
 
   const columns = React.useMemo<ColumnDef<McpToolCall>[]>(
     () => [
@@ -127,7 +128,9 @@ export function McpActivityTable() {
         accessorKey: 'tool',
         header: 'Tool',
         cell: ({ row }) => (
-          <span className="font-data text-xs text-foreground">{row.original.tool}</span>
+          <span className="font-data text-xs text-foreground">
+            {row.original.tool ?? row.original.event_name}
+          </span>
         ),
       },
       {
@@ -196,6 +199,7 @@ export function McpActivityTable() {
             <SelectItem value="error">Error</SelectItem>
             <SelectItem value="denied">Denied</SelectItem>
             <SelectItem value="rate_limited">Rate limited</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
       </div>

@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import posthog from 'posthog-js';
 import { useEffect, useMemo } from 'react';
+import { publishOAuthCompletion } from '@/lib/popup';
 
 type PopupSuccessPayload = {
   type: 'oauth:success';
@@ -107,14 +108,9 @@ export default function IntegrationCallbackPage() {
       payload.status ? 'connection_successful' : 'connection_error',
       payload.reason,
     );
-    if (window.opener) {
-      try {
-        window.opener.postMessage(payload.payload, origin);
-        window.close();
-        return;
-      } catch {
-        // fall through to fallback navigation
-      }
+    if (publishOAuthCompletion(payload.payload, origin)) {
+      window.close();
+      return;
     }
     router.replace(fallback);
   }, [payload, router]);
