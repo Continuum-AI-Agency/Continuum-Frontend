@@ -7,8 +7,6 @@ import { DashboardHeader } from './dashboard-header';
 import { AppSidebar } from './navigation/AppSidebar';
 import { CommandPaletteProvider } from './navigation/CommandPaletteProvider';
 import { ActiveBrandProvider } from './providers/ActiveBrandProvider';
-import { StrategicAnalysisRealtimeListener } from './strategic-analyses/StrategicAnalysisRealtimeListener';
-import { StrategicAnalysisStatusPill } from './strategic-analyses/StrategicAnalysisStatusPill';
 import { BrandWelcomeBanner } from './welcome/BrandWelcomeBanner';
 
 const CommandPalette = dynamic(
@@ -26,6 +24,22 @@ const ClientRenderProvider = dynamic(
   () =>
     import('@/lib/client-render/ClientRenderProvider').then((m) => ({
       default: m.ClientRenderProvider,
+    })),
+  { ssr: false },
+);
+
+const StrategicAnalysisRealtimeListener = dynamic(
+  () =>
+    import('./strategic-analyses/StrategicAnalysisRealtimeListener').then((m) => ({
+      default: m.StrategicAnalysisRealtimeListener,
+    })),
+  { ssr: false },
+);
+
+const StrategicAnalysisStatusPill = dynamic(
+  () =>
+    import('./strategic-analyses/StrategicAnalysisStatusPill').then((m) => ({
+      default: m.StrategicAnalysisStatusPill,
     })),
   { ssr: false },
 );
