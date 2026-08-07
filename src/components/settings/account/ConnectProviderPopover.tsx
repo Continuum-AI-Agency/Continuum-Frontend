@@ -21,7 +21,10 @@ import {
   useStartXSync,
 } from '@/lib/api/integrations';
 import { getProviderConnectionSummary } from '@/lib/integrations/providerConnections';
-import type { UserIntegrationSummary } from '@/lib/integrations/userIntegrations';
+import type {
+  ProviderReconnectPrompt,
+  UserIntegrationSummary,
+} from '@/lib/integrations/userIntegrations';
 import { openCenteredPopup, waitForOAuthCompletion } from '@/lib/popup';
 import { cn } from '@/lib/utils';
 import {
@@ -295,128 +298,143 @@ export function ConnectProviderPopover({
               : getProviderConnectionSummary(integrations, providerId);
             const connected = connectionSummary?.connected ?? false;
             const Icon = PROVIDER_GROUP_ICONS[providerId];
+            const reconnectPrompt = connected
+              ? reconnectPrompts.find((prompt) => prompt.provider === providerId)
+              : undefined;
             return (
-              <div
-                key={providerId}
-                className={cn(
-                  'flex items-center gap-3 rounded-md px-2 py-2',
-                  comingSoon ? 'opacity-60' : 'hover:bg-muted/40',
-                )}
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {PROVIDER_GROUP_LABELS[providerId]}
+              <div key={providerId}>
+                <div
+                  className={cn(
+                    'flex items-center gap-3 rounded-md px-2 py-2',
+                    comingSoon ? 'opacity-60' : 'hover:bg-muted/40',
+                  )}
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {PROVIDER_GROUP_LABELS[providerId]}
+                      </p>
+                      {comingSoon ? (
+                        <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
+                          Coming soon
+                        </Badge>
+                      ) : connected ? (
+                        <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
+                          Connected
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {connected && connectionSummary && connectionSummary.accountNames.length > 0
+                        ? connectionSummary.accountNames.join(', ')
+                        : PROVIDER_GROUP_DESCRIPTIONS[providerId]}
                     </p>
-                    {comingSoon ? (
-                      <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
-                        Coming soon
-                      </Badge>
-                    ) : connected ? (
-                      <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
-                        Connected
-                      </Badge>
-                    ) : null}
                   </div>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {connected && connectionSummary && connectionSummary.accountNames.length > 0
-                      ? connectionSummary.accountNames.join(', ')
-                      : PROVIDER_GROUP_DESCRIPTIONS[providerId]}
-                  </p>
-                </div>
-                {comingSoon ? (
-                  <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled>
-                    Coming soon
-                  </Button>
-                ) : connected ? (
-                  <div className="flex items-center gap-1">
-                    {providerId === 'google' ? (
+                  {comingSoon ? (
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled>
+                      Coming soon
+                    </Button>
+                  ) : connected ? (
+                    <div className="flex items-center gap-1">
+                      {providerId === 'google' ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Connect a different Google account for Ads"
+                          onClick={() => handleConnect(providerId, { forceAccountChooser: true })}
+                          disabled={isPending}
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : null}
+                      {providerId === 'linkedin' ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          title="Connect LinkedIn Organic separately"
+                          onClick={() => handleConnect(providerId, { linkedinMode: 'organic' })}
+                          disabled={isPending}
+                        >
+                          Organic
+                        </Button>
+                      ) : null}
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7"
-                        title="Connect a different Google account for Ads"
-                        onClick={() => handleConnect(providerId, { forceAccountChooser: true })}
+                        title="Reconnect to refresh accounts"
+                        onClick={() =>
+                          handleConnect(
+                            providerId,
+                            providerId === 'linkedin' ? { linkedinMode: 'paid' } : undefined,
+                          )
+                        }
                         disabled={isPending}
                       >
-                        <UserPlus className="h-3.5 w-3.5" />
+                        <RefreshCw className="h-3.5 w-3.5" />
                       </Button>
-                    ) : null}
-                    {providerId === 'linkedin' ? (
                       <Button
                         variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        title="Disconnect"
+                        onClick={() => handleDisconnect(providerId)}
+                        disabled={isPending}
+                      >
+                        <Unplug className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : providerId === 'linkedin' ? (
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
                         size="sm"
-                        className="h-7 px-2 text-xs"
-                        title="Connect LinkedIn Organic separately"
+                        className="h-7 gap-1 px-2 text-xs"
+                        onClick={() => handleConnect(providerId, { linkedinMode: 'paid' })}
+                        disabled={isPending}
+                      >
+                        <Plus className="h-3 w-3" />
+                        Ads
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1 px-2 text-xs"
                         onClick={() => handleConnect(providerId, { linkedinMode: 'organic' })}
                         disabled={isPending}
                       >
                         Organic
                       </Button>
-                    ) : null}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title="Reconnect to refresh accounts"
-                      onClick={() =>
-                        handleConnect(
-                          providerId,
-                          providerId === 'linkedin' ? { linkedinMode: 'paid' } : undefined,
-                        )
-                      }
-                      disabled={isPending}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive"
-                      title="Disconnect"
-                      onClick={() => handleDisconnect(providerId)}
-                      disabled={isPending}
-                    >
-                      <Unplug className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ) : providerId === 'linkedin' ? (
-                  <div className="flex items-center gap-1">
+                    </div>
+                  ) : (
                     <Button
                       variant="outline"
                       size="sm"
                       className="h-7 gap-1 px-2 text-xs"
-                      onClick={() => handleConnect(providerId, { linkedinMode: 'paid' })}
+                      onClick={() => handleConnect(providerId)}
                       disabled={isPending}
                     >
                       <Plus className="h-3 w-3" />
-                      Ads
+                      Connect
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 gap-1 px-2 text-xs"
-                      onClick={() => handleConnect(providerId, { linkedinMode: 'organic' })}
-                      disabled={isPending}
-                    >
-                      Organic
-                    </Button>
+                  )}
+                </div>
+                {reconnectPrompt ? (
+                  <div className="mx-2 mb-1 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-amber-700 dark:text-amber-300">
+                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium">{reconnectPrompt.title}</p>
+                      <p className="text-2xs leading-snug opacity-90">
+                        {reconnectPrompt.description}
+                      </p>
+                    </div>
                   </div>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 gap-1 px-2 text-xs"
-                    onClick={() => handleConnect(providerId)}
-                    disabled={isPending}
-                  >
-                    <Plus className="h-3 w-3" />
-                    Connect
-                  </Button>
-                )}
+                ) : null}
               </div>
             );
           })}
