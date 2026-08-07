@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, RefreshCw, Unplug, UserPlus } from 'lucide-react';
+import { Plus, RefreshCw, TriangleAlert, Unplug, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -189,6 +189,23 @@ export function ConnectProviderPopover({
             title: 'Connected, with a note',
             description:
               'No Google Ads accounts were found for this account. Use "Connect a different Google account for Ads" if Ads lives under another identity.',
+            variant: 'info',
+          });
+        } else if (result.warning === 'ga4_scope_missing') {
+          // The token was stored, but Google didn't grant analytics.readonly —
+          // usually a connection re-authorized without re-approving the consent
+          // screen. No GA4 property can sync until it is granted.
+          show({
+            title: 'Connected, without Analytics',
+            description:
+              'Google Analytics access was not granted, so no GA4 properties were synced. Reconnect and approve Analytics to enable them.',
+            variant: 'info',
+          });
+        } else if (result.warning === 'ga4_enrichment_failed') {
+          show({
+            title: 'Connected, with a note',
+            description:
+              "Couldn't read your Google Analytics properties. Everything else connected — try reconnecting if GA4 data stays missing.",
             variant: 'info',
           });
         } else if (result.warning === 'meta_partial_sync') {

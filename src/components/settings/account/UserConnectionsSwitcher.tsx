@@ -11,19 +11,26 @@ import {
   type IntegrationSwitcherTab,
 } from '@/components/shadcn-studio/card/integration-switcher';
 import { Button } from '@/components/ui/button';
-import type { UserIntegrationSummary } from '@/lib/integrations/userIntegrations';
+import type {
+  ProviderReconnectPrompt,
+  UserIntegrationSummary,
+} from '@/lib/integrations/userIntegrations';
 import { PLATFORM_ICONS, PLATFORM_LABELS } from '../shell/platformIcons';
 import { ConnectProviderPopover } from './ConnectProviderPopover';
 
 type UserConnectionsSwitcherProps = {
   integrations: UserIntegrationSummary;
+  reconnectPrompts?: ProviderReconnectPrompt[];
 };
 
 function statusFor(status: string | null): IntegrationSwitcherItemStatus {
   return status && status.toLowerCase() === 'active' ? 'checked' : 'copy';
 }
 
-export function UserConnectionsSwitcher({ integrations }: UserConnectionsSwitcherProps) {
+export function UserConnectionsSwitcher({
+  integrations,
+  reconnectPrompts,
+}: UserConnectionsSwitcherProps) {
   const { tabs, data, hasAny } = useMemo(() => {
     const tabs: IntegrationSwitcherTab[] = [];
     const data: IntegrationSwitcherData = {};
@@ -58,7 +65,7 @@ export function UserConnectionsSwitcher({ integrations }: UserConnectionsSwitche
           Connect Meta, Google, TikTok, or X to surface accounts you can later assign to brands.
         </p>
         <div className="mt-4 inline-block">
-          <ConnectProviderPopover integrations={integrations}>
+          <ConnectProviderPopover integrations={integrations} reconnectPrompts={reconnectPrompts}>
             <Button variant="outline" size="sm" className="gap-2">
               <Plus className="h-3.5 w-3.5" />
               Connect a provider
@@ -74,7 +81,9 @@ export function UserConnectionsSwitcher({ integrations }: UserConnectionsSwitche
       integrations={tabs}
       data={data}
       className="max-w-none"
-      tabBarTrailing={<ConnectProviderPopover integrations={integrations} />}
+      tabBarTrailing={
+        <ConnectProviderPopover integrations={integrations} reconnectPrompts={reconnectPrompts} />
+      }
     />
   );
 }
