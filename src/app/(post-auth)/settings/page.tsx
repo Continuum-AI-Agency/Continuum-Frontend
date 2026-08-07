@@ -21,6 +21,7 @@ import { BrandIntegrationsSwitcher } from '@/components/settings/brand/BrandInte
 import { BrandIntelligenceWorkspace } from '@/components/settings/brand/BrandIntelligenceWorkspace';
 import { BrandInvitesSection } from '@/components/settings/brand/BrandInvitesSection';
 import { BrandPulseSection } from '@/components/settings/brand/BrandPulseSection';
+import { DesignSystemSection } from '@/components/settings/brand/DesignSystemSection';
 import { PromptsSettingsSection } from '@/components/settings/brand/PromptsSettingsSection';
 import { SkillsSettingsSection } from '@/components/settings/brand/SkillsSettingsSection';
 import { RoleCapabilityLegend } from '@/components/settings/RoleCapabilityLegend';
@@ -227,6 +228,14 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               />
             </div>
           ) : null}
+          {/* Sits with the Brand Book because it is the same mental model — the brand's
+              own account of itself — and because a brand that uploaded a design system
+              expects to find it next to the book it outranks. */}
+          {activeBrandId ? (
+            <div className="mt-6 border-t border-white/10 pt-6">
+              <DesignSystemSection brandId={activeBrandId} />
+            </div>
+          ) : null}
         </SettingsSection>
       </>
     );
@@ -294,7 +303,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         {createBrandHeader(defaultBrandName)}
         <SettingsSection
           title="Knowledge"
-          description="Documents Jaina uses for app-wide brand intelligence."
+          description="Documents your agents use for app-wide brand intelligence. Files attached in chat appear here as temporary for 14 days — save one to keep it permanently."
           action={<RunStrategicAnalysisButton brandProfileId={activeBrandId} compact />}
         >
           <BrandDocumentsSection brandId={activeBrandId} documents={documents} />
