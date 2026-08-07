@@ -1,5 +1,5 @@
 // Single source of truth for brand-document upload limits, shared by the client
-// uploader (useDocumentMutations) and the server route (/api/onboarding/documents).
+// uploader (uploadBrandDocument) and the server route (/api/brand-documents).
 //
 // Files are uploaded browser -> Supabase Storage directly (not through the Vercel
 // route) to bypass the 4.5 MB Vercel Function request-body cap. The hard size gate
@@ -23,6 +23,38 @@ const ACCEPTED_MIME_EXACT = new Set<string>([
 export function isAcceptedDocumentMime(mime: string): boolean {
   if (ACCEPTED_MIME_EXACT.has(mime)) return true;
   return ACCEPTED_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix));
+}
+
+/**
+ * Extensions offered in a file picker, and the list the chat composer classifies
+ * against. EXTENSION-driven on purpose: browsers report an empty MIME for `.md` and
+ * frequently mis-report `.docx`, so a MIME-only accept list silently omits formats we
+ * do support. `isAcceptedDocumentMime` tolerates '' for exactly that reason.
+ */
+export const DOCUMENT_FILE_EXTENSIONS = [
+  '.pdf',
+  '.docx',
+  '.pptx',
+  '.xlsx',
+  '.txt',
+  '.md',
+  '.csv',
+  '.json',
+] as const;
+
+/** Image formats accepted into the document library (OCR'd on ingest). */
+export const DOCUMENT_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'] as const;
+
+/** `accept` attribute value for a brand-document file input. */
+export const ACCEPTED_DOCUMENT_EXTENSIONS = [
+  ...DOCUMENT_FILE_EXTENSIONS,
+  ...DOCUMENT_IMAGE_EXTENSIONS,
+].join(',');
+
+/** True when a filename's extension is a text-bearing document (not an image). */
+export function hasDocumentExtension(fileName: string): boolean {
+  const lower = fileName.toLowerCase();
+  return DOCUMENT_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
 export type DocumentUploadMetadata = {

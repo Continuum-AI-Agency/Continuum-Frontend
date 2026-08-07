@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { designSystemSnapshotSchema } from '../design-system/manifest';
 import { brandBookDocumentSchema } from './brand-book';
 import { brandGuidelinesSchema } from './brand-guidelines';
 import { brandMdTokensSchema } from './brand-md';
@@ -18,7 +19,12 @@ import { readinessSummarySchema } from './readiness-summary';
 // One ranked retrieval result from a within-brand semantic search. `ref` is the
 // source-row identifier callers cite (document_id, guideline tag id, or brand
 // report embedding id) so a generation can attribute what it grounded on.
-export const groundingHitSourceSchema = z.enum(['guideline', 'document', 'brand_report']);
+export const groundingHitSourceSchema = z.enum([
+  'guideline',
+  'document',
+  'brand_report',
+  'design_system',
+]);
 export type GroundingHitSource = z.infer<typeof groundingHitSourceSchema>;
 
 export const groundingHitSchema = z.object({
@@ -47,6 +53,12 @@ export const brandGroundingBundleSchema = z.object({
   guidelines: brandGuidelinesSchema.nullable().default(null),
   readiness: readinessSummarySchema,
   documents: z.array(brandBookDocumentSchema).default([]),
+  // The brand's own design system, when it uploaded one. Sits alongside `tokens`
+  // rather than replacing it: `tokens` stays the small primitive every generator
+  // already reads (and the system projects INTO it), while this carries the full
+  // fidelity — the scale, the radii policy, the adherence rules — for the surfaces
+  // that can use it. Null for the majority of brands, which have no design system.
+  designSystem: designSystemSnapshotSchema.nullable().default(null),
   hits: z.array(groundingHitSchema).default([]),
 });
 export type BrandGroundingBundle = z.infer<typeof brandGroundingBundleSchema>;

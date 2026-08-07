@@ -4,22 +4,37 @@ import type { FileUIPart } from 'ai';
 import { AlertCircle, Check, Loader2, RefreshCw } from 'lucide-react';
 import {
   Attachment as AiAttachment,
+  Attachments as AiAttachments,
   AttachmentInfo,
   AttachmentPreview,
   AttachmentRemove,
-  Attachments as AiAttachments,
 } from '@/components/ai-elements/attachments';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export type ChatAttachmentStatus = 'uploading' | 'ready' | 'error';
+// 'indexing' exists because for a DOCUMENT, uploaded does not mean usable — the text
+// still has to be extracted, chunked and embedded before the agent can retrieve any of
+// it. Folding it into the composer's isUploading gate is what stops a send from racing
+// ahead of ingest and the model silently receiving nothing.
+export type ChatAttachmentStatus = 'uploading' | 'indexing' | 'ready' | 'error';
 
 export type Attachment = {
   id: string;
+  /**
+   * Which pipeline this attachment went through. Set at add() time and never
+   * undefined, so downstream code branches on a discriminant rather than guessing
+   * from which optional fields happen to be populated.
+   */
+  kind: 'media' | 'document';
   assetId?: string;
   versionId?: string;
+  /** Set for kind === 'document'. The agent resolves chunks from this server-side. */
+  documentId?: string;
+  retention?: 'permanent' | 'ephemeral';
+  expiresAt?: string;
   name: string;
+  /** Media only. A document has no renderable URL and deliberately leaves this unset. */
   url?: string;
   type?: string;
   size?: string;
@@ -69,15 +84,21 @@ export function Attachments({ files, onRemove, onRetry }: AttachmentsProps) {
   );
 }
 
-function AttachmentStatus({
-  file,
-  onRetry,
-}: {
-  file: Attachment;
-  onRetry?: (id: string) => void;
-}) {
+function AttachmentStatus({ file, onRetry }: { file: Attachment; onRetry?: (id: string) => void }) {
+  const isDocument = file.kind === 'document';
+
   if (file.status === 'uploading') {
-    return <Badge variant="secondary">Uploading to Library…</Badge>;
+    return <Badge variant="secondary">{isDocument ? 'Uploading…' : 'Uploading to Library…'}</Badge>;
+  }
+
+  if (file.status === 'indexing') {
+    return <Badge variant="secondary">Indexing…</Badge>;
+  }
+
+  // A temporary document says so on the chip, so the 14-day life is visible at the
+  // moment of sending and not only in the toast that has since disappeared.
+  if (file.status === 'ready' && isDocument && file.retention === 'ephemeral') {
+    return <Badge variant="outline">Temporary · 14d</Badge>;
   }
 
   if (file.status === 'error') {
@@ -105,7 +126,9 @@ function AttachmentStatus({
 }
 
 function AttachmentStatusIcon({ file }: { file: Attachment }) {
-  if (file.status === 'uploading') return <Loader2 className="animate-spin" aria-hidden="true" />;
+  if (file.status === 'uploading' || file.status === 'indexing') {
+    return <Loader2 className="animate-spin" aria-hidden="true" />;
+  }
   if (file.status === 'error') return <AlertCircle aria-hidden="true" />;
   return <Check aria-hidden="true" />;
 }

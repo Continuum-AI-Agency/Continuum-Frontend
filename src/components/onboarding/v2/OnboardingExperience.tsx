@@ -224,6 +224,9 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   // brand's own Instagram account to be connected. Without it the inspirations
   // screen has no organic data to show, so we skip it gracefully and go straight
   // to the brand-guided generation screen (which only needs the brand guidelines).
+  // Held while a design system is being read — see DocumentsScreen for why.
+  const [designSystemBusy, setDesignSystemBusy] = useState(false);
+
   const handleContinueToInspirations = () => {
     const integrationCount = Math.max(assignedAccountIds.length, countSelectedAccounts(state));
     trackOnboardingEvent('onboarding_launch_clicked', {
@@ -444,6 +447,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     onChangeUrl: () => void navigate(0),
     onLaunch: handleLaunch,
     onContinueToInspirations: handleContinueToInspirations,
+    designSystemBusy,
     inspirationsEnabled: INSPIRATIONS_ENABLED,
     launching,
   });
@@ -618,7 +622,11 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
               retrying={jobs.scrape.status === 'running'}
             />
           ) : screen === 1 ? (
-            <DocumentsScreen totalSteps={TOTAL_STEPS} />
+            <DocumentsScreen
+              totalSteps={TOTAL_STEPS}
+              brandId={brandId}
+              onDesignSystemBusyChange={setDesignSystemBusy}
+            />
           ) : screen === 2 ? (
             <IntegrationsScreen onAdvance={() => void navigate(3)} />
           ) : screen === 3 ? (
@@ -710,6 +718,7 @@ function useBottomBar({
   onContinueToInspirations,
   inspirationsEnabled,
   launching,
+  designSystemBusy,
 }: {
   screen: ScreenIndex;
   navigate: (next: ScreenIndex) => Promise<boolean>;
@@ -718,6 +727,7 @@ function useBottomBar({
   onContinueToInspirations: () => void;
   inspirationsEnabled: boolean;
   launching: boolean;
+  designSystemBusy: boolean;
 }) {
   const { jobs } = useBackgroundJobs();
   const dnaReady = jobs.agentPreview.status === 'done';
@@ -727,17 +737,29 @@ function useBottomBar({
   }
   if (screen === 1) {
     return {
-      hint: "Add brand assets — or skip and we'll infer from your website.",
+      hint: designSystemBusy
+        ? 'Reading your design system — everything after this is built from it.'
+        : "Add brand assets — or skip and we'll infer from your website.",
       actions: (
         <>
           <Button variant="outline" size="sm" onClick={onChangeUrl}>
             ← Change URL
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => void navigate(2)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void navigate(2)}
+            disabled={designSystemBusy}
+          >
             Skip for now
           </Button>
-          <Button variant="default" size="sm" onClick={() => void navigate(2)}>
-            Continue →
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => void navigate(2)}
+            disabled={designSystemBusy}
+          >
+            {designSystemBusy ? 'Reading design system…' : 'Continue →'}
           </Button>
         </>
       ),

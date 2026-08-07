@@ -1,11 +1,15 @@
 import type {
   AgentAttachment,
+  AgentDocumentAttachment,
   AgentMentionReference,
 } from '@continuum/contracts';
 import type { Attachment } from './attachments';
 
 type AttachmentContext = {
+  /** Media only — things the model sees as pixels. */
   attachments: AgentAttachment[];
+  /** Documents — identities the Backend resolves to chunks server-side. */
+  documents: AgentDocumentAttachment[];
   references: AgentMentionReference[];
 };
 
@@ -15,18 +19,52 @@ const isReadyLibraryAttachment = (
   assetId: string;
   url: string;
 } =>
+  attachment.kind === 'media' &&
   attachment.status === 'ready' &&
   Boolean(attachment.assetId) &&
   Boolean(attachment.url);
+
+const isReadyDocumentAttachment = (
+  attachment: Attachment,
+): attachment is Attachment & { documentId: string } =>
+  attachment.kind === 'document' && attachment.status === 'ready' && Boolean(attachment.documentId);
 
 export function buildAgentAttachmentContext(
   files: readonly Attachment[],
   source: AgentMentionReference['source'],
 ): AttachmentContext {
   const attachments: AgentAttachment[] = [];
+  const documents: AgentDocumentAttachment[] = [];
   const references: AgentMentionReference[] = [];
 
   for (const file of files) {
+    // A document becomes a `document` reference — exactly the shape an @-mention from
+    // the Brain folder already produces, which the Organic agent resolves through
+    // getDocumentChunks. Routing it through `attachments` instead would put it on the
+    // pixels path, where non-image parts are silently dropped.
+    if (isReadyDocumentAttachment(file)) {
+      documents.push({
+        documentId: file.documentId,
+        name: file.name,
+        mediaType: file.type,
+        ...(file.storagePath ? { storagePath: file.storagePath } : {}),
+        ...(file.retention ? { retention: file.retention } : {}),
+        ...(file.expiresAt ? { expiresAt: file.expiresAt } : {}),
+      });
+      references.push({
+        id: file.documentId,
+        type: 'document',
+        label: file.name,
+        source,
+        metadata: {
+          mimeType: file.type,
+          ...(file.retention ? { retention: file.retention } : {}),
+          ...(file.expiresAt ? { expiresAt: file.expiresAt } : {}),
+        },
+      });
+      continue;
+    }
+
     if (!isReadyLibraryAttachment(file)) continue;
     attachments.push({
       assetId: file.assetId,
@@ -51,7 +89,7 @@ export function buildAgentAttachmentContext(
     });
   }
 
-  return { attachments, references };
+  return { attachments, documents, references };
 }
 
 export function mergeAttachmentReferences(

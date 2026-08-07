@@ -1,4 +1,4 @@
-import { toDocumentCategory } from '@continuum/contracts';
+import { toDocumentCategory, toDocumentRetention } from '@continuum/contracts';
 import type { OnboardingDocument } from '@/lib/onboarding/state';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -29,6 +29,7 @@ function normalizeDocumentSource(source: string | null): OnboardingDocument['sou
 type BrandDocumentRow = {
   id: string;
   name: string | null;
+  display_name: string | null;
   source: string | null;
   category: string | null;
   status: string | null;
@@ -37,6 +38,10 @@ type BrandDocumentRow = {
   external_url: string | null;
   error_message: string | null;
   created_at: string;
+  retention: string | null;
+  expires_at: string | null;
+  archived_at: string | null;
+  version: number | null;
 };
 
 export async function fetchBrandDocuments(brandId: string): Promise<OnboardingDocument[]> {
@@ -45,9 +50,13 @@ export async function fetchBrandDocuments(brandId: string): Promise<OnboardingDo
     .schema('brand_profiles')
     .from('brand_documents')
     .select(
-      'id, name, source, category, status, size, storage_path, external_url, error_message, created_at',
+      'id, name, display_name, source, category, status, size, storage_path, external_url, error_message, created_at, retention, expires_at, archived_at, version',
     )
     .eq('brand_id', brandId)
+    // Deliberately UNFILTERED. The settings Knowledge page owns the Active /
+    // Temporary / Archived split client-side (filterDocumentsByScope), so archived and
+    // ephemeral rows have to reach it. Every AGENT-facing reader filters at the query,
+    // which is where it matters.
     .order('created_at', { ascending: true });
 
   if (error) {
@@ -58,12 +67,25 @@ export async function fetchBrandDocuments(brandId: string): Promise<OnboardingDo
   return ((data ?? []) as BrandDocumentRow[]).map((row) => {
     const document: OnboardingDocument = {
       id: row.id,
-      name: row.name?.trim() ? row.name : 'Document',
+      // display_name is the user-editable label; fall back to the stored filename for
+      // rows written before the rename feature existed.
+      name: row.display_name?.trim() || (row.name?.trim() ? row.name : 'Document'),
       source: normalizeDocumentSource(row.source),
       category: toDocumentCategory(row.category),
+      retention: toDocumentRetention(row.retention),
       createdAt: row.created_at,
       status: normalizeDocumentStatus(row.status),
     };
+
+    if (row.expires_at) {
+      document.expiresAt = row.expires_at;
+    }
+    if (row.archived_at) {
+      document.archivedAt = row.archived_at;
+    }
+    if (typeof row.version === 'number' && row.version > 0) {
+      document.version = row.version;
+    }
 
     if (typeof row.size === 'number' && Number.isFinite(row.size) && row.size >= 0) {
       document.size = row.size;

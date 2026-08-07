@@ -7,7 +7,7 @@
 //   3. sourceUrl — fetch the signed storage URL → decode text (plain-text only)
 //   4. content (base64 data URL) — last-resort fallback for legacy plain-text entries
 //
-// Local file uploads now go through /api/ai-studio/documents → embed_document,
+// Local file uploads now go through /api/brand-documents → embed_document,
 // so they always arrive with a sourceDocumentId by the time they are used in a
 // workflow. Path 2 is therefore the primary path for all locally-uploaded docs.
 //
@@ -120,10 +120,41 @@ async function fetchSignedUrlText(signedUrl: string): Promise<string | null> {
   }
 }
 
-async function fetchBrandDocumentChunks(documentId: string): Promise<string | null> {
+async function fetchBrandDocumentChunks(
+  documentId: string,
+  brandId: string | undefined,
+): Promise<string | null> {
+  // Fail closed. This reads through the service-role client, which bypasses RLS, so
+  // without a brand to scope to there is nothing stopping any caller-supplied
+  // documentId from returning another brand's document text.
+  if (!brandId) {
+    console.warn('[enrich] refusing document chunk read with no brandId in context');
+    return null;
+  }
+
   try {
     // Use admin client: chunk rows are server-side only (service role bypasses RLS).
     const admin = createSupabaseAdminClient();
+
+    // Confirm the document belongs to this brand and is live before reading any
+    // content. Ephemeral chat uploads are deliberately excluded: this is the AI Studio
+    // enrich path, not the conversation that owns them.
+    const { data: doc, error: docError } = await admin
+      .schema('brand_profiles')
+      .from('brand_documents')
+      .select('id')
+      .eq('id', documentId)
+      .eq('brand_id', brandId)
+      .eq('retention', 'permanent')
+      .is('archived_at', null)
+      .maybeSingle();
+
+    if (docError) {
+      console.warn('[enrich] brand_documents ownership check error', docError.message);
+      return null;
+    }
+    if (!doc) return null;
+
     const { data, error } = await admin
       .schema('brand_profiles')
       .from('brand_document_chunks')
@@ -145,13 +176,16 @@ async function fetchBrandDocumentChunks(documentId: string): Promise<string | nu
   }
 }
 
-async function extractDocumentText(doc: z.infer<typeof documentSchema>): Promise<string | null> {
+async function extractDocumentText(
+  doc: z.infer<typeof documentSchema>,
+  brandId: string | undefined,
+): Promise<string | null> {
   // Path 1: caller already has the text.
   if (doc.extractedText?.trim()) return doc.extractedText.trim();
 
   // Path 2: brand_document_chunks — best path for platform docs (covers PDFs).
   if (doc.sourceDocumentId) {
-    const chunks = await fetchBrandDocumentChunks(doc.sourceDocumentId);
+    const chunks = await fetchBrandDocumentChunks(doc.sourceDocumentId, brandId);
     if (chunks) return chunks;
   }
 
@@ -184,6 +218,9 @@ async function extractDocumentText(doc: z.infer<typeof documentSchema>): Promise
 async function assembleEnrichedPrompt(
   prompt: string,
   context: z.infer<typeof enrichBodySchema>['context'],
+  // brandId lives on the request root, not inside context. It is required to scope
+  // any document read, which runs through the service-role client.
+  brandId: string | undefined,
 ): Promise<string> {
   const parts: string[] = [];
 
@@ -210,7 +247,7 @@ async function assembleEnrichedPrompt(
   if (context.documents && context.documents.length > 0) {
     const textParts: string[] = [];
     for (const doc of context.documents) {
-      const text = await extractDocumentText(doc);
+      const text = await extractDocumentText(doc, brandId);
       if (!text) {
         console.info(`[enrich] no extractable text for "${doc.name}"`);
         continue;
@@ -268,9 +305,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { prompt, context } = parsed.data;
+  const { prompt, context, brandId } = parsed.data;
 
-  const enrichedPrompt = await assembleEnrichedPrompt(prompt, context);
+  const enrichedPrompt = await assembleEnrichedPrompt(prompt, context, brandId);
 
   // Stream the result as SSE so the client can display it incrementally.
   const encoder = new TextEncoder();

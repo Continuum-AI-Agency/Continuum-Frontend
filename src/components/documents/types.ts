@@ -2,6 +2,9 @@ import {
   DOCUMENT_CATEGORY_DEFAULT,
   DOCUMENT_CATEGORY_LABELS,
   type DocumentCategory,
+  type DocumentRetention,
+  type DocumentScope,
+  toDocumentRetention,
 } from '@continuum/contracts';
 import type {
   DocumentErrorCode,
@@ -99,6 +102,74 @@ export function filterDocumentsByCategory(
 ): DocumentView[] {
   if (filter === 'all') return documents;
   return documents.filter((doc) => documentCategoryOf(doc) === filter);
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle (retention / archive) — all pure so they unit-test without a DB
+// ---------------------------------------------------------------------------
+
+export function documentRetentionOf(doc: DocumentView): DocumentRetention {
+  // Absent means a row written before retention shipped, and all of those are
+  // curated brand knowledge.
+  return toDocumentRetention(doc.retention);
+}
+
+export function isArchived(doc: DocumentView): boolean {
+  return Boolean(doc.archivedAt);
+}
+
+export function isEphemeral(doc: DocumentView): boolean {
+  return documentRetentionOf(doc) === 'ephemeral';
+}
+
+/**
+ * Client-side expiry check. The server sweep is the authority, but it runs nightly —
+ * so without this a document would keep showing as live for up to a day after it
+ * expired. A permanent document is never expired regardless of a stale expires_at,
+ * mirroring the retention-qualified predicate in the SQL.
+ */
+export function isExpired(doc: DocumentView, now: number = Date.now()): boolean {
+  if (!isEphemeral(doc)) return false;
+  if (!doc.expiresAt) return false;
+  return new Date(doc.expiresAt).getTime() <= now;
+}
+
+export function filterDocumentsByScope(
+  documents: DocumentView[],
+  scope: DocumentScope,
+  now: number = Date.now(),
+): DocumentView[] {
+  switch (scope) {
+    case 'archived':
+      return documents.filter(isArchived);
+    case 'temporary':
+      return documents.filter(
+        (doc) => !isArchived(doc) && isEphemeral(doc) && !isExpired(doc, now),
+      );
+    default:
+      return documents.filter((doc) => !isArchived(doc) && !isExpired(doc, now));
+  }
+}
+
+/**
+ * Human countdown for a temporary document. Days until it is swept, then hours, then
+ * a plain "Expires today" so the last stretch never reads as "0d left".
+ */
+export function formatRetentionCountdown(
+  expiresAt: string | undefined,
+  now: number = Date.now(),
+): string | null {
+  if (!expiresAt) return null;
+  const remainingMs = new Date(expiresAt).getTime() - now;
+  if (Number.isNaN(remainingMs)) return null;
+  if (remainingMs <= 0) return 'Expired';
+
+  const days = Math.floor(remainingMs / (24 * 60 * 60 * 1000));
+  if (days >= 1) return `${days}d left`;
+
+  const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+  if (hours >= 1) return `${hours}h left`;
+  return 'Expires today';
 }
 
 export function formatBytes(bytes: number): string {

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 
 const uploadMediaAsset = mock(async () => ({
   assetId: 'asset-9',
@@ -20,8 +22,16 @@ function makeFile(name: string, type: string, size: number): File {
   return file;
 }
 
+// The controller now raises the ephemeral-document notice itself, so it needs the real
+// toast provider rather than each of the three chat surfaces duplicating that logic.
+const withToast = ({ children }: { children: ReactNode }) => (
+  <ToastProvider>{children}</ToastProvider>
+);
+
 function renderController() {
-  return renderHook(() => useChatAttachments({ brandId: 'brand-1', sessionId: 'session-1' }));
+  return renderHook(() => useChatAttachments({ brandId: 'brand-1', sessionId: 'session-1' }), {
+    wrapper: withToast,
+  });
 }
 
 describe('useChatAttachments', () => {
@@ -134,8 +144,9 @@ describe('useChatAttachments', () => {
   });
 
   it('errors without uploading when no brand is selected', () => {
-    const { result } = renderHook(() =>
-      useChatAttachments({ brandId: null, sessionId: 'session-1' }),
+    const { result } = renderHook(
+      () => useChatAttachments({ brandId: null, sessionId: 'session-1' }),
+      { wrapper: withToast },
     );
 
     act(() => {

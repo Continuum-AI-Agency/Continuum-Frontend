@@ -5,10 +5,11 @@ import {
   DOCUMENT_CATEGORY_LABELS,
   DOCUMENT_CATEGORY_VALUES,
   type DocumentCategory,
+  type DocumentScope,
 } from '@continuum/contracts';
 import { FileText, Loader2, Plus, Upload } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -23,10 +24,29 @@ import type { OnboardingState } from '@/lib/onboarding/state';
 import { cn } from '@/lib/utils';
 import { DocumentCategorySelect } from './DocumentCategorySelect';
 import { DocumentRow, PendingRow, ROW_EASE } from './DocumentRow';
+import { DocumentScopeSelect } from './DocumentScopeSelect';
 import type { CategoryFilter, DocumentDensity, DocumentView } from './types';
-import { filterDocumentsByCategory } from './types';
+import { filterDocumentsByCategory, filterDocumentsByScope, isEphemeral } from './types';
+import { useDocumentActions } from './useDocumentActions';
 import { useDocumentMutations } from './useDocumentMutations';
 import { useDocuments } from './useDocuments';
+
+const EXPIRY_TICK_MS = 60_000;
+
+/**
+ * Ticking clock for retention countdowns. Only runs while a temporary document is on
+ * screen — a library of permanent documents has nothing to count down, so it costs
+ * nothing there.
+ */
+function useNowTicker(enabled: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!enabled) return;
+    const id = setInterval(() => setNow(Date.now()), EXPIRY_TICK_MS);
+    return () => clearInterval(id);
+  }, [enabled]);
+  return now;
+}
 
 const ACCEPT = '.pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif';
 
@@ -55,21 +75,38 @@ export function DocumentManager({
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  const [scope, setScope] = useState<DocumentScope>('active');
   const [uploadCategory, setUploadCategory] = useState<DocumentCategory>(DOCUMENT_CATEGORY_DEFAULT);
 
   const compact = density === 'compact';
-  const visibleDocuments = useMemo(
-    () => filterDocumentsByCategory(documents, categoryFilter),
-    [documents, categoryFilter],
+
+  // One clock for the whole list rather than a timer per row. Also drives the
+  // client-side expiry hide, so the UI is correct even when the nightly sweep is
+  // hours away from running.
+  const now = useNowTicker(documents.some(isEphemeral));
+
+  // Scope first, then category — so switching to Archived does not silently keep a
+  // category filter that makes the list look empty.
+  const scopedDocuments = useMemo(
+    () => filterDocumentsByScope(documents, scope, now),
+    [documents, scope, now],
   );
+  const visibleDocuments = useMemo(
+    () => filterDocumentsByCategory(scopedDocuments, categoryFilter),
+    [scopedDocuments, categoryFilter],
+  );
+  const actions = useDocumentActions(mutations, onStateChange);
+
   const hasItems = visibleDocuments.length > 0 || mutations.uploads.length > 0;
   const anyUploading = mutations.uploads.some((u) => u.status === 'uploading');
-  const readyCount = documents.filter((d) => (d.progressStep ?? d.status) === 'ready').length;
+  // Counts describe what is on screen. Computing them over ALL documents would claim
+  // "12 ready" above a list showing 9.
+  const readyCount = scopedDocuments.filter((d) => (d.progressStep ?? d.status) === 'ready').length;
   const processingCount =
-    documents.length -
+    scopedDocuments.length -
     readyCount +
     mutations.uploads.filter((u) => u.status === 'uploading').length;
-  const errorCount = documents.filter((d) => (d.progressStep ?? d.status) === 'error').length;
+  const errorCount = scopedDocuments.filter((d) => (d.progressStep ?? d.status) === 'error').length;
 
   const handleFiles = async (files: File[]) => {
     if (files.length === 0) return;
@@ -113,12 +150,27 @@ export function DocumentManager({
     }
   };
 
+  // Take-down is now reversible: the row survives, its chunks are purged so it leaves
+  // every agent surface immediately, and the file is retained for a recovery window.
   const handleRemove = async (documentId: string) => {
     try {
-      await mutations.removeDocument(documentId, onStateChange);
+      await mutations.archiveDocument(documentId, onStateChange);
+      show({
+        title: 'Document taken down',
+        description: 'Agents can no longer use it. Restore it from Archived.',
+        variant: 'success',
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            void mutations
+              .restoreDocument(documentId, onStateChange)
+              .catch(() => show({ title: 'Could not restore document', variant: 'error' }));
+          },
+        },
+      });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not remove document.';
-      show({ title: 'Remove failed', description: message, variant: 'error' });
+      const message = err instanceof Error ? err.message : 'Could not take down document.';
+      show({ title: 'Take down failed', description: message, variant: 'error' });
     }
   };
 
@@ -160,7 +212,10 @@ export function DocumentManager({
   };
 
   return (
-    <div
+    // A labelled section rather than a bare div: drag-and-drop is a pointer-only
+    // convenience here, and the keyboard-accessible path is the Upload button inside.
+    <section
+      aria-label="Brand documents"
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -192,6 +247,9 @@ export function DocumentManager({
             onCategoryFilterChange={setCategoryFilter}
             uploadCategory={uploadCategory}
             onUploadCategoryChange={setUploadCategory}
+            scope={scope}
+            onScopeChange={setScope}
+            showScope={!compact}
           />
           <ItemPanel
             hasItems={hasItems}
@@ -220,6 +278,8 @@ export function DocumentManager({
                     key={doc.id}
                     doc={doc}
                     isPinned={pinnedId === doc.id}
+                    now={now}
+                    actions={actions}
                     onPinnedChange={(pinned) => setPinnedId(pinned ? doc.id : null)}
                     onOpenInline={(storagePath) => void handleOpenInline(storagePath)}
                     onDownload={handleDownload}
@@ -232,7 +292,7 @@ export function DocumentManager({
           </ItemPanel>
         </CardContent>
       </Card>
-    </div>
+    </section>
   );
 }
 
@@ -246,6 +306,9 @@ function SyncBar({
   onCategoryFilterChange,
   uploadCategory,
   onUploadCategoryChange,
+  scope,
+  onScopeChange,
+  showScope,
 }: {
   onUploadClick: () => void;
   uploading: boolean;
@@ -256,11 +319,16 @@ function SyncBar({
   onCategoryFilterChange: (filter: CategoryFilter) => void;
   uploadCategory: DocumentCategory;
   onUploadCategoryChange: (category: DocumentCategory) => void;
+  scope: DocumentScope;
+  onScopeChange: (scope: DocumentScope) => void;
+  /** Hidden in the compact onboarding surface, whose uploads are always permanent. */
+  showScope: boolean;
 }) {
   const summary = formatSummary({ ready, processing, errors });
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/30 px-3 py-2">
       <div className="flex min-w-0 items-center gap-2">
+        {showScope ? <DocumentScopeSelect value={scope} onChange={onScopeChange} /> : null}
         <CategoryFilterSelect value={categoryFilter} onChange={onCategoryFilterChange} />
         <span className="truncate text-xs text-muted-foreground">{summary}</span>
       </div>

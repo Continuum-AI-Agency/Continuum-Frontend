@@ -1,7 +1,7 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
-import { documentCategorySchema } from '@continuum/contracts';
+import { documentCategorySchema, documentRenameSchema } from '@continuum/contracts';
 import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
@@ -23,9 +23,13 @@ import { createBrandId } from '@/lib/onboarding/state';
 import {
   appendDocument,
   applyOnboardingPatch,
+  archiveDocument,
+  deleteDocumentPermanently,
   fetchOnboardingState,
-  removeDocument,
+  renameDocument,
   resetOnboardingState,
+  restoreDocument,
+  saveDocumentPermanently,
   updateDocumentCategory,
 } from '@/lib/onboarding/storage';
 import { getPostHogClient } from '@/lib/posthog-server';
@@ -293,11 +297,52 @@ export async function registerDocumentMetadataAction(
   return appendDocument(brandId, payload);
 }
 
-export async function removeDocumentAction(
+/**
+ * Take a document down (reversible). The sweep purges its chunks and, after the
+ * recovery window, its storage object.
+ */
+export async function archiveDocumentAction(
   brandId: string,
   documentId: string,
 ): Promise<OnboardingState> {
-  return removeDocument(brandId, documentId);
+  return archiveDocument(brandId, documentId);
+}
+
+export async function restoreDocumentAction(
+  brandId: string,
+  documentId: string,
+): Promise<OnboardingState> {
+  return restoreDocument(brandId, documentId);
+}
+
+/** Irreversible. Offered only from the Archived view. */
+export async function deleteDocumentPermanentlyAction(
+  brandId: string,
+  documentId: string,
+): Promise<OnboardingState> {
+  return deleteDocumentPermanently(brandId, documentId);
+}
+
+export async function renameDocumentAction(
+  brandId: string,
+  documentId: string,
+  displayName: string,
+): Promise<OnboardingState> {
+  // Re-parsed server-side against the same schema the client form resolver uses, so
+  // the two can never drift and the client gate is never the only gate.
+  const parsed = documentRenameSchema.safeParse({ displayName });
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? 'Invalid document name');
+  }
+  return renameDocument(brandId, documentId, parsed.data.displayName);
+}
+
+/** Promote a one-off chat/MCP upload to permanent brand knowledge. */
+export async function saveDocumentPermanentlyAction(
+  brandId: string,
+  documentId: string,
+): Promise<OnboardingState> {
+  return saveDocumentPermanently(brandId, documentId);
 }
 
 export async function updateDocumentCategoryAction(

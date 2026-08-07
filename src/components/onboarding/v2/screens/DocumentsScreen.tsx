@@ -1,14 +1,33 @@
+'use client';
+
 import { FileText } from '@phosphor-icons/react';
 
+import { DesignSystemCard } from '@/components/design-system/DesignSystemCard';
 import { DocumentUploader } from '@/components/onboarding/shared/DocumentUploader';
 
 import { HelpPopover } from '../HelpPopover';
 
 type DocumentsScreenProps = {
   totalSteps: number;
+  brandId?: string | null;
+  /**
+   * Raised while a design system is being read.
+   *
+   * The parent holds Continue for the duration. A design system is the single
+   * highest-signal input we ever receive about a brand, and everything downstream —
+   * the Brand DNA reveal, the creative prewarm, the first generations — is derived
+   * from what we know at the moment it runs. Letting the wizard advance mid-parse
+   * would produce a brand built from the website guess and then quietly contradicted
+   * a few seconds later.
+   */
+  onDesignSystemBusyChange?: (busy: boolean) => void;
 };
 
-export function DocumentsScreen({ totalSteps }: DocumentsScreenProps) {
+export function DocumentsScreen({
+  totalSteps,
+  brandId,
+  onDesignSystemBusyChange,
+}: DocumentsScreenProps) {
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-12 md:px-8">
       <div className="w-full max-w-2xl">
@@ -35,6 +54,18 @@ export function DocumentsScreen({ totalSteps }: DocumentsScreenProps) {
             infer from your website.
           </p>
         </div>
+
+        {/* Above the document list on purpose: a design system outranks every other
+            document a brand can give us, and burying it under a generic uploader is
+            how the most valuable input on the page gets missed. */}
+        {brandId ? (
+          <DesignSystemCard
+            brandId={brandId}
+            variant="onboarding"
+            onBusyChange={onDesignSystemBusyChange}
+            className="mb-6"
+          />
+        ) : null}
 
         <DocumentUploader />
       </div>

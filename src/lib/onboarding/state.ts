@@ -1,4 +1,8 @@
-import { documentCategorySchema, onboardingInspirationSelectionSchema } from '@continuum/contracts';
+import {
+  documentCategorySchema,
+  documentRetentionSchema,
+  onboardingInspirationSelectionSchema,
+} from '@continuum/contracts';
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import { z } from 'zod';
 import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
@@ -163,6 +167,16 @@ const onboardingDocumentSchema = z.object({
   pageCount: z.number().int().positive().optional(),
   textExcerpt: z.string().optional(),
   previewPath: z.string().optional(),
+  // Lifecycle. All optional so rows written before the retention migration (and any
+  // persisted onboarding-state blob from then) still parse; absent means permanent
+  // and live, which is what those documents are.
+  retention: documentRetentionSchema.optional(),
+  expiresAt: isoDateString.optional(),
+  archivedAt: isoDateString.optional(),
+  // User-facing label, distinct from `name` (the sanitized filename that storage_path
+  // was built from), so a rename can never invalidate a storage reference.
+  displayName: z.string().optional(),
+  version: z.number().int().positive().optional(),
 });
 
 export type DocumentKind = z.infer<typeof documentKindSchema>;

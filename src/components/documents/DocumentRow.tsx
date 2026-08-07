@@ -5,7 +5,6 @@ import type { LucideIcon } from 'lucide-react';
 import {
   AlertCircle,
   CheckCircle2,
-  Download,
   FileSpreadsheet,
   FileText,
   FileType,
@@ -19,8 +18,18 @@ import { motion, useReducedMotion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { DocumentCategorySelect } from './DocumentCategorySelect';
 import { DocumentPreviewCard } from './DocumentPreviewCard';
+import { DocumentRowActions } from './DocumentRowActions';
+import { RetentionPill } from './RetentionPill';
 import type { DocumentView } from './types';
-import { describeStep, documentCategoryOf, formatBytes, kindLabel } from './types';
+import {
+  describeStep,
+  documentCategoryOf,
+  formatBytes,
+  isArchived,
+  isEphemeral,
+  kindLabel,
+} from './types';
+import type { DocumentRowActionHandlers } from './useDocumentActions';
 import type { UploadEntry } from './useDocumentMutations';
 
 export const ROW_EASE = [0.2, 0.8, 0.2, 1] as const;
@@ -118,6 +127,8 @@ export function PendingRow({
 export function DocumentRow({
   doc,
   isPinned,
+  now,
+  actions,
   onPinnedChange,
   onOpenInline,
   onDownload,
@@ -126,6 +137,9 @@ export function DocumentRow({
 }: {
   doc: DocumentView;
   isPinned: boolean;
+  /** Ticking clock so the retention countdown stays honest without each row owning a timer. */
+  now: number;
+  actions: DocumentRowActionHandlers;
   onPinnedChange: (pinned: boolean) => void;
   onOpenInline: (storagePath: string) => void;
   onDownload: (storagePath: string) => Promise<void>;
@@ -157,7 +171,12 @@ export function DocumentRow({
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
       transition={ROW_TRANSITION}
       aria-busy={label.tone === 'progress' ? true : undefined}
-      className="group flex min-h-12 items-center justify-between gap-3 border-b border-border/70 py-2.5 last:border-0"
+      className={cn(
+        'group flex min-h-12 items-center justify-between gap-3 border-b border-border/70 py-2.5 last:border-0',
+        // Opacity on the wrapper, never `text-primary/60` — text-primary is a custom
+        // utility and an opacity modifier resolves to an unrelated Tailwind colour.
+        isArchived(doc) && 'opacity-60',
+      )}
     >
       <DocumentPreviewCard
         doc={doc}
@@ -179,7 +198,10 @@ export function DocumentRow({
             {codeParts.join(' · ')}
           </span>
           <span className="min-w-0 flex-1 truncate">
-            <span className="block truncate text-sm font-medium text-primary">{doc.name}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm font-medium text-primary">{doc.name}</span>
+              <RetentionPill doc={doc} now={now} />
+            </span>
             <span
               className={cn(
                 'block truncate text-xs',
@@ -211,7 +233,19 @@ export function DocumentRow({
             ariaLabel={`Category for ${doc.name}`}
           />
         ) : null}
-        {/* Download, remove — revealed on hover (always visible for errors) */}
+        {/* Save is the one action that must not be buried: a temporary document is
+            about to disappear, and it appears on few rows. Everything else lives in
+            the overflow menu. */}
+        {isEphemeral(doc) && !isArchived(doc) ? (
+          <button
+            type="button"
+            onClick={() => void actions.onSavePermanently(doc)}
+            className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-emerald-700 outline-none transition-colors hover:bg-emerald-500/10 focus-visible:ring-2 focus-visible:ring-ring dark:text-emerald-400"
+          >
+            Save
+          </button>
+        ) : null}
+        {/* Overflow menu — revealed on hover (always visible for errors) */}
         <div
           className={cn(
             'flex items-center gap-0.5 motion-safe:transition-opacity',
@@ -220,20 +254,7 @@ export function DocumentRow({
               : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
           )}
         >
-          {doc.storagePath ? (
-            <CircleAction
-              ariaLabel="Download"
-              tone="muted"
-              icon={Download}
-              onClick={() => void onDownload(doc.storagePath ?? '')}
-            />
-          ) : null}
-          <CircleAction
-            ariaLabel="Remove document"
-            tone="muted"
-            icon={X}
-            onClick={() => onRemove(doc.id)}
-          />
+          <DocumentRowActions doc={doc} actions={actions} />
         </div>
         {/* Ingestion status badge — independent of preview */}
         <StatusBadge tone={statusTone} icon={statusIcon} spin={label.tone === 'progress'} />

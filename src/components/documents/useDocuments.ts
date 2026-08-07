@@ -25,13 +25,23 @@ type RealtimeRow = {
   external_url?: string | null;
   size?: number | null;
   created_at?: string;
+  display_name?: string | null;
+  retention?: OnboardingDocument['retention'] | null;
+  expires_at?: string | null;
+  archived_at?: string | null;
+  version?: number | null;
 };
 
 function rowToView(row: RealtimeRow): DocumentView {
   return {
     id: row.id,
-    name: row.name,
+    // display_name is the user-editable label; fall back to the stored filename.
+    name: row.display_name?.trim() || row.name,
     source: row.source,
+    retention: row.retention ?? undefined,
+    expiresAt: row.expires_at ?? undefined,
+    archivedAt: row.archived_at ?? undefined,
+    version: typeof row.version === 'number' ? row.version : undefined,
     createdAt: row.created_at ?? new Date().toISOString(),
     status: (row.status as OnboardingDocument['status']) ?? 'processing',
     category: row.category ?? undefined,
@@ -59,7 +69,7 @@ function mergeRealtimeUpdate(existing: DocumentView, row: RealtimeRow): Document
 // "processing" is treated as stuck (e.g. the edge function's isolate died before
 // writing a terminal row), so the UI fails it instead of hanging on "Extracting
 // text" forever. Reset every time the server reports progress for the doc.
-const STALE_PROCESSING_MS = 120_000;
+export const STALE_PROCESSING_MS = 120_000;
 
 export function useDocuments(brandId: string, seed: DocumentView[]): DocumentView[] {
   const [documents, setDocuments] = useState<DocumentView[]>(seed);
@@ -116,7 +126,7 @@ export function useDocuments(brandId: string, seed: DocumentView[]): DocumentVie
 
   // Fail documents that have gone silent mid-processing so the row reaches a
   // terminal state even when no realtime "error" update ever arrives.
-  const hasProcessing = documents.some((doc) => doc.status === 'processing');
+  const hasProcessing = documents.some((doc) => doc.status === 'processing' && !doc.archivedAt);
   useEffect(() => {
     if (!hasProcessing) return;
     const id = setInterval(() => {
@@ -125,6 +135,9 @@ export function useDocuments(brandId: string, seed: DocumentView[]): DocumentVie
         let changed = false;
         const next = prev.map((doc) => {
           if (doc.status !== 'processing') return doc;
+          // A document archived mid-ingest is never going to finish, and failing it
+          // would leave a permanent red error badge sitting in the Archived tab.
+          if (doc.archivedAt) return doc;
           const lastSeen = lastSeenRef.current[doc.id] ?? Date.parse(doc.createdAt);
           if (Number.isNaN(lastSeen) || now - lastSeen < STALE_PROCESSING_MS) return doc;
           changed = true;

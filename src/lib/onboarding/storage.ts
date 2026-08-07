@@ -859,11 +859,91 @@ export async function appendDocument(
   });
 }
 
-export async function removeDocument(
+/**
+ * Take a document down. This is a SOFT delete: the row survives, its chunks are
+ * purged by the lifecycle sweep, and the storage object is retained for a recovery
+ * window before the purge worker frees it.
+ *
+ * Replaces the previous hard delete, which removed the row and left the file behind —
+ * the reason 18 objects in prod have no owning row.
+ */
+export async function archiveDocument(
+  brandId: string,
+  documentId: string,
+): Promise<OnboardingState> {
+  const { supabase, user } = await getAuthContext();
+
+  await supabase
+    .schema('brand_profiles')
+    .from('brand_documents')
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: user?.id ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', documentId)
+    .eq('brand_id', brandId)
+    .is('archived_at', null);
+
+  return updateBrandState(brandId, (state) => {
+    const documents = state.documents.filter((doc: OnboardingDocument) => doc.id !== documentId);
+    return mergeOnboardingState(state, { documents });
+  });
+}
+
+/**
+ * Undo an archive. Deliberately does NOT re-embed: chunks were purged on archive, so
+ * a restored document is visible and downloadable but not yet searchable until it is
+ * re-ingested. Surfacing that honestly beats silently spending an embed.
+ */
+export async function restoreDocument(
   brandId: string,
   documentId: string,
 ): Promise<OnboardingState> {
   const { supabase } = await getAuthContext();
+
+  await supabase
+    .schema('brand_profiles')
+    .from('brand_documents')
+    .update({
+      archived_at: null,
+      archived_by: null,
+      purge_after: null,
+      purge_claimed_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', documentId)
+    .eq('brand_id', brandId);
+
+  return updateBrandState(brandId, (state) => state);
+}
+
+/**
+ * Hard delete, offered only from the Archived view. Removes the storage object too —
+ * the old delete path did not, which is how orphans accumulated.
+ */
+export async function deleteDocumentPermanently(
+  brandId: string,
+  documentId: string,
+): Promise<OnboardingState> {
+  const { supabase } = await getAuthContext();
+
+  const { data: row } = await supabase
+    .schema('brand_profiles')
+    .from('brand_documents')
+    .select('storage_path, superseded_storage_paths')
+    .eq('id', documentId)
+    .eq('brand_id', brandId)
+    .maybeSingle();
+
+  const paths = [
+    (row as { storage_path?: string | null } | null)?.storage_path,
+    ...((row as { superseded_storage_paths?: string[] } | null)?.superseded_storage_paths ?? []),
+  ].filter((path): path is string => Boolean(path));
+
+  if (paths.length > 0) {
+    await supabase.storage.from('brand-docs').remove(paths);
+  }
 
   await supabase
     .schema('brand_profiles')
@@ -876,6 +956,56 @@ export async function removeDocument(
     const documents = state.documents.filter((doc: OnboardingDocument) => doc.id !== documentId);
     return mergeOnboardingState(state, { documents });
   });
+}
+
+/** Rename only the user-facing label; `name` stays the sanitized storage filename. */
+export async function renameDocument(
+  brandId: string,
+  documentId: string,
+  displayName: string,
+): Promise<OnboardingState> {
+  const { supabase } = await getAuthContext();
+
+  await supabase
+    .schema('brand_profiles')
+    .from('brand_documents')
+    .update({ display_name: displayName, updated_at: new Date().toISOString() })
+    .eq('id', documentId)
+    .eq('brand_id', brandId);
+
+  return updateBrandState(brandId, (state) => {
+    const documents = state.documents.map((doc: OnboardingDocument) =>
+      doc.id === documentId ? { ...doc, name: displayName, displayName } : doc,
+    );
+    return mergeOnboardingState(state, { documents });
+  });
+}
+
+/**
+ * Promote a one-off upload to permanent brand knowledge. No data moves — the row is
+ * already in the same table, bucket and vector index; only its lifecycle flags change.
+ * Clearing expires_at is what stops the sweep from ever archiving it.
+ */
+export async function saveDocumentPermanently(
+  brandId: string,
+  documentId: string,
+): Promise<OnboardingState> {
+  const { supabase } = await getAuthContext();
+
+  await supabase
+    .schema('brand_profiles')
+    .from('brand_documents')
+    .update({
+      retention: 'permanent',
+      expires_at: null,
+      scope_key: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', documentId)
+    .eq('brand_id', brandId)
+    .eq('retention', 'ephemeral');
+
+  return updateBrandState(brandId, (state) => state);
 }
 
 export async function updateDocumentCategory(
