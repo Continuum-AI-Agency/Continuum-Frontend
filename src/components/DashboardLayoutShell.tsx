@@ -7,7 +7,6 @@ import { DashboardHeader } from './dashboard-header';
 import { AppSidebar } from './navigation/AppSidebar';
 import { CommandPaletteProvider } from './navigation/CommandPaletteProvider';
 import { ActiveBrandProvider } from './providers/ActiveBrandProvider';
-import { BrandWelcomeBanner } from './welcome/BrandWelcomeBanner';
 
 const CommandPalette = dynamic(
   () => import('./navigation/CommandPalette').then((m) => ({ default: m.CommandPalette })),
@@ -41,6 +40,11 @@ const StrategicAnalysisStatusPill = dynamic(
     import('./strategic-analyses/StrategicAnalysisStatusPill').then((m) => ({
       default: m.StrategicAnalysisStatusPill,
     })),
+  { ssr: false },
+);
+
+const BrandWelcomeBanner = dynamic(
+  () => import('./welcome/BrandWelcomeBanner').then((m) => ({ default: m.BrandWelcomeBanner })),
   { ssr: false },
 );
 
