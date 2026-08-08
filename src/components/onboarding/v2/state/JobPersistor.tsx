@@ -2,6 +2,7 @@
 
 import { useEffect, useReducer, useRef } from 'react';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
+import { resolveSafeBrandName } from '@/lib/onboarding/brandName';
 import { internalizeLogo } from '@/lib/onboarding/internalizeLogo';
 import { type ScrapeResult, scrapeSchema } from '@/lib/onboarding/scrape';
 import type { OnboardingPatch } from '@/lib/onboarding/state';
@@ -16,7 +17,8 @@ function parseScrape(data: unknown): ScrapeResult | null {
 
 export function JobPersistor() {
   const { jobs } = useBackgroundJobs();
-  const { brandId, updateState } = useOnboarding();
+  const { brandId, state, updateState } = useOnboarding();
+  const currentBrandName = state.brand.name;
   const persisted = useRef<Set<JobKey>>(new Set());
   const persisting = useRef<Set<JobKey>>(new Set());
   const logoInternalized = useRef<Set<string>>(new Set());
@@ -32,7 +34,7 @@ export function JobPersistor() {
       ) {
         return;
       }
-      const patch = patchFor(key, jobs[key].data);
+      const patch = patchFor(key, jobs[key].data, currentBrandName);
       if (!patch) return;
       persisting.current.add(key);
       void updateState(patch)
@@ -72,12 +74,22 @@ export function JobPersistor() {
         }
       }
     });
-  }, [jobs, brandId, retryVersion, updateState]);
+  }, [jobs, brandId, currentBrandName, retryVersion, updateState]);
 
   return null;
 }
 
-export function scrapeToBrandPatch(scrape: ScrapeResult): OnboardingPatch {
+// `fallbackName` is the name already in onboarding state. It matters because
+// the scrape is the only writer of `brand.name` that reaches
+// `brand_profiles.brand_name`, and a raw `scrape.title` persisted junk verbatim
+// ("Page Not Found | Framer", a brand carrying its full tagline). Routing it
+// through resolveSafeBrandName rejects interstitial titles and reduces an SEO
+// title to its brand segment; on rejection the existing name survives instead
+// of being overwritten.
+export function scrapeToBrandPatch(
+  scrape: ScrapeResult,
+  fallbackName?: string | null,
+): OnboardingPatch {
   const typography = scrape.typography
     ? {
         primary: scrape.typography.primary ?? null,
@@ -87,7 +99,7 @@ export function scrapeToBrandPatch(scrape: ScrapeResult): OnboardingPatch {
   return {
     brand: {
       website: scrape.url,
-      name: scrape.title ?? undefined,
+      name: resolveSafeBrandName({ scrapeTitle: scrape.title, fallbackName, url: scrape.url }),
       logoPath: scrape.logoUrl ?? undefined,
       colors: scrape.colors,
       typography,
@@ -96,10 +108,14 @@ export function scrapeToBrandPatch(scrape: ScrapeResult): OnboardingPatch {
   };
 }
 
-function patchFor(key: JobKey, data: unknown): OnboardingPatch | null {
+function patchFor(
+  key: JobKey,
+  data: unknown,
+  fallbackName?: string | null,
+): OnboardingPatch | null {
   if (key === 'scrape') {
     const scrape = parseScrape(data);
-    return scrape ? scrapeToBrandPatch(scrape) : null;
+    return scrape ? scrapeToBrandPatch(scrape, fallbackName) : null;
   }
   if (key === 'agentPreview') {
     const raw = data as AgentPreviewBuckets | { buckets: AgentPreviewBuckets } | null;
