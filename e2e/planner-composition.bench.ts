@@ -89,7 +89,7 @@ assert(
   Array.isArray(timeline?.data.items) && timeline.data.items.length === clips.length,
   'places every clip on the timeline',
 );
-assert(publish?.type === 'publishToPlanner', 'adds the Planner attachment sink');
+assert(publish?.type === 'organicPublisher', 'adds the Planner attachment sink');
 assert(
   publishEdge?.targetHandle === PUBLISH_VIDEO_INPUT_HANDLE,
   'connects the rendered timeline output to Planner',
