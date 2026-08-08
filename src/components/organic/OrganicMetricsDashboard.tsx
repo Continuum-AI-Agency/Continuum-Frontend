@@ -499,7 +499,7 @@ function PostGalleryCard({
       onClick={onSelect}
       aria-label={`Open analytics for ${post.title ?? post.mediaType ?? post.id}`}
       className={cn(
-        'group relative block w-full overflow-hidden rounded-xl border border-subtle bg-surface text-left transition-[transform,box-shadow,opacity,border-color] duration-200',
+        'group relative block w-full overflow-hidden rounded-xl border border-border bg-surface text-left transition-[transform,box-shadow,opacity,border-color] duration-200',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1',
         selected
           ? 'ring-2 ring-blue-500/60 border-blue-400/60 shadow-lg shadow-blue-500/15'
@@ -750,7 +750,7 @@ function PostSnapshotPanel({
       transition={{ duration: 0.24, ease: [0.2, 0.8, 0.2, 1] }}
       className="min-h-0"
     >
-      <div className="h-full rounded-lg border border-subtle bg-surface">
+      <div className="h-full bg-surface">
         <SectionHeader
           title="Post Snapshot"
           meta={
@@ -828,7 +828,7 @@ function PostSnapshotPanel({
 
           <div className="mb-3">
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-              <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
+              <div className="inline-flex rounded-md border border-border bg-muted/20 p-0.5">
                 {(Object.keys(POST_METRIC_LABELS) as PostMetricKey[]).map((metricKey) => (
                   <button
                     key={metricKey}
@@ -975,7 +975,7 @@ function MetricCard({
   const cardContent = (
     <div
       className={cn(
-        'group relative rounded-lg border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-200 motion-reduce:transition-none',
+        'group relative rounded-lg border border-border bg-surface/95 backdrop-blur-sm shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-200 motion-reduce:transition-none',
         compact ? 'min-h-[48px]' : 'min-h-[96px]',
         active ? 'border-blue-500/70 bg-blue-500/10 shadow-blue-500/10' : '',
         interactive ? 'hover:-translate-y-0.5 hover:shadow-sm' : '',
@@ -1135,7 +1135,7 @@ function YoutubeTypeSummaryStrip({
     },
   ];
   return (
-    <div className="mb-3 rounded-lg border border-subtle bg-surface">
+    <div className="border-b border-border bg-surface">
       <div className="p-3">
         <div className="flex gap-6 flex-wrap">
           {stats.map((stat) => (
@@ -1156,7 +1156,7 @@ function YoutubeContentTypeSplitCard({ performance }: { performance: ContentType
   if (performance.length === 0) return null;
   const maxViews = Math.max(1, ...performance.map((row) => row.views ?? 0));
   return (
-    <div className="rounded-lg border border-subtle bg-surface">
+    <div className="bg-surface">
       <div className="p-3">
         <span className="mb-2 block text-sm font-medium">Shorts vs Videos</span>
         <div className="flex flex-col gap-3">
@@ -1239,7 +1239,7 @@ function AudienceCard({
   const ageMaxValue = Math.max(1, peakAgeBand?.value ?? 0);
 
   return (
-    <div className={cn('rounded-lg border border-subtle bg-surface', hidden && '!hidden')}>
+    <div className={cn('rounded-lg border border-border bg-surface', hidden && '!hidden')}>
       <SectionHeader title="Audience" />
       <div className="p-3">
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
@@ -1658,7 +1658,7 @@ function Dashboard({
   ]);
 
   return (
-    <div className="flex flex-col gap-2 min-h-0 pb-6">
+    <div className="flex min-h-0 flex-col divide-y divide-border pb-6">
       {isAccountView && data.accountProfile ? (
         <OrganicAccountProfileHeader
           profile={data.accountProfile}
@@ -1715,7 +1715,7 @@ function Dashboard({
       ) : null}
 
       {isAccountView ? (
-        <div className="rounded-lg border border-subtle bg-surface">
+        <div className="bg-surface">
           <SectionHeader
             title="Metric Drilldown"
             meta={
@@ -1743,7 +1743,7 @@ function Dashboard({
                     />
                   </label>
                 ) : null}
-                <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
+                <div className="inline-flex rounded-md border border-border bg-muted/20 p-0.5">
                   <button
                     type="button"
                     className={cn(
@@ -1869,7 +1869,7 @@ function Dashboard({
           {platform === 'youtube' ? (
             <YoutubeTypeSummaryStrip posts={visiblePosts} filter={youtubePostType} />
           ) : null}
-          <div className="rounded-lg border border-subtle bg-surface">
+          <div className="bg-surface">
             <div className="p-3">
               {visiblePosts.length === 0 ? (
                 <span className="text-sm text-muted-foreground">
@@ -2684,9 +2684,9 @@ export function OrganicMetricsDashboard({
   return (
     <section
       data-tour-id="organic-metrics-dashboard"
-      className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-subtle bg-surface"
+      className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-surface"
     >
-      <div className="flex min-h-10 flex-wrap items-center gap-2 border-b px-2 py-1.5 sm:px-3">
+      <div className="flex min-h-10 flex-wrap items-center gap-2 border-b border-border px-[var(--card-pad)] py-1.5">
         <Pill variant="muted" className="hidden sm:inline-flex">
           <PlatformIcon platform={platform} />
         </Pill>
@@ -2748,7 +2748,7 @@ export function OrganicMetricsDashboard({
               className="w-auto gap-0"
             >
               <TabsList
-                className="inline-flex h-8 w-auto rounded-lg border border-subtle bg-muted/20 p-0.5"
+                className="inline-flex h-8 w-auto rounded-lg border border-border bg-muted/20 p-0.5"
                 aria-label="Organic metrics view"
               >
                 <TabsTrigger
@@ -2782,7 +2782,7 @@ export function OrganicMetricsDashboard({
               onValueChange={(value) => setYoutubePostType(value as YoutubePostTypeFilter)}
               className="w-auto gap-0"
             >
-              <TabsList className="inline-flex h-8 w-auto rounded-lg border border-subtle bg-muted/20 p-0.5">
+              <TabsList className="inline-flex h-8 w-auto rounded-lg border border-border bg-muted/20 p-0.5">
                 <TabsTrigger value="all" className="px-3 text-xs">
                   All
                 </TabsTrigger>
@@ -2891,7 +2891,7 @@ export function OrganicMetricsDashboard({
         ref={metricsScrollRef}
         data-tour-id="organic-metrics-scroll-body"
         className={cn(
-          'min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain p-2 sm:p-3',
+          'min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain',
           isPending && 'opacity-60 pointer-events-none transition-opacity duration-150',
         )}
       >

@@ -95,7 +95,7 @@ export function FirstRunWorkflowMap({ setup }: { setup: DashboardSetupState }) {
     <section
       aria-label="How Continuum works"
       data-testid="dashboard-workflow-map"
-      className="rounded-lg border border-border/70 bg-card p-4"
+      className="p-[var(--card-pad)]"
     >
       <h2 className="text-sm font-semibold tracking-tight text-foreground">How Continuum works</h2>
       <p className="text-xs text-muted-foreground">The loop your workspace runs on.</p>

@@ -16,25 +16,39 @@ type SectionHeaderProps = {
 export function SectionHeader({ title, eyebrow, meta, action, className }: SectionHeaderProps) {
   if (!title && !eyebrow && !meta && !action) return null;
 
+  // Most call sites pass a bare title, and a flex box around a single child is a
+  // DOM level that renders identically without it. The right cluster keeps its
+  // wrapper unconditionally — that is where shrink-0 lives, and without it a long
+  // title would compress the action link instead of truncating itself.
+  const needsLeftGroup = Boolean(eyebrow) && Boolean(title);
+
+  const eyebrowNode = eyebrow ? (
+    <span className="shrink-0 font-mono text-2xs uppercase tracking-wide text-muted-foreground">
+      {eyebrow}
+    </span>
+  ) : null;
+
+  const titleNode = title ? (
+    <p className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {title}
+    </p>
+  ) : null;
+
   return (
     <div
       className={cn(
-        'flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2',
+        'flex shrink-0 items-center justify-between gap-2 border-b border-border px-[var(--card-pad)] py-[var(--section-header-pad-block)]',
         className,
       )}
     >
-      <div className="flex min-w-0 items-center gap-2">
-        {eyebrow ? (
-          <span className="shrink-0 font-mono text-2xs uppercase tracking-wide text-muted-foreground">
-            {eyebrow}
-          </span>
-        ) : null}
-        {title ? (
-          <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {title}
-          </p>
-        ) : null}
-      </div>
+      {needsLeftGroup ? (
+        <div className="flex min-w-0 items-center gap-2">
+          {eyebrowNode}
+          {titleNode}
+        </div>
+      ) : (
+        (eyebrowNode ?? titleNode)
+      )}
       {meta || action ? (
         <div className="flex shrink-0 items-center gap-3">
           {meta}

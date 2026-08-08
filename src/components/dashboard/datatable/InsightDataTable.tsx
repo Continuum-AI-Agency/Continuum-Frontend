@@ -2,7 +2,7 @@
 
 import { ArrowDown, ArrowUp, ChevronDown, ChevronsUpDown, Search } from 'lucide-react';
 import { Fragment, type ReactNode, useMemo, useState } from 'react';
-import { SectionHeader } from '@/components/shared/SectionHeader';
+import { Panel } from '@/components/shared/Panel';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -117,26 +117,21 @@ export function InsightDataTable<T>({
   const totalColumns = columns.length + (rowActions ? 1 : 0) + (expandedContent ? 1 : 0);
 
   return (
-    <div
-      className={cn(
-        'min-w-0 overflow-hidden rounded-lg border border-border/70 bg-card',
-        className,
-      )}
+    <Panel
+      className={className}
+      bodyClassName="p-0"
+      title={title}
+      meta={
+        metricLabel ? (
+          <p className="font-mono text-2xs uppercase tracking-wide text-muted-foreground">
+            {metricLabel}
+          </p>
+        ) : null
+      }
+      action={headerAction}
     >
-      <SectionHeader
-        title={title}
-        meta={
-          metricLabel ? (
-            <p className="font-mono text-2xs uppercase tracking-wide text-muted-foreground">
-              {metricLabel}
-            </p>
-          ) : null
-        }
-        action={headerAction}
-      />
-
       {canSearch ? (
-        <div className="border-border/60 border-b px-3 py-2">
+        <div className="border-b border-border px-[var(--card-pad)] py-[var(--section-header-pad-block)]">
           <div className="relative">
             <Search
               className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
@@ -157,7 +152,7 @@ export function InsightDataTable<T>({
         containerClassName={cn(maxHeight != null && 'overflow-y-auto')}
         containerStyle={maxHeight != null ? { maxHeight } : undefined}
       >
-        <TableHeader className="sticky top-0 z-10 bg-card [&_tr]:border-border/70">
+        <TableHeader className="sticky top-0 z-10 bg-background [&_tr]:border-border">
           <TableRow className="hover:bg-transparent">
             {columns.map((column) => {
               const sortable = Boolean(column.sortValue);
@@ -174,7 +169,7 @@ export function InsightDataTable<T>({
                     active ? (sort?.direction === 'asc' ? 'ascending' : 'descending') : undefined
                   }
                   className={cn(
-                    'h-8 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground',
+                    'h-7 px-[var(--card-pad)] text-xs font-medium uppercase tracking-wide text-muted-foreground',
                     column.align === 'right' && 'text-right',
                     column.headerClassName,
                   )}
@@ -210,7 +205,7 @@ export function InsightDataTable<T>({
             <TableRow className="hover:bg-transparent">
               <TableCell
                 colSpan={totalColumns}
-                className="px-3 py-6 text-center text-xs text-muted-foreground"
+                className="px-[var(--card-pad)] py-6 text-center text-xs text-muted-foreground"
               >
                 {canSearch && query.trim().length > 0
                   ? `No matches for “${query.trim()}”.`
@@ -229,7 +224,7 @@ export function InsightDataTable<T>({
                     <TableCell
                       key={column.id}
                       className={cn(
-                        'px-3 py-2.5 text-sm',
+                        'px-[var(--card-pad)] py-2 text-sm',
                         column.align === 'right' && 'text-right font-mono tabular-nums',
                         column.cellClassName,
                       )}
@@ -239,14 +234,14 @@ export function InsightDataTable<T>({
                   ))}
                   {rowActions ? (
                     <TableCell
-                      className="w-10 px-2 py-2.5 text-right"
+                      className="w-10 px-2 py-2 text-right"
                       onClick={(event) => event.stopPropagation()}
                     >
                       {rowActions(row)}
                     </TableCell>
                   ) : null}
                   {expandable ? (
-                    <TableCell className="w-9 px-2 py-2.5 text-right text-muted-foreground">
+                    <TableCell className="w-9 px-2 py-2 text-right text-muted-foreground">
                       <ChevronDown
                         className={cn(
                           'size-4 transition-transform duration-200',
@@ -297,7 +292,7 @@ export function InsightDataTable<T>({
           )}
         </TableBody>
       </Table>
-    </div>
+    </Panel>
   );
 }
 
@@ -307,7 +302,7 @@ function LoadingRows({ columns }: { columns: number }) {
       {Array.from({ length: 4 }).map((_, rowIndex) => (
         <TableRow key={rowIndex} className="hover:bg-transparent">
           {Array.from({ length: columns }).map((__, cellIndex) => (
-            <TableCell key={cellIndex} className="px-3 py-2.5">
+            <TableCell key={cellIndex} className="px-[var(--card-pad)] py-2">
               <Skeleton className="h-4 w-full" />
             </TableCell>
           ))}

@@ -350,7 +350,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
   return (
     <div
       data-tour-id="organic-audience-location"
-      className="rounded-lg border border-subtle bg-surface"
+      className="rounded-lg border border-border bg-surface"
     >
       <SectionHeader
         title="Audience Location"
@@ -360,7 +360,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
           </span>
         }
         action={
-          <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
+          <div className="inline-flex rounded-md border border-border bg-muted/20 p-0.5">
             <button
               type="button"
               className={cn(
@@ -390,7 +390,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
       />
       <div className="p-3">
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="relative h-[clamp(240px,48svh,560px)] sm:h-[clamp(280px,52svh,580px)] overflow-hidden rounded-lg border border-subtle">
+          <div className="relative h-[clamp(240px,48svh,560px)] sm:h-[clamp(280px,52svh,580px)] overflow-hidden rounded-lg border border-border">
             {countryLayerVisible ? (
               countryChoroplethData.length === 0 ? (
                 <div className="flex h-full items-center justify-center bg-muted/20 p-4 text-center">
@@ -469,7 +469,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
               </Map>
             )}
 
-            <div className="pointer-events-none absolute left-3 top-3 rounded-lg border border-subtle bg-white/85 px-2 py-1.5 shadow-sm backdrop-blur">
+            <div className="pointer-events-none absolute left-3 top-3 rounded-lg border border-border bg-white/85 px-2 py-1.5 shadow-sm backdrop-blur">
               {countryLayerVisible ? (
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted-foreground">Fewer</span>
@@ -504,7 +504,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
             </div>
           </div>
 
-          <div className="rounded-lg border border-subtle bg-white/70 p-3">
+          <div className="rounded-lg border border-border bg-white/70 p-3">
             <h3 className="mb-2 text-sm font-semibold">
               Top {countryLayerVisible ? 'countries' : 'cities'}
             </h3>

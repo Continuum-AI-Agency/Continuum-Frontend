@@ -24,8 +24,8 @@ export function DashboardBriefing({
   creativesSlot,
 }: DashboardBriefingProps) {
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end justify-between gap-2">
+    <section className="flex flex-col">
+      <div className="flex flex-wrap items-end justify-between gap-2 px-[var(--card-pad)] py-[var(--section-header-pad-block)]">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-foreground">Overview</h2>
           <p className="text-xs text-muted-foreground">Your weekly signal. Pick your next move.</p>
@@ -43,9 +43,11 @@ export function DashboardBriefing({
 
       {metricStripSlot}
 
+      {/* Two panes sharing one hairline: a vertical rule once they sit side by
+          side, a horizontal one while they are stacked. Never both, never a gap. */}
       <div
         data-tour-id="dashboard-top-content"
-        className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]"
+        className="grid grid-cols-1 items-stretch divide-y divide-border border-y border-border lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:divide-x lg:divide-y-0"
       >
         {insightsSlot}
         {creativesSlot}

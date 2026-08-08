@@ -85,14 +85,26 @@ The shell is viewport-locked: `(post-auth)/layout.tsx` → `DashboardLayoutShell
 
 Every panel/page/metric block composes from these. **Never hand-roll a panel header, a page title block, or a stat-card grid** — reach for the primitive so the whole app stays one structure.
 
-- **`SectionHeader`** — the panel header bar: `<SectionHeader title="Foo" meta={…} action={<ModuleShortcutLink…/>} />` renders a hairline `border-b border-border/70 px-3 py-2` row, title `text-xs font-semibold uppercase tracking-wide text-muted-foreground`. Use for every module/panel title.
+- **`Panel`** — the panel itself: `<Panel title="Foo" meta={…} action={…} bodyClassName?>{children}</Panel>` renders a `SectionHeader` over a `p-[var(--card-pad)]` body. **It carries no border, radius or surface colour** — app panes are flat, and a panel that owns no chrome can never produce a card-in-card. Pass `bodyClassName="p-0"` when the body pads its own rows/cells (tables, lists). Floating surfaces opt into chrome via `className` — see `OptimizerPanel` for the pattern.
+- **`SectionHeader`** — the panel header bar used *by* `Panel`: a hairline `border-b border-border px-[var(--card-pad)] py-[var(--section-header-pad-block)]` row, title `text-xs font-semibold uppercase tracking-wide text-muted-foreground`. Reach for `Panel` first; use `SectionHeader` bare only when a surface genuinely has a header and no body.
 - **`PageHeader`** — the workspace/page title: `<PageHeader title="Foo" description="…" action={…} />`, title `text-base font-semibold`. Two-tier hierarchy: **PageHeader (`text-base`) for page titles, SectionHeader (`text-xs uppercase`) for panels.** Never use `text-2xl`/`text-xl` for an in-app page header.
 - **`MetricStrip`** — the one-line KPI row: `<MetricStrip items={[{label, value, deltaPct?}]} live? />`. **Replaces big stat-card grids** (3/4/5/6-up bordered cards with `text-2xl`+ numbers). Metrics are a quiet line, not a wall of cards.
 - **`ModuleShortcutLink`** — the "go to workspace" arrow: `<ModuleShortcutLink href="/scale" label="Scale" />`. Pass as a panel's `action` where it teases a fuller surface.
 - **`DeltaBadge`** — `<DeltaBadge value={n} isPercent? />`, emerald-up / red-down mono delta.
 
+### Panes vs. cards
+
+**App surfaces are flat panes, not cards.** A dashboard, workspace or settings surface is one bounded frame filled with full-bleed panes separated by **1px `border-border` hairlines** — `divide-y` down a stack, `divide-x` across a row. No radius, no per-panel border, no gap between panes. Structure comes from the dividers; the pane's only inset is its own `var(--card-pad)`.
+
+Two rules follow, and they are the ones that actually drift:
+
+- **Never nest a bordered/rounded box inside another.** If an ancestor already draws a border, the descendant may not. Repeating the *same* token (`border-border` inside `border-border`) is the tell.
+- **Never charge a gutter twice.** If a parent pads, the child does not. `--app-shell-pad-inline` and `--shell-gutter` resolve to the same value — applying both is a silent double charge.
+
+Radius signals **floating**, flat signals **structural**. `rounded-lg` is reserved for surfaces that genuinely leave the plane — popovers, hover cards, dialogs, dropdowns — and is the ceiling everywhere (no `rounded-2xl`/`rounded-3xl` on app surfaces).
+
 ### Cards (`ui/card.tsx`)
-`rounded-lg`, **1px border only — no drop shadow by default**, padding `var(--card-pad)`, internal gap `var(--card-gap)`. **Never nest a card inside a card.** A card earns its border only when it groups genuinely distinct content; otherwise use spacing or a hairline divider. (Pairing a 1px border with a soft wide shadow — the "ghost card" — is banned.) **No `rounded-2xl`/`rounded-3xl` on app surfaces** (`rounded-lg` is the ceiling); **no `p-6`/`p-8` panel padding** — use `var(--card-pad)`; empty states cap at `p-6`. Heavy shadows (`shadow-md`/`shadow-xl`/`shadow-2xl`) are not part of the language.
+Still available for genuinely floating or standalone content (`OptimizerPanel`, quick-look popovers): `rounded-lg`, **1px border only — no drop shadow by default**, padding `var(--card-pad)`, internal gap `var(--card-gap)`. Not for dashboard panes — use `Panel`. **No `p-6`/`p-8` panel padding** — use `var(--card-pad)`; empty states cap at `p-6`. Pairing a 1px border with a soft wide shadow — the "ghost card" — is banned, as are heavy shadows (`shadow-md`/`shadow-xl`/`shadow-2xl`).
 
 ### Buttons (`ui/button.tsx`)
 Heights: default `h-8` (32px), `sm` `h-7` (28px), `xs` `h-6` (24px), `lg` `h-9`; icon `size-8`. `rounded-md`. Primary = `bg-primary text-primary-foreground`; hover shifts background, `:active` micro-scales. No decorative drop shadow.

@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 function MetricCardSkeleton() {
   return (
-    <div className="rounded-lg border border-subtle bg-surface transition-all">
+    <div className="rounded-lg border border-border bg-surface transition-all">
       <div className="p-3">
         {/* Label skeleton */}
         <Skeleton className="h-3 w-[80px] rounded" />
@@ -44,7 +44,7 @@ function MetricsGridSkeleton() {
         <Skeleton className="h-5 w-[280px] rounded mb-3" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="rounded-lg border border-subtle bg-surface">
+            <div key={index} className="rounded-lg border border-border bg-surface">
               <div className="p-3">
                 <Skeleton className="h-3 w-[100px] rounded mb-2" />
                 <Skeleton className="h-[120px] w-full rounded" />
@@ -82,7 +82,7 @@ function TrendsPanelSkeleton() {
       {/* Charts grid */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Reach & Views chart */}
-        <div className="rounded-lg border border-subtle bg-surface">
+        <div className="rounded-lg border border-border bg-surface">
           <div className="p-3">
             <Skeleton className="h-4 w-[120px] rounded mb-2" />
             <Skeleton className="h-[200px] w-full rounded" />
@@ -90,7 +90,7 @@ function TrendsPanelSkeleton() {
         </div>
 
         {/* Engagement chart */}
-        <div className="rounded-lg border border-subtle bg-surface">
+        <div className="rounded-lg border border-border bg-surface">
           <div className="p-3">
             <Skeleton className="h-4 w-[120px] rounded mb-2" />
             <Skeleton className="h-[200px] w-full rounded" />
@@ -113,8 +113,8 @@ function TrendsPanelSkeleton() {
  */
 export function OrganicMetricsWidgetSkeleton() {
   return (
-    <div className="h-full rounded-lg border border-subtle bg-surface">
-      <div className="border-b px-3 py-1.5">
+    <div className="h-full bg-surface">
+      <div className="border-b border-border px-[var(--card-pad)] py-1.5">
         <div className="flex items-center gap-2 flex-wrap">
           <Skeleton className="hidden h-7 w-7 rounded-full sm:block" />
           <Skeleton className="h-8 w-36 rounded-md" />

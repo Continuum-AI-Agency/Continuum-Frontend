@@ -112,9 +112,11 @@ export default function DashboardLayoutShell({
                 <AppSidebar automationEnvironment={automationEnvironment} />
                 <SidebarInset className="flex h-dvh flex-col overflow-hidden bg-transparent">
                   <DashboardHeader changelogEntries={changelogEntries} />
-                  <main className="@container/app-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-[var(--shell-gutter)] pb-[var(--shell-stack-gap)]">
+                  {/* No inline gutter: surfaces are full-bleed panes and the
+                      sidebar's own border-r is the separation. */}
+                  <main className="@container/app-main min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-[var(--shell-stack-gap)]">
                     <BrandWelcomeBanner />
-                    <div className="min-h-full w-full min-w-0">{children}</div>
+                    {children}
                   </main>
                 </SidebarInset>
               </SidebarProvider>

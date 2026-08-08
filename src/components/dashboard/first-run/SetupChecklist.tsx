@@ -49,7 +49,7 @@ export function SetupChecklist({ setup }: { setup: DashboardSetupState }) {
     <section
       aria-label="Guided setup checklist"
       data-testid="dashboard-setup-checklist"
-      className="rounded-lg border border-border/70 bg-card p-4"
+      className="p-[var(--card-pad)]"
     >
       <header className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold tracking-tight text-foreground">Finish setting up</h2>

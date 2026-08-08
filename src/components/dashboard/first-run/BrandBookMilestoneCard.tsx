@@ -64,7 +64,7 @@ export function BrandBookMilestoneCard({
       <section
         aria-label="Brand Book"
         data-testid="brand-book-milestone"
-        className="flex items-center gap-3 rounded-lg border border-border/70 bg-card p-4"
+        className="flex items-center gap-3 p-[var(--card-pad)]"
       >
         <Loader2
           aria-hidden="true"
@@ -86,7 +86,7 @@ export function BrandBookMilestoneCard({
       <section
         aria-label="Brand Book"
         data-testid="brand-book-milestone"
-        className="rounded-lg border border-border/70 bg-card p-4"
+        className="p-[var(--card-pad)]"
       >
         <EmptyState
           headline="Generate your Brand Book"
@@ -105,7 +105,7 @@ export function BrandBookMilestoneCard({
     <section
       aria-label="Brand Book"
       data-testid="brand-book-milestone"
-      className="rounded-lg border border-border/70 bg-card p-4"
+      className="p-[var(--card-pad)]"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2.5">

@@ -113,8 +113,8 @@ export function OrganicWorkspaceTabs({
   useGenerationJobsRealtime(tickerBrandId);
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border bg-background">
-      <div className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
+      <div className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--card-pad)] py-[var(--app-shell-pad-block)]">
         <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -167,9 +167,14 @@ export function OrganicWorkspaceTabs({
       </div>
 
       <ViewTransition>
-        <div className="min-h-0 overflow-hidden px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
+        {/* Inline padding lives on each slot, not here: the metrics tab is a
+            full-bleed pane and must not pay the shell gutter a second time. */}
+        <div className="min-h-0 overflow-hidden py-[var(--app-shell-pad-block)]">
           {/* Always render planner — it's the default tab */}
-          <div className="h-full w-full min-h-0 overflow-hidden" hidden={activeView !== 'planner'}>
+          <div
+            className="h-full w-full min-h-0 overflow-hidden px-[var(--card-pad)]"
+            hidden={activeView !== 'planner'}
+          >
             {plannerSlot}
           </div>
           {/* Defer metrics mount until first viewed, then keep alive to avoid re-fetch */}
@@ -183,7 +188,10 @@ export function OrganicWorkspaceTabs({
           )}
           {/* Defer agent mount until first viewed, then keep alive */}
           {agentSlot !== undefined && agentEverShown && (
-            <div className="h-full w-full min-h-0 overflow-hidden" hidden={activeView !== 'agent'}>
+            <div
+              className="h-full w-full min-h-0 overflow-hidden px-[var(--card-pad)]"
+              hidden={activeView !== 'agent'}
+            >
               {agentSlot}
             </div>
           )}

@@ -204,6 +204,7 @@ export function InspirationBrowser({
   showSync = false,
   variant = 'full',
   gridClassName,
+  className,
   feedLimit = MAX_INSTAGRAM_POSTS,
   onManageCompetitors,
 }: {
@@ -213,6 +214,7 @@ export function InspirationBrowser({
   showSync?: boolean;
   variant?: 'full' | 'compact';
   gridClassName?: string;
+  className?: string;
   feedLimit?: number;
   onManageCompetitors?: () => void;
 }) {
@@ -237,7 +239,7 @@ export function InspirationBrowser({
   const q = debounced || undefined;
 
   return (
-    <div className={cn('flex min-w-0 flex-col', compact ? 'gap-3' : 'gap-4')}>
+    <div className={cn('flex min-w-0 flex-col', compact ? 'gap-2' : 'gap-4', className)}>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Segmented
           value={source}
@@ -286,7 +288,7 @@ export function InspirationBrowser({
           />
         ) : null}
 
-        <div className={cn('min-w-0 flex-1', compact && 'max-h-[28rem] overflow-y-auto pr-0.5')}>
+        <div className={cn('min-w-0 flex-1', compact && 'max-h-[28rem] overflow-y-auto')}>
           {source === 'organic' ? (
             <CompetitorOrganicExplorer
               brandId={brandId}

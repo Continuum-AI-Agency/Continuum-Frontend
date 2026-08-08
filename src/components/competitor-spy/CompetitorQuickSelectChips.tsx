@@ -36,7 +36,7 @@ export function CompetitorQuickSelectChips({
     .slice(0, max);
 
   return (
-    <div className={cn('flex items-center gap-1.5 overflow-x-auto pb-0.5', className)}>
+    <div className={cn('flex items-center gap-1.5 overflow-x-auto', className)}>
       <button
         type="button"
         onClick={() => onSelect(undefined)}

@@ -333,7 +333,7 @@ async function OrganicContent({
             : 'facebook';
 
   return (
-    <div className="h-full min-h-0">
+    <>
       <OrganicNoticeBridge
         brandId={brandProfileId}
         insightsError={insightsError}
@@ -406,7 +406,7 @@ async function OrganicContent({
           />
         }
       />
-    </div>
+    </>
   );
 }
 
@@ -452,7 +452,7 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
       : null;
 
   return (
-    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full min-w-0 overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
+    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full min-w-0 overflow-hidden">
       <Suspense fallback={<OrganicContentSkeleton view={initialView} />}>
         <OrganicContent
           initialSelectedDraftId={initialSelectedDraftId}

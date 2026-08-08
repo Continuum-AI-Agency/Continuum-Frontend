@@ -77,96 +77,94 @@ export function HomeBaseDashboard({
   }, [activeView, router]);
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
-      <section
-        data-tour-id="dashboard-overview"
-        className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-background"
-      >
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border/70 bg-muted/20 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
-          {hasData ? (
-            <>
-              <div className="flex min-w-0 flex-col">
-                <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {activeConfig.title}
-                </h1>
-                <p className="min-w-0 truncate text-[11px] text-muted-foreground/80">
-                  {activeConfig.microcopy}
-                </p>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Dashboard view
-                </span>
-                <nav
-                  className="inline-flex rounded-md border border-border/70 bg-background p-0.5"
-                  aria-label="Dashboard view options"
-                >
-                  {(Object.keys(DASHBOARD_VIEWS) as DashboardView[]).map((view) => {
-                    const config = DASHBOARD_VIEWS[view];
-                    const isActive = activeView === view;
-
-                    return (
-                      <button
-                        key={view}
-                        type="button"
-                        data-tour-id={view === 'paid' ? 'dashboard-paid-toggle' : undefined}
-                        title={config.microcopy}
-                        onClick={() => handleViewChange(view)}
-                        className={cn(
-                          'h-6 rounded px-2.5 text-xs font-medium transition-colors active:scale-[0.96]',
-                          isActive
-                            ? 'bg-muted/60 text-foreground'
-                            : 'text-muted-foreground hover:text-foreground',
-                        )}
-                        style={{ transitionProperty: 'background-color, color, scale' }}
-                        aria-pressed={isActive}
-                      >
-                        {config.label}
-                      </button>
-                    );
-                  })}
-                </nav>
-              </div>
-            </>
-          ) : (
-            <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Get started
-            </h1>
-          )}
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
-          {firstRunSetup ? (
-            <div className="mb-[var(--app-shell-gap)]">
-              <FirstRunSetup setup={firstRunSetup} brandBookRefreshedAt={brandBookRefreshedAt} />
+    <section
+      data-tour-id="dashboard-overview"
+      className="flex h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] w-full min-w-0 flex-col overflow-hidden bg-background"
+    >
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border bg-muted/20 px-[var(--card-pad)] py-[var(--app-shell-pad-block)]">
+        {hasData ? (
+          <>
+            <div className="flex min-w-0 flex-col">
+              <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {activeConfig.title}
+              </h1>
+              <p className="min-w-0 truncate text-[11px] text-muted-foreground/80">
+                {activeConfig.microcopy}
+              </p>
             </div>
-          ) : null}
 
-          {hasData ? (
-            <>
-              {firstRunSetup ? (
-                <div className="mb-3 flex items-center gap-2 pt-2">
-                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Your live data
-                  </span>
-                  <span className="h-px flex-1 bg-border/70" aria-hidden="true" />
-                </div>
-              ) : null}
-              <motion.div
-                key={activeView}
-                data-dashboard-panel={activeView}
-                className="min-h-full"
-                initial={shouldReduceMotion ? false : { opacity: 0.96 }}
-                animate={shouldReduceMotion ? undefined : { opacity: 1 }}
-                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Dashboard view
+              </span>
+              <nav
+                className="inline-flex rounded-md border border-border bg-background p-0.5"
+                aria-label="Dashboard view options"
               >
-                {activeViewSlot}
-              </motion.div>
-            </>
-          ) : null}
-        </div>
-      </section>
-    </div>
+                {(Object.keys(DASHBOARD_VIEWS) as DashboardView[]).map((view) => {
+                  const config = DASHBOARD_VIEWS[view];
+                  const isActive = activeView === view;
+
+                  return (
+                    <button
+                      key={view}
+                      type="button"
+                      data-tour-id={view === 'paid' ? 'dashboard-paid-toggle' : undefined}
+                      title={config.microcopy}
+                      onClick={() => handleViewChange(view)}
+                      className={cn(
+                        'h-6 rounded px-2.5 text-xs font-medium transition-colors active:scale-[0.96]',
+                        isActive
+                          ? 'bg-muted/60 text-foreground'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                      style={{ transitionProperty: 'background-color, color, scale' }}
+                      aria-pressed={isActive}
+                    >
+                      {config.label}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          </>
+        ) : (
+          <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Get started
+          </h1>
+        )}
+      </div>
+
+      {/* No inline padding: the panes inside own their own gutter, so adding one
+          here charges the shell gutter a second time and misaligns nothing. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+        {firstRunSetup ? (
+          <FirstRunSetup setup={firstRunSetup} brandBookRefreshedAt={brandBookRefreshedAt} />
+        ) : null}
+
+        {hasData ? (
+          <>
+            {firstRunSetup ? (
+              <div className="flex items-center gap-2 px-[var(--card-pad)]">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Your live data
+                </span>
+                <span className="h-px flex-1 bg-border/70" aria-hidden="true" />
+              </div>
+            ) : null}
+            <motion.div
+              key={activeView}
+              data-dashboard-panel={activeView}
+              className="min-w-0"
+              initial={shouldReduceMotion ? false : { opacity: 0.96 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            >
+              {activeViewSlot}
+            </motion.div>
+          </>
+        ) : null}
+      </div>
+    </section>
   );
 }

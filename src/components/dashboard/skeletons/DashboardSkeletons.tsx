@@ -1,30 +1,40 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
+// Skeletons mirror the flattened pane structure: a hairline-divided stack, no
+// radius, no shadow, panel padding from --card-pad. If these drift back into
+// cards, every dashboard load flashes the pre-flatten chrome before hydrating.
+
+function PaneHeaderSkeleton({ width = 'w-28' }: { width?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2 border-b border-border px-[var(--card-pad)] py-[var(--section-header-pad-block)]">
+      <Skeleton className={`h-3.5 ${width} bg-muted/70`} />
+      <Skeleton className="h-3.5 w-20 bg-muted/70" />
+    </div>
+  );
+}
+
 export function DashboardShellSkeleton() {
   return (
     <div className="w-full">
-      <div className="sticky top-0 z-10 shrink-0 px-4 py-3 border-b flex items-center justify-between bg-background">
+      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-border bg-background px-[var(--card-pad)] py-[var(--app-shell-pad-block)]">
         <div className="flex gap-4">
           <Skeleton className="h-6 w-24 bg-muted/70" />
           <Skeleton className="h-6 w-24 bg-muted/70" />
         </div>
         <Skeleton className="h-4 w-48 bg-muted/70" />
       </div>
-      <div className="bg-muted/30 p-4">
-        <WidgetSkeleton />
-      </div>
+      <WidgetSkeleton />
     </div>
   );
 }
 
 export function PaidWidgetSkeleton() {
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 items-start">
-        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-          <div className="p-4 space-y-3">
-            <Skeleton className="h-5 w-44 bg-muted/70" />
-            <Skeleton className="h-4 w-72 bg-muted/70" />
+    <div className="flex flex-col divide-y divide-border">
+      <div className="grid grid-cols-1 items-stretch divide-y divide-border border-y border-border lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
+        <div>
+          <PaneHeaderSkeleton width="w-32" />
+          <div className="space-y-3 p-[var(--card-pad)]">
             <div className="grid grid-cols-2 gap-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <Skeleton
@@ -36,10 +46,9 @@ export function PaidWidgetSkeleton() {
             <Skeleton className="h-48 w-full rounded-md bg-muted/70" />
           </div>
         </div>
-        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-          <div className="p-4 space-y-3">
-            <Skeleton className="h-5 w-36 bg-muted/70" />
-            <Skeleton className="h-4 w-52 bg-muted/70" />
+        <div>
+          <PaneHeaderSkeleton width="w-24" />
+          <div className="space-y-3 p-[var(--card-pad)]">
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton
                 key={`paid-action-row-${i}`}
@@ -49,10 +58,11 @@ export function PaidWidgetSkeleton() {
           </div>
         </div>
       </div>
-      <div className="rounded-lg border bg-card shadow-sm overflow-hidden p-4 space-y-3">
-        <Skeleton className="h-5 w-52 bg-muted/70" />
-        <Skeleton className="h-4 w-72 bg-muted/70" />
-        <Skeleton className="h-44 w-full rounded-md bg-muted/70" />
+      <div>
+        <PaneHeaderSkeleton width="w-40" />
+        <div className="p-[var(--card-pad)]">
+          <Skeleton className="h-44 w-full rounded-md bg-muted/70" />
+        </div>
       </div>
     </div>
   );
@@ -60,89 +70,75 @@ export function PaidWidgetSkeleton() {
 
 /**
  * Suspense fallback for OrganicDashboardDataWrapper.
- * Mirrors the OrganicDashboardView 2-column grid layout:
- * - Left (3fr): InstagramOrganicReportingWidget skeleton
- * - Right (2fr): BrandTrendsPanel skeleton
+ * Mirrors OrganicDashboardView: an Overview header, the insights + creatives
+ * pane pair, then the competitor / trends / reporting panes stacked below.
  */
 export function WidgetSkeleton() {
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 items-start">
-      {/* Instagram metrics widget */}
-      <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-        <div className="p-4 space-y-4">
-          {/* Header */}
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-8 w-8 rounded-full bg-muted/70" />
-              <div className="space-y-1">
-                <Skeleton className="h-4 w-44 bg-muted/70" />
-                <Skeleton className="h-3 w-32 bg-muted/70" />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Skeleton className="h-9 w-28 rounded-md bg-muted/70" />
-              <Skeleton className="h-9 w-44 rounded-md bg-muted/70" />
-            </div>
-          </div>
-          {/* Metric cards grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={`widget-metric-${i}`} className="h-16 w-full rounded-md bg-muted/70" />
-            ))}
-          </div>
-          {/* Chart */}
-          <Skeleton className="h-48 w-full rounded-md bg-muted/70" />
+    <div className="flex flex-col divide-y divide-border">
+      <div className="flex flex-wrap items-end justify-between gap-2 px-[var(--card-pad)] py-[var(--section-header-pad-block)]">
+        <div className="space-y-1.5">
+          <Skeleton className="h-5 w-28 bg-muted/70" />
+          <Skeleton className="h-3 w-56 bg-muted/70" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-44 rounded-md bg-muted/70" />
+          <Skeleton className="h-8 w-8 rounded-md bg-muted/70" />
         </div>
       </div>
 
-      {/* Brand trends panel */}
-      <div className="rounded-lg bg-card shadow-sm overflow-hidden">
-        {/* Panel header */}
-        <div className="p-4 border-b space-y-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1.5">
-              <Skeleton className="h-3 w-28 bg-muted/70" />
-              <Skeleton className="h-5 w-52 bg-muted/70" />
-            </div>
-            <div className="flex gap-2">
-              <Skeleton className="h-6 w-20 rounded-full bg-muted/70" />
-              <Skeleton className="h-6 w-24 rounded-full bg-muted/70" />
-            </div>
-          </div>
-        </div>
-        {/* Panel content */}
-        <div className="p-3 space-y-3">
-          {/* Generate controls (statusSlot area) */}
-          <div className="flex justify-end gap-2">
-            <Skeleton className="h-8 w-28 rounded-md bg-muted/70" />
-            <Skeleton className="h-8 w-36 rounded-md bg-muted/70" />
-          </div>
-          <div className="h-px bg-border" />
-          {/* Tabs */}
-          <Skeleton className="h-9 w-full rounded-lg bg-muted/70" />
-          {/* Search + count */}
-          <div className="flex gap-2">
-            <Skeleton className="h-9 flex-1 rounded-md bg-muted/70" />
-            <Skeleton className="h-9 w-20 rounded-md bg-muted/70" />
-          </div>
-          {/* Data rows */}
-          <div className="rounded-lg border overflow-hidden">
+      <div className="grid grid-cols-1 items-stretch divide-y divide-border border-y border-border lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
+        <div>
+          <PaneHeaderSkeleton />
+          <div className="divide-y divide-border/50">
             {Array.from({ length: 5 }).map((_, i) => (
               <div
-                key={`trends-row-${i}`}
-                className="flex items-start gap-3 px-4 py-3 border-b last:border-0"
+                key={`insight-row-${i}`}
+                className="flex items-start gap-2.5 px-[var(--card-pad)] py-2.5"
               >
+                <Skeleton className="h-3.5 w-3.5 shrink-0 rounded-full bg-muted/70" />
                 <div className="flex-1 space-y-1.5">
-                  <Skeleton className="h-3.5 w-3/5 bg-muted/70" />
-                  <Skeleton className="h-3 w-4/5 bg-muted/70" />
-                </div>
-                <div className="space-y-1.5 shrink-0">
-                  <Skeleton className="h-3.5 w-20 bg-muted/70" />
-                  <Skeleton className="h-5 w-16 rounded-full bg-muted/70" />
+                  <Skeleton className="h-3 w-20 bg-muted/70" />
+                  <Skeleton className="h-3.5 w-4/5 bg-muted/70" />
                 </div>
               </div>
             ))}
           </div>
+        </div>
+
+        <div>
+          <PaneHeaderSkeleton width="w-24" />
+          <div className="divide-y divide-border/50">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={`creative-row-${i}`}
+                className="flex items-center gap-3 px-[var(--card-pad)] py-2.5"
+              >
+                <Skeleton className="size-9 shrink-0 rounded bg-muted/70" />
+                <Skeleton className="h-3.5 flex-1 bg-muted/70" />
+                <Skeleton className="h-3.5 w-12 shrink-0 bg-muted/70" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <PaneHeaderSkeleton width="w-40" />
+        <div className="grid grid-cols-3 gap-2 p-[var(--card-pad)] sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <Skeleton
+              key={`competitor-tile-${i}`}
+              className="aspect-square w-full rounded-md bg-muted/70"
+            />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <PaneHeaderSkeleton width="w-32" />
+        <div className="p-[var(--card-pad)]">
+          <Skeleton className="h-48 w-full rounded-md bg-muted/70" />
         </div>
       </div>
     </div>

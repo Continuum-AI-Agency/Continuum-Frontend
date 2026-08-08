@@ -408,16 +408,14 @@ const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<'bu
 );
 SidebarRail.displayName = 'SidebarRail';
 
-const SidebarInset = React.forwardRef<HTMLElement, React.ComponentProps<'main'>>(
+// A layout box, not a landmark. The <main> landmark belongs to the scrolling
+// content region inside it, which excludes the app header.
+const SidebarInset = React.forwardRef<HTMLDivElement, React.ComponentProps<'div'>>(
   ({ className, ...props }, ref) => {
     return (
-      <main
+      <div
         ref={ref}
-        className={cn(
-          'bg-background relative flex w-full flex-1 flex-col',
-          'md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2',
-          className,
-        )}
+        className={cn('bg-background relative flex w-full flex-1 flex-col', className)}
         {...props}
       />
     );

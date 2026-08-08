@@ -42,9 +42,9 @@ export function CompetitorPostGrid({
 
   if (views.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 p-8 text-center">
-        <p className="text-sm text-muted-foreground">{emptyText}</p>
-      </div>
+      <p className="rounded-lg border border-dashed border-border/70 py-6 text-center text-sm text-muted-foreground">
+        {emptyText}
+      </p>
     );
   }
 

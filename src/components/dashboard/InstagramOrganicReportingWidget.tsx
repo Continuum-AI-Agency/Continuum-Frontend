@@ -163,7 +163,7 @@ function InteractionBreakdownCharts({
           }));
 
           return (
-            <div className="rounded-lg border border-subtle bg-surface" key={metric}>
+            <div className="border border-border bg-surface" key={metric}>
               <div className="p-3">
                 <span className="mb-2 block text-sm text-muted-foreground">
                   {METRIC_LABELS[metric]}
@@ -345,11 +345,11 @@ export function InstagramOrganicReportingWidget({
     <div
       data-tour-id="dashboard-organic-metrics"
       className={cn(
-        'flex flex-col gap-0 overflow-hidden rounded-lg border border-subtle bg-surface py-0',
+        'flex flex-col gap-0 overflow-hidden bg-surface py-0',
         className,
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/70 bg-muted/20 px-2 py-1">
+      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border bg-muted/20 px-[var(--card-pad)] py-1">
         <div className="flex min-w-0 items-center gap-1.5">
           <Select value={platform} onValueChange={(val) => setPlatform(val as OrganicPlatform)}>
             <SelectTrigger className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0">
@@ -637,7 +637,7 @@ function MetricsPanel({
         </div>
 
         <div className="min-h-[280px] w-full">
-          <div className="flex flex-col rounded-lg border border-subtle bg-surface">
+          <div className="flex flex-col border border-border bg-surface">
             <div className="flex min-h-0 flex-1 flex-col p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>

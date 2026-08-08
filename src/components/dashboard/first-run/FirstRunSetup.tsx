@@ -22,9 +22,14 @@ export function FirstRunSetup({
     : 'Connect your accounts and generate your Brand Book to bring this dashboard to life.';
 
   return (
-    <div data-testid="dashboard-first-run" className="flex w-full min-w-0 flex-col gap-3">
-      <PageHeader title="Set up your workspace" description={headerDescription} />
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+    <div
+      data-testid="dashboard-first-run"
+      className="flex w-full min-w-0 flex-col divide-y divide-border"
+    >
+      <div className="px-[var(--card-pad)] py-[var(--section-header-pad-block)]">
+        <PageHeader title="Set up your workspace" description={headerDescription} />
+      </div>
+      <div className="grid grid-cols-1 items-stretch divide-y divide-border lg:grid-cols-2 lg:divide-x lg:divide-y-0">
         <SetupChecklist setup={setup} />
         <BrandBookMilestoneCard setup={setup} refreshedAt={brandBookRefreshedAt} />
       </div>

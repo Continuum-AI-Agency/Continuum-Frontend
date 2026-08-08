@@ -244,7 +244,7 @@ export function CompetitorPostHoverTile({
           target="_blank"
           rel="noreferrer"
           aria-label={`Open ${view.competitorName} ${post.kind} on Instagram`}
-          className="group/tile relative block overflow-hidden rounded-md border border-border/70 bg-muted transition hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group/tile relative block overflow-hidden rounded-md border border-transparent bg-muted transition hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onPointerEnter={() => setTileHovering(true)}
           onPointerLeave={() => setTileHovering(false)}
         >

@@ -1,13 +1,11 @@
 import type { ReactNode } from 'react';
 
-import { SectionHeader } from '@/components/shared/SectionHeader';
-import { Card } from '@/components/ui/card';
+import { Panel } from '@/components/shared/Panel';
 import { cn } from '@/lib/utils';
 
-// The calm-dense panel used across the optimizer surface: a Card (rounded-lg, 1px
-// border, no shadow) with the shared SectionHeader bar on top and a padded body.
-// Replaces the hand-rolled `Card + CardHeader border-b p-4 + CardContent p-4`
-// blocks that were repeated per panel — one structure, styleguide-conformant.
+// The shared Panel plus the optimizer surface's card chrome. Kept as its own
+// component because the optimizer still reads as a stack of discrete cards,
+// unlike the flattened dashboard panes.
 export function OptimizerPanel({
   title,
   meta,
@@ -24,9 +22,14 @@ export function OptimizerPanel({
   bodyClassName?: string;
 }) {
   return (
-    <Card className={cn('gap-0 overflow-hidden py-0', className)}>
-      <SectionHeader title={title} meta={meta} action={action} />
-      <div className={cn('p-[var(--card-pad)]', bodyClassName)}>{children}</div>
-    </Card>
+    <Panel
+      title={title}
+      meta={meta}
+      action={action}
+      bodyClassName={bodyClassName}
+      className={cn('overflow-hidden rounded-lg border bg-card text-card-foreground', className)}
+    >
+      {children}
+    </Panel>
   );
 }

@@ -48,7 +48,7 @@ export function OrganicDashboardView({
   const isCold = trendsAndEvents.trends.length === 0 || !generatedAt;
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-[var(--app-shell-gap)]">
+    <div className="flex w-full min-w-0 flex-col divide-y divide-border">
       <DashboardWarmOnMount brandId={brandId} isCold={isCold} />
       <DashboardBriefing
         brandId={brandId}
@@ -76,11 +76,9 @@ export function OrganicDashboardView({
         }
       />
 
-      <section>
-        <CompetitorOrganicTable brandId={brandId} />
-      </section>
+      <CompetitorOrganicTable brandId={brandId} />
 
-      <section className="min-h-[var(--dashboard-compact-panel-min-height)]">
+      <div className="min-h-[var(--dashboard-compact-panel-min-height)]">
         <BrandTrendsPanel
           trends={trendsAndEvents.trends}
           events={trendsAndEvents.events}
@@ -94,16 +92,14 @@ export function OrganicDashboardView({
             <BrandInsightsGenerateButton brandId={brandId} lastGeneratedAt={generatedAt} force />
           }
         />
-      </section>
+      </div>
 
-      <section>
-        <InstagramOrganicReportingWidget
-          brandId={brandId}
-          accounts={instagramAccounts}
-          youtubeAccounts={youtubeAccounts}
-          className="min-h-[var(--dashboard-min-panel-height)]"
-        />
-      </section>
+      <InstagramOrganicReportingWidget
+        brandId={brandId}
+        accounts={instagramAccounts}
+        youtubeAccounts={youtubeAccounts}
+        className="min-h-[var(--dashboard-min-panel-height)]"
+      />
     </div>
   );
 }

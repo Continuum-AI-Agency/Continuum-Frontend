@@ -140,7 +140,9 @@
      The header is DashboardHeader (consumes --app-header-h). Pages that fill
      the viewport use --app-content-h instead of a magic per-page offset. */
   --app-header-h: 3rem;
-  --app-content-h: calc(100dvh - var(--app-header-h));
+  /* Must also subtract the shell's bottom pad, or every h-[var(--app-content-h)]
+     surface overshoots its scroll container by exactly that much. */
+  --app-content-h: calc(100dvh - var(--app-header-h) - var(--shell-stack-gap));
 
   /* Shell scale — fixed rem (no viewport-width fluidity). */
   --shell-sidebar-w: 15rem;
@@ -165,8 +167,11 @@
   --page-pad-inline: var(--shell-gutter);
   --page-pad-block: 1rem;
   --page-section-gap: 1rem;
-  --card-pad: 0.875rem;
+  /* Panel padding. Every flattened pane routes its gutter through --card-pad,
+     so this is the one knob for dashboard density. */
+  --card-pad: 0.6875rem;
   --card-gap: 0.625rem;
+  --section-header-pad-block: 0.375rem;
 
   --ai-chat-shell-offset: 1.5rem;
   --ai-chat-shell-min-height: 40rem;
@@ -203,7 +208,7 @@ html {
     --app-shell-pad-inline: 1rem;
     --page-pad-block: 0.875rem;
     --page-section-gap: 0.875rem;
-    --card-pad: 0.8125rem;
+    --card-pad: 0.625rem;
     --card-gap: 0.5625rem;
     --workspace-min-height: 30rem;
     --dashboard-min-panel-height: 22rem;
@@ -237,7 +242,7 @@ html {
     --layout-density: 0.92;
     --page-pad-block: 0.75rem;
     --page-section-gap: 0.75rem;
-    --card-pad: 0.75rem;
+    --card-pad: 0.5625rem;
     --card-gap: 0.5rem;
     --shell-stack-gap: 0.875rem;
     --shell-gutter: 0.875rem;

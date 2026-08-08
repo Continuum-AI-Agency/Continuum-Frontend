@@ -33,6 +33,7 @@
     "organic:metrics:compare:bench": "bun run src/lib/organic/organic-metrics-compare.bench.ts",
     "posthog:logs:bench": "NODE_ENV=production bun run src/lib/observability/posthog-logs.bench.ts",
     "trends:render:e2e:bench": "bun run src/lib/brand-insights/trends-render.bench.ts",
+    "dashboard:density:e2e": "playwright test e2e/dashboard-density.spec.ts --workers=1",
     "organic:metrics:compare:e2e": "playwright test e2e/organic-metrics-compare.spec.ts",
     "organic:trends:header:e2e": "playwright test e2e/organic-trends-header-module.spec.ts",
     "library:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/library-poster-transcript.spec.ts e2e/library-range-comments-editor.spec.ts",

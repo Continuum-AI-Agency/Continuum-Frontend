@@ -1,6 +1,6 @@
 import { AlertTriangle, type LucideIcon, Minus, TrendingUp } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { SectionHeader } from '@/components/shared/SectionHeader';
+import { Panel } from '@/components/shared/Panel';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -69,11 +69,13 @@ export function InsightsList({
   const normalizedItems = normalizeInsightItems(items);
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
-      <SectionHeader title={title} action={headerAction} />
-
+    <Panel title={title} action={headerAction} bodyClassName="p-0">
       {isLoading ? (
-        <div className="flex flex-col gap-3 p-3" role="status" aria-label="Loading recent insights">
+        <div
+          className="flex flex-col gap-3 p-[var(--card-pad)]"
+          role="status"
+          aria-label="Loading recent insights"
+        >
           <p className="text-xs text-muted-foreground">Loading recent insights…</p>
           {['92%', '78%', '86%', '68%'].map((width) => (
             <div key={width} className="flex items-center gap-2.5">
@@ -97,7 +99,7 @@ export function InsightsList({
           {normalizedItems.map((item) => {
             const { label, Icon, className } = SEVERITY[item.severity];
             return (
-              <li key={item.id} className="flex items-start gap-2.5 px-3 py-2.5">
+              <li key={item.id} className="flex items-start gap-2.5 px-[var(--card-pad)] py-2">
                 <span className={cn('mt-0.5 flex-shrink-0', className)}>
                   <Icon className="h-3.5 w-3.5" aria-hidden />
                   <span className="sr-only">{label}</span>
@@ -120,6 +122,6 @@ export function InsightsList({
           })}
         </ul>
       )}
-    </div>
+    </Panel>
   );
 }
