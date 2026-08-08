@@ -1,14 +1,17 @@
 'use client';
 
-// Presentational "last sync / source status" pill for data-dependent surfaces
+// Presentational "last sync / source status" stamp for data-dependent surfaces
 // (IMP-016 / BUG-017), so a user can tell missing vs stale vs syncing vs failed
-// apart at a glance. Data-agnostic: it renders a derived FreshnessMeta and never
-// fetches. The status->tone/label projection is a pure exported helper so it can
-// be unit-tested without a DOM. A tooltip carries the fuller detail (exact time,
-// source, next sync, error) the badge itself keeps compact.
+// apart at a glance. Deliberately chrome-free (no fill, no border): a sync
+// timestamp is toolbar metadata, not a status chip competing with the controls
+// beside it. The tone dot carries the state; the text carries the age.
+// Data-agnostic: it renders a derived FreshnessMeta and never fetches. The
+// status->tone/label projection is a pure exported helper so it can be
+// unit-tested without a DOM. A tooltip carries the fuller detail (exact time,
+// source, next sync, error) the stamp itself keeps compact.
 
 import { useId } from 'react';
-import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
+import { PillIndicator } from '@/components/kibo-ui/pill';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   type FreshnessMeta,
@@ -85,14 +88,16 @@ export function FreshnessBadge({ freshness, side = 'top', className }: Freshness
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Pill
-            variant="secondary"
+          <span
             aria-describedby={descriptionId}
-            className={cn('cursor-default text-secondary-foreground', className)}
+            className={cn(
+              'inline-flex cursor-default items-center gap-1.5 whitespace-nowrap text-2xs text-muted-foreground',
+              className,
+            )}
           >
             {tone ? <PillIndicator variant={tone} pulse={pulse} /> : null}
             {label}
-          </Pill>
+          </span>
         </TooltipTrigger>
         {detail.length ? (
           <TooltipContent side={side} className="max-w-xs">
