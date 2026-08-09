@@ -161,6 +161,12 @@ export const publishErrorCodeSchema = z.enum([
   'hyperframe_mp4_not_ready',
   // The draft's format is not offered by its platform.
   'unsupported_format',
+  // The caption states figures the claim guard recorded as `data_needed` — the system flagged
+  // them as unsourced and the caption publishes them as fact. Fails closed rather than ship them.
+  'unverified_claims',
+  // A carousel block exists but not one slide carries headline/body/overlayText. The generator
+  // used to pad these from the internal brief; it now emits nothing and this blocks instead.
+  'slide_copy_missing',
   // Human-in-the-loop gate reasons (see publishGate.ts). These are not faults — they mean the
   // publish is waiting on a person, so the surface must prompt rather than report an error.
   //

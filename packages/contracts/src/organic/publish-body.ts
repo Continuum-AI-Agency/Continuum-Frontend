@@ -73,16 +73,43 @@ interface CarouselPublishBody extends PublishTarget {
 export type PublishRequestBody = PostPublishBody | ReelPublishBody | CarouselPublishBody;
 
 /**
- * A draft's `format` is free-form prose from whichever generator wrote it — "carousel",
- * "Carousel", "FeedPost", "reel", "Hyperframe". Match loosely; never on exact case.
+ * The format a single stored value NAMES, or null when it names none.
+ *
+ * `null` is the load-bearing part. A draft carries the format under four different
+ * keys and no row carries all four, so a reader has to walk them — and a walk needs
+ * to tell "this value names no format" (the generator's literal `'Text'`, an empty
+ * `content_json`) apart from "this value names a POST". Defaulting mid-walk is how
+ * every MCP-created reel resolved as a plain post: the first key present won, even
+ * when it named nothing.
  */
-export function resolvePublishFormat(format?: string | null): PublishFormat {
+export function matchPublishFormat(format?: string | null): PublishFormat | null {
   const value = (format ?? '').trim().toLowerCase();
+  if (!value) return null;
   if (value.includes('video') || value.includes('reel') || value.includes('hyperframe')) {
     return 'REEL';
   }
   if (value.includes('carousel')) return 'CAROUSEL';
-  return 'POST';
+  if (
+    value.includes('post') ||
+    value.includes('image') ||
+    value.includes('photo') ||
+    value.includes('static') ||
+    value.includes('story')
+  ) {
+    return 'POST';
+  }
+  return null;
+}
+
+/**
+ * A draft's `format` is free-form prose from whichever generator wrote it — "carousel",
+ * "Carousel", "FeedPost", "reel", "Hyperframe". Match loosely; never on exact case.
+ *
+ * Defaults to POST for a value that names nothing. Callers walking several keys want
+ * `matchPublishFormat` instead, so the default cannot outrank a later key that answers.
+ */
+export function resolvePublishFormat(format?: string | null): PublishFormat {
+  return matchPublishFormat(format) ?? 'POST';
 }
 
 export function isCarouselFormat(format?: string | null): boolean {
