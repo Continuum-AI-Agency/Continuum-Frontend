@@ -1,8 +1,7 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import { Cross2Icon, ImageIcon, PlusIcon, VideoIcon } from '@radix-ui/react-icons';
-import { Music2 } from 'lucide-react';
+import { Image, Music2, Plus, Video, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -66,9 +65,9 @@ function BinTile({
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
             {source.kind === 'image' ? (
-              <ImageIcon className="h-4 w-4" />
+              <Image className="h-4 w-4" />
             ) : source.kind === 'video' ? (
-              <VideoIcon className="h-4 w-4" />
+              <Video className="h-4 w-4" />
             ) : (
               <Music2 className="h-4 w-4" />
             )}
@@ -94,7 +93,7 @@ function BinTile({
         }}
         aria-label={`Add ${source.label} to the timeline`}
       >
-        <PlusIcon className="h-3.5 w-3.5" />
+        <Plus className="h-3.5 w-3.5" />
       </Button>
 
       {onRemove ? (
@@ -109,7 +108,7 @@ function BinTile({
           }}
           aria-label={`Remove ${source.label} from the media bin`}
         >
-          <Cross2Icon className="h-3.5 w-3.5" />
+          <X className="h-3.5 w-3.5" />
         </Button>
       ) : null}
     </div>

@@ -1,4 +1,3 @@
-import { Cross2Icon, FileTextIcon, LinkBreak2Icon, UploadIcon } from '@radix-ui/react-icons';
 import {
   Handle,
   type NodeProps,
@@ -7,7 +6,7 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { Copy, Library, Loader2, Trash2 } from 'lucide-react';
+import { Copy, FileText, Library, Loader2, Trash2, Unlink, Upload, X } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -403,7 +402,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                     className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
                   >
                     <div className="rounded bg-amber-500/10 p-1 text-amber-600">
-                      <FileTextIcon className="h-4 w-4" />
+                      <FileText className="h-4 w-4" />
                     </div>
                     <span className="min-w-0 flex-1 truncate font-medium">{row.name}</span>
                     <span className="shrink-0 text-2xs uppercase text-muted-foreground">
@@ -448,7 +447,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                     className="absolute right-8 top-2 z-20 cursor-pointer rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100"
                     onMouseDown={(event) => event.stopPropagation()}
                   >
-                    <UploadIcon className="w-3 h-3" />
+                    <Upload className="w-3 h-3" />
                   </Label>
 
                   <Button
@@ -480,7 +479,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                               {status === 'processing' ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
-                                <FileTextIcon className="w-4 h-4" />
+                                <FileText className="w-4 h-4" />
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
@@ -502,7 +501,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                               onClick={() => removeDocument(index)}
                               className="rounded p-1 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
                             >
-                              <Cross2Icon className="w-3 h-3" />
+                              <X className="w-3 h-3" />
                             </button>
                           </div>
                         );
@@ -517,7 +516,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                         <Empty>
                           <EmptyHeader>
                             <EmptyMedia variant="icon">
-                              <FileTextIcon />
+                              <FileText />
                             </EmptyMedia>
                             <EmptyTitle>No Documents</EmptyTitle>
                             <EmptyDescription>
@@ -576,7 +575,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <LinkBreak2Icon className="mr-2 h-4 w-4" />
+            <Unlink className="mr-2 h-4 w-4" />
             Detach connections
           </ContextMenuItem>
           <ContextMenuItem

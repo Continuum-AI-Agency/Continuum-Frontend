@@ -1,6 +1,6 @@
 'use client';
+import { RotateCw, Square, SquarePen } from 'lucide-react';
 
-import { Pencil2Icon, ReloadIcon, StopIcon } from '@radix-ui/react-icons';
 import Image from 'next/image';
 import React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -54,11 +54,11 @@ export function PreviewPane({
           </Pill>
           {canMarkup ? (
             <Button size="sm" variant="outline" onClick={onMarkup}>
-              <Pencil2Icon /> Markup
+              <SquarePen /> Markup
             </Button>
           ) : null}
           <Button size="sm" variant="ghost" onClick={onReset}>
-            <ReloadIcon /> Reset
+            <RotateCw /> Reset
           </Button>
         </div>
       </div>
@@ -118,7 +118,7 @@ export function PreviewPane({
               className="mt-3 border-destructive text-destructive hover:text-destructive"
               onClick={onCancel}
             >
-              <StopIcon /> Cancel
+              <Square /> Cancel
             </Button>
           </div>
         ) : null}

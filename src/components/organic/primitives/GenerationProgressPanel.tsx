@@ -1,6 +1,6 @@
 'use client';
+import { Check, RotateCw, X } from 'lucide-react';
 
-import { CheckIcon, Cross2Icon, ReloadIcon } from '@radix-ui/react-icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Progress } from '@/components/ui/progress';
 import type { GridStatus } from '@/lib/organic/store';
@@ -60,19 +60,19 @@ export function GenerationProgressPanel({
             <div className="flex items-center gap-3">
               {isError ? (
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-                  <Cross2Icon className="w-4 h-4" />
+                  <X className="w-4 h-4" />
                 </div>
               ) : isComplete ? (
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/10 text-success">
-                  <CheckIcon className="w-4 h-4" />
+                  <Check className="w-4 h-4" />
                 </div>
               ) : isCompleteWithErrors ? (
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning/10 text-warning">
-                  <Cross2Icon className="w-4 h-4" />
+                  <X className="w-4 h-4" />
                 </div>
               ) : (
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning/10 text-warning animate-spin">
-                  <ReloadIcon className="w-4 h-4" />
+                  <RotateCw className="w-4 h-4" />
                 </div>
               )}
 

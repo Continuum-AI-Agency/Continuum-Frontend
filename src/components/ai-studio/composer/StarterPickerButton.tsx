@@ -1,4 +1,5 @@
 'use client';
+import { Layers2 } from 'lucide-react';
 
 // Composer-adjacent picker that drops a saved starter (a captured canvas recipe)
 // onto the canvas. Picking one re-applies its subgraph — prompts, models, reference
@@ -6,7 +7,6 @@
 // uses, so the user only has to press Run. Authoring lives on the canvas ("Save
 // selection as starter"); this only invokes.
 
-import { StackIcon } from '@radix-ui/react-icons';
 import { useState } from 'react';
 import {
   Command,
@@ -38,7 +38,7 @@ export function StarterPickerButton({ brandProfileId }: Props) {
             aria-label="Add a saved starter"
             className="mb-1 inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
           >
-            <StackIcon />
+            <Layers2 />
           </button>
         }
       />

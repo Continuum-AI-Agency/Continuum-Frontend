@@ -1,6 +1,6 @@
 'use client';
+import { Check, RotateCw, SquarePen, Trash2, X } from 'lucide-react';
 
-import { CheckIcon, Cross2Icon, Pencil2Icon, ReloadIcon, TrashIcon } from '@radix-ui/react-icons';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -326,7 +326,7 @@ export function ImageMarkupDialog({
           <DialogClose
             render={
               <Button size="icon" variant="ghost" aria-label="Close">
-                <Cross2Icon />
+                <X />
               </Button>
             }
           />
@@ -339,7 +339,7 @@ export function ImageMarkupDialog({
               variant={tool === 'pen' ? 'default' : 'outline'}
               onClick={() => setTool('pen')}
             >
-              <Pencil2Icon /> Pen
+              <SquarePen /> Pen
             </Button>
             <Button
               size="sm"
@@ -382,16 +382,14 @@ export function ImageMarkupDialog({
                   } transition hover:scale-[1.05] hover:ring-2 hover:ring-white/60 hover:ring-offset-2 hover:ring-offset-slate-950`}
                   aria-label={`Select ${swatch.name}`}
                 >
-                  {isSelected ? (
-                    <CheckIcon className={isLight ? 'text-black' : 'text-white'} />
-                  ) : null}
+                  {isSelected ? <Check className={isLight ? 'text-black' : 'text-white'} /> : null}
                 </button>
               );
             })}
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={handleUndo} disabled={!canUndo}>
-              <ReloadIcon /> Undo
+              <RotateCw /> Undo
             </Button>
             <Button
               size="sm"
@@ -399,7 +397,7 @@ export function ImageMarkupDialog({
               className="border-destructive text-destructive hover:text-destructive"
               onClick={resetCanvas}
             >
-              <TrashIcon /> Clear
+              <Trash2 /> Clear
             </Button>
           </div>
         </div>

@@ -1,6 +1,6 @@
 'use client';
+import { Image, Video, Wand2 } from 'lucide-react';
 
-import { ImageIcon, MagicWandIcon, VideoIcon } from '@radix-ui/react-icons';
 import React from 'react';
 import { ErrorRetryState } from '@/components/shared/state';
 import { cn } from '@/lib/utils';
@@ -75,17 +75,17 @@ export function CanvasMediaLoader({
 
         <div className="relative h-52 overflow-hidden rounded-lg border border-border/70 bg-muted/40">
           <div className="absolute left-[10%] top-[22%] flex w-28 items-center gap-2 rounded-lg border border-primary/25 bg-background/90 px-3 py-2 shadow-sm">
-            <ImageIcon className="h-4 w-4 text-primary" />
+            <Image className="h-4 w-4 text-primary" />
             <span className="text-xs font-medium text-foreground">Image</span>
           </div>
 
           <div className="absolute right-[10%] top-[22%] flex w-28 items-center gap-2 rounded-lg border border-primary/25 bg-background/90 px-3 py-2 shadow-sm">
-            <VideoIcon className="h-4 w-4 text-primary" />
+            <Video className="h-4 w-4 text-primary" />
             <span className="text-xs font-medium text-foreground">Video</span>
           </div>
 
           <div className="absolute bottom-[16%] left-1/2 flex w-32 -translate-x-1/2 items-center gap-2 rounded-lg border border-primary/25 bg-background/90 px-3 py-2 shadow-sm">
-            <MagicWandIcon className="h-4 w-4 text-primary" />
+            <Wand2 className="h-4 w-4 text-primary" />
             <span className="text-xs font-medium text-foreground">Prompt</span>
           </div>
 
@@ -110,7 +110,7 @@ export function CanvasMediaLoader({
               style={{ animationDirection: 'reverse', animationDuration: '2.8s' }}
             />
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-background shadow-sm">
-              <MagicWandIcon className="h-4 w-4 text-foreground" />
+              <Wand2 className="h-4 w-4 text-foreground" />
             </div>
           </div>
         </div>

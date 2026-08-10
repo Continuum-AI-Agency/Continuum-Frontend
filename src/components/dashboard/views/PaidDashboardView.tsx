@@ -1,6 +1,6 @@
 'use client';
+import { ChevronLeft, ChevronRight, ScrollText } from 'lucide-react';
 
-import { ActivityLogIcon, ChevronLeftIcon, ChevronRightIcon } from '@radix-ui/react-icons';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -152,7 +152,7 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
                 className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
                 style={{ transitionProperty: 'background-color, color, scale' }}
               >
-                <ChevronLeftIcon className="h-3.5 w-3.5" />
+                <ChevronLeft className="h-3.5 w-3.5" />
               </button>
             }
           />
@@ -172,7 +172,7 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
                 className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
                 style={{ transitionProperty: 'background-color, color, scale' }}
               >
-                <ActivityLogIcon className="h-3.5 w-3.5" />
+                <ScrollText className="h-3.5 w-3.5" />
               </button>
             }
           />
@@ -196,7 +196,7 @@ function DCORailCollapseButton({ onCollapse }: { onCollapse: () => void }) {
               className="absolute right-1.5 top-1.5 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-border/70 bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-foreground active:scale-[0.96]"
               style={{ transitionProperty: 'background-color, color, scale' }}
             >
-              <ChevronRightIcon className="h-3.5 w-3.5" />
+              <ChevronRight className="h-3.5 w-3.5" />
             </button>
           }
         />

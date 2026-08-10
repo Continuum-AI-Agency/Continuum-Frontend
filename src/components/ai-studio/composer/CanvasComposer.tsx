@@ -1,13 +1,6 @@
 'use client';
+import { MessageCircle, Play, Trash2, TriangleAlert, Wand2, X } from 'lucide-react';
 
-import {
-  ChatBubbleIcon,
-  Cross2Icon,
-  ExclamationTriangleIcon,
-  MagicWandIcon,
-  PlayIcon,
-  TrashIcon,
-} from '@radix-ui/react-icons';
 import { useCallback, useMemo, useState } from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import {
@@ -157,7 +150,7 @@ export function CanvasComposer({
             className="size-8 shrink-0 text-muted-foreground"
             type="button"
           >
-            {expanded ? <Cross2Icon /> : <ChatBubbleIcon />}
+            {expanded ? <X /> : <MessageCircle />}
           </Button>
           <StarterPickerButton brandProfileId={brandProfileId} />
           <Button
@@ -204,7 +197,7 @@ export function CanvasComposer({
         {expanded ? (
           <div className="flex h-[26rem] flex-col rounded-xl border bg-background/95 shadow-lg backdrop-blur">
             <div className="flex items-center gap-2 border-b px-3 py-2">
-              <MagicWandIcon className="size-4 text-muted-foreground" aria-hidden />
+              <Wand2 className="size-4 text-muted-foreground" aria-hidden />
               <span className="text-sm font-medium">Composer</span>
               <Badge variant="secondary">remembers this chat</Badge>
               <div className="ml-auto">
@@ -216,7 +209,7 @@ export function CanvasComposer({
                   aria-label="Clear the conversation"
                   className="size-7 text-muted-foreground"
                 >
-                  <TrashIcon />
+                  <Trash2 />
                 </Button>
               </div>
             </div>
@@ -225,7 +218,7 @@ export function CanvasComposer({
               <ConversationContent className="flex flex-col gap-3 p-3">
                 {turns.length === 0 ? (
                   <ConversationEmptyState
-                    icon={<MagicWandIcon className="size-10" aria-hidden />}
+                    icon={<Wand2 className="size-10" aria-hidden />}
                     title="Compose on the canvas"
                     description="Prompts sent from here share this conversation as context."
                   />
@@ -318,7 +311,7 @@ function TurnMessages({
 
           {state.status === 'error' ? (
             <span className="flex items-start gap-2 text-destructive">
-              <ExclamationTriangleIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
               {state.error}
             </span>
           ) : null}
@@ -359,7 +352,7 @@ function TurnMessages({
                   data-testid="composer-turn-run"
                   className="h-6 px-2 text-xs"
                 >
-                  <PlayIcon data-icon="inline-start" />
+                  <Play data-icon="inline-start" />
                   Run
                 </Button>
               ) : null}
@@ -397,7 +390,7 @@ function ComposerProgress({
 
           {state.status === 'error' ? (
             <p className="flex items-start gap-2 text-destructive">
-              <ExclamationTriangleIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
               {state.error}
             </p>
           ) : null}
@@ -428,7 +421,7 @@ function ComposerProgress({
         <div className="flex shrink-0 items-center gap-1">
           {state.status === 'done' && state.graph ? (
             <Button size="sm" type="button" onClick={onRun} data-testid="composer-card-run">
-              <PlayIcon data-icon="inline-start" />
+              <Play data-icon="inline-start" />
               Run
             </Button>
           ) : null}
@@ -441,7 +434,7 @@ function ComposerProgress({
             data-testid="composer-card-dismiss"
             className="size-7"
           >
-            <Cross2Icon />
+            <X />
           </Button>
         </div>
       </div>

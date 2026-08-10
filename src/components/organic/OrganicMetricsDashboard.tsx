@@ -1,6 +1,5 @@
 'use client';
 
-import { DownloadIcon, PaperPlaneIcon, ReloadIcon } from '@radix-ui/react-icons';
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import React from 'react';
@@ -49,7 +48,7 @@ const OrganicAudienceLocationMapCard = dynamic(
 
 import type { IntegrationErrorCode, OrganicMetricId } from '@continuum/contracts';
 import { kpiConfigForPlatform } from '@continuum/contracts';
-import { Flag } from 'lucide-react';
+import { Download, Flag, RotateCw, Send } from 'lucide-react';
 import { BrandTrendsHeaderModule } from '@/components/brand-insights/BrandTrendsHeaderModule';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
 import { Reel, ReelContent, type ReelItem, ReelVideo } from '@/components/kibo-ui/reel';
@@ -1999,7 +1998,7 @@ function Dashboard({
                                 className="h-7 px-2 text-xs"
                                 onClick={() => onLoadMorePosts?.()}
                               >
-                                <ReloadIcon className="mr-1.5" aria-hidden />
+                                <RotateCw className="mr-1.5" aria-hidden />
                                 Retry
                               </Button>
                             </div>
@@ -2832,7 +2831,7 @@ export function OrganicMetricsDashboard({
               }
               aria-label="Refresh organic analytics"
             >
-              <ReloadIcon className={cn(isLoadingView && 'animate-spin')} />
+              <RotateCw className={cn(isLoadingView && 'animate-spin')} />
             </Button>
           </DisabledControl>
           {/* Mounted in every view, including Compare. Whether it can run is a
@@ -2848,9 +2847,7 @@ export function OrganicMetricsDashboard({
                     aria-label="Open organic report export or email options"
                     className="h-8 px-2 text-xs"
                   >
-                    <DownloadIcon
-                      className={cn(exportingReportFormat !== null && 'animate-pulse')}
-                    />
+                    <Download className={cn(exportingReportFormat !== null && 'animate-pulse')} />
                     {exportingReportFormat !== null ? 'Exporting…' : 'Export or Email'}
                   </Button>
                 }
@@ -2879,7 +2876,7 @@ export function OrganicMetricsDashboard({
                   }}
                   disabled={exportingReportFormat !== null}
                 >
-                  <PaperPlaneIcon className="mr-2 h-3.5 w-3.5" aria-hidden />
+                  <Send className="mr-2 h-3.5 w-3.5" aria-hidden />
                   Email Continuum Report
                 </DropdownMenuItem>
               </DropdownMenuContent>

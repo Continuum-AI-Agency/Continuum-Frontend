@@ -1,11 +1,6 @@
 'use client';
+import { CircleCheck, CircleX, RotateCw, TriangleAlert } from 'lucide-react';
 
-import {
-  CheckCircledIcon,
-  CrossCircledIcon,
-  ExclamationTriangleIcon,
-  ReloadIcon,
-} from '@radix-ui/react-icons';
 import React from 'react';
 import {
   type CanvasConnectionState,
@@ -48,7 +43,7 @@ export function CanvasSyncStatus({
           className={`${PILL} bg-muted text-muted-foreground border-border`}
           title="Loading your workspace…"
         >
-          <ReloadIcon className="w-3.5 h-3.5 animate-spin opacity-70" />
+          <RotateCw className="w-3.5 h-3.5 animate-spin opacity-70" />
           <span>Loading workspace...</span>
         </div>
       );
@@ -59,7 +54,7 @@ export function CanvasSyncStatus({
           className={`${PILL} bg-muted text-muted-foreground border-border`}
           title="No workspace open yet."
         >
-          <CheckCircledIcon className="w-3.5 h-3.5" />
+          <CircleCheck className="w-3.5 h-3.5" />
           <span>Ready</span>
         </div>
       );
@@ -70,7 +65,7 @@ export function CanvasSyncStatus({
           className={`${PILL} bg-red-500/10 text-red-600 border-red-500/20`}
           title="Database sync failed. Reload to retry."
         >
-          <CrossCircledIcon className="w-3.5 h-3.5" />
+          <CircleX className="w-3.5 h-3.5" />
           <span>Sync Error</span>
         </div>
       );
@@ -81,7 +76,7 @@ export function CanvasSyncStatus({
           className={`${PILL} bg-amber-500/10 text-amber-600 border-amber-500/20`}
           title="Presence disconnected. cursors may lag."
         >
-          <ExclamationTriangleIcon className="w-3.5 h-3.5" />
+          <TriangleAlert className="w-3.5 h-3.5" />
           <span>Live Disconnected</span>
         </div>
       );
@@ -89,7 +84,7 @@ export function CanvasSyncStatus({
     case 'saving':
       return (
         <div className={`${PILL} bg-blue-500/10 text-blue-600 border-blue-500/20`}>
-          <ReloadIcon className="w-3.5 h-3.5 animate-spin" />
+          <RotateCw className="w-3.5 h-3.5 animate-spin" />
           <span>Saving...</span>
         </div>
       );
@@ -100,7 +95,7 @@ export function CanvasSyncStatus({
           className={`${PILL} bg-muted text-muted-foreground border-border`}
           title="Offline — your work is saved locally and syncs when you reconnect."
         >
-          <CheckCircledIcon className="w-3.5 h-3.5" />
+          <CircleCheck className="w-3.5 h-3.5" />
           <span>Saved locally</span>
         </div>
       );
@@ -108,7 +103,7 @@ export function CanvasSyncStatus({
     case 'connecting':
       return (
         <div className={`${PILL} bg-amber-500/10 text-amber-600 border-amber-500/20`}>
-          <ReloadIcon className="w-3.5 h-3.5 animate-spin" />
+          <RotateCw className="w-3.5 h-3.5 animate-spin" />
           <span>Connecting...</span>
         </div>
       );
@@ -116,7 +111,7 @@ export function CanvasSyncStatus({
     default:
       return (
         <div className={`${PILL} bg-green-500/10 text-green-600 border-green-500/20`}>
-          <CheckCircledIcon className="w-3.5 h-3.5" />
+          <CircleCheck className="w-3.5 h-3.5" />
           <span>Saved</span>
         </div>
       );

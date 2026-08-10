@@ -1,7 +1,7 @@
 'use client';
 
 import { Accordion } from '@base-ui/react/accordion';
-import { ChevronDownIcon } from '@radix-ui/react-icons';
+import { ChevronDown } from 'lucide-react';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -151,7 +151,7 @@ export function MetaSelectableAssetsTree({
                             </span>
                           ) : null}
                         </span>
-                        <ChevronDownIcon
+                        <ChevronDown
                           className="text-secondary shrink-0 transition-transform group-data-[state=open]:rotate-180"
                           aria-hidden="true"
                         />
@@ -214,7 +214,7 @@ export function MetaSelectableAssetsTree({
                                               Ad Account ID {adAccount.ad_account_id}
                                             </span>
                                           </span>
-                                          <ChevronDownIcon
+                                          <ChevronDown
                                             className="text-secondary shrink-0 transition-transform group-data-[state=open]:rotate-180"
                                             aria-hidden="true"
                                           />

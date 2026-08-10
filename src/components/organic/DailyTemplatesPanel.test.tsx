@@ -1,10 +1,14 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { fireEvent, render } from '@testing-library/react';
+import * as lucideIcons from 'lucide-react';
 import type { DetailedPostTemplate } from '@/lib/organic/types';
 import { DailyTemplatesPanel } from './DailyTemplatesPanel';
 
-mock.module('@radix-ui/react-icons', () => ({
-  ClipboardCopyIcon: () => <span>copy</span>,
+// mock.module is process-wide in bun, so spread the real module and override only what this
+// spec asserts on, or every other spec loses the icons it imports.
+mock.module('lucide-react', () => ({
+  ...lucideIcons,
+  ClipboardCopy: () => <span>copy</span>,
 }));
 
 mock.module('./PlatformPreview', () => ({

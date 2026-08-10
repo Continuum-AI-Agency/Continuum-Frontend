@@ -1,5 +1,4 @@
 import type { BrandBookPieceKind } from '@continuum/contracts';
-import { CopyIcon, DownloadIcon, PlayIcon, TrashIcon, VideoIcon } from '@radix-ui/react-icons';
 import {
   Handle,
   type HandleProps,
@@ -10,6 +9,7 @@ import {
   useEdges,
   useNodeId,
 } from '@xyflow/react';
+import { Copy, Download, Play, Trash2, Video } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -367,7 +367,7 @@ export function VideoGenBlock({
                   onClick={handleRun}
                   title="Run Node"
                 >
-                  <PlayIcon className="h-4 w-4" />
+                  <Play className="h-4 w-4" />
                 </Button>
               </Toolbar>
 
@@ -410,7 +410,7 @@ export function VideoGenBlock({
                           title="Download Output"
                           aria-label="Download generated video"
                         >
-                          <DownloadIcon className="h-4 w-4" />
+                          <Download className="h-4 w-4" />
                         </Button>
                       </div>
                     ) : (
@@ -418,7 +418,7 @@ export function VideoGenBlock({
                         <Empty>
                           <EmptyHeader>
                             <EmptyMedia variant="icon" className="bg-default text-secondary">
-                              <VideoIcon />
+                              <Video />
                             </EmptyMedia>
                             <EmptyTitle>No Video</EmptyTitle>
                             <EmptyDescription>Generated video will appear here</EmptyDescription>
@@ -709,17 +709,17 @@ export function VideoGenBlock({
           </ContextMenuSub>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleRun}>
-            <PlayIcon className="mr-2 h-4 w-4" />
+            <Play className="mr-2 h-4 w-4" />
             Run Node
             <ContextMenuShortcut>R</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <CopyIcon className="mr-2 h-4 w-4" />
+            <Copy className="mr-2 h-4 w-4" />
             Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
-            <DownloadIcon className="mr-2 h-4 w-4" />
+            <Download className="mr-2 h-4 w-4" />
             Download Output
           </ContextMenuItem>
           <ContextMenuSeparator />
@@ -727,7 +727,7 @@ export function VideoGenBlock({
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <TrashIcon className="mr-2 h-4 w-4" />
+            <Trash2 className="mr-2 h-4 w-4" />
             Delete
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>

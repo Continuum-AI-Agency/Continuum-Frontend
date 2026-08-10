@@ -1,14 +1,7 @@
 'use client';
 
-import {
-  CheckIcon,
-  Cross2Icon,
-  ExclamationTriangleIcon,
-  LightningBoltIcon,
-  PlusIcon,
-} from '@radix-ui/react-icons';
 import { endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOfWeek } from 'date-fns';
-import { CalendarIcon, EyeOff, RefreshCw } from 'lucide-react';
+import { CalendarIcon, Check, EyeOff, Plus, RefreshCw, TriangleAlert, X, Zap } from 'lucide-react';
 import * as React from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Badge } from '@/components/ui/badge';
@@ -349,21 +342,21 @@ export function CalendarToolbar({
                   aria-label="Open trends"
                   onClick={onOpenTrends}
                 >
-                  <LightningBoltIcon className="mr-1 h-3.5 w-3.5" />
+                  <Zap className="mr-1 h-3.5 w-3.5" />
                   Trends
                 </Button>
                 <Separator orientation="vertical" className="h-5" />
                 {isGenerating ? (
                   <DisabledControl hint={addHint}>
                     <Button type="button" size="sm" disabled>
-                      <PlusIcon className="animate-pulse" data-icon="inline-start" />
+                      <Plus className="animate-pulse" data-icon="inline-start" />
                       Create content
                     </Button>
                   </DisabledControl>
                 ) : (
                   <AddPostMenu onCreatePost={onCreatePost} align="end">
                     <Button type="button" size="sm">
-                      <PlusIcon data-icon="inline-start" />
+                      <Plus data-icon="inline-start" />
                       Create content
                     </Button>
                   </AddPostMenu>
@@ -419,13 +412,13 @@ export function CalendarToolbar({
             {/* Grid status banners */}
             {gridStatus === 'complete' && (
               <div className="mt-2 flex items-center gap-2 rounded-md bg-emerald-500/5 px-3 py-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                <CheckIcon className="h-3.5 w-3.5" />
+                <Check className="h-3.5 w-3.5" />
                 All {slotProgress?.total ?? 0} posts generated
               </div>
             )}
             {gridStatus === 'complete_with_errors' && (
               <div className="mt-2 flex items-center gap-2 rounded-md bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400">
-                <ExclamationTriangleIcon className="h-3.5 w-3.5" />
+                <TriangleAlert className="h-3.5 w-3.5" />
                 {slotProgress?.completed ?? 0} of {slotProgress?.total ?? 0} generated.{' '}
                 {slotProgress?.failed ?? 0} failed
                 {onRetryGeneration && (
@@ -441,7 +434,7 @@ export function CalendarToolbar({
             )}
             {gridStatus === 'error' && gridError && (
               <div className="mt-2 flex items-center gap-2 rounded-md bg-red-500/5 px-3 py-1.5 text-xs text-red-600 dark:text-red-400">
-                <Cross2Icon className="h-3.5 w-3.5" />
+                <X className="h-3.5 w-3.5" />
                 Generation failed: {gridError}
                 {onRetryGeneration && (
                   <button

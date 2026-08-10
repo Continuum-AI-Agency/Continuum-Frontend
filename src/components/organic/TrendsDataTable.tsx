@@ -1,6 +1,5 @@
 'use client';
 
-import { DragHandleHorizontalIcon } from '@radix-ui/react-icons';
 import { useQuery } from '@tanstack/react-query';
 import {
   type ColumnDef,
@@ -18,6 +17,7 @@ import {
   ChevronDown,
   ExternalLink,
   Filter,
+  GripHorizontal,
   Heart,
   Loader2,
   MessageCircle,
@@ -281,7 +281,7 @@ export function TrendsDataTable({
               className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
-              <DragHandleHorizontalIcon className="text-muted-foreground opacity-50" />
+              <GripHorizontal className="text-muted-foreground opacity-50" />
             </div>
           );
         },

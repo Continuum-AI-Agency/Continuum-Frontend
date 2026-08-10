@@ -1,6 +1,6 @@
 'use client';
+import { MessageCircle, Send, X } from 'lucide-react';
 
-import { ChatBubbleIcon, Cross2Icon, PaperPlaneIcon } from '@radix-ui/react-icons';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -91,7 +91,7 @@ export function AIStudioChat({
           aria-label="Open team chat"
           className="size-11 rounded-full shadow-md transition-colors"
         >
-          <ChatBubbleIcon width="24" height="24" />
+          <MessageCircle width="24" height="24" />
         </Button>
         {unreadCount > 0 && (
           <div className="absolute -top-1 -right-1">
@@ -116,7 +116,7 @@ export function AIStudioChat({
         <div className="flex min-h-12 items-center justify-between border-b border-border px-3 py-2">
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <ChatBubbleIcon />
+              <MessageCircle />
               <span className="font-medium text-sm">Team chat</span>
             </div>
             <span className="text-2xs text-muted-foreground">
@@ -129,7 +129,7 @@ export function AIStudioChat({
             onClick={() => setOpen(false)}
             aria-label="Close team chat"
           >
-            <Cross2Icon />
+            <X />
           </Button>
         </div>
 
@@ -204,7 +204,7 @@ export function AIStudioChat({
               variant="default"
               aria-label="Send message"
             >
-              <PaperPlaneIcon />
+              <Send />
             </Button>
           </div>
         </div>

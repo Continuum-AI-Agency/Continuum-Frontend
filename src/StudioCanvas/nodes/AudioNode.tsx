@@ -1,4 +1,3 @@
-import { LinkBreak2Icon, PauseIcon, PlayIcon, SpeakerLoudIcon } from '@radix-ui/react-icons';
 import {
   Handle,
   type NodeProps,
@@ -7,7 +6,7 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { Copy, Trash2 } from 'lucide-react';
+import { Copy, Pause, Play, Trash2, Unlink, Volume2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -285,9 +284,9 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                             aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
                           >
                             {isPlaying ? (
-                              <PauseIcon className="h-4 w-4" />
+                              <Pause className="h-4 w-4" />
                             ) : (
-                              <PlayIcon className="ml-0.5 h-4 w-4" />
+                              <Play className="ml-0.5 h-4 w-4" />
                             )}
                           </button>
 
@@ -301,7 +300,7 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                           </div>
 
                           <div className="rounded-sm bg-emerald-500/10 p-1.5 text-emerald-600">
-                            <SpeakerLoudIcon className="h-4 w-4" />
+                            <Volume2 className="h-4 w-4" />
                           </div>
                         </div>
                       </div>
@@ -309,7 +308,7 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                       <Empty>
                         <EmptyHeader>
                           <EmptyMedia variant="icon">
-                            <SpeakerLoudIcon />
+                            <Volume2 />
                           </EmptyMedia>
                           <EmptyTitle>Upload Audio</EmptyTitle>
                           <EmptyDescription>Drag & drop or click</EmptyDescription>
@@ -360,7 +359,7 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <LinkBreak2Icon className="mr-2 h-4 w-4" />
+            <Unlink className="mr-2 h-4 w-4" />
             Detach connections
           </ContextMenuItem>
           <ContextMenuItem

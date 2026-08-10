@@ -1,7 +1,7 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
-import { Cross2Icon, ImageIcon, VideoIcon } from '@radix-ui/react-icons';
+import { Image, Video, X } from 'lucide-react';
 import type React from 'react';
 import { cn } from '@/lib/utils';
 
@@ -102,9 +102,9 @@ export function OverlayTrack({
               }}
             >
               {item.kind === 'video' ? (
-                <VideoIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <Video className="h-3 w-3 shrink-0 text-muted-foreground" />
               ) : (
-                <ImageIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <Image className="h-3 w-3 shrink-0 text-muted-foreground" />
               )}
               <span className="truncate text-2xs font-medium">{item.label}</span>
               <button
@@ -117,7 +117,7 @@ export function OverlayTrack({
                 }}
                 className="ml-auto hidden h-4 w-4 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground hover:bg-destructive hover:text-destructive-foreground group-hover/ov:flex"
               >
-                <Cross2Icon className="h-2.5 w-2.5" />
+                <X className="h-2.5 w-2.5" />
               </button>
             </div>
           ))}

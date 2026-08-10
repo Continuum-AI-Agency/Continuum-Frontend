@@ -1,6 +1,6 @@
 'use client';
+import { Check } from 'lucide-react';
 
-import { CheckIcon } from '@radix-ui/react-icons';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -121,7 +121,7 @@ export function CampaignIndexManagerDialog({
                       )}
                       aria-hidden="true"
                     >
-                      {selected ? <CheckIcon className="h-3 w-3" /> : null}
+                      {selected ? <Check className="h-3 w-3" /> : null}
                     </span>
                     <span className="truncate text-xs">{campaign.name}</span>
                     <span className="ml-auto text-2xs uppercase text-muted-foreground">

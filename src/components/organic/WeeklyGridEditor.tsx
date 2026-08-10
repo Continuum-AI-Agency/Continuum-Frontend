@@ -1,6 +1,5 @@
 'use client';
-
-import { LightningBoltIcon, ReloadIcon } from '@radix-ui/react-icons';
+import { RotateCw, Zap } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -118,12 +117,12 @@ export function WeeklyGridEditor({
             <Button onClick={onGenerateDetails} disabled={isGeneratingDetails || isEditing}>
               {isGeneratingDetails ? (
                 <>
-                  <ReloadIcon className="animate-spin" />
+                  <RotateCw className="animate-spin" />
                   Generating details…
                 </>
               ) : (
                 <>
-                  <LightningBoltIcon />
+                  <Zap />
                   Generate Daily Templates
                 </>
               )}

@@ -1,7 +1,6 @@
 'use client';
 
-import { ReloadIcon } from '@radix-ui/react-icons';
-import { HeartIcon, LayoutGridIcon, TrendingUpIcon, UsersIcon } from 'lucide-react';
+import { HeartIcon, LayoutGridIcon, RotateCw, TrendingUpIcon, UsersIcon } from 'lucide-react';
 import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { PinToAgentButton } from '@/components/organic/agent/PinToAgentButton';
@@ -120,7 +119,7 @@ export function OrganicInsightsPanel({
             ) : null}
           </div>
           <Button variant="ghost" size="icon-sm" onClick={refresh} aria-label="Refresh insights">
-            <ReloadIcon />
+            <RotateCw />
           </Button>
         </div>
 

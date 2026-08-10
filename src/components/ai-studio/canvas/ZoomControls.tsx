@@ -1,6 +1,6 @@
 'use client';
+import { Minus, Plus, Table } from 'lucide-react';
 
-import { BorderAllIcon, MinusIcon, PlusIcon } from '@radix-ui/react-icons';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ export function ZoomControls({ instance }: ZoomControlsProps) {
           className="w-8 h-8 p-0"
           aria-label="Zoom in"
         >
-          <PlusIcon />
+          <Plus />
         </Button>
         <Button
           type="button"
@@ -29,7 +29,7 @@ export function ZoomControls({ instance }: ZoomControlsProps) {
           className="w-8 h-8 p-0"
           aria-label="Zoom out"
         >
-          <MinusIcon />
+          <Minus />
         </Button>
         <Button
           type="button"
@@ -38,7 +38,7 @@ export function ZoomControls({ instance }: ZoomControlsProps) {
           className="w-8 h-8 p-0"
           aria-label="Fit view"
         >
-          <BorderAllIcon />
+          <Table />
         </Button>
       </div>
     </div>

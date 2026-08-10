@@ -1,6 +1,6 @@
 'use client';
+import { Monitor, Play, Smartphone } from 'lucide-react';
 
-import { DesktopIcon, MobileIcon, PlayIcon } from '@radix-ui/react-icons';
 import Image from 'next/image';
 import { useMemo, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -112,7 +112,7 @@ export function PlatformPreview({ template, onAssetDrop }: PlatformPreviewProps)
               onClick={() => handleMode('mobile')}
               aria-label="Mobile preview"
             >
-              <MobileIcon />
+              <Smartphone />
             </Button>
             <Button
               size="icon-sm"
@@ -120,7 +120,7 @@ export function PlatformPreview({ template, onAssetDrop }: PlatformPreviewProps)
               onClick={() => handleMode('desktop')}
               aria-label="Desktop preview"
             >
-              <DesktopIcon />
+              <Monitor />
             </Button>
           </div>
         ) : (
@@ -248,7 +248,7 @@ function LinkedInDesktopPreview({
 function VideoMock({ mediaUrl }: { mediaUrl: string }) {
   return (
     <div className="relative flex h-full w-full items-center justify-center bg-black text-white">
-      <PlayIcon width={36} height={36} />
+      <Play width={36} height={36} />
       <span className="absolute bottom-3 right-3 rounded bg-black/60 px-2 py-1 text-xs font-medium">
         {mediaUrl.split('.').pop()?.toUpperCase() ?? 'MP4'}
       </span>
@@ -260,7 +260,7 @@ function PlaceholderMedia({ platform }: { platform: OrganicPlatformKey | 'unknow
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-400">
       <div className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-gray-400">
-        <MobileIcon />
+        <Smartphone />
       </div>
       <span className="text-xs">Media preview for {PLATFORM_LABELS[platform]}</span>
     </div>

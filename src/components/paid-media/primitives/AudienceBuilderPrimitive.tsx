@@ -1,11 +1,6 @@
 'use client';
+import { Backpack, Component, SlidersHorizontal, Zap } from 'lucide-react';
 
-import {
-  BackpackIcon,
-  Component1Icon,
-  LightningBoltIcon,
-  MixerHorizontalIcon,
-} from '@radix-ui/react-icons';
 import { BrandQuestionsList } from '@/components/brand-insights/BrandQuestionsList';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -51,7 +46,7 @@ export function AudienceBuilderPrimitive({
         <div className="glass-panel h-full rounded-lg p-4">
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
-              <BackpackIcon />
+              <Backpack />
               <h4 className="text-lg font-semibold text-white">Audience Builder</h4>
             </div>
             <Separator />
@@ -76,7 +71,7 @@ export function AudienceBuilderPrimitive({
               <div className="rounded-lg border border-[var(--glass-border)] p-4">
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
-                    <MixerHorizontalIcon />
+                    <SlidersHorizontal />
                     <span className="font-medium">Psychographic layer</span>
                   </div>
                   <SkeletonBar width="90%" />
@@ -87,7 +82,7 @@ export function AudienceBuilderPrimitive({
               <div className="rounded-lg border border-[var(--glass-border)] p-4">
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
-                    <Component1Icon />
+                    <Component />
                     <span className="font-medium">Targeting layer</span>
                   </div>
                   <SkeletonBar width="85%" />
@@ -158,7 +153,7 @@ export function AudienceBuilderPrimitive({
             <Separator />
             {questionsError ? (
               <Alert variant="destructive">
-                <LightningBoltIcon />
+                <Zap />
                 <AlertDescription>{questionsError}</AlertDescription>
               </Alert>
             ) : (

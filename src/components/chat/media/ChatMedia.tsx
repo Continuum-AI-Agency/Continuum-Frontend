@@ -1,7 +1,6 @@
 'use client';
 
-import { FileIcon } from '@radix-ui/react-icons';
-import { ExternalLink, Play } from 'lucide-react';
+import { ExternalLink, File, Play } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
@@ -179,7 +178,7 @@ export function ChatMediaThumb({
         />
       ) : (
         <span className="flex size-full items-center justify-center text-muted-foreground">
-          <FileIcon width={18} height={18} aria-hidden="true" />
+          <File width={18} height={18} aria-hidden="true" />
         </span>
       )}
 

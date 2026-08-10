@@ -1,7 +1,7 @@
 'use client';
 
-import { BellIcon, CalendarIcon, InfoCircledIcon, ReloadIcon } from '@radix-ui/react-icons';
 import { format, parseISO } from 'date-fns';
+import { Bell, Calendar as CalendarIcon, Info, RotateCw } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import type { DateRange } from 'react-day-picker';
@@ -445,7 +445,7 @@ export function PaidMediaDashboard({
               size="sm"
               className="h-8 text-xs"
             >
-              <BellIcon className="mr-1.5 h-3.5 w-3.5" />
+              <Bell className="mr-1.5 h-3.5 w-3.5" />
               Alerts
             </Button>
           }
@@ -476,7 +476,7 @@ export function PaidMediaDashboard({
               className="h-8 w-8 text-muted-foreground"
               aria-label="Chart attribution"
             >
-              <InfoCircledIcon className="h-4 w-4" />
+              <Info className="h-4 w-4" />
             </Button>
           }
         />
@@ -502,7 +502,7 @@ export function PaidMediaDashboard({
         className="h-8 w-8"
         aria-label="Refresh campaigns"
       >
-        <ReloadIcon className={loadState.status === 'loading-campaigns' ? 'animate-spin' : ''} />
+        <RotateCw className={loadState.status === 'loading-campaigns' ? 'animate-spin' : ''} />
       </Button>
     </>
   );
@@ -524,7 +524,7 @@ export function PaidMediaDashboard({
             aria-label="Retry campaigns"
             onClick={() => void loadCampaigns(true)}
           >
-            <ReloadIcon className="h-3.5 w-3.5" />
+            <RotateCw className="h-3.5 w-3.5" />
             Retry
           </Button>
         </div>

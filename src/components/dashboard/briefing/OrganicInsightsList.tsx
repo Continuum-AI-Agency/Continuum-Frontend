@@ -1,6 +1,6 @@
 'use client';
+import { RotateCw } from 'lucide-react';
 
-import { ReloadIcon } from '@radix-ui/react-icons';
 import { useMemo } from 'react';
 import { DASHBOARD_PANEL_MAX_HEIGHT } from '@/components/dashboard/briefing/panelLayout';
 import { type InsightListItem, InsightsList } from '@/components/dashboard/datatable/InsightsList';
@@ -72,7 +72,7 @@ export function OrganicInsightsList({
             aria-label="Regenerate insights"
             className="rounded p-0.5 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <ReloadIcon className={cn('size-3', isLoading && 'animate-spin')} />
+            <RotateCw className={cn('size-3', isLoading && 'animate-spin')} />
           </button>
           <ModuleShortcutLink href="/organic?tab=metrics" label="Metrics" />
         </div>

@@ -1,4 +1,4 @@
-import { CursorArrowIcon, HandIcon } from '@radix-ui/react-icons';
+import { Hand, MousePointer2 } from 'lucide-react';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { useStudioStore } from '../stores/useStudioStore';
@@ -15,7 +15,7 @@ export function InteractionModeToggle() {
         onClick={() => setInteractionMode('pan')}
         title="Pan Mode (H)"
       >
-        <HandIcon className="w-4 h-4" />
+        <Hand className="w-4 h-4" />
       </Button>
       <Button
         variant={interactionMode === 'select' ? 'secondary' : 'ghost'}
@@ -24,7 +24,7 @@ export function InteractionModeToggle() {
         onClick={() => setInteractionMode('select')}
         title="Selection Mode (V)"
       >
-        <CursorArrowIcon className="w-4 h-4" />
+        <MousePointer2 className="w-4 h-4" />
       </Button>
     </div>
   );

@@ -4,14 +4,6 @@ import {
   type ImageReformatCompletedData,
 } from '@continuum/contracts';
 import {
-  Cross1Icon,
-  ImageIcon,
-  LinkBreak2Icon,
-  Pencil2Icon,
-  ReloadIcon,
-  UploadIcon,
-} from '@radix-ui/react-icons';
-import {
   Handle,
   type NodeProps,
   NodeResizer,
@@ -19,7 +11,22 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { CheckCircle2, Copy, Crop, Expand, Loader2, Scaling, Trash2, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  Copy,
+  Crop,
+  Expand,
+  Image as ImageIcon,
+  Loader2,
+  RotateCw,
+  Scaling,
+  SquarePen,
+  Trash2,
+  Unlink,
+  Upload,
+  X,
+  XCircle,
+} from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -542,7 +549,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                       title={preview ? 'Replace image' : 'Upload image'}
                       aria-label={preview ? 'Replace image' : 'Upload image'}
                     >
-                      <UploadIcon className="h-3 w-3" />
+                      <Upload className="h-3 w-3" />
                     </Button>
                     {preview && (
                       <QuickReformatMenu
@@ -583,7 +590,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                         title="Clear image"
                         aria-label="Clear image"
                       >
-                        <Cross1Icon className="h-3 w-3" />
+                        <X className="h-3 w-3" />
                       </Button>
                     )}
                     {preview && (
@@ -603,7 +610,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                         title="Markup image"
                         aria-label="Markup image"
                       >
-                        <Pencil2Icon className="h-3 w-3" />
+                        <SquarePen className="h-3 w-3" />
                       </Button>
                     )}
                     <Select value={refType} onValueChange={handleRefTypeChange}>
@@ -636,7 +643,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                       )}
                       {data.hasMarkup && (
                         <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-amber-500/90 px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm">
-                          <Pencil2Icon className="h-2.5 w-2.5" />
+                          <SquarePen className="h-2.5 w-2.5" />
                           <span>Marked up</span>
                         </div>
                       )}
@@ -676,7 +683,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                               onMouseDown={(event) => event.stopPropagation()}
                               onClick={handleRetryUpload}
                             >
-                              <ReloadIcon className="mr-1 h-3 w-3" />
+                              <RotateCw className="mr-1 h-3 w-3" />
                               Retry
                             </Button>
                           </TooltipContent>
@@ -804,17 +811,17 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                 </ContextMenuSubContent>
               </ContextMenuSub>
               <ContextMenuItem onClick={() => setMarkupOpen(true)}>
-                <Pencil2Icon className="mr-2 h-4 w-4" />
+                <SquarePen className="mr-2 h-4 w-4" />
                 Markup Image
               </ContextMenuItem>
               {data.hasMarkup && (data.originalImage ?? data.image) && (
                 <ContextMenuItem onClick={handleResetToOriginal}>
-                  <ReloadIcon className="mr-2 h-4 w-4" />
+                  <RotateCw className="mr-2 h-4 w-4" />
                   Reset to Original
                 </ContextMenuItem>
               )}
               <ContextMenuItem onClick={handleClearReference}>
-                <Cross1Icon className="mr-2 h-4 w-4" />
+                <X className="mr-2 h-4 w-4" />
                 Clear Reference
               </ContextMenuItem>
             </>
@@ -829,7 +836,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <LinkBreak2Icon className="mr-2 h-4 w-4" />
+            <Unlink className="mr-2 h-4 w-4" />
             Detach connections
           </ContextMenuItem>
           <ContextMenuItem

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import * as radixIcons from '@radix-ui/react-icons';
 import { cleanup, fireEvent, render } from '@testing-library/react';
+import * as lucideIcons from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import type { CalendarToolbar as CalendarToolbarType } from './CalendarToolbar';
@@ -20,14 +20,27 @@ Object.assign(global.window, {
 // OTHER spec in the run of the icons it imports (PlayIcon, etc.). Spread the real module
 // and override only the icons this file asserts on. A sync factory over a static import
 // is required: an async importActual factory deadlocks bun's module registry.
-mock.module('@radix-ui/react-icons', () => ({
-  ...radixIcons,
-  CheckIcon: () => <span data-testid="check-icon" />,
-  Cross2Icon: () => <span data-testid="cross-icon" />,
-  ExclamationTriangleIcon: () => <span data-testid="warning-icon" />,
-  LightningBoltIcon: () => <span data-testid="lightning-icon" />,
-  PlusIcon: () => <span data-testid="plus-icon" />,
-  TrashIcon: () => <span data-testid="trash-icon" />,
+// These stubs WRAP the real icon rather than replacing it. mock.module is process-wide and
+// lucide-react is imported by ~400 files, so a replacing stub silently changes what every other
+// spec in the run renders (it did: PostMetaChips started failing). Wrapping keeps the real
+// glyph for everyone else while giving this file its test ids.
+const tagged = (id: string, Icon: React.ComponentType<Record<string, unknown>>) =>
+  function TaggedIcon(props: Record<string, unknown>) {
+    return (
+      <span data-testid={id}>
+        <Icon {...props} />
+      </span>
+    );
+  };
+
+mock.module('lucide-react', () => ({
+  ...lucideIcons,
+  Check: tagged('check-icon', lucideIcons.Check),
+  X: tagged('cross-icon', lucideIcons.X),
+  TriangleAlert: tagged('warning-icon', lucideIcons.TriangleAlert),
+  Zap: tagged('lightning-icon', lucideIcons.Zap),
+  Plus: tagged('plus-icon', lucideIcons.Plus),
+  Trash2: tagged('trash-icon', lucideIcons.Trash2),
 }));
 
 mock.module('@/components/ui/button', () => ({

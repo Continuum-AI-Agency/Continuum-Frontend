@@ -1,11 +1,6 @@
 'use client';
+import { ChevronDown, RotateCw, Search, SquareArrowOutUpRight } from 'lucide-react';
 
-import {
-  ChevronDownIcon,
-  MagnifyingGlassIcon,
-  OpenInNewWindowIcon,
-  ReloadIcon,
-} from '@radix-ui/react-icons';
 import * as React from 'react';
 import {
   Area,
@@ -1022,7 +1017,7 @@ function AdPreviewCard({
           onClick={(event) => event.stopPropagation()}
         >
           Preview
-          <OpenInNewWindowIcon className="h-3 w-3" />
+          <SquareArrowOutUpRight className="h-3 w-3" />
         </a>
       ) : (
         <span className="text-xs text-muted-foreground">Preview unavailable</span>
@@ -2622,7 +2617,7 @@ export function CampaignTimelineWorkspace({
                                   onSelectedCampaignChange?.(next);
                                 }}
                               >
-                                <ChevronDownIcon
+                                <ChevronDown
                                   className={cn(
                                     'h-4 w-4 transition-transform',
                                     isExpanded ? 'rotate-180' : '',
@@ -2707,7 +2702,7 @@ export function CampaignTimelineWorkspace({
                           <div className="mt-2 ml-7 rounded border bg-muted/10 p-2">
                             {adSetLoad.status === 'loading' ? (
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <ReloadIcon className="h-3 w-3 animate-spin" />
+                                <RotateCw className="h-3 w-3 animate-spin" />
                                 {visibleAdSets.length > 0
                                   ? 'Refreshing live ad sets...'
                                   : 'Loading ad sets...'}
@@ -2909,7 +2904,7 @@ export function CampaignTimelineWorkspace({
                                                   void loadAdsForAdSet(adSet.id);
                                                 }}
                                               >
-                                                <ChevronDownIcon
+                                                <ChevronDown
                                                   className={cn(
                                                     'h-3 w-3 transition-transform',
                                                     adSetExpanded ? 'rotate-180' : '',
@@ -3166,7 +3161,7 @@ export function CampaignTimelineWorkspace({
 
                                               {adSetAdsState.status === 'loading' ? (
                                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                  <ReloadIcon className="h-3 w-3 animate-spin" />
+                                                  <RotateCw className="h-3 w-3 animate-spin" />
                                                   Loading ads and previews...
                                                 </div>
                                               ) : null}
@@ -3302,7 +3297,7 @@ export function CampaignTimelineWorkspace({
 
           <aside className="flex min-h-0 flex-col overflow-hidden rounded-md border bg-muted/15 p-1.5">
             <div className="flex items-center gap-1.5 border-b border-border/70 pb-1.5">
-              <MagnifyingGlassIcon className="h-3 w-3 text-muted-foreground" />
+              <Search className="h-3 w-3 text-muted-foreground" />
               <input
                 type="search"
                 value={campaignQuery}

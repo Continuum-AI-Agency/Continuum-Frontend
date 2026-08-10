@@ -1,7 +1,6 @@
 'use client';
 
-import { PlayIcon } from '@radix-ui/react-icons';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Play } from 'lucide-react';
 import * as React from 'react';
 import { createClientRenderJob } from '@/lib/api/clientRenderJobs.client';
 import { openClientRenderInbox } from '@/lib/client-render/ClientRenderProvider';
@@ -206,7 +205,7 @@ export function HyperFramePlayer({
             {state === 'loading' ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
-              <PlayIcon className="h-6 w-6 translate-x-[1px]" />
+              <Play className="h-6 w-6 translate-x-[1px]" />
             )}
           </span>
         </button>

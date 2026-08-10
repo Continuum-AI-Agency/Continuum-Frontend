@@ -1,17 +1,22 @@
 'use client';
 
 import {
-  CheckIcon,
-  CopyIcon,
-  FigmaLogoIcon,
-  GitHubLogoIcon,
-  MixIcon,
-  Pencil1Icon,
-  ReaderIcon,
-} from '@radix-ui/react-icons';
-import { GitBranch, GitMerge, Loader2, MessageSquare, PenLine, Plus, Users } from 'lucide-react';
+  BookOpen,
+  Check,
+  Copy,
+  GitBranch,
+  GitMerge,
+  Loader2,
+  MessageSquare,
+  Pencil,
+  PenLine,
+  Plus,
+  Shuffle,
+  Users,
+} from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import * as React from 'react';
+import { FigmaIcon, GitHubIcon } from '@/components/shared/icons';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -57,10 +62,10 @@ type IntegrationSwitcherProps = {
 };
 
 const defaultIntegrations: IntegrationSwitcherTab[] = [
-  { id: 'github', name: 'GitHub', icon: GitHubLogoIcon },
-  { id: 'figma', name: 'Figma', icon: FigmaLogoIcon },
+  { id: 'github', name: 'GitHub', icon: GitHubIcon },
+  { id: 'figma', name: 'Figma', icon: FigmaIcon },
   { id: 'slack', name: 'Slack', icon: MessageSquare },
-  { id: 'linear', name: 'Linear', icon: MixIcon },
+  { id: 'linear', name: 'Linear', icon: Shuffle },
   { id: 'teams', name: 'Teams', icon: Users },
 ];
 
@@ -76,7 +81,7 @@ const defaultIntegrationData: IntegrationSwitcherData = {
     {
       id: '#341',
       title: 'sync-release-notes',
-      icon: ReaderIcon,
+      icon: BookOpen,
       status: 'copy',
     },
   ],
@@ -85,10 +90,10 @@ const defaultIntegrationData: IntegrationSwitcherData = {
     {
       id: 'v2.0',
       title: 'handoff-components',
-      icon: Pencil1Icon,
+      icon: Pencil,
       status: 'checked',
     },
-    { id: 'lib', title: 'token-library', icon: ReaderIcon, status: 'copy' },
+    { id: 'lib', title: 'token-library', icon: BookOpen, status: 'copy' },
   ],
   slack: [
     {
@@ -106,7 +111,7 @@ const defaultIntegrationData: IntegrationSwitcherData = {
     {
       id: 'rev',
       title: 'weekly-revenue-sync',
-      icon: ReaderIcon,
+      icon: BookOpen,
       status: 'copy',
     },
   ],
@@ -126,7 +131,7 @@ const defaultIntegrationData: IntegrationSwitcherData = {
     {
       id: 'LIN-151',
       title: 'triage-performance',
-      icon: ReaderIcon,
+      icon: BookOpen,
       status: 'copy',
     },
   ],
@@ -138,7 +143,7 @@ const defaultIntegrationData: IntegrationSwitcherData = {
       icon: MessageSquare,
       status: 'copy',
     },
-    { id: 'CS', title: 'renewal-readiness', icon: ReaderIcon, status: 'copy' },
+    { id: 'CS', title: 'renewal-readiness', icon: BookOpen, status: 'copy' },
   ],
 };
 
@@ -240,10 +245,11 @@ function ActionIcon({ status }: { status: IntegrationSwitcherItemStatus }) {
   if (status === 'checked') {
     return (
       <span
+        role="img"
         aria-label="Already synced"
         className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
       >
-        <CheckIcon className="h-4 w-4" />
+        <Check className="h-4 w-4" />
       </span>
     );
   }
@@ -254,7 +260,7 @@ function ActionIcon({ status }: { status: IntegrationSwitcherItemStatus }) {
       aria-label="Copy item"
       className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <CopyIcon className="h-4 w-4" />
+      <Copy className="h-4 w-4" />
     </button>
   );
 }
@@ -289,7 +295,7 @@ function ToggleAction({
       {pending ? (
         <Loader2 className="h-4 w-4 animate-spin" />
       ) : checked ? (
-        <CheckIcon className="h-4 w-4" />
+        <Check className="h-4 w-4" />
       ) : (
         <Plus className="h-4 w-4" />
       )}
@@ -330,7 +336,7 @@ function IntegrationItemRow({
               aria-hidden
               className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground/50"
             >
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path
                   d="M4 0V8C4 10.2091 5.79086 12 8 12H16"
                   stroke="currentColor"

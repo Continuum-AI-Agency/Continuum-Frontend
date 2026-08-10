@@ -1,7 +1,6 @@
 'use client';
 
-import { ChevronDownIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons';
-import { RefreshCw } from 'lucide-react';
+import { ChevronDown, RefreshCw, TriangleAlert } from 'lucide-react';
 import React, { type ComponentProps, type ReactNode, useMemo, useState } from 'react';
 import { applyBrandIntegrationAssignmentsAction } from '@/app/(post-auth)/settings/integrations/actions';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -383,7 +382,7 @@ export function BrandIntegrationsManager({
                   >
                     <ShadcnTableCell className="py-4">
                       {group.count > 0 && (
-                        <ChevronDownIcon
+                        <ChevronDown
                           className={`h-4 w-4 transition-transform duration-200 ${
                             isExpanded ? 'rotate-180' : ''
                           }`}
@@ -497,7 +496,7 @@ export function BrandIntegrationsManager({
       </div>
 
       <Alert className="border-warning/30 bg-warning/5">
-        <ExclamationTriangleIcon className="text-warning" aria-hidden="true" />
+        <TriangleAlert className="text-warning" aria-hidden="true" />
         <AlertDescription className="text-xs">
           {emptyHint ??
             'Connect providers in your personal settings, then use “Edit assignments” to share them here.'}

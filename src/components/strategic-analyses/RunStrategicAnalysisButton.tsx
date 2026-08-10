@@ -1,6 +1,6 @@
 'use client';
+import { Rocket } from 'lucide-react';
 
-import { RocketIcon } from '@radix-ui/react-icons';
 import { useState, useTransition } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -53,7 +53,7 @@ export function RunStrategicAnalysisButton({ brandProfileId, compact = false }: 
 
       {error ? (
         <Alert variant="destructive">
-          <RocketIcon aria-hidden="true" />
+          <Rocket aria-hidden="true" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}

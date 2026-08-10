@@ -1,4 +1,5 @@
 'use client';
+import { ChevronDown } from 'lucide-react';
 
 // Which of the brand's accounts this planner publishes to, per platform.
 //
@@ -9,7 +10,6 @@
 // never disagree.
 
 import type { PublishPlatform } from '@continuum/contracts';
-import { ChevronDownIcon } from '@radix-ui/react-icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -59,7 +59,7 @@ export function PlannerAccountSwitcher() {
                   <span className="max-w-32 truncate font-medium">
                     {selected?.label ?? 'Select account'}
                   </span>
-                  <ChevronDownIcon className="size-3 opacity-60" />
+                  <ChevronDown className="size-3 opacity-60" />
                 </Button>
               }
             />

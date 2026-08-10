@@ -1,6 +1,5 @@
 'use client';
-
-import { ActivityLogIcon, OpenInNewWindowIcon, PinTopIcon } from '@radix-ui/react-icons';
+import { ArrowUpToLine, ScrollText, SquareArrowOutUpRight } from 'lucide-react';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -36,7 +35,7 @@ export function AgenticActivityLog({ items, emptyMessage }: AgenticActivityLogPr
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Pill variant="muted">
-            <ActivityLogIcon aria-hidden="true" />
+            <ScrollText aria-hidden="true" />
           </Pill>
           <div>
             <h3 className="text-lg font-semibold">Recent activity</h3>
@@ -47,10 +46,10 @@ export function AgenticActivityLog({ items, emptyMessage }: AgenticActivityLogPr
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" size="icon" aria-label="Open activity log">
-            <OpenInNewWindowIcon aria-hidden="true" />
+            <SquareArrowOutUpRight aria-hidden="true" />
           </Button>
           <Button variant="secondary" size="icon" aria-label="Pin activity log">
-            <PinTopIcon aria-hidden="true" />
+            <ArrowUpToLine aria-hidden="true" />
           </Button>
         </div>
       </div>

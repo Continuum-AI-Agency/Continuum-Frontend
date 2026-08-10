@@ -1,14 +1,6 @@
 'use client';
+import { Check, ChevronDown, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  Cross2Icon,
-  LightningBoltIcon,
-  Pencil1Icon,
-  PlusIcon,
-  TrashIcon,
-} from '@radix-ui/react-icons';
 import * as React from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
@@ -237,7 +229,7 @@ const DraftRow = React.memo(function DraftRow({
                       }}
                       className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
                     >
-                      <Cross2Icon className="size-3" />
+                      <X className="size-3" />
                     </button>
                   </div>
                 </div>
@@ -247,21 +239,21 @@ const DraftRow = React.memo(function DraftRow({
         />
         <ContextMenuContent className="w-48">
           <ContextMenuItem onSelect={() => beginEditingDraft(draft.id)}>
-            <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
+            <Pencil className="mr-2 h-3.5 w-3.5" />
             Open in editor
           </ContextMenuItem>
           {onRegenerate && draft.status !== 'streaming' && (
             <>
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={onRegenerate}>
-                <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
+                <Zap className="mr-2 h-3.5 w-3.5" />
                 {draft.status === 'failed' ? 'Retry generation' : 'Regenerate'}
               </ContextMenuItem>
             </>
           )}
           <ContextMenuSeparator />
           <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
-            <TrashIcon className="mr-2 h-3.5 w-3.5" />
+            <Trash2 className="mr-2 h-3.5 w-3.5" />
             Delete
           </ContextMenuItem>
         </ContextMenuContent>
@@ -320,7 +312,7 @@ const BacklogRow = React.memo(function BacklogRow({
                 }}
                 className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
               >
-                <Cross2Icon className="size-3" />
+                <X className="size-3" />
               </button>
             </div>
           </div>
@@ -363,10 +355,10 @@ function QuickCreateRow({
           if (value.trim()) onSubmit(value.trim());
         }}
       >
-        <CheckIcon className="size-3" />
+        <Check className="size-3" />
       </Button>
       <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={onCancel}>
-        <Cross2Icon className="size-3" />
+        <X className="size-3" />
       </Button>
     </div>
   );
@@ -627,7 +619,7 @@ export function OrganicListView({
               {...rowActivationProps(() => toggleGroup(key))}
             >
               <div className="flex items-center gap-2">
-                <ChevronDownIcon
+                <ChevronDown
                   className={cn(
                     'size-3.5 text-muted-foreground transition-transform duration-150',
                     collapsed[key] && '-rotate-90',
@@ -653,7 +645,7 @@ export function OrganicListView({
                   }}
                   className="h-6 w-6 cursor-pointer opacity-0 transition-opacity hover:opacity-100 group-hover/section:opacity-100"
                 >
-                  <PlusIcon className="size-3" />
+                  <Plus className="size-3" />
                 </Button>
               )}
             </div>

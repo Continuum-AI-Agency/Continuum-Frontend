@@ -1,6 +1,6 @@
 'use client';
+import { ArrowDown, ArrowUp, ChevronDown, RotateCw } from 'lucide-react';
 
-import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ReloadIcon } from '@radix-ui/react-icons';
 import * as React from 'react';
 
 import { CardOverlayDemo } from '@/components/shadcn-studio/card/card-07';
@@ -174,9 +174,9 @@ export function AdSetTable({
     if (sortField !== field) return null;
 
     return sortDirection === 'asc' ? (
-      <ArrowUpIcon className="ml-1 inline h-3 w-3" />
+      <ArrowUp className="ml-1 inline h-3 w-3" />
     ) : (
-      <ArrowDownIcon className="ml-1 inline h-3 w-3" />
+      <ArrowDown className="ml-1 inline h-3 w-3" />
     );
   };
 
@@ -302,7 +302,7 @@ export function AdSetTable({
                   aria-expanded={isExpanded}
                 >
                   <TableCell>
-                    <ChevronDownIcon
+                    <ChevronDown
                       className={cn('h-4 w-4 transition-transform', isExpanded && 'rotate-180')}
                     />
                   </TableCell>
@@ -338,7 +338,7 @@ export function AdSetTable({
 
                       {adsState?.status === 'loading' ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <ReloadIcon className="h-4 w-4 animate-spin" />
+                          <RotateCw className="h-4 w-4 animate-spin" />
                           Loading ads and creatives...
                         </div>
                       ) : null}

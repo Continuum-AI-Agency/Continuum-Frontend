@@ -1,8 +1,15 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
-import { LightningBoltIcon, Pencil1Icon, TrashIcon } from '@radix-ui/react-icons';
-import { ChevronLeft, ChevronRight, GalleryHorizontalEnd, Plus } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  GalleryHorizontalEnd,
+  Pencil,
+  Plus,
+  Trash2,
+  Zap,
+} from 'lucide-react';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -167,14 +174,14 @@ function DraftChip({
         />
         <ContextMenuContent className="w-48">
           <ContextMenuItem onSelect={() => beginEditingDraft(draft.id)}>
-            <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
+            <Pencil className="mr-2 h-3.5 w-3.5" />
             Open in editor
           </ContextMenuItem>
           {onRegenerate && draft.status !== 'streaming' && (
             <>
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
-                <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
+                <Zap className="mr-2 h-3.5 w-3.5" />
                 {draft.status === 'failed' ? 'Retry generation' : 'Regenerate'}
               </ContextMenuItem>
             </>
@@ -186,7 +193,7 @@ function DraftChip({
                 className="text-destructive focus:text-destructive"
                 onSelect={() => onDelete(draft.id)}
               >
-                <TrashIcon className="mr-2 h-3.5 w-3.5" />
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
                 Delete
               </ContextMenuItem>
             </>

@@ -1,6 +1,6 @@
 'use client';
+import { Moon, Sun } from 'lucide-react';
 
-import { MoonIcon, SunIcon } from '@radix-ui/react-icons';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTheme } from './theme-provider';
@@ -15,7 +15,7 @@ export function ThemeToggle() {
         <TooltipTrigger
           render={
             <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
-              {appearance === 'dark' ? <SunIcon /> : <MoonIcon />}
+              {appearance === 'dark' ? <Sun /> : <Moon />}
             </Button>
           }
         />

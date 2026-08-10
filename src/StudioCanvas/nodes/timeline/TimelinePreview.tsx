@@ -1,7 +1,6 @@
 'use client';
 
-import { VideoIcon } from '@radix-ui/react-icons';
-import { Pause, Play } from 'lucide-react';
+import { Pause, Play, Video } from 'lucide-react';
 import type React from 'react';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -207,7 +206,7 @@ export function TimelinePreview({
 
         {isEmpty ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground">
-            <VideoIcon className="h-7 w-7 opacity-30" />
+            <Video className="h-7 w-7 opacity-30" />
             <span className="text-xs">Drag clips from the media bin onto the timeline</span>
           </div>
         ) : null}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { ReaderIcon } from '@radix-ui/react-icons';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { BookOpen } from 'lucide-react';
 import * as React from 'react';
 
 import {
@@ -34,12 +34,12 @@ describe('IntegrationSwitcher', () => {
 
   it('accepts custom tabs and data', () => {
     const integrations: IntegrationSwitcherTab[] = [
-      { id: 'alpha', name: 'Alpha', icon: ReaderIcon },
-      { id: 'beta', name: 'Beta', icon: ReaderIcon },
+      { id: 'alpha', name: 'Alpha', icon: BookOpen },
+      { id: 'beta', name: 'Beta', icon: BookOpen },
     ];
     const data: IntegrationSwitcherData = {
-      alpha: [{ id: 'A-1', title: 'alpha-brief', icon: ReaderIcon, status: 'checked' }],
-      beta: [{ id: 'B-1', title: 'beta-handoff', icon: ReaderIcon, status: 'copy' }],
+      alpha: [{ id: 'A-1', title: 'alpha-brief', icon: BookOpen, status: 'checked' }],
+      beta: [{ id: 'B-1', title: 'beta-handoff', icon: BookOpen, status: 'copy' }],
     };
 
     render(

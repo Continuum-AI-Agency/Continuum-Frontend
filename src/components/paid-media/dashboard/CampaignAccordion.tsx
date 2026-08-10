@@ -1,8 +1,7 @@
 'use client';
 
 import type { IntegrationErrorCode } from '@continuum/contracts';
-import { ReloadIcon } from '@radix-ui/react-icons';
-import { Megaphone } from 'lucide-react';
+import { Megaphone, RotateCw } from 'lucide-react';
 import * as React from 'react';
 import { EmptyState } from '@/components/shared/state';
 import {
@@ -460,7 +459,7 @@ export function CampaignAccordion({
                 />
                 {state.status === 'loading' ? (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+                    <RotateCw className="mr-2 h-4 w-4 animate-spin" />
                     Loading {segmentLabel}...
                   </div>
                 ) : null}

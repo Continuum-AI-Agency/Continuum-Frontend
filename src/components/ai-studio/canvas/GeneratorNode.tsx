@@ -1,13 +1,7 @@
 import { Collapsible } from '@base-ui/react/collapsible';
 import { ContextMenu } from '@base-ui/react/context-menu';
-import {
-  CheckIcon,
-  ExclamationTriangleIcon,
-  MagicWandIcon,
-  PaperPlaneIcon,
-  StackIcon,
-} from '@radix-ui/react-icons';
 import { Handle, Position } from '@xyflow/react';
+import { Check, Layers2, Send, TriangleAlert, Wand2 } from 'lucide-react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
@@ -29,11 +23,11 @@ const JOB_STATUS_META: Record<
     icon: React.ReactNode;
   }
 > = {
-  queued: { label: 'Queued', variant: 'warning', icon: <StackIcon /> },
-  processing: { label: 'Processing', variant: 'teal', icon: <MagicWandIcon /> },
-  completed: { label: 'Completed', variant: 'success', icon: <CheckIcon /> },
-  failed: { label: 'Failed', variant: 'destructive', icon: <ExclamationTriangleIcon /> },
-  cancelled: { label: 'Cancelled', variant: 'muted', icon: <ExclamationTriangleIcon /> },
+  queued: { label: 'Queued', variant: 'warning', icon: <Layers2 /> },
+  processing: { label: 'Processing', variant: 'teal', icon: <Wand2 /> },
+  completed: { label: 'Completed', variant: 'success', icon: <Check /> },
+  failed: { label: 'Failed', variant: 'destructive', icon: <TriangleAlert /> },
+  cancelled: { label: 'Cancelled', variant: 'muted', icon: <TriangleAlert /> },
 };
 
 export function GeneratorNode({ id, data, selected }: GeneratorNodeProps) {
@@ -98,13 +92,13 @@ export function GeneratorNode({ id, data, selected }: GeneratorNodeProps) {
                   window.dispatchEvent(new CustomEvent('node:generate', { detail: { id } }))
                 }
               >
-                <PaperPlaneIcon /> Generate
+                <Send /> Generate
               </Button>
             </div>
 
             {data.status === 'failed' && data.failureMessage && (
               <div className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
-                <ExclamationTriangleIcon className="mt-0.5 shrink-0" />
+                <TriangleAlert className="mt-0.5 shrink-0" />
                 <span className="break-words">{data.failureMessage}</span>
               </div>
             )}

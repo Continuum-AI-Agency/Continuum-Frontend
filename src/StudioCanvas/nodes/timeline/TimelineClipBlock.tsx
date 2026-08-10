@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Cross2Icon, ImageIcon, VideoIcon } from '@radix-ui/react-icons';
+import { Image, Video, X } from 'lucide-react';
 import type React from 'react';
 import { useCallback } from 'react';
 import { cn } from '@/lib/utils';
@@ -121,9 +121,9 @@ export function TimelineClipBlock({
         )}
       >
         {isVideo ? (
-          <VideoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <Video className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         ) : (
-          <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <Image className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         )}
         <span className="truncate text-2xs font-medium">{label}</span>
         <span className="ml-auto shrink-0 text-2xs tabular-nums text-muted-foreground">
@@ -158,7 +158,7 @@ export function TimelineClipBlock({
         }}
         className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground shadow-sm transition-colors hover:bg-destructive hover:text-destructive-foreground group-hover/clip:flex"
       >
-        <Cross2Icon className="h-2.5 w-2.5" />
+        <X className="h-2.5 w-2.5" />
       </button>
     </div>
   );

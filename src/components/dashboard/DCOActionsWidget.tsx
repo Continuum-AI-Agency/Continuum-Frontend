@@ -1,11 +1,6 @@
 'use client';
+import { ArrowUpToLine, RotateCw, ScrollText, SquareArrowOutUpRight } from 'lucide-react';
 
-import {
-  ActivityLogIcon,
-  OpenInNewWindowIcon,
-  PinTopIcon,
-  ReloadIcon,
-} from '@radix-ui/react-icons';
 import { AnimatePresence, motion } from 'motion/react';
 import * as React from 'react';
 import { CreativeSwapComparison } from '@/components/dco/CreativeSwapComparison';
@@ -652,7 +647,7 @@ export function DCOActionsWidget({
           <div className="border-b border-border/70 bg-muted/20 px-2 py-1">
             <div className="flex flex-wrap items-center justify-between gap-1.5">
               <div className="flex min-w-0 items-center gap-1.5">
-                <ActivityLogIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <ScrollText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <h3 className="truncate text-xs font-semibold sm:text-sm">DCO actions</h3>
                 <span className="whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground tabular-nums">
                   {pagination.totalCount} · {dateRangeDays}d
@@ -702,7 +697,7 @@ export function DCOActionsWidget({
                         disabled={isLoading}
                         aria-label="Refresh actions"
                       >
-                        <ReloadIcon className={isLoading ? 'animate-spin' : undefined} />
+                        <RotateCw className={isLoading ? 'animate-spin' : undefined} />
                       </Button>
                     }
                   />
@@ -850,7 +845,7 @@ export function DCOActionsWidget({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Pill variant="muted">
-              <ActivityLogIcon aria-hidden="true" />
+              <ScrollText aria-hidden="true" />
             </Pill>
             <div>
               <h3 className="text-lg font-semibold">DCO Actions</h3>
@@ -864,17 +859,17 @@ export function DCOActionsWidget({
               <TooltipTrigger
                 render={
                   <Button variant="secondary" size="icon" onClick={refresh} disabled={isLoading}>
-                    <ReloadIcon />
+                    <RotateCw />
                   </Button>
                 }
               />
               <TooltipContent>Refresh</TooltipContent>
             </Tooltip>
             <Button variant="secondary" size="icon" aria-label="Open full activity log">
-              <OpenInNewWindowIcon />
+              <SquareArrowOutUpRight />
             </Button>
             <Button variant="secondary" size="icon" aria-label="Pin activity log">
-              <PinTopIcon />
+              <ArrowUpToLine />
             </Button>
           </div>
         </div>

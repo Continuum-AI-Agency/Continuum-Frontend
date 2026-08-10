@@ -1,7 +1,6 @@
 'use client';
 
-import { ArrowUpIcon } from '@radix-ui/react-icons';
-import { Paperclip, Square } from 'lucide-react';
+import { ArrowUp, Paperclip, Square } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -953,7 +952,7 @@ export function PromptInput({
                     size="icon"
                     type="submit"
                   >
-                    <ArrowUpIcon className="size-4" />
+                    <ArrowUp className="size-4" />
                   </Button>
                 )}
               </motion.div>

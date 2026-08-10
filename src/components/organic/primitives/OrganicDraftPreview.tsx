@@ -10,9 +10,10 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { ChevronLeftIcon, ChevronRightIcon, Cross2Icon } from '@radix-ui/react-icons';
 import {
   Check,
+  ChevronLeft,
+  ChevronRight,
   Hash,
   Library,
   Loader2,
@@ -24,6 +25,7 @@ import {
   Sparkles,
   Trash2,
   Wand2,
+  X,
 } from 'lucide-react';
 import * as React from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
@@ -389,7 +391,7 @@ function InteractiveCarouselMediaArea({
                 className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
                 aria-label="Previous slide"
               >
-                <ChevronLeftIcon className="h-4 w-4" />
+                <ChevronLeft className="h-4 w-4" />
               </button>
             )}
 
@@ -403,7 +405,7 @@ function InteractiveCarouselMediaArea({
                 className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
                 aria-label="Next slide"
               >
-                <ChevronRightIcon className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </button>
             )}
 
@@ -529,7 +531,7 @@ function ReadOnlyCarouselMediaArea({
           className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
           aria-label="Previous slide"
         >
-          <ChevronLeftIcon className="h-4 w-4" />
+          <ChevronLeft className="h-4 w-4" />
         </button>
       )}
 
@@ -540,7 +542,7 @@ function ReadOnlyCarouselMediaArea({
           className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
           aria-label="Next slide"
         >
-          <ChevronRightIcon className="h-4 w-4" />
+          <ChevronRight className="h-4 w-4" />
         </button>
       )}
 
@@ -674,7 +676,7 @@ function ContextualPanel({
           aria-label={`Close ${title}`}
           className="rounded p-0.5 text-muted-foreground/60 transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          <Cross2Icon className="h-3.5 w-3.5" />
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
       {children}
@@ -722,7 +724,7 @@ function HashtagTiers({
                     }}
                     aria-label={`Remove #${tag.replace(/^#/, '')}`}
                   >
-                    <Cross2Icon className="h-2.5 w-2.5" />
+                    <X className="h-2.5 w-2.5" />
                   </button>
                 </span>
               ))}

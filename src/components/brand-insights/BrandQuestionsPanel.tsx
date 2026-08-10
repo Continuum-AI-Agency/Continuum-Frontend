@@ -1,4 +1,4 @@
-import { CalendarIcon, ClockIcon, GlobeIcon, ReaderIcon } from '@radix-ui/react-icons';
+import { BookOpen, Calendar, Clock, Globe } from 'lucide-react';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { GlassPanel } from '@/components/ui/GlassPanel';
@@ -49,7 +49,7 @@ export function BrandQuestionsPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <ReaderIcon className="h-4 w-4 text-primary" aria-hidden="true" />
+            <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
             <span className="text-xs text-muted-foreground">Brand Insights · Questions</span>
           </div>
           <h3 className="text-xl font-semibold text-foreground">Audience questions</h3>
@@ -64,19 +64,19 @@ export function BrandQuestionsPanel({
           )}
           {country && (
             <Pill variant="muted">
-              <GlobeIcon className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+              <Globe className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
               {country}
             </Pill>
           )}
           {weekLabel && (
             <Pill variant="violet">
-              <CalendarIcon className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+              <Calendar className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
               Week of {weekLabel}
             </Pill>
           )}
           {generatedLabel && (
             <Pill variant="success">
-              <ClockIcon className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+              <Clock className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
               Updated {generatedLabel}
             </Pill>
           )}

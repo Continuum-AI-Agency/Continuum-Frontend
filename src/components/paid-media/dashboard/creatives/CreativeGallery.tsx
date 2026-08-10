@@ -1,7 +1,7 @@
 'use client';
 
 import type { IntegrationErrorCode } from '@continuum/contracts';
-import { MagnifyingGlassIcon, ReloadIcon } from '@radix-ui/react-icons';
+import { RotateCw, Search } from 'lucide-react';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
@@ -139,7 +139,7 @@ export function CreativeGallery({
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[160px] flex-1 sm:max-w-xs">
-          <MagnifyingGlassIcon className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -200,7 +200,7 @@ export function CreativeGallery({
             retryAfter={retryAfter}
           />
           <Button variant="outline" size="xs" onClick={onRetry}>
-            <ReloadIcon className="mr-1 h-3 w-3" />
+            <RotateCw className="mr-1 h-3 w-3" />
             Retry
           </Button>
         </div>

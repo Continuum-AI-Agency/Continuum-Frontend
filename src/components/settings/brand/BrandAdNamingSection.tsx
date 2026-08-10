@@ -1,7 +1,7 @@
 'use client';
 
 import type { AdNamingSchemaConfig } from '@continuum/contracts';
-import { PlusIcon, TrashIcon } from '@radix-ui/react-icons';
+import { Plus, Trash2 } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { updateBrandAdNamingSchemaAction } from '@/app/(post-auth)/settings/actions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -116,7 +116,7 @@ export function BrandAdNamingSection({
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-muted-foreground">Fields (in order)</span>
           <Button type="button" size="sm" variant="secondary" onClick={addItem} disabled={!canEdit}>
-            <PlusIcon /> Add field
+            <Plus /> Add field
           </Button>
         </div>
         {items.length === 0 ? (
@@ -142,7 +142,7 @@ export function BrandAdNamingSection({
                 disabled={!canEdit}
                 className="text-destructive hover:text-destructive"
               >
-                <TrashIcon /> Remove
+                <Trash2 /> Remove
               </Button>
             </div>
           ))

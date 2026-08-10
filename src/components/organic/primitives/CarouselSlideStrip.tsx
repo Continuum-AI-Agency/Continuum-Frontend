@@ -23,8 +23,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Cross2Icon } from '@radix-ui/react-icons';
-import { Maximize2, Plus, Replace } from 'lucide-react';
+import { Maximize2, Plus, Replace, X } from 'lucide-react';
 import Image from 'next/image';
 import * as React from 'react';
 import type { UseDraftMediaPlacementResult } from '@/components/organic/hooks/useDraftMediaPlacement';
@@ -140,7 +139,7 @@ function SortableThumb({
           }}
           className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-background border border-border/70 shadow-sm text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:flex"
         >
-          <Cross2Icon className="h-2.5 w-2.5" />
+          <X className="h-2.5 w-2.5" />
         </button>
       )}
 

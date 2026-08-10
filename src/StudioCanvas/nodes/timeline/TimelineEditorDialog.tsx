@@ -14,8 +14,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { ChatBubbleIcon, ChevronDownIcon, PlayIcon } from '@radix-ui/react-icons';
-import { Redo2, Undo2 } from 'lucide-react';
+import { ChevronDown, MessageCircle, Play, Redo2, Undo2 } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCanvasComposer } from '@/components/ai-studio/composer/useCanvasComposer';
 import { Button } from '@/components/ui/button';
@@ -147,7 +146,7 @@ function CanvasEditorCommand({ adapter }: { adapter: TimelineEditorAdapter }) {
       onSubmit={handleSubmit}
       className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-4 py-2"
     >
-      <ChatBubbleIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <MessageCircle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       <input
         value={prompt}
         onChange={(event) => setPrompt(event.target.value)}
@@ -661,7 +660,7 @@ export function TimelineEditorDialog({
               disabled={captions.isGenerating || isRendering || items.length === 0}
               title="Transcribe the timeline audio with word-level timing"
             >
-              <ChatBubbleIcon className="h-3.5 w-3.5" />
+              <MessageCircle className="h-3.5 w-3.5" />
               {captions.isGenerating
                 ? 'Captioning…'
                 : captionCues.length > 0
@@ -705,7 +704,7 @@ export function TimelineEditorDialog({
                   onClick={() => handleRender(primarySink.kind)}
                   disabled={renderDisabled}
                 >
-                  <PlayIcon className="h-3.5 w-3.5" />
+                  <Play className="h-3.5 w-3.5" />
                   {isRendering
                     ? status === 'queued'
                       ? 'Queued…'
@@ -724,7 +723,7 @@ export function TimelineEditorDialog({
                           disabled={renderDisabled}
                           aria-label="Choose where the render goes"
                         >
-                          <ChevronDownIcon className="h-3.5 w-3.5" />
+                          <ChevronDown className="h-3.5 w-3.5" />
                         </Button>
                       }
                     />

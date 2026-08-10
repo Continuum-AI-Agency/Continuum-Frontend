@@ -1,14 +1,15 @@
 'use client';
 
 import type { IntegrationErrorCode } from '@continuum/contracts';
-import {
-  ArrowLeftIcon,
-  ChevronRightIcon,
-  DotsHorizontalIcon,
-  ReloadIcon,
-} from '@radix-ui/react-icons';
 import type { UTCTimestamp } from 'lightweight-charts';
-import { PanelRightCloseIcon, PanelRightOpenIcon } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronRight,
+  Ellipsis,
+  PanelRightCloseIcon,
+  PanelRightOpenIcon,
+  RotateCw,
+} from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import * as React from 'react';
@@ -2206,7 +2207,7 @@ export function CampaignAdSetWorkspace({
                         <ContextMenuTrigger
                           render={
                             <Button size="icon-xs" variant="ghost" className="ml-auto">
-                              <DotsHorizontalIcon />
+                              <Ellipsis />
                             </Button>
                           }
                         />
@@ -2511,7 +2512,7 @@ export function CampaignAdSetWorkspace({
                                                       }
                                                       className="rounded p-0.5 text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
                                                     >
-                                                      <ChevronRightIcon className="h-3 w-3" />
+                                                      <ChevronRight className="h-3 w-3" />
                                                     </button>
                                                   </button>
                                                 );
@@ -2593,7 +2594,7 @@ export function CampaignAdSetWorkspace({
                                               }
                                               className="rounded p-0.5 text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
                                             >
-                                              <ChevronRightIcon className="h-3 w-3" />
+                                              <ChevronRight className="h-3 w-3" />
                                             </button>
                                           </button>
                                         </SidebarMenuItem>
@@ -2705,7 +2706,7 @@ export function CampaignAdSetWorkspace({
                                       }
                                       className="rounded p-0.5 text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
                                     >
-                                      <ChevronRightIcon className="h-3 w-3" />
+                                      <ChevronRight className="h-3 w-3" />
                                     </button>
                                   </button>
                                 </SidebarMenuItem>
@@ -2845,7 +2846,7 @@ export function CampaignAdSetWorkspace({
                             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                               {isAdSetLoading ? (
                                 <span className="inline-flex items-center gap-2">
-                                  <ReloadIcon className="h-4 w-4 animate-spin" />
+                                  <RotateCw className="h-4 w-4 animate-spin" />
                                   Loading {segmentLabelSingular} timeline...
                                 </span>
                               ) : (
@@ -2949,7 +2950,7 @@ export function CampaignAdSetWorkspace({
                       }}
                       className="h-7 w-full justify-start border-sidebar-border/70 bg-sidebar text-xs text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     >
-                      <ArrowLeftIcon className="mr-1 h-3.5 w-3.5" />
+                      <ArrowLeft className="mr-1 h-3.5 w-3.5" />
                       Back to campaigns
                     </Button>
                     <Input

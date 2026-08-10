@@ -1,12 +1,6 @@
 'use client';
+import { ArrowLeft, Component, FileText, SlidersHorizontal, User } from 'lucide-react';
 
-import {
-  ArrowLeftIcon,
-  Component1Icon,
-  FileTextIcon,
-  MixerHorizontalIcon,
-  PersonIcon,
-} from '@radix-ui/react-icons';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactElement, useEffect, useMemo, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -35,7 +29,7 @@ const primitiveCards: PrimitiveCardConfig[] = [
     title: 'Audience Builder',
     status: 'under-construction',
     summary: 'Reusable, dual-layer audience presets that stay compatible with Meta and Google.',
-    icon: <MixerHorizontalIcon />,
+    icon: <SlidersHorizontal />,
     accent: 'linear-gradient(135deg, rgba(139,92,246,0.42), rgba(59,130,246,0.34))',
   },
   {
@@ -43,7 +37,7 @@ const primitiveCards: PrimitiveCardConfig[] = [
     title: 'Brand Guidelines',
     status: 'under-construction',
     summary: 'Purpose-driven brand books with approvals, tags, and reusable context.',
-    icon: <FileTextIcon />,
+    icon: <FileText />,
     accent: 'linear-gradient(135deg, rgba(34,197,94,0.32), rgba(59,130,246,0.28))',
   },
   {
@@ -51,7 +45,7 @@ const primitiveCards: PrimitiveCardConfig[] = [
     title: 'Product Catalog Manager',
     status: 'under-construction',
     summary: 'Catalog CRUD for DCO feeds, ad-object mapping, and product-tagging metric integrity.',
-    icon: <Component1Icon />,
+    icon: <Component />,
     accent: 'linear-gradient(135deg, rgba(99,102,241,0.40), rgba(16,185,129,0.34))',
   },
   {
@@ -59,7 +53,7 @@ const primitiveCards: PrimitiveCardConfig[] = [
     title: 'Brand Personas',
     status: 'coming-soon',
     summary: 'Living personas that align creative tone, targeting, and narrative arcs.',
-    icon: <PersonIcon />,
+    icon: <User />,
     accent: 'linear-gradient(135deg, rgba(244,114,182,0.32), rgba(59,130,246,0.28))',
   },
 ];
@@ -193,7 +187,7 @@ export function PrimitivesHub({
               onClick={() => setActiveWithUrl(null)}
               className="bg-transparent text-slate-200 hover:bg-white/5"
             >
-              <ArrowLeftIcon /> Back
+              <ArrowLeft /> Back
             </Button>
             <Pill variant={activeCard?.status === 'under-construction' ? 'warning' : 'muted'}>
               {activeCard?.status === 'under-construction' ? 'Under construction' : 'Coming soon'}

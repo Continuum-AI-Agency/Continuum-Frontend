@@ -1,6 +1,6 @@
 'use client';
+import { ScrollText, X } from 'lucide-react';
 
-import { ActivityLogIcon, Cross2Icon } from '@radix-ui/react-icons';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -51,7 +51,7 @@ export function EventStreamPanel({
       <div className="flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
-            <ActivityLogIcon className="w-4 h-4 text-muted-foreground" />
+            <ScrollText className="w-4 h-4 text-muted-foreground" />
             <h3 className="text-base font-semibold">Generation Stream</h3>
             {hasEvents && (
               <span className="text-xs text-muted-foreground tabular-nums">({events.length})</span>
@@ -65,7 +65,7 @@ export function EventStreamPanel({
               onClick={onClear}
               className="text-muted-foreground hover:text-foreground"
             >
-              <Cross2Icon className="w-3 h-3 mr-1" />
+              <X className="w-3 h-3 mr-1" />
               Clear
             </Button>
           )}
@@ -86,7 +86,7 @@ export function EventStreamPanel({
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-              <ActivityLogIcon className="w-8 h-8 text-muted-foreground/50 mb-3" />
+              <ScrollText className="w-8 h-8 text-muted-foreground/50 mb-3" />
               <span className="text-sm text-muted-foreground">Start generation to see events</span>
               <span className="mt-1 text-xs text-muted-foreground">
                 Progress updates and placements will appear here

@@ -1,6 +1,6 @@
 'use client';
+import { Rocket } from 'lucide-react';
 
-import { RocketIcon } from '@radix-ui/react-icons';
 import { motion } from 'motion/react';
 import React from 'react';
 import { Suggestion } from '@/components/ai-elements/suggestion';
@@ -37,7 +37,7 @@ export function JainaEmptyState({
 
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-        <RocketIcon className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+        <Rocket className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
         <div className="space-y-1">
           <h3 className="text-base font-semibold tracking-tight">Select an Ad Account</h3>
           <span className="text-sm text-muted-foreground">
@@ -57,7 +57,7 @@ export function JainaEmptyState({
         className="mb-1"
         aria-hidden="true"
       >
-        <RocketIcon className="h-6 w-6 text-muted-foreground" />
+        <Rocket className="h-6 w-6 text-muted-foreground" />
       </motion.div>
 
       <motion.div

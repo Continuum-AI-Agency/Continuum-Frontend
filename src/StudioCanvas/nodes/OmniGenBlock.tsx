@@ -1,13 +1,5 @@
 import type { BrandBookPieceKind } from '@continuum/contracts';
 import {
-  CopyIcon,
-  DownloadIcon,
-  Pencil1Icon,
-  PlayIcon,
-  TrashIcon,
-  VideoIcon,
-} from '@radix-ui/react-icons';
-import {
   Handle,
   type HandleProps,
   type NodeProps,
@@ -17,6 +9,7 @@ import {
   useEdges,
   useNodeId,
 } from '@xyflow/react';
+import { Copy, Download, Pencil, Play, Trash2, Video } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -365,7 +358,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                   onClick={handleRun}
                   title={hasChain ? 'Regenerate Original' : 'Generate'}
                 >
-                  <PlayIcon className="h-4 w-4" />
+                  <Play className="h-4 w-4" />
                 </Button>
               </Toolbar>
 
@@ -409,7 +402,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                             title="Download Output"
                             aria-label="Download generated video"
                           >
-                            <DownloadIcon className="h-4 w-4" />
+                            <Download className="h-4 w-4" />
                           </Button>
                         </div>
                       ) : (
@@ -417,7 +410,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                           <Empty>
                             <EmptyHeader>
                               <EmptyMedia variant="icon" className="bg-default text-secondary">
-                                <VideoIcon />
+                                <Video />
                               </EmptyMedia>
                               <EmptyTitle>Omni Flash</EmptyTitle>
                               <EmptyDescription>
@@ -441,7 +434,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                               void handleRun();
                             }}
                           >
-                            <PlayIcon className="mr-1.5 h-3.5 w-3.5" /> Generate
+                            <Play className="mr-1.5 h-3.5 w-3.5" /> Generate
                           </Button>
                         </div>
                       )}
@@ -505,7 +498,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                               onMouseDown={(event) => event.stopPropagation()}
                               title={canEdit ? 'Edit this clip' : 'Generate a clip first'}
                             >
-                              <Pencil1Icon className="mr-1 h-3.5 w-3.5" /> Edit
+                              <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
                             </Button>
                           }
                         />
@@ -654,17 +647,17 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
           </ContextMenuSub>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleRun}>
-            <PlayIcon className="mr-2 h-4 w-4" />
+            <Play className="mr-2 h-4 w-4" />
             {hasChain ? 'Regenerate Original' : 'Generate'}
             <ContextMenuShortcut>R</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <CopyIcon className="mr-2 h-4 w-4" />
+            <Copy className="mr-2 h-4 w-4" />
             Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!previewVideo}>
-            <DownloadIcon className="mr-2 h-4 w-4" />
+            <Download className="mr-2 h-4 w-4" />
             Download Output
           </ContextMenuItem>
           <ContextMenuSeparator />
@@ -672,7 +665,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <TrashIcon className="mr-2 h-4 w-4" />
+            <Trash2 className="mr-2 h-4 w-4" />
             Delete
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>

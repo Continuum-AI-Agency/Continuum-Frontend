@@ -1,7 +1,6 @@
 'use client';
 
-import { ReloadIcon } from '@radix-ui/react-icons';
-import { GaugeCircleIcon } from 'lucide-react';
+import { GaugeCircleIcon, RotateCw } from 'lucide-react';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { persistCampaignInsightsSnapshot } from '@/app/_actions/paidMediaInsights';
@@ -204,7 +203,7 @@ export function CampaignPerformanceTab({
             onClick={() => load(true)}
             aria-label="Refresh performance"
           >
-            <ReloadIcon className={cn(campaignEntry?.status === 'loading' && 'animate-spin')} />
+            <RotateCw className={cn(campaignEntry?.status === 'loading' && 'animate-spin')} />
           </Button>
         </div>
       </div>

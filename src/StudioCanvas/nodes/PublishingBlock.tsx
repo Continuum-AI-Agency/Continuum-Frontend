@@ -7,7 +7,6 @@ import {
   PUBLISH_IMAGE_INPUT_HANDLE,
   PUBLISH_VIDEO_INPUT_HANDLE,
 } from '@continuum/contracts';
-import { CopyIcon, PaperPlaneIcon, TrashIcon } from '@radix-ui/react-icons';
 import {
   Handle,
   type NodeProps,
@@ -15,6 +14,7 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
+import { Copy, Send, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -486,7 +486,7 @@ function PublisherBlock({
             disabled={actionDisabled}
             onClick={publisher === 'organic' ? attachOrganic : replacePaid}
           >
-            <PaperPlaneIcon className="mr-1.5" />
+            <Send className="mr-1.5" />
             {actionPending
               ? 'Working…'
               : publisher === 'organic'
@@ -502,7 +502,7 @@ function PublisherBlock({
               className="nodrag h-7 w-7"
               onClick={() => duplicateNode(id)}
             >
-              <CopyIcon />
+              <Copy />
             </Button>
             <Button
               variant="ghost"
@@ -510,7 +510,7 @@ function PublisherBlock({
               className="nodrag h-7 w-7 text-destructive"
               onClick={() => deleteNode(id)}
             >
-              <TrashIcon />
+              <Trash2 />
             </Button>
           </div>
         </NodeContent>

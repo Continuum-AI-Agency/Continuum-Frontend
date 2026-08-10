@@ -10,13 +10,7 @@ import {
   MODEL_CATALOG,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  ExclamationTriangleIcon,
-  MagicWandIcon,
-  MixerVerticalIcon,
-  PaperPlaneIcon,
-  StopIcon,
-} from '@radix-ui/react-icons';
+import { Send, SlidersVertical, Square, TriangleAlert, Wand2 } from 'lucide-react';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -300,7 +294,7 @@ export function ChatPanel({
                               : { fontFamily: brandFont }
                           }
                         >
-                          {isEnriching ? <div className="animate-spin">◌</div> : <MagicWandIcon />}
+                          {isEnriching ? <div className="animate-spin">◌</div> : <Wand2 />}
                         </Button>
                       }
                     />
@@ -459,7 +453,7 @@ export function ChatPanel({
           open={false}
         >
           <summary className="flex cursor-pointer items-center gap-2 text-sm text-gray-200">
-            <MixerVerticalIcon /> Advanced
+            <SlidersVertical /> Advanced
           </summary>
           <div className="mt-3 space-y-3">
             <div className="space-y-1">
@@ -511,7 +505,7 @@ export function ChatPanel({
         </details>
 
         <Alert className="border-white/10 bg-white/5">
-          <ExclamationTriangleIcon />
+          <TriangleAlert />
           <AlertDescription className="text-gray-300">
             {refsSummary?.refCount
               ? `${refsSummary.refCount} reference image${refsSummary.refCount === 1 ? '' : 's'} attached.`
@@ -524,7 +518,7 @@ export function ChatPanel({
 
         <div className="flex gap-2">
           <Button type="submit" className="flex-1" disabled={disabled || isStreaming}>
-            <PaperPlaneIcon /> {isStreaming ? 'Streaming' : 'Generate'}
+            <Send /> {isStreaming ? 'Streaming' : 'Generate'}
           </Button>
           <Button
             type="button"
@@ -533,7 +527,7 @@ export function ChatPanel({
             onClick={onCancel}
             disabled={!isStreaming}
           >
-            <StopIcon /> Cancel
+            <Square /> Cancel
           </Button>
         </div>
       </form>

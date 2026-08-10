@@ -1,7 +1,7 @@
 'use client';
 
 import { resolveOrganicImageUrl } from '@continuum/contracts';
-import { PlayIcon } from '@radix-ui/react-icons';
+import { Play } from 'lucide-react';
 import Image from 'next/image';
 import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
 import { cn } from '@/lib/utils';
@@ -165,7 +165,7 @@ export function DraftCardMedia({
         />
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
-            <PlayIcon className="h-4 w-4 translate-x-[1px]" />
+            <Play className="h-4 w-4 translate-x-[1px]" />
           </span>
         </div>
       </div>
@@ -190,7 +190,7 @@ export function DraftCardMedia({
         />
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
-            <PlayIcon className="h-4 w-4 translate-x-[1px]" />
+            <Play className="h-4 w-4 translate-x-[1px]" />
           </span>
         </div>
       </div>

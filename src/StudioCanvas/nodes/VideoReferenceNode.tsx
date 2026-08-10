@@ -1,4 +1,3 @@
-import { LinkBreak2Icon, ReloadIcon, UploadIcon, VideoIcon } from '@radix-ui/react-icons';
 import {
   Handle,
   type NodeProps,
@@ -7,7 +6,17 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { CheckCircle2, Copy, Loader2, Trash2, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  Copy,
+  Loader2,
+  RotateCw,
+  Trash2,
+  Unlink,
+  Upload,
+  Video,
+  XCircle,
+} from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -379,7 +388,7 @@ export function VideoReferenceNode({
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={handleRetryUpload}
                         >
-                          <ReloadIcon className="mr-1 h-3 w-3" />
+                          <RotateCw className="mr-1 h-3 w-3" />
                           Retry
                         </Button>
                       </TooltipContent>
@@ -390,7 +399,7 @@ export function VideoReferenceNode({
                     className="absolute right-2 top-2 z-20 cursor-pointer rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100 focus-visible:opacity-100"
                     onMouseDown={(event) => event.stopPropagation()}
                   >
-                    <UploadIcon className="h-3 w-3" />
+                    <Upload className="h-3 w-3" />
                   </label>
                   <label
                     htmlFor={`video-file-${id}`}
@@ -413,7 +422,7 @@ export function VideoReferenceNode({
                       <Empty>
                         <EmptyHeader>
                           <EmptyMedia variant="icon">
-                            <VideoIcon />
+                            <Video />
                           </EmptyMedia>
                           <EmptyTitle>Upload Video</EmptyTitle>
                           <EmptyDescription>Drag & drop or click</EmptyDescription>
@@ -468,7 +477,7 @@ export function VideoReferenceNode({
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <LinkBreak2Icon className="mr-2 h-4 w-4" />
+            <Unlink className="mr-2 h-4 w-4" />
             Detach connections
           </ContextMenuItem>
           <ContextMenuItem

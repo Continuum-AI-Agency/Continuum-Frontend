@@ -6,8 +6,8 @@ import {
   getStatusBadgeLabel,
   isModelSelectable,
 } from '@continuum/contracts';
-import { ChatBubbleIcon } from '@radix-ui/react-icons';
 import { Handle, Position } from '@xyflow/react';
+import { MessageCircle } from 'lucide-react';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -206,7 +206,7 @@ export function LLMNode({ id: nodeId, data, selected }: LLMNodeProps) {
               )
             }
           >
-            <ChatBubbleIcon /> Generate
+            <MessageCircle /> Generate
           </Button>
         </div>
       </div>

@@ -1,11 +1,4 @@
-import {
-  Cross2Icon,
-  DotsHorizontalIcon,
-  DownloadIcon,
-  Pencil1Icon,
-  ReloadIcon,
-  TrashIcon,
-} from '@radix-ui/react-icons';
+import { Download, Ellipsis, Pencil, RotateCw, Trash2, X } from 'lucide-react';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -213,13 +206,13 @@ function WorkflowRow({
                 aria-label={`Options for ${workflow.name}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <DotsHorizontalIcon className="h-3.5 w-3.5" />
+                <Ellipsis className="h-3.5 w-3.5" />
               </Button>
             }
           />
           <DropdownMenuContent align="end" className="w-40">
             <DropdownMenuItem onSelect={() => onRenameRequest(workflow)}>
-              <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
+              <Pencil className="mr-2 h-3.5 w-3.5" />
               Rename
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -227,7 +220,7 @@ function WorkflowRow({
               className="text-destructive focus:text-destructive"
               onSelect={() => onDeleteRequest(workflow.id)}
             >
-              <TrashIcon className="mr-2 h-3.5 w-3.5" />
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -276,7 +269,7 @@ function WorkflowPanel({
               !brandProfileId ? 'Select a brand profile to load workflows.' : 'Refresh workflows'
             }
           >
-            <ReloadIcon className="h-4 w-4" />
+            <RotateCw className="h-4 w-4" />
           </Button>
           {onClose && (
             <Button
@@ -287,7 +280,7 @@ function WorkflowPanel({
               onClick={onClose}
               aria-label="Close workflow loader"
             >
-              <Cross2Icon className="h-4 w-4" />
+              <X className="h-4 w-4" />
             </Button>
           )}
         </div>
@@ -313,7 +306,7 @@ function WorkflowPanel({
             <div className="p-3 text-xs text-secondary">Loading workflows…</div>
           ) : filteredWorkflows.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 px-4 text-center">
-              <DownloadIcon className="h-8 w-8 text-muted-foreground/40" />
+              <Download className="h-8 w-8 text-muted-foreground/40" />
               <p className="text-sm font-medium text-muted-foreground">No saved workflows yet</p>
               <p className="text-xs text-muted-foreground">
                 {query
@@ -495,7 +488,7 @@ export function LoadWorkflowDialog({
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <DownloadIcon className="mr-2 h-4 w-4" /> My Workflows
+            <Download className="mr-2 h-4 w-4" /> My Workflows
           </Button>
         }
       />

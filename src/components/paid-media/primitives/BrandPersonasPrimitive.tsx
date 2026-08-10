@@ -1,6 +1,5 @@
 'use client';
-
-import { PersonIcon } from '@radix-ui/react-icons';
+import { User } from 'lucide-react';
 
 import { ComingSoonPrimitive } from './ComingSoonPrimitive';
 
@@ -9,7 +8,7 @@ export function BrandPersonasPrimitive() {
     <ComingSoonPrimitive
       title="Brand Personas"
       summary="Coming soon. We’ll wire this into the same primitives surface so teams can reuse tone, visuals, and personas across channels."
-      icon={<PersonIcon />}
+      icon={<User />}
     />
   );
 }

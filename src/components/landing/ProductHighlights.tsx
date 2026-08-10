@@ -1,7 +1,7 @@
 'use client';
 
 import { Tabs as TabsPrimitive } from '@base-ui/react/tabs';
-import { BarChartIcon, LayersIcon, MagicWandIcon } from '@radix-ui/react-icons';
+import { BarChart3, Layers, Wand2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -13,7 +13,7 @@ const panels = [
   {
     value: 'social',
     label: 'Social+',
-    icon: MagicWandIcon,
+    icon: Wand2,
     kicker: 'Campaign-ready in minutes',
     headline: 'AI ideation, channel-ready copy, and scheduled handoffs',
     bullets: [
@@ -26,7 +26,7 @@ const panels = [
   {
     value: 'performance',
     label: 'Performance+',
-    icon: BarChartIcon,
+    icon: BarChart3,
     kicker: 'Unify performance intelligence',
     headline: 'Launch paid campaigns with guardrails and anomaly alerts',
     bullets: [
@@ -39,7 +39,7 @@ const panels = [
   {
     value: 'studio',
     label: 'Studio+',
-    icon: LayersIcon,
+    icon: Layers,
     kicker: 'Accelerate brand visuals',
     headline: 'Frontier multimodal models, prompt templates, and brand style guides',
     bullets: [

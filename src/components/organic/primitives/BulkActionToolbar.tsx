@@ -1,14 +1,7 @@
 'use client';
 
-import {
-  CheckIcon,
-  Cross2Icon,
-  MixerHorizontalIcon,
-  TrashIcon,
-  VideoIcon,
-} from '@radix-ui/react-icons';
 import { format } from 'date-fns';
-import { Image, Sparkles } from 'lucide-react';
+import { Check, Image, SlidersHorizontal, Sparkles, Trash2, Video, X } from 'lucide-react';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -71,7 +64,7 @@ export function BulkActionToolbar({
             aria-label="Clear selection"
             className="p-1 hover:bg-subtle rounded-full transition-colors"
           >
-            <Cross2Icon className="w-4 h-4 text-secondary" />
+            <X className="w-4 h-4 text-secondary" />
           </button>
         </div>
 
@@ -107,7 +100,7 @@ export function BulkActionToolbar({
               disabled={isGeneratingReels}
               className="h-8 gap-2 text-brand-primary hover:bg-brand-primary/10 hover:text-brand-primary"
             >
-              <VideoIcon className="w-4 h-4" />
+              <Video className="w-4 h-4" />
               {isGeneratingReels
                 ? 'Generating…'
                 : `Prepare ${reelCount} reel${reelCount === 1 ? '' : 's'}`}
@@ -120,7 +113,7 @@ export function BulkActionToolbar({
               onClick={onApprove}
               className="h-8 gap-2 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600"
             >
-              <CheckIcon className="w-4 h-4" />
+              <Check className="w-4 h-4" />
               Approve
             </Button>
           ) : null}
@@ -132,7 +125,7 @@ export function BulkActionToolbar({
                   size="sm"
                   className="h-8 gap-2 text-secondary hover:text-primary"
                 >
-                  <MixerHorizontalIcon className="w-4 h-4" />
+                  <SlidersHorizontal className="w-4 h-4" />
                   Move
                 </Button>
               }
@@ -155,7 +148,7 @@ export function BulkActionToolbar({
             onClick={onDelete}
             className="h-8 gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
-            <TrashIcon className="w-4 h-4" />
+            <Trash2 className="w-4 h-4" />
             Delete
           </Button>
         </div>

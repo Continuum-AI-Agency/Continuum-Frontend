@@ -1,8 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { MagicWandIcon } from '@radix-ui/react-icons';
 import { Handle, Position } from '@xyflow/react';
+import { Wand2 } from 'lucide-react';
 import React from 'react';
 
 import { Pill } from '@/components/kibo-ui/pill';
@@ -130,7 +130,7 @@ export function ImageProcessorNode({ id: nodeId, data, selected }: ImageProcesso
               window.dispatchEvent(new CustomEvent('node:process', { detail: { id: nodeId } }))
             }
           >
-            <MagicWandIcon /> Process
+            <Wand2 /> Process
           </Button>
         </div>
       </div>

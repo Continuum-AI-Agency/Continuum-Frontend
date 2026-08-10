@@ -6,14 +6,6 @@ import {
   timelineDocumentFingerprint,
 } from '@continuum/contracts';
 import {
-  CopyIcon,
-  DownloadIcon,
-  Pencil2Icon,
-  PlayIcon,
-  TrashIcon,
-  VideoIcon,
-} from '@radix-ui/react-icons';
-import {
   Handle,
   type HandleProps,
   type NodeProps,
@@ -23,6 +15,7 @@ import {
   useEdges,
   useNodeId,
 } from '@xyflow/react';
+import { Copy, Download, Play, SquarePen, Trash2, Video } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -407,7 +400,7 @@ export function TimelineEditorBlock({
                   }}
                   title="Open editor"
                 >
-                  <Pencil2Icon className="h-4 w-4" />
+                  <SquarePen className="h-4 w-4" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -423,7 +416,7 @@ export function TimelineEditorBlock({
                   disabled={data.videoProjectId ? false : renderDisabled}
                   title={data.videoProjectId ? 'Open production' : 'Render & Continue'}
                 >
-                  <PlayIcon className="h-4 w-4" />
+                  <Play className="h-4 w-4" />
                 </Button>
               </Toolbar>
 
@@ -499,7 +492,7 @@ export function TimelineEditorBlock({
                           title="Download output"
                           aria-label="Download edited video"
                         >
-                          <DownloadIcon className="h-4 w-4" />
+                          <Download className="h-4 w-4" />
                         </Button>
                       </>
                     ) : (
@@ -510,7 +503,7 @@ export function TimelineEditorBlock({
                         }}
                         className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
                       >
-                        <VideoIcon className="h-6 w-6 opacity-30" />
+                        <Video className="h-6 w-6 opacity-30" />
                         <span className="text-2xs">
                           {production
                             ? production.stage.replaceAll('_', ' ')
@@ -528,7 +521,7 @@ export function TimelineEditorBlock({
                       setEditorOpen(true);
                     }}
                   >
-                    <Pencil2Icon className="mr-1 h-3.5 w-3.5" />
+                    <SquarePen className="mr-1 h-3.5 w-3.5" />
                     {production ? 'Open production' : 'Open editor'}
                   </Button>
                 </NodeContent>
@@ -583,7 +576,7 @@ export function TimelineEditorBlock({
           <ContextMenuLabel>Video Editor</ContextMenuLabel>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => setEditorOpen(true)}>
-            <Pencil2Icon className="mr-2 h-4 w-4" />
+            <SquarePen className="mr-2 h-4 w-4" />
             Open editor
           </ContextMenuItem>
           <ContextMenuItem
@@ -593,17 +586,17 @@ export function TimelineEditorBlock({
             }}
             disabled={data.videoProjectId ? false : renderDisabled}
           >
-            <PlayIcon className="mr-2 h-4 w-4" />
+            <Play className="mr-2 h-4 w-4" />
             {data.videoProjectId ? 'Open production' : 'Render & Continue'}
             <ContextMenuShortcut>R</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <CopyIcon className="mr-2 h-4 w-4" />
+            <Copy className="mr-2 h-4 w-4" />
             Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
-            <DownloadIcon className="mr-2 h-4 w-4" />
+            <Download className="mr-2 h-4 w-4" />
             Download Output
           </ContextMenuItem>
           <ContextMenuSeparator />
@@ -611,7 +604,7 @@ export function TimelineEditorBlock({
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <TrashIcon className="mr-2 h-4 w-4" />
+            <Trash2 className="mr-2 h-4 w-4" />
             Delete
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>

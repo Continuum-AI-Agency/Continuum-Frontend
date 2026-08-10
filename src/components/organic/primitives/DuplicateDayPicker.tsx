@@ -1,6 +1,6 @@
 'use client';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-import { ChevronLeftIcon, ChevronRightIcon } from '@radix-ui/react-icons';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -58,7 +58,7 @@ export function DuplicateDayPicker({ onSelect, onCancel }: DuplicateDayPickerPro
           onClick={() => setWeekOffset((o) => o - 1)}
           aria-label="Previous week"
         >
-          <ChevronLeftIcon className="h-3.5 w-3.5" />
+          <ChevronLeft className="h-3.5 w-3.5" />
         </button>
         <span className="text-xs font-semibold text-muted-foreground">{weekLabel}</span>
         <button
@@ -67,7 +67,7 @@ export function DuplicateDayPicker({ onSelect, onCancel }: DuplicateDayPickerPro
           onClick={() => setWeekOffset((o) => o + 1)}
           aria-label="Next week"
         >
-          <ChevronRightIcon className="h-3.5 w-3.5" />
+          <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
 

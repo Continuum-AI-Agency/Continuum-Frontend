@@ -1,6 +1,6 @@
 'use client';
+import { Plus } from 'lucide-react';
 
-import { PlusIcon } from '@radix-ui/react-icons';
 import { Pill, type PillProps } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import type { BrandGuidelineStatus, BrandGuidelineSummary } from '@/lib/schemas/brandGuidelines';
@@ -33,7 +33,7 @@ export function BrandGuidelinesLibrary({
         <div className="flex items-center justify-between gap-2">
           <h4 className="text-lg font-semibold text-white">Guidelines library</h4>
           <Button size="sm" onClick={onCreateNew}>
-            <PlusIcon /> New
+            <Plus /> New
           </Button>
         </div>
         <span className="text-sm text-muted-foreground">

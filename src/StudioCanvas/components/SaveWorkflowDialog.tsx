@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Cross2Icon, UploadIcon } from '@radix-ui/react-icons';
+import { Upload, X } from 'lucide-react';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -101,7 +101,7 @@ export function SaveWorkflowDialog({ brandProfileId, roomId }: SaveWorkflowDialo
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <UploadIcon className="mr-2 h-4 w-4" /> Save
+            <Upload className="mr-2 h-4 w-4" /> Save
           </Button>
         }
       />
@@ -122,7 +122,7 @@ export function SaveWorkflowDialog({ brandProfileId, roomId }: SaveWorkflowDialo
               onClick={closePanel}
               aria-label="Close workflow saver"
             >
-              <Cross2Icon className="h-4 w-4" />
+              <X className="h-4 w-4" />
             </Button>
           </div>
 

@@ -1,6 +1,5 @@
 'use client';
-
-import { CheckCircledIcon, CircleIcon, CrossCircledIcon } from '@radix-ui/react-icons';
+import { Circle, CircleCheck, CircleX } from 'lucide-react';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { Spinner } from '@/components/ui/Loading';
@@ -71,12 +70,12 @@ export function TestResults({ results, title = 'Test Results' }: TestResultsProp
 function StatusIcon({ status }: { status: TestResult['status'] }) {
   switch (status) {
     case 'pass':
-      return <CheckCircledIcon className="h-4 w-4 text-success" aria-hidden="true" />;
+      return <CircleCheck className="h-4 w-4 text-success" aria-hidden="true" />;
     case 'fail':
-      return <CrossCircledIcon className="h-4 w-4 text-destructive" aria-hidden="true" />;
+      return <CircleX className="h-4 w-4 text-destructive" aria-hidden="true" />;
     case 'running':
       return <Spinner size={16} />;
     default:
-      return <CircleIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
+      return <Circle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
   }
 }

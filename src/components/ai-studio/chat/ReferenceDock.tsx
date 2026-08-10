@@ -1,6 +1,6 @@
 'use client';
+import { Image as ImageIcon, RotateCw, SquarePen, Trash2, Upload } from 'lucide-react';
 
-import { ImageIcon, Pencil2Icon, ReloadIcon, TrashIcon, UploadIcon } from '@radix-ui/react-icons';
 import Image from 'next/image';
 import React from 'react';
 import { type FileError, type FileRejection, useDropzone } from 'react-dropzone';
@@ -537,7 +537,7 @@ export function ReferenceDock({
         ) : null}
 
         <div className="mt-3 flex items-center gap-2">
-          <UploadIcon />
+          <Upload />
           <span className="text-xs text-gray-400">
             Drag from Creative Library to seed your generation.
           </span>
@@ -628,12 +628,12 @@ function RefChip({
       ) : null}
       {onRevert ? (
         <Button size="icon-sm" variant="ghost" onClick={onRevert}>
-          <ReloadIcon />
+          <RotateCw />
         </Button>
       ) : null}
       {onEdit ? (
         <Button size="icon-sm" variant="ghost" onClick={onEdit}>
-          <Pencil2Icon />
+          <SquarePen />
         </Button>
       ) : null}
       <Button
@@ -642,7 +642,7 @@ function RefChip({
         className="text-destructive hover:text-destructive"
         onClick={onRemove}
       >
-        <TrashIcon />
+        <Trash2 />
       </Button>
     </div>
   );
@@ -701,12 +701,12 @@ function FrameTile({
           <div className="absolute right-1 top-1 flex items-center gap-1">
             {onRevert ? (
               <Button size="icon-sm" variant="outline" onClick={onRevert}>
-                <ReloadIcon />
+                <RotateCw />
               </Button>
             ) : null}
             {onEdit ? (
               <Button size="icon-sm" variant="outline" onClick={onEdit}>
-                <Pencil2Icon />
+                <SquarePen />
               </Button>
             ) : null}
             <Button

@@ -1,4 +1,4 @@
-import { PlayIcon, ReloadIcon, StopIcon } from '@radix-ui/react-icons';
+import { Play, RotateCw, Square } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -35,7 +35,7 @@ export function Toolbar() {
       {!isRunning ? (
         <div className="flex items-center gap-1">
           <Button data-tour-id="studio-run-flow" variant="default" size="sm" onClick={handleRun}>
-            <PlayIcon className="w-4 h-4 mr-2" />
+            <Play className="w-4 h-4 mr-2" />
             Run Flow
           </Button>
           <TooltipProvider>
@@ -49,7 +49,7 @@ export function Toolbar() {
                     className="h-8 w-8"
                     onClick={handleRerunAll}
                   >
-                    <ReloadIcon className="w-4 h-4" />
+                    <RotateCw className="w-4 h-4" />
                   </Button>
                 }
               />
@@ -60,7 +60,7 @@ export function Toolbar() {
       ) : (
         <div className="flex items-center gap-2">
           <Button variant="destructive" size="sm" onClick={handleAbort}>
-            <StopIcon className="w-4 h-4 mr-2" />
+            <Square className="w-4 h-4 mr-2" />
             Abort
           </Button>
           {streamState.progressPct !== undefined && (

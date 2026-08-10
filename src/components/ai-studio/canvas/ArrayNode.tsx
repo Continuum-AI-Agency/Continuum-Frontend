@@ -1,8 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { PlusIcon, TrashIcon } from '@radix-ui/react-icons';
 import { Handle, Position } from '@xyflow/react';
+import { Plus, Trash2 } from 'lucide-react';
 import React from 'react';
 
 import { Pill } from '@/components/kibo-ui/pill';
@@ -74,7 +74,7 @@ export function ArrayNode({ id: nodeId, data, selected }: ArrayNodeProps) {
               onClick={() => removeItem(index)}
               className="shrink-0 text-destructive hover:text-destructive"
             >
-              <TrashIcon />
+              <Trash2 />
             </Button>
           </div>
         ))}
@@ -82,7 +82,7 @@ export function ArrayNode({ id: nodeId, data, selected }: ArrayNodeProps) {
 
       <div className="mt-3 flex justify-center">
         <Button variant="outline" onClick={addItem}>
-          <PlusIcon /> Add Item
+          <Plus /> Add Item
         </Button>
       </div>
 

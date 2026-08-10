@@ -3,7 +3,7 @@
 // House-modified: diverged from the upstream ai-elements component of the same name.
 // Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
 import { Collapsible } from '@base-ui/react/collapsible';
-import { ChevronDownIcon, InfoCircledIcon } from '@radix-ui/react-icons';
+import { ChevronDown, Info } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -30,11 +30,11 @@ export function ReasoningTrigger({ children }: { children: ReactNode }) {
       render={
         <div className="flex cursor-pointer items-center justify-between p-2 transition-colors hover:bg-muted/40">
           <div className="flex items-center gap-2">
-            <InfoCircledIcon className="text-secondary" aria-hidden="true" />
+            <Info className="text-secondary" aria-hidden="true" />
             <span className="text-sm font-medium text-secondary">{children}</span>
           </div>
           <Button variant="ghost" size="icon-sm">
-            <ChevronDownIcon className="transition-transform duration-200" aria-hidden="true" />
+            <ChevronDown className="transition-transform duration-200" aria-hidden="true" />
           </Button>
         </div>
       }

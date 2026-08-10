@@ -1,7 +1,6 @@
 'use client';
 
-import { Cross2Icon, ImageIcon, VideoIcon } from '@radix-ui/react-icons';
-import { Plus, Type } from 'lucide-react';
+import { Image, Plus, Type, Video, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -162,9 +161,9 @@ export function ClipInspector({
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           {isVideo ? (
-            <VideoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <Video className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           ) : (
-            <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <Image className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
           <span className="truncate text-xs font-semibold">{label}</span>
         </div>
@@ -175,7 +174,7 @@ export function ClipInspector({
           aria-label="Deselect clip"
           onClick={onClose}
         >
-          <Cross2Icon className="h-3 w-3" />
+          <X className="h-3 w-3" />
         </Button>
       </div>
 
@@ -550,7 +549,7 @@ export function ClipInspector({
                 aria-label="Remove text overlay"
                 onClick={() => updateText(textOverlays.filter((entry) => entry.id !== overlay.id))}
               >
-                <Cross2Icon className="h-3 w-3" />
+                <X className="h-3 w-3" />
               </Button>
             </div>
           ))

@@ -1,6 +1,6 @@
 'use client';
+import { Plus, Trash2 } from 'lucide-react';
 
-import { PlusIcon, TrashIcon } from '@radix-ui/react-icons';
 import { type Control, Controller, type FieldArrayPath, useFieldArray } from 'react-hook-form';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -43,7 +43,7 @@ export function BrandGuidelineTagsSection({
             onClick={() => append({ label: '', description: '' })}
             disabled={count >= TAG_LIMIT}
           >
-            <PlusIcon /> Add tag
+            <Plus /> Add tag
           </Button>
         </div>
         {helper ? <span className="text-xs text-muted-foreground">{helper}</span> : null}
@@ -65,7 +65,7 @@ export function BrandGuidelineTagsSection({
                       className="text-destructive hover:text-destructive"
                       onClick={() => remove(index)}
                     >
-                      <TrashIcon /> Remove
+                      <Trash2 /> Remove
                     </Button>
                   </div>
                   <Controller

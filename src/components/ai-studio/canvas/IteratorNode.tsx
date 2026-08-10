@@ -1,8 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { PlayIcon, StopIcon } from '@radix-ui/react-icons';
 import { Handle, Position } from '@xyflow/react';
+import { Play, Square } from 'lucide-react';
 import React from 'react';
 
 import { Pill } from '@/components/kibo-ui/pill';
@@ -51,10 +51,10 @@ export function IteratorNode({ id: nodeId, data, selected }: IteratorNodeProps) 
 
       <div className="mt-3 flex gap-2">
         <Button variant="outline" onClick={handleIterate} className="flex-1">
-          <PlayIcon /> Iterate
+          <Play /> Iterate
         </Button>
         <Button variant="ghost" onClick={handleReset}>
-          <StopIcon />
+          <Square />
         </Button>
       </div>
 

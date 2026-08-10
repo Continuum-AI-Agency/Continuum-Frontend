@@ -1,6 +1,6 @@
 'use client';
+import { RotateCw } from 'lucide-react';
 
-import { ReloadIcon } from '@radix-ui/react-icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { PaidPerformanceMetricKey } from '@/components/paid-media/PaidMediaReportingWidget';
@@ -122,7 +122,7 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
           }}
           aria-label="Refresh pacing"
         >
-          <ReloadIcon className={state.status === 'loading' ? 'animate-spin' : undefined} />
+          <RotateCw className={state.status === 'loading' ? 'animate-spin' : undefined} />
         </Button>
       </div>
 

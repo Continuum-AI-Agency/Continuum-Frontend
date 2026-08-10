@@ -19,18 +19,18 @@ describe('GenerationProgressPanel', () => {
       />,
     );
 
-    expect(screen.getByTestId('generation-progress-panel')).toBeInTheDocument();
-    expect(screen.getByTestId('generation-progress-bar')).toBeInTheDocument();
-    expect(screen.getByText('45%')).toBeInTheDocument();
-    expect(screen.getByText('Drafting content...')).toBeInTheDocument();
-    expect(screen.getByText('Drafting')).toBeInTheDocument();
+    expect(screen.getByTestId('generation-progress-panel')).toBeTruthy();
+    expect(screen.getByTestId('generation-progress-bar')).toBeTruthy();
+    expect(screen.getByText('45%')).toBeTruthy();
+    expect(screen.getByText('Drafting content...')).toBeTruthy();
+    expect(screen.getByText('Drafting')).toBeTruthy();
   });
 
   it('renders complete state', () => {
     render(<GenerationProgressPanel status="complete" percent={100} stage="finalizing" />);
 
-    expect(screen.getByText('Generation Complete')).toBeInTheDocument();
-    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.getByText('Generation Complete')).toBeTruthy();
+    expect(screen.getByText('100%')).toBeTruthy();
   });
 
   it('renders error state', () => {
@@ -38,9 +38,9 @@ describe('GenerationProgressPanel', () => {
       <GenerationProgressPanel status="error" percent={0} error="Failed to connect to service" />,
     );
 
-    expect(screen.getByText('Generation Failed')).toBeInTheDocument();
-    expect(screen.getByText('Failed to connect to service')).toBeInTheDocument();
-    expect(screen.queryByTestId('generation-progress-bar')).not.toBeInTheDocument();
+    expect(screen.getByText('Generation Failed')).toBeTruthy();
+    expect(screen.getByText('Failed to connect to service')).toBeTruthy();
+    expect(screen.queryByTestId('generation-progress-bar')).toBeNull();
   });
 
   it('shows correct stage badge', () => {
@@ -56,7 +56,7 @@ describe('GenerationProgressPanel', () => {
       const { unmount } = render(
         <GenerationProgressPanel status="running" percent={50} stage={stage} />,
       );
-      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.getByText(label)).toBeTruthy();
       unmount();
     });
   });
@@ -65,6 +65,6 @@ describe('GenerationProgressPanel', () => {
     render(<GenerationProgressPanel status="error" percent={0} error="Test error message" />);
 
     const errorBox = screen.getByRole('alert');
-    expect(errorBox).toHaveAttribute('aria-live', 'assertive');
+    expect(errorBox?.getAttribute('aria-live')).toBe('assertive');
   });
 });

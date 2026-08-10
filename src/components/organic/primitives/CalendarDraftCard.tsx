@@ -1,16 +1,16 @@
 'use client';
 
 import {
-  CheckIcon,
-  CopyIcon,
-  Cross2Icon,
-  ImageIcon,
-  LightningBoltIcon,
-  Pencil1Icon,
-  QuestionMarkCircledIcon,
-  TrashIcon,
-} from '@radix-ui/react-icons';
-import { GalleryHorizontalEnd } from 'lucide-react';
+  Check,
+  CircleQuestionMark,
+  Copy,
+  GalleryHorizontalEnd,
+  Image as ImageIcon,
+  Pencil,
+  Trash2,
+  X,
+  Zap,
+} from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import Image from 'next/image';
 import * as React from 'react';
@@ -106,7 +106,7 @@ function CardStageAction({ label, onActivate }: { label: string; onActivate: () 
         }
       }}
     >
-      <LightningBoltIcon className="h-2.5 w-2.5" aria-hidden />
+      <Zap className="h-2.5 w-2.5" aria-hidden />
       {label}
     </span>
   );
@@ -363,7 +363,7 @@ export function CalendarDraftCard({
                                     className="p-0.5 -m-0.5 cursor-help"
                                     onClick={(e) => e.stopPropagation()}
                                   >
-                                    <QuestionMarkCircledIcon className="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-brand-primary" />
+                                    <CircleQuestionMark className="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-brand-primary" />
                                   </div>
                                 }
                               />
@@ -381,7 +381,7 @@ export function CalendarDraftCard({
                       <div className="flex items-center gap-1.5">
                         {isMultiSelected && (
                           <div className="w-3.5 h-3.5 bg-brand-primary rounded-full flex items-center justify-center">
-                            <CheckIcon className="w-2.5 h-2.5 text-brand-primary-foreground" />
+                            <Check className="w-2.5 h-2.5 text-brand-primary-foreground" />
                           </div>
                         )}
                         {onRegenerate && draft.status !== 'streaming' && (
@@ -402,7 +402,7 @@ export function CalendarDraftCard({
                               }
                             }}
                           >
-                            <LightningBoltIcon className="h-3.5 w-3.5 text-brand-primary" />
+                            <Zap className="h-3.5 w-3.5 text-brand-primary" />
                           </span>
                         )}
                         <StatusBadge
@@ -491,7 +491,7 @@ export function CalendarDraftCard({
                                 }
                               }}
                             >
-                              <LightningBoltIcon className="h-3 w-3" />
+                              <Zap className="h-3 w-3" />
                               Retry
                             </span>
                           ) : null}
@@ -512,7 +512,7 @@ export function CalendarDraftCard({
                               }
                             }}
                           >
-                            <Cross2Icon className="h-3 w-3" />
+                            <X className="h-3 w-3" />
                             Clear
                           </span>
                         </div>
@@ -646,12 +646,12 @@ export function CalendarDraftCard({
         <ContextMenuContent className="w-56">
           <ContextMenuLabel>Quick Edit</ContextMenuLabel>
           <ContextMenuItem onSelect={() => beginEditingDraft(draft.id)}>
-            <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
+            <Pencil className="mr-2 h-3.5 w-3.5" />
             Open in editor
           </ContextMenuItem>
           {draft.status !== 'streaming' && draft.status !== 'placeholder' ? (
             <ContextMenuItem onSelect={() => setDuplicatePickerOpen(true)}>
-              <CopyIcon className="mr-2 h-3.5 w-3.5" />
+              <Copy className="mr-2 h-3.5 w-3.5" />
               Duplicate...
             </ContextMenuItem>
           ) : null}
@@ -709,13 +709,13 @@ export function CalendarDraftCard({
           <ContextMenuSeparator />
           {onRegenerate ? (
             <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
-              <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
+              <Zap className="mr-2 h-3.5 w-3.5" />
               {isFailed ? 'Retry generation' : 'Regenerate'}
             </ContextMenuItem>
           ) : null}
           {isFailed ? (
             <ContextMenuItem onSelect={clearFailure}>
-              <Cross2Icon className="mr-2 h-3.5 w-3.5" />
+              <X className="mr-2 h-3.5 w-3.5" />
               Clear failure
             </ContextMenuItem>
           ) : null}
@@ -752,7 +752,7 @@ export function CalendarDraftCard({
             className="text-destructive focus:text-destructive"
             onSelect={() => requestDraftDeletion([draft.id], bulkDeleteDrafts)}
           >
-            <TrashIcon className="mr-2 h-3.5 w-3.5" />
+            <Trash2 className="mr-2 h-3.5 w-3.5" />
             Delete draft
           </ContextMenuItem>
         </ContextMenuContent>

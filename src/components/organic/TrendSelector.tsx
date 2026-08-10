@@ -1,6 +1,6 @@
 'use client';
+import { RefreshCw, Zap } from 'lucide-react';
 
-import { LightningBoltIcon, UpdateIcon } from '@radix-ui/react-icons';
 import type * as React from 'react';
 import {
   Accordion,
@@ -73,11 +73,11 @@ export function TrendSelector({
                 disabled={isFetching}
               >
                 {isFetching ? (
-                  <UpdateIcon className="mr-1 h-3 w-3 animate-spin" />
+                  <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
                 ) : hasTrends ? (
-                  <UpdateIcon className="mr-1 h-3 w-3" />
+                  <RefreshCw className="mr-1 h-3 w-3" />
                 ) : (
-                  <LightningBoltIcon className="mr-1 h-3 w-3" />
+                  <Zap className="mr-1 h-3 w-3" />
                 )}
                 {isFetching ? 'Generating…' : hasTrends ? 'Refresh' : 'Generate Trends'}
               </Button>

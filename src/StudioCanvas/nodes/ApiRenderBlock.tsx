@@ -6,7 +6,6 @@ import type {
   ApiRenderTemplateSummary,
   PaidCanvasTarget,
 } from '@continuum/contracts';
-import { CopyIcon, TrashIcon } from '@radix-ui/react-icons';
 import {
   Handle,
   type NodeProps,
@@ -14,7 +13,7 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
-import { RefreshCw } from 'lucide-react';
+import { Copy, RefreshCw, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -259,6 +258,7 @@ export function ApiRenderBlock({
           </select>
 
           {(data.variableDefinitions ?? []).map((variable) => (
+            // biome-ignore lint/a11y/noLabelWithoutControl: wraps its own input a few lines below
             <label
               key={variable.key}
               className="relative flex flex-col gap-1 rounded border border-border/70 p-2"
@@ -451,7 +451,7 @@ export function ApiRenderBlock({
           onClick={() => duplicateNode(id)}
           aria-label="Duplicate"
         >
-          <CopyIcon />
+          <Copy />
         </button>
         <button
           type="button"
@@ -459,7 +459,7 @@ export function ApiRenderBlock({
           onClick={() => deleteNode(id)}
           aria-label="Delete"
         >
-          <TrashIcon />
+          <Trash2 />
         </button>
       </div>
     </div>

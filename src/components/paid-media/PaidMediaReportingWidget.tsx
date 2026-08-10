@@ -1,6 +1,6 @@
 'use client';
+import { PieChart, RotateCw } from 'lucide-react';
 
-import { PieChartIcon, ReloadIcon } from '@radix-ui/react-icons';
 import React, { useCallback, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -516,7 +516,7 @@ export function PaidMediaReportingWidget({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Pill variant="teal">
-                <PieChartIcon />
+                <PieChart />
               </Pill>
               <div>
                 <span className="font-medium">Paid Media Performance</span>
@@ -564,7 +564,7 @@ export function PaidMediaReportingWidget({
                 }
                 title="Refresh data"
               >
-                <ReloadIcon className={state.status.startsWith('loading') ? 'animate-spin' : ''} />
+                <RotateCw className={state.status.startsWith('loading') ? 'animate-spin' : ''} />
               </Button>
             </div>
           </div>

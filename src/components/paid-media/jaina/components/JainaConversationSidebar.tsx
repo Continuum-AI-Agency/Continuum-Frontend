@@ -1,8 +1,7 @@
 'use client';
 
 import type { AgentSessionListFilters } from '@continuum/contracts';
-import { PlusIcon } from '@radix-ui/react-icons';
-import { Loader2Icon, Trash2Icon } from 'lucide-react';
+import { Loader2Icon, Plus, Trash2Icon } from 'lucide-react';
 import React from 'react';
 import { AgentInitiatorPill } from '@/components/chat/AgentInitiatorPill';
 import { ChatHistoryFilterBar } from '@/components/chat/ChatHistoryFilterBar';
@@ -188,7 +187,7 @@ export function JainaConversationSidebar({
             className="gap-1"
             aria-label="Create new conversation"
           >
-            <PlusIcon />
+            <Plus />
             New
           </Button>
         ) : mode === 'goals' ? (

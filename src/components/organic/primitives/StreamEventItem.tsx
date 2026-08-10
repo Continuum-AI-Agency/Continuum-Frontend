@@ -1,6 +1,6 @@
 'use client';
+import { Check, FileText, RotateCw, X } from 'lucide-react';
 
-import { CheckIcon, Cross2Icon, FileTextIcon, ReloadIcon } from '@radix-ui/react-icons';
 import type * as React from 'react';
 import type { CalendarGenerationEvent } from '@/lib/organic/calendar-generation';
 import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
@@ -14,11 +14,11 @@ interface StreamEventItemProps {
 }
 
 const stageIcons: Record<string, React.ReactNode> = {
-  analyzing: <ReloadIcon className="w-3.5 h-3.5" />,
-  optimizing: <ReloadIcon className="w-3.5 h-3.5" />,
-  drafting: <FileTextIcon className="w-3.5 h-3.5" />,
-  matching: <ReloadIcon className="w-3.5 h-3.5" />,
-  finalizing: <CheckIcon className="w-3.5 h-3.5" />,
+  analyzing: <RotateCw className="w-3.5 h-3.5" />,
+  optimizing: <RotateCw className="w-3.5 h-3.5" />,
+  drafting: <FileText className="w-3.5 h-3.5" />,
+  matching: <RotateCw className="w-3.5 h-3.5" />,
+  finalizing: <Check className="w-3.5 h-3.5" />,
 };
 
 const stageColors: Record<string, string> = {
@@ -89,7 +89,7 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
     return (
       <div className="flex items-center gap-3 py-2 px-3 rounded-md hover:bg-muted/50 transition-colors">
         <div className="flex items-center justify-center text-warning">
-          <ReloadIcon className="w-3.5 h-3.5" />
+          <RotateCw className="w-3.5 h-3.5" />
         </div>
         <div className="flex flex-col flex-1 min-w-0">
           <span className="text-sm truncate">
@@ -109,7 +109,7 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
         role="alert"
       >
         <div className="flex items-center justify-center text-destructive">
-          <Cross2Icon className="w-3.5 h-3.5" />
+          <X className="w-3.5 h-3.5" />
         </div>
         <div className="flex flex-col flex-1 min-w-0">
           <span className="text-sm text-destructive truncate">
@@ -129,7 +129,7 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
         role="alert"
       >
         <div className="flex items-center justify-center text-destructive">
-          <Cross2Icon className="w-3.5 h-3.5" />
+          <X className="w-3.5 h-3.5" />
         </div>
         <div className="flex flex-col flex-1 min-w-0">
           <span className="text-sm text-destructive truncate">
@@ -146,7 +146,7 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
     return (
       <div className="flex items-center gap-3 py-2 px-3 rounded-md bg-success/10 border border-success/20">
         <div className="flex items-center justify-center text-success">
-          <CheckIcon className="w-3.5 h-3.5" />
+          <Check className="w-3.5 h-3.5" />
         </div>
         <div className="flex flex-col flex-1 min-w-0">
           <span className="text-sm truncate">Generation complete</span>

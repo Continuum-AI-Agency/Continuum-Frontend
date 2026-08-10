@@ -6,7 +6,7 @@ import {
   type PublishPlatform,
   resolvePlannerTimeZone,
 } from '@continuum/contracts';
-import { ChevronLeftIcon, Cross2Icon } from '@radix-ui/react-icons';
+import { ChevronLeft, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
@@ -1310,7 +1310,7 @@ function OrganicCalendarWorkspaceInner({
                         aria-label="Close preview"
                         onClick={clearAll}
                       >
-                        <Cross2Icon className="h-3.5 w-3.5" />
+                        <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -1542,7 +1542,7 @@ function OrganicCalendarWorkspaceInner({
             onClick={expandPreview}
             className="bg-background hover:bg-accent absolute right-1 top-3 z-30 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border shadow-sm transition-colors"
           >
-            <ChevronLeftIcon className="h-3.5 w-3.5 text-muted-foreground" />
+            <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
         ) : null}
 

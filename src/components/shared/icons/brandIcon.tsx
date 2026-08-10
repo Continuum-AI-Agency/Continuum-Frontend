@@ -8,6 +8,7 @@ import {
   type BrandIconData,
   facebook,
   figma,
+  github,
   google,
   instagram,
   linkedin,
@@ -42,6 +43,7 @@ export function makeSvgIcon(iconData: BrandIconData): IconComponent {
 export const AmazonIcon = makeSvgIcon(amazon);
 export const FacebookIcon = makeSvgIcon(facebook);
 export const FigmaIcon = makeSvgIcon(figma);
+export const GitHubIcon = makeSvgIcon(github);
 export const GoogleIcon = makeSvgIcon(google);
 export const InstagramIcon = makeSvgIcon(instagram);
 export const LinkedInIcon = makeSvgIcon(linkedin);

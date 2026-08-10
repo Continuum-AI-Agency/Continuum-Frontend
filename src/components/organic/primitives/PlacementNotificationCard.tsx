@@ -1,8 +1,8 @@
 'use client';
 
-import { InstagramLogoIcon, LinkedInLogoIcon } from '@radix-ui/react-icons';
 import type * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
+import { InstagramIcon, LinkedInIcon } from '@/components/shared/icons';
 import type { CalendarPlacement } from '@/lib/organic/calendar-generation';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
@@ -14,8 +14,8 @@ interface PlacementNotificationCardProps {
 }
 
 const platformIcons: Record<string, React.ReactNode> = {
-  instagram: <InstagramLogoIcon className="w-3.5 h-3.5" />,
-  linkedin: <LinkedInLogoIcon className="w-3.5 h-3.5" />,
+  instagram: <InstagramIcon className="w-3.5 h-3.5" />,
+  linkedin: <LinkedInIcon className="w-3.5 h-3.5" />,
 };
 
 const platformLabels: Record<string, string> = {

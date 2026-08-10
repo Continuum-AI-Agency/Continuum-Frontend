@@ -1,6 +1,6 @@
 'use client';
+import { RotateCw, Search } from 'lucide-react';
 
-import { MagnifyingGlassIcon, ReloadIcon } from '@radix-ui/react-icons';
 import { AnimatePresence, motion } from 'motion/react';
 import * as React from 'react';
 import { CreativeSwapComparison } from '@/components/dco/CreativeSwapComparison';
@@ -350,7 +350,7 @@ export function DCOActionAlertsBox({
               disabled={isLoading}
               aria-label="Refresh alerts"
             >
-              <ReloadIcon className={cn('h-4 w-4', isLoading ? 'animate-spin' : undefined)} />
+              <RotateCw className={cn('h-4 w-4', isLoading ? 'animate-spin' : undefined)} />
             </Button>
           </div>
 
@@ -388,7 +388,7 @@ export function DCOActionAlertsBox({
                       key={`alert-command-${log.id}`}
                       onSelect={() => setSearch(`${log.actionType} ${log.metaCampaignId ?? ''}`)}
                     >
-                      <MagnifyingGlassIcon className="h-3.5 w-3.5" />
+                      <Search className="h-3.5 w-3.5" />
                       <span className="truncate">{log.actionType}</span>
                       <span className="ml-auto text-2xs text-muted-foreground">{log.status}</span>
                     </CommandItem>

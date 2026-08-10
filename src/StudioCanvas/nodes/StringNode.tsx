@@ -1,4 +1,3 @@
-import { LinkBreak2Icon, MagicWandIcon } from '@radix-ui/react-icons';
 import {
   Handle,
   type NodeProps,
@@ -7,7 +6,7 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { Copy, Sparkles, Trash2 } from 'lucide-react';
+import { Copy, Sparkles, Trash2, Unlink, Wand2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo } from 'react';
 import {
@@ -202,7 +201,7 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5">
-                        <MagicWandIcon className="w-3.5 h-3.5 fill-white" />
+                        <Wand2 className="w-3.5 h-3.5 fill-white" />
                         <span className="font-semibold tracking-wide">Enrich Prompt</span>
                       </div>
                     )}
@@ -274,7 +273,7 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
         <ContextMenuLabel>Text Block</ContextMenuLabel>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => void handleEnrich()}>
-          <MagicWandIcon className="mr-2 h-4 w-4" />
+          <Wand2 className="mr-2 h-4 w-4" />
           Enrich Prompt
           <ContextMenuShortcut>R</ContextMenuShortcut>
         </ContextMenuItem>
@@ -287,7 +286,7 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
           disabled={getConnectedEdges(id).length === 0}
           onClick={() => detachNodeConnections(id)}
         >
-          <LinkBreak2Icon className="mr-2 h-4 w-4" />
+          <Unlink className="mr-2 h-4 w-4" />
           Detach connections
         </ContextMenuItem>
         <ContextMenuSeparator />

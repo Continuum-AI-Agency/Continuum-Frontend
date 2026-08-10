@@ -1,6 +1,5 @@
 'use client';
-
-import { CheckCircledIcon, ExclamationTriangleIcon, InfoCircledIcon } from '@radix-ui/react-icons';
+import { CircleCheck, Info, TriangleAlert } from 'lucide-react';
 
 type FormAlertVariant = 'error' | 'success' | 'warning' | 'info';
 
@@ -40,10 +39,10 @@ const VARIANT_STYLES: Record<
 };
 
 const VARIANT_ICONS: Record<FormAlertVariant, React.ReactNode> = {
-  error: <ExclamationTriangleIcon className="w-5 h-5" />,
-  success: <CheckCircledIcon className="w-5 h-5" />,
-  warning: <ExclamationTriangleIcon className="w-5 h-5" />,
-  info: <InfoCircledIcon className="w-5 h-5" />,
+  error: <TriangleAlert className="w-5 h-5" />,
+  success: <CircleCheck className="w-5 h-5" />,
+  warning: <TriangleAlert className="w-5 h-5" />,
+  info: <Info className="w-5 h-5" />,
 };
 
 export function FormAlert({ message, variant = 'error' }: FormAlertProps) {

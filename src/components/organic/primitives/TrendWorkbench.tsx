@@ -1,15 +1,17 @@
 'use client';
 
-import { CheckIcon, LightningBoltIcon, UpdateIcon } from '@radix-ui/react-icons';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
+  Check,
   ChevronDown,
   ExternalLink,
   Heart,
   Loader2,
   MessageCircle,
+  RefreshCw,
   Sparkles,
+  Zap,
 } from 'lucide-react';
 import * as React from 'react';
 
@@ -313,7 +315,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
         <TableCell className="align-top">
           {isSelected ? (
             <span className="inline-flex rounded-full bg-primary/15 p-1 text-primary">
-              <CheckIcon className="h-3 w-3" />
+              <Check className="h-3 w-3" />
             </span>
           ) : (
             <span className="inline-flex h-5 w-5 rounded-full border border-border/70" />
@@ -573,9 +575,9 @@ function TrendWorkbenchEmptyState({
             disabled={isFetching}
           >
             {isFetching ? (
-              <UpdateIcon className="mr-1 h-3 w-3 animate-spin" />
+              <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
             ) : (
-              <UpdateIcon className="mr-1 h-3 w-3" />
+              <RefreshCw className="mr-1 h-3 w-3" />
             )}
             {isFetching ? 'Retrying…' : 'Retry'}
           </Button>
@@ -604,9 +606,9 @@ function TrendWorkbenchEmptyState({
             disabled={isFetching}
           >
             {isFetching ? (
-              <UpdateIcon className="mr-1 h-3 w-3 animate-spin" />
+              <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
             ) : (
-              <LightningBoltIcon className="mr-1 h-3 w-3" />
+              <Zap className="mr-1 h-3 w-3" />
             )}
             {isFetching ? 'Generating…' : 'Generate Trends'}
           </Button>
@@ -857,11 +859,11 @@ export function TrendWorkbench({
               disabled={isFetching}
             >
               {isFetching ? (
-                <UpdateIcon className="mr-1 h-3 w-3 animate-spin" />
+                <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
               ) : trends.length === 0 ? (
-                <LightningBoltIcon className="mr-1 h-3 w-3" />
+                <Zap className="mr-1 h-3 w-3" />
               ) : (
-                <UpdateIcon className="mr-1 h-3 w-3" />
+                <RefreshCw className="mr-1 h-3 w-3" />
               )}
               {isFetching ? 'Generating…' : trends.length === 0 ? 'Generate Trends' : 'Refresh'}
             </Button>
@@ -906,7 +908,7 @@ export function TrendWorkbench({
                           >
                             <span className="truncate">{trend.title}</span>
                             {isSelected ? (
-                              <CheckIcon className="ml-auto h-3.5 w-3.5 text-primary" />
+                              <Check className="ml-auto h-3.5 w-3.5 text-primary" />
                             ) : null}
                           </CommandItem>
                         );

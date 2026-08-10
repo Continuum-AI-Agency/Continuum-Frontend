@@ -1,6 +1,6 @@
 'use client';
+import { Check, Plus, Trash2 } from 'lucide-react';
 
-import { CheckIcon, PlusIcon, TrashIcon } from '@radix-ui/react-icons';
 import { useCallback, useMemo, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -69,7 +69,7 @@ export function PromptSelector({
         <div className="flex justify-between items-center flex-wrap gap-2">
           <h2 className="text-lg font-semibold">Prompt Strategy</h2>
           <Button variant="secondary" size="sm" onClick={() => setIsCreating((prev) => !prev)}>
-            <PlusIcon /> {isCreating ? 'Close' : 'Create Prompt'}
+            <Plus /> {isCreating ? 'Close' : 'Create Prompt'}
           </Button>
         </div>
 
@@ -106,7 +106,7 @@ export function PromptSelector({
                   Cancel
                 </Button>
                 <Button disabled={!name.trim() || !content.trim()} onClick={handleCreate}>
-                  <CheckIcon /> Save Prompt
+                  <Check /> Save Prompt
                 </Button>
               </div>
             </div>
@@ -165,7 +165,7 @@ export function PromptSelector({
                                 onDeletePrompt(prompt.id);
                               }}
                             >
-                              <TrashIcon /> Remove
+                              <Trash2 /> Remove
                             </Button>
                           </div>
                         )}

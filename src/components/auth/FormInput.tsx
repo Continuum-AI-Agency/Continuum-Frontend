@@ -1,6 +1,6 @@
 'use client';
+import { Eye, EyeOff } from 'lucide-react';
 
-import { EyeNoneIcon, EyeOpenIcon } from '@radix-ui/react-icons';
 import { forwardRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,9 +50,9 @@ export const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? (
-                <EyeNoneIcon className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                <EyeOff className="w-4 h-4 text-gray-500 dark:text-gray-400" />
               ) : (
-                <EyeOpenIcon className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                <Eye className="w-4 h-4 text-gray-500 dark:text-gray-400" />
               )}
             </Button>
           )}

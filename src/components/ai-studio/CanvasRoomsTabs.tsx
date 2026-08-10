@@ -1,6 +1,6 @@
 'use client';
+import { Check, Plus, SquarePen, Trash2 } from 'lucide-react';
 
-import { CheckIcon, Pencil2Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons';
 import React, { useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -95,10 +95,7 @@ export function CanvasRoomsTabs({
                     if (e.key === 'Escape') setEditingRoomId(null);
                   }}
                 />
-                <CheckIcon
-                  className="h-3.5 w-3.5 cursor-pointer hover:scale-110"
-                  onClick={saveEdit}
-                />
+                <Check className="h-3.5 w-3.5 cursor-pointer hover:scale-110" onClick={saveEdit} />
               </div>
             ) : (
               <div className="flex items-center gap-2">
@@ -110,7 +107,7 @@ export function CanvasRoomsTabs({
                 ) : null}
                 {isActive && room.kind !== 'planner' && (
                   <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1.5 ml-1">
-                    <Pencil2Icon
+                    <SquarePen
                       className="h-3.5 w-3.5 text-muted-foreground hover:scale-110 hover:text-primary"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -118,7 +115,7 @@ export function CanvasRoomsTabs({
                       }}
                     />
                     {generalRooms.length > 1 && (
-                      <TrashIcon
+                      <Trash2
                         className="h-3.5 w-3.5 text-muted-foreground hover:scale-110 hover:text-destructive"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -144,7 +141,7 @@ export function CanvasRoomsTabs({
                   onClick={handleCreate}
                   className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-background/50 text-muted-foreground transition-all hover:border-primary/25 hover:bg-primary/10 hover:text-primary"
                 >
-                  <PlusIcon className="h-4 w-4" />
+                  <Plus className="h-4 w-4" />
                 </button>
               }
             />

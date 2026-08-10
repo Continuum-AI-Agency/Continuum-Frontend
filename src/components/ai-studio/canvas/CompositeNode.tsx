@@ -1,8 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { MixIcon } from '@radix-ui/react-icons';
 import { Handle, Position } from '@xyflow/react';
+import { Shuffle } from 'lucide-react';
 import React from 'react';
 
 import { Pill } from '@/components/kibo-ui/pill';
@@ -223,7 +223,7 @@ export function CompositeNode({ id: nodeId, data, selected }: CompositeNodeProps
               window.dispatchEvent(new CustomEvent('node:composite', { detail: { id: nodeId } }))
             }
           >
-            <MixIcon /> Composite
+            <Shuffle /> Composite
           </Button>
         </div>
       </div>

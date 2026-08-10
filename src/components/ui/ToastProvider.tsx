@@ -1,12 +1,7 @@
 'use client';
 
 import { Toast as ToastPrimitive } from '@base-ui/react/toast';
-import {
-  CheckCircledIcon,
-  Cross2Icon,
-  ExclamationTriangleIcon,
-  InfoCircledIcon,
-} from '@radix-ui/react-icons';
+import { CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type React from 'react';
 import { createContext, useCallback, useContext, useMemo } from 'react';
@@ -44,7 +39,7 @@ const TOAST_SURFACE = 'bg-popover/95 border-border';
 
 const TOAST_PALETTE: Record<ToastVariant, ToastVisual> = {
   success: {
-    icon: <CheckCircledIcon className="h-5 w-5 text-success" />,
+    icon: <CircleCheck className="h-5 w-5 text-success" />,
     accent: 'bg-success',
     ring: 'focus-visible:ring-success',
     bg: TOAST_SURFACE,
@@ -52,7 +47,7 @@ const TOAST_PALETTE: Record<ToastVariant, ToastVisual> = {
     subtext: 'text-muted-foreground',
   },
   info: {
-    icon: <InfoCircledIcon className="h-5 w-5 text-primary" />,
+    icon: <Info className="h-5 w-5 text-primary" />,
     accent: 'bg-primary',
     ring: 'focus-visible:ring-primary',
     bg: TOAST_SURFACE,
@@ -60,7 +55,7 @@ const TOAST_PALETTE: Record<ToastVariant, ToastVisual> = {
     subtext: 'text-muted-foreground',
   },
   warning: {
-    icon: <ExclamationTriangleIcon className="h-5 w-5 text-warning" />,
+    icon: <TriangleAlert className="h-5 w-5 text-warning" />,
     accent: 'bg-warning',
     ring: 'focus-visible:ring-warning',
     bg: TOAST_SURFACE,
@@ -68,7 +63,7 @@ const TOAST_PALETTE: Record<ToastVariant, ToastVisual> = {
     subtext: 'text-muted-foreground',
   },
   error: {
-    icon: <ExclamationTriangleIcon className="h-5 w-5 text-destructive" />,
+    icon: <TriangleAlert className="h-5 w-5 text-destructive" />,
     accent: 'bg-destructive',
     ring: 'focus-visible:ring-destructive',
     bg: TOAST_SURFACE,
@@ -204,7 +199,7 @@ function ToastList() {
                   aria-label="Dismiss toast"
                   className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 ${paletteItem.ring}`}
                 >
-                  <Cross2Icon className="h-4 w-4" />
+                  <X className="h-4 w-4" />
                 </ToastPrimitive.Close>
               </div>
 

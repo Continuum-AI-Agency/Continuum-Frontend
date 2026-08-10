@@ -1,6 +1,6 @@
 'use client';
+import { Archive, Layers, RotateCcw, Target, X } from 'lucide-react';
 
-import { ArchiveIcon, Cross2Icon, LayersIcon, ResetIcon, TargetIcon } from '@radix-ui/react-icons';
 import React from 'react';
 import {
   AlertDialog,
@@ -44,20 +44,20 @@ export function JainaHeader({
 
         <div className="hidden sm:flex items-center gap-3 overflow-x-auto no-scrollbar py-1">
           <div className="flex items-center gap-1.5 shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
-            <ArchiveIcon className="size-3" />
+            <Archive className="size-3" />
             <span className="truncate max-w-[100px]">{brandName}</span>
           </div>
 
           {adAccountId && (
             <div className="flex items-center gap-1.5 shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
-              <LayersIcon className="size-3" />
+              <Layers className="size-3" />
               <span className="font-mono truncate max-w-[120px]">{adAccountId}</span>
             </div>
           )}
 
           {campaignId && (
             <div className="flex items-center gap-1.5 shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
-              <TargetIcon className="size-3" />
+              <Target className="size-3" />
               <span className="truncate max-w-[120px]">{campaignId}</span>
             </div>
           )}
@@ -74,7 +74,7 @@ export function JainaHeader({
                 className="hover:bg-white/10"
                 aria-label="Clear Memory"
               >
-                <ResetIcon />
+                <RotateCcw />
                 <span className="hidden xs:inline">Memory</span>
               </Button>
             }
@@ -108,7 +108,7 @@ export function JainaHeader({
                 className="hover:bg-white/10"
                 aria-label="Clear Conversation"
               >
-                <Cross2Icon />
+                <X />
                 <span className="hidden xs:inline">Clear</span>
               </Button>
             }

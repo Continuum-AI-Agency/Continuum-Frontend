@@ -1,10 +1,10 @@
 'use client';
+import { Send } from 'lucide-react';
 
 // Opens the Continuum Report recipient picker. On-demand emails are "Continuum
 // Report" (not the scheduled Continuum Pulse digest). Same edge builder, product
 // presentation name differs.
 
-import { PaperPlaneIcon } from '@radix-ui/react-icons';
 import { useState } from 'react';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ export function SendPulseButton({ brandId }: SendPulseButtonProps) {
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <PaperPlaneIcon aria-hidden />
+        <Send aria-hidden />
         Email Continuum Report
       </Button>
       <SendContinuumReportDialog brandId={brandId} open={open} onOpenChange={setOpen} />

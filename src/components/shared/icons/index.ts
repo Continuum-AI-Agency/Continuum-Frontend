@@ -2,6 +2,7 @@ export {
   AmazonIcon,
   FacebookIcon,
   FigmaIcon,
+  GitHubIcon,
   GoogleIcon,
   type IconComponent,
   InstagramIcon,

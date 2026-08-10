@@ -1,11 +1,11 @@
 'use client';
 
-import { ReloadIcon } from '@radix-ui/react-icons';
 import {
   BarChart3Icon,
   LayoutGridIcon,
   MapPinIcon,
   PaletteIcon,
+  RotateCw,
   UsersIcon,
   WalletIcon,
 } from 'lucide-react';
@@ -129,7 +129,7 @@ export function AccountInsightsPanel({
             onClick={refresh}
             disabled={isLoading}
           >
-            <ReloadIcon className={isLoading ? 'size-3.5 animate-spin' : 'size-3.5'} />
+            <RotateCw className={isLoading ? 'size-3.5 animate-spin' : 'size-3.5'} />
           </Button>
         }
       />

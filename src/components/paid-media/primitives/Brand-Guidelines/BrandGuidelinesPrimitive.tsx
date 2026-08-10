@@ -1,6 +1,6 @@
 'use client';
+import { TriangleAlert } from 'lucide-react';
 
-import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { BrandGuidelinesEditor } from '@/components/paid-media/primitives/Brand-Guidelines/BrandGuidelinesEditor';
 import { BrandGuidelinesLibrary } from '@/components/paid-media/primitives/Brand-Guidelines/BrandGuidelinesLibrary';
@@ -132,7 +132,7 @@ export function BrandGuidelinesPrimitive({
         <div className="flex flex-col gap-3">
           {error ? (
             <Alert variant="destructive">
-              <ExclamationTriangleIcon />
+              <TriangleAlert />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           ) : null}

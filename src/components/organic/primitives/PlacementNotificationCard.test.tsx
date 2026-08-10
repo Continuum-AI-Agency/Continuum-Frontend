@@ -38,10 +38,10 @@ describe('PlacementNotificationCard', () => {
       <PlacementNotificationCard placement={mockPlacement} timestamp={new Date().toISOString()} />,
     );
 
-    expect(screen.getByTestId('placement-card')).toBeInTheDocument();
-    expect(screen.getByText('IG')).toBeInTheDocument();
-    expect(screen.getByText('Reel')).toBeInTheDocument();
-    expect(screen.getByText('Test Title Topic')).toBeInTheDocument();
+    expect(screen.getByTestId('placement-card')).toBeTruthy();
+    expect(screen.getByText('IG')).toBeTruthy();
+    expect(screen.getByText('Reel')).toBeTruthy();
+    expect(screen.getByText('Test Title Topic')).toBeTruthy();
   });
 
   it('calls onSelect when clicked', () => {
@@ -60,11 +60,17 @@ describe('PlacementNotificationCard', () => {
 
   it('displays relative timestamp', () => {
     const now = new Date();
-    const fiveSecondsAgo = new Date(now.getTime() - 5000).toISOString();
+    // formatRelativeTime says 'just now' under a minute, so a 5s delta never renders "ago".
+    const justNow = new Date(now.getTime() - 5_000).toISOString();
+    const { unmount } = render(
+      <PlacementNotificationCard placement={mockPlacement} timestamp={justNow} />,
+    );
+    expect(screen.getByText('just now')).toBeTruthy();
+    unmount();
 
-    render(<PlacementNotificationCard placement={mockPlacement} timestamp={fiveSecondsAgo} />);
-
-    expect(screen.getByText(/ago/)).toBeInTheDocument();
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60_000).toISOString();
+    render(<PlacementNotificationCard placement={mockPlacement} timestamp={fiveMinutesAgo} />);
+    expect(screen.getByText(/ago/)).toBeTruthy();
   });
 
   it('shows correct platform badge for linkedin', () => {
@@ -80,7 +86,7 @@ describe('PlacementNotificationCard', () => {
       />,
     );
 
-    expect(screen.getByText('LinkedIn')).toBeInTheDocument();
+    expect(screen.getByText('LinkedIn')).toBeTruthy();
   });
 
   it('truncates long title topics', () => {
@@ -101,6 +107,6 @@ describe('PlacementNotificationCard', () => {
     );
 
     const titleElement = container.querySelector('.line-clamp-2');
-    expect(titleElement).toBeInTheDocument();
+    expect(titleElement).toBeTruthy();
   });
 });

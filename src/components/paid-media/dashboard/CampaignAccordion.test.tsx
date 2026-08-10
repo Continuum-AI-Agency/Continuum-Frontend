@@ -73,15 +73,15 @@ describe('CampaignAccordion', () => {
     const secondTrigger = screen.getByRole('button', { name: /Campaign Two/i });
 
     await waitFor(() => {
-      expect(firstTrigger.getAttribute('data-state')).toBe('open');
-      expect(secondTrigger.getAttribute('data-state')).toBe('closed');
+      expect(firstTrigger.hasAttribute('data-panel-open')).toBe(true);
+      expect(secondTrigger.hasAttribute('data-panel-open')).toBe(false);
     });
 
     fireEvent.click(secondTrigger);
 
     await waitFor(() => {
-      expect(firstTrigger.getAttribute('data-state')).toBe('closed');
-      expect(secondTrigger.getAttribute('data-state')).toBe('open');
+      expect(firstTrigger.hasAttribute('data-panel-open')).toBe(false);
+      expect(secondTrigger.hasAttribute('data-panel-open')).toBe(true);
     });
   });
 });

@@ -1,6 +1,6 @@
 'use client';
+import { ClipboardCopy } from 'lucide-react';
 
-import { ClipboardCopyIcon } from '@radix-ui/react-icons';
 import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -106,7 +106,7 @@ export function DailyTemplatesPanel({
                             type="button"
                             onClick={() => onCopyCaption(template.caption_copy)}
                           >
-                            <ClipboardCopyIcon />
+                            <ClipboardCopy />
                             Copy Caption
                           </Button>
                         </div>

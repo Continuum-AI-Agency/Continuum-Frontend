@@ -1,6 +1,6 @@
 'use client';
+import { Bookmark, Plus, SquarePen, Trash2 } from 'lucide-react';
 
-import { BookmarkIcon, Pencil2Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -140,7 +140,7 @@ export function PromptTemplatePicker({
       <PopoverTrigger
         render={
           <Button size="icon-sm" variant="ghost" aria-label="Prompt templates" disabled={isLoading}>
-            <BookmarkIcon />
+            <Bookmark />
           </Button>
         }
       />
@@ -153,7 +153,7 @@ export function PromptTemplatePicker({
             aria-label="Create template"
             onClick={openCreate}
           >
-            <PlusIcon />
+            <Plus />
           </Button>
         </div>
 
@@ -196,7 +196,7 @@ export function PromptTemplatePicker({
                         disabled={template.source === 'preset'}
                         onClick={() => openEdit(template)}
                       >
-                        <Pencil2Icon />
+                        <SquarePen />
                       </Button>
                       <Button
                         size="icon-sm"
@@ -206,7 +206,7 @@ export function PromptTemplatePicker({
                         disabled={template.source === 'preset' || isDeleting === template.id}
                         onClick={() => handleDelete(template)}
                       >
-                        <TrashIcon />
+                        <Trash2 />
                       </Button>
                     </div>
                   </div>

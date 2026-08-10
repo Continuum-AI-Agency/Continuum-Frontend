@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckIcon, Pencil2Icon } from '@radix-ui/react-icons';
+import { Check, SquarePen } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, type FieldError, type FieldErrors, type Path, useForm } from 'react-hook-form';
 import { Pill, type PillProps } from '@/components/kibo-ui/pill';
@@ -512,10 +512,10 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
 
         <div className="flex items-center justify-end gap-2">
           <Button type="button" variant="secondary" onClick={handleSaveDraft} disabled={isSaving}>
-            <Pencil2Icon /> Save draft
+            <SquarePen /> Save draft
           </Button>
           <Button type="button" onClick={handleApprove} disabled={isSaving}>
-            <CheckIcon /> Approve
+            <Check /> Approve
           </Button>
         </div>
       </div>

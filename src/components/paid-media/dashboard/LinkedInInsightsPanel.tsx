@@ -1,7 +1,12 @@
 'use client';
 
-import { ReloadIcon } from '@radix-ui/react-icons';
-import { BarChart3Icon, MousePointerClickIcon, TrendingUpIcon, WalletIcon } from 'lucide-react';
+import {
+  BarChart3Icon,
+  MousePointerClickIcon,
+  RotateCw,
+  TrendingUpIcon,
+  WalletIcon,
+} from 'lucide-react';
 import * as React from 'react';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button } from '@/components/ui/button';
@@ -178,7 +183,7 @@ export function LinkedInInsightsPanel({
             onClick={load}
             disabled={isLoading}
           >
-            <ReloadIcon className={isLoading ? 'size-3.5 animate-spin' : 'size-3.5'} />
+            <RotateCw className={isLoading ? 'size-3.5 animate-spin' : 'size-3.5'} />
           </Button>
         }
       />
