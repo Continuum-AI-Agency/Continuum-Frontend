@@ -59,6 +59,10 @@ function ContextMenuGroup({ ...props }: ContextMenuPrimitive.Group.Props) {
   return <ContextMenuPrimitive.Group data-slot="context-menu-group" {...props} />;
 }
 
+// Base UI's GroupLabel reads MenuGroupContext and throws when it is absent, where
+// Radix rendered a plain label anywhere. Every call site here was written against
+// Radix and puts the label straight in the content, so the label carries its own
+// Group rather than asking two dozen menus to grow a wrapper.
 function ContextMenuLabel({
   className,
   inset,
@@ -67,15 +71,17 @@ function ContextMenuLabel({
   inset?: boolean;
 }) {
   return (
-    <ContextMenuPrimitive.GroupLabel
-      data-slot="context-menu-label"
-      data-inset={inset}
-      className={cn(
-        'px-1.5 py-1 text-xs font-medium text-muted-foreground data-inset:pl-7',
-        className,
-      )}
-      {...props}
-    />
+    <ContextMenuPrimitive.Group>
+      <ContextMenuPrimitive.GroupLabel
+        data-slot="context-menu-label"
+        data-inset={inset}
+        className={cn(
+          'px-1.5 py-1 text-xs font-medium text-muted-foreground data-inset:pl-7',
+          className,
+        )}
+        {...props}
+      />
+    </ContextMenuPrimitive.Group>
   );
 }
 
