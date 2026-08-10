@@ -38,6 +38,29 @@ export function getActiveBrandLabel(
   return brandSummaries.find((brand) => brand.id === activeBrandId)?.name || 'Brands';
 }
 
-export function getBrandMenuItemLabel(brand: BrandSummaryLike): string {
-  return brand.name || 'Untitled brand';
+/**
+ * A brand's name is derived from the scraped site title at onboarding, so re-running
+ * onboarding mints a second, genuinely distinct row with the identical name — the
+ * switcher then shows what looks like the same brand twice with no way to tell them
+ * apart. Same idiom as the admin console's `formatBrandDisambiguationLabel`: append a
+ * short id tail, and only for the names that actually collide, so the common case
+ * stays clean.
+ *
+ * `siblings` is the full list the label is shown alongside; omit it when the label
+ * stands alone and no collision is possible.
+ */
+export function getBrandMenuItemLabel(
+  brand: BrandSummaryLike,
+  siblings?: readonly BrandSummaryLike[],
+): string {
+  const name = brandDisplayName(brand);
+  if (!siblings) return name;
+  const collides = siblings.some(
+    (other) => other.id !== brand.id && brandDisplayName(other) === name,
+  );
+  return collides ? `${name} — …${brand.id.slice(-6)}` : name;
+}
+
+function brandDisplayName(brand: BrandSummaryLike): string {
+  return brand.name?.trim() || 'Untitled brand';
 }

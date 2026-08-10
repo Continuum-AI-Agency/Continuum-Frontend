@@ -36,7 +36,7 @@ export function BrandSwitcher() {
   const [menuOpen, setMenuOpen] = React.useState(false);
 
   const brands = brandSummaries.map((brand) => ({
-    name: getBrandMenuItemLabel(brand),
+    name: getBrandMenuItemLabel(brand, brandSummaries),
     logo: brand.logoUrl ? brand.logoUrl : Layers,
     id: brand.id,
     completed: brand.completed,

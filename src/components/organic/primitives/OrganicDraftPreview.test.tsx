@@ -1,5 +1,12 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as rtlRender,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { useEffect, useReducer } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
@@ -751,5 +758,144 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Approve & Schedule' }));
     expect(onApprove).toHaveBeenCalledWith('draft-1');
     expect(fanOutAndApproveMock).not.toHaveBeenCalled();
+  });
+});
+
+// #255 — "if you pass the carousel very fast it shows the same image". Persisted
+// slideIndex is sparse (and absent on assets the agent never numbered) while the
+// preview counts array positions; mixing the two made the badge, the chevrons and
+// the strip disagree about which slide was on screen.
+describe('OrganicDraftPreview — carousel slide navigation', () => {
+  beforeEach(() => cleanup());
+
+  // Display order after sorting by slideIndex (absent sorts last): a, c, b.
+  const sparseCarousel = (overrides: Partial<OrganicCalendarDraft> = {}) =>
+    baseDraft({
+      format: 'Carousel',
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
+      publishingAssets: [
+        {
+          role: 'primary',
+          kind: 'image',
+          slideIndex: 0,
+          storagePath: 'a.jpg',
+          storageUrl: 'https://cdn/a.jpg',
+        },
+        // No slideIndex at all — this is the asset that used to render as "1/3".
+        {
+          role: 'primary',
+          kind: 'image',
+          storagePath: 'b.jpg',
+          storageUrl: 'https://cdn/b.jpg',
+        },
+        {
+          role: 'primary',
+          kind: 'image',
+          slideIndex: 7,
+          storagePath: 'c.jpg',
+          storageUrl: 'https://cdn/c.jpg',
+        },
+      ],
+      ...overrides,
+    });
+
+  const shownSlideSrc = () =>
+    screen
+      .getAllByRole('img')
+      .map((img) => img.getAttribute('src'))
+      .find((src) => src?.startsWith('https://cdn/'));
+
+  it('advances one slide per Next click, and the badge counts positions not slideIndex', () => {
+    render(<OrganicDraftPreview draft={sparseCarousel()} brandProfileId="brand-1" />);
+
+    expect(screen.getByText('1/3')).toBeTruthy();
+    expect(shownSlideSrc()).toBe('https://cdn/a.jpg');
+
+    fireEvent.click(screen.getByLabelText('Next slide'));
+    // c.jpg carries slideIndex 7 — the badge must still read 2/3.
+    expect(screen.getByText('2/3')).toBeTruthy();
+    expect(shownSlideSrc()).toBe('https://cdn/c.jpg');
+    expect(screen.getByAltText('Test post — slide 2')).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText('Next slide'));
+    expect(screen.getByText('3/3')).toBeTruthy();
+    expect(shownSlideSrc()).toBe('https://cdn/b.jpg');
+    // Last slide: no further Next.
+    expect(screen.queryByLabelText('Next slide')).toBeNull();
+  });
+
+  it('lands on slide 3 when two Next clicks are batched into a single render', () => {
+    render(<OrganicDraftPreview draft={sparseCarousel()} brandProfileId="brand-1" />);
+
+    // Fast clicking: both handlers run before React re-renders. Value setters
+    // (activeIndex + 1) both computed from the same captured 0 and netted +1 —
+    // the screen stayed on the same image.
+    const next = screen.getByLabelText('Next slide');
+    act(() => {
+      next.click();
+      next.click();
+    });
+
+    expect(screen.getByText('3/3')).toBeTruthy();
+    expect(shownSlideSrc()).toBe('https://cdn/b.jpg');
+  });
+
+  it('agrees between a dot and a chevron on the same slide', () => {
+    render(<OrganicDraftPreview draft={sparseCarousel()} brandProfileId="brand-1" />);
+
+    fireEvent.click(screen.getByLabelText('Slide 3'));
+    expect(screen.getByText('3/3')).toBeTruthy();
+    expect(shownSlideSrc()).toBe('https://cdn/b.jpg');
+
+    fireEvent.click(screen.getByLabelText('Previous slide'));
+    expect(screen.getByText('2/3')).toBeTruthy();
+    expect(shownSlideSrc()).toBe('https://cdn/c.jpg');
+  });
+
+  it('clamps the position when the slide array shrinks under it', () => {
+    const { rerender } = render(
+      <OrganicDraftPreview draft={sparseCarousel()} brandProfileId="brand-1" />,
+    );
+    fireEvent.click(screen.getByLabelText('Slide 3'));
+    expect(screen.getByText('3/3')).toBeTruthy();
+
+    // Drop c.jpg — the draft now has two slides while the position sits at 2.
+    const shrunk = sparseCarousel();
+    shrunk.publishingAssets = shrunk.publishingAssets?.slice(0, 2);
+    rerender(
+      <ToastProvider>
+        <OrganicDraftPreview draft={shrunk} brandProfileId="brand-1" />
+      </ToastProvider>,
+    );
+
+    expect(screen.getByText('2/2')).toBeTruthy();
+    expect(shownSlideSrc()).toBe('https://cdn/b.jpg');
+  });
+
+  it('resets to the first slide when the panel switches drafts', () => {
+    const { rerender } = render(
+      <OrganicDraftPreview draft={sparseCarousel()} brandProfileId="brand-1" />,
+    );
+    fireEvent.click(screen.getByLabelText('Slide 3'));
+    expect(screen.getByText('3/3')).toBeTruthy();
+
+    rerender(
+      <ToastProvider>
+        <OrganicDraftPreview draft={sparseCarousel({ id: 'draft-2' })} brandProfileId="brand-1" />
+      </ToastProvider>,
+    );
+
+    expect(screen.getByText('1/3')).toBeTruthy();
+    expect(shownSlideSrc()).toBe('https://cdn/a.jpg');
+  });
+
+  it('opens the creative full screen from the preview itself', () => {
+    render(<OrganicDraftPreview draft={sparseCarousel()} brandProfileId="brand-1" />);
+
+    fireEvent.click(screen.getByLabelText('Next slide'));
+    fireEvent.click(screen.getByLabelText('Enlarge creative'));
+
+    // The lightbox opens on the slide that was on screen, not on slide 1.
+    expect(screen.getByText('Slide 2 of 3')).toBeTruthy();
   });
 });

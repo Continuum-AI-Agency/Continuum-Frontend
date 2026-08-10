@@ -139,8 +139,11 @@ function resolveCreativeDirection(draft: OrganicCalendarDraft): string {
   );
 }
 
+// Ordering is settled once, here. Downstream — badge, chevrons, dots, strip,
+// lightbox, and every placement write — speaks array POSITION only. The persisted
+// `slideIndex` is sparse, sometimes null and sometimes duplicated, so carrying it
+// any further gave the preview two coordinate spaces that disagreed.
 type PreviewSlide = {
-  slideIndex: number;
   storageUrl: string;
   assetId?: string | null;
   storagePath: string;
@@ -160,7 +163,6 @@ function resolveCarouselSlides(draft: OrganicCalendarDraft): PreviewSlide[] {
     .sort((a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999));
   if (published.length > 0) {
     return published.map((a) => ({
-      slideIndex: a.slideIndex ?? 0,
       storageUrl: a.storageUrl,
       assetId: a.assetId,
       storagePath: a.storagePath,
@@ -173,7 +175,6 @@ function resolveCarouselSlides(draft: OrganicCalendarDraft): PreviewSlide[] {
   if (primary) {
     return [
       {
-        slideIndex: 0,
         storageUrl: primary.url,
         storagePath: primary.url,
         kind: primary.kind,
@@ -198,6 +199,109 @@ function PreviewSlideMedia({ slide, alt }: { slide: PreviewSlide; alt: string })
       }}
       className="absolute inset-0 rounded-none"
     />
+  );
+}
+
+type SlideNavProps = {
+  slides: PreviewSlide[];
+  // Array position of the previewed slide; already clamped by the owner.
+  activeIndex: number;
+  onSelectSlide: (position: number) => void;
+  // Chevrons move relative, never absolute: two clicks batched into one render
+  // both computed from the same captured value and netted +1 for two clicks.
+  onStepSlide: (delta: number) => void;
+  onEnlargeSlide: (position: number) => void;
+};
+
+// The slide chrome shared by the editable and read-only media areas — creative,
+// click-to-enlarge, position badge, chevrons, dots. Duplicating it is what let the
+// two areas drift apart and needed every navigation fix applied twice.
+function CarouselSlideNav({
+  slides,
+  activeIndex,
+  alt,
+  onSelectSlide,
+  onStepSlide,
+  onEnlargeSlide,
+}: SlideNavProps & { alt: string }) {
+  const total = slides.length;
+  const activeSlide = slides[activeIndex];
+  if (!activeSlide) return null;
+
+  return (
+    <>
+      <PreviewSlideMedia slide={activeSlide} alt={`${alt} — slide ${activeIndex + 1}`} />
+
+      {/* The creative itself opens the lightbox: full screen is where a slide is
+          actually inspected, replaced or removed. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onEnlargeSlide(activeIndex);
+        }}
+        className="group/enlarge absolute inset-0 cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        aria-label="Enlarge creative"
+      >
+        <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white transition-colors group-hover/enlarge:bg-black/60">
+          <Maximize2 className="h-3.5 w-3.5" />
+        </span>
+      </button>
+
+      {total > 1 && (
+        <div className="absolute right-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-2xs font-semibold text-white tabular-nums">
+          {activeIndex + 1}/{total}
+        </div>
+      )}
+
+      {activeIndex > 0 && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onStepSlide(-1);
+          }}
+          className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
+          aria-label="Previous slide"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+      )}
+
+      {activeIndex < total - 1 && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onStepSlide(1);
+          }}
+          className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
+          aria-label="Next slide"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      )}
+
+      {total > 1 && (
+        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1">
+          {slides.map((_, position) => (
+            <button
+              key={position}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectSlide(position);
+              }}
+              className={cn(
+                'h-1.5 rounded-full transition-all',
+                position === activeIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50',
+              )}
+              aria-label={`Slide ${position + 1}`}
+            />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -226,6 +330,7 @@ function shouldShowUseOwnCta(draft: OrganicCalendarDraft): boolean {
 // inside a PreviewMediaDropZone. When no media is present, renders the CTA.
 function InteractiveCarouselMediaArea({
   draft,
+  slides,
   alt,
   aspectRatio,
   borderClass = 'border-b border-border/70',
@@ -235,8 +340,9 @@ function InteractiveCarouselMediaArea({
   onSelectLibrary,
   onFilesChosen,
   isUploading,
-  activeSlideIndex,
+  activeIndex,
   onSelectSlide,
+  onStepSlide,
   placement,
   onAddSlideRequest,
   onReplaceSlideRequest,
@@ -248,7 +354,7 @@ function InteractiveCarouselMediaArea({
   isEnriching,
   onEnlargeFrame,
   onEnlargeSlide,
-}: {
+}: SlideNavProps & {
   draft: OrganicCalendarDraft;
   alt: string;
   aspectRatio: number;
@@ -259,8 +365,6 @@ function InteractiveCarouselMediaArea({
   onSelectLibrary?: () => void;
   onFilesChosen?: (files: File[]) => void;
   isUploading?: boolean;
-  activeSlideIndex: number;
-  onSelectSlide: (i: number) => void;
   placement?: ReturnType<typeof useDraftMediaPlacement>;
   onAddSlideRequest?: () => void;
   onReplaceSlideRequest?: (position: number) => void;
@@ -271,9 +375,7 @@ function InteractiveCarouselMediaArea({
   canEnrich?: boolean;
   isEnriching?: boolean;
   onEnlargeFrame: (index: number) => void;
-  onEnlargeSlide: (index: number) => void;
 }) {
-  const slides = resolveCarouselSlides(draft);
   const total = slides.length;
   const isCarousel = draft.format.toLowerCase() === 'carousel';
   const showCta = shouldShowUseOwnCta(draft);
@@ -311,8 +413,6 @@ function InteractiveCarouselMediaArea({
       : showCta && !showStoryboard
         ? 'fallback'
         : 'idle';
-
-  const activeSlide = slides[activeSlideIndex] ?? slides[0];
 
   // The empty slot offers the agent path first: headless realize, plus the
   // text-stage blueprint sketch when the draft has no storyboard yet. Library
@@ -356,80 +456,14 @@ function InteractiveCarouselMediaArea({
         className={cn('w-full', borderClass)}
         error={placement?.error}
       >
-        {total > 0 && activeSlide && (
-          <>
-            <PreviewSlideMedia
-              slide={activeSlide}
-              alt={`${alt} — slide ${(activeSlide.slideIndex ?? 0) + 1}`}
-            />
-
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEnlargeSlide(activeSlideIndex);
-              }}
-              className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Enlarge creative"
-            >
-              <Maximize2 className="h-3.5 w-3.5" />
-            </button>
-
-            {total > 1 && (
-              <div className="absolute right-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-2xs font-semibold text-white tabular-nums">
-                {(activeSlide.slideIndex ?? 0) + 1}/{total}
-              </div>
-            )}
-
-            {activeSlideIndex > 0 && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectSlide(activeSlideIndex - 1);
-                }}
-                className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
-                aria-label="Previous slide"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-            )}
-
-            {activeSlideIndex < total - 1 && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectSlide(activeSlideIndex + 1);
-                }}
-                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
-                aria-label="Next slide"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            )}
-
-            {total > 1 && (
-              <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1">
-                {slides.map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectSlide(i);
-                    }}
-                    className={cn(
-                      'h-1.5 rounded-full transition-all',
-                      i === activeSlideIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50',
-                    )}
-                    aria-label={`Slide ${i + 1}`}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        )}
+        <CarouselSlideNav
+          slides={slides}
+          activeIndex={activeIndex}
+          alt={alt}
+          onSelectSlide={onSelectSlide}
+          onStepSlide={onStepSlide}
+          onEnlargeSlide={onEnlargeSlide}
+        />
 
         {showStoryboard && (
           <BlueprintStoryboard
@@ -448,7 +482,7 @@ function InteractiveCarouselMediaArea({
       {isCarousel && slides.length > 0 && placement && (
         <CarouselSlideStrip
           slides={slides}
-          activeIndex={activeSlideIndex}
+          activeIndex={activeIndex}
           onSelectSlide={onSelectSlide}
           placement={placement}
           onAddRequest={onAddSlideRequest ?? onActivate}
@@ -465,27 +499,20 @@ function InteractiveCarouselMediaArea({
 // replace/add controls — just the resolved creative as it will post, with view-
 // only slide navigation and enlarge. Editing affordances live behind the pencil.
 function ReadOnlyCarouselMediaArea({
-  draft,
+  slides,
   alt,
   aspectRatio,
   borderClass = 'border-b border-border/70',
-  activeSlideIndex,
+  activeIndex,
   onSelectSlide,
+  onStepSlide,
   onEnlargeSlide,
-}: {
-  draft: OrganicCalendarDraft;
+}: SlideNavProps & {
   alt: string;
   aspectRatio: number;
   borderClass?: string;
-  activeSlideIndex: number;
-  onSelectSlide: (i: number) => void;
-  onEnlargeSlide: (index: number) => void;
 }) {
-  const slides = resolveCarouselSlides(draft);
-  const total = slides.length;
-  const activeSlide = slides[activeSlideIndex] ?? slides[0];
-
-  if (total === 0 || !activeSlide) {
+  if (slides.length === 0) {
     return (
       <div
         className={cn(
@@ -504,64 +531,14 @@ function ReadOnlyCarouselMediaArea({
       className={cn('relative w-full overflow-hidden bg-muted/20', borderClass)}
       style={{ aspectRatio: `${aspectRatio}` }}
     >
-      <PreviewSlideMedia
-        slide={activeSlide}
-        alt={`${alt} — slide ${(activeSlide.slideIndex ?? 0) + 1}`}
+      <CarouselSlideNav
+        slides={slides}
+        activeIndex={activeIndex}
+        alt={alt}
+        onSelectSlide={onSelectSlide}
+        onStepSlide={onStepSlide}
+        onEnlargeSlide={onEnlargeSlide}
       />
-
-      <button
-        type="button"
-        onClick={() => onEnlargeSlide(activeSlideIndex)}
-        className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label="Enlarge creative"
-      >
-        <Maximize2 className="h-3.5 w-3.5" />
-      </button>
-
-      {total > 1 && (
-        <div className="absolute right-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-2xs font-semibold text-white tabular-nums">
-          {(activeSlide.slideIndex ?? 0) + 1}/{total}
-        </div>
-      )}
-
-      {activeSlideIndex > 0 && (
-        <button
-          type="button"
-          onClick={() => onSelectSlide(activeSlideIndex - 1)}
-          className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
-          aria-label="Previous slide"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-      )}
-
-      {activeSlideIndex < total - 1 && (
-        <button
-          type="button"
-          onClick={() => onSelectSlide(activeSlideIndex + 1)}
-          className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
-          aria-label="Next slide"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      )}
-
-      {total > 1 && (
-        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1">
-          {slides.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => onSelectSlide(i)}
-              className={cn(
-                'h-1.5 rounded-full transition-all',
-                i === activeSlideIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50',
-              )}
-              aria-label={`Slide ${i + 1}`}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -844,8 +821,39 @@ export function OrganicDraftPreview({
   // Media placement hook — the single write path for user-supplied creatives.
   const placement = useDraftMediaPlacement(draft.id);
 
-  // Active carousel slide index (shared between preview and strip).
+  // The slides of record, resolved once: the media areas, the strip, the clamp and
+  // the lightbox all index into this same array.
+  const previewSlides = React.useMemo(
+    () => resolveCarouselSlides(draftForPreview),
+    [draftForPreview],
+  );
+  const lastSlidePosition = Math.max(previewSlides.length - 1, 0);
+
+  // Active carousel slide POSITION (shared between preview and strip).
   const [activeSlideIndex, setActiveSlideIndex] = React.useState(0);
+  // The panel is reused across drafts, so a stale position would open a 3-slide
+  // draft on "slide 8" and silently fall back to the first creative.
+  React.useEffect(() => {
+    setActiveSlideIndex(0);
+  }, [draft.id]);
+  // Clamping at render (rather than in an effect) is what keeps a shrinking slide
+  // array — a removed slide — from flashing the fallback creative for a frame.
+  const activeSlidePosition = Math.min(activeSlideIndex, lastSlidePosition);
+
+  const selectSlide = React.useCallback(
+    (position: number) => {
+      setActiveSlideIndex(Math.min(Math.max(position, 0), lastSlidePosition));
+    },
+    [lastSlidePosition],
+  );
+  const stepSlide = React.useCallback(
+    (delta: number) => {
+      setActiveSlideIndex((current) =>
+        Math.min(Math.max(Math.min(current, lastSlidePosition) + delta, 0), lastSlidePosition),
+      );
+    },
+    [lastSlidePosition],
+  );
 
   // Drives the dropzone "placing" shimmer while disk uploads run.
   const [isUploading, setIsUploading] = React.useState(false);
@@ -1134,6 +1142,7 @@ export function OrganicDraftPreview({
         anchor={
           <InteractiveCarouselMediaArea
             draft={draftForPreview}
+            slides={previewSlides}
             alt={resolveDraftMediaAltText(draftForPreview)}
             aspectRatio={mediaAspectRatio}
             slotId={`preview-media-${draft.id}`}
@@ -1141,8 +1150,9 @@ export function OrganicDraftPreview({
             onSelectLibrary={() => setMediaSelectOpen(true)}
             onFilesChosen={handleUploadFiles}
             isUploading={isUploading}
-            activeSlideIndex={activeSlideIndex}
-            onSelectSlide={setActiveSlideIndex}
+            activeIndex={activeSlidePosition}
+            onSelectSlide={selectSlide}
+            onStepSlide={stepSlide}
             placement={placement}
             onAddSlideRequest={() => {
               replaceTargetRef.current = null;
@@ -1169,11 +1179,12 @@ export function OrganicDraftPreview({
   // no dropzone or generate/replace controls. Shown unless the pencil is active.
   const readOnlyMediaNode = !isHyperframeFormat ? (
     <ReadOnlyCarouselMediaArea
-      draft={draftForPreview}
+      slides={previewSlides}
       alt={resolveDraftMediaAltText(draftForPreview)}
       aspectRatio={mediaAspectRatio}
-      activeSlideIndex={activeSlideIndex}
-      onSelectSlide={setActiveSlideIndex}
+      activeIndex={activeSlidePosition}
+      onSelectSlide={selectSlide}
+      onStepSlide={stepSlide}
       onEnlargeSlide={(index) => setLightbox({ kind: 'slide', index })}
     />
   ) : null;
@@ -1184,7 +1195,7 @@ export function OrganicDraftPreview({
   // dialog stays a dumb, reusable shell. Blueprint frames offer generate / use-
   // your-own; realized slides offer replace / remove (carousels keep >= 1 slide).
   const lightboxFrames = resolveStoryboardFrames(draftForPreview);
-  const lightboxSlides = resolveCarouselSlides(draftForPreview);
+  const lightboxSlides = previewSlides;
   const lightboxItems: LightboxItem[] =
     lightbox?.kind === 'blueprint'
       ? lightboxFrames.map((frame, index) => ({
@@ -1212,7 +1223,12 @@ export function OrganicDraftPreview({
         title={lightbox.kind === 'blueprint' ? 'Blueprint concept' : 'Creative'}
         items={lightboxItems}
         index={Math.min(lightbox.index, lightboxItems.length - 1)}
-        onIndexChange={(index) => setLightbox((prev) => (prev ? { ...prev, index } : prev))}
+        onIndexChange={(index) => {
+          setLightbox((prev) => (prev ? { ...prev, index } : prev));
+          // Paging full screen and then closing should not snap back to the slide
+          // you started on.
+          if (lightbox.kind === 'slide') selectSlide(index);
+        }}
         actions={
           lightbox.kind === 'blueprint' ? (
             <>

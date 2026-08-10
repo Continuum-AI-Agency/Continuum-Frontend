@@ -112,6 +112,11 @@ export function ChatMediaThumb({
       ) : media.kind === 'video' && !videoFailed ? (
         <>
           <video
+            // Keyed on the URL: swapping `src` on a live element leaves the previous
+            // frame painted until the new one decodes (a <video> does not even reload
+            // without an explicit .load()), which reads as "the same media twice" when
+            // a carousel is paged quickly.
+            key={media.url}
             ref={videoRef}
             src={resolvedVideoSrc}
             poster={media.thumbnailUrl}
@@ -159,6 +164,7 @@ export function ChatMediaThumb({
         </>
       ) : showImage && imageSrc ? (
         <Image
+          key={imageSrc}
           src={imageSrc}
           alt={media.name ?? media.caption ?? ''}
           fill

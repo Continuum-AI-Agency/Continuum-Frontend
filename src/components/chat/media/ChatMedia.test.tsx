@@ -83,6 +83,32 @@ describe('ChatMediaThumb error fallback', () => {
     expect(container.textContent).toContain('R');
   });
 
+  // #255: paging a carousel quickly showed "the same image" twice. Mutating `src` on
+  // a live element leaves the previous decode painted until the new URL loads (and a
+  // <video> does not reload at all without .load()), so both elements are keyed by URL.
+  it('remounts the image element when the URL changes instead of mutating src in place', () => {
+    const { rerender } = render(<ChatMediaThumb media={imageMedia('https://cdn/one.jpg')} />);
+    const first = screen.getByRole('img');
+
+    rerender(<ChatMediaThumb media={imageMedia('https://cdn/two.jpg')} />);
+    const second = screen.getByRole('img');
+
+    expect(second.getAttribute('src')).toBe('https://cdn/two.jpg');
+    expect(second).not.toBe(first);
+  });
+
+  it('remounts the video element when the URL changes', () => {
+    const clip = (url: string): ChatMedia => ({ id: 'v1', url, kind: 'video', name: 'Reel' });
+    const { container, rerender } = render(<ChatMediaThumb media={clip('https://cdn/a.mp4')} />);
+    const first = container.querySelector('video');
+
+    rerender(<ChatMediaThumb media={clip('https://cdn/b.mp4')} />);
+    const second = container.querySelector('video');
+
+    expect(second?.getAttribute('src')).toBe('https://cdn/b.mp4#t=0.01');
+    expect(second).not.toBe(first);
+  });
+
   it('uses the explicit fallbackSeed over media names', () => {
     const { container } = render(
       <ChatMediaThumb media={imageMedia('https://cdn/x.jpg')} fallbackSeed="Zeta" />,

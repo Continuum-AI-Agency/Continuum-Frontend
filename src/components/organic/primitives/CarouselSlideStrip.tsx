@@ -29,18 +29,21 @@ import * as React from 'react';
 import type { UseDraftMediaPlacementResult } from '@/components/organic/hooks/useDraftMediaPlacement';
 import { cn } from '@/lib/utils';
 
+// Position in `slides` is the only coordinate this strip speaks. The persisted
+// `slideIndex` is sparse, sometimes null and sometimes duplicated, so ordering is
+// resolved once by the caller and everything downstream counts array positions.
 type Slide = {
-  slideIndex: number;
   storageUrl: string;
   assetId?: string | null;
   storagePath: string;
 };
 
 type CarouselSlideStripProps = {
+  // Already in display order.
   slides: Slide[];
-  // 0-based index of the currently previewed slide.
+  // 0-based array position of the currently previewed slide.
   activeIndex: number;
-  onSelectSlide: (index: number) => void;
+  onSelectSlide: (position: number) => void;
   placement: UseDraftMediaPlacementResult;
   // Called when user clicks the + add slot — typically opens the library rail.
   onAddRequest: () => void;
@@ -54,8 +57,11 @@ type CarouselSlideStripProps = {
   className?: string;
 };
 
+const slideSortableId = (position: number) => `slide-${position}`;
+
 function SortableThumb({
   slide,
+  position,
   activeIndex,
   totalCount,
   onSelect,
@@ -64,6 +70,7 @@ function SortableThumb({
   onEnlarge,
 }: {
   slide: Slide;
+  position: number;
   activeIndex: number;
   totalCount: number;
   onSelect: () => void;
@@ -72,11 +79,12 @@ function SortableThumb({
   onEnlarge?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: `slide-${slide.slideIndex}`,
+    id: slideSortableId(position),
   });
 
-  const isActive = slide.slideIndex === activeIndex;
+  const isActive = position === activeIndex;
   const canRemove = totalCount > 1;
+  const label = position + 1;
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -89,7 +97,7 @@ function SortableThumb({
       {/* Drag handle + thumbnail — the whole tile is the drag surface */}
       <button
         type="button"
-        aria-label={`Slide ${slide.slideIndex + 1}${isActive ? ' (active)' : ''}`}
+        aria-label={`Slide ${label}${isActive ? ' (active)' : ''}`}
         aria-pressed={isActive}
         onClick={onSelect}
         className={cn(
@@ -101,15 +109,18 @@ function SortableThumb({
         {...listeners}
       >
         <Image
+          // Tiles are keyed by position so a reorder animates in place; the image
+          // inside must be keyed by URL or the browser keeps painting the old decode.
+          key={slide.storageUrl}
           src={slide.storageUrl}
-          alt={`Slide ${slide.slideIndex + 1}`}
+          alt={`Slide ${label}`}
           fill
           unoptimized
           sizes="56px"
           className="object-cover"
         />
         <div className="absolute bottom-0.5 right-0.5 rounded-full bg-black/60 px-1 py-px text-3xs font-semibold text-white tabular-nums">
-          {slide.slideIndex + 1}
+          {label}
         </div>
       </button>
 
@@ -117,7 +128,7 @@ function SortableThumb({
       {onReplace && (
         <button
           type="button"
-          aria-label={`Replace slide ${slide.slideIndex + 1}`}
+          aria-label={`Replace slide ${label}`}
           onClick={(e) => {
             e.stopPropagation();
             onReplace();
@@ -132,7 +143,7 @@ function SortableThumb({
       {canRemove && (
         <button
           type="button"
-          aria-label={`Remove slide ${slide.slideIndex + 1}`}
+          aria-label={`Remove slide ${label}`}
           onClick={(e) => {
             e.stopPropagation();
             onRemove();
@@ -147,7 +158,7 @@ function SortableThumb({
       {onEnlarge && (
         <button
           type="button"
-          aria-label={`Enlarge slide ${slide.slideIndex + 1}`}
+          aria-label={`Enlarge slide ${label}`}
           onClick={(e) => {
             e.stopPropagation();
             onEnlarge();
@@ -178,16 +189,15 @@ export function CarouselSlideStrip({
     }),
   );
 
-  const sortedSlides = [...slides].sort((a, b) => a.slideIndex - b.slideIndex);
-  const slideIds = sortedSlides.map((s) => `slide-${s.slideIndex}`);
+  const slideIds = slides.map((_, position) => slideSortableId(position));
 
   const handleDragEnd = React.useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
       if (!over || active.id === over.id) return;
 
-      const fromIndex = sortedSlides.findIndex((s) => `slide-${s.slideIndex}` === active.id);
-      const toIndex = sortedSlides.findIndex((s) => `slide-${s.slideIndex}` === over.id);
+      const fromIndex = slideIds.indexOf(String(active.id));
+      const toIndex = slideIds.indexOf(String(over.id));
 
       if (fromIndex !== -1 && toIndex !== -1) {
         placement.reorderSlides(fromIndex, toIndex);
@@ -197,7 +207,7 @@ export function CarouselSlideStrip({
         }
       }
     },
-    [sortedSlides, placement, activeIndex, onSelectSlide],
+    [slideIds, placement, activeIndex, onSelectSlide],
   );
 
   if (slides.length === 0) return null;
@@ -215,13 +225,14 @@ export function CarouselSlideStrip({
             className,
           )}
         >
-          {sortedSlides.map((slide, position) => (
+          {slides.map((slide, position) => (
             <SortableThumb
-              key={slide.slideIndex}
+              key={slideSortableId(position)}
               slide={slide}
+              position={position}
               activeIndex={activeIndex}
-              totalCount={sortedSlides.length}
-              onSelect={() => onSelectSlide(slide.slideIndex)}
+              totalCount={slides.length}
+              onSelect={() => onSelectSlide(position)}
               onRemove={() => placement.removeSlide(position)}
               onReplace={onReplaceRequest ? () => onReplaceRequest(position) : undefined}
               onEnlarge={onEnlarge ? () => onEnlarge(position) : undefined}
