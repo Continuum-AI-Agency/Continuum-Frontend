@@ -107,6 +107,7 @@ export const portfoliosPopulated: PortfolioListItem[] = [
     next_realloc_at: '2026-06-23T00:00:00.000Z',
     adset_count: 4,
     pending_recommendations: 2,
+    pending_budget_moves: 3,
   },
   {
     id: '22222222-2222-4222-8222-222222222222',
@@ -122,5 +123,6 @@ export const portfoliosPopulated: PortfolioListItem[] = [
     next_realloc_at: null,
     adset_count: 2,
     pending_recommendations: 0,
+    pending_budget_moves: 0,
   },
 ];

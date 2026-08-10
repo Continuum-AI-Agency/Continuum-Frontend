@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
+import { pendingWorkCount } from './reportModel';
 import { OptimizerActions } from './sections/OptimizerActions';
 import { OptimizerLogs } from './sections/OptimizerLogs';
 import { OptimizerOffline } from './sections/OptimizerOffline';
@@ -60,8 +61,10 @@ type OptimizerTabProps = {
   onSelectAdAccount?: (adAccountId: string) => void;
 };
 
+/** The Actions badge must count what the Actions tab actually renders — recommendations
+ *  AND budget moves. Counting recs alone under-reported every money-only cycle. */
 function totalPending(portfolios: PortfolioListItem[]): number {
-  return portfolios.reduce((sum, portfolio) => sum + portfolio.pending_recommendations, 0);
+  return portfolios.reduce((sum, portfolio) => sum + pendingWorkCount(portfolio), 0);
 }
 
 function OptimizerSkeleton() {

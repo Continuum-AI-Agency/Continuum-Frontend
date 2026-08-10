@@ -9,10 +9,12 @@ import {
   creativeBriefForRec,
   explainConfidence,
   freezeLabel,
+  hasPendingWork,
   isExecutable,
   notImplementedMessage,
   parseReport,
   partitionHeldItems,
+  pendingWorkCount,
   recommendationActionCopy,
   recommendationLabel,
 } from './reportModel';
@@ -433,5 +435,37 @@ describe('budgetMoveWhy explains one move from what cycle_items already stores',
       diagnostics: { velocityCapped: true },
     });
     expect(why?.capped).toBe(true);
+  });
+});
+
+describe('pending work counts BUDGET MOVES, not just recommendations', () => {
+  const portfolio = (recs: number, moves?: number) => ({
+    pending_recommendations: recs,
+    ...(moves === undefined ? {} : { pending_budget_moves: moves }),
+  });
+
+  it('counts a money-only cycle as work', () => {
+    // The regression this exists for: a cycle that wants to move budget but fired no
+    // trigger has zero recommendations, and the Actions tab filtered it out entirely.
+    expect(hasPendingWork(portfolio(0, 2))).toBe(true);
+    expect(pendingWorkCount(portfolio(0, 2))).toBe(2);
+  });
+
+  it('sums both kinds so the tab badge matches what the tab renders', () => {
+    expect(pendingWorkCount(portfolio(2, 8))).toBe(10);
+  });
+
+  it('still counts a recommendation-only cycle', () => {
+    expect(hasPendingWork(portfolio(1, 0))).toBe(true);
+  });
+
+  it('is false only when BOTH are zero', () => {
+    expect(hasPendingWork(portfolio(0, 0))).toBe(false);
+    expect(pendingWorkCount(portfolio(0, 0))).toBe(0);
+  });
+
+  it('treats a payload predating the RPC change as zero moves, never NaN', () => {
+    expect(pendingWorkCount(portfolio(3))).toBe(3);
+    expect(hasPendingWork(portfolio(0))).toBe(false);
   });
 });

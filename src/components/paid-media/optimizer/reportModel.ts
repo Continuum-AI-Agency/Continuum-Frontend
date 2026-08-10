@@ -157,6 +157,28 @@ export function budgetMoveWhy(item: CycleItemRow): BudgetMoveWhy | null {
   };
 }
 
+// ── What counts as work waiting on a human ───────────────────────────────────
+// ONE definition, because the proxy drifted once already. The Actions queue used
+// `pending_recommendations > 0`, but a budget move is a cycle_items row and never
+// produces a recommendation — so a portfolio whose cycle wanted to move money but
+// fired no trigger was filtered out of the queue and its moves were unreachable.
+// The tab badge and the prefetch warmer read the same proxy, so all three have to
+// agree; they now all call this.
+
+export function pendingWorkCount(portfolio: {
+  pending_recommendations: number;
+  pending_budget_moves?: number;
+}): number {
+  return portfolio.pending_recommendations + (portfolio.pending_budget_moves ?? 0);
+}
+
+export function hasPendingWork(portfolio: {
+  pending_recommendations: number;
+  pending_budget_moves?: number;
+}): boolean {
+  return pendingWorkCount(portfolio) > 0;
+}
+
 /** Confidence band → badge variant + label, tolerant of loose DB strings. */
 export function confidenceBand(band: string | null | undefined): {
   variant: 'success' | 'secondary' | 'destructive';
