@@ -1,6 +1,5 @@
 'use client';
 
-import * as NavigationMenu from '@radix-ui/react-navigation-menu';
 import Link from 'next/link';
 import { buttonVariants } from '@/components/ui/button';
 import ThemeToggle from '../theme-toggle';
@@ -20,35 +19,27 @@ export function SiteHeader() {
           </div>
 
           <div className="flex items-center gap-4">
-            <NavigationMenu.Root className="hidden md:flex" aria-label="Primary navigation">
-              <NavigationMenu.List className="flex items-center gap-3 text-sm">
-                <NavigationMenu.Item>
-                  <NavigationMenu.Link asChild>
-                    <Link href="#product">Product</Link>
-                  </NavigationMenu.Link>
-                </NavigationMenu.Item>
-                <NavigationMenu.Item>
-                  <NavigationMenu.Link asChild>
-                    <Link href="#subscribe">Pricing</Link>
-                  </NavigationMenu.Link>
-                </NavigationMenu.Item>
-                <NavigationMenu.Item>
-                  <NavigationMenu.Link asChild>
-                    <Link href="#solutions">Solutions</Link>
-                  </NavigationMenu.Link>
-                </NavigationMenu.Item>
-                <NavigationMenu.Item>
-                  <NavigationMenu.Link asChild>
-                    <Link href="#resources">Resources</Link>
-                  </NavigationMenu.Link>
-                </NavigationMenu.Item>
-                <NavigationMenu.Item>
-                  <NavigationMenu.Link asChild>
-                    <Link href="/oauth/mock">Sign in</Link>
-                  </NavigationMenu.Link>
-                </NavigationMenu.Item>
-              </NavigationMenu.List>
-            </NavigationMenu.Root>
+            {/* Five static links, no popups: <nav>/<ul> carries the same semantics that
+                Radix's NavigationMenu was providing here. */}
+            <nav className="hidden md:flex" aria-label="Primary navigation">
+              <ul className="flex items-center gap-3 text-sm">
+                <li>
+                  <Link href="#product">Product</Link>
+                </li>
+                <li>
+                  <Link href="#subscribe">Pricing</Link>
+                </li>
+                <li>
+                  <Link href="#solutions">Solutions</Link>
+                </li>
+                <li>
+                  <Link href="#resources">Resources</Link>
+                </li>
+                <li>
+                  <Link href="/oauth/mock">Sign in</Link>
+                </li>
+              </ul>
+            </nav>
 
             <div className="flex items-center gap-3">
               <Link href="/onboarding" className={buttonVariants()}>

@@ -1,6 +1,6 @@
 'use client';
 
-import * as Tabs from '@radix-ui/react-tabs';
+import { Tabs } from '@base-ui/react/tabs';
 import type { ReactNode } from 'react';
 import { SettingsNavItem } from './SettingsNavItem';
 import { ACCOUNT_SECTIONS, BRAND_SECTIONS } from './sections';

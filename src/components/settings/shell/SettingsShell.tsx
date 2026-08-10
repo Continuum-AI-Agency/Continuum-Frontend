@@ -1,6 +1,6 @@
 'use client';
 
-import * as Tabs from '@radix-ui/react-tabs';
+import { Tabs } from '@base-ui/react/tabs';
 import { Menu } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
@@ -87,13 +87,13 @@ export function SettingsShell({
         </aside>
 
         <div className="min-w-0 max-w-[var(--shell-content-max)]">
-          <Tabs.Content
+          <Tabs.Panel
             key={activeSection}
             value={section}
             className="space-y-[var(--page-section-gap)] outline-none data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:duration-200"
           >
             {section === activeSection ? activeSectionSlot : <SettingsSectionSkeleton />}
-          </Tabs.Content>
+          </Tabs.Panel>
         </div>
       </Tabs.Root>
     </div>

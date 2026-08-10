@@ -1,13 +1,14 @@
-import { Slot } from '@radix-ui/react-slot';
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
 import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
 import * as React from 'react';
+import { isValidElement } from 'react';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 function Pagination({ className, ...props }: React.ComponentProps<'nav'>) {
   return (
     <nav
-      role="navigation"
       aria-label="pagination"
       className={cn('mx-auto flex w-full justify-center', className)}
       {...props}
@@ -45,24 +46,26 @@ function PaginationLink({
   asChild = false,
   ...props
 }: PaginationLinkProps) {
-  const Comp = asChild ? Slot : 'a';
-
-  return (
-    <Comp
-      aria-current={isActive ? 'page' : undefined}
-      aria-disabled={disabled ? true : undefined}
-      tabIndex={disabled ? -1 : props.tabIndex}
-      className={cn(
-        buttonVariants({
-          variant: isActive ? 'outline' : 'ghost',
-          size,
-        }),
-        disabled && 'pointer-events-none opacity-50',
-        className,
-      )}
-      {...props}
-    />
-  );
+  // Base UI has no Slot; useRender is its equivalent. The `asChild` API is kept so the
+  // call sites are unchanged - the child element receives the merged props exactly as before.
+  const { children, ...rest } = props;
+  return useRender({
+    defaultTagName: 'a',
+    props: mergeProps<'a'>(
+      {
+        'aria-current': isActive ? 'page' : undefined,
+        'aria-disabled': disabled ? true : undefined,
+        tabIndex: disabled ? -1 : props.tabIndex,
+        className: cn(
+          buttonVariants({ variant: isActive ? 'outline' : 'ghost', size }),
+          disabled && 'pointer-events-none opacity-50',
+          className,
+        ),
+      },
+      asChild ? rest : props,
+    ),
+    render: asChild && isValidElement(children) ? children : undefined,
+  });
 }
 
 function PaginationPrevious({ className, ...props }: React.ComponentProps<typeof PaginationLink>) {

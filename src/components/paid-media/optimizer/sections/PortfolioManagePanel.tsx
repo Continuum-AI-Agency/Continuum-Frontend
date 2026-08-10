@@ -707,17 +707,19 @@ export function PortfolioManagePanel({
       </Section>
 
       <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs font-semibold tracking-tight"
-          >
-            Advanced
-            <ChevronDown
-              className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
-            />
-          </button>
-        </CollapsibleTrigger>
+        <CollapsibleTrigger
+          render={
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs font-semibold tracking-tight"
+            >
+              Advanced
+              <ChevronDown
+                className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
+              />
+            </button>
+          }
+        />
         <CollapsibleContent className="mt-2 grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label htmlFor={`manage-cpa-${portfolio.id}`}>

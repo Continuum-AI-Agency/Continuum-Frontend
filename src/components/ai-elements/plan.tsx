@@ -62,20 +62,24 @@ export const Plan = ({
   ...props
 }: PlanProps) => (
   <PlanContext.Provider value={{ isStreaming, status }}>
-    <Collapsible asChild data-slot="plan" {...props}>
-      <Card
-        className={cn(
-          'shadow-none transition-all duration-300',
-          status === 'completed' && 'border-emerald-500/30 bg-emerald-500/[0.03]',
-          status === 'awaiting_approval' && 'border-amber-500/50 bg-amber-500/5',
-          status === 'approved' && 'border-emerald-500/50 bg-emerald-500/5',
-          status === 'rejected' && 'border-red-500/50 bg-red-500/5',
-          className,
-        )}
-      >
-        {children}
-      </Card>
-    </Collapsible>
+    <Collapsible
+      data-slot="plan"
+      render={
+        <Card
+          className={cn(
+            'shadow-none transition-all duration-300',
+            status === 'completed' && 'border-emerald-500/30 bg-emerald-500/[0.03]',
+            status === 'awaiting_approval' && 'border-amber-500/50 bg-amber-500/5',
+            status === 'approved' && 'border-emerald-500/50 bg-emerald-500/5',
+            status === 'rejected' && 'border-red-500/50 bg-red-500/5',
+            className,
+          )}
+        >
+          {children}
+        </Card>
+      }
+      {...props}
+    />
   </PlanContext.Provider>
 );
 
@@ -154,9 +158,7 @@ export const PlanAction = (props: PlanActionProps) => (
 export type PlanContentProps = ComponentProps<typeof CardContent>;
 
 export const PlanContent = (props: PlanContentProps) => (
-  <CollapsibleContent asChild>
-    <CardContent data-slot="plan-content" {...props} />
-  </CollapsibleContent>
+  <CollapsibleContent render={<CardContent data-slot="plan-content" {...props} />} />
 );
 
 export type PlanFooterProps = ComponentProps<'div'>;
@@ -168,18 +170,20 @@ export const PlanFooter = (props: PlanFooterProps) => (
 export type PlanTriggerProps = ComponentProps<typeof CollapsibleTrigger>;
 
 export const PlanTrigger = ({ className, ...props }: PlanTriggerProps) => (
-  <CollapsibleTrigger asChild>
-    <Button
-      className={cn('size-8', className)}
-      data-slot="plan-trigger"
-      size="icon"
-      variant="ghost"
-      {...props}
-    >
-      <ChevronsUpDownIcon className="size-4" />
-      <span className="sr-only">Toggle plan</span>
-    </Button>
-  </CollapsibleTrigger>
+  <CollapsibleTrigger
+    {...props}
+    render={
+      <Button
+        className={cn('size-8', className)}
+        data-slot="plan-trigger"
+        size="icon"
+        variant="ghost"
+      >
+        <ChevronsUpDownIcon className="size-4" />
+        <span className="sr-only">Toggle plan</span>
+      </Button>
+    }
+  />
 );
 
 export type PlanFeedbackProps = Omit<ComponentProps<'div'>, 'onSubmit'> & {

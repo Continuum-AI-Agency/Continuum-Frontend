@@ -134,12 +134,7 @@ export function AIStudioChat({
         </div>
 
         {/* Message List */}
-        <ScrollArea
-          className="min-h-0 flex-1"
-          viewportClassName="p-4"
-          viewportRef={scrollRef}
-          type="always"
-        >
+        <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4" viewportRef={scrollRef}>
           <div className="flex min-h-full flex-col justify-end gap-3">
             {isLoading && (
               <div className="flex justify-center p-4">

@@ -1,6 +1,8 @@
-import { Slot } from '@radix-ui/react-slot';
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
 import { ChevronRight, MoreHorizontal } from 'lucide-react';
 import * as React from 'react';
+import { isValidElement } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -39,15 +41,18 @@ const BreadcrumbLink = React.forwardRef<
     asChild?: boolean;
   }
 >(({ asChild, className, ...props }, ref) => {
-  const Comp = asChild ? Slot : 'a';
-
-  return (
-    <Comp
-      ref={ref}
-      className={cn('hover:text-foreground transition-colors', className)}
-      {...props}
-    />
-  );
+  // Base UI has no Slot; useRender is its equivalent and preserves the `asChild` API.
+  const { children, ...rest } = props;
+  return useRender({
+    defaultTagName: 'a',
+    props: mergeProps<'a'>(
+      {
+        className: cn('hover:text-foreground transition-colors', className),
+      },
+      asChild ? rest : props,
+    ),
+    render: asChild && isValidElement(children) ? children : undefined,
+  });
 });
 BreadcrumbLink.displayName = 'BreadcrumbLink';
 
@@ -55,8 +60,6 @@ const BreadcrumbPage = React.forwardRef<HTMLSpanElement, React.ComponentPropsWit
   ({ className, ...props }, ref) => (
     <span
       ref={ref}
-      role="link"
-      aria-disabled="true"
       aria-current="page"
       className={cn('text-foreground font-normal', className)}
       {...props}

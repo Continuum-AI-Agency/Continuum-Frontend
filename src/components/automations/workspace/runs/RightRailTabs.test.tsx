@@ -1,7 +1,7 @@
-// The whole reason the rail uses the StableTabs fork is that the inactive panel
-// must stay mounted. A plain Radix Tabs swap would unmount the inspector and
-// throw away its scroll position, focus and in-flight edit, so that is what this
-// spec pins down.
+// The whole reason the rail keeps its panels mounted is that swapping tabs must not
+// unmount the inspector and throw away its scroll position, focus and in-flight edit,
+// so that is what this spec pins down. (This used to require a fork of Radix Tabs;
+// Base UI expresses it as `keepMounted`.)
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -59,7 +59,7 @@ describe('RightRailTabs', () => {
 
     expect(screen.getByTestId('inspector-body-mounts').textContent).toBe('mounted');
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /runs/ }), { button: 0 });
+    fireEvent.click(screen.getByRole('tab', { name: /runs/ }));
 
     expect(panelFor('runs').hasAttribute('hidden')).toBe(false);
     expect(panelFor('inspector').hasAttribute('hidden')).toBe(true);
@@ -80,7 +80,7 @@ describe('RightRailTabs', () => {
       />,
     );
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /runs/ }), { button: 0 });
+    fireEvent.click(screen.getByRole('tab', { name: /runs/ }));
 
     expect(onTabChange).toHaveBeenCalledTimes(1);
     expect(onTabChange.mock.calls[0]?.[0]).toBe('runs');

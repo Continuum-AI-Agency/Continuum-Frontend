@@ -58,10 +58,18 @@ import { AssignmentsDialog } from './AssignmentsDialog';
 
 const emptySummary = {} as BrandIntegrationSummary;
 
-function rowCheckbox(name: string): HTMLElement {
+// Clicks the ROW, not the raw control. Base UI's checkbox is a button beside a hidden input, and
+// under happy-dom a click on the button also activates the enclosing <label>, toggling twice.
+// Real browsers skip label activation for interactive descendants; clicking the row label is both
+// what a user does and immune to that gap.
+function rowLabel(name: string): HTMLElement {
   const label = screen.getByText(name).closest('label');
   if (!label) throw new Error(`row label for "${name}" not found`);
-  const checkbox = label.querySelector('[role=checkbox]');
+  return label as HTMLElement;
+}
+
+function rowCheckbox(name: string): HTMLElement {
+  const checkbox = rowLabel(name).querySelector('[role=checkbox]');
   if (!checkbox) throw new Error(`checkbox for "${name}" not found`);
   return checkbox as HTMLElement;
 }
@@ -100,7 +108,7 @@ describe('AssignmentsDialog', () => {
     expect(screen.getByText('Continuum Instagram')).toBeTruthy();
     expect(screen.getByText('Not attached to a Meta ad account')).toBeTruthy();
 
-    fireEvent.click(rowCheckbox('Continuum Instagram'));
+    fireEvent.click(rowLabel('Continuum Instagram'));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     });

@@ -1,7 +1,7 @@
 'use client';
 
+import { Tabs as TabsPrimitive } from '@base-ui/react/tabs';
 import { BarChartIcon, LayersIcon, MagicWandIcon } from '@radix-ui/react-icons';
-import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -77,7 +77,7 @@ export function ProductHighlights() {
             <TabsPrimitive.List className="w-full overflow-x-auto">
               <div className="flex gap-3 flex-wrap">
                 {panels.map((panel) => (
-                  <TabsPrimitive.Trigger
+                  <TabsPrimitive.Tab
                     key={panel.value}
                     value={panel.value}
                     className="rounded-full px-4 py-2 text-sm font-medium"
@@ -86,14 +86,14 @@ export function ProductHighlights() {
                       <panel.icon className="h-4 w-4" />
                       <span className="capitalize">{panel.label}</span>
                     </div>
-                  </TabsPrimitive.Trigger>
+                  </TabsPrimitive.Tab>
                 ))}
               </div>
             </TabsPrimitive.List>
 
             <AnimatePresence mode="wait">
               {panels.map((panel) => (
-                <TabsPrimitive.Content
+                <TabsPrimitive.Panel
                   key={panel.value}
                   value={panel.value}
                   className="focus:outline-none"
@@ -151,7 +151,7 @@ export function ProductHighlights() {
                       </GlassCard>
                     </motion.div>
                   ) : null}
-                </TabsPrimitive.Content>
+                </TabsPrimitive.Panel>
               ))}
             </AnimatePresence>
           </TabsPrimitive.Root>

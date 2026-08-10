@@ -165,7 +165,7 @@ export function PromptTemplatePicker({
         />
 
         <div className="mt-2">
-          <ScrollArea type="auto" style={{ maxHeight: 260 }}>
+          <ScrollArea style={{ maxHeight: 260 }}>
             <div className="flex flex-col gap-2">
               {isLoading ? (
                 <span className="text-xs text-muted-foreground">Loading templates…</span>

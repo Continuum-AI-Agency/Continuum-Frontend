@@ -467,7 +467,7 @@ export function ReferenceDock({
               {...refsDropzone}
               className="mb-3 w-full rounded-lg border border-dashed border-white/20 bg-white/5 p-3 text-white max-h-56 overflow-hidden"
             >
-              <ScrollArea type="always" className="mb-3 max-h-44 pr-2">
+              <ScrollArea className="mb-3 max-h-44 pr-2">
                 <div className="flex flex-wrap gap-2">
                   {refs.map((ref) => (
                     <RefChip

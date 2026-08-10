@@ -37,7 +37,7 @@ describe('JainaConversationSidebar', () => {
   it('allows the Goals tab in an enabled environment', () => {
     render(<JainaConversationSidebar {...props} goalsAccessEnabled />);
 
-    const goalsTab = screen.getByRole('radio', { name: 'Goals' }) as HTMLButtonElement;
+    const goalsTab = screen.getByRole('button', { name: 'Goals' }) as HTMLButtonElement;
     expect(goalsTab.disabled).toBe(false);
     fireEvent.click(goalsTab);
     expect(screen.getByText('Goal list')).not.toBeNull();

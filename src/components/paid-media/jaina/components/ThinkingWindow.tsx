@@ -237,55 +237,57 @@ export function ThinkingWindow({
 
   return (
     <ChainOfThought open={isOpen} onOpenChange={setUserOverride} className="space-y-0">
-      <CollapsibleTrigger asChild>
-        <button
-          type="button"
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-        >
-          <SparkleSpinner isActive={isStreaming} className="text-foreground/60" />
-          <span className="flex-1 text-left">
-            {isStreaming ? (
-              <Shimmer as="span" className="text-sm font-medium" duration={1.6}>
-                Thinking…
-              </Shimmer>
-            ) : (
-              <span className="font-medium">{doneLabel}</span>
-            )}
-          </span>
-          <AnimatePresence>
-            {currentStage && (
-              <motion.span
-                key={currentStage}
-                initial={{ opacity: 0, x: -4 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground"
-              >
-                {currentStage}
-              </motion.span>
-            )}
-          </AnimatePresence>
-          <div className="flex items-center gap-1.5">
-            {toolCount > 0 && (
-              <Badge variant="secondary" className="text-2xs px-1.5">
-                {toolCount} tool{toolCount !== 1 ? 's' : ''}
-              </Badge>
-            )}
-            {thoughtCount > 0 && (
-              <Badge variant="outline" className="text-2xs px-1.5">
-                {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
-              </Badge>
-            )}
-          </div>
-          <ChevronDownIcon
-            className={cn(
-              'size-4 shrink-0 transition-transform',
-              isOpen ? 'rotate-180' : 'rotate-0',
-            )}
-          />
-        </button>
-      </CollapsibleTrigger>
+      <CollapsibleTrigger
+        render={
+          <button
+            type="button"
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+          >
+            <SparkleSpinner isActive={isStreaming} className="text-foreground/60" />
+            <span className="flex-1 text-left">
+              {isStreaming ? (
+                <Shimmer as="span" className="text-sm font-medium" duration={1.6}>
+                  Thinking…
+                </Shimmer>
+              ) : (
+                <span className="font-medium">{doneLabel}</span>
+              )}
+            </span>
+            <AnimatePresence>
+              {currentStage && (
+                <motion.span
+                  key={currentStage}
+                  initial={{ opacity: 0, x: -4 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground"
+                >
+                  {currentStage}
+                </motion.span>
+              )}
+            </AnimatePresence>
+            <div className="flex items-center gap-1.5">
+              {toolCount > 0 && (
+                <Badge variant="secondary" className="text-2xs px-1.5">
+                  {toolCount} tool{toolCount !== 1 ? 's' : ''}
+                </Badge>
+              )}
+              {thoughtCount > 0 && (
+                <Badge variant="outline" className="text-2xs px-1.5">
+                  {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
+            <ChevronDownIcon
+              className={cn(
+                'size-4 shrink-0 transition-transform',
+                isOpen ? 'rotate-180' : 'rotate-0',
+              )}
+            />
+          </button>
+        }
+      />
 
       {isStreaming && !isOpen ? (
         <AnimatePresence mode="wait">

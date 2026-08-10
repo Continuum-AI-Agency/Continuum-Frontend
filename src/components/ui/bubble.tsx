@@ -1,6 +1,8 @@
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Slot } from 'radix-ui';
 import type * as React from 'react';
+import { isValidElement } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -68,23 +70,28 @@ function BubbleContent({
 }: React.ComponentProps<'div'> & {
   asChild?: boolean;
 }) {
-  const Comp = asChild ? Slot.Root : 'div';
-
-  return (
-    <Comp
-      data-slot="bubble-content"
-      className={cn(
-        // overflow-x-auto, not overflow-hidden: the bubble still has to CONTAIN a child wider
-        // than the column (a markdown table, a code block, a long unbroken URL) so it cannot
-        // push the transcript sideways, but hiding it simply truncated the answer with no way
-        // to read the rest. Scrolling keeps the containment and gives the reader the escape
-        // hatch. Text wrapping is unaffected — wrap-break-word below is what handles prose.
-        'w-fit max-w-full min-w-0 overflow-x-auto rounded-xl border border-transparent px-3 py-2 text-sm leading-relaxed wrap-break-word group-data-[align=end]/bubble:self-end [button]:text-left [button,a]:transition-colors [button,a]:outline-none [button,a]:focus-visible:border-ring [button,a]:focus-visible:ring-3 [button,a]:focus-visible:ring-ring/50',
-        className,
-      )}
-      {...props}
-    />
-  );
+  // Base UI has no Slot; useRender is its equivalent. The `asChild` API is kept so the
+  // call sites are unchanged - the child element receives the merged props exactly as before.
+  const { children, ...rest } = props;
+  return useRender({
+    defaultTagName: 'div',
+    props: mergeProps<'div'>(
+      {
+        className: cn(
+          // overflow-x-auto, not overflow-hidden: the bubble still has to CONTAIN a child wider
+          // than the column (a markdown table, a code block, a long unbroken URL) so it cannot
+          // push the transcript sideways, but hiding it simply truncated the answer with no way
+          // to read the rest. Scrolling keeps the containment and gives the reader the escape
+          // hatch. Text wrapping is unaffected — wrap-break-word below is what handles prose.
+          'w-fit max-w-full min-w-0 overflow-x-auto rounded-xl border border-transparent px-3 py-2 text-sm leading-relaxed wrap-break-word group-data-[align=end]/bubble:self-end [button]:text-left [button,a]:transition-colors [button,a]:outline-none [button,a]:focus-visible:border-ring [button,a]:focus-visible:ring-3 [button,a]:focus-visible:ring-ring/50',
+          className,
+        ),
+      },
+      asChild ? rest : props,
+    ),
+    render: asChild && isValidElement(children) ? children : undefined,
+    state: { slot: 'bubble-content' },
+  });
 }
 
 const bubbleReactionsVariants = cva(

@@ -39,30 +39,32 @@ export function OrganicThinkingPanel({ toolCalls, isStreaming }: OrganicThinking
 
   return (
     <ChainOfThought open={isOpen} onOpenChange={setIsOpen} className="space-y-0">
-      <CollapsibleTrigger asChild>
-        <button
-          type="button"
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-        >
-          {hasRunning ? (
-            <span className="size-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
-          ) : (
-            <WrenchIcon className="size-3.5 shrink-0 text-foreground/50" />
-          )}
-          <span className="flex-1 font-medium">
-            {isStreaming ? 'Thinking...' : 'Actions taken'}
-          </span>
-          <Badge variant="secondary" className="px-1.5 text-2xs">
-            {toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}
-          </Badge>
-          <ChevronDownIcon
-            className={cn(
-              'size-4 shrink-0 transition-transform',
-              isOpen ? 'rotate-180' : 'rotate-0',
+      <CollapsibleTrigger
+        render={
+          <button
+            type="button"
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+          >
+            {hasRunning ? (
+              <span className="size-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
+            ) : (
+              <WrenchIcon className="size-3.5 shrink-0 text-foreground/50" />
             )}
-          />
-        </button>
-      </CollapsibleTrigger>
+            <span className="flex-1 font-medium">
+              {isStreaming ? 'Thinking...' : 'Actions taken'}
+            </span>
+            <Badge variant="secondary" className="px-1.5 text-2xs">
+              {toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}
+            </Badge>
+            <ChevronDownIcon
+              className={cn(
+                'size-4 shrink-0 transition-transform',
+                isOpen ? 'rotate-180' : 'rotate-0',
+              )}
+            />
+          </button>
+        }
+      />
 
       <AnimatePresence>
         {isStreaming && activeToolName && !isOpen && (

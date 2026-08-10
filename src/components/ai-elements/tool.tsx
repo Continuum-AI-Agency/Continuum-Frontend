@@ -96,28 +96,30 @@ export function ToolHeader({
   const displayTitle = title || safeType.replace('tool-', '').replace(/_/g, ' ');
 
   return (
-    <CollapsibleTrigger asChild>
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-2 rounded-sm p-2 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <Code2 className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate text-sm font-medium text-foreground">{displayTitle}</span>
-          {state === 'running' && (
-            <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-          )}
-        </span>
-        {showDisclosure ? (
-          <ChevronDown
-            className={cn(
-              'size-4 shrink-0 text-muted-foreground transition-transform',
-              open ? 'rotate-180' : 'rotate-0',
+    <CollapsibleTrigger
+      render={
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 rounded-sm p-2 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Code2 className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate text-sm font-medium text-foreground">{displayTitle}</span>
+            {state === 'running' && (
+              <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
             )}
-          />
-        ) : null}
-      </button>
-    </CollapsibleTrigger>
+          </span>
+          {showDisclosure ? (
+            <ChevronDown
+              className={cn(
+                'size-4 shrink-0 text-muted-foreground transition-transform',
+                open ? 'rotate-180' : 'rotate-0',
+              )}
+            />
+          ) : null}
+        </button>
+      }
+    />
   );
 }
 

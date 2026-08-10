@@ -1,6 +1,6 @@
 'use client';
 
-import * as SheetPrimitive from '@radix-ui/react-dialog';
+import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
 import { Archive, X } from 'lucide-react';
 import React from 'react';
 import { StudioMediaLibraryPanel } from '@/components/creative-assets/StudioMediaLibraryPanel';
@@ -38,7 +38,7 @@ export function CreativeLibrarySidebar({
 
       <Sheet open={open} onOpenChange={setOpen} modal={false}>
         <SheetPrimitive.Portal>
-          <SheetPrimitive.Content
+          <SheetPrimitive.Popup
             className={cn(
               'fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500',
               'bg-slate-950/95 border-l border-white/10 text-white backdrop-blur-xl',
@@ -47,7 +47,6 @@ export function CreativeLibrarySidebar({
               'inset-y-0 right-0 h-full focus:outline-none',
             )}
             style={{ width: expandedWidth, maxWidth: '100vw' }}
-            onPointerDownOutside={() => setOpen(false)}
           >
             <div className="flex h-full flex-col">
               <div className="flex flex-shrink-0 items-center justify-between border-b border-white/5 p-4">
@@ -72,7 +71,7 @@ export function CreativeLibrarySidebar({
                 <StudioMediaLibraryPanel brandProfileId={brandProfileId} />
               </div>
             </div>
-          </SheetPrimitive.Content>
+          </SheetPrimitive.Popup>
         </SheetPrimitive.Portal>
       </Sheet>
     </>

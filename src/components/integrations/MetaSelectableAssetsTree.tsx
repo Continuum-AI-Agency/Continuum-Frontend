@@ -1,6 +1,6 @@
 'use client';
 
-import * as Accordion from '@radix-ui/react-accordion';
+import { Accordion } from '@base-ui/react/accordion';
 import { ChevronDownIcon } from '@radix-ui/react-icons';
 
 import { Pill } from '@/components/kibo-ui/pill';
@@ -129,7 +129,7 @@ export function MetaSelectableAssetsTree({
 
         return (
           <div key={integration.integration_id}>
-            <Accordion.Root type="multiple" className="flex flex-col gap-2">
+            <Accordion.Root multiple className="flex flex-col gap-2">
               {businesses.map((business, index) => {
                 const businessKey = `${integration.integration_id}:${business.business_id ?? 'none'}:${index}`;
                 const businessLabel =
@@ -158,12 +158,12 @@ export function MetaSelectableAssetsTree({
                       </Accordion.Trigger>
                     </Accordion.Header>
 
-                    <Accordion.Content className="border-subtle border-t px-3 py-3">
+                    <Accordion.Panel className="border-subtle border-t px-3 py-3">
                       <div className="flex flex-col gap-3">
                         {(business.ad_accounts ?? []).length > 0 ? (
                           <div className="flex flex-col gap-2">
                             <span className="text-sm font-medium text-primary">Ad accounts</span>
-                            <Accordion.Root type="multiple" className="flex flex-col gap-2">
+                            <Accordion.Root multiple className="flex flex-col gap-2">
                               {(business.ad_accounts ?? []).map((adAccount) => {
                                 const adAccountKey = `${businessKey}:ad:${adAccount.ad_account_id}`;
                                 const adAccountLabel = adAccount.ad_account
@@ -222,7 +222,7 @@ export function MetaSelectableAssetsTree({
                                       </div>
                                     </Accordion.Header>
 
-                                    <Accordion.Content className="border-subtle border-t px-3 py-3">
+                                    <Accordion.Panel className="border-subtle border-t px-3 py-3">
                                       <div className="flex flex-col gap-3">
                                         <AssetsList
                                           title="Pages"
@@ -261,7 +261,7 @@ export function MetaSelectableAssetsTree({
                                           seenKeys={seenKeys}
                                         />
                                       </div>
-                                    </Accordion.Content>
+                                    </Accordion.Panel>
                                   </Accordion.Item>
                                 );
                               })}
@@ -294,7 +294,7 @@ export function MetaSelectableAssetsTree({
                           seenKeys={seenKeys}
                         />
                       </div>
-                    </Accordion.Content>
+                    </Accordion.Panel>
                   </Accordion.Item>
                 );
               })}

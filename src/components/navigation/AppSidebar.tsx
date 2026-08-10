@@ -305,96 +305,98 @@ function AppSidebarInner({
       return (
         <Collapsible
           key={item.href}
-          asChild
           defaultOpen={active || isSubActive}
           className="group/collapsible"
-        >
-          <SidebarMenuItem>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      size="default"
-                      isActive={active || isSubActive}
-                      onMouseEnter={() => router.prefetch(item.href)}
-                      className={cn(
-                        'group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]',
-                        active || isSubActive
-                          ? 'text-[var(--sidebar-foreground)]'
-                          : 'text-[var(--sidebar-muted)]',
-                      )}
-                    >
-                      {active || isSubActive ? (
-                        <ActiveMarker
-                          layoutId="nav-active-marker"
-                          animate={!reduce}
-                          className="h-4 w-0.5"
-                        />
-                      ) : null}
-                      <NavIcon
-                        icon={item.icon}
-                        active={active || isSubActive}
-                        accentColor={item.accentColor}
-                      />
-                      <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-                        {item.label}
-                      </span>
-                      <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                }
-              />
-              <TooltipContent
-                side="right"
-                align="center"
-                hidden={state !== 'collapsed' || isMobile}
-              >
-                {item.label}
-              </TooltipContent>
-            </Tooltip>
-            <CollapsibleContent>
-              <SidebarMenuSub className="group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:m-0 group-data-[collapsible=icon]:border-none group-data-[collapsible=icon]:px-0">
-                {item.items?.map((subItem) => {
-                  const subActive = isRouteActive(pathname, searchParams, subItem);
-                  const SubIcon = subItem.icon;
-
-                  return (
-                    <SidebarMenuSubItem
-                      key={subItem.href}
-                      className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-full"
-                    >
-                      <SidebarMenuSubButton
-                        asChild
-                        isActive={subActive}
-                        size="md"
-                        onMouseEnter={() => router.prefetch(subItem.href)}
-                        className={cn(
-                          'group relative text-[var(--sidebar-muted)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)] data-[active=true]:text-[var(--sidebar-foreground)] data-[active=true]:bg-[var(--sidebar-active-bg)]',
-                          'group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0',
-                        )}
-                      >
-                        <Link href={subItem.href}>
-                          {subActive ? <ActiveMarker className="h-3 w-0.5" /> : null}
-                          {SubIcon && (
-                            <NavIcon
-                              icon={SubIcon}
-                              active={subActive}
-                              accentColor={item.accentColor}
-                            />
+          render={
+            <SidebarMenuItem>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <CollapsibleTrigger
+                      render={
+                        <SidebarMenuButton
+                          size="default"
+                          isActive={active || isSubActive}
+                          onMouseEnter={() => router.prefetch(item.href)}
+                          className={cn(
+                            'group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]',
+                            active || isSubActive
+                              ? 'text-[var(--sidebar-foreground)]'
+                              : 'text-[var(--sidebar-muted)]',
                           )}
-                          <span className="group-data-[collapsible=icon]:hidden text-[0.74rem] font-medium tracking-[0.01em]">
-                            {subItem.label}
+                        >
+                          {active || isSubActive ? (
+                            <ActiveMarker
+                              layoutId="nav-active-marker"
+                              animate={!reduce}
+                              className="h-4 w-0.5"
+                            />
+                          ) : null}
+                          <NavIcon
+                            icon={item.icon}
+                            active={active || isSubActive}
+                            accentColor={item.accentColor}
+                          />
+                          <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                            {item.label}
                           </span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  );
-                })}
-              </SidebarMenuSub>
-            </CollapsibleContent>
-          </SidebarMenuItem>
-        </Collapsible>
+                          <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
+                        </SidebarMenuButton>
+                      }
+                    />
+                  }
+                />
+                <TooltipContent
+                  side="right"
+                  align="center"
+                  hidden={state !== 'collapsed' || isMobile}
+                >
+                  {item.label}
+                </TooltipContent>
+              </Tooltip>
+              <CollapsibleContent>
+                <SidebarMenuSub className="group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:m-0 group-data-[collapsible=icon]:border-none group-data-[collapsible=icon]:px-0">
+                  {item.items?.map((subItem) => {
+                    const subActive = isRouteActive(pathname, searchParams, subItem);
+                    const SubIcon = subItem.icon;
+
+                    return (
+                      <SidebarMenuSubItem
+                        key={subItem.href}
+                        className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-full"
+                      >
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={subActive}
+                          size="md"
+                          onMouseEnter={() => router.prefetch(subItem.href)}
+                          className={cn(
+                            'group relative text-[var(--sidebar-muted)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)] data-[active=true]:text-[var(--sidebar-foreground)] data-[active=true]:bg-[var(--sidebar-active-bg)]',
+                            'group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0',
+                          )}
+                        >
+                          <Link href={subItem.href}>
+                            {subActive ? <ActiveMarker className="h-3 w-0.5" /> : null}
+                            {SubIcon && (
+                              <NavIcon
+                                icon={SubIcon}
+                                active={subActive}
+                                accentColor={item.accentColor}
+                              />
+                            )}
+                            <span className="group-data-[collapsible=icon]:hidden text-[0.74rem] font-medium tracking-[0.01em]">
+                              {subItem.label}
+                            </span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    );
+                  })}
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </SidebarMenuItem>
+          }
+        />
       );
     }
 

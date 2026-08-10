@@ -1,5 +1,5 @@
-import * as Collapsible from '@radix-ui/react-collapsible';
-import * as ContextMenu from '@radix-ui/react-context-menu';
+import { Collapsible } from '@base-ui/react/collapsible';
+import { ContextMenu } from '@base-ui/react/context-menu';
 import {
   CheckIcon,
   ExclamationTriangleIcon,
@@ -41,124 +41,126 @@ export function GeneratorNode({ id, data, selected }: GeneratorNodeProps) {
 
   return (
     <ContextMenu.Root>
-      <ContextMenu.Trigger asChild>
-        <div
-          className={`relative w-96 max-w-md rounded-xl border ${selected ? 'border-blue-400' : 'border-white/10'} bg-slate-900/95 p-3 shadow-lg`}
-        >
-          <div className="flex items-center justify-between">
-            <Pill variant="muted">{data.provider}</Pill>
-            <Pill variant={isVideo ? 'violet' : 'teal'}>{data.medium}</Pill>
-          </div>
-
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(providerAspectRatioOptions[data.provider]?.[data.medium] ?? ['1:1', '16:9']).map(
-              (ratio) => (
-                <Button
-                  key={ratio}
-                  size="sm"
-                  variant={data.aspectRatio === ratio ? 'default' : 'outline'}
-                  className="rounded-full"
-                  onClick={() =>
-                    window.dispatchEvent(
-                      new CustomEvent('node:edit', {
-                        detail: { id, field: 'aspectRatio', value: ratio },
-                      }),
-                    )
-                  }
-                >
-                  {ratio}
-                </Button>
-              ),
-            )}
-          </div>
-
-          <Textarea
-            value={data.prompt}
-            onChange={(e) =>
-              window.dispatchEvent(
-                new CustomEvent('node:edit', {
-                  detail: { id, field: 'prompt', value: e.target.value },
-                }),
-              )
-            }
-            placeholder="Prompt..."
-            className="mt-2 min-h-[60px] bg-transparent text-white"
-          />
-
-          <div className="mt-3 flex items-center justify-between">
-            {(() => {
-              const meta = data.status
-                ? JOB_STATUS_META[data.status as keyof typeof JOB_STATUS_META]
-                : undefined;
-              return <Pill variant={meta?.variant ?? 'muted'}>{data.status ?? 'idle'}</Pill>;
-            })()}
-            <Button
-              onClick={() =>
-                window.dispatchEvent(new CustomEvent('node:generate', { detail: { id } }))
-              }
-            >
-              <PaperPlaneIcon /> Generate
-            </Button>
-          </div>
-
-          {data.status === 'failed' && data.failureMessage && (
-            <div className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
-              <ExclamationTriangleIcon className="mt-0.5 shrink-0" />
-              <span className="break-words">{data.failureMessage}</span>
+      <ContextMenu.Trigger
+        render={
+          <div
+            className={`relative w-96 max-w-md rounded-xl border ${selected ? 'border-blue-400' : 'border-white/10'} bg-slate-900/95 p-3 shadow-lg`}
+          >
+            <div className="flex items-center justify-between">
+              <Pill variant="muted">{data.provider}</Pill>
+              <Pill variant={isVideo ? 'violet' : 'teal'}>{data.medium}</Pill>
             </div>
-          )}
 
-          <Handle
-            type="target"
-            id="prompt"
-            position={Position.Left}
-            style={{ top: '30%' }}
-            className="!bg-blue-400 h-3 w-3"
-          />
-          <Handle
-            type="target"
-            id="negative"
-            position={Position.Left}
-            style={{ top: '45%' }}
-            className="!bg-amber-400 h-3 w-3"
-          />
-          <Handle
-            type="target"
-            id="ref"
-            position={Position.Left}
-            style={{ top: '60%' }}
-            className="!bg-purple-400 h-3 w-3"
-          />
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(providerAspectRatioOptions[data.provider]?.[data.medium] ?? ['1:1', '16:9']).map(
+                (ratio) => (
+                  <Button
+                    key={ratio}
+                    size="sm"
+                    variant={data.aspectRatio === ratio ? 'default' : 'outline'}
+                    className="rounded-full"
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent('node:edit', {
+                          detail: { id, field: 'aspectRatio', value: ratio },
+                        }),
+                      )
+                    }
+                  >
+                    {ratio}
+                  </Button>
+                ),
+              )}
+            </div>
 
-          {isVideo && (
-            <>
-              <Handle
-                type="target"
-                id="firstFrame"
-                position={Position.Left}
-                style={{ top: '72%' }}
-                className="!bg-purple-400 h-3 w-3"
-              />
-              <Handle
-                type="target"
-                id="lastFrame"
-                position={Position.Left}
-                style={{ top: '82%' }}
-                className="!bg-purple-400 h-3 w-3"
-              />
-            </>
-          )}
+            <Textarea
+              value={data.prompt}
+              onChange={(e) =>
+                window.dispatchEvent(
+                  new CustomEvent('node:edit', {
+                    detail: { id, field: 'prompt', value: e.target.value },
+                  }),
+                )
+              }
+              placeholder="Prompt..."
+              className="mt-2 min-h-[60px] bg-transparent text-white"
+            />
 
-          <Handle
-            type="source"
-            position={Position.Right}
-            style={{ top: '50%' }}
-            className="!bg-green-400 h-3 w-3"
-          />
-        </div>
-      </ContextMenu.Trigger>
+            <div className="mt-3 flex items-center justify-between">
+              {(() => {
+                const meta = data.status
+                  ? JOB_STATUS_META[data.status as keyof typeof JOB_STATUS_META]
+                  : undefined;
+                return <Pill variant={meta?.variant ?? 'muted'}>{data.status ?? 'idle'}</Pill>;
+              })()}
+              <Button
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent('node:generate', { detail: { id } }))
+                }
+              >
+                <PaperPlaneIcon /> Generate
+              </Button>
+            </div>
 
-      <ContextMenu.Content className="rounded-lg border border-white/10 bg-slate-900/95 p-2 text-sm text-white shadow-lg">
+            {data.status === 'failed' && data.failureMessage && (
+              <div className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
+                <ExclamationTriangleIcon className="mt-0.5 shrink-0" />
+                <span className="break-words">{data.failureMessage}</span>
+              </div>
+            )}
+
+            <Handle
+              type="target"
+              id="prompt"
+              position={Position.Left}
+              style={{ top: '30%' }}
+              className="!bg-blue-400 h-3 w-3"
+            />
+            <Handle
+              type="target"
+              id="negative"
+              position={Position.Left}
+              style={{ top: '45%' }}
+              className="!bg-amber-400 h-3 w-3"
+            />
+            <Handle
+              type="target"
+              id="ref"
+              position={Position.Left}
+              style={{ top: '60%' }}
+              className="!bg-purple-400 h-3 w-3"
+            />
+
+            {isVideo && (
+              <>
+                <Handle
+                  type="target"
+                  id="firstFrame"
+                  position={Position.Left}
+                  style={{ top: '72%' }}
+                  className="!bg-purple-400 h-3 w-3"
+                />
+                <Handle
+                  type="target"
+                  id="lastFrame"
+                  position={Position.Left}
+                  style={{ top: '82%' }}
+                  className="!bg-purple-400 h-3 w-3"
+                />
+              </>
+            )}
+
+            <Handle
+              type="source"
+              position={Position.Right}
+              style={{ top: '50%' }}
+              className="!bg-green-400 h-3 w-3"
+            />
+          </div>
+        }
+      />
+
+      <ContextMenu.Popup className="rounded-lg border border-white/10 bg-slate-900/95 p-2 text-sm text-white shadow-lg">
         <ContextMenu.Item
           className="flex cursor-default items-center rounded px-2 py-1 hover:bg-white/10"
           onSelect={() =>
@@ -176,12 +178,12 @@ export function GeneratorNode({ id, data, selected }: GeneratorNodeProps) {
           <ContextMenuItemInfo description="Delete removes the generator node from the active graph." />
         </ContextMenu.Item>
         <ContextMenu.Separator className="my-1 h-px bg-white/10" />
-        <ContextMenu.Label className="text-gray-300">Advanced</ContextMenu.Label>
+        <ContextMenu.GroupLabel className="text-gray-300">Advanced</ContextMenu.GroupLabel>
         <Collapsible.Root>
           <Collapsible.Trigger className="mt-1 w-full rounded-md px-1 py-1 text-left text-xs text-gray-300 hover:bg-white/5">
             Advanced
           </Collapsible.Trigger>
-          <Collapsible.Content className="space-y-2 px-1 py-1">
+          <Collapsible.Panel className="space-y-2 px-1 py-1">
             {!isVideo && (
               <div>
                 {/* biome-ignore lint/a11y/noLabelWithoutControl: pre-existing compact canvas-node control; the label sits directly above its single input. An htmlFor association is a tracked follow-up, out of scope for this styling pass. */}
@@ -244,9 +246,9 @@ export function GeneratorNode({ id, data, selected }: GeneratorNodeProps) {
                 />
               </div>
             </div>
-          </Collapsible.Content>
+          </Collapsible.Panel>
         </Collapsible.Root>
-      </ContextMenu.Content>
+      </ContextMenu.Popup>
     </ContextMenu.Root>
   );
 }

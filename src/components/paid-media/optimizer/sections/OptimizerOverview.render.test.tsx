@@ -107,7 +107,7 @@ describe('OptimizerOverview', () => {
     expect(cards[0].textContent).toContain('Alpha');
 
     // Switch to daily budget ascending → Zebra ($100) before Alpha ($900).
-    fireEvent.click(getByRole('radio', { name: 'Daily budget' }));
+    fireEvent.click(getByRole('button', { name: 'Daily budget' }));
     cards = getAllByRole('button', { name: /Alpha|Zebra/ });
     expect(cards[0].textContent).toContain('Zebra');
   });

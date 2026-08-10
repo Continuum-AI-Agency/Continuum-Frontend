@@ -606,7 +606,7 @@ function HistoryPanel({
         <span className="font-medium">History (this session)</span>
         <Pill variant="muted">{history.length}</Pill>
       </div>
-      <ScrollArea type="always" className="max-h-[220px] pr-1">
+      <ScrollArea className="max-h-[220px] pr-1">
         {history.length === 0 ? (
           <span className="text-xs text-gray-400">No generations yet.</span>
         ) : (

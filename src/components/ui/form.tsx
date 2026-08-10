@@ -1,8 +1,9 @@
 'use client';
 
-import type * as LabelPrimitive from '@radix-ui/react-label';
-import { Slot } from '@radix-ui/react-slot';
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
 import * as React from 'react';
+import { isValidElement } from 'react';
 import {
   Controller,
   type ControllerProps,
@@ -78,7 +79,7 @@ function FormItem({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-function FormLabel({ className, ...props }: React.ComponentProps<typeof LabelPrimitive.Root>) {
+function FormLabel({ className, ...props }: React.ComponentProps<typeof Label>) {
   const { error, formItemId } = useFormField();
 
   return (
@@ -92,18 +93,27 @@ function FormLabel({ className, ...props }: React.ComponentProps<typeof LabelPri
   );
 }
 
-function FormControl({ ...props }: React.ComponentProps<typeof Slot>) {
+// FormControl exists to hand the field's a11y wiring to whatever control the caller renders,
+// which is exactly what Base UI's useRender does with a `render` element.
+function FormControl({ children, ...props }: React.ComponentProps<'div'>) {
   const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
 
-  return (
-    <Slot
-      data-slot="form-control"
-      id={formItemId}
-      aria-describedby={!error ? `${formDescriptionId}` : `${formDescriptionId} ${formMessageId}`}
-      aria-invalid={!!error}
-      {...props}
-    />
-  );
+  return useRender({
+    defaultTagName: 'div',
+    props: mergeProps<'div'>(
+      {
+        id: formItemId,
+        'aria-describedby': !error
+          ? `${formDescriptionId}`
+          : `${formDescriptionId} ${formMessageId}`,
+        'aria-invalid': !!error,
+      },
+      props,
+    ),
+    // children IS the control here (the old Slot API), so it becomes the rendered element.
+    render: isValidElement(children) ? children : undefined,
+    state: { slot: 'form-control' },
+  });
 }
 
 function FormDescription({ className, ...props }: React.ComponentProps<'p'>) {

@@ -4,14 +4,13 @@
 // Runs list. They are tabs rather than a second drawer because they answer the
 // same question from two directions — "what is this step" and "what did it do".
 //
-// `StableTabs` (a Radix Tabs fork built on Presence) is used with `forceMount`
-// plus an explicit `hidden`, so the inactive panel stays MOUNTED and merely
-// hidden. Plain Radix Tabs unmount it, which would throw away the inspector's
-// scroll position, its focused field and any in-flight edit every time someone
-// glanced at the run list.
+// The inactive panel must stay MOUNTED, or switching to the run list throws away
+// the inspector's scroll position, its focused field and any in-flight edit.
+// Base UI expresses that as `keepMounted` on the panel; this used to need a
+// 281-line fork of Radix Tabs built on its private Presence internals.
 
+import { Tabs as TabsPrimitive } from '@base-ui/react/tabs';
 import type { ReactNode } from 'react';
-import { Tabs } from '@/components/ui/StableTabs';
 import { cn } from '@/lib/utils';
 
 export type RightRailTab = 'inspector' | 'runs';
@@ -30,14 +29,14 @@ export function RightRailTabs({
   runs: ReactNode;
 }) {
   return (
-    <Tabs.Root
+    <TabsPrimitive.Root
       value={tab}
       onValueChange={(value) => onTabChange(value as RightRailTab)}
       className="flex h-full min-h-0 flex-col bg-card"
     >
-      <Tabs.List className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
+      <TabsPrimitive.List className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
         {RIGHT_RAIL_TABS.map((candidate) => (
-          <Tabs.Trigger
+          <TabsPrimitive.Tab
             key={candidate}
             value={candidate}
             className={cn(
@@ -48,27 +47,17 @@ export function RightRailTabs({
             )}
           >
             {candidate}
-          </Tabs.Trigger>
+          </TabsPrimitive.Tab>
         ))}
-      </Tabs.List>
+      </TabsPrimitive.List>
 
-      <Tabs.Content
-        value="inspector"
-        forceMount
-        hidden={tab !== 'inspector'}
-        className="min-h-0 flex-1 overflow-hidden"
-      >
+      <TabsPrimitive.Panel value="inspector" keepMounted className="min-h-0 flex-1 overflow-hidden">
         {inspector}
-      </Tabs.Content>
+      </TabsPrimitive.Panel>
 
-      <Tabs.Content
-        value="runs"
-        forceMount
-        hidden={tab !== 'runs'}
-        className="min-h-0 flex-1 overflow-hidden"
-      >
+      <TabsPrimitive.Panel value="runs" keepMounted className="min-h-0 flex-1 overflow-hidden">
         {runs}
-      </Tabs.Content>
-    </Tabs.Root>
+      </TabsPrimitive.Panel>
+    </TabsPrimitive.Root>
   );
 }

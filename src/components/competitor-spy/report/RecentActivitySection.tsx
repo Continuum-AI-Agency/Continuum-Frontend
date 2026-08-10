@@ -17,21 +17,23 @@ export function RecentActivitySection({ brandId }: { brandId: string }) {
 
   return (
     <Collapsible onOpenChange={setOpen} open={open}>
-      <CollapsibleTrigger asChild>
-        <button
-          className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/40"
-          type="button"
-        >
-          <span>Recent competitor activity</span>
-          <ChevronDown
-            aria-hidden="true"
-            className={cn(
-              'size-4 text-muted-foreground transition-transform',
-              open && 'rotate-180',
-            )}
-          />
-        </button>
-      </CollapsibleTrigger>
+      <CollapsibleTrigger
+        render={
+          <button
+            className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/40"
+            type="button"
+          >
+            <span>Recent competitor activity</span>
+            <ChevronDown
+              aria-hidden="true"
+              className={cn(
+                'size-4 text-muted-foreground transition-transform',
+                open && 'rotate-180',
+              )}
+            />
+          </button>
+        }
+      />
       <CollapsibleContent className="space-y-4 pt-3">
         {!report ? (
           <p className="text-xs text-muted-foreground">

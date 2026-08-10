@@ -1,6 +1,8 @@
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Slot } from 'radix-ui';
 import type * as React from 'react';
+import { isValidElement } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -27,16 +29,18 @@ function Marker({
   VariantProps<typeof markerVariants> & {
     asChild?: boolean;
   }) {
-  const Comp = asChild ? Slot.Root : 'div';
-
-  return (
-    <Comp
-      data-slot="marker"
-      data-variant={variant}
-      className={cn(markerVariants({ variant, className }))}
-      {...props}
-    />
-  );
+  // Base UI has no Slot; useRender is its equivalent. The `asChild` API is kept so the
+  // call sites are unchanged - the child element receives the merged props exactly as before.
+  const { children, ...rest } = props;
+  return useRender({
+    defaultTagName: 'div',
+    props: mergeProps<'div'>(
+      { className: cn(markerVariants({ variant, className })) },
+      asChild ? rest : props,
+    ),
+    render: asChild && isValidElement(children) ? children : undefined,
+    state: { slot: 'marker', variant },
+  });
 }
 
 function MarkerIcon({ className, ...props }: React.ComponentProps<'span'>) {

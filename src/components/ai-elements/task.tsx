@@ -8,7 +8,7 @@ import {
   FileIcon,
   Loader2Icon,
 } from 'lucide-react';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactElement } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 
@@ -69,31 +69,35 @@ export const TaskTrigger = ({
   progress,
   ...props
 }: TaskTriggerProps) => (
-  <CollapsibleTrigger asChild className={cn('group', className)} {...props}>
-    {children ?? (
-      <button
-        type="button"
-        className="flex w-full cursor-pointer items-center gap-2.5 text-muted-foreground text-sm transition-all hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-      >
-        <StatusIcon status={status} />
-        <p
-          className={cn(
-            'text-sm font-medium flex-1 text-left',
-            status === 'completed' && 'text-foreground',
-            status === 'in_progress' && 'text-foreground',
-          )}
+  <CollapsibleTrigger
+    className={cn('group', className)}
+    {...props}
+    render={
+      (children as ReactElement) ?? (
+        <button
+          type="button"
+          className="flex w-full cursor-pointer items-center gap-2.5 text-muted-foreground text-sm transition-all hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
         >
-          {title}
-        </p>
-        {progress && (
-          <span className="text-2xs font-mono text-muted-foreground/60 uppercase">
-            {progress.current}/{progress.total}
-          </span>
-        )}
-        <ChevronDownIcon className="size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
-      </button>
-    )}
-  </CollapsibleTrigger>
+          <StatusIcon status={status} />
+          <p
+            className={cn(
+              'text-sm font-medium flex-1 text-left',
+              status === 'completed' && 'text-foreground',
+              status === 'in_progress' && 'text-foreground',
+            )}
+          >
+            {title}
+          </p>
+          {progress && (
+            <span className="text-2xs font-mono text-muted-foreground/60 uppercase">
+              {progress.current}/{progress.total}
+            </span>
+          )}
+          <ChevronDownIcon className="size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+        </button>
+      )
+    }
+  />
 );
 
 function StatusIcon({ status }: { status: TaskStatus }) {
