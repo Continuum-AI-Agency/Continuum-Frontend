@@ -49,11 +49,13 @@ function IssueText({ brandId, issue }: { brandId: string; issue: SetupAdviceIssu
 
   return (
     <HoverCard open={open} onOpenChange={setOpen} openDelay={120} closeDelay={80}>
-      <HoverCardTrigger asChild>
-        <span className="cursor-help underline decoration-dotted underline-offset-2">
-          {issue.message}
-        </span>
-      </HoverCardTrigger>
+      <HoverCardTrigger
+        render={
+          <span className="cursor-help underline decoration-dotted underline-offset-2">
+            {issue.message}
+          </span>
+        }
+      />
       <HoverCardContent className="w-72 text-xs">
         {insight.isLoading ? (
           <Skeleton className="h-8 bg-muted/70" />

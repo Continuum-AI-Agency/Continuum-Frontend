@@ -812,12 +812,11 @@ export function CalendarDraftCard({
       openDelay={400}
       closeDelay={120}
     >
-      <HoverCardTrigger asChild>{triggerButton}</HoverCardTrigger>
+      <HoverCardTrigger render={triggerButton} />
       <HoverCardContent
         side="right"
         align="start"
         className="p-0 border-none bg-transparent shadow-none"
-        avoidCollisions
       >
         <DraftHoverCardContent draft={draft} />
       </HoverCardContent>

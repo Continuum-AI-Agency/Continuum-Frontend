@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactElement, type ReactNode } from 'react';
 import { Node, NodeContent, NodeHeader, NodeTitle } from '@/components/ai-elements/node';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import type {
@@ -84,11 +84,12 @@ function NodeHover({
 }: {
   title: string;
   detail: ReactNode;
-  children: ReactNode;
+  /** Single element: it becomes the hover-card trigger via Base UI `render`. */
+  children: ReactElement;
 }) {
   return (
     <HoverCard openDelay={220} closeDelay={80}>
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardTrigger render={children} />
       <HoverCardContent side="right" align="start" className="w-80">
         <p className="mb-2 font-medium text-sm break-words">{title}</p>
         {detail}

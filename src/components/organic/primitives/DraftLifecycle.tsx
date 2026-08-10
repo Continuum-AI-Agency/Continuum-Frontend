@@ -233,16 +233,18 @@ export function MediaEnrichmentSummary({
       </span>
       <MediaStagePill mediaStage={mediaStage} />
       <HoverCard openDelay={120} closeDelay={120}>
-        <HoverCardTrigger asChild>
-          <button
-            type="button"
-            aria-label="Media enrichment details"
-            className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/30 px-1.5 py-0.5 text-3xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            <span>{summary.label}</span>
-            <Info className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
-          </button>
-        </HoverCardTrigger>
+        <HoverCardTrigger
+          render={
+            <button
+              type="button"
+              aria-label="Media enrichment details"
+              className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/30 px-1.5 py-0.5 text-3xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <span>{summary.label}</span>
+              <Info className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+            </button>
+          }
+        />
         <HoverCardContent align="start" className="w-72 space-y-2.5">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Media enrichment
@@ -292,16 +294,18 @@ export function MediaEnrichmentSummary({
 export function SchedulingRequirementsHint({ checks }: { checks: ReadinessCheck[] }) {
   return (
     <HoverCard openDelay={120} closeDelay={120}>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          aria-label="Why this draft can't be scheduled yet"
-          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wider text-amber-700 transition-colors hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring dark:text-amber-300"
-        >
-          <AlertCircle className="h-3 w-3 shrink-0" aria-hidden />
-          Needs setup
-        </button>
-      </HoverCardTrigger>
+      <HoverCardTrigger
+        render={
+          <button
+            type="button"
+            aria-label="Why this draft can't be scheduled yet"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wider text-amber-700 transition-colors hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring dark:text-amber-300"
+          >
+            <AlertCircle className="h-3 w-3 shrink-0" aria-hidden />
+            Needs setup
+          </button>
+        }
+      />
       <HoverCardContent align="end" className="w-60 space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Needed to schedule

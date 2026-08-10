@@ -334,9 +334,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
         <TableCell className="align-top whitespace-normal">
           {hoverHasContent ? (
             <HoverCard openDelay={150} closeDelay={80}>
-              <HoverCardTrigger asChild>
-                <span>{title}</span>
-              </HoverCardTrigger>
+              <HoverCardTrigger render={<span>{title}</span>} />
               <HoverCardContent
                 side="right"
                 align="start"

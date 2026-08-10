@@ -551,8 +551,19 @@ export function MentionSuggestionHover({
   const isFolder = Boolean(suggestion.isFolder || suggestion.childrenLabel);
 
   return (
-    <HoverCard open={open} onOpenChange={setOpen} openDelay={180} closeDelay={80}>
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+    <HoverCard
+      open={open}
+      // Keep hover interactive (links on creatives) without dismissing the menu. Radix expressed
+      // this as onPointerDownOutside+preventDefault on the content; Base UI reports the reason on
+      // the open-change instead.
+      onOpenChange={(next, details) => {
+        if (!next && details?.reason === 'outside-press') return;
+        setOpen(next);
+      }}
+      openDelay={180}
+      closeDelay={80}
+    >
+      <HoverCardTrigger render={children} />
       <HoverCardContent
         side="right"
         align="start"
@@ -561,8 +572,6 @@ export function MentionSuggestionHover({
           'z-[80] w-80 p-3',
           (suggestion.type === 'media_asset' || suggestion.type === 'canvas_node') && 'w-96',
         )}
-        // Keep hover interactive (links on creatives) without dismissing the menu.
-        onPointerDownOutside={(e) => e.preventDefault()}
       >
         {isFolder && !suggestion.reference ? (
           <div className="flex flex-col gap-1.5">

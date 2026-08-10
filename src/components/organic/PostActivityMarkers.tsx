@@ -181,16 +181,18 @@ function PostFlagLabel(props: { viewBox?: LabelViewBox; day: AnnotatedDailyTrend
     >
       <div className="flex h-full w-full items-start justify-center">
         <HoverCard openDelay={80} closeDelay={80}>
-          <HoverCardTrigger asChild>
-            <button
-              type="button"
-              aria-label={`${count} post${count === 1 ? '' : 's'} published on ${day.date}`}
-              className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none text-white shadow-sm ring-1 ring-white/60 outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-              style={{ backgroundColor: color }}
-            >
-              {count > 1 ? count : ''}
-            </button>
-          </HoverCardTrigger>
+          <HoverCardTrigger
+            render={
+              <button
+                type="button"
+                aria-label={`${count} post${count === 1 ? '' : 's'} published on ${day.date}`}
+                className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none text-white shadow-sm ring-1 ring-white/60 outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                style={{ backgroundColor: color }}
+              >
+                {count > 1 ? count : ''}
+              </button>
+            }
+          />
           <HoverCardContent side="top" align="center" className="w-72 overflow-hidden p-0">
             <div className="border-b border-border/70 bg-muted/30 px-3 py-2">
               <p className="text-xs font-semibold text-foreground">{formatDayHeading(day.date)}</p>

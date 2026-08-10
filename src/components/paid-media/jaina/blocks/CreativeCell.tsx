@@ -55,11 +55,13 @@ export function CreativeCell({ label, creative }: CreativeCellProps) {
 
   return (
     <HoverCard open={open} onOpenChange={setOpen} openDelay={200} closeDelay={120}>
-      <HoverCardTrigger asChild>
-        <span className="cursor-pointer border-b border-dashed border-primary/40 text-primary/90 transition-colors hover:text-primary">
-          {label}
-        </span>
-      </HoverCardTrigger>
+      <HoverCardTrigger
+        render={
+          <span className="cursor-pointer border-b border-dashed border-primary/40 text-primary/90 transition-colors hover:text-primary">
+            {label}
+          </span>
+        }
+      />
       <HoverCardContent align="start" className="w-56 p-2">
         {preview.status === 'ready' && preview.url ? (
           <img

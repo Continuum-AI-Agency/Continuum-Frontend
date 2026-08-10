@@ -1954,20 +1954,22 @@ function Dashboard({
                                     if (open) onRequestPostDetail?.(post.id);
                                   }}
                                 >
-                                  <HoverCardTrigger asChild>
-                                    <div className="w-full">
-                                      <PostGalleryCard
-                                        post={displayPost}
-                                        selected={selectedPostId === post.id}
-                                        loading={loadingPostId === post.id}
-                                        onSelect={() => {
-                                          setSelectedPostId(post.id);
-                                        }}
-                                        onRecoverMedia={onRecoverPostMedia}
-                                        platform={platform}
-                                      />
-                                    </div>
-                                  </HoverCardTrigger>
+                                  <HoverCardTrigger
+                                    render={
+                                      <div className="w-full">
+                                        <PostGalleryCard
+                                          post={displayPost}
+                                          selected={selectedPostId === post.id}
+                                          loading={loadingPostId === post.id}
+                                          onSelect={() => {
+                                            setSelectedPostId(post.id);
+                                          }}
+                                          onRecoverMedia={onRecoverPostMedia}
+                                          platform={platform}
+                                        />
+                                      </div>
+                                    }
+                                  />
                                   <HoverCardContent
                                     side="right"
                                     align="start"

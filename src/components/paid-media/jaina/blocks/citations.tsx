@@ -125,20 +125,22 @@ export function CitationChip({ resolved }: { resolved: ResolvedCitation }) {
 
   return (
     <InlineCitationCard>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          aria-label={ariaLabel}
-          className="mx-0.5 inline-flex cursor-pointer align-super focus-visible:outline-none"
-        >
-          <Badge
-            variant="secondary"
-            className="h-4 min-w-4 rounded-full px-1 text-[0.625rem] font-medium leading-none"
+      <HoverCardTrigger
+        render={
+          <button
+            type="button"
+            aria-label={ariaLabel}
+            className="mx-0.5 inline-flex cursor-pointer align-super focus-visible:outline-none"
           >
-            {index}
-          </Badge>
-        </button>
-      </HoverCardTrigger>
+            <Badge
+              variant="secondary"
+              className="h-4 min-w-4 rounded-full px-1 text-[0.625rem] font-medium leading-none"
+            >
+              {index}
+            </Badge>
+          </button>
+        }
+      />
       <InlineCitationCardBody className="w-72 p-3">
         <InlineCitationSource title={title} description={description}>
           {citation.cache_key ? (

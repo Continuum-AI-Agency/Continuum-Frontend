@@ -72,18 +72,20 @@ export function ConfidenceBadge({ band, score, confidence, className }: Confiden
 
   return (
     <HoverCard openDelay={120} closeDelay={80}>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          aria-label={`${label}. Show what is driving it.`}
-          className={cn(
-            'inline-flex cursor-help items-center gap-2 rounded underline decoration-dotted decoration-muted-foreground/60 underline-offset-4',
-            className,
-          )}
-        >
-          {meter}
-        </button>
-      </HoverCardTrigger>
+      <HoverCardTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`${label}. Show what is driving it.`}
+            className={cn(
+              'inline-flex cursor-help items-center gap-2 rounded underline decoration-dotted decoration-muted-foreground/60 underline-offset-4',
+              className,
+            )}
+          >
+            {meter}
+          </button>
+        }
+      />
       <HoverCardContent className="w-72 space-y-2 text-2xs">
         {explanation.limiter ? (
           <p className="text-foreground">

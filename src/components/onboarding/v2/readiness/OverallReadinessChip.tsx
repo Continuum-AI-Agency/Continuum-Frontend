@@ -21,16 +21,18 @@ export function OverallReadinessChip({ readiness, loading }: Props) {
 
   return (
     <HoverCard openDelay={200} closeDelay={150}>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafaff] px-3 py-1.5 text-sm font-medium text-[#0b1220] shadow-sm transition-colors hover:border-[#cbd5e1]"
-        >
-          <ScorePip score={score} size={14} color={pipColor} />
-          Brand readiness
-          <span className="tabular-nums text-[#64748b]">· {Math.round(score)}%</span>
-        </button>
-      </HoverCardTrigger>
+      <HoverCardTrigger
+        render={
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafaff] px-3 py-1.5 text-sm font-medium text-[#0b1220] shadow-sm transition-colors hover:border-[#cbd5e1]"
+          >
+            <ScorePip score={score} size={14} color={pipColor} />
+            Brand readiness
+            <span className="tabular-nums text-[#64748b]">· {Math.round(score)}%</span>
+          </button>
+        }
+      />
       <HoverCardContent className="w-80 p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#64748b]">
           What we scored

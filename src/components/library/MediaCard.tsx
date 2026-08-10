@@ -564,134 +564,136 @@ export function MediaCard({
         openDelay={150}
         closeDelay={100}
       >
-        <HoverCardTrigger asChild>
-          {/* The whole card opens the detail takeover; inner controls (clip tools,
-            copy, carousel paging) stopPropagation so they keep their own click.
-            A native <button> cannot wrap those nested controls, hence the role. */}
-          {/* biome-ignore lint/a11y/useSemanticElements: nested interactive controls preclude a native button wrapper */}
-          <motion.div
-            role="button"
-            tabIndex={0}
-            aria-label={`Open ${asset.title ?? asset.fileName}`}
-            onClick={openDetail}
-            onPointerEnter={() => {
-              // Opening the modal causes a synthetic leave on the covered card.
-              // Only a fresh enter after the modal closes may re-enable preview.
-              if (suppressHoverDetailRef.current) suppressHoverDetailRef.current = false;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                openDetail();
-              }
-            }}
-            className={cn(
-              'group flex flex-col overflow-hidden rounded-lg border border-border/70 bg-card',
-              'transition-[border-color] hover:border-foreground/20',
-              selected && 'border-primary ring-2 ring-primary/20',
-              onOpen &&
-                'cursor-pointer focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
-            )}
-            whileHover={reduceMotion ? undefined : { y: -2 }}
-            transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
-          >
-            <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-              {onToggleSelected ? (
-                <button
-                  type="button"
-                  aria-label={`${selected ? 'Deselect' : 'Select'} ${asset.title ?? asset.fileName}`}
-                  aria-pressed={selected}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onToggleSelected(asset);
-                  }}
-                  className={cn(
-                    'absolute left-2 top-2 z-10 flex size-7 items-center justify-center rounded-md border bg-background/90 shadow-sm backdrop-blur transition-opacity',
-                    selected
-                      ? 'border-primary bg-primary text-primary-foreground opacity-100'
-                      : 'border-border text-muted-foreground opacity-0 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100',
-                  )}
-                >
-                  <Check className="size-3.5" />
-                </button>
-              ) : null}
-              {asset.carousel && asset.carousel.slideCount > 1 ? (
-                <CarouselThumbnail
-                  slides={asset.carousel.slides}
-                  priority={priority}
-                  alt={asset.title ?? asset.fileName}
-                />
-              ) : (
-                <Thumbnail
-                  asset={asset}
-                  showBoundingBoxes={showBoundingBoxes}
-                  priority={priority}
-                />
+        {/* The whole card opens the detail takeover; inner controls (clip tools,
+          copy, carousel paging) stopPropagation so they keep their own click.
+          A native <button> cannot wrap those nested controls, hence the role. */}
+        <HoverCardTrigger
+          render={
+            // biome-ignore lint/a11y/useSemanticElements: nested interactive controls preclude a native button wrapper
+            <motion.div
+              role="button"
+              tabIndex={0}
+              aria-label={`Open ${asset.title ?? asset.fileName}`}
+              onClick={openDetail}
+              onPointerEnter={() => {
+                // Opening the modal causes a synthetic leave on the covered card.
+                // Only a fresh enter after the modal closes may re-enable preview.
+                if (suppressHoverDetailRef.current) suppressHoverDetailRef.current = false;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openDetail();
+                }
+              }}
+              className={cn(
+                'group flex flex-col overflow-hidden rounded-lg border border-border/70 bg-card',
+                'transition-[border-color] hover:border-foreground/20',
+                selected && 'border-primary ring-2 ring-primary/20',
+                onOpen &&
+                  'cursor-pointer focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
               )}
-              <StatusBadge status={asset.status} />
-              <ClipViralityBadge asset={asset} />
-              {asset.kind === 'image' && asset.signedUrl ? (
-                <QuickReformatMenu
-                  asset={asset}
-                  brandId={brandId}
-                  onCompleted={() => onAssetChanged?.()}
-                  trigger={
-                    <button
-                      type="button"
-                      title="Reformat image"
-                      aria-label={`Reformat ${asset.title ?? asset.fileName}`}
-                      className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-md border border-white/15 bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/75 focus-visible:opacity-100 group-hover:opacity-100"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <Scaling className="size-3.5" />
-                    </button>
-                  }
-                />
-              ) : null}
-            </div>
-
-            <div className="flex flex-col gap-1.5 p-3">
-              <p className="truncate text-sm font-medium leading-snug text-balance">
-                {asset.title ?? asset.fileName}
-              </p>
-
-              {asset.description && (
-                <div className="flex items-start gap-1">
-                  <p className="line-clamp-2 flex-1 text-xs leading-relaxed text-muted-foreground text-pretty">
-                    {asset.description}
-                  </p>
-                  <CopyDescriptionButton text={asset.description} />
-                </div>
-              )}
-
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs tabular-nums text-muted-foreground/60">{formattedDate}</p>
-                {canGenerateClips && !activeProgress && (
-                  <div className="flex items-center gap-1.5">
-                    <ClipCaptionToggle
-                      value={captionsEnabled}
-                      onChange={setCaptionsEnabled}
-                      disabled={isGenerating}
-                    />
-                    <ClipQualityToggle
-                      value={quality}
-                      onChange={setQuality}
-                      disabled={isGenerating}
-                    />
-                    <GenerateClipsButton
-                      onGenerate={() =>
-                        void generate(asset, { quality, captionsEnabled, captionStyle })
-                      }
-                      disabled={isGenerating}
-                    />
-                  </div>
+              whileHover={reduceMotion ? undefined : { y: -2 }}
+              transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
+            >
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+                {onToggleSelected ? (
+                  <button
+                    type="button"
+                    aria-label={`${selected ? 'Deselect' : 'Select'} ${asset.title ?? asset.fileName}`}
+                    aria-pressed={selected}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleSelected(asset);
+                    }}
+                    className={cn(
+                      'absolute left-2 top-2 z-10 flex size-7 items-center justify-center rounded-md border bg-background/90 shadow-sm backdrop-blur transition-opacity',
+                      selected
+                        ? 'border-primary bg-primary text-primary-foreground opacity-100'
+                        : 'border-border text-muted-foreground opacity-0 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100',
+                    )}
+                  >
+                    <Check className="size-3.5" />
+                  </button>
+                ) : null}
+                {asset.carousel && asset.carousel.slideCount > 1 ? (
+                  <CarouselThumbnail
+                    slides={asset.carousel.slides}
+                    priority={priority}
+                    alt={asset.title ?? asset.fileName}
+                  />
+                ) : (
+                  <Thumbnail
+                    asset={asset}
+                    showBoundingBoxes={showBoundingBoxes}
+                    priority={priority}
+                  />
                 )}
+                <StatusBadge status={asset.status} />
+                <ClipViralityBadge asset={asset} />
+                {asset.kind === 'image' && asset.signedUrl ? (
+                  <QuickReformatMenu
+                    asset={asset}
+                    brandId={brandId}
+                    onCompleted={() => onAssetChanged?.()}
+                    trigger={
+                      <button
+                        type="button"
+                        title="Reformat image"
+                        aria-label={`Reformat ${asset.title ?? asset.fileName}`}
+                        className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-md border border-white/15 bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/75 focus-visible:opacity-100 group-hover:opacity-100"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Scaling className="size-3.5" />
+                      </button>
+                    }
+                  />
+                ) : null}
               </div>
 
-              {activeProgress && <ClipProgressStrip progress={activeProgress} />}
-            </div>
-          </motion.div>
-        </HoverCardTrigger>
+              <div className="flex flex-col gap-1.5 p-3">
+                <p className="truncate text-sm font-medium leading-snug text-balance">
+                  {asset.title ?? asset.fileName}
+                </p>
+
+                {asset.description && (
+                  <div className="flex items-start gap-1">
+                    <p className="line-clamp-2 flex-1 text-xs leading-relaxed text-muted-foreground text-pretty">
+                      {asset.description}
+                    </p>
+                    <CopyDescriptionButton text={asset.description} />
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs tabular-nums text-muted-foreground/60">{formattedDate}</p>
+                  {canGenerateClips && !activeProgress && (
+                    <div className="flex items-center gap-1.5">
+                      <ClipCaptionToggle
+                        value={captionsEnabled}
+                        onChange={setCaptionsEnabled}
+                        disabled={isGenerating}
+                      />
+                      <ClipQualityToggle
+                        value={quality}
+                        onChange={setQuality}
+                        disabled={isGenerating}
+                      />
+                      <GenerateClipsButton
+                        onGenerate={() =>
+                          void generate(asset, { quality, captionsEnabled, captionStyle })
+                        }
+                        disabled={isGenerating}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {activeProgress && <ClipProgressStrip progress={activeProgress} />}
+              </div>
+            </motion.div>
+          }
+        />
         <MediaCardHoverDetail asset={asset} formattedDate={formattedDate} />
       </HoverCard>
     </>

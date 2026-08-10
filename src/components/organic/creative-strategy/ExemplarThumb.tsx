@@ -68,7 +68,7 @@ export function ExemplarThumb({ exemplar, seed }: { exemplar: ExemplarView; seed
 
   return (
     <HoverCard openDelay={120} closeDelay={100}>
-      <HoverCardTrigger asChild>{trigger}</HoverCardTrigger>
+      <HoverCardTrigger render={trigger} />
       <HoverCardContent side="top" align="start" className="w-72 p-3">
         <ExemplarQuickLook exemplar={exemplar} />
       </HoverCardContent>

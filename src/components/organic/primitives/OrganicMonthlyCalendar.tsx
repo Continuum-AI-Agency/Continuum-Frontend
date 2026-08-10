@@ -122,45 +122,47 @@ function DraftChip({
       closeDelay={100}
     >
       <ContextMenu>
-        <HoverCardTrigger asChild>
-          <ContextMenuTrigger asChild>
-            <div
-              ref={setNodeRef}
-              style={style}
-              className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
-              {...listeners}
-              {...attributes}
-            >
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // A drag ends in a click on the chip it started from. Un-guarded, every
-                  // month-view drag also swapped the preview panel — which is exactly why
-                  // the month grid felt like it had no drag and drop at all.
-                  if (isDragging) return;
-                  if (e.shiftKey && onToggleSelection) {
-                    onToggleSelection(draft.id);
-                    return;
-                  }
-                  onClick();
-                }}
-                className={cn(
-                  'flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight transition-opacity hover:opacity-80',
-                  statusFrameClasses(platform, draft.status, 'chip'),
-                  isSelected && 'ring-1 ring-brand-primary ring-offset-1',
-                  isMultiSelected && !isSelected && 'ring-1 ring-brand-primary/50',
-                )}
-                // The chip is coloured by PLATFORM, so without the dot and this title the
-                // month grid was the one surface that named no status at all.
-                title={`${statusLabel} · ${draft.title || 'Untitled'}`}
+        <HoverCardTrigger
+          render={
+            <ContextMenuTrigger asChild>
+              <div
+                ref={setNodeRef}
+                style={style}
+                className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+                {...listeners}
+                {...attributes}
               >
-                <StatusDot status={draft.status} />
-                <span className="truncate">{draft.title || 'Untitled'}</span>
-              </button>
-            </div>
-          </ContextMenuTrigger>
-        </HoverCardTrigger>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // A drag ends in a click on the chip it started from. Un-guarded, every
+                    // month-view drag also swapped the preview panel — which is exactly why
+                    // the month grid felt like it had no drag and drop at all.
+                    if (isDragging) return;
+                    if (e.shiftKey && onToggleSelection) {
+                      onToggleSelection(draft.id);
+                      return;
+                    }
+                    onClick();
+                  }}
+                  className={cn(
+                    'flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight transition-opacity hover:opacity-80',
+                    statusFrameClasses(platform, draft.status, 'chip'),
+                    isSelected && 'ring-1 ring-brand-primary ring-offset-1',
+                    isMultiSelected && !isSelected && 'ring-1 ring-brand-primary/50',
+                  )}
+                  // The chip is coloured by PLATFORM, so without the dot and this title the
+                  // month grid was the one surface that named no status at all.
+                  title={`${statusLabel} · ${draft.title || 'Untitled'}`}
+                >
+                  <StatusDot status={draft.status} />
+                  <span className="truncate">{draft.title || 'Untitled'}</span>
+                </button>
+              </div>
+            </ContextMenuTrigger>
+          }
+        />
         <ContextMenuContent className="w-48">
           <ContextMenuItem onSelect={() => beginEditingDraft(draft.id)}>
             <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
@@ -193,7 +195,6 @@ function DraftChip({
         side="right"
         align="start"
         className="p-0 border-none bg-transparent shadow-none"
-        avoidCollisions
       >
         <DraftHoverCardContent draft={draft} />
       </HoverCardContent>
@@ -207,27 +208,28 @@ function PostedContentChip({ post }: { post: OrganicCalendarPostedContent }) {
 
   return (
     <HoverCard openDelay={300} closeDelay={100}>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'flex w-full cursor-default items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight opacity-90 ring-0 transition-opacity hover:opacity-100',
-            colorClass,
-          )}
-          title={isCarousel ? `Carousel · ${post.title}` : post.title}
-        >
-          <span className="shrink-0 text-3xs font-bold uppercase">{post.timeLabel}</span>
-          {isCarousel ? (
-            <GalleryHorizontalEnd className="size-2.5 shrink-0" aria-label="Carousel" />
-          ) : null}
-          <span className="truncate">{post.title}</span>
-        </button>
-      </HoverCardTrigger>
+      <HoverCardTrigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              'flex w-full cursor-default items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight opacity-90 ring-0 transition-opacity hover:opacity-100',
+              colorClass,
+            )}
+            title={isCarousel ? `Carousel · ${post.title}` : post.title}
+          >
+            <span className="shrink-0 text-3xs font-bold uppercase">{post.timeLabel}</span>
+            {isCarousel ? (
+              <GalleryHorizontalEnd className="size-2.5 shrink-0" aria-label="Carousel" />
+            ) : null}
+            <span className="truncate">{post.title}</span>
+          </button>
+        }
+      />
       <HoverCardContent
         side="right"
         align="start"
         className="p-0 border-none bg-transparent shadow-none"
-        avoidCollisions
       >
         <PostedContentPreview post={post} />
       </HoverCardContent>

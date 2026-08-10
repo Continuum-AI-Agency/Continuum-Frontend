@@ -74,52 +74,54 @@ export function AwarenessTopPostRow({
         if (open && post.id) onRequestDetail?.(post.id);
       }}
     >
-      <HoverCardTrigger asChild>
-        <div className="flex w-full cursor-default items-center gap-3 rounded-md px-1 py-1.5 transition-colors hover:bg-muted/40">
-          <span className="w-4 shrink-0 text-center text-xs text-muted-foreground tabular-nums">
-            {rank}
-          </span>
-          <Thumb post={enriched} seed={kind} />
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-xs font-medium">{kind}</span>
-            <span className="truncate text-2xs text-muted-foreground">
-              {snippet ?? (enriched.views !== null ? `${nf.format(enriched.views)} views` : '—')}
+      <HoverCardTrigger
+        render={
+          <div className="flex w-full cursor-default items-center gap-3 rounded-md px-1 py-1.5 transition-colors hover:bg-muted/40">
+            <span className="w-4 shrink-0 text-center text-xs text-muted-foreground tabular-nums">
+              {rank}
             </span>
-          </span>
-          <span className="ml-auto flex shrink-0 items-center gap-1.5">
-            <span className="flex flex-col items-end">
-              <span
-                className={cn(
-                  'text-sm font-semibold tabular-nums',
-                  enriched.hookRate === null && 'text-muted-foreground',
-                )}
-                style={
-                  enriched.hookRate !== null
-                    ? { color: hookRateTextColor(enriched.hookRate) }
-                    : undefined
-                }
-              >
-                {enriched.hookRate !== null ? `${enriched.hookRate.toFixed(1)}%` : '—'}
+            <Thumb post={enriched} seed={kind} />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-xs font-medium">{kind}</span>
+              <span className="truncate text-2xs text-muted-foreground">
+                {snippet ?? (enriched.views !== null ? `${nf.format(enriched.views)} views` : '—')}
               </span>
-              <span className="text-3xs uppercase tracking-wide text-muted-foreground">hook</span>
             </span>
-            {enriched.permalink ? (
-              <a
-                href={enriched.permalink}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`Open ${kind} on platform`}
-                className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
-                // Keep the hover card open when the pointer moves to the icon,
-                // but don't treat icon clicks as "select the row".
-                onClick={(event) => event.stopPropagation()}
-              >
-                <ExternalLink className="size-3" aria-hidden />
-              </a>
-            ) : null}
-          </span>
-        </div>
-      </HoverCardTrigger>
+            <span className="ml-auto flex shrink-0 items-center gap-1.5">
+              <span className="flex flex-col items-end">
+                <span
+                  className={cn(
+                    'text-sm font-semibold tabular-nums',
+                    enriched.hookRate === null && 'text-muted-foreground',
+                  )}
+                  style={
+                    enriched.hookRate !== null
+                      ? { color: hookRateTextColor(enriched.hookRate) }
+                      : undefined
+                  }
+                >
+                  {enriched.hookRate !== null ? `${enriched.hookRate.toFixed(1)}%` : '—'}
+                </span>
+                <span className="text-3xs uppercase tracking-wide text-muted-foreground">hook</span>
+              </span>
+              {enriched.permalink ? (
+                <a
+                  href={enriched.permalink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Open ${kind} on platform`}
+                  className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                  // Keep the hover card open when the pointer moves to the icon,
+                  // but don't treat icon clicks as "select the row".
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ExternalLink className="size-3" aria-hidden />
+                </a>
+              ) : null}
+            </span>
+          </div>
+        }
+      />
       <HoverCardContent side="top" align="start" className="w-[min(20rem,calc(100vw-2rem))] p-3">
         {livePost ? (
           <PostQuickLook post={livePost} loading={loadingDetail} />

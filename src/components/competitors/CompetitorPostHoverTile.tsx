@@ -238,35 +238,37 @@ export function CompetitorPostHoverTile({
 
   return (
     <HoverCard openDelay={180} closeDelay={100}>
-      <HoverCardTrigger asChild>
-        <a
-          href={post.permalink}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={`Open ${view.competitorName} ${post.kind} on Instagram`}
-          className="group/tile relative block overflow-hidden rounded-md border border-transparent bg-muted transition hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onPointerEnter={() => setTileHovering(true)}
-          onPointerLeave={() => setTileHovering(false)}
-        >
-          {videoUrl ? (
-            <ReelVideo
-              src={videoUrl}
-              poster={post.coverUrl}
-              alt={altText}
-              playing={tileHovering}
-              className={mediaClassName}
-            />
-          ) : (
-            <PostThumb coverUrl={post.coverUrl} alt={altText} className={mediaClassName} />
-          )}
-          {(post.kind !== 'post' || post.mediaCount > 1) && (
-            <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
-              <KindGlyph kind={post.kind} />
-              {post.mediaCount > 1 ? post.mediaCount : post.kind === 'reel' ? 'Reel' : null}
-            </span>
-          )}
-        </a>
-      </HoverCardTrigger>
+      <HoverCardTrigger
+        render={
+          <a
+            href={post.permalink}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Open ${view.competitorName} ${post.kind} on Instagram`}
+            className="group/tile relative block overflow-hidden rounded-md border border-transparent bg-muted transition hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onPointerEnter={() => setTileHovering(true)}
+            onPointerLeave={() => setTileHovering(false)}
+          >
+            {videoUrl ? (
+              <ReelVideo
+                src={videoUrl}
+                poster={post.coverUrl}
+                alt={altText}
+                playing={tileHovering}
+                className={mediaClassName}
+              />
+            ) : (
+              <PostThumb coverUrl={post.coverUrl} alt={altText} className={mediaClassName} />
+            )}
+            {(post.kind !== 'post' || post.mediaCount > 1) && (
+              <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
+                <KindGlyph kind={post.kind} />
+                {post.mediaCount > 1 ? post.mediaCount : post.kind === 'reel' ? 'Reel' : null}
+              </span>
+            )}
+          </a>
+        }
+      />
 
       <HoverCardContent align="start" className="w-80 overflow-hidden p-0">
         {slides.length > 0 ? (

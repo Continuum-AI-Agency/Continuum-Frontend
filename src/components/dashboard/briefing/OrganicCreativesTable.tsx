@@ -167,27 +167,32 @@ export function OrganicCreativesTable({
                 if (open) requestPostDetail(row.id);
               }}
             >
-              <HoverCardTrigger asChild>
-                <div className="flex min-w-0 max-w-full items-center gap-3 overflow-hidden">
-                  {thumbnailUrl ? (
-                    <LeaderboardThumbnail
-                      src={thumbnailUrl}
-                      alt={row.name}
-                      fallbackSeed={row.name}
-                    />
-                  ) : null}
-                  <div className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden">
-                    <p className="min-w-0 flex-1 truncate text-sm text-foreground" title={row.name}>
-                      {row.name}
-                    </p>
-                    {row.mediaType ? (
-                      <span className="shrink-0 text-2xs uppercase tracking-wide text-muted-foreground">
-                        {row.mediaType}
-                      </span>
+              <HoverCardTrigger
+                render={
+                  <div className="flex min-w-0 max-w-full items-center gap-3 overflow-hidden">
+                    {thumbnailUrl ? (
+                      <LeaderboardThumbnail
+                        src={thumbnailUrl}
+                        alt={row.name}
+                        fallbackSeed={row.name}
+                      />
                     ) : null}
+                    <div className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden">
+                      <p
+                        className="min-w-0 flex-1 truncate text-sm text-foreground"
+                        title={row.name}
+                      >
+                        {row.name}
+                      </p>
+                      {row.mediaType ? (
+                        <span className="shrink-0 text-2xs uppercase tracking-wide text-muted-foreground">
+                          {row.mediaType}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              </HoverCardTrigger>
+                }
+              />
               {quickLookPost ? (
                 <HoverCardContent side="right" align="start" className="w-[340px] p-3">
                   <PostQuickLook post={quickLookPost} loading={loadingPostId === row.id} />

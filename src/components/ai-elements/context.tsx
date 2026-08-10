@@ -1,7 +1,7 @@
 'use client';
 
 import type { LanguageModelUsage } from 'ai';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactElement } from 'react';
 import { createContext, useContext, useMemo } from 'react';
 import { getUsage } from 'tokenlens';
 import { Button } from '@/components/ui/button';
@@ -103,14 +103,16 @@ export const ContextTrigger = ({ children, ...props }: ContextTriggerProps) => {
   }).format(usedPercent);
 
   return (
-    <HoverCardTrigger asChild>
-      {children ?? (
-        <Button type="button" variant="ghost" {...props}>
-          <span className="font-medium text-muted-foreground">{renderedPercent}</span>
-          <ContextIcon />
-        </Button>
-      )}
-    </HoverCardTrigger>
+    <HoverCardTrigger
+      render={
+        (children as ReactElement) ?? (
+          <Button type="button" variant="ghost" {...props}>
+            <span className="font-medium text-muted-foreground">{renderedPercent}</span>
+            <ContextIcon />
+          </Button>
+        )
+      }
+    />
   );
 };
 

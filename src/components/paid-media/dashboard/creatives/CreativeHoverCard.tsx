@@ -29,7 +29,8 @@ type CreativeHoverCardProps = {
   ad: CreativeHoverCardAd;
   logs: ActionLog[];
   onOpenDetail: (focusLogId?: string) => void;
-  children: React.ReactNode;
+  /** Single element: it becomes the hover-card trigger via Base UI `render`. */
+  children: React.ReactElement;
 };
 
 function ThumbTile({ url, label }: { url: string | null; label: string }) {
@@ -123,7 +124,7 @@ export function CreativeHoverCard({ ad, logs, onOpenDetail, children }: Creative
 
   return (
     <HoverCard openDelay={250} closeDelay={120} open={open} onOpenChange={setOpen}>
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardTrigger render={children} />
       <HoverCardContent align="start" className="w-80 p-3">
         {open ? <HoverCardBody ad={ad} logs={logs} onOpenDetail={onOpenDetail} /> : null}
       </HoverCardContent>

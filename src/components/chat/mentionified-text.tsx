@@ -366,15 +366,17 @@ function InlineMention({
 
   return (
     <HoverCard openDelay={160} closeDelay={100}>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          className="inline align-baseline border-0 bg-transparent p-0 text-left"
-          aria-label={`${typeLabel(reference.type)}: ${label}`}
-        >
-          {trigger}
-        </button>
-      </HoverCardTrigger>
+      <HoverCardTrigger
+        render={
+          <button
+            type="button"
+            className="inline align-baseline border-0 bg-transparent p-0 text-left"
+            aria-label={`${typeLabel(reference.type)}: ${label}`}
+          >
+            {trigger}
+          </button>
+        }
+      />
       <HoverCardContent
         align="start"
         side="top"

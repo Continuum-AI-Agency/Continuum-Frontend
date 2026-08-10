@@ -102,58 +102,60 @@ function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: strin
   return (
     <>
       <HoverCard openDelay={150} closeDelay={100}>
-        <HoverCardTrigger asChild>
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: draggable Library tile; nested quick action requires a non-button wrapper */}
-          <div
-            draggable
-            onDragStart={(e) => setStudioAssetDragData(e.dataTransfer, asset)}
-            className="group relative aspect-square cursor-grab overflow-hidden rounded-lg bg-black/40 outline outline-1 outline-white/10 active:scale-[0.96] [transition-property:scale]"
-          >
-            {url && !isVideo ? (
-              <img src={url} alt={label} className="h-full w-full object-cover" />
-            ) : url && isVideo ? (
-              <video
-                src={`${url}#t=0.01`}
-                preload="metadata"
-                muted
-                playsInline
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-gray-600">
-                <ImageOff className="h-6 w-6" />
+        <HoverCardTrigger
+          render={
+            // biome-ignore lint/a11y/noStaticElementInteractions: draggable Library tile; nested quick action requires a non-button wrapper
+            <div
+              draggable
+              onDragStart={(e) => setStudioAssetDragData(e.dataTransfer, asset)}
+              className="group relative aspect-square cursor-grab overflow-hidden rounded-lg bg-black/40 outline outline-1 outline-white/10 active:scale-[0.96] [transition-property:scale]"
+            >
+              {url && !isVideo ? (
+                <img src={url} alt={label} className="h-full w-full object-cover" />
+              ) : url && isVideo ? (
+                <video
+                  src={`${url}#t=0.01`}
+                  preload="metadata"
+                  muted
+                  playsInline
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-gray-600">
+                  <ImageOff className="h-6 w-6" />
+                </div>
+              )}
+
+              {isVideo && (
+                <div className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1">
+                  <Play className="h-3 w-3 text-white" />
+                </div>
+              )}
+
+              {!isVideo && url ? (
+                <QuickReformatMenu
+                  asset={asset}
+                  brandId={brandId}
+                  trigger={
+                    <button
+                      type="button"
+                      aria-label={`Reformat ${label}`}
+                      title="Reformat image"
+                      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <Scaling className="h-3.5 w-3.5" />
+                    </button>
+                  }
+                />
+              ) : null}
+
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                <p className="truncate text-xs font-medium text-white">{label}</p>
               </div>
-            )}
-
-            {isVideo && (
-              <div className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1">
-                <Play className="h-3 w-3 text-white" />
-              </div>
-            )}
-
-            {!isVideo && url ? (
-              <QuickReformatMenu
-                asset={asset}
-                brandId={brandId}
-                trigger={
-                  <button
-                    type="button"
-                    aria-label={`Reformat ${label}`}
-                    title="Reformat image"
-                    className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <Scaling className="h-3.5 w-3.5" />
-                  </button>
-                }
-              />
-            ) : null}
-
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-              <p className="truncate text-xs font-medium text-white">{label}</p>
             </div>
-          </div>
-        </HoverCardTrigger>
+          }
+        />
         <StudioAssetHoverDetail asset={asset} url={url} isVideo={isVideo} label={label} />
       </HoverCard>
     </>

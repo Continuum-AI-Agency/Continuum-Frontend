@@ -31,7 +31,8 @@ type DocumentPreviewCardProps = {
   onOpenInline: (storagePath: string) => void;
   onDownload: (storagePath: string) => void;
   onRemove: (documentId: string) => void;
-  children: React.ReactNode;
+  /** Single element: it becomes the hover-card trigger via Base UI `render`. */
+  children: React.ReactElement;
 };
 
 export function DocumentPreviewCard({
@@ -54,7 +55,7 @@ export function DocumentPreviewCard({
         closeDelay={120}
       >
         <PopoverTrigger asChild>
-          <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+          <HoverCardTrigger render={children} />
         </PopoverTrigger>
 
         <HoverCardContent

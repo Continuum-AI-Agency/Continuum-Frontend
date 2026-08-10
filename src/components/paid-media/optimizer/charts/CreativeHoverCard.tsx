@@ -9,7 +9,7 @@
 // what's going on" affordance.
 
 import type { AdDailyTrend, AdsetAd, PaidAdAngle } from '@continuum/contracts';
-import type { ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { AdThumb } from '../AdThumb';
@@ -66,7 +66,8 @@ type CreativeHoverCardProps = {
   accountId?: string | null;
   /** The 480×848 creative poster, preferred over the 64×64 Meta thumbnail. */
   posterUrl?: string | null;
-  children: ReactNode;
+  /** Single element: it becomes the hover-card trigger via Base UI `render`. */
+  children: ReactElement;
 };
 
 export function CreativeHoverCard({
@@ -86,7 +87,7 @@ export function CreativeHoverCard({
 
   return (
     <HoverCard closeDelay={80} openDelay={120}>
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardTrigger render={children} />
       <HoverCardContent className="w-72 space-y-3">
         <div className="flex gap-3">
           <AdThumb

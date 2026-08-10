@@ -11,7 +11,7 @@
 // exactly the failure this card exists to avoid.
 
 import type { PaidCreativeVerdict } from '@continuum/contracts';
-import type { ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromPaidVerdict } from '@/components/chat/media/media';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -22,7 +22,8 @@ type VerdictHoverCardProps = {
   verdict: PaidCreativeVerdict;
   freshUrl: string | null;
   onRecover: (adId: string) => void;
-  children: ReactNode;
+  /** Single element: it becomes the hover-card trigger via Base UI `render`. */
+  children: ReactElement;
 };
 
 export function VerdictHoverCard({
@@ -40,7 +41,7 @@ export function VerdictHoverCard({
 
   return (
     <HoverCard closeDelay={80} openDelay={120}>
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardTrigger render={children} />
       <HoverCardContent className="w-72 space-y-3">
         <div className="relative aspect-[4/5] w-full overflow-hidden rounded-md bg-muted/50">
           {media ? (

@@ -49,19 +49,21 @@ export function RecommendationInsight({
   return (
     <>
       <HoverCard closeDelay={80} onOpenChange={setOpen} openDelay={120}>
-        <HoverCardTrigger asChild>
-          <span
-            aria-describedby={descriptionId}
-            className={cn(
-              'cursor-help font-medium text-sm underline decoration-dotted underline-offset-2',
-              severityTone(severity),
-            )}
-            // biome-ignore lint/a11y/noNoninteractiveTabindex: an inline recommendation label is not a native control, so the wrapper must be focusable for keyboard users to open the card and read the insight.
-            tabIndex={0}
-          >
-            {glyph} {label}
-          </span>
-        </HoverCardTrigger>
+        <HoverCardTrigger
+          render={
+            <span
+              aria-describedby={descriptionId}
+              className={cn(
+                'cursor-help font-medium text-sm underline decoration-dotted underline-offset-2',
+                severityTone(severity),
+              )}
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: an inline recommendation label is not a native control, so the wrapper must be focusable for keyboard users to open the card and read the insight.
+              tabIndex={0}
+            >
+              {glyph} {label}
+            </span>
+          }
+        />
         <HoverCardContent className="w-72 space-y-2">
           {pending ? (
             <div className="space-y-2">

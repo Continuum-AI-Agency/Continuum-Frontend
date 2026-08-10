@@ -273,6 +273,8 @@ export function TrendsDataTable({
             e.dataTransfer.effectAllowed = 'copy';
           };
           return (
+            // biome-ignore lint/a11y/noStaticElementInteractions: pointer-only drag affordance; the row itself carries the keyboard semantics
+            // biome-ignore lint/a11y/useKeyWithClickEvents: onClick only stops the row handler; there is no click action of its own
             <div
               draggable
               onDragStart={handleDragStart}
@@ -292,6 +294,8 @@ export function TrendsDataTable({
         header: () => <span className="sr-only">Select</span>,
         size: 40,
         cell: ({ row }) => (
+          // biome-ignore lint/a11y/noStaticElementInteractions: wrapper exists only to stop the row click; the Checkbox is the control
+          // biome-ignore lint/a11y/useKeyWithClickEvents: no click action of its own
           <div onClick={(e) => e.stopPropagation()}>
             <Checkbox
               checked={selectedTrendIds.includes(row.original.id)}
@@ -338,9 +342,7 @@ export function TrendsDataTable({
             <div className="min-w-0 space-y-0.5">
               {hoverHasContent ? (
                 <HoverCard openDelay={150} closeDelay={80}>
-                  <HoverCardTrigger asChild>
-                    <span>{titleNode}</span>
-                  </HoverCardTrigger>
+                  <HoverCardTrigger render={<span>{titleNode}</span>} />
                   <HoverCardContent
                     side="right"
                     align="start"
@@ -444,6 +446,8 @@ export function TrendsDataTable({
         header: () => <span className="sr-only">Actions</span>,
         size: 50,
         cell: ({ row }) => (
+          // biome-ignore lint/a11y/noStaticElementInteractions: wrapper exists only to stop the row click; the menu trigger is the control
+          // biome-ignore lint/a11y/useKeyWithClickEvents: no click action of its own
           <div onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

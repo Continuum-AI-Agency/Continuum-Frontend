@@ -70,30 +70,32 @@ export function CreativeCard({ creative, index }: CreativeCardProps) {
 
   return (
     <HoverCard openDelay={120} closeDelay={80}>
-      <HoverCardTrigger asChild>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.88 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.22, delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-[76px] shrink-0 cursor-pointer overflow-hidden rounded-lg ring-1 ring-border/50 transition-all duration-200 hover:scale-110 hover:ring-2 hover:ring-primary/50 hover:shadow-lg hover:z-10"
-          style={{ transformOrigin: 'bottom center' }}
-        >
-          <AspectRatio ratio={1}>
-            {hasMedia ? (
-              <ChatMediaCarousel
-                items={media}
-                className="rounded-none"
-                onRecoverItem={recover}
-                fallbackSeed={creative.headline ?? creative.id}
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-muted/40">
-                <ImageIcon className="size-5 text-muted-foreground/30" />
-              </div>
-            )}
-          </AspectRatio>
-        </motion.div>
-      </HoverCardTrigger>
+      <HoverCardTrigger
+        render={
+          <motion.div
+            initial={{ opacity: 0, scale: 0.88 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.22, delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
+            className="relative w-[76px] shrink-0 cursor-pointer overflow-hidden rounded-lg ring-1 ring-border/50 transition-all duration-200 hover:scale-110 hover:ring-2 hover:ring-primary/50 hover:shadow-lg hover:z-10"
+            style={{ transformOrigin: 'bottom center' }}
+          >
+            <AspectRatio ratio={1}>
+              {hasMedia ? (
+                <ChatMediaCarousel
+                  items={media}
+                  className="rounded-none"
+                  onRecoverItem={recover}
+                  fallbackSeed={creative.headline ?? creative.id}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-muted/40">
+                  <ImageIcon className="size-5 text-muted-foreground/30" />
+                </div>
+              )}
+            </AspectRatio>
+          </motion.div>
+        }
+      />
 
       <HoverCardContent
         side="bottom"
