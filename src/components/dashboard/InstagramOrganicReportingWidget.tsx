@@ -344,10 +344,7 @@ export function InstagramOrganicReportingWidget({
   return (
     <div
       data-tour-id="dashboard-organic-metrics"
-      className={cn(
-        'flex flex-col gap-0 overflow-hidden bg-surface py-0',
-        className,
-      )}
+      className={cn('flex flex-col gap-0 overflow-hidden bg-surface py-0', className)}
     >
       <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border bg-muted/20 px-[var(--card-pad)] py-1">
         <div className="flex min-w-0 items-center gap-1.5">
@@ -357,7 +354,7 @@ export function InstagramOrganicReportingWidget({
                 <PlatformIcon platform={platform === 'x' ? 'threads' : platform} />
               </Pill>
             </SelectTrigger>
-            <SelectContent position="popper">
+            <SelectContent>
               <SelectItem value="instagram">
                 <span className="flex items-center gap-2">
                   <PlatformIcon platform="instagram" />
@@ -419,7 +416,7 @@ export function InstagramOrganicReportingWidget({
                   placeholder={`Choose ${articleFor(platformLabel)} ${platformLabel} account`}
                 />
               </SelectTrigger>
-              <SelectContent position="popper">
+              <SelectContent>
                 <SelectGroup>
                   <SelectLabel>{platformLabel} accounts</SelectLabel>
                   {platformAccounts.map((account) => (
