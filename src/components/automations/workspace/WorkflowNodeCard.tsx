@@ -31,7 +31,7 @@ import { Toolbar } from '@/components/ai-elements/toolbar';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ResolvedNodeCapability } from '@/lib/automations/capability-lifecycle';
 import { cn } from '@/lib/utils';
 import {
@@ -157,17 +157,19 @@ function NodeToolbarAction({
 }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          size="icon-xs"
-          variant={destructive ? 'destructive' : 'ghost'}
-          aria-label={label}
-          onClick={onClick}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            size="icon-xs"
+            variant={destructive ? 'destructive' : 'ghost'}
+            aria-label={label}
+            onClick={onClick}
+          >
+            {children}
+          </Button>
+        }
+      />
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );
@@ -225,22 +227,26 @@ export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNod
         />
       ) : null}
       {inputs.map((handle, index) => (
-        <Tooltip key={handle} delayDuration={120}>
-          <TooltipTrigger asChild>
-            <Handle
-              id={handle}
-              type="target"
-              position={Position.Left}
-              className="workflow-port size-3! border-2! border-background! bg-muted-foreground! transition-transform hover:scale-125"
-              style={{ top: `${((index + 1) / (inputs.length + 1)) * 100}%` }}
-              aria-label={`${node.label} ${handle} input`}
+        <TooltipProvider key={handle} delay={120}>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Handle
+                  id={handle}
+                  type="target"
+                  position={Position.Left}
+                  className="workflow-port size-3! border-2! border-background! bg-muted-foreground! transition-transform hover:scale-125"
+                  style={{ top: `${((index + 1) / (inputs.length + 1)) * 100}%` }}
+                  aria-label={`${node.label} ${handle} input`}
+                />
+              }
             />
-          </TooltipTrigger>
-          <TooltipContent side="left">
-            {handle} input · {portTypeLabel(spec.inputs[handle])}
-            {spec.requiredInputs?.includes(handle) ? ' · required' : ''}
-          </TooltipContent>
-        </Tooltip>
+            <TooltipContent side="left">
+              {handle} input · {portTypeLabel(spec.inputs[handle])}
+              {spec.requiredInputs?.includes(handle) ? ' · required' : ''}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ))}
 
       <AiNode
@@ -352,21 +358,25 @@ export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNod
       </Toolbar>
 
       {outputs.map((handle, index) => (
-        <Tooltip key={handle} delayDuration={120}>
-          <TooltipTrigger asChild>
-            <Handle
-              id={handle}
-              type="source"
-              position={Position.Right}
-              className="workflow-port size-3! border-2! border-background! bg-primary! transition-transform hover:scale-125"
-              style={{ top: `${((index + 1) / (outputs.length + 1)) * 100}%` }}
-              aria-label={`${node.label} ${handle} output`}
+        <TooltipProvider key={handle} delay={120}>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Handle
+                  id={handle}
+                  type="source"
+                  position={Position.Right}
+                  className="workflow-port size-3! border-2! border-background! bg-primary! transition-transform hover:scale-125"
+                  style={{ top: `${((index + 1) / (outputs.length + 1)) * 100}%` }}
+                  aria-label={`${node.label} ${handle} output`}
+                />
+              }
             />
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            {handle} output · {portTypeLabel(spec.outputs[handle])}
-          </TooltipContent>
-        </Tooltip>
+            <TooltipContent side="right">
+              {handle} output · {portTypeLabel(spec.outputs[handle])}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ))}
     </motion.div>
   );

@@ -43,7 +43,9 @@ mock.module('@/components/organic/hooks/useUnscheduleDraft', () => ({
 
 mock.module('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  ContextMenuTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   ContextMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuSeparator: () => <hr />,
@@ -66,14 +68,18 @@ mock.module('@/components/ui/context-menu', () => ({
 
 mock.module('@/components/ui/hover-card', () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  HoverCardTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  HoverCardTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   HoverCardContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
 mock.module('@/components/ui/tooltip', () => ({
   TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 

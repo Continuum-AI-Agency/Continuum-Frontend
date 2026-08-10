@@ -542,17 +542,20 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
             </CanvasNode>
 
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id="document"
-                  style={{
-                    ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-document, #f59e0b)',
-                  }}
-                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
-                />
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id="document"
+                    style={{
+                      ['--edge-color' as keyof React.CSSProperties]:
+                        'var(--edge-document, #f59e0b)',
+                    }}
+                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
+                  />
+                }
+              />
               <TooltipContent>
                 <p>Document Output: {docConnections} connections</p>
               </TooltipContent>

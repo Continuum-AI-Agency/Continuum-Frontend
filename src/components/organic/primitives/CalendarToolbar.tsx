@@ -286,12 +286,14 @@ export function CalendarToolbar({
                   old "0/5 TRENDS" said neither, so three surfaces read as three numbers for
                   one word. */}
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="outline" className="text-2xs">
-                    Trends selected: {selectedTrendCount}
-                    {typeof maxTrendSelections === 'number' ? ` of ${maxTrendSelections}` : ''}
-                  </Badge>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <Badge variant="outline" className="text-2xs">
+                      Trends selected: {selectedTrendCount}
+                      {typeof maxTrendSelections === 'number' ? ` of ${maxTrendSelections}` : ''}
+                    </Badge>
+                  }
+                />
                 <TooltipContent className="max-w-xs">
                   A trend is a topic Continuum found moving in your market. Selecting one tags it
                   onto the posts you generate next. Open Trends to see what we found for your brand,
@@ -300,11 +302,13 @@ export function CalendarToolbar({
               </Tooltip>
               {postedContentCount > 0 ? (
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="outline" className="text-2xs uppercase tracking-wide">
-                      {scopeLabel} · {postedContentCount} posted
-                    </Badge>
-                  </TooltipTrigger>
+                  <TooltipTrigger
+                    render={
+                      <Badge variant="outline" className="text-2xs uppercase tracking-wide">
+                        {scopeLabel} · {postedContentCount} posted
+                      </Badge>
+                    }
+                  />
                   <TooltipContent>Published posts loaded into this planning week</TooltipContent>
                 </Tooltip>
               ) : null}

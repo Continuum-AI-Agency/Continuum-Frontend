@@ -547,14 +547,16 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
               style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
             >
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id="video"
-                    className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
-                  />
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id="video"
+                      className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
+                    />
+                  }
+                />
                 <TooltipContent>
                   <p>Generated Video Output</p>
                 </TooltipContent>
@@ -563,46 +565,50 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
 
             <div className="absolute -left-5 top-0 bottom-0 z-20 flex h-full flex-col justify-evenly py-4 pointer-events-none">
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <div
-                    className="relative pointer-events-auto group/handle"
-                    style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
-                  >
-                    <LimitedHandle
-                      type="target"
-                      position={Position.Left}
-                      id="prompt-in"
-                      maxConnections={1}
-                      className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                    />
-                    <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100 z-50 pointer-events-none">
-                      Prompt
-                    </span>
-                  </div>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <div
+                      className="relative pointer-events-auto group/handle"
+                      style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
+                    >
+                      <LimitedHandle
+                        type="target"
+                        position={Position.Left}
+                        id="prompt-in"
+                        maxConnections={1}
+                        className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                      />
+                      <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100 z-50 pointer-events-none">
+                        Prompt
+                      </span>
+                    </div>
+                  }
+                />
                 <TooltipContent>
                   <p>Prompt (optional — or type inline)</p>
                 </TooltipContent>
               </Tooltip>
 
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <div
-                    className="relative pointer-events-auto group/handle"
-                    style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
-                  >
-                    <LimitedHandle
-                      type="target"
-                      position={Position.Left}
-                      id="ref-images"
-                      maxConnections={3}
-                      className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                    />
-                    <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100 z-50 pointer-events-none">
-                      Ref Images (Max 3)
-                    </span>
-                  </div>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <div
+                      className="relative pointer-events-auto group/handle"
+                      style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+                    >
+                      <LimitedHandle
+                        type="target"
+                        position={Position.Left}
+                        id="ref-images"
+                        maxConnections={3}
+                        className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                      />
+                      <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100 z-50 pointer-events-none">
+                        Ref Images (Max 3)
+                      </span>
+                    </div>
+                  }
+                />
                 <TooltipContent>
                   <p>Reference images (generate only)</p>
                 </TooltipContent>

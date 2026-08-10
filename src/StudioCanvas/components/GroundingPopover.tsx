@@ -11,13 +11,12 @@
 // the content spills out of the popover instead of scrolling. Its viewport also
 // wraps children in a `display: table` div, which breaks the sticky headers.
 
-import type { BrandBookPieceKind, BrandDirectionPiece } from '@continuum/contracts';
+import type { BrandBookPieceKind, BrandDirectionPiece, DesignSection } from '@continuum/contracts';
 import { Check, Wand2 } from 'lucide-react';
 import Link from 'next/link';
 import React from 'react';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import type { DesignSection } from '@continuum/contracts';
 import { useBrandBook } from '@/lib/brands/useBrandBook.client';
 import { useBrandDirectionPieces } from '@/lib/brands/useBrandDirectionPieces.client';
 import { useBrandSkills } from '@/lib/organic/skills';
@@ -101,11 +100,13 @@ function ToggleRow({
         </span>
         {description ? (
           <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="line-clamp-2 block text-xs leading-snug text-muted-foreground">
-                {description}
-              </span>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <span className="line-clamp-2 block text-xs leading-snug text-muted-foreground">
+                  {description}
+                </span>
+              }
+            />
             <TooltipContent side="right" className="max-w-xs">
               {description}
             </TooltipContent>
@@ -162,7 +163,7 @@ export function GroundingPopover({
   const enforcedCount = enforcedConcretePieces(brandBookPieces).length;
 
   return (
-    <TooltipProvider delayDuration={250}>
+    <TooltipProvider delay={250}>
       <div className="max-h-[min(32rem,var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain p-2">
         <div className="flex flex-col gap-3">
           {/*

@@ -2631,21 +2631,23 @@ export function CampaignTimelineWorkspace({
                               </Button>
 
                               <UiTooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className="truncate text-left text-sm font-semibold hover:underline"
-                                    onClick={() => {
-                                      setFocusedCampaignId(campaign.id);
-                                      setFocusedAdSet(undefined);
-                                      setFocusedAdId(undefined);
-                                      onSelectedCampaignChange?.(campaign.id);
-                                      void loadAdSets(campaign.id);
-                                    }}
-                                  >
-                                    {campaign.name}
-                                  </button>
-                                </TooltipTrigger>
+                                <TooltipTrigger
+                                  render={
+                                    <button
+                                      type="button"
+                                      className="truncate text-left text-sm font-semibold hover:underline"
+                                      onClick={() => {
+                                        setFocusedCampaignId(campaign.id);
+                                        setFocusedAdSet(undefined);
+                                        setFocusedAdId(undefined);
+                                        onSelectedCampaignChange?.(campaign.id);
+                                        void loadAdSets(campaign.id);
+                                      }}
+                                    >
+                                      {campaign.name}
+                                    </button>
+                                  }
+                                />
                                 <EntityRadarTooltip
                                   label={campaign.name}
                                   comparison={campaign.comparison}
@@ -2916,24 +2918,26 @@ export function CampaignTimelineWorkspace({
                                               </Button>
 
                                               <UiTooltip>
-                                                <TooltipTrigger asChild>
-                                                  <button
-                                                    type="button"
-                                                    className="truncate text-left text-xs font-semibold hover:underline"
-                                                    onClick={() => {
-                                                      setFocusedCampaignId(campaign.id);
-                                                      setFocusedAdSet({
-                                                        campaignId: campaign.id,
-                                                        adSetId: adSet.id,
-                                                      });
-                                                      setFocusedAdId(undefined);
-                                                      onSelectedCampaignChange?.(campaign.id);
-                                                      void loadAdsForAdSet(adSet.id);
-                                                    }}
-                                                  >
-                                                    {adSet.name}
-                                                  </button>
-                                                </TooltipTrigger>
+                                                <TooltipTrigger
+                                                  render={
+                                                    <button
+                                                      type="button"
+                                                      className="truncate text-left text-xs font-semibold hover:underline"
+                                                      onClick={() => {
+                                                        setFocusedCampaignId(campaign.id);
+                                                        setFocusedAdSet({
+                                                          campaignId: campaign.id,
+                                                          adSetId: adSet.id,
+                                                        });
+                                                        setFocusedAdId(undefined);
+                                                        onSelectedCampaignChange?.(campaign.id);
+                                                        void loadAdsForAdSet(adSet.id);
+                                                      }}
+                                                    >
+                                                      {adSet.name}
+                                                    </button>
+                                                  }
+                                                />
                                                 <EntityRadarTooltip
                                                   label={adSet.name}
                                                   comparison={adSet.comparison}

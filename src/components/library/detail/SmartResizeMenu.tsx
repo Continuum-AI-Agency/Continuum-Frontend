@@ -27,9 +27,7 @@ export function SmartResizeMenu({ brandId, asset, onAssetChanged }: SmartResizeM
       {disabled ? (
         <TooltipProvider>
           <Tooltip>
-            <TooltipTrigger asChild>
-              <span>{button}</span>
-            </TooltipTrigger>
+            <TooltipTrigger render={<span>{button}</span>} />
             <TooltipContent>Reformat is available for images.</TooltipContent>
           </Tooltip>
         </TooltipProvider>

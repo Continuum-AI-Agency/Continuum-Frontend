@@ -156,20 +156,22 @@ export function JainaConversationSidebar({
                 Goals
               </ToggleGroupItem>
             ) : (
-              <TooltipProvider delayDuration={150}>
+              <TooltipProvider delay={150}>
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-not-allowed">
-                      <ToggleGroupItem
-                        value="goals"
-                        disabled
-                        aria-label={`Goals (${GOALS_PRODUCTION_DISABLED_REASON})`}
-                        className="pointer-events-none h-6 px-2 text-xs opacity-50"
-                      >
-                        Goals
-                      </ToggleGroupItem>
-                    </span>
-                  </TooltipTrigger>
+                  <TooltipTrigger
+                    render={
+                      <span className="cursor-not-allowed">
+                        <ToggleGroupItem
+                          value="goals"
+                          disabled
+                          aria-label={`Goals (${GOALS_PRODUCTION_DISABLED_REASON})`}
+                          className="pointer-events-none h-6 px-2 text-xs opacity-50"
+                        >
+                          Goals
+                        </ToggleGroupItem>
+                      </span>
+                    }
+                  />
                   <TooltipContent side="bottom">{GOALS_PRODUCTION_DISABLED_REASON}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>

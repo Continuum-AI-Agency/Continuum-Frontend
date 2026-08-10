@@ -45,9 +45,11 @@ function AngleRow({ row, currency }: { row: AdsetAngleRow; currency?: string | n
     <div className="space-y-1.5 border-border/40 border-b py-2.5 last:border-b-0 last:pb-0">
       <div className="flex items-start justify-between gap-2">
         <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="min-w-0 truncate text-xs text-foreground">{row.adsetName}</span>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <span className="min-w-0 truncate text-xs text-foreground">{row.adsetName}</span>
+            }
+          />
           <TooltipContent className="max-w-xs">
             <span className="font-mono text-2xs">{row.adsetId}</span>
           </TooltipContent>

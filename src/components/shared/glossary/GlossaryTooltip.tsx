@@ -29,21 +29,23 @@ export function GlossaryTooltip({
   const descriptionId = useId();
 
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            // biome-ignore lint/a11y/noNoninteractiveTabindex: a glossary term is inline text, not a native control, so the wrapper must be focusable for keyboard users to reach the tooltip and read the definition.
-            tabIndex={0}
-            aria-describedby={descriptionId}
-            className={cn(
-              'cursor-help underline decoration-dotted decoration-muted-foreground/60 underline-offset-2',
-              className,
-            )}
-          >
-            {children ?? entry.term}
-          </span>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <span
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: a glossary term is inline text, not a native control, so the wrapper must be focusable for keyboard users to reach the tooltip and read the definition.
+              tabIndex={0}
+              aria-describedby={descriptionId}
+              className={cn(
+                'cursor-help underline decoration-dotted decoration-muted-foreground/60 underline-offset-2',
+                className,
+              )}
+            >
+              {children ?? entry.term}
+            </span>
+          }
+        />
         <TooltipContent side={side} className="max-w-xs">
           <p className="text-sm font-medium">{entry.term}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{entry.short}</p>

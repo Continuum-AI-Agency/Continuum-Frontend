@@ -31,18 +31,20 @@ export function ApplyModePill({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        {/* A span, not a button: the pill renders inside whole-card <button>s
-            (PortfolioRowCard / PortfolioCard), where a nested button is invalid HTML
-            and trips a React hydration warning. The pill's visible text is the
-            accessible content; the tooltip is hover-triggered supplementary detail. */}
-        <span className="inline-flex rounded-full">
-          <Pill variant={variant} className={className ?? 'cursor-default'}>
-            <PillIndicator variant={indicator} />
-            {label}
-          </Pill>
-        </span>
-      </TooltipTrigger>
+      {/* A span, not a button: the pill renders inside whole-card <button>s
+          (PortfolioRowCard / PortfolioCard), where a nested button is invalid HTML
+          and trips a React hydration warning. The pill's visible text is the
+          accessible content; the tooltip is hover-triggered supplementary detail. */}
+      <TooltipTrigger
+        render={
+          <span className="inline-flex rounded-full">
+            <Pill variant={variant} className={className ?? 'cursor-default'}>
+              <PillIndicator variant={indicator} />
+              {label}
+            </Pill>
+          </span>
+        }
+      />
       <TooltipContent className="max-w-64 text-xs">{tip}</TooltipContent>
     </Tooltip>
   );

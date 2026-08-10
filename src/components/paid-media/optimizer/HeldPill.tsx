@@ -15,17 +15,19 @@ export function HeldPill({ reason }: { reason: string | null | undefined }) {
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Pill variant="secondary" className="cursor-default">
-            <PillIndicator variant="warning" />
-            {held.label}
-          </Pill>
-        </button>
-      </TooltipTrigger>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Pill variant="secondary" className="cursor-default">
+              <PillIndicator variant="warning" />
+              {held.label}
+            </Pill>
+          </button>
+        }
+      />
       <TooltipContent className="max-w-64 text-xs">{held.hint}</TooltipContent>
     </Tooltip>
   );

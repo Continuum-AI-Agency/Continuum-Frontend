@@ -28,18 +28,20 @@ export function DisabledReason({
   const descriptionId = useId();
 
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            // biome-ignore lint/a11y/noNoninteractiveTabindex: a disabled control is removed from the tab order and cannot receive focus/hover, so this wrapper must be focusable for keyboard users to reach the tooltip and discover why the control is disabled.
-            tabIndex={0}
-            aria-describedby={descriptionId}
-            className={cn('inline-flex cursor-help', className)}
-          >
-            {children}
-          </span>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <span
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: a disabled control is removed from the tab order and cannot receive focus/hover, so this wrapper must be focusable for keyboard users to reach the tooltip and discover why the control is disabled.
+              tabIndex={0}
+              aria-describedby={descriptionId}
+              className={cn('inline-flex cursor-help', className)}
+            >
+              {children}
+            </span>
+          }
+        />
         <TooltipContent side={side} className="max-w-xs">
           <p className="text-sm">{reason}</p>
           {unlocks !== undefined ? (

@@ -85,20 +85,22 @@ export function FreshnessBadge({ freshness, side = 'top', className }: Freshness
   ].filter((line): line is string => Boolean(line));
 
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            aria-describedby={descriptionId}
-            className={cn(
-              'inline-flex cursor-default items-center gap-1.5 whitespace-nowrap text-2xs text-muted-foreground',
-              className,
-            )}
-          >
-            {tone ? <PillIndicator variant={tone} pulse={pulse} /> : null}
-            {label}
-          </span>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <span
+              aria-describedby={descriptionId}
+              className={cn(
+                'inline-flex cursor-default items-center gap-1.5 whitespace-nowrap text-2xs text-muted-foreground',
+                className,
+              )}
+            >
+              {tone ? <PillIndicator variant={tone} pulse={pulse} /> : null}
+              {label}
+            </span>
+          }
+        />
         {detail.length ? (
           <TooltipContent side={side} className="max-w-xs">
             {detail.map((line) => (

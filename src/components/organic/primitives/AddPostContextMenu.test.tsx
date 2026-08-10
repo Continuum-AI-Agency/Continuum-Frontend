@@ -13,7 +13,9 @@ import type { ReactNode } from 'react';
 // way CalendarDraftCard.test does.
 mock.module('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  ContextMenuTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   ContextMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuSeparator: () => <hr />,

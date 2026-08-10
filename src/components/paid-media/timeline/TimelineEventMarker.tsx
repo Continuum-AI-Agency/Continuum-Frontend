@@ -55,20 +55,23 @@ export function TimelineEventMarker({
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClick?.(event);
-            }}
-            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-background border flex items-center justify-center shadow-sm hover:scale-110 transition-transform z-10 ${
-              isSelected ? 'ring-2 ring-primary border-primary' : 'border-border'
-            }`}
-            style={{ left: `${left}%` }}
-          >
-            {getEventIcon(event.type, 14)}
-          </button>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClick?.(event);
+              }}
+              className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-background border flex items-center justify-center shadow-sm hover:scale-110 transition-transform z-10 ${
+                isSelected ? 'ring-2 ring-primary border-primary' : 'border-border'
+              }`}
+              style={{ left: `${left}%` }}
+            >
+              {getEventIcon(event.type, 14)}
+            </button>
+          }
+        />
         <TooltipContent>
           <div className="flex flex-col gap-1 text-xs">
             <span className="font-semibold">{event.summary || event.type.replace('_', ' ')}</span>

@@ -3373,39 +3373,41 @@ export function JainaChatSurface({
                     pendingClarificationId ? "Reply to Jaina's question…" : 'Ask Jaina anything…'
                   }
                   actions={
-                    <TooltipProvider delayDuration={180}>
+                    <TooltipProvider delay={180}>
                       <div className="flex items-center gap-1.5">
                         <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={
-                                reportArtifactJob?.status === 'failed'
-                                  ? 'destructive'
-                                  : isJainaProMode || reportArtifactJob
-                                    ? 'default'
-                                    : 'secondary'
-                              }
-                              disabled={reportArtifactButtonDisabled}
-                              aria-pressed={isJainaProMode}
-                              aria-label={reportArtifactTooltip}
-                              onClick={handleReportArtifactAction}
-                              className="gap-1.5"
-                            >
-                              <ReportArtifactButtonIcon
-                                className={cn(
-                                  'size-3.5',
-                                  (hasPendingReportArtifactRequest ||
-                                    reportArtifactJob?.status === 'pending' ||
-                                    reportArtifactJob?.status === 'running' ||
-                                    isReportArtifactDownloading) &&
-                                    'animate-spin',
-                                )}
-                              />
-                              {reportArtifactStatusLabel}
-                            </Button>
-                          </TooltipTrigger>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={
+                                  reportArtifactJob?.status === 'failed'
+                                    ? 'destructive'
+                                    : isJainaProMode || reportArtifactJob
+                                      ? 'default'
+                                      : 'secondary'
+                                }
+                                disabled={reportArtifactButtonDisabled}
+                                aria-pressed={isJainaProMode}
+                                aria-label={reportArtifactTooltip}
+                                onClick={handleReportArtifactAction}
+                                className="gap-1.5"
+                              >
+                                <ReportArtifactButtonIcon
+                                  className={cn(
+                                    'size-3.5',
+                                    (hasPendingReportArtifactRequest ||
+                                      reportArtifactJob?.status === 'pending' ||
+                                      reportArtifactJob?.status === 'running' ||
+                                      isReportArtifactDownloading) &&
+                                      'animate-spin',
+                                  )}
+                                />
+                                {reportArtifactStatusLabel}
+                              </Button>
+                            }
+                          />
                           <TooltipContent side="top" className="text-xs">
                             {reportArtifactTooltip}
                           </TooltipContent>

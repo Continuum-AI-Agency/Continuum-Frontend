@@ -36,18 +36,20 @@ export function AdSetIdLabel({
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            title={title}
-            className={cn(
-              'block w-40 shrink-0 truncate text-2xs text-muted-foreground',
-              !hasName && 'font-mono',
-              className,
-            )}
-          >
-            {surface}
-          </span>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <span
+              title={title}
+              className={cn(
+                'block w-40 shrink-0 truncate text-2xs text-muted-foreground',
+                !hasName && 'font-mono',
+                className,
+              )}
+            >
+              {surface}
+            </span>
+          }
+        />
         <TooltipContent className="max-w-xs">
           <span className="font-mono text-2xs">{detail}</span>
         </TooltipContent>

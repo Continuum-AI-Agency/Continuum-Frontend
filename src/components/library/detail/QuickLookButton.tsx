@@ -140,14 +140,16 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
     return (
       <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              <Button variant="outline" size="sm" disabled className="pointer-events-none">
-                <Sparkles className="size-3.5" aria-hidden />
-                Brand quick look
-              </Button>
-            </span>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <span>
+                <Button variant="outline" size="sm" disabled className="pointer-events-none">
+                  <Sparkles className="size-3.5" aria-hidden />
+                  Brand quick look
+                </Button>
+              </span>
+            }
+          />
           <TooltipContent>Brand quick look supports images only for now.</TooltipContent>
         </Tooltip>
       </TooltipProvider>

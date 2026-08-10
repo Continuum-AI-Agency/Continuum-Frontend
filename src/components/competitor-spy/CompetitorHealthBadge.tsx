@@ -44,23 +44,25 @@ export function CompetitorHealthBadge({
   const descriptionId = useId();
 
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            // biome-ignore lint/a11y/noNoninteractiveTabindex: the chip is a status label, not a native control, so it must be focusable for keyboard users to reach the diagnostics tooltip.
-            tabIndex={0}
-            aria-describedby={descriptionId}
-            className={cn(
-              'inline-flex cursor-help items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium',
-              TONE_CLASS[chip.tone],
-              className,
-            )}
-          >
-            <span aria-hidden className="size-1.5 rounded-full bg-current opacity-70" />
-            {chip.label}
-          </span>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <span
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: the chip is a status label, not a native control, so it must be focusable for keyboard users to reach the diagnostics tooltip.
+              tabIndex={0}
+              aria-describedby={descriptionId}
+              className={cn(
+                'inline-flex cursor-help items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium',
+                TONE_CLASS[chip.tone],
+                className,
+              )}
+            >
+              <span aria-hidden className="size-1.5 rounded-full bg-current opacity-70" />
+              {chip.label}
+            </span>
+          }
+        />
         <TooltipContent side="top" className="max-w-xs">
           <p className="text-sm font-medium">{chip.label}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{guidance}</p>

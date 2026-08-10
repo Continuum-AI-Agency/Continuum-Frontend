@@ -327,17 +327,19 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
             </CanvasNode>
 
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id="audio"
-                  style={{
-                    ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-audio, #10b981)',
-                  }}
-                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
-                />
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id="audio"
+                    style={{
+                      ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-audio, #10b981)',
+                    }}
+                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
+                  />
+                }
+              />
               <TooltipContent>
                 <p>Audio Output: {audioConnections} connections</p>
               </TooltipContent>

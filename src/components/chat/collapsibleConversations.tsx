@@ -49,20 +49,22 @@ export function CollapseConversationsButton({
   className?: string;
 }) {
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            onClick={onToggle}
-            aria-label="Hide conversations"
-            className={cn('shrink-0 text-muted-foreground', className)}
-          >
-            <PanelLeftCloseIcon className="size-4" />
-          </Button>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              onClick={onToggle}
+              aria-label="Hide conversations"
+              className={cn('shrink-0 text-muted-foreground', className)}
+            >
+              <PanelLeftCloseIcon className="size-4" />
+            </Button>
+          }
+        />
         <TooltipContent side="bottom">Hide conversations</TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -81,36 +83,40 @@ export function CollapsedConversationsRail({
   isInteractionDisabled?: boolean;
 }) {
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <div className="flex flex-row items-center gap-1 p-2 md:h-full md:flex-col">
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              onClick={onExpand}
-              aria-label="Show conversations"
-              className="text-muted-foreground"
-            >
-              <PanelLeftOpenIcon className="size-4" />
-            </Button>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                onClick={onExpand}
+                aria-label="Show conversations"
+                className="text-muted-foreground"
+              >
+                <PanelLeftOpenIcon className="size-4" />
+              </Button>
+            }
+          />
           <TooltipContent side="right">Show conversations</TooltipContent>
         </Tooltip>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="secondary"
-              onClick={onNewSession}
-              disabled={isInteractionDisabled}
-              aria-label="New conversation"
-            >
-              <PlusIcon className="size-4" />
-            </Button>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="secondary"
+                onClick={onNewSession}
+                disabled={isInteractionDisabled}
+                aria-label="New conversation"
+              >
+                <PlusIcon className="size-4" />
+              </Button>
+            }
+          />
           <TooltipContent side="right">New conversation</TooltipContent>
         </Tooltip>
       </div>

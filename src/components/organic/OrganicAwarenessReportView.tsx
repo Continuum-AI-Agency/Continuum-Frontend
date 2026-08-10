@@ -149,25 +149,27 @@ function ContentTypeBlock({ rows }: { rows: AwarenessContentTypeRow[] }) {
         return (
           <li key={row.contentType}>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex cursor-default items-center gap-3">
-                  <span className="w-16 shrink-0 truncate text-xs font-medium capitalize">
-                    {row.contentType}
-                  </span>
-                  <span className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted/50">
-                    <span
-                      className="absolute inset-y-0 left-0 rounded-full bg-accent/70"
-                      style={{ width: `${(views / max) * 100}%` }}
-                    />
-                  </span>
-                  <span className="w-14 shrink-0 text-right text-xs tabular-nums">
-                    {nf.format(views)}
-                  </span>
-                  <span className="w-8 shrink-0 text-right text-2xs text-muted-foreground tabular-nums">
-                    {share}%
-                  </span>
-                </div>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <div className="flex cursor-default items-center gap-3">
+                    <span className="w-16 shrink-0 truncate text-xs font-medium capitalize">
+                      {row.contentType}
+                    </span>
+                    <span className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted/50">
+                      <span
+                        className="absolute inset-y-0 left-0 rounded-full bg-accent/70"
+                        style={{ width: `${(views / max) * 100}%` }}
+                      />
+                    </span>
+                    <span className="w-14 shrink-0 text-right text-xs tabular-nums">
+                      {nf.format(views)}
+                    </span>
+                    <span className="w-8 shrink-0 text-right text-2xs text-muted-foreground tabular-nums">
+                      {share}%
+                    </span>
+                  </div>
+                }
+              />
               <TooltipContent>{contentTypeTooltip(row)}</TooltipContent>
             </Tooltip>
           </li>
@@ -182,7 +184,8 @@ function NarrativeBlock({ lines }: { lines: string[] }) {
   return (
     <ul className="space-y-1.5">
       {lines.map((line, index) => (
-        <li key={index} className="flex gap-2">
+        // Plain strings with no id; the list is render-only and never reordered.
+        <li key={`${index}-${line}`} className="flex gap-2">
           <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-accent/70" />
           <span className="text-sm leading-snug">{line}</span>
         </li>
@@ -324,7 +327,7 @@ export function OrganicAwarenessReportView({
         </div>
 
         {open ? (
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delay={200}>
             <div className="mt-3 divide-y divide-subtle/60">
               {report.blocks.map((block, index) => (
                 <AwarenessSection

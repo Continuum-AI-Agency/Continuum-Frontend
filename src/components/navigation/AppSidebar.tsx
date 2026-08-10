@@ -165,23 +165,25 @@ function AppSidebarInner({
       return (
         <SidebarMenuItem key={item.href}>
           <Tooltip>
-            <TooltipTrigger asChild>
-              <SidebarMenuButton
-                aria-disabled="true"
-                aria-label={disabledName}
-                tabIndex={-1}
-                size="default"
-                className="group relative cursor-not-allowed opacity-50 text-[var(--sidebar-muted)] hover:bg-transparent hover:text-[var(--sidebar-muted)]"
-              >
-                <DisabledIcon className="!h-[18px] !w-[18px] stroke-[1.8] text-[var(--sidebar-muted)]" />
-                <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-                  {item.label}
-                </span>
-                {item.locked ? (
-                  <Lock className="ml-auto !h-3.5 !w-3.5 stroke-[1.8] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden" />
-                ) : null}
-              </SidebarMenuButton>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <SidebarMenuButton
+                  aria-disabled="true"
+                  aria-label={disabledName}
+                  tabIndex={-1}
+                  size="default"
+                  className="group relative cursor-not-allowed opacity-50 text-[var(--sidebar-muted)] hover:bg-transparent hover:text-[var(--sidebar-muted)]"
+                >
+                  <DisabledIcon className="!h-[18px] !w-[18px] stroke-[1.8] text-[var(--sidebar-muted)]" />
+                  <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                    {item.label}
+                  </span>
+                  {item.locked ? (
+                    <Lock className="ml-auto !h-3.5 !w-3.5 stroke-[1.8] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden" />
+                  ) : null}
+                </SidebarMenuButton>
+              }
+            />
             <TooltipContent side="right" align="center">
               {item.disabledReason ?? item.label}
             </TooltipContent>
@@ -309,38 +311,40 @@ function AppSidebarInner({
         >
           <SidebarMenuItem>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <CollapsibleTrigger asChild>
-                  <SidebarMenuButton
-                    size="default"
-                    isActive={active || isSubActive}
-                    onMouseEnter={() => router.prefetch(item.href)}
-                    className={cn(
-                      'group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]',
-                      active || isSubActive
-                        ? 'text-[var(--sidebar-foreground)]'
-                        : 'text-[var(--sidebar-muted)]',
-                    )}
-                  >
-                    {active || isSubActive ? (
-                      <ActiveMarker
-                        layoutId="nav-active-marker"
-                        animate={!reduce}
-                        className="h-4 w-0.5"
+              <TooltipTrigger
+                render={
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      size="default"
+                      isActive={active || isSubActive}
+                      onMouseEnter={() => router.prefetch(item.href)}
+                      className={cn(
+                        'group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]',
+                        active || isSubActive
+                          ? 'text-[var(--sidebar-foreground)]'
+                          : 'text-[var(--sidebar-muted)]',
+                      )}
+                    >
+                      {active || isSubActive ? (
+                        <ActiveMarker
+                          layoutId="nav-active-marker"
+                          animate={!reduce}
+                          className="h-4 w-0.5"
+                        />
+                      ) : null}
+                      <NavIcon
+                        icon={item.icon}
+                        active={active || isSubActive}
+                        accentColor={item.accentColor}
                       />
-                    ) : null}
-                    <NavIcon
-                      icon={item.icon}
-                      active={active || isSubActive}
-                      accentColor={item.accentColor}
-                    />
-                    <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-                      {item.label}
-                    </span>
-                    <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
-                  </SidebarMenuButton>
-                </CollapsibleTrigger>
-              </TooltipTrigger>
+                      <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                        {item.label}
+                      </span>
+                      <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                }
+              />
               <TooltipContent
                 side="right"
                 align="center"
@@ -441,16 +445,18 @@ function AppSidebarInner({
           <div className="flex shrink-0 items-center gap-0.5">
             {state !== 'collapsed' && (
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => openPalette(true)}
-                    className="flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]"
-                    aria-label="Search (⌘K)"
-                  >
-                    <Search className="h-[14px] w-[14px]" />
-                  </button>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      onClick={() => openPalette(true)}
+                      className="flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]"
+                      aria-label="Search (⌘K)"
+                    >
+                      <Search className="h-[14px] w-[14px]" />
+                    </button>
+                  }
+                />
                 <TooltipContent side="bottom" className="flex items-center gap-2">
                   Search
                   <kbd className="pointer-events-none inline-flex h-4 select-none items-center gap-1 rounded border bg-muted px-1 font-mono text-2xs font-medium opacity-100">

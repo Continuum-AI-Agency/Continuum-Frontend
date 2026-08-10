@@ -115,24 +115,28 @@ export default function ApprovalsClient({ brandProfileId, brandName }: Props) {
           <span className="text-2xs uppercase tracking-wider text-muted-foreground">
             Queue ({actions.length})
           </span>
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delay={200}>
             <TabsList className="h-7 p-0.5">
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <TabsTrigger value="focus" className="size-6 p-0" aria-label="List view">
-                    <List className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  </TabsTrigger>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <TabsTrigger value="focus" className="size-6 p-0" aria-label="List view">
+                      <List className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    </TabsTrigger>
+                  }
+                />
                 <TooltipContent side="bottom" className="text-xs">
                   List view
                 </TooltipContent>
               </Tooltip>
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <TabsTrigger value="table" className="size-6 p-0" aria-label="Table view (T)">
-                    <TableIcon className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  </TabsTrigger>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <TabsTrigger value="table" className="size-6 p-0" aria-label="Table view (T)">
+                      <TableIcon className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    </TabsTrigger>
+                  }
+                />
                 <TooltipContent side="bottom" className="text-xs">
                   Table view · T
                 </TooltipContent>

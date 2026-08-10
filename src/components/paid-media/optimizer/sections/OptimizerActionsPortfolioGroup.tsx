@@ -1148,15 +1148,17 @@ function AdLevelDangerIcon() {
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            aria-label="Ad-level execution is in progress — not yet surfaced here"
-            className="mt-0.5 inline-flex text-amber-600 dark:text-amber-500"
-            role="img"
-          >
-            <TriangleAlertIcon aria-hidden="true" className="size-4" />
-          </span>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <span
+              aria-label="Ad-level execution is in progress — not yet surfaced here"
+              className="mt-0.5 inline-flex text-amber-600 dark:text-amber-500"
+              role="img"
+            >
+              <TriangleAlertIcon aria-hidden="true" className="size-4" />
+            </span>
+          }
+        />
         <TooltipContent className="max-w-xs">
           Ad-level execution is in progress — not yet surfaced here.
         </TooltipContent>

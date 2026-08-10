@@ -16,26 +16,28 @@ function LiveStatusDotImpl({ isDryRun, isFetching }: Props) {
     : 'Live — approvals execute against Meta on approve.';
 
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            className="relative inline-flex h-2 w-2 shrink-0 items-center justify-center"
-            role="status"
-            aria-label={label}
-          >
+        <TooltipTrigger
+          render={
             <span
-              className="absolute inline-flex h-full w-full rounded-full opacity-70 live-pulse"
-              style={{ backgroundColor: color }}
-              aria-hidden="true"
-            />
-            <span
-              className="relative inline-flex h-2 w-2 rounded-full"
-              style={{ backgroundColor: color, opacity: isFetching ? 1 : 0.9 }}
-              aria-hidden="true"
-            />
-          </span>
-        </TooltipTrigger>
+              className="relative inline-flex h-2 w-2 shrink-0 items-center justify-center"
+              role="status"
+              aria-label={label}
+            >
+              <span
+                className="absolute inline-flex h-full w-full rounded-full opacity-70 live-pulse"
+                style={{ backgroundColor: color }}
+                aria-hidden="true"
+              />
+              <span
+                className="relative inline-flex h-2 w-2 rounded-full"
+                style={{ backgroundColor: color, opacity: isFetching ? 1 : 0.9 }}
+                aria-hidden="true"
+              />
+            </span>
+          }
+        />
         <TooltipContent side="bottom" className="text-xs">
           {label}
         </TooltipContent>

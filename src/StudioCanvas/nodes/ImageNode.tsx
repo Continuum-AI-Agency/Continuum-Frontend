@@ -655,12 +655,14 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                     )}
                     {refBadge && refBadge.tone === 'error' && (
                       <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="absolute top-2 right-2 z-10 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm">
-                            <XCircle className="h-2.5 w-2.5" />
-                            <span>{refBadge.label}</span>
-                          </div>
-                        </TooltipTrigger>
+                        <TooltipTrigger
+                          render={
+                            <div className="absolute top-2 right-2 z-10 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm">
+                              <XCircle className="h-2.5 w-2.5" />
+                              <span>{refBadge.label}</span>
+                            </div>
+                          }
+                        />
                         <TooltipContent className="flex max-w-[220px] flex-col items-start gap-1.5">
                           <p className="text-xs">
                             {data.referenceError ?? 'Upload failed — try again'}
@@ -715,15 +717,17 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
             </CanvasNode>
 
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id="image"
-                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
-                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
-                />
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id="image"
+                    style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
+                  />
+                }
+              />
               <TooltipContent>
                 <p>Image Output: {imageConnections} connections</p>
               </TooltipContent>

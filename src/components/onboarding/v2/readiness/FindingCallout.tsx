@@ -27,11 +27,13 @@ export function FindingCallout({ finding }: { finding: ReadinessFinding }) {
         <div className="flex items-start gap-2">
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Sparkles
-                  className={`mt-0.5 h-3.5 w-3.5 shrink-0 cursor-default ${ICON_TONE[band]}`}
-                />
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Sparkles
+                    className={`mt-0.5 h-3.5 w-3.5 shrink-0 cursor-default ${ICON_TONE[band]}`}
+                  />
+                }
+              />
               <TooltipContent side="left">AI insight</TooltipContent>
             </Tooltip>
           </TooltipProvider>

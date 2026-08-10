@@ -51,11 +51,13 @@ export function AngleChip({ angle }: { angle: PaidAdAngle }) {
     typeof angle.confidence === 'number' ? `${Math.round(angle.confidence * 100)}%` : null;
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Badge className="shrink-0 text-3xs" variant="secondary">
-          {humanize(angle.angle)}
-        </Badge>
-      </TooltipTrigger>
+      <TooltipTrigger
+        render={
+          <Badge className="shrink-0 text-3xs" variant="secondary">
+            {humanize(angle.angle)}
+          </Badge>
+        }
+      />
       <TooltipContent className="max-w-xs space-y-1">
         {angle.hook ? <p className="text-2xs">&ldquo;{angle.hook}&rdquo;</p> : null}
         <p className="text-3xs text-muted-foreground">

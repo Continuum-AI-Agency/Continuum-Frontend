@@ -189,16 +189,18 @@ const AdsetRow = memo(function AdsetRow({
             {/* Name-first: the raw Meta id lives in the tooltip, never inline, so the
                 name column stays legible instead of carrying a debug string. */}
             <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className={cn(
-                    'truncate text-sm',
-                    row.eligible ? 'text-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  {row.name}
-                </span>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <span
+                    className={cn(
+                      'truncate text-sm',
+                      row.eligible ? 'text-foreground' : 'text-muted-foreground',
+                    )}
+                  >
+                    {row.name}
+                  </span>
+                }
+              />
               <TooltipContent className="max-w-xs">
                 <span className="font-mono text-2xs">{row.id}</span>
               </TooltipContent>
@@ -239,11 +241,13 @@ const AdsetRow = memo(function AdsetRow({
               stays exact, with the full text on hover. */}
           {!row.eligible && row.reason ? (
             <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="mt-0.5 line-clamp-1 block text-2xs text-warning">
-                  {row.reason}
-                </span>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <span className="mt-0.5 line-clamp-1 block text-2xs text-warning">
+                    {row.reason}
+                  </span>
+                }
+              />
               <TooltipContent className="max-w-xs">{row.reason}</TooltipContent>
             </Tooltip>
           ) : null}

@@ -13,7 +13,9 @@ import type { CampaignSection } from '../picker/campaignGroups';
 // dialog surfaces in this codebase (see organic/primitives/WorkspacePanel.test).
 mock.module('@/components/ui/alert-dialog', () => ({
   AlertDialog: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  AlertDialogTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  AlertDialogTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   AlertDialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   AlertDialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   AlertDialogTitle: ({ children }: { children: ReactNode }) => <div>{children}</div>,

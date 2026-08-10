@@ -1276,26 +1276,28 @@ function OrganicCalendarWorkspaceInner({
                       ) : null}
                       <TooltipProvider>
                         <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                disabled={!brandProfileId || !previewDraft}
-                                onClick={handleOpenInAiStudio}
-                                style={
-                                  !brandProfileId || !previewDraft
-                                    ? { pointerEvents: 'none' }
-                                    : undefined
-                                }
-                              >
-                                {previewDraft?.mediaSuggestion?.reel?.composition
-                                  ? 'Edit in AI Studio'
-                                  : 'Open in AI Studio'}
-                              </Button>
-                            </span>
-                          </TooltipTrigger>
+                          <TooltipTrigger
+                            render={
+                              <span>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={!brandProfileId || !previewDraft}
+                                  onClick={handleOpenInAiStudio}
+                                  style={
+                                    !brandProfileId || !previewDraft
+                                      ? { pointerEvents: 'none' }
+                                      : undefined
+                                  }
+                                >
+                                  {previewDraft?.mediaSuggestion?.reel?.composition
+                                    ? 'Edit in AI Studio'
+                                    : 'Open in AI Studio'}
+                                </Button>
+                              </span>
+                            }
+                          />
                           {!brandProfileId ? (
                             <TooltipContent>Select a brand to use AI Studio</TooltipContent>
                           ) : null}

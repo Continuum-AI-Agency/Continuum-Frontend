@@ -27,14 +27,16 @@ export function AvatarStack({ avatars, max = 5, className }: AvatarStackProps) {
       <div className={cn('flex -space-x-2 items-center', className)}>
         {visibleAvatars.map((avatar, index) => (
           <Tooltip key={index}>
-            <TooltipTrigger asChild>
-              <Avatar className="border-2 border-background ring-1 ring-white/10 h-8 w-8">
-                {avatar.image && <AvatarImage src={avatar.image} alt={avatar.name} />}
-                <AvatarFallback className="text-2xs font-bold">
-                  {avatar.fallback || avatar.name.slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <Avatar className="border-2 border-background ring-1 ring-white/10 h-8 w-8">
+                  {avatar.image && <AvatarImage src={avatar.image} alt={avatar.name} />}
+                  <AvatarFallback className="text-2xs font-bold">
+                    {avatar.fallback || avatar.name.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              }
+            />
             <TooltipContent>
               <div className="text-sm">
                 <div className="font-medium">{avatar.name}</div>

@@ -41,7 +41,7 @@ const ROLE_CAPABILITIES: readonly RoleCapability[] = [
 
 export function RoleCapabilityLegend() {
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <div className="rounded-lg border border-border/60 bg-card/20 p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -62,15 +62,17 @@ export function RoleCapabilityLegend() {
               <dd className="flex min-w-0 flex-1 items-start gap-1 text-muted-foreground">
                 <span className="min-w-0">{capability.summary}</span>
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={`${capability.role} permission boundary`}
-                      className="mt-0.5 shrink-0 text-muted-foreground/70 transition-colors hover:text-foreground"
-                    >
-                      <Info className="size-3" aria-hidden />
-                    </button>
-                  </TooltipTrigger>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label={`${capability.role} permission boundary`}
+                        className="mt-0.5 shrink-0 text-muted-foreground/70 transition-colors hover:text-foreground"
+                      >
+                        <Info className="size-3" aria-hidden />
+                      </button>
+                    }
+                  />
                   <TooltipContent side="top" className="max-w-xs">
                     <p className="text-xs">{capability.boundary}</p>
                   </TooltipContent>

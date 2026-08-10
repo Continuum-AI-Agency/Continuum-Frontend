@@ -533,15 +533,17 @@ export function TimelineEditorBlock({
               style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
             >
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <LimitedHandle
-                    type="target"
-                    position={Position.Left}
-                    id={TIMELINE_MEDIA_INPUT_HANDLE}
-                    maxConnections={TIMELINE_MEDIA_POOL_LIMIT}
-                    className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                  />
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <LimitedHandle
+                      type="target"
+                      position={Position.Left}
+                      id={TIMELINE_MEDIA_INPUT_HANDLE}
+                      maxConnections={TIMELINE_MEDIA_POOL_LIMIT}
+                      className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                    />
+                  }
+                />
                 <TooltipContent>
                   <p>Connect images &amp; videos to place in the editor</p>
                 </TooltipContent>
@@ -553,14 +555,16 @@ export function TimelineEditorBlock({
               style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
             >
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id="video"
-                    className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                  />
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id="video"
+                      className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                    />
+                  }
+                />
                 <TooltipContent>
                   <p>Edited Video Output</p>
                 </TooltipContent>

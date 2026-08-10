@@ -109,7 +109,7 @@ export function CampaignMetricHeatmap({
   const cellPadding = density === 'compact' ? 'px-2 py-0.5' : 'px-2.5 py-1.5';
 
   return (
-    <TooltipProvider delayDuration={120}>
+    <TooltipProvider delay={120}>
       <section className="overflow-hidden rounded-lg border border-border/70 bg-card">
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/15 px-3 py-2">
           <div className="min-w-0">
@@ -216,43 +216,45 @@ export function CampaignMetricHeatmap({
                     const isActiveColumn = metric.key === selectedMetric;
                     return (
                       <Tooltip key={metric.key}>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onMetricChange(metric.key);
-                              onCampaignSelect?.(campaign.id);
-                            }}
-                            data-active={isActiveColumn || undefined}
-                            data-selected={isSelected || undefined}
-                            className={cn(
-                              'group relative flex items-center justify-between gap-1 text-right transition-[box-shadow,transform] duration-150',
-                              'border-b border-border/40',
-                              !isLast || 'border-b-0',
-                              cellPadding,
-                              'bg-[var(--hm-bg-light)] dark:bg-[var(--hm-bg-dark)]',
-                              'hover:ring-1 hover:ring-inset hover:ring-foreground/15',
-                              'data-[active]:shadow-[inset_0_0_0_2px_oklch(60%_0.20_280_/_0.35)]',
-                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-inset',
-                            )}
-                            style={paintToStyle(paint) as React.CSSProperties}
-                          >
-                            <span
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onMetricChange(metric.key);
+                                onCampaignSelect?.(campaign.id);
+                              }}
+                              data-active={isActiveColumn || undefined}
+                              data-selected={isSelected || undefined}
                               className={cn(
-                                'text-2xs uppercase tracking-tight transition-colors',
-                                tone === 'positive' && 'text-emerald-700 dark:text-emerald-300',
-                                tone === 'negative' && 'text-rose-700 dark:text-rose-300',
-                                tone === 'flat' && 'text-muted-foreground/70',
+                                'group relative flex items-center justify-between gap-1 text-right transition-[box-shadow,transform] duration-150',
+                                'border-b border-border/40',
+                                !isLast || 'border-b-0',
+                                cellPadding,
+                                'bg-[var(--hm-bg-light)] dark:bg-[var(--hm-bg-dark)]',
+                                'hover:ring-1 hover:ring-inset hover:ring-foreground/15',
+                                'data-[active]:shadow-[inset_0_0_0_2px_oklch(60%_0.20_280_/_0.35)]',
+                                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-inset',
                               )}
+                              style={paintToStyle(paint) as React.CSSProperties}
                             >
-                              <DeltaGlyph tone={tone} size={density === 'compact' ? 9 : 10} />
-                            </span>
-                            <span className="truncate font-mono text-sm font-medium tabular-nums text-foreground">
-                              {formatMetric(metric.key, value)}
-                            </span>
-                          </button>
-                        </TooltipTrigger>
+                              <span
+                                className={cn(
+                                  'text-2xs uppercase tracking-tight transition-colors',
+                                  tone === 'positive' && 'text-emerald-700 dark:text-emerald-300',
+                                  tone === 'negative' && 'text-rose-700 dark:text-rose-300',
+                                  tone === 'flat' && 'text-muted-foreground/70',
+                                )}
+                              >
+                                <DeltaGlyph tone={tone} size={density === 'compact' ? 9 : 10} />
+                              </span>
+                              <span className="truncate font-mono text-sm font-medium tabular-nums text-foreground">
+                                {formatMetric(metric.key, value)}
+                              </span>
+                            </button>
+                          }
+                        />
                         <TooltipContent side="top" align="end" className="px-2 py-1.5">
                           <div className="space-y-0.5">
                             <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">

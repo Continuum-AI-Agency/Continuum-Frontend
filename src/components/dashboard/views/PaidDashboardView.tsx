@@ -140,38 +140,42 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
           transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
         />
         <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => {
-                clearCharge();
-                onExpand();
-              }}
-              aria-label="Open DCO actions"
-              className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
-              style={{ transitionProperty: 'background-color, color, scale' }}
-            >
-              <ChevronLeftIcon className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={() => {
+                  clearCharge();
+                  onExpand();
+                }}
+                aria-label="Open DCO actions"
+                className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
+                style={{ transitionProperty: 'background-color, color, scale' }}
+              >
+                <ChevronLeftIcon className="h-3.5 w-3.5" />
+              </button>
+            }
+          />
           <TooltipContent side="left">Open DCO actions (or hover)</TooltipContent>
         </Tooltip>
         <div className="z-10 my-1 h-px w-5 bg-border/70" aria-hidden="true" />
         <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => {
-                clearCharge();
-                onExpand();
-              }}
-              aria-label="Show DCO actions"
-              className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
-              style={{ transitionProperty: 'background-color, color, scale' }}
-            >
-              <ActivityLogIcon className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={() => {
+                  clearCharge();
+                  onExpand();
+                }}
+                aria-label="Show DCO actions"
+                className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
+                style={{ transitionProperty: 'background-color, color, scale' }}
+              >
+                <ActivityLogIcon className="h-3.5 w-3.5" />
+              </button>
+            }
+          />
           <TooltipContent side="left">DCO actions</TooltipContent>
         </Tooltip>
       </div>
@@ -183,17 +187,19 @@ function DCORailCollapseButton({ onCollapse }: { onCollapse: () => void }) {
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={onCollapse}
-            aria-label="Hide DCO actions"
-            className="absolute right-1.5 top-1.5 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-border/70 bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-foreground active:scale-[0.96]"
-            style={{ transitionProperty: 'background-color, color, scale' }}
-          >
-            <ChevronRightIcon className="h-3.5 w-3.5" />
-          </button>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              onClick={onCollapse}
+              aria-label="Hide DCO actions"
+              className="absolute right-1.5 top-1.5 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-border/70 bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-foreground active:scale-[0.96]"
+              style={{ transitionProperty: 'background-color, color, scale' }}
+            >
+              <ChevronRightIcon className="h-3.5 w-3.5" />
+            </button>
+          }
+        />
         <TooltipContent side="left">Hide DCO actions</TooltipContent>
       </Tooltip>
     </TooltipProvider>

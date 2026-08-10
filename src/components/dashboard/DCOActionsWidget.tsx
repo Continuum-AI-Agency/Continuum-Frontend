@@ -693,17 +693,19 @@ export function DCOActionsWidget({
                 </Select>
 
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={refresh}
-                      disabled={isLoading}
-                      aria-label="Refresh actions"
-                    >
-                      <ReloadIcon className={isLoading ? 'animate-spin' : undefined} />
-                    </Button>
-                  </TooltipTrigger>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={refresh}
+                        disabled={isLoading}
+                        aria-label="Refresh actions"
+                      >
+                        <ReloadIcon className={isLoading ? 'animate-spin' : undefined} />
+                      </Button>
+                    }
+                  />
                   <TooltipContent>Refresh actions</TooltipContent>
                 </Tooltip>
               </div>
@@ -859,11 +861,13 @@ export function DCOActionsWidget({
           </div>
           <div className="flex gap-2">
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="secondary" size="icon" onClick={refresh} disabled={isLoading}>
-                  <ReloadIcon />
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Button variant="secondary" size="icon" onClick={refresh} disabled={isLoading}>
+                    <ReloadIcon />
+                  </Button>
+                }
+              />
               <TooltipContent>Refresh</TooltipContent>
             </Tooltip>
             <Button variant="secondary" size="icon" aria-label="Open full activity log">

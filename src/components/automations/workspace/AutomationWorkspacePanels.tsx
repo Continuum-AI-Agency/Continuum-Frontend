@@ -120,11 +120,13 @@ export function IconButton({
 }: React.ComponentProps<typeof Button> & { label: string }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button aria-label={label} size="icon" variant="ghost" {...props}>
-          {children}
-        </Button>
-      </TooltipTrigger>
+      <TooltipTrigger
+        render={
+          <Button aria-label={label} size="icon" variant="ghost" {...props}>
+            {children}
+          </Button>
+        }
+      />
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );

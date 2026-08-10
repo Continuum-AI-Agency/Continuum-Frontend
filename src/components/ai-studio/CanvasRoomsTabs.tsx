@@ -137,15 +137,17 @@ export function CanvasRoomsTabs({
       {generalRooms.length < 3 && (
         <TooltipProvider>
           <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={handleCreate}
-                className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-background/50 text-muted-foreground transition-all hover:border-primary/25 hover:bg-primary/10 hover:text-primary"
-              >
-                <PlusIcon className="h-4 w-4" />
-              </button>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-background/50 text-muted-foreground transition-all hover:border-primary/25 hover:bg-primary/10 hover:text-primary"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                </button>
+              }
+            />
             <TooltipContent
               side="bottom"
               align="center"

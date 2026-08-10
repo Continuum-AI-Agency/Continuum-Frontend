@@ -351,18 +351,20 @@ export function CalendarDraftCard({
                       {draft.timeLabel}
                     </span>
                     {draft.titleTopic && (
-                      <TooltipProvider>
-                        <Tooltip delayDuration={0}>
-                          <TooltipTrigger asChild>
-                            {/* biome-ignore lint/a11y/noStaticElementInteractions: tooltip target (help affordance), not a control */}
-                            {/* biome-ignore lint/a11y/useKeyWithClickEvents: onClick only stops the card button from activating; the tooltip opens on hover/focus */}
-                            <div
-                              className="p-0.5 -m-0.5 cursor-help"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <QuestionMarkCircledIcon className="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-brand-primary" />
-                            </div>
-                          </TooltipTrigger>
+                      <TooltipProvider delay={0}>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              // biome-ignore lint/a11y/noStaticElementInteractions: tooltip target (help affordance), not a control
+                              // biome-ignore lint/a11y/useKeyWithClickEvents: onClick only stops the card button from activating; the tooltip opens on hover/focus
+                              <div
+                                className="p-0.5 -m-0.5 cursor-help"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <QuestionMarkCircledIcon className="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-brand-primary" />
+                              </div>
+                            }
+                          />
                           <TooltipContent
                             side="top"
                             className="max-w-[200px] border-border/70 bg-popover text-popover-foreground text-xs"

@@ -260,13 +260,15 @@ export function PlannerMatrix({
                   // A bare "view" was the row's only content on an empty read-only channel,
                   // which read as a stray word. The label says what the row IS and the
                   // tooltip says why it cannot be scheduled.
-                  <TooltipProvider>
-                    <Tooltip delayDuration={150}>
-                      <TooltipTrigger asChild>
-                        <Badge variant="muted" className="h-4 cursor-help px-1 text-xs">
-                          Read-only
-                        </Badge>
-                      </TooltipTrigger>
+                  <TooltipProvider delay={150}>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Badge variant="muted" className="h-4 cursor-help px-1 text-xs">
+                            Read-only
+                          </Badge>
+                        }
+                      />
                       <TooltipContent side="right" className="max-w-[220px] text-xs">
                         {readOnlyPlatformNotice(platform.label)}
                       </TooltipContent>

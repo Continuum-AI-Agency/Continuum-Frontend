@@ -282,26 +282,28 @@ export function ChatPanel({
               {onEnrich && (
                 <TooltipProvider>
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        type="button"
-                        aria-label="Align to Brand"
-                        disabled={disabled || isStreaming || isEnriching || !form.watch('prompt')}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          onEnrich(form.getValues('prompt'));
-                        }}
-                        style={
-                          brandAccent
-                            ? { color: brandAccent, fontFamily: brandFont }
-                            : { fontFamily: brandFont }
-                        }
-                      >
-                        {isEnriching ? <div className="animate-spin">◌</div> : <MagicWandIcon />}
-                      </Button>
-                    </TooltipTrigger>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          type="button"
+                          aria-label="Align to Brand"
+                          disabled={disabled || isStreaming || isEnriching || !form.watch('prompt')}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onEnrich(form.getValues('prompt'));
+                          }}
+                          style={
+                            brandAccent
+                              ? { color: brandAccent, fontFamily: brandFont }
+                              : { fontFamily: brandFont }
+                          }
+                        >
+                          {isEnriching ? <div className="animate-spin">◌</div> : <MagicWandIcon />}
+                        </Button>
+                      }
+                    />
                     <TooltipContent>
                       Align to Brand — rewrites your prompt using your brand's colors, typography,
                       and voice

@@ -72,7 +72,9 @@ mock.module('@/components/ui/calendar', () => ({
 // is process-wide). Omitting it would make their imports fail to resolve.
 mock.module('@/components/ui/popover', () => ({
   Popover: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  PopoverTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  PopoverTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   PopoverAnchor: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -94,14 +96,18 @@ mock.module('@/components/ui/separator', () => ({
 
 mock.module('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   TooltipContent: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 mock.module('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  ContextMenuTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   ContextMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuSeparator: () => <hr />,

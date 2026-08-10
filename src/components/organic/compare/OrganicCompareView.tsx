@@ -331,7 +331,7 @@ export function OrganicCompareView({
   }
 
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <div className="flex flex-col gap-4" data-tour-id="organic-compare-view">
         <MetricsScopeSelector
           mode="multi"
@@ -431,15 +431,17 @@ export function OrganicCompareView({
                 <span className="flex items-center gap-1 text-2xs uppercase tracking-wide text-muted-foreground">
                   Combined total across selected accounts
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label="What can be combined across accounts"
-                        className="inline-flex size-3.5 items-center justify-center rounded-full border border-subtle text-2xs leading-none text-muted-foreground"
-                      >
-                        ?
-                      </button>
-                    </TooltipTrigger>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label="What can be combined across accounts"
+                          className="inline-flex size-3.5 items-center justify-center rounded-full border border-subtle text-2xs leading-none text-muted-foreground"
+                        >
+                          ?
+                        </button>
+                      }
+                    />
                     <TooltipContent side="top" className="max-w-[240px]">
                       <p className="text-xs leading-snug">
                         Only metrics that can be added up appear here. Rates and unique-people

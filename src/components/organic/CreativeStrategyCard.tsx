@@ -51,17 +51,19 @@ function Leaderboard({ title, entries }: { title: string; entries: CreativeLeade
       <div className="flex gap-1.5 flex-wrap">
         {entries.map((entry, rank) => (
           <Tooltip key={`${title}-${entry.label}`}>
-            <TooltipTrigger asChild>
-              <Pill
-                variant={rankVariant(rank)}
-                className="cursor-default px-2 py-1 text-xs"
-                data-testid="creative-leaderboard-chip"
-              >
-                <PillStatus className="text-2xs tabular-nums">#{rank + 1}</PillStatus>
-                <span className="max-w-64 truncate font-medium">{entry.label}</span>
-                <span className="tabular-nums opacity-70">{entry.count}</span>
-              </Pill>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <Pill
+                  variant={rankVariant(rank)}
+                  className="cursor-default px-2 py-1 text-xs"
+                  data-testid="creative-leaderboard-chip"
+                >
+                  <PillStatus className="text-2xs tabular-nums">#{rank + 1}</PillStatus>
+                  <span className="max-w-64 truncate font-medium">{entry.label}</span>
+                  <span className="tabular-nums opacity-70">{entry.count}</span>
+                </Pill>
+              }
+            />
             <TooltipContent>{leaderboardMetricLine(entry)}</TooltipContent>
           </Tooltip>
         ))}
@@ -129,7 +131,7 @@ export function CreativeStrategyCard({ brandId }: { brandId?: string }) {
         </div>
 
         {open ? (
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delay={200}>
             <div className="mt-3 grid gap-3">
               <div className="flex gap-4 flex-wrap">
                 <Leaderboard title="Top hooks" entries={report.hookLeaderboard} />

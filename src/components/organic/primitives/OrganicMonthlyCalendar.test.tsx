@@ -49,12 +49,16 @@ mock.module('./PostedContentQuickLook', () => ({
 }));
 mock.module('@/components/ui/hover-card', () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  HoverCardTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  HoverCardTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   HoverCardContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 mock.module('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  ContextMenuTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   ContextMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuSeparator: () => <hr />,
   ContextMenuItem: ({ children, onSelect }: { children: ReactNode; onSelect?: () => void }) => (

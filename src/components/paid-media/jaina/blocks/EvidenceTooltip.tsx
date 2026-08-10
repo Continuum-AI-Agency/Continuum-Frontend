@@ -61,18 +61,20 @@ export function EvidenceTooltip({ provenance, datasetId }: EvidenceTooltipProps)
   const srSummary = [headline, detail, ...facts.map((f) => `${f.label}: ${f.value}`)].join('. ');
 
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            aria-label="Data provenance"
-            aria-describedby={descriptionId}
-            className="inline-flex cursor-help items-center text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:text-foreground"
-          >
-            <InfoIcon className="size-3.5" aria-hidden="true" />
-          </button>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              aria-label="Data provenance"
+              aria-describedby={descriptionId}
+              className="inline-flex cursor-help items-center text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:text-foreground"
+            >
+              <InfoIcon className="size-3.5" aria-hidden="true" />
+            </button>
+          }
+        />
         <TooltipContent side="top" className="max-w-xs">
           <p className="text-sm font-medium">{headline}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>

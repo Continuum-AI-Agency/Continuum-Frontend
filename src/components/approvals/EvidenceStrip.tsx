@@ -55,7 +55,7 @@ export function EvidenceStrip({ facts, className }: Props) {
   const deltas = computeDeltas(numericFacts);
 
   return (
-    <TooltipProvider delayDuration={200}>
+    <TooltipProvider delay={200}>
       <div
         className={cn(
           'grid grid-flow-col auto-cols-[minmax(7rem,1fr)] gap-px overflow-x-auto rounded-md border border-border bg-border',
@@ -66,29 +66,31 @@ export function EvidenceStrip({ facts, className }: Props) {
           const delta = deltas[key];
           return (
             <Tooltip key={key}>
-              <TooltipTrigger asChild>
-                <div className="flex flex-col items-start gap-1 bg-card px-3 py-2 transition-colors hover:bg-accent/40">
-                  <span className="flex items-center justify-between gap-2 self-stretch text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-                    <span className="truncate">{metricLabel(key)}</span>
-                    {delta ? (
-                      <span
-                        className={cn(
-                          'rounded-sm px-1 py-px font-data text-3xs tabular-nums',
-                          delta.direction === 'down' && 'bg-destructive/10 text-destructive',
-                          delta.direction === 'up' &&
-                            'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-                          delta.direction === 'flat' && 'text-muted-foreground',
-                        )}
-                      >
-                        {delta.label}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="font-data text-base tabular-nums text-foreground">
-                    {formatMetric(key, value)}
-                  </span>
-                </div>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <div className="flex flex-col items-start gap-1 bg-card px-3 py-2 transition-colors hover:bg-accent/40">
+                    <span className="flex items-center justify-between gap-2 self-stretch text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+                      <span className="truncate">{metricLabel(key)}</span>
+                      {delta ? (
+                        <span
+                          className={cn(
+                            'rounded-sm px-1 py-px font-data text-3xs tabular-nums',
+                            delta.direction === 'down' && 'bg-destructive/10 text-destructive',
+                            delta.direction === 'up' &&
+                              'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+                            delta.direction === 'flat' && 'text-muted-foreground',
+                          )}
+                        >
+                          {delta.label}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="font-data text-base tabular-nums text-foreground">
+                      {formatMetric(key, value)}
+                    </span>
+                  </div>
+                }
+              />
               {METRIC_HINTS[key] ? (
                 <TooltipContent side="bottom" className="max-w-xs text-xs">
                   {METRIC_HINTS[key]}

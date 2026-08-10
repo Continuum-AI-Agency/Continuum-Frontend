@@ -12,11 +12,13 @@ export function ThemeToggle() {
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
-            {appearance === 'dark' ? <SunIcon /> : <MoonIcon />}
-          </Button>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
+              {appearance === 'dark' ? <SunIcon /> : <MoonIcon />}
+            </Button>
+          }
+        />
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>

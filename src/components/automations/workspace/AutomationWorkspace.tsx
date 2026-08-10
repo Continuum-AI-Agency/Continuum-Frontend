@@ -876,19 +876,21 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
 
   return (
     <MotionConfig reducedMotion="user">
-      <TooltipProvider delayDuration={250}>
+      <TooltipProvider delay={250}>
         <div className="automation-workspace-shell fixed inset-x-0 top-0 flex h-dvh flex-col overflow-hidden bg-background text-foreground md:left-[var(--app-sidebar-width,3.5rem)]">
           <header className="flex min-h-16 shrink-0 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur">
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Link
-                  href="/automations"
-                  aria-label="Back to automations"
-                  className={buttonVariants({ size: 'icon', variant: 'ghost' })}
-                >
-                  <ChevronLeft aria-hidden="true" />
-                </Link>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Link
+                    href="/automations"
+                    aria-label="Back to automations"
+                    className={buttonVariants({ size: 'icon', variant: 'ghost' })}
+                  >
+                    <ChevronLeft aria-hidden="true" />
+                  </Link>
+                }
+              />
               <TooltipContent>Back to automations</TooltipContent>
             </Tooltip>
 
@@ -1270,32 +1272,36 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                         className="border-0 bg-transparent shadow-none"
                       >
                         <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Pill
-                              variant={
-                                liveRun.status === 'completed'
-                                  ? 'success'
-                                  : liveRun.status === 'failed'
-                                    ? 'destructive'
-                                    : liveRun.status === 'queued'
-                                      ? 'warning'
-                                      : 'violet'
-                              }
-                              className="bg-card/95 px-3 py-1.5 shadow-sm backdrop-blur"
-                            >
-                              <PillIndicator
-                                variant={liveRunTone}
-                                pulse={liveRun.status === 'queued' || liveRun.status === 'running'}
-                              />
-                              {liveRun.status === 'queued'
-                                ? 'Queued'
-                                : liveRun.status === 'running'
-                                  ? 'Running'
-                                  : liveRun.status === 'completed'
-                                    ? 'Run complete'
-                                    : 'Run failed'}
-                            </Pill>
-                          </TooltipTrigger>
+                          <TooltipTrigger
+                            render={
+                              <Pill
+                                variant={
+                                  liveRun.status === 'completed'
+                                    ? 'success'
+                                    : liveRun.status === 'failed'
+                                      ? 'destructive'
+                                      : liveRun.status === 'queued'
+                                        ? 'warning'
+                                        : 'violet'
+                                }
+                                className="bg-card/95 px-3 py-1.5 shadow-sm backdrop-blur"
+                              >
+                                <PillIndicator
+                                  variant={liveRunTone}
+                                  pulse={
+                                    liveRun.status === 'queued' || liveRun.status === 'running'
+                                  }
+                                />
+                                {liveRun.status === 'queued'
+                                  ? 'Queued'
+                                  : liveRun.status === 'running'
+                                    ? 'Running'
+                                    : liveRun.status === 'completed'
+                                      ? 'Run complete'
+                                      : 'Run failed'}
+                              </Pill>
+                            }
+                          />
                           <TooltipContent>
                             Live server run {liveRun.runId.slice(0, 8)}
                           </TooltipContent>

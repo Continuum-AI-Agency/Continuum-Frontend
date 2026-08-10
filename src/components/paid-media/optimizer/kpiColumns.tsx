@@ -284,26 +284,28 @@ function CostCell({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex flex-col items-end gap-0.5">
-          <span className="tabular-nums">{formatCpa(cost, currency)}</span>
-          {hasInterval ? (
-            <span
-              aria-hidden="true"
-              className="relative block h-1 w-20 overflow-visible rounded-full bg-muted/50"
-            >
+      <TooltipTrigger
+        render={
+          <span className="inline-flex flex-col items-end gap-0.5">
+            <span className="tabular-nums">{formatCpa(cost, currency)}</span>
+            {hasInterval ? (
               <span
-                className="absolute top-0 h-1 rounded-full bg-border"
-                style={{ left: `${left}%`, width: `${width}%` }}
-              />
-              <span
-                className="absolute -top-0.5 h-2 w-0.5 rounded-full bg-primary"
-                style={{ left: `${markerLeft}%` }}
-              />
-            </span>
-          ) : null}
-        </span>
-      </TooltipTrigger>
+                aria-hidden="true"
+                className="relative block h-1 w-20 overflow-visible rounded-full bg-muted/50"
+              >
+                <span
+                  className="absolute top-0 h-1 rounded-full bg-border"
+                  style={{ left: `${left}%`, width: `${width}%` }}
+                />
+                <span
+                  className="absolute -top-0.5 h-2 w-0.5 rounded-full bg-primary"
+                  style={{ left: `${markerLeft}%` }}
+                />
+              </span>
+            ) : null}
+          </span>
+        }
+      />
       <TooltipContent className="max-w-xs">
         <p className="text-2xs">{plain}</p>
       </TooltipContent>

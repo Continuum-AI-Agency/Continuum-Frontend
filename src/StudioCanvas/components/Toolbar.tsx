@@ -40,17 +40,19 @@ export function Toolbar() {
           </Button>
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  aria-label="Rerun all"
-                  variant="destructive"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={handleRerunAll}
-                >
-                  <ReloadIcon className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Button
+                    aria-label="Rerun all"
+                    variant="destructive"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={handleRerunAll}
+                  >
+                    <ReloadIcon className="w-4 h-4" />
+                  </Button>
+                }
+              />
               <TooltipContent>Rerun all — regenerate every node from scratch</TooltipContent>
             </Tooltip>
           </TooltipProvider>

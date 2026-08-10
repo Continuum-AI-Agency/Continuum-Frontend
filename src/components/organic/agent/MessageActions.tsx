@@ -48,43 +48,47 @@ export function MessageActions({
   }, [content]);
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delay={300}>
       <div className={cn('flex items-center gap-0.5 text-muted-foreground', className)}>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={copied ? 'Copied' : 'Copy message'}
-              className="text-muted-foreground hover:text-foreground"
-              onClick={handleCopy}
-            >
-              {copied ? (
-                <CheckIcon className="size-3.5 text-emerald-500" />
-              ) : (
-                <CopyIcon className="size-3.5" />
-              )}
-            </Button>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={copied ? 'Copied' : 'Copy message'}
+                className="text-muted-foreground hover:text-foreground"
+                onClick={handleCopy}
+              >
+                {copied ? (
+                  <CheckIcon className="size-3.5 text-emerald-500" />
+                ) : (
+                  <CopyIcon className="size-3.5" />
+                )}
+              </Button>
+            }
+          />
           <TooltipContent>{copied ? 'Copied' : 'Copy'}</TooltipContent>
         </Tooltip>
 
         {onRegenerate ? (
           <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Regenerate response"
-                className="text-muted-foreground hover:text-foreground"
-                disabled={disabled}
-                onClick={onRegenerate}
-              >
-                <RefreshCwIcon className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Regenerate response"
+                  className="text-muted-foreground hover:text-foreground"
+                  disabled={disabled}
+                  onClick={onRegenerate}
+                >
+                  <RefreshCwIcon className="size-3.5" />
+                </Button>
+              }
+            />
             <TooltipContent>Regenerate</TooltipContent>
           </Tooltip>
         ) : null}

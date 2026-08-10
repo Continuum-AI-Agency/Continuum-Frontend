@@ -169,14 +169,16 @@ function TypeIcon({
     return <Icon className="h-3 w-3" strokeWidth={1.5} />;
   }
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="relative inline-flex">
-            <Icon className="h-3 w-3" strokeWidth={1.5} />
-            <span className="absolute -right-1 -top-1 inline-flex h-1.5 w-1.5 rounded-full bg-destructive" />
-          </span>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <span className="relative inline-flex">
+              <Icon className="h-3 w-3" strokeWidth={1.5} />
+              <span className="absolute -right-1 -top-1 inline-flex h-1.5 w-1.5 rounded-full bg-destructive" />
+            </span>
+          }
+        />
         <TooltipContent side="bottom" className="max-w-xs text-xs">
           {typeLabel} isn&apos;t handled by the executor yet. Approving will mark this row FAILED.
         </TooltipContent>

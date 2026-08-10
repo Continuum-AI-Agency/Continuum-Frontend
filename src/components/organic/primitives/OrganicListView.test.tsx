@@ -42,7 +42,9 @@ mock.module('./DraftDeletionConfirmation', () => ({
 
 mock.module('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  ContextMenuTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   ContextMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuSeparator: () => <hr />,
   // `onSelect` is the item's whole behaviour, so the stub has to forward it.
@@ -69,7 +71,9 @@ mock.module('@/components/ui/scroll-area', () => ({
 // assertion, never this one.
 mock.module('@/components/ui/hover-card', () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  HoverCardTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  HoverCardTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   HoverCardContent: ({
     children,
     className,

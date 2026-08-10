@@ -120,7 +120,7 @@ export function StatTile({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{body}</TooltipTrigger>
+      <TooltipTrigger render={body} />
       <TooltipContent side="top" className="max-w-[220px]">
         <p className="text-xs leading-snug">{tooltip}</p>
         {pct !== undefined && !Number.isNaN(pct) ? (

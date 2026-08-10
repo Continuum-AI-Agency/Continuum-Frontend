@@ -75,6 +75,7 @@ export function ExtendVideoBlock({
     <TooltipProvider>
       <ContextMenu>
         <ContextMenuTrigger asChild>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: hover-only affordance on a canvas node wrapper; the node's controls carry the real semantics */}
           <div
             className={cn(
               'relative group h-full w-full min-w-[260px] min-h-[160px] rounded-xl transition-shadow',
@@ -121,6 +122,7 @@ export function ExtendVideoBlock({
                     </div>
                   ) : displayVideo ? (
                     <div className="relative h-full w-full bg-black/85">
+                      {/* biome-ignore lint/a11y/useMediaCaption: user-generated canvas output; no caption track exists */}
                       <video
                         src={displayVideo as string}
                         controls
@@ -188,14 +190,16 @@ export function ExtendVideoBlock({
               style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
             >
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id="video"
-                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
-                  />
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id="video"
+                      className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
+                    />
+                  }
+                />
                 <TooltipContent>
                   <p>Extended Video Output</p>
                 </TooltipContent>

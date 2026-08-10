@@ -84,7 +84,7 @@ export function DataFreshnessChip({
       <span aria-hidden="true">·</span>
       {isCoolingDown ? (
         <Tooltip>
-          <TooltipTrigger asChild>{refreshControl}</TooltipTrigger>
+          <TooltipTrigger render={refreshControl} />
           <TooltipContent className="max-w-56 text-xs">
             Refresh paused — Meta limits how often live data can reload. Try again shortly.
           </TooltipContent>
