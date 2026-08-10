@@ -515,6 +515,55 @@ describe('mergeNodes', () => {
     expect((result[0].data as any).prompt).toBe('new storyboard prompt with camera movement');
     expect(result[0].position).toEqual({ x: 20, y: 20 });
   });
+
+  // The Text Block writes its prompt to `value`, which was missing from the
+  // rich-text key list — so a snapshot that arrived without it emptied the box
+  // the user was writing in.
+  it('preserves the local text block prompt when remote sends value as empty', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'string-1',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'a long prompt the user is halfway through writing' },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'string-1',
+        type: 'string',
+        position: { x: 30, y: 30 },
+        data: { value: '' },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).value).toBe('a long prompt the user is halfway through writing');
+    expect(result[0].position).toEqual({ x: 30, y: 30 });
+  });
+
+  it('still applies a remote text block prompt when the peer actually wrote one', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'string-2',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'old text' },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'string-2',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'text a collaborator typed' },
+      } as StudioNode,
+    ];
+
+    expect((mergeNodes(local, remote, [])[0].data as any).value).toBe('text a collaborator typed');
+  });
 });
 
 describe('mergeEdges', () => {

@@ -8,7 +8,7 @@ import {
 } from '@xyflow/react';
 import { Copy, Sparkles, Trash2, Unlink, Wand2 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Node as CanvasNode,
   NodeContent,
@@ -79,13 +79,44 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
     return { edgeColor: 'var(--edge-text)', border: 'border-border/60' };
   }, [connectedEdge]);
 
+  // The textarea owns its text while the user is in it. `data` reaches this node
+  // through React Flow's internal store, which the `nodes` prop only refreshes in
+  // a passive effect — one tick AFTER the keystroke that produced it. Binding the
+  // textarea straight to `data.value` therefore re-rendered it with the previous
+  // string while the DOM already held the new one, so React rewrote the DOM value
+  // and the browser collapsed the caret to the end on every single keypress.
+  // External writes (enrichment stream, realtime merge, canvas load) mirror in
+  // only while the box is not being typed into.
+  const [draft, setDraft] = useState(data.value);
+  const isEditingRef = useRef(false);
+
+  useEffect(() => {
+    if (isEditingRef.current) return;
+    setDraft(data.value);
+  }, [data.value]);
+
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setDraft(e.target.value);
       updateNodeData(id, { value: e.target.value });
       debouncedSave();
     },
     [id, updateNodeData, debouncedSave],
   );
+
+  const handleFocus = useCallback(() => {
+    isEditingRef.current = true;
+  }, []);
+
+  const handleBlur = useCallback(() => {
+    isEditingRef.current = false;
+    // A remote merge that landed mid-edit left the store holding the peer's text.
+    // What the user just typed is the newer intent, so re-assert it on the way out.
+    if (draft !== data.value) {
+      updateNodeData(id, { value: draft });
+      debouncedSave();
+    }
+  }, [draft, data.value, id, updateNodeData, debouncedSave]);
 
   const handleEnrich = useCallback(
     async (e?: React.MouseEvent) => {
@@ -164,8 +195,11 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
 
               <NodeContent className="relative flex-1 flex flex-col min-h-0 overflow-hidden p-0 bg-muted/20">
                 <Textarea
-                  value={data.value}
+                  data-testid="studio-string-node-textarea"
+                  value={draft}
                   onChange={handleChange}
+                  onFocus={handleFocus}
+                  onBlur={handleBlur}
                   onKeyDown={(event) => event.stopPropagation()}
                   className="nodrag text-xs text-primary placeholder:text-muted-foreground/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8 overflow-y-auto whitespace-pre-wrap break-words block h-full min-h-[100px]"
                   placeholder="Enter prompt or instructions..."

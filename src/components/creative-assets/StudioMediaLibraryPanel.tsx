@@ -2,7 +2,16 @@
 'use client';
 
 import type { MediaAsset } from '@continuum/contracts';
-import { AlertTriangle, ImageOff, Loader2, Play, Scaling, Search } from 'lucide-react';
+import {
+  AlertTriangle,
+  ImageOff,
+  Loader2,
+  Play,
+  RefreshCw,
+  Scaling,
+  Search,
+  Sparkles,
+} from 'lucide-react';
 import React from 'react';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { QuickReformatMenu } from '@/components/library/reformat/QuickReformatMenu';
@@ -11,6 +20,7 @@ import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { setStudioAssetDragData } from '@/lib/creative-assets/studioAssetDrop';
 import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
 import { SOURCE_LABEL } from '@/lib/media/filters';
+import { streamInspirations } from '@/lib/onboarding/inspirationsClient';
 
 type Props = {
   brandProfileId: string;
@@ -20,8 +30,21 @@ type Props = {
 // library page's filter + search semantics and makes every asset grabbable onto
 // the canvas via the shared asset_drop contract.
 export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
-  const { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters, error } =
-    useStudioLibraryBrowser(brandProfileId);
+  const {
+    assets,
+    loading,
+    hasMore,
+    loadMore,
+    refresh,
+    query,
+    setQuery,
+    filters,
+    setFilters,
+    error,
+  } = useStudioLibraryBrowser(brandProfileId);
+
+  const isInspiration = filters.source === 'inspiration';
+  const pull = useInspirationPull(brandProfileId, refresh);
 
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -57,6 +80,10 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
           onSourceChange={(value) => setFilters({ source: value })}
           onKindChange={(value) => setFilters({ kind: value })}
         />
+
+        {isInspiration && assets.length > 0 ? (
+          <InspirationPullButton label="Regenerate" pull={pull} />
+        ) : null}
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
@@ -69,6 +96,8 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
             <AlertTriangle className="h-6 w-6 text-amber-400" />
             <span>{error}</span>
           </div>
+        ) : assets.length === 0 && isInspiration && !query.trim() ? (
+          <InspirationEmptyState pull={pull} />
         ) : assets.length === 0 ? (
           <div className="p-6 text-center text-sm text-gray-400">
             {query.trim() ? 'No matching assets.' : 'No assets in the library yet.'}
@@ -88,6 +117,124 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+type InspirationPull = {
+  running: boolean;
+  found: number;
+  error: string | null;
+  start: () => void;
+};
+
+// "Inspiration" is competitor creative, not an AI generation — so filling the
+// folder means re-running the competitor pull that onboarding uses, never a
+// second generation pipeline. The Backend registers everything it pulls into
+// media.assets with source='inspiration', so a completed run leaves the folder
+// populated for next time; we just re-read it when the stream ends.
+function useInspirationPull(brandId: string, onSettled: () => void): InspirationPull {
+  const [running, setRunning] = React.useState(false);
+  const [found, setFound] = React.useState(0);
+  const [error, setError] = React.useState<string | null>(null);
+  const abortRef = React.useRef<AbortController | null>(null);
+
+  React.useEffect(() => () => abortRef.current?.abort(), []);
+
+  const start = React.useCallback(() => {
+    if (abortRef.current) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setRunning(true);
+    setFound(0);
+    setError(null);
+
+    // Mutated from inside the frame callback, so it cannot be a narrowed `let`.
+    const outcome = { pulled: 0, message: null as string | null };
+
+    void (async () => {
+      try {
+        await streamInspirations({
+          brandId,
+          signal: controller.signal,
+          onFrame: (frame) => {
+            if (frame.type === 'post_pulled' || frame.type === 'ad_pulled') {
+              outcome.pulled += 1;
+              setFound(outcome.pulled);
+              return;
+            }
+            if (frame.type === 'error') outcome.message = frame.data.message;
+          },
+        });
+        // A run that streamed nothing is a failure the user has to see; the old
+        // surface just went back to looking empty with no explanation.
+        setError(
+          outcome.pulled > 0
+            ? null
+            : (outcome.message ??
+                'No inspiration came back. Add competitors for this brand, then try again.'),
+        );
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          console.error('[StudioMediaLibraryPanel] inspiration pull failed', err);
+          setError("Couldn't pull inspiration. Please try again.");
+        }
+      } finally {
+        abortRef.current = null;
+        setRunning(false);
+        // Partial runs still registered assets, so re-read either way.
+        onSettled();
+      }
+    })();
+  }, [brandId, onSettled]);
+
+  return { running, found, error, start };
+}
+
+function InspirationPullButton({ label, pull }: { label: string; pull: InspirationPull }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        type="button"
+        data-testid="studio-inspiration-regenerate"
+        onClick={pull.start}
+        disabled={pull.running}
+        className="inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {pull.running ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {pull.found > 0 ? `Finding inspiration… ${pull.found} found` : 'Finding inspiration…'}
+          </>
+        ) : (
+          <>
+            <RefreshCw className="h-3.5 w-3.5" />
+            {label}
+          </>
+        )}
+      </button>
+      {pull.error ? (
+        <p data-testid="studio-inspiration-error" className="text-2xs text-amber-400">
+          {pull.error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function InspirationEmptyState({ pull }: { pull: InspirationPull }) {
+  return (
+    <div
+      data-testid="studio-inspiration-empty"
+      className="flex flex-col items-center gap-3 p-6 text-center"
+    >
+      <Sparkles className="h-6 w-6 text-purple-400" />
+      <p className="text-sm font-medium text-white">No inspiration saved yet</p>
+      <p className="max-w-[16rem] text-xs leading-relaxed text-gray-400">
+        Inspiration is competitor creative pulled from the brands you track. Nothing has been saved
+        for this brand yet — pull a set to fill this folder.
+      </p>
+      <InspirationPullButton label="Find inspiration" pull={pull} />
     </div>
   );
 }

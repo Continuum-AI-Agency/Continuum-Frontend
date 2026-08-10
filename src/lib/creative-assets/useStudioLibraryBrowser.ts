@@ -23,6 +23,9 @@ export type UseStudioLibraryBrowserResult = {
   loading: boolean;
   hasMore: boolean;
   loadMore: () => void;
+  /** Re-reads the current filter/search from page one. Used after a write that
+   *  adds assets (e.g. an Inspiration pull) so the grid shows them immediately. */
+  refresh: () => void;
   query: string;
   setQuery: (value: string) => void;
   filters: StudioLibraryFilters;
@@ -157,11 +160,32 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
     void runListPage(offsetRef.current);
   }, [loading, hasMore, query, runListPage]);
 
+  const refresh = useCallback(() => {
+    const trimmed = query.trim();
+    if (trimmed) {
+      void runSearch(trimmed);
+      return;
+    }
+    offsetRef.current = 0;
+    void runListPage(0);
+  }, [query, runListPage, runSearch]);
+
   const setQuery = useCallback((value: string) => setQueryState(value), []);
   const setFilters = useCallback(
     (next: Partial<StudioLibraryFilters>) => setFiltersState((prev) => ({ ...prev, ...next })),
     [],
   );
 
-  return { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters, error };
+  return {
+    assets,
+    loading,
+    hasMore,
+    loadMore,
+    refresh,
+    query,
+    setQuery,
+    filters,
+    setFilters,
+    error,
+  };
 }

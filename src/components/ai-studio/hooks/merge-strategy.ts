@@ -32,7 +32,10 @@ const richInputDataKeys = [
   'generatedVideoBucket',
 ] as const;
 
-const richTextDataKeys = ['positivePrompt', 'prompt', 'negativePrompt'] as const;
+// `value` is the Text Block's prompt field — the same class of user-authored text
+// as the generator prompts, and it was missing here, so a snapshot that arrived
+// without it silently emptied the box the user was writing in.
+const richTextDataKeys = ['positivePrompt', 'prompt', 'negativePrompt', 'value'] as const;
 
 const localOnlyDataKeys = ['isToolbarVisible'] as const;
 
