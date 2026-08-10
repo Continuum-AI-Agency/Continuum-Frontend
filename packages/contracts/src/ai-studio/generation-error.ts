@@ -10,7 +10,19 @@ import { z } from 'zod';
 // branch mint codes from their own vocabularies, and a narrow enum here would
 // invalidate frames that are already correct. Narrow on the read side.
 
-export const STUDIO_GENERATION_ERROR_CODES = ['image_blocked', 'image_empty_response'] as const;
+/**
+ * `model_unavailable` is the provider refusing the workspace, not the request: fal
+ * answers 401/402/403 for a missing key, no credits, or a model the account is not
+ * enabled for, and every fal-hosted generator (gpt-image-2, flux-2-*) has no fallback
+ * provider behind it. It reached the canvas as "Generation failed — Forbidden"
+ * (Airtable #248). The message names the model; the canvas disables that model for the
+ * session on this code.
+ */
+export const STUDIO_GENERATION_ERROR_CODES = [
+  'image_blocked',
+  'image_empty_response',
+  'model_unavailable',
+] as const;
 
 export const studioGenerationErrorCodeSchema = z.enum(STUDIO_GENERATION_ERROR_CODES);
 export type StudioGenerationErrorCode = z.infer<typeof studioGenerationErrorCodeSchema>;

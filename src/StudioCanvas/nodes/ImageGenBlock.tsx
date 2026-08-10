@@ -1,4 +1,3 @@
-import { Copy, Download, Image, Play, Trash2, TriangleAlert } from 'lucide-react';
 import {
   type BrandBookPieceKind,
   type BrandDirectionPiece,
@@ -7,6 +6,8 @@ import {
   FIXED_IMAGE_PIXELS,
   getImageVariationHandleId,
   type ImageGeneratorModel,
+  imageModelLabel,
+  imageModelOptions,
   imageSizesForModel,
   supportsImageSize,
   variationIndexFromHandle,
@@ -22,8 +23,9 @@ import {
   useNodeId,
   useUpdateNodeInternals,
 } from '@xyflow/react';
+import { Copy, Download, Image, Play, Trash2, TriangleAlert } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
 import { Button } from '@/components/ui/button';
@@ -31,6 +33,7 @@ import {
   ContextMenu,
   ContextMenuCheckboxItem,
   ContextMenuContent,
+  ContextMenuGroup,
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
@@ -71,6 +74,16 @@ import { resignCanvasNodes } from '../utils/resignCanvasNodes';
 // buys nothing: the ceiling is IMAGE_VARIATION_LIMIT either way.
 const VARIATION_COUNTS = [1, 4] as const;
 type VariationCount = (typeof VARIATION_COUNTS)[number];
+
+/*
+ * Models this session has PROVEN unreachable. `model_unavailable` is the provider
+ * refusing the workspace (fal 401/402/403), not the request — retrying hits the same
+ * wall — so every image node greys the model out for the rest of the session instead of
+ * offering it again. Session-scoped on purpose: buying fal credits should cost a reload,
+ * not a redeploy, and a capability-probe endpoint would be a lot of machinery for a fact
+ * the first failed run already told us.
+ */
+const sessionUnavailableModels = new Set<string>();
 
 const LimitedHandle = ({
   maxConnections,
@@ -243,17 +256,25 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
         data: { ...(node.data as NanoGenNodeData), variationCount: count },
       }));
 
-      // Dropping to fewer variations removes the handles the surviving edges point
-      // at. React Flow would keep those edges in state pointed at a handle that is
-      // no longer in the DOM, so they stop being drawn while still looking connected.
+      // Dropping to fewer variations DELETES the handles those edges point at. Moving
+      // them onto `image` (what this used to do) pointed two variations at the same
+      // target, and normalizeEdges then dropped the duplicate without telling anyone —
+      // which is the "point connected to nowhere" of Airtable #259. Remove them here,
+      // and say how many went, so the deletion is the user's news rather than a
+      // surprise the next time they run the graph.
       if (count < previousCount) {
-        setEdges(
-          currentEdges.map((edge) =>
-            edge.source === id && variationIndexFromHandle(edge.sourceHandle) >= count
-              ? { ...edge, sourceHandle: getImageVariationHandleId(0) }
-              : edge,
-          ),
+        const survivingEdges = currentEdges.filter(
+          (edge) => edge.source !== id || variationIndexFromHandle(edge.sourceHandle) < count,
         );
+        const removedCount = currentEdges.length - survivingEdges.length;
+        if (removedCount > 0) {
+          setEdges(survivingEdges);
+          show({
+            title: `Removed ${removedCount} connection${removedCount === 1 ? '' : 's'}`,
+            description: `Variations ${count + 1}–${previousCount} no longer exist on this node.`,
+            variant: 'warning',
+          });
+        }
       }
 
       triggerSave();
@@ -261,7 +282,16 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       // positions and edges render to the wrong point on the node.
       updateNodeInternals(id);
     },
-    [currentEdges, data.variationCount, id, setEdges, triggerSave, updateNode, updateNodeInternals],
+    [
+      currentEdges,
+      data.variationCount,
+      id,
+      setEdges,
+      show,
+      triggerSave,
+      updateNode,
+      updateNodeInternals,
+    ],
   );
 
   const handleRun = useCallback(async () => {
@@ -279,6 +309,14 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
     ? generationErrorCopy(data.errorCode, generationError)
     : undefined;
 
+  // A refusal is about the workspace, not this node: remember it so the picker on every
+  // image node stops offering the model.
+  useEffect(() => {
+    if (data.errorCode === 'model_unavailable' && data.model) {
+      sessionUnavailableModels.add(data.model);
+    }
+  }, [data.errorCode, data.model]);
+
   const handleDismissError = useCallback(() => {
     useStudioStore.getState().updateNodeData(id, { error: undefined, errorCode: undefined });
   }, [id]);
@@ -289,11 +327,12 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   const previewImage = showVariationGrid
     ? undefined
     : ((data.generatedImage as string | Blob | undefined) ?? data.generatedImageUrl);
-  // Handles follow what EXISTS once a run has produced variations, and what is
-  // REQUESTED before that, so the node never draws a handle with nothing behind it.
-  const outputHandleIds = Array.from(
-    { length: showVariationGrid ? generatedVariations.length : variationCount },
-    (_unused, index) => getImageVariationHandleId(index),
+  // One handle per REQUESTED variation, always. Letting a finished 4-up run win instead
+  // meant the node kept drawing four handles after the user selected 1, and the extras
+  // led nowhere (Airtable #259). The 2x2 grid below still shows everything the last run
+  // produced: what a node DISPLAYS and what it can OUTPUT are different things.
+  const outputHandleIds = Array.from({ length: variationCount }, (_unused, index) =>
+    getImageVariationHandleId(index),
   );
 
   // Expiry recovery: a signed URL can expire while the canvas is open. On an image
@@ -330,20 +369,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   const model = data.model ?? DEFAULT_IMAGE_GENERATOR_MODEL;
   const sizeOptions = imageSizesForModel(model);
   const currentImageSize = coerceImageSize(model, data.imageSize);
-  const modelLabel =
-    model === 'nano-banana-pro'
-      ? 'Nano Banana Pro'
-      : model === 'nano-banana-2'
-        ? 'Nano Banana 2'
-        : model === 'nano-banana-2-lite'
-          ? 'Nano Banana 2 Lite'
-          : model === 'gpt-image-2'
-            ? 'GPT Image 2'
-            : model === 'flux-2-pro'
-              ? 'FLUX.2 Pro'
-              : model === 'flux-2-max'
-                ? 'FLUX.2 Max'
-                : 'Nano Banana';
+  const modelLabel = imageModelLabel(model);
+  const modelOptions = imageModelOptions(sessionUnavailableModels);
   // A model with no size parameter still renders at SOME size. Saying nothing let
   // users believe the node had chosen one; say the size it actually produces.
   const fixedPixels = FIXED_IMAGE_PIXELS[model];
@@ -646,89 +673,69 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
         }
       />
       <ContextMenuContent className="w-56">
-        <ContextMenuLabel>Image Generator</ContextMenuLabel>
-        <ContextMenuSub>
-          <ContextMenuSubTrigger>Model</ContextMenuSubTrigger>
-          <ContextMenuSubContent className="w-44">
-            <ContextMenuCheckboxItem
-              checked={model === 'nano-banana'}
-              onClick={() => handleModelChange('nano-banana')}
-            >
-              Nano Banana
-            </ContextMenuCheckboxItem>
-            <ContextMenuCheckboxItem
-              checked={model === 'nano-banana-pro'}
-              onClick={() => handleModelChange('nano-banana-pro')}
-            >
-              Nano Banana Pro
-            </ContextMenuCheckboxItem>
-            <ContextMenuCheckboxItem
-              checked={model === 'nano-banana-2'}
-              onClick={() => handleModelChange('nano-banana-2')}
-            >
-              Nano Banana 2
-            </ContextMenuCheckboxItem>
-            <ContextMenuCheckboxItem
-              checked={model === 'nano-banana-2-lite'}
-              onClick={() => handleModelChange('nano-banana-2-lite')}
-            >
-              Nano Banana 2 Lite
-            </ContextMenuCheckboxItem>
-            <ContextMenuCheckboxItem
-              checked={data.model === 'gpt-image-2'}
-              onClick={() => handleModelChange('gpt-image-2')}
-            >
-              GPT Image 2
-            </ContextMenuCheckboxItem>
-            <ContextMenuCheckboxItem
-              checked={data.model === 'flux-2-pro'}
-              onClick={() => handleModelChange('flux-2-pro')}
-            >
-              FLUX.2 Pro
-            </ContextMenuCheckboxItem>
-            <ContextMenuCheckboxItem
-              checked={data.model === 'flux-2-max'}
-              onClick={() => handleModelChange('flux-2-max')}
-            >
-              FLUX.2 Max
-            </ContextMenuCheckboxItem>
-          </ContextMenuSubContent>
-        </ContextMenuSub>
-        {supportsImageSize(model) && (
+        {/* The group is load-bearing, not decoration: Base UI's GroupLabel reads a
+            MenuGroupContext and THROWS without one, so a bare label took the whole
+            right-click menu down the moment it opened — the picker below was
+            unreachable. Every other context menu in the app has the same shape; the
+            durable fix belongs in components/ui/context-menu.tsx. */}
+        <ContextMenuGroup>
+          <ContextMenuLabel>Image Generator</ContextMenuLabel>
           <ContextMenuSub>
-            <ContextMenuSubTrigger>Size</ContextMenuSubTrigger>
+            <ContextMenuSubTrigger>Model</ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-60">
+              {modelOptions.map((option) => (
+                <ContextMenuCheckboxItem
+                  key={option.model}
+                  checked={model === option.model}
+                  disabled={!option.selectable}
+                  onClick={() => handleModelChange(option.model)}
+                >
+                  {option.label}
+                  {option.note ? (
+                    <span className="ml-auto pl-2 text-2xs text-muted-foreground">
+                      {option.note}
+                    </span>
+                  ) : null}
+                </ContextMenuCheckboxItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+          {supportsImageSize(model) && (
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>Size</ContextMenuSubTrigger>
+              <ContextMenuSubContent className="w-36">
+                {sizeOptions.map((value) => (
+                  <ContextMenuCheckboxItem
+                    key={value}
+                    checked={currentImageSize === value}
+                    onClick={() => handleImageSizeChange(value)}
+                  >
+                    {value}
+                  </ContextMenuCheckboxItem>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          )}
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>Aspect Ratio</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-36">
-              {sizeOptions.map((value) => (
+              {(model === 'nano-banana-2'
+                ? ['1:1', '4:5', '5:4', '16:9', '9:16', '4:3', '3:4']
+                : model === 'nano-banana-2-lite' || model === 'flux-2-pro' || model === 'flux-2-max'
+                  ? ['1:1', '4:5', '5:4', '16:9', '9:16', '4:3', '3:4', '21:9']
+                  : ['1:1', '16:9', '9:16', '4:3', '3:4']
+              ).map((value) => (
                 <ContextMenuCheckboxItem
                   key={value}
-                  checked={currentImageSize === value}
-                  onClick={() => handleImageSizeChange(value)}
+                  checked={(data.aspectRatio || '16:9') === value}
+                  onClick={() => handleAspectRatioChange(value)}
                 >
                   {value}
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
-        )}
-        <ContextMenuSub>
-          <ContextMenuSubTrigger>Aspect Ratio</ContextMenuSubTrigger>
-          <ContextMenuSubContent className="w-36">
-            {(model === 'nano-banana-2'
-              ? ['1:1', '4:5', '5:4', '16:9', '9:16', '4:3', '3:4']
-              : model === 'nano-banana-2-lite' || model === 'flux-2-pro' || model === 'flux-2-max'
-                ? ['1:1', '4:5', '5:4', '16:9', '9:16', '4:3', '3:4', '21:9']
-                : ['1:1', '16:9', '9:16', '4:3', '3:4']
-            ).map((value) => (
-              <ContextMenuCheckboxItem
-                key={value}
-                checked={(data.aspectRatio || '16:9') === value}
-                onClick={() => handleAspectRatioChange(value)}
-              >
-                {value}
-              </ContextMenuCheckboxItem>
-            ))}
-          </ContextMenuSubContent>
-        </ContextMenuSub>
+        </ContextMenuGroup>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={handleRun}>
           <Play className="mr-2 h-4 w-4" />

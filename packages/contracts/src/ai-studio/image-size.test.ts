@@ -3,8 +3,11 @@ import {
   coerceImageSize,
   DEFAULT_IMAGE_GENERATOR_MODEL,
   FIXED_IMAGE_PIXELS,
+  IMAGE_GENERATOR_MODELS,
   IMAGE_MODEL_SIZES,
   IMAGE_SIZES,
+  imageModelLabel,
+  imageModelOptions,
   imageResolutionFor,
   imageSizeSchema,
   imageSizesForModel,
@@ -82,6 +85,53 @@ describe('imageResolutionFor', () => {
     expect(imageResolutionFor('nano-banana-2', '1K')).toBe('1024x1024');
     expect(imageResolutionFor('nano-banana-pro', '2K')).toBe('2048x2048');
     expect(imageResolutionFor('nano-banana-pro', '4K')).toBe('4096x4096');
+  });
+});
+
+/*
+ * The picker was hardcoded JSX with no notion of status, so a model this workspace
+ * cannot reach looked exactly like one it can, and the only way to find out was a red
+ * node reading "Generation failed — Forbidden" (Airtable #248).
+ */
+describe('imageModelOptions', () => {
+  const optionFor = (model: string, unavailable?: ReadonlySet<string>) => {
+    const option = imageModelOptions(unavailable).find((entry) => entry.model === model);
+    if (!option) throw new Error(`no option for ${model}`);
+    return option;
+  };
+
+  it('offers every model the node data can legally carry, and nothing else', () => {
+    expect(imageModelOptions().map((option) => option.model)).toEqual([...IMAGE_GENERATOR_MODELS]);
+  });
+
+  it('labels every model, so the picker and the node caption cannot drift apart', () => {
+    for (const option of imageModelOptions()) {
+      expect(option.label.length).toBeGreaterThan(0);
+      expect(imageModelLabel(option.model)).toBe(option.label);
+    }
+    expect(imageModelLabel('flux-2-max')).toBe('FLUX.2 Max');
+  });
+
+  it('warns that the fal tier needs credits while still letting a funded workspace pick it', () => {
+    for (const model of ['gpt-image-2', 'flux-2-pro', 'flux-2-max']) {
+      expect(optionFor(model).note).toBe('Needs fal credits');
+      expect(optionFor(model).selectable).toBe(true);
+    }
+  });
+
+  it('surfaces a single-size model as a ceiling rather than waiting for the 400', () => {
+    expect(optionFor('nano-banana-2-lite').note).toBe('1K only');
+    expect(optionFor('nano-banana').note).toBe('1024px only');
+    expect(optionFor('nano-banana-2').note).toBeUndefined();
+  });
+
+  it('greys out a model this session has already been refused', () => {
+    const refused = optionFor('flux-2-max', new Set(['flux-2-max']));
+    expect(refused.status).toBe('unavailable');
+    expect(refused.selectable).toBe(false);
+    expect(refused.note).toBe('Not enabled on this workspace');
+    // One refusal must not take its neighbours down with it.
+    expect(optionFor('nano-banana-2', new Set(['flux-2-max'])).selectable).toBe(true);
   });
 });
 

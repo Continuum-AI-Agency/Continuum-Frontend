@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isModelSelectable, type ModelStatus } from './model-catalog';
 
 // The image-generation size vocabulary — ONE definition, shared by the canvas, the
 // chat surface, the agent write path, and the Backend request schema.
@@ -80,6 +81,82 @@ export const DEFAULT_IMAGE_SIZE: Partial<Record<ImageGeneratorModel, ImageSize>>
   'nano-banana-2': '512px',
   'nano-banana-2-lite': '1K',
 };
+
+/**
+ * What the picker says about each generator, and whether it can be picked at all.
+ *
+ * The picker used to be hardcoded JSX with no disabled state: every model was always
+ * clickable and the only way to learn a model was out of reach was a red node reading
+ * "Generation failed — Forbidden" (Airtable #248).
+ *
+ * The fal-hosted tier (gpt-image-2, flux-2-*) reaches its provider through FAL_KEY and
+ * nothing else, and there is no fallback provider. They stay selectable because a
+ * workspace WITH fal credits runs them fine — the note says what they need, and a run
+ * that comes back `model_unavailable` disables that model for the rest of the session
+ * (see `imageModelOptions`).
+ */
+export const IMAGE_MODEL_INFO: Record<
+  ImageGeneratorModel,
+  { label: string; status: ModelStatus; note?: string }
+> = {
+  'nano-banana': { label: 'Nano Banana', status: 'available' },
+  'nano-banana-pro': { label: 'Nano Banana Pro', status: 'available' },
+  'nano-banana-2': { label: 'Nano Banana 2', status: 'available' },
+  'nano-banana-2-lite': { label: 'Nano Banana 2 Lite', status: 'available' },
+  'gpt-image-2': { label: 'GPT Image 2', status: 'beta', note: 'Needs fal credits' },
+  'flux-2-pro': { label: 'FLUX.2 Pro', status: 'beta', note: 'Needs fal credits' },
+  'flux-2-max': { label: 'FLUX.2 Max', status: 'beta', note: 'Needs fal credits' },
+};
+
+export const imageModelLabel = (model: unknown): string =>
+  isImageGeneratorModel(model)
+    ? IMAGE_MODEL_INFO[model].label
+    : IMAGE_MODEL_INFO[DEFAULT_IMAGE_GENERATOR_MODEL].label;
+
+export type ImageModelOption = {
+  model: ImageGeneratorModel;
+  label: string;
+  status: ModelStatus;
+  /** One short clause under the label: the ceiling to expect, or why it cannot be picked. */
+  note?: string;
+  selectable: boolean;
+};
+
+/** The single size a model always renders at, when it has exactly one. */
+const sizeCeilingNote = (model: ImageGeneratorModel): string | undefined => {
+  const fixed = FIXED_IMAGE_PIXELS[model];
+  if (fixed) return `${fixed}px only`;
+  const sizes = IMAGE_MODEL_SIZES[model];
+  return sizes.length === 1 ? `${sizes[0]} only` : undefined;
+};
+
+const NOTHING_UNAVAILABLE: ReadonlySet<string> = new Set();
+
+/**
+ * Every model the picker offers, in the status it should be drawn in.
+ *
+ * `unavailableModels` is what the session has LEARNED: a run that came back
+ * `model_unavailable` proves this workspace cannot reach that model, so the picker
+ * greys it out rather than letting the user retry into the same wall.
+ */
+export function imageModelOptions(
+  unavailableModels: ReadonlySet<string> = NOTHING_UNAVAILABLE,
+): readonly ImageModelOption[] {
+  return IMAGE_GENERATOR_MODELS.map((model) => {
+    const info = IMAGE_MODEL_INFO[model];
+    const status: ModelStatus = unavailableModels.has(model) ? 'unavailable' : info.status;
+    return {
+      model,
+      label: info.label,
+      status,
+      note:
+        status === 'unavailable'
+          ? 'Not enabled on this workspace'
+          : (info.note ?? sizeCeilingNote(model)),
+      selectable: isModelSelectable(status),
+    };
+  });
+}
 
 export const supportsImageSize = (model: ImageGeneratorModel): boolean =>
   IMAGE_MODEL_SIZES[model].length > 0;

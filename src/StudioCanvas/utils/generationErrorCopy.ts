@@ -25,15 +25,30 @@ const COPY: Record<StudioGenerationErrorCode, GenerationErrorCopy> = {
     guidance:
       'Running this node again with the same input will fail the same way. Change the prompt or the reference images first.',
   },
+  model_unavailable: {
+    title: "This model isn't available",
+    guidance: 'Pick another model from the node menu — Nano Banana 2 is the closest match.',
+  },
 };
 
 const FALLBACK_TITLE = 'Generation failed';
+
+// The Backend names the refused model and whether it is credits or entitlement; only
+// the canvas knows which model to point at instead.
+const MODEL_UNAVAILABLE_SUGGESTION = 'Nano Banana 2 is the closest match.';
 
 export const generationErrorCopy = (
   code: unknown,
   fallbackMessage?: string,
 ): GenerationErrorCopy => {
-  if (isStudioGenerationErrorCode(code)) return COPY[code];
+  if (isStudioGenerationErrorCode(code)) {
+    const copy = COPY[code];
+    const message = fallbackMessage?.trim();
+    if (code === 'model_unavailable' && message) {
+      return { title: copy.title, guidance: `${message} ${MODEL_UNAVAILABLE_SUGGESTION}` };
+    }
+    return copy;
+  }
   return {
     title: FALLBACK_TITLE,
     guidance: fallbackMessage?.trim() || 'Something went wrong while generating. Try again.',
