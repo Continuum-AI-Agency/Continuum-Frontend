@@ -9,7 +9,7 @@ import { BookOpenText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { ScoreBadge } from '@/components/onboarding/v2/readiness/ScoreBadge';
 import { EmptyState } from '@/components/shared/state';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { freshnessFromSyncedAt } from '@/lib/freshness/freshnessMeta';
 import type { DashboardSetupState } from './setupState';
 import { SETTINGS_BRAND_BOOK_HREF } from './setupState';
@@ -34,21 +34,25 @@ function formatAge(seconds: number | null): string | null {
 
 function ViewButton() {
   return (
-    <Button asChild size="sm" variant="outline">
-      <Link href={SETTINGS_BRAND_BOOK_HREF} data-testid="brand-book-milestone-view">
-        View Brand Book
-      </Link>
-    </Button>
+    <Link
+      href={SETTINGS_BRAND_BOOK_HREF}
+      data-testid="brand-book-milestone-view"
+      className={buttonVariants({ size: 'sm', variant: 'outline' })}
+    >
+      View Brand Book
+    </Link>
   );
 }
 
 function GenerateButton() {
   return (
-    <Button asChild size="sm">
-      <Link href={SETTINGS_BRAND_BOOK_HREF} data-testid="brand-book-milestone-generate">
-        Generate Brand Book
-      </Link>
-    </Button>
+    <Link
+      href={SETTINGS_BRAND_BOOK_HREF}
+      data-testid="brand-book-milestone-generate"
+      className={buttonVariants({ size: 'sm' })}
+    >
+      Generate Brand Book
+    </Link>
   );
 }
 

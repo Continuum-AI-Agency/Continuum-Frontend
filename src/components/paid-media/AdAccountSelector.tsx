@@ -4,7 +4,7 @@ import { Check, ChevronsUpDown, PlugZapIcon, RefreshCwIcon } from 'lucide-react'
 import Link from 'next/link';
 import * as React from 'react';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Command,
   CommandEmpty,
@@ -227,12 +227,16 @@ export function AdAccountSelector({
   if (showRecovery) {
     return (
       <div className="flex items-center gap-1.5">
-        <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 px-2 text-xs">
-          <Link href={PAID_SETUP_CONNECT_HREF}>
-            <PlugZapIcon aria-hidden="true" className="h-3.5 w-3.5" />
-            Connect ad account
-          </Link>
-        </Button>
+        <Link
+          href={PAID_SETUP_CONNECT_HREF}
+          className={cn(
+            buttonVariants({ variant: 'outline', size: 'sm' }),
+            'h-8 gap-1.5 px-2 text-xs',
+          )}
+        >
+          <PlugZapIcon aria-hidden="true" className="h-3.5 w-3.5" />
+          Connect ad account
+        </Link>
         <Button
           type="button"
           variant="ghost"

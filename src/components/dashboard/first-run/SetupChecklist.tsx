@@ -7,7 +7,7 @@
 import { ArrowRight, CheckCircle2, Circle } from 'lucide-react';
 import Link from 'next/link';
 
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { DashboardSetupState, DashboardSetupStep } from './setupState';
 
@@ -34,12 +34,17 @@ function ChecklistRow({ step }: { step: DashboardSetupStep }) {
         </p>
         <p className="text-xs text-muted-foreground">{step.description}</p>
       </div>
-      <Button asChild size="xs" variant={isDone ? 'ghost' : 'outline'} className="shrink-0">
-        <Link href={step.href} data-testid={`setup-step-cta-${step.id}`}>
-          {step.cta}
-          <ArrowRight aria-hidden="true" className="size-3" />
-        </Link>
-      </Button>
+      <Link
+        href={step.href}
+        data-testid={`setup-step-cta-${step.id}`}
+        className={cn(
+          buttonVariants({ size: 'xs', variant: isDone ? 'ghost' : 'outline' }),
+          'shrink-0',
+        )}
+      >
+        {step.cta}
+        <ArrowRight aria-hidden="true" className="size-3" />
+      </Link>
     </li>
   );
 }

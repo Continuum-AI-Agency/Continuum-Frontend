@@ -13,10 +13,11 @@ import {
   InsightDataTable,
 } from '@/components/dashboard/datatable/InsightDataTable';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAdTimeline } from '@/lib/api/competitorSpy';
 import { adStatusBadge, formatRelativeDay } from '@/lib/competitor-spy/competitor-spy-rows';
+import { cn } from '@/lib/utils';
 import { CompetitorSpyLink } from './CompetitorSpyLink';
 
 function compactDays(firstSeenAt: string, lastSeenAt: string): string {
@@ -245,17 +246,18 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
               </CardContent>
             </Card>
             {row.snapshotUrl ? (
-              <Button
-                asChild
-                variant="ghost"
-                size="xs"
-                className="w-fit px-0 text-muted-foreground hover:text-foreground"
+              <a
+                href={row.snapshotUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  buttonVariants({ variant: 'ghost', size: 'xs' }),
+                  'w-fit px-0 text-muted-foreground hover:text-foreground',
+                )}
               >
-                <a href={row.snapshotUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink className="size-3" />
-                  Open in Meta Ad Library
-                </a>
-              </Button>
+                <ExternalLink className="size-3" />
+                Open in Meta Ad Library
+              </a>
             ) : null}
           </div>
         )}

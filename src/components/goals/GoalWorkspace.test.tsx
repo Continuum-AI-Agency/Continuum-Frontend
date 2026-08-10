@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, render } from '@testing-library/react';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 import type { GoalArtifactView, GoalWorkspaceView } from '@/lib/goals/models';
 import { GoalWorkspace } from './GoalWorkspace';
 
@@ -46,20 +47,22 @@ const goal: GoalWorkspaceView = {
 describe('GoalWorkspace focus', () => {
   it('selects the exact artifact from a deep link', () => {
     const { getAllByRole, queryByRole } = render(
-      <GoalWorkspace
-        goal={goal}
-        currentUserId="user_1"
-        focus={{ kind: 'artifact', id: 'artifact_2' }}
-        isSavingArtifact={false}
-        saveArtifactError={null}
-        onRefresh={() => {}}
-        onAskTeammate={mock(async () => true)}
-        onRespondToRequest={mock(async () => true)}
-        onRegisterEvidence={mock(async () => 'attachment_1')}
-        onSaveArtifact={mock(async () => true)}
-        onArtifactAction={mock(async () => {})}
-        onSaveCapabilityRoute={mock(async () => true)}
-      />,
+      <ToastProvider>
+        <GoalWorkspace
+          goal={goal}
+          currentUserId="user_1"
+          focus={{ kind: 'artifact', id: 'artifact_2' }}
+          isSavingArtifact={false}
+          saveArtifactError={null}
+          onRefresh={() => {}}
+          onAskTeammate={mock(async () => true)}
+          onRespondToRequest={mock(async () => true)}
+          onRegisterEvidence={mock(async () => 'attachment_1')}
+          onSaveArtifact={mock(async () => true)}
+          onArtifactAction={mock(async () => {})}
+          onSaveCapabilityRoute={mock(async () => true)}
+        />
+      </ToastProvider>,
     );
 
     expect(getAllByRole('heading', { name: 'Focused brief' })).toHaveLength(2);

@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { GoalFocus } from '@/lib/goals/focus';
 import type { GoalWorkspaceView } from '@/lib/goals/models';
@@ -151,12 +151,10 @@ export function GoalWorkspace({
               <RefreshCw className="size-3.5" />
               Refresh
             </Button>
-            <Button asChild type="button" size="sm" variant="ghost">
-              <Link href="/goals">
-                <ArrowLeft className="size-3.5" />
-                All goals
-              </Link>
-            </Button>
+            <Link href="/goals" className={buttonVariants({ size: 'sm', variant: 'ghost' })}>
+              <ArrowLeft className="size-3.5" />
+              All goals
+            </Link>
           </>
         }
       />

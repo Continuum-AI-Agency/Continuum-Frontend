@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -39,15 +39,14 @@ export function CommunitySection() {
                 Tap into behind-the-scenes drops, launch templates, and live AMA sessions with our
                 founder.
               </span>
-              <Button size="lg" variant="outline" asChild>
-                <Link
-                  href="https://www.instagram.com/lachicadelaia"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Follow @lachicadelaia
-                </Link>
-              </Button>
+              <Link
+                href="https://www.instagram.com/lachicadelaia"
+                target="_blank"
+                rel="noreferrer"
+                className={buttonVariants({ size: 'lg', variant: 'outline' })}
+              >
+                Follow @lachicadelaia
+              </Link>
               <span className="text-purple-900/70 dark:text-purple-100/70 text-sm">
                 Prefer email? Subscribe inside the Instagram bio. We announce every product
                 iteration there first.

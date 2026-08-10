@@ -17,7 +17,7 @@ import {
 import Link from 'next/link';
 import type { ComponentType } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
 import type { FreshnessMeta } from '@/lib/freshness/freshnessMeta';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
@@ -73,9 +73,9 @@ function StepCta({ step, onRetry }: { step: PaidSetupStep; onRetry: () => void }
   }
 
   return (
-    <Button asChild size="sm" className="h-8">
-      <Link href={step.cta.href}>{step.cta.label}</Link>
-    </Button>
+    <Link href={step.cta.href} className={cn(buttonVariants({ size: 'sm' }), 'h-8')}>
+      {step.cta.label}
+    </Link>
   );
 }
 

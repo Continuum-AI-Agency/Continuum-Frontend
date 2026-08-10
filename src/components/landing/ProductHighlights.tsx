@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import GlassCard from '../ui/GlassCard';
 
 const panels = [
@@ -127,12 +127,14 @@ export function ProductHighlights() {
                               ))}
                             </div>
                             <div className="mt-6">
-                              <Button
-                                asChild
-                                variant={panel.value === 'social' ? 'default' : 'outline'}
+                              <Link
+                                href={panel.cta.href}
+                                className={buttonVariants({
+                                  variant: panel.value === 'social' ? 'default' : 'outline',
+                                })}
                               >
-                                <Link href={panel.cta.href}>{panel.cta.label}</Link>
-                              </Button>
+                                {panel.cta.label}
+                              </Link>
                             </div>
                           </div>
                           <div className="md:w-5/12">

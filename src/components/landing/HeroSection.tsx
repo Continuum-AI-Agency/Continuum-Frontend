@@ -3,7 +3,8 @@
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { Pill } from '@/components/kibo-ui/pill';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import GradientText from '../ui/GradientText';
 import { KpiGraph } from './KpiGraph';
 
@@ -42,12 +43,18 @@ export function HeroSection() {
               transition={{ delay: 0.12, duration: 0.5 }}
               className="mt-8 flex flex-col gap-3 sm:flex-row"
             >
-              <Button size="lg" asChild className="min-w-[200px]">
-                <Link href="/onboarding">Start now</Link>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link href="mailto:hello@continuum.ai">Contact sales</Link>
-              </Button>
+              <Link
+                href="/onboarding"
+                className={cn(buttonVariants({ size: 'lg' }), 'min-w-[200px]')}
+              >
+                Start now
+              </Link>
+              <Link
+                href="mailto:hello@continuum.ai"
+                className={buttonVariants({ size: 'lg', variant: 'outline' })}
+              >
+                Contact sales
+              </Link>
             </motion.div>
 
             <motion.div

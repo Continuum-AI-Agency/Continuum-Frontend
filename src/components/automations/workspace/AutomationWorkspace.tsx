@@ -51,7 +51,7 @@ import { Panel as CanvasPanel } from '@/components/ai-elements/panel';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Command,
   CommandEmpty,
@@ -879,11 +879,18 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
       <TooltipProvider delayDuration={250}>
         <div className="automation-workspace-shell fixed inset-x-0 top-0 flex h-dvh flex-col overflow-hidden bg-background text-foreground md:left-[var(--app-sidebar-width,3.5rem)]">
           <header className="flex min-h-16 shrink-0 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur">
-            <IconButton label="Back to automations" asChild>
-              <Link href="/automations">
-                <ChevronLeft aria-hidden="true" />
-              </Link>
-            </IconButton>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/automations"
+                  aria-label="Back to automations"
+                  className={buttonVariants({ size: 'icon', variant: 'ghost' })}
+                >
+                  <ChevronLeft aria-hidden="true" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent>Back to automations</TooltipContent>
+            </Tooltip>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2">

@@ -10,7 +10,7 @@ import { CurrentUserAvatar } from '@/components/current-user-avatar';
 import { Pill } from '@/components/kibo-ui/pill';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useTheme } from '@/components/theme-provider';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Sidebar,
@@ -265,21 +265,23 @@ function AppSidebarInner({
                   {item.items?.map((subItem) => {
                     const subActive = isRouteActive(pathname, searchParams, subItem);
                     return (
-                      <Button
+                      <Link
                         key={subItem.href}
-                        asChild
-                        size="sm"
-                        variant={subActive ? 'secondary' : 'outline'}
+                        href={subItem.href}
                         onMouseEnter={() => router.prefetch(subItem.href)}
                         className={cn(
+                          buttonVariants({
+                            size: 'sm',
+                            variant: subActive ? 'secondary' : 'outline',
+                          }),
                           'h-6 rounded-md px-2 text-[0.65rem] font-medium tracking-[0.01em]',
                           subActive
                             ? 'border-[color-mix(in_srgb,var(--ring)_36%,transparent)] bg-[color-mix(in_srgb,var(--ring)_16%,transparent)] text-[var(--sidebar-foreground)]'
                             : 'border-[color-mix(in_srgb,var(--sidebar-foreground)_18%,transparent)] bg-transparent text-[color-mix(in_srgb,var(--sidebar-foreground)_76%,transparent)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]',
                         )}
                       >
-                        <Link href={subItem.href}>{subItem.label}</Link>
-                      </Button>
+                        {subItem.label}
+                      </Link>
                     );
                   })}
                 </div>

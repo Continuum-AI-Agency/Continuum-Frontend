@@ -3,7 +3,7 @@
 import { ExternalLink, GalleryHorizontalEnd } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { isCarouselMediaType } from '@/lib/organic/carousel';
 import { cn } from '@/lib/utils';
@@ -40,12 +40,15 @@ export function PostedContentPreview({ post }: { post: OrganicCalendarPostedCont
           </p>
         ) : null}
         {post.permalink ? (
-          <Button asChild size="sm" variant="outline" className="self-start">
-            <a href={post.permalink} target="_blank" rel="noreferrer">
-              Open post
-              <ExternalLink data-icon="inline-end" />
-            </a>
-          </Button>
+          <a
+            href={post.permalink}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'self-start')}
+          >
+            Open post
+            <ExternalLink data-icon="inline-end" />
+          </a>
         ) : null}
       </div>
     </div>

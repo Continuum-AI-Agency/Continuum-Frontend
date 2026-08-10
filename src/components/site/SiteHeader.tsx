@@ -2,7 +2,7 @@
 
 import * as NavigationMenu from '@radix-ui/react-navigation-menu';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import ThemeToggle from '../theme-toggle';
 
 export function SiteHeader() {
@@ -51,12 +51,15 @@ export function SiteHeader() {
             </NavigationMenu.Root>
 
             <div className="flex items-center gap-3">
-              <Button asChild>
-                <Link href="/onboarding">Start now</Link>
-              </Button>
-              <Button variant="outline" asChild>
-                <Link href="mailto:hello@continuum.ai">Contact sales</Link>
-              </Button>
+              <Link href="/onboarding" className={buttonVariants()}>
+                Start now
+              </Link>
+              <Link
+                href="mailto:hello@continuum.ai"
+                className={buttonVariants({ variant: 'outline' })}
+              >
+                Contact sales
+              </Link>
             </div>
 
             <ThemeToggle />

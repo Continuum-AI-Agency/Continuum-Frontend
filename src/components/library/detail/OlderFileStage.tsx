@@ -9,7 +9,7 @@
 
 import type { MediaAssetVersion } from '@continuum/contracts';
 import { Download, FileIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { fileExtension, formatBytes } from './assetFileMeta';
 
 export type OlderFileStageProps = {
@@ -40,12 +40,15 @@ export function OlderFileStage({ version }: OlderFileStageProps) {
       </div>
 
       {version.signedUrl ? (
-        <Button asChild type="button" size="sm">
-          <a href={version.signedUrl} download={version.fileName} rel="noopener">
-            <Download className="size-4" />
-            Download v{version.versionNumber}
-          </a>
-        </Button>
+        <a
+          href={version.signedUrl}
+          download={version.fileName}
+          rel="noopener"
+          className={buttonVariants({ size: 'sm' })}
+        >
+          <Download className="size-4" />
+          Download v{version.versionNumber}
+        </a>
       ) : (
         <p className="text-xs text-destructive">This version has no downloadable file.</p>
       )}

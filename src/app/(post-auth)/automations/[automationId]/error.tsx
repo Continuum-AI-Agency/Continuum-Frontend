@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 
 export default function AutomationWorkspaceError({
   error,
@@ -25,9 +25,9 @@ export default function AutomationWorkspaceError({
         <Button type="button" onClick={reset}>
           Try again
         </Button>
-        <Button asChild variant="outline">
-          <Link href="/automations">Back to automations</Link>
-        </Button>
+        <Link href="/automations" className={buttonVariants({ variant: 'outline' })}>
+          Back to automations
+        </Link>
       </div>
     </div>
   );

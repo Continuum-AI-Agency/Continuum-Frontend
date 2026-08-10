@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { Pill } from '@/components/kibo-ui/pill';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 export function PricingSection() {
   return (
@@ -58,9 +59,9 @@ export function PricingSection() {
                     <span>Single dashboard for performance and anomaly alerts</span>
                   </li>
                 </ul>
-                <Button size="lg" asChild className="mt-2">
-                  <Link href="/onboarding">Start now</Link>
-                </Button>
+                <Link href="/onboarding" className={cn(buttonVariants({ size: 'lg' }), 'mt-2')}>
+                  Start now
+                </Link>
               </div>
             </div>
 
@@ -88,9 +89,12 @@ export function PricingSection() {
                     <span>Reserved access to Continuum&apos;s render studio</span>
                   </li>
                 </ul>
-                <Button size="lg" variant="outline" asChild>
-                  <Link href="mailto:hello@continuum.ai">Contact sales</Link>
-                </Button>
+                <Link
+                  href="mailto:hello@continuum.ai"
+                  className={buttonVariants({ size: 'lg', variant: 'outline' })}
+                >
+                  Contact sales
+                </Link>
                 <span className="mt-2 text-sm text-muted-foreground">
                   Studio+ (frontier multimodal, prompt templates, brand integrations) is a
                   pay‑as‑you‑go add‑on to any module.

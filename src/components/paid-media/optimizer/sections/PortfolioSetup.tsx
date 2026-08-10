@@ -39,7 +39,7 @@ import Link from 'next/link';
 import * as React from 'react';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -393,9 +393,15 @@ export function PortfolioSetup({
               })}
             </p>
             {suggestReason === 'not_permitted' ? (
-              <Button asChild variant="link" size="sm" className="h-auto p-0 text-xs">
-                <Link href={PAID_SETUP_CONNECT_HREF}>Manage assignments</Link>
-              </Button>
+              <Link
+                href={PAID_SETUP_CONNECT_HREF}
+                className={cn(
+                  buttonVariants({ variant: 'link', size: 'sm' }),
+                  'h-auto p-0 text-xs',
+                )}
+              >
+                Manage assignments
+              </Link>
             ) : null}
           </div>
         ) : (

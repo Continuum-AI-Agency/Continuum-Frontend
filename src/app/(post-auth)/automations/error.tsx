@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 
 export default function AutomationsError({
   error,
@@ -27,9 +27,9 @@ export default function AutomationsError({
         <Button type="button" onClick={reset}>
           Try again
         </Button>
-        <Button asChild variant="outline">
-          <Link href="/dashboard">Back to dashboard</Link>
-        </Button>
+        <Link href="/dashboard" className={buttonVariants({ variant: 'outline' })}>
+          Back to dashboard
+        </Link>
       </div>
     </div>
   );

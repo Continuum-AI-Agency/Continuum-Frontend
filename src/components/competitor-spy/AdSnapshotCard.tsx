@@ -4,9 +4,10 @@ import type { TimelineEntry } from '@continuum/contracts';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromCompetitorAdSnapshot } from '@/components/chat/media/media';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useCreativeUrl } from '@/lib/api/competitorSpy';
+import { cn } from '@/lib/utils';
 import { SaveToBoardButton } from './SaveToBoardButton';
 
 function formatDate(iso: string | null): string {
@@ -134,11 +135,17 @@ export function AdSnapshotCard({
               />
             ) : null}
             {entry.snapshotUrl ? (
-              <Button asChild variant="link" size="xs" className="h-auto p-0 text-xs">
-                <a href={entry.snapshotUrl} target="_blank" rel="noreferrer">
-                  View on Meta
-                </a>
-              </Button>
+              <a
+                href={entry.snapshotUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  buttonVariants({ variant: 'link', size: 'xs' }),
+                  'h-auto p-0 text-xs',
+                )}
+              >
+                View on Meta
+              </a>
             ) : null}
           </div>
         </div>

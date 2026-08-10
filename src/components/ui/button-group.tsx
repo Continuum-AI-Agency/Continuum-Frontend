@@ -1,5 +1,6 @@
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Slot } from 'radix-ui';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +27,7 @@ function ButtonGroup({
   ...props
 }: React.ComponentProps<'div'> & VariantProps<typeof buttonGroupVariants>) {
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a toolbar grouping, not a form fieldset — fieldset would drag in its own layout/legend semantics
     <div
       role="group"
       data-slot="button-group"
@@ -36,24 +38,20 @@ function ButtonGroup({
   );
 }
 
-function ButtonGroupText({
-  className,
-  asChild = false,
-  ...props
-}: React.ComponentProps<'div'> & {
-  asChild?: boolean;
-}) {
-  const Comp = asChild ? Slot.Root : 'div';
-
-  return (
-    <Comp
-      className={cn(
-        "bg-muted flex items-center gap-2 rounded-md border px-4 text-sm font-medium shadow-xs [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
-        className,
-      )}
-      {...props}
-    />
-  );
+function ButtonGroupText({ className, render, ...props }: useRender.ComponentProps<'div'>) {
+  return useRender({
+    defaultTagName: 'div',
+    props: mergeProps<'div'>(
+      {
+        className: cn(
+          "bg-muted flex items-center gap-2 rounded-md border px-4 text-sm font-medium shadow-xs [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
+          className,
+        ),
+      },
+      props,
+    ),
+    render,
+  });
 }
 
 function ButtonGroupSeparator({

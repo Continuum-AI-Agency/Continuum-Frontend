@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 
 export default function AutomationWorkspaceNotFound() {
   return (
@@ -9,9 +9,9 @@ export default function AutomationWorkspaceNotFound() {
         This workflow no longer exists, or it belongs to a different brand. Switch brands or pick
         another workflow to continue.
       </p>
-      <Button asChild>
-        <Link href="/automations">Back to automations</Link>
-      </Button>
+      <Link href="/automations" className={buttonVariants()}>
+        Back to automations
+      </Link>
     </div>
   );
 }
