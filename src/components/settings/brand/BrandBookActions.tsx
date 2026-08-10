@@ -133,16 +133,18 @@ export function BrandBookActions({
   return (
     <div className="flex items-center gap-2">
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            disabled={editorIsDirty || exporting !== null}
-            title={editorIsDirty ? 'Save or discard brand.md edits before exporting.' : undefined}
-          >
-            <Download aria-hidden />
-            {exporting ? 'Exporting…' : 'Export'}
-          </Button>
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="outline"
+              disabled={editorIsDirty || exporting !== null}
+              title={editorIsDirty ? 'Save or discard brand.md edits before exporting.' : undefined}
+            >
+              <Download aria-hidden />
+              {exporting ? 'Exporting…' : 'Export'}
+            </Button>
+          }
+        />
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem
             disabled={editorIsDirty || exporting !== null}

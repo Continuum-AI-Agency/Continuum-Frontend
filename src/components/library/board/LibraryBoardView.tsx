@@ -369,17 +369,19 @@ function GroupByPicker({
 }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex min-h-7 items-center gap-1.5 rounded-md px-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <Columns3 className="size-3.5" />
-          <span>Group by</span>
-          <span className="font-medium text-foreground">{label}</span>
-          <ChevronDown className="size-3 opacity-60" />
-        </button>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className="flex min-h-7 items-center gap-1.5 rounded-md px-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Columns3 className="size-3.5" />
+            <span>Group by</span>
+            <span className="font-medium text-foreground">{label}</span>
+            <ChevronDown className="size-3 opacity-60" />
+          </button>
+        }
+      />
       <DropdownMenuContent align="start">
         <DropdownMenuItem className="text-xs" onSelect={() => onSelect(null)}>
           {REVIEW_GROUPING_LABEL}

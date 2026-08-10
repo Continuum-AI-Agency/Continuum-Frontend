@@ -19,7 +19,8 @@ import type { CreatePostOptions, PlannerPlatformKey } from './planner-platforms'
 type AddPostMenuProps = {
   onCreatePost: (options: CreatePostOptions) => void;
   // The styled + trigger, supplied by each call site so per-view density stays intact.
-  children: React.ReactNode;
+  /** Single element: it becomes the menu trigger via Base UI `render`. */
+  children: React.ReactElement;
   // Cell menus pass the day/platform they belong to; the toolbar + omits them and
   // the workspace defaults to the first visible day.
   dayId?: string;
@@ -47,7 +48,7 @@ export const AddPostMenu = React.memo(function AddPostMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+      <DropdownMenuTrigger render={children} />
       <DropdownMenuContent align={align} className="w-52">
         <DropdownMenuGroup>
           <DropdownMenuItem onSelect={() => select(AI_ONE_SHOT_ACTION.options)}>

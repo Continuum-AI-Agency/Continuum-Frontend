@@ -125,15 +125,17 @@ function SelectFieldChip({ field, filter, summary, compact, filters, onChange }:
   const selected = filter?.operator === 'any_of' ? filter.values : [];
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-pressed={filter !== null}
-          className={chipClass(filter !== null, compact)}
-        >
-          <ChipLabel field={field} summary={summary} />
-        </button>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            aria-pressed={filter !== null}
+            className={chipClass(filter !== null, compact)}
+          >
+            <ChipLabel field={field} summary={summary} />
+          </button>
+        }
+      />
       <DropdownMenuContent align="start" className="w-52">
         {field.options.map((option) => (
           <DropdownMenuCheckboxItem

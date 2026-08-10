@@ -104,18 +104,29 @@ export function InstagramPost({ data }: InstagramPostProps) {
             <div className="flex items-center gap-1">
               {author && <span className="font-semibold text-sm">{author}</span>}
               {verified && (
-                <svg className="h-3.5 w-3.5 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                <svg
+                  className="h-3.5 w-3.5 text-blue-500"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  role="img"
+                  aria-label="Verified"
+                >
                   <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.818-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.437 2.25c-.415-.165-.866-.25-1.336-.25-2.11 0-3.818 1.79-3.818 4 0 .494.083.964.237 1.4-1.272.65-2.147 2.018-2.147 3.6 0 1.495.782 2.798 1.942 3.486-.02.17-.032.34-.032.514 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.335-.25.62 1.334 1.926 2.25 3.437 2.25 1.512 0 2.818-.916 3.437-2.25.415.163.865.248 1.336.248 2.11 0 3.818-1.79 3.818-4 0-.174-.012-.344-.033-.513 1.158-.687 1.943-1.99 1.943-3.484z" />
                 </svg>
               )}
             </div>
           </div>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="text-foreground hover:text-muted-foreground transition-colors cursor-pointer">
-                <MoreHorizontal className="h-5 w-5" />
-              </button>
-            </DropdownMenuTrigger>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className="text-foreground hover:text-muted-foreground transition-colors cursor-pointer"
+                >
+                  <MoreHorizontal className="h-5 w-5" />
+                </button>
+              }
+            />
             <DropdownMenuContent align="end">
               <DropdownMenuItem>
                 <Flag className="mr-2 h-4 w-4" />
@@ -152,18 +163,21 @@ export function InstagramPost({ data }: InstagramPostProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
+                type="button"
                 aria-label="Like"
                 className="hover:text-muted-foreground transition-colors cursor-pointer"
               >
                 <Heart className="h-6 w-6" />
               </button>
               <button
+                type="button"
                 aria-label="Comment"
                 className="hover:text-muted-foreground transition-colors cursor-pointer"
               >
                 <MessageCircle className="h-6 w-6" />
               </button>
               <button
+                type="button"
                 aria-label="Share"
                 className="hover:text-muted-foreground transition-colors cursor-pointer"
               >
@@ -171,6 +185,7 @@ export function InstagramPost({ data }: InstagramPostProps) {
               </button>
             </div>
             <button
+              type="button"
               aria-label="Save"
               className="hover:text-muted-foreground transition-colors cursor-pointer"
             >

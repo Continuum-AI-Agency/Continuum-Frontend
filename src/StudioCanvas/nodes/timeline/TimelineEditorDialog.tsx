@@ -716,16 +716,18 @@ export function TimelineEditorDialog({
                 </Button>
                 {renderSinks.length > 1 ? (
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="sm"
-                        className="rounded-l-none border-l border-primary-foreground/25 px-2"
-                        disabled={renderDisabled}
-                        aria-label="Choose where the render goes"
-                      >
-                        <ChevronDownIcon className="h-3.5 w-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          size="sm"
+                          className="rounded-l-none border-l border-primary-foreground/25 px-2"
+                          disabled={renderDisabled}
+                          aria-label="Choose where the render goes"
+                        >
+                          <ChevronDownIcon className="h-3.5 w-3.5" />
+                        </Button>
+                      }
+                    />
                     <DropdownMenuContent align="end" className="w-64">
                       {renderSinks.map((sink) => (
                         <DropdownMenuItem

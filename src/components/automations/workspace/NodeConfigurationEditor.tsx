@@ -253,16 +253,18 @@ function PromptField({
         </InputGroupText>
         <div className="flex items-center gap-1">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <InputGroupButton
-                aria-label="Add prompt starter"
-                title="Add prompt starter"
-                disabled={disabled}
-              >
-                <Sparkles aria-hidden="true" />
-                Quick start
-              </InputGroupButton>
-            </DropdownMenuTrigger>
+            <DropdownMenuTrigger
+              render={
+                <InputGroupButton
+                  aria-label="Add prompt starter"
+                  title="Add prompt starter"
+                  disabled={disabled}
+                >
+                  <Sparkles aria-hidden="true" />
+                  Quick start
+                </InputGroupButton>
+              }
+            />
             <DropdownMenuContent
               align="end"
               className="automation-workflow-popover w-72 rounded-lg p-1.5"

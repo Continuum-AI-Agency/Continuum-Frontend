@@ -203,18 +203,20 @@ function WorkflowRow({
           Load
         </span>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-              aria-label={`Options for ${workflow.name}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <DotsHorizontalIcon className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                aria-label={`Options for ${workflow.name}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <DotsHorizontalIcon className="h-3.5 w-3.5" />
+              </Button>
+            }
+          />
           <DropdownMenuContent align="end" className="w-40">
             <DropdownMenuItem onSelect={() => onRenameRequest(workflow)}>
               <Pencil1Icon className="mr-2 h-3.5 w-3.5" />

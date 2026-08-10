@@ -31,8 +31,8 @@ mock.module('@/components/ui/dropdown-menu', () => ({
     </button>
   ),
   DropdownMenuSub: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuSubTrigger: ({ children }: { children: ReactNode }) => (
-    <button type="button">{children}</button>
+  DropdownMenuSubTrigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <button type="button">{render ?? children}</button>
   ),
   DropdownMenuSubContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));

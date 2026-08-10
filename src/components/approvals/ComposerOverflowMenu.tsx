@@ -34,17 +34,19 @@ export function ComposerOverflowMenu({ action, onReject, onSkip, onViewPayload }
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground"
-          aria-label="More actions"
-        >
-          <MoreHorizontal className="h-4 w-4" strokeWidth={1.5} />
-        </Button>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground"
+            aria-label="More actions"
+          >
+            <MoreHorizontal className="h-4 w-4" strokeWidth={1.5} />
+          </Button>
+        }
+      />
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem onSelect={onReject} className="text-destructive focus:text-destructive">
           <Ban className="mr-2 h-4 w-4" strokeWidth={1.5} />

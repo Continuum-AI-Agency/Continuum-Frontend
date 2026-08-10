@@ -208,23 +208,25 @@ export function PostMetaChips({
   return (
     <div className="flex items-center gap-1 border-b border-border/60 bg-muted/40 px-2 py-1.5">
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className={chipClass} aria-label={selectionAriaLabel(selected)}>
-            <span className="flex items-center">
-              {selected.map((value, index) => (
-                <span
-                  key={value}
-                  className={cn(
-                    'h-1.5 w-1.5 rounded-full ring-1 ring-muted/40',
-                    index > 0 && '-ml-0.5',
-                  )}
-                  style={{ backgroundColor: PLATFORM_DOT[value] ?? '#7C6FFF' }}
-                />
-              ))}
-            </span>
-            {selectionChipLabel(selected)}
-          </button>
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger
+          render={
+            <button type="button" className={chipClass} aria-label={selectionAriaLabel(selected)}>
+              <span className="flex items-center">
+                {selected.map((value, index) => (
+                  <span
+                    key={value}
+                    className={cn(
+                      'h-1.5 w-1.5 rounded-full ring-1 ring-muted/40',
+                      index > 0 && '-ml-0.5',
+                    )}
+                    style={{ backgroundColor: PLATFORM_DOT[value] ?? '#7C6FFF' }}
+                  />
+                ))}
+              </span>
+              {selectionChipLabel(selected)}
+            </button>
+          }
+        />
         <DropdownMenuContent align="start" className="w-44">
           {PLATFORM_OPTIONS.map((option) => {
             const checked = selected.includes(option.value);
@@ -254,11 +256,13 @@ export function PostMetaChips({
       <Sep />
 
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className={chipClass} aria-label="Change format">
-            {format}
-          </button>
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger
+          render={
+            <button type="button" className={chipClass} aria-label="Change format">
+              {format}
+            </button>
+          }
+        />
         <DropdownMenuContent align="start" className="w-36">
           {/* The format menu marked no current value at all, so it read as "pick one"
               rather than "this is the one". */}

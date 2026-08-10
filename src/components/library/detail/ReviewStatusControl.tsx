@@ -143,20 +143,26 @@ export function ReviewStatusControl({ brandId, asset, onChanged }: ReviewStatusC
   return (
     <div className="flex items-center gap-1">
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            disabled={saving}
-            className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-            aria-label={`Review status: ${meta.label}`}
-          >
-            <Pill variant="secondary" className="cursor-pointer select-none">
-              {saving ? <Loader2 className="size-3 animate-spin" /> : <StatusDot status={status} />}
-              {meta.label}
-              <ChevronDown className="size-3 text-muted-foreground" />
-            </Pill>
-          </button>
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger
+          render={
+            <button
+              type="button"
+              disabled={saving}
+              className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              aria-label={`Review status: ${meta.label}`}
+            >
+              <Pill variant="secondary" className="cursor-pointer select-none">
+                {saving ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <StatusDot status={status} />
+                )}
+                {meta.label}
+                <ChevronDown className="size-3 text-muted-foreground" />
+              </Pill>
+            </button>
+          }
+        />
         <DropdownMenuContent align="start">
           {REVIEW_STATUS_ORDER.map((candidate) => (
             <DropdownMenuItem

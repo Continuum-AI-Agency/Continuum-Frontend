@@ -127,16 +127,18 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
   return (
     <div className="flex items-center gap-2">
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" disabled={busy}>
-            {busy ? (
-              <Loader2 className="size-3.5 animate-spin" aria-hidden />
-            ) : (
-              <Workflow className="size-3.5" aria-hidden />
-            )}
-            Open in Canvas
-          </Button>
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger
+          render={
+            <Button variant="outline" size="sm" disabled={busy}>
+              {busy ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Workflow className="size-3.5" aria-hidden />
+              )}
+              Open in Canvas
+            </Button>
+          }
+        />
         <DropdownMenuContent align="end" className="w-72">
           <DropdownMenuLabel>Pre-made workflows</DropdownMenuLabel>
           {TEMPLATE_ROWS.map((row) => {

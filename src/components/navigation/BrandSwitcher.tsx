@@ -60,36 +60,38 @@ export function BrandSwitcher() {
     <SidebarMenu className="group-data-[collapsible=icon]:items-center">
       <SidebarMenuItem>
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              aria-label="Switch brand"
-              className="text-[var(--sidebar-foreground)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-            >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground overflow-hidden">
-                {typeof TeamLogo === 'string' ? (
-                  <Avatar className="size-8 rounded-lg">
-                    <AvatarImage src={TeamLogo} alt={activeTeam.name} className="object-cover" />
-                    <AvatarFallback className="rounded-lg">
-                      {activeTeam.name.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+          <DropdownMenuTrigger
+            render={
+              <SidebarMenuButton
+                size="lg"
+                aria-label="Switch brand"
+                className="text-[var(--sidebar-foreground)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              >
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground overflow-hidden">
+                  {typeof TeamLogo === 'string' ? (
+                    <Avatar className="size-8 rounded-lg">
+                      <AvatarImage src={TeamLogo} alt={activeTeam.name} className="object-cover" />
+                      <AvatarFallback className="rounded-lg">
+                        {activeTeam.name.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <TeamLogo className="size-4" />
+                  )}
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                  <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">
+                    {activeTeam.name}
+                  </span>
+                </div>
+                {isSwitching ? (
+                  <Loader2 className="ml-auto h-4 w-4 animate-spin text-[var(--ring)] group-data-[collapsible=icon]:hidden" />
                 ) : (
-                  <TeamLogo className="size-4" />
+                  <ChevronsUpDown className="ml-auto text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] group-data-[collapsible=icon]:hidden" />
                 )}
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">
-                  {activeTeam.name}
-                </span>
-              </div>
-              {isSwitching ? (
-                <Loader2 className="ml-auto h-4 w-4 animate-spin text-[var(--ring)] group-data-[collapsible=icon]:hidden" />
-              ) : (
-                <ChevronsUpDown className="ml-auto text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] group-data-[collapsible=icon]:hidden" />
-              )}
-            </SidebarMenuButton>
-          </DropdownMenuTrigger>
+              </SidebarMenuButton>
+            }
+          />
           <DropdownMenuContent
             className="w-[--radix-dropdown-menu-trigger-width] min-w-56 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)] p-0"
             align="start"

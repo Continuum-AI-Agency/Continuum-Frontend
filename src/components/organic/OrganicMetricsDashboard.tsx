@@ -2840,17 +2840,21 @@ export function OrganicMetricsDashboard({
               reason to hide the control. */}
           <DisabledControl side="bottom" hint={exportBlockHint}>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  disabled={!exportTarget || isLoadingView || exportingReportFormat !== null}
-                  aria-label="Open organic report export or email options"
-                  className="h-8 px-2 text-xs"
-                >
-                  <DownloadIcon className={cn(exportingReportFormat !== null && 'animate-pulse')} />
-                  {exportingReportFormat !== null ? 'Exporting…' : 'Export or Email'}
-                </Button>
-              </DropdownMenuTrigger>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    disabled={!exportTarget || isLoadingView || exportingReportFormat !== null}
+                    aria-label="Open organic report export or email options"
+                    className="h-8 px-2 text-xs"
+                  >
+                    <DownloadIcon
+                      className={cn(exportingReportFormat !== null && 'animate-pulse')}
+                    />
+                    {exportingReportFormat !== null ? 'Exporting…' : 'Export or Email'}
+                  </Button>
+                }
+              />
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
                   onSelect={() => {

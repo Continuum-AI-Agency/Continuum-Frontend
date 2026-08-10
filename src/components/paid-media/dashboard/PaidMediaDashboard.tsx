@@ -437,17 +437,19 @@ export function PaidMediaDashboard({
       </Popover>
 
       <DropdownMenu open={alertsPanelOpen} onOpenChange={setAlertsPanelOpen} modal={false}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            data-tour-id="paid-dco-alerts"
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs"
-          >
-            <BellIcon className="mr-1.5 h-3.5 w-3.5" />
-            Alerts
-          </Button>
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              data-tour-id="paid-dco-alerts"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+            >
+              <BellIcon className="mr-1.5 h-3.5 w-3.5" />
+              Alerts
+            </Button>
+          }
+        />
         <DropdownMenuContent align="end" className="h-[min(80vh,640px)] w-[min(96vw,1100px)] p-0">
           <PendingActivityTabs
             brandId={brandId}

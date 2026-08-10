@@ -35,12 +35,14 @@ export function SourceDropNodePicker({
         if (!open) onDismiss();
       }}
     >
-      <DropdownMenuTrigger asChild>
-        <div
-          className="pointer-events-none fixed h-0 w-0"
-          style={{ left: screenPosition.x, top: screenPosition.y }}
-        />
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger
+        render={
+          <div
+            className="pointer-events-none fixed h-0 w-0"
+            style={{ left: screenPosition.x, top: screenPosition.y }}
+          />
+        }
+      />
       <DropdownMenuContent align="start">
         <DropdownMenuLabel>Connect to…</DropdownMenuLabel>
         {candidates.map((candidate) => (

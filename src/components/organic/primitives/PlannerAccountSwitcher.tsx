@@ -45,22 +45,24 @@ export function PlannerAccountSwitcher() {
 
         return (
           <DropdownMenu key={platform}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1 text-xs"
-                aria-label={`${PLATFORM_LABEL.get(platform) ?? platform} account`}
-              >
-                <span className="text-muted-foreground">
-                  {PLATFORM_LABEL.get(platform) ?? platform}:
-                </span>
-                <span className="max-w-32 truncate font-medium">
-                  {selected?.label ?? 'Select account'}
-                </span>
-                <ChevronDownIcon className="size-3 opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 text-xs"
+                  aria-label={`${PLATFORM_LABEL.get(platform) ?? platform} account`}
+                >
+                  <span className="text-muted-foreground">
+                    {PLATFORM_LABEL.get(platform) ?? platform}:
+                  </span>
+                  <span className="max-w-32 truncate font-medium">
+                    {selected?.label ?? 'Select account'}
+                  </span>
+                  <ChevronDownIcon className="size-3 opacity-60" />
+                </Button>
+              }
+            />
             <DropdownMenuContent align="start" className="min-w-48">
               <DropdownMenuLabel className="text-xs">
                 Publish {PLATFORM_LABEL.get(platform) ?? platform} posts to

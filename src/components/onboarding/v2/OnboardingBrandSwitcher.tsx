@@ -28,26 +28,28 @@ export function OnboardingBrandSwitcher() {
 
   return (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          disabled={isSwitching}
-          className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--sidebar-foreground)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--ring)_8%,transparent)] disabled:opacity-60 dark:bg-card"
-        >
-          {isSwitching ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-          ) : activeBrand ? (
-            <BrandAvatar
-              name={activeBrandLabel}
-              logoUrl={activeBrand.logoUrl ?? null}
-              size="sm"
-              className="size-4"
-            />
-          ) : null}
-          <span className="max-w-[120px] truncate">{activeBrandLabel}</span>
-          <ChevronsUpDown className="h-3.5 w-3.5 text-[color-mix(in_srgb,var(--sidebar-foreground)_60%,transparent)]" />
-        </button>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            disabled={isSwitching}
+            className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--sidebar-foreground)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--ring)_8%,transparent)] disabled:opacity-60 dark:bg-card"
+          >
+            {isSwitching ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : activeBrand ? (
+              <BrandAvatar
+                name={activeBrandLabel}
+                logoUrl={activeBrand.logoUrl ?? null}
+                size="sm"
+                className="size-4"
+              />
+            ) : null}
+            <span className="max-w-[120px] truncate">{activeBrandLabel}</span>
+            <ChevronsUpDown className="h-3.5 w-3.5 text-[color-mix(in_srgb,var(--sidebar-foreground)_60%,transparent)]" />
+          </button>
+        }
+      />
 
       <DropdownMenuContent
         align="end"

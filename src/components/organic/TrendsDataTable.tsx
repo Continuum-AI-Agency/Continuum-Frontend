@@ -450,11 +450,13 @@ export function TrendsDataTable({
           // biome-ignore lint/a11y/useKeyWithClickEvents: no click action of its own
           <div onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-6 w-6 p-0" aria-label="Row actions">
-                  <MoreHorizontal className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="ghost" className="h-6 w-6 p-0" aria-label="Row actions">
+                    <MoreHorizontal className="h-3 w-3" />
+                  </Button>
+                }
+              />
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel className="text-xs">Actions</DropdownMenuLabel>
                 <DropdownMenuItem
@@ -525,16 +527,18 @@ export function TrendsDataTable({
         />
         {showMomentumFilter && (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 text-3xs uppercase font-semibold"
-              >
-                <Filter className="mr-1 h-3 w-3" />
-                {momentumFilter === 'all' ? 'All' : momentumFilter}
-              </Button>
-            </DropdownMenuTrigger>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-3xs uppercase font-semibold"
+                >
+                  <Filter className="mr-1 h-3 w-3" />
+                  {momentumFilter === 'all' ? 'All' : momentumFilter}
+                </Button>
+              }
+            />
             <DropdownMenuContent align="end">
               {['all', 'rising', 'stable', 'cooling'].map((value) => (
                 <DropdownMenuItem
