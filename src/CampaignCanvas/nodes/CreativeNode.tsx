@@ -120,33 +120,35 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <Node
-          handles={{ target: true, source: false }}
-          selected={selected}
-          className="overflow-hidden border-border/60 p-0 transition-shadow hover:shadow-sm cursor-grab active:cursor-grabbing"
-        >
-          <AspectRatio ratio={previewRatio} className="w-full overflow-hidden bg-muted">
-            {data.thumbnailUrl ? (
-              <Image
-                src={data.thumbnailUrl}
-                alt="Creative Preview"
-                fill
-                unoptimized
-                sizes="(max-width: 768px) 100vw, 240px"
-                className="h-full w-full object-cover"
-                draggable={false}
-                onDragStart={handlePreviewDragStart}
-                onLoadingComplete={handlePreviewLoad}
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
-                <ImageIcon className="h-8 w-8 opacity-20" />
-              </div>
-            )}
-          </AspectRatio>
-        </Node>
-      </ContextMenuTrigger>
+      <ContextMenuTrigger
+        render={
+          <Node
+            handles={{ target: true, source: false }}
+            selected={selected}
+            className="overflow-hidden border-border/60 p-0 transition-shadow hover:shadow-sm cursor-grab active:cursor-grabbing"
+          >
+            <AspectRatio ratio={previewRatio} className="w-full overflow-hidden bg-muted">
+              {data.thumbnailUrl ? (
+                <Image
+                  src={data.thumbnailUrl}
+                  alt="Creative Preview"
+                  fill
+                  unoptimized
+                  sizes="(max-width: 768px) 100vw, 240px"
+                  className="h-full w-full object-cover"
+                  draggable={false}
+                  onDragStart={handlePreviewDragStart}
+                  onLoadingComplete={handlePreviewLoad}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
+                  <ImageIcon className="h-8 w-8 opacity-20" />
+                </div>
+              )}
+            </AspectRatio>
+          </Node>
+        }
+      />
       <ContextMenuContent className="w-56">
         <ContextMenuLabel>Creative Actions</ContextMenuLabel>
         <ContextMenuGroup>

@@ -6,7 +6,7 @@
 // takes callbacks and only renders the items whose handler is provided, so the same
 // menu serves a portfolio card and an ad-set row with different verbs.
 
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -23,7 +23,8 @@ type AdsetActionMenuProps = {
   onAnalyzeAngles?: () => void;
   onHold?: () => void;
   onArchive?: () => void;
-  children: ReactNode;
+  /** Single element: it becomes the context-menu trigger via Base UI `render`. */
+  children: ReactElement;
 };
 
 export function AdsetActionMenu({
@@ -35,11 +36,13 @@ export function AdsetActionMenu({
   onArchive,
   children,
 }: AdsetActionMenuProps) {
+  // Base UI's ContextMenuTrigger has no `disabled`; leaving the menu off entirely is the same
+  // observable behaviour (right-click does nothing) without a dead trigger in the tree.
+  if (disabled) return children;
+
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild disabled={disabled}>
-        {children}
-      </ContextMenuTrigger>
+      <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-56">
         {label ? (
           <>

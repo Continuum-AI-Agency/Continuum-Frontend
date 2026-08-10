@@ -418,150 +418,152 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
       </Dialog>
 
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone for document files; no semantic role applies */}
-          <div
-            className={cn(
-              'relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow',
-              isSelectedByOther && 'selected-by-other',
-            )}
-            style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-          >
-            <NodeResizer
-              minWidth={180}
-              minHeight={180}
-              isVisible={selected}
-              lineClassName="border-brand-primary/60"
-              handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
-            />
-            <CanvasNode
-              handles={{ target: false, source: false }}
-              selected={selected}
-              className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+        <ContextMenuTrigger
+          render={
+            // biome-ignore lint/a11y/noStaticElementInteractions: drop zone for document files; no semantic role applies
+            <div
+              className={cn(
+                'relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow',
+                isSelectedByOther && 'selected-by-other',
+              )}
+              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
             >
-              <NodeContent className="relative flex-1 min-h-0 p-0 flex flex-col bg-muted/30 group/preview">
-                <Label
-                  htmlFor={`doc-upload-${id}`}
-                  className="absolute right-8 top-2 z-20 cursor-pointer rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100"
-                  onMouseDown={(event) => event.stopPropagation()}
-                >
-                  <UploadIcon className="w-3 h-3" />
-                </Label>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={openPicker}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  className="absolute right-2 top-2 z-20 h-6 w-6 rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100"
-                  title="Select from platform"
-                >
-                  <Library className="w-3 h-3" />
-                </Button>
-
-                {documents.length > 0 ? (
-                  <div className="nodrag flex-1 space-y-2 overflow-y-auto p-2">
-                    {documents.map((doc, index) => {
-                      const { status, step } = resolveDocStatus(
-                        doc,
-                        uploadStates,
-                        liveDocById.current,
-                      );
-                      return (
-                        <div
-                          key={index}
-                          className="group/item flex items-center gap-2 rounded-md border border-border/70 bg-background/90 p-2 shadow-sm"
-                        >
-                          <div className="rounded bg-amber-500/10 p-1.5 text-amber-600">
-                            {status === 'processing' ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <FileTextIcon className="w-4 h-4" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="truncate text-xs font-medium text-foreground">
-                              {doc.name}
-                            </p>
-                            <p className="text-3xs uppercase text-muted-foreground">
-                              {status === 'processing'
-                                ? (step ?? 'processing…')
-                                : status === 'error'
-                                  ? 'error'
-                                  : doc.sourceDocumentId
-                                    ? `${doc.type} · ready`
-                                    : doc.type}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeDocument(index)}
-                            className="rounded p-1 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
-                          >
-                            <Cross2Icon className="w-3 h-3" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center p-4">
-                    <Label
-                      htmlFor={`doc-upload-${id}`}
-                      className="cursor-pointer flex h-full w-full flex-col items-center justify-center transition-opacity hover:opacity-80"
-                    >
-                      <Empty>
-                        <EmptyHeader>
-                          <EmptyMedia variant="icon">
-                            <FileTextIcon />
-                          </EmptyMedia>
-                          <EmptyTitle>No Documents</EmptyTitle>
-                          <EmptyDescription>
-                            {brandId
-                              ? 'Drag & drop, upload, or select from platform'
-                              : 'Select a brand to upload documents'}
-                          </EmptyDescription>
-                        </EmptyHeader>
-                      </Empty>
-                    </Label>
-                  </div>
-                )}
-
-                <Input
-                  id={`doc-upload-${id}`}
-                  type="file"
-                  accept=".txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
-              </NodeContent>
-            </CanvasNode>
-
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id="document"
-                    style={{
-                      ['--edge-color' as keyof React.CSSProperties]:
-                        'var(--edge-document, #f59e0b)',
-                    }}
-                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
-                  />
-                }
+              <NodeResizer
+                minWidth={180}
+                minHeight={180}
+                isVisible={selected}
+                lineClassName="border-brand-primary/60"
+                handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
               />
-              <TooltipContent>
-                <p>Document Output: {docConnections} connections</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </ContextMenuTrigger>
+              <CanvasNode
+                handles={{ target: false, source: false }}
+                selected={selected}
+                className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <NodeContent className="relative flex-1 min-h-0 p-0 flex flex-col bg-muted/30 group/preview">
+                  <Label
+                    htmlFor={`doc-upload-${id}`}
+                    className="absolute right-8 top-2 z-20 cursor-pointer rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100"
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    <UploadIcon className="w-3 h-3" />
+                  </Label>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={openPicker}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className="absolute right-2 top-2 z-20 h-6 w-6 rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100"
+                    title="Select from platform"
+                  >
+                    <Library className="w-3 h-3" />
+                  </Button>
+
+                  {documents.length > 0 ? (
+                    <div className="nodrag flex-1 space-y-2 overflow-y-auto p-2">
+                      {documents.map((doc, index) => {
+                        const { status, step } = resolveDocStatus(
+                          doc,
+                          uploadStates,
+                          liveDocById.current,
+                        );
+                        return (
+                          <div
+                            key={index}
+                            className="group/item flex items-center gap-2 rounded-md border border-border/70 bg-background/90 p-2 shadow-sm"
+                          >
+                            <div className="rounded bg-amber-500/10 p-1.5 text-amber-600">
+                              {status === 'processing' ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <FileTextIcon className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="truncate text-xs font-medium text-foreground">
+                                {doc.name}
+                              </p>
+                              <p className="text-3xs uppercase text-muted-foreground">
+                                {status === 'processing'
+                                  ? (step ?? 'processing…')
+                                  : status === 'error'
+                                    ? 'error'
+                                    : doc.sourceDocumentId
+                                      ? `${doc.type} · ready`
+                                      : doc.type}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeDocument(index)}
+                              className="rounded p-1 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
+                            >
+                              <Cross2Icon className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center p-4">
+                      <Label
+                        htmlFor={`doc-upload-${id}`}
+                        className="cursor-pointer flex h-full w-full flex-col items-center justify-center transition-opacity hover:opacity-80"
+                      >
+                        <Empty>
+                          <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                              <FileTextIcon />
+                            </EmptyMedia>
+                            <EmptyTitle>No Documents</EmptyTitle>
+                            <EmptyDescription>
+                              {brandId
+                                ? 'Drag & drop, upload, or select from platform'
+                                : 'Select a brand to upload documents'}
+                            </EmptyDescription>
+                          </EmptyHeader>
+                        </Empty>
+                      </Label>
+                    </div>
+                  )}
+
+                  <Input
+                    id={`doc-upload-${id}`}
+                    type="file"
+                    accept=".txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </NodeContent>
+              </CanvasNode>
+
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id="document"
+                      style={{
+                        ['--edge-color' as keyof React.CSSProperties]:
+                          'var(--edge-document, #f59e0b)',
+                      }}
+                      className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
+                    />
+                  }
+                />
+                <TooltipContent>
+                  <p>Document Output: {docConnections} connections</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          }
+        />
         <ContextMenuContent className="w-52">
           <ContextMenuLabel>Document Context</ContextMenuLabel>
           <ContextMenuSeparator />

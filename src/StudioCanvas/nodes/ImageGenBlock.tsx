@@ -372,281 +372,283 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>
-        {/* biome-ignore lint/a11y/noStaticElementInteractions: canvas node hover affordance, not an interactive control */}
-        <div
-          data-tour-id={data.isTourSeed ? 'studio-node-image-gen' : undefined}
-          className={cn(
-            'relative group h-full w-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow',
-            isSelectedByOther && 'selected-by-other',
-          )}
-          style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          {/* Legible at any zoom, and it survives the toast: a run that failed is not
-              the same as a node nobody has run yet. */}
-          <NodeStatus status={errorCopy ? 'error' : 'idle'} errorMessage={generationError} />
-
-          {/* Inside the card's top-left, not straddling its border: `-top-3` against a
-              24px chip put exactly half of it outside the node (Airtable #229). */}
-          <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
-            <GroundingChip
-              brandId={brandId}
-              skillIds={data.skillIds}
-              brandBookPieces={data.brandBookPieces}
-              editable
-              onToggleSkill={handleToggleSkill}
-              onTogglePiece={handleToggleBrandPiece}
-              brandDirectionPieces={data.brandDirectionPieces}
-              onToggleDirectionPiece={handleToggleDirectionPiece}
-              className="bg-background/90 shadow-sm backdrop-blur-sm"
-            />
-          </div>
-          <NodeResizer
-            minWidth={IMAGE_GENERATOR_NODE_BOUNDS.minWidth}
-            minHeight={IMAGE_GENERATOR_NODE_BOUNDS.minHeight}
-            keepAspectRatio
-            isVisible={selected}
-            lineClassName="border-brand-primary/60"
-            handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
-          />
-
-          <Toolbar
-            isVisible={isToolbarVisible}
-            position={Position.Top}
-            align="end"
-            className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
-          >
-            <div className="flex items-center gap-0.5 rounded border border-border/60 bg-muted/50 p-0.5">
-              {VARIATION_COUNTS.map((count) => (
-                <button
-                  key={count}
-                  type="button"
-                  aria-pressed={variationCount === count}
-                  className={cn(
-                    'h-5 min-w-[1.25rem] rounded px-1 text-[10px] font-medium transition-colors',
-                    variationCount === count
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                  onClick={() => handleVariationCountChange(count)}
-                  title={`Generate ${count} variation${count > 1 ? 's' : ''}`}
-                >
-                  {count}
-                </button>
-              ))}
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={handleRun}
-              title="Run Node"
-            >
-              <PlayIcon className="h-4 w-4" />
-            </Button>
-          </Toolbar>
-
-          <CanvasNode
-            handles={{ target: false, source: false }}
-            selected={selected}
-            className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
-          >
-            {/* The node's own box carries the aspect ratio now (and re-snaps to whatever
-                the model actually returned, see handleImageLoad), so the preview simply
-                fills it. A Radix AspectRatio here sized itself from the WIDTH and ignored
-                h-full: a 9:16 ratio in a 400-wide box computed ~400x711 and the
-                overflow-hidden card clipped it, which read as extreme zoom (#232). */}
-            <NodeContent
-              className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview"
-              data-testid="studio-node-preview"
-            >
-              {data.isExecuting ? (
-                <div className="w-full h-full flex items-center justify-center bg-muted p-4">
-                  <GenerationPulseLoader />
-                </div>
-              ) : errorCopy ? (
-                <div
-                  className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-y-auto bg-destructive/5 p-4 text-center"
-                  data-testid="studio-image-node-error"
-                >
-                  <Empty>
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <ExclamationTriangleIcon className="text-destructive" />
-                      </EmptyMedia>
-                      <EmptyTitle>{errorCopy.title}</EmptyTitle>
-                      <EmptyDescription>{errorCopy.guidance}</EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="nodrag"
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleDismissError();
-                    }}
-                  >
-                    Dismiss
-                  </Button>
-                </div>
-              ) : showVariationGrid ? (
-                <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-0.5 bg-muted">
-                  {generatedVariations.map((variation, index) => (
-                    <div
-                      key={variation.storagePath ?? variation.preview}
-                      className="relative overflow-hidden bg-muted group/variation"
-                    >
-                      <img
-                        src={variation.preview}
-                        alt={`Generated variation ${index + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="nodrag absolute right-1 top-1 z-20 h-6 w-6 border border-border/70 bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover/variation:opacity-90 hover:opacity-100"
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          downloadAsset({
-                            data: variation.preview,
-                            baseName: `${fileBaseName}-${index + 1}`,
-                            fallbackExtension: 'png',
-                          });
-                        }}
-                        title={`Download variation ${index + 1}`}
-                        aria-label={`Download variation ${index + 1}`}
-                      >
-                        <DownloadIcon className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : previewImage ? (
-                <div className="relative w-full h-full flex items-center justify-center bg-muted">
-                  <img
-                    src={previewImage as string}
-                    alt="Generated result"
-                    className="h-full w-full object-contain"
-                    onError={handleImageError}
-                  />
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100"
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleDownload();
-                    }}
-                    title="Download Output"
-                    aria-label="Download generated image"
-                  >
-                    <DownloadIcon className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
-                  <Empty>
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <ImageIcon />
-                      </EmptyMedia>
-                      <EmptyTitle>No Image</EmptyTitle>
-                      <EmptyDescription>Generated image will appear here</EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                </div>
-              )}
-            </NodeContent>
-          </CanvasNode>
-
+      <ContextMenuTrigger
+        render={
+          // biome-ignore lint/a11y/noStaticElementInteractions: canvas node hover affordance, not an interactive control
           <div
-            className="absolute -right-2 top-0 bottom-0 z-20 flex flex-col items-center justify-evenly py-4 pointer-events-none"
-            style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+            data-tour-id={data.isTourSeed ? 'studio-node-image-gen' : undefined}
+            className={cn(
+              'relative group h-full w-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow',
+              isSelectedByOther && 'selected-by-other',
+            )}
+            style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
           >
-            {outputHandleIds.map((handleId, index) => (
-              <div key={handleId} className="relative pointer-events-auto group/handle">
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id={handleId}
-                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                />
-                {outputHandleIds.length > 1 ? (
-                  <span className="studio-handle-pill absolute right-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                    {`Variation ${index + 1}`}
-                  </span>
-                ) : null}
+            {/* Legible at any zoom, and it survives the toast: a run that failed is not
+                the same as a node nobody has run yet. */}
+            <NodeStatus status={errorCopy ? 'error' : 'idle'} errorMessage={generationError} />
+
+            {/* Inside the card's top-left, not straddling its border: `-top-3` against a
+                24px chip put exactly half of it outside the node (Airtable #229). */}
+            <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
+              <GroundingChip
+                brandId={brandId}
+                skillIds={data.skillIds}
+                brandBookPieces={data.brandBookPieces}
+                editable
+                onToggleSkill={handleToggleSkill}
+                onTogglePiece={handleToggleBrandPiece}
+                brandDirectionPieces={data.brandDirectionPieces}
+                onToggleDirectionPiece={handleToggleDirectionPiece}
+                className="bg-background/90 shadow-sm backdrop-blur-sm"
+              />
+            </div>
+            <NodeResizer
+              minWidth={IMAGE_GENERATOR_NODE_BOUNDS.minWidth}
+              minHeight={IMAGE_GENERATOR_NODE_BOUNDS.minHeight}
+              keepAspectRatio
+              isVisible={selected}
+              lineClassName="border-brand-primary/60"
+              handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
+            />
+
+            <Toolbar
+              isVisible={isToolbarVisible}
+              position={Position.Top}
+              align="end"
+              className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
+            >
+              <div className="flex items-center gap-0.5 rounded border border-border/60 bg-muted/50 p-0.5">
+                {VARIATION_COUNTS.map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    aria-pressed={variationCount === count}
+                    className={cn(
+                      'h-5 min-w-[1.25rem] rounded px-1 text-[10px] font-medium transition-colors',
+                      variationCount === count
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                    onClick={() => handleVariationCountChange(count)}
+                    title={`Generate ${count} variation${count > 1 ? 's' : ''}`}
+                  >
+                    {count}
+                  </button>
+                ))}
               </div>
-            ))}
-          </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleRun}
+                title="Run Node"
+              >
+                <PlayIcon className="h-4 w-4" />
+              </Button>
+            </Toolbar>
 
-          {/* Handles Container - Outside of Card to prevent clipping */}
-          <div className="absolute -left-5 top-0 bottom-0 flex flex-col justify-evenly py-4 pointer-events-none h-full z-20">
-            <div
-              className="relative pointer-events-auto group/handle"
-              style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
+            <CanvasNode
+              handles={{ target: false, source: false }}
+              selected={selected}
+              className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
             >
-              <LimitedHandle
-                type="target"
-                position={Position.Left}
-                id="prompt"
-                maxConnections={1}
-                className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-              />
-              <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                Prompt
-              </span>
-            </div>
+              {/* The node's own box carries the aspect ratio now (and re-snaps to whatever
+                  the model actually returned, see handleImageLoad), so the preview simply
+                  fills it. A Radix AspectRatio here sized itself from the WIDTH and ignored
+                  h-full: a 9:16 ratio in a 400-wide box computed ~400x711 and the
+                  overflow-hidden card clipped it, which read as extreme zoom (#232). */}
+              <NodeContent
+                className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview"
+                data-testid="studio-node-preview"
+              >
+                {data.isExecuting ? (
+                  <div className="w-full h-full flex items-center justify-center bg-muted p-4">
+                    <GenerationPulseLoader />
+                  </div>
+                ) : errorCopy ? (
+                  <div
+                    className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-y-auto bg-destructive/5 p-4 text-center"
+                    data-testid="studio-image-node-error"
+                  >
+                    <Empty>
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <ExclamationTriangleIcon className="text-destructive" />
+                        </EmptyMedia>
+                        <EmptyTitle>{errorCopy.title}</EmptyTitle>
+                        <EmptyDescription>{errorCopy.guidance}</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="nodrag"
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDismissError();
+                      }}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                ) : showVariationGrid ? (
+                  <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-0.5 bg-muted">
+                    {generatedVariations.map((variation, index) => (
+                      <div
+                        key={variation.storagePath ?? variation.preview}
+                        className="relative overflow-hidden bg-muted group/variation"
+                      >
+                        <img
+                          src={variation.preview}
+                          alt={`Generated variation ${index + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          className="nodrag absolute right-1 top-1 z-20 h-6 w-6 border border-border/70 bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover/variation:opacity-90 hover:opacity-100"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            downloadAsset({
+                              data: variation.preview,
+                              baseName: `${fileBaseName}-${index + 1}`,
+                              fallbackExtension: 'png',
+                            });
+                          }}
+                          title={`Download variation ${index + 1}`}
+                          aria-label={`Download variation ${index + 1}`}
+                        >
+                          <DownloadIcon className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : previewImage ? (
+                  <div className="relative w-full h-full flex items-center justify-center bg-muted">
+                    <img
+                      src={previewImage as string}
+                      alt="Generated result"
+                      className="h-full w-full object-contain"
+                      onError={handleImageError}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100"
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDownload();
+                      }}
+                      title="Download Output"
+                      aria-label="Download generated image"
+                    >
+                      <DownloadIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
+                    <Empty>
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <ImageIcon />
+                        </EmptyMedia>
+                        <EmptyTitle>No Image</EmptyTitle>
+                        <EmptyDescription>Generated image will appear here</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  </div>
+                )}
+              </NodeContent>
+            </CanvasNode>
 
             <div
-              className="relative pointer-events-auto group/handle"
-              style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
-            >
-              <LimitedHandle
-                type="target"
-                position={Position.Left}
-                id="negative"
-                maxConnections={1}
-                className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-              />
-              <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                Negative Prompt
-              </span>
-            </div>
-
-            <div
-              className="relative pointer-events-auto group/handle"
+              className="absolute -right-2 top-0 bottom-0 z-20 flex flex-col items-center justify-evenly py-4 pointer-events-none"
               style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
             >
-              <LimitedHandle
-                type="target"
-                position={Position.Left}
-                id="ref-image"
-                maxConnections={refImageLimit}
-                className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-              />
-              <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                Ref Image
-              </span>
+              {outputHandleIds.map((handleId, index) => (
+                <div key={handleId} className="relative pointer-events-auto group/handle">
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={handleId}
+                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                  />
+                  {outputHandleIds.length > 1 ? (
+                    <span className="studio-handle-pill absolute right-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                      {`Variation ${index + 1}`}
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+
+            {/* Handles Container - Outside of Card to prevent clipping */}
+            <div className="absolute -left-5 top-0 bottom-0 flex flex-col justify-evenly py-4 pointer-events-none h-full z-20">
+              <div
+                className="relative pointer-events-auto group/handle"
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
+              >
+                <LimitedHandle
+                  type="target"
+                  position={Position.Left}
+                  id="prompt"
+                  maxConnections={1}
+                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                />
+                <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                  Prompt
+                </span>
+              </div>
+
+              <div
+                className="relative pointer-events-auto group/handle"
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
+              >
+                <LimitedHandle
+                  type="target"
+                  position={Position.Left}
+                  id="negative"
+                  maxConnections={1}
+                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                />
+                <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                  Negative Prompt
+                </span>
+              </div>
+
+              <div
+                className="relative pointer-events-auto group/handle"
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+              >
+                <LimitedHandle
+                  type="target"
+                  position={Position.Left}
+                  id="ref-image"
+                  maxConnections={refImageLimit}
+                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                />
+                <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                  Ref Image
+                </span>
+              </div>
+            </div>
+
+            <div
+              className={cn(
+                'pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity',
+                selected || isHovered ? 'opacity-100' : 'opacity-0',
+              )}
+            >
+              {generatorDescription}
             </div>
           </div>
-
-          <div
-            className={cn(
-              'pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity',
-              selected || isHovered ? 'opacity-100' : 'opacity-0',
-            )}
-          >
-            {generatorDescription}
-          </div>
-        </div>
-      </ContextMenuTrigger>
+        }
+      />
       <ContextMenuContent className="w-56">
         <ContextMenuLabel>Image Generator</ContextMenuLabel>
         <ContextMenuSub>

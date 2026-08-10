@@ -320,321 +320,327 @@ export function VideoGenBlock({
   return (
     <TooltipProvider>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: canvas node hover affordance, not an interactive control */}
-          <div
-            className={cn(
-              'relative group h-full w-full min-w-[300px] min-h-[170px] rounded-xl transition-shadow',
-              isSelectedByOther && 'selected-by-other',
-            )}
-            style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-          >
-            {/* Inside the card's top-left, not straddling its border: `-top-3` against a
-                24px chip put exactly half of it outside the node (Airtable #229). */}
-            <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
-              <GroundingChip
-                brandId={brandId}
-                skillIds={data.skillIds}
-                brandBookPieces={data.brandBookPieces}
-                editable
-                onToggleSkill={handleToggleSkill}
-                onTogglePiece={handleToggleBrandPiece}
-                className="bg-background/90 shadow-sm backdrop-blur-sm"
-              />
-            </div>
-            <NodeResizer
-              minWidth={VIDEO_GENERATOR_NODE_BOUNDS.minWidth}
-              minHeight={VIDEO_GENERATOR_NODE_BOUNDS.minHeight}
-              keepAspectRatio
-              isVisible={selected}
-              lineClassName="border-brand-primary/60"
-              handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
-            />
-
-            <Toolbar
-              isVisible={isToolbarVisible}
-              position={Position.Top}
-              align="end"
-              className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
-            >
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={handleRun}
-                title="Run Node"
-              >
-                <PlayIcon className="h-4 w-4" />
-              </Button>
-            </Toolbar>
-
-            <CanvasNode
-              handles={{ target: false, source: false }}
-              selected={selected}
-              className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
-            >
-              <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
-                {/* The node's own box carries the aspect ratio now, so the preview simply
-                    fills it. A Radix AspectRatio here sized itself from the WIDTH and
-                    ignored h-full: a 9:16 ratio in a 512-wide box computed ~512x910 and
-                    the overflow-hidden card clipped it, which read as extreme zoom
-                    (Airtable #232). object-contain letterboxes instead of cropping. */}
-                <div
-                  className="relative h-full w-full overflow-hidden bg-muted"
-                  data-testid="studio-node-preview"
-                >
-                  {data.isExecuting ? (
-                    <div className="w-full h-full flex items-center justify-center bg-muted p-4">
-                      <GenerationPulseLoader />
-                    </div>
-                  ) : displayVideo ? (
-                    <div className="relative w-full h-full flex items-center justify-center bg-black/85">
-                      {/* biome-ignore lint/a11y/useMediaCaption: generated preview clip has no caption track */}
-                      <video
-                        src={displayVideo as string}
-                        controls
-                        className="w-full h-full object-contain"
-                      />
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100"
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleDownload();
-                        }}
-                        title="Download Output"
-                        aria-label="Download generated video"
-                      >
-                        <DownloadIcon className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
-                      <Empty>
-                        <EmptyHeader>
-                          <EmptyMedia variant="icon" className="bg-default text-secondary">
-                            <VideoIcon />
-                          </EmptyMedia>
-                          <EmptyTitle>No Video</EmptyTitle>
-                          <EmptyDescription>Generated video will appear here</EmptyDescription>
-                        </EmptyHeader>
-                      </Empty>
-                    </div>
-                  )}
-                </div>
-              </NodeContent>
-            </CanvasNode>
-
+        <ContextMenuTrigger
+          render={
+            // biome-ignore lint/a11y/noStaticElementInteractions: canvas node hover affordance, not an interactive control
             <div
-              className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
-              style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
-            >
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Handle
-                      type="source"
-                      position={Position.Right}
-                      id="video"
-                      className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
-                    />
-                  }
-                />
-                <TooltipContent>
-                  <p>Generated Video Output</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-
-            <div className="absolute -left-5 top-0 bottom-0 flex flex-col justify-evenly py-4 pointer-events-none h-full z-20">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <div
-                      className="relative pointer-events-auto group/handle"
-                      style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
-                    >
-                      <LimitedHandle
-                        type="target"
-                        position={Position.Left}
-                        id="prompt-in"
-                        maxConnections={1}
-                        className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                      />
-                      <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                        Prompt
-                      </span>
-                    </div>
-                  }
-                />
-                <TooltipContent>
-                  <p>Prompt: {promptConnections}/1</p>
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <div
-                      className="relative pointer-events-auto group/handle"
-                      style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
-                    >
-                      <LimitedHandle
-                        type="target"
-                        position={Position.Left}
-                        id="negative"
-                        maxConnections={1}
-                        className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                      />
-                      <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                        Negative Prompt
-                      </span>
-                    </div>
-                  }
-                />
-                <TooltipContent>
-                  <p>Negative Prompt: {negativeConnections}/1</p>
-                </TooltipContent>
-              </Tooltip>
-
-              {supportsFrameInputs && (
-                <>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <div
-                          className="relative pointer-events-auto group/handle"
-                          style={{
-                            ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
-                          }}
-                        >
-                          <LimitedHandle
-                            type="target"
-                            position={Position.Left}
-                            id="first-frame"
-                            maxConnections={1}
-                            className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                          />
-                          <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                            First Frame
-                          </span>
-                        </div>
-                      }
-                    />
-                    <TooltipContent>
-                      <p>First Frame: {firstFrameConnections}/1</p>
-                    </TooltipContent>
-                  </Tooltip>
-
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <div
-                          className="relative pointer-events-auto group/handle"
-                          style={{
-                            ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
-                          }}
-                        >
-                          <LimitedHandle
-                            type="target"
-                            position={Position.Left}
-                            id="last-frame"
-                            maxConnections={1}
-                            className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                          />
-                          <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                            Last Frame
-                          </span>
-                        </div>
-                      }
-                    />
-                    <TooltipContent>
-                      <p>Last Frame: {lastFrameConnections}/1</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </>
+              className={cn(
+                'relative group h-full w-full min-w-[300px] min-h-[170px] rounded-xl transition-shadow',
+                isSelectedByOther && 'selected-by-other',
               )}
+              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+            >
+              {/* Inside the card's top-left, not straddling its border: `-top-3` against a
+                  24px chip put exactly half of it outside the node (Airtable #229). */}
+              <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
+                <GroundingChip
+                  brandId={brandId}
+                  skillIds={data.skillIds}
+                  brandBookPieces={data.brandBookPieces}
+                  editable
+                  onToggleSkill={handleToggleSkill}
+                  onTogglePiece={handleToggleBrandPiece}
+                  className="bg-background/90 shadow-sm backdrop-blur-sm"
+                />
+              </div>
+              <NodeResizer
+                minWidth={VIDEO_GENERATOR_NODE_BOUNDS.minWidth}
+                minHeight={VIDEO_GENERATOR_NODE_BOUNDS.minHeight}
+                keepAspectRatio
+                isVisible={selected}
+                lineClassName="border-brand-primary/60"
+                handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
+              />
 
-              {referenceImageHandle && (
+              <Toolbar
+                isVisible={isToolbarVisible}
+                position={Position.Top}
+                align="end"
+                className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
+              >
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={handleRun}
+                  title="Run Node"
+                >
+                  <PlayIcon className="h-4 w-4" />
+                </Button>
+              </Toolbar>
+
+              <CanvasNode
+                handles={{ target: false, source: false }}
+                selected={selected}
+                className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
+                  {/* The node's own box carries the aspect ratio now, so the preview simply
+                      fills it. A Radix AspectRatio here sized itself from the WIDTH and
+                      ignored h-full: a 9:16 ratio in a 512-wide box computed ~512x910 and
+                      the overflow-hidden card clipped it, which read as extreme zoom
+                      (Airtable #232). object-contain letterboxes instead of cropping. */}
+                  <div
+                    className="relative h-full w-full overflow-hidden bg-muted"
+                    data-testid="studio-node-preview"
+                  >
+                    {data.isExecuting ? (
+                      <div className="w-full h-full flex items-center justify-center bg-muted p-4">
+                        <GenerationPulseLoader />
+                      </div>
+                    ) : displayVideo ? (
+                      <div className="relative w-full h-full flex items-center justify-center bg-black/85">
+                        {/* biome-ignore lint/a11y/useMediaCaption: generated preview clip has no caption track */}
+                        <video
+                          src={displayVideo as string}
+                          controls
+                          className="w-full h-full object-contain"
+                        />
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDownload();
+                          }}
+                          title="Download Output"
+                          aria-label="Download generated video"
+                        >
+                          <DownloadIcon className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
+                        <Empty>
+                          <EmptyHeader>
+                            <EmptyMedia variant="icon" className="bg-default text-secondary">
+                              <VideoIcon />
+                            </EmptyMedia>
+                            <EmptyTitle>No Video</EmptyTitle>
+                            <EmptyDescription>Generated video will appear here</EmptyDescription>
+                          </EmptyHeader>
+                        </Empty>
+                      </div>
+                    )}
+                  </div>
+                </NodeContent>
+              </CanvasNode>
+
+              <div
+                className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+              >
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <div
-                        className="relative pointer-events-auto group/handle"
-                        style={{
-                          ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
-                        }}
-                      >
-                        <LimitedHandle
-                          type="target"
-                          position={Position.Left}
-                          id={referenceImageHandle}
-                          maxConnections={imageLimit}
-                          className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                        />
-                        <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                          Ref Images{imageLimit ? ` (Max ${imageLimit})` : ''}
-                        </span>
-                        {refImageCount > 0 && (
-                          <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 studio-handle-pill text-3xs px-1 rounded-full font-bold shadow-sm pointer-events-none">
-                            {refImageCount}
-                          </div>
-                        )}
-                      </div>
+                      <Handle
+                        type="source"
+                        position={Position.Right}
+                        id="video"
+                        className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
+                      />
                     }
                   />
                   <TooltipContent>
-                    <p>
-                      Reference Images: {refImageCount}/{imageLimit ?? '∞'}
-                    </p>
+                    <p>Generated Video Output</p>
                   </TooltipContent>
                 </Tooltip>
-              )}
+              </div>
 
-              {supportsReferenceVideo && (
+              <div className="absolute -left-5 top-0 bottom-0 flex flex-col justify-evenly py-4 pointer-events-none h-full z-20">
                 <Tooltip>
                   <TooltipTrigger
                     render={
                       <div
                         className="relative pointer-events-auto group/handle"
                         style={{
-                          ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)',
+                          ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)',
                         }}
                       >
                         <LimitedHandle
                           type="target"
                           position={Position.Left}
-                          id="ref-video"
+                          id="prompt-in"
                           maxConnections={1}
                           className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
                         <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                          Ref Video (Max 1)
+                          Prompt
                         </span>
                       </div>
                     }
                   />
                   <TooltipContent>
-                    <p>Reference Video: {referenceVideoConnections}/1</p>
+                    <p>Prompt: {promptConnections}/1</p>
                   </TooltipContent>
                 </Tooltip>
-              )}
-            </div>
 
-            <div
-              className={cn(
-                'pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity',
-                selected || isHovered ? 'opacity-100' : 'opacity-0',
-              )}
-            >
-              {generatorDescription}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <div
+                        className="relative pointer-events-auto group/handle"
+                        style={{
+                          ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)',
+                        }}
+                      >
+                        <LimitedHandle
+                          type="target"
+                          position={Position.Left}
+                          id="negative"
+                          maxConnections={1}
+                          className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                        />
+                        <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                          Negative Prompt
+                        </span>
+                      </div>
+                    }
+                  />
+                  <TooltipContent>
+                    <p>Negative Prompt: {negativeConnections}/1</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                {supportsFrameInputs && (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <div
+                            className="relative pointer-events-auto group/handle"
+                            style={{
+                              ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+                            }}
+                          >
+                            <LimitedHandle
+                              type="target"
+                              position={Position.Left}
+                              id="first-frame"
+                              maxConnections={1}
+                              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                            />
+                            <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                              First Frame
+                            </span>
+                          </div>
+                        }
+                      />
+                      <TooltipContent>
+                        <p>First Frame: {firstFrameConnections}/1</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <div
+                            className="relative pointer-events-auto group/handle"
+                            style={{
+                              ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+                            }}
+                          >
+                            <LimitedHandle
+                              type="target"
+                              position={Position.Left}
+                              id="last-frame"
+                              maxConnections={1}
+                              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                            />
+                            <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                              Last Frame
+                            </span>
+                          </div>
+                        }
+                      />
+                      <TooltipContent>
+                        <p>Last Frame: {lastFrameConnections}/1</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
+
+                {referenceImageHandle && (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <div
+                          className="relative pointer-events-auto group/handle"
+                          style={{
+                            ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+                          }}
+                        >
+                          <LimitedHandle
+                            type="target"
+                            position={Position.Left}
+                            id={referenceImageHandle}
+                            maxConnections={imageLimit}
+                            className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                          />
+                          <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                            Ref Images{imageLimit ? ` (Max ${imageLimit})` : ''}
+                          </span>
+                          {refImageCount > 0 && (
+                            <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 studio-handle-pill text-3xs px-1 rounded-full font-bold shadow-sm pointer-events-none">
+                              {refImageCount}
+                            </div>
+                          )}
+                        </div>
+                      }
+                    />
+                    <TooltipContent>
+                      <p>
+                        Reference Images: {refImageCount}/{imageLimit ?? '∞'}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
+                {supportsReferenceVideo && (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <div
+                          className="relative pointer-events-auto group/handle"
+                          style={{
+                            ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)',
+                          }}
+                        >
+                          <LimitedHandle
+                            type="target"
+                            position={Position.Left}
+                            id="ref-video"
+                            maxConnections={1}
+                            className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                          />
+                          <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                            Ref Video (Max 1)
+                          </span>
+                        </div>
+                      }
+                    />
+                    <TooltipContent>
+                      <p>Reference Video: {referenceVideoConnections}/1</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+
+              <div
+                className={cn(
+                  'pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity',
+                  selected || isHovered ? 'opacity-100' : 'opacity-0',
+                )}
+              >
+                {generatorDescription}
+              </div>
             </div>
-          </div>
-        </ContextMenuTrigger>
+          }
+        />
         <ContextMenuContent className="w-56">
           <ContextMenuLabel>Video Generator</ContextMenuLabel>
           <ContextMenuSub>

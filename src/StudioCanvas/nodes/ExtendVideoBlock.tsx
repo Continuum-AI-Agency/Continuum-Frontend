@@ -74,148 +74,150 @@ export function ExtendVideoBlock({
   return (
     <TooltipProvider>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: hover-only affordance on a canvas node wrapper; the node's controls carry the real semantics */}
-          <div
-            className={cn(
-              'relative group h-full w-full min-w-[260px] min-h-[160px] rounded-xl transition-shadow',
-              isSelectedByOther && 'selected-by-other',
-            )}
-            style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-          >
-            <NodeResizer
-              minWidth={260}
-              minHeight={160}
-              isVisible={selected}
-              lineClassName="border-brand-primary/60"
-              handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
-            />
-
-            <Toolbar
-              isVisible={isToolbarVisible}
-              position={Position.Top}
-              className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
-            >
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={handleRun}
-                title="Run Node"
-              >
-                <PlayIcon className="h-4 w-4" />
-              </Button>
-            </Toolbar>
-
-            <CanvasNode
-              handles={{ target: false, source: false }}
-              selected={selected}
-              className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
-            >
-              <NodeContent className="relative flex-1 p-0 flex items-center justify-center overflow-hidden bg-muted/30 text-xs text-secondary group/preview">
-                <AspectRatio ratio={16 / 9} className="h-full w-full overflow-hidden bg-muted">
-                  {data.isExecuting ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-muted p-4">
-                      <GenerationPulseLoader />
-                    </div>
-                  ) : displayVideo ? (
-                    <div className="relative h-full w-full bg-black/85">
-                      {/* biome-ignore lint/a11y/useMediaCaption: user-generated canvas output; no caption track exists */}
-                      <video
-                        src={displayVideo as string}
-                        controls
-                        className="h-full w-full object-contain"
-                      />
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100"
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleDownload();
-                        }}
-                        title="Download Output"
-                        aria-label="Download generated video"
-                      >
-                        <DownloadIcon className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                      <VideoIcon className="h-8 w-8 opacity-20" />
-                      <span className="text-2xs opacity-50">Ready to extend video</span>
-                    </div>
-                  )}
-                </AspectRatio>
-              </NodeContent>
-            </CanvasNode>
-
-            <div className="absolute -left-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 pointer-events-none">
-              <div
-                className="relative flex flex-col items-center group/handle"
-                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
-              >
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id="video"
-                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
-                />
-                <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                  Video Input
-                </span>
-              </div>
-
-              <div
-                className="relative flex flex-col items-center group/handle"
-                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
-              >
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id="prompt"
-                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
-                />
-                <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                  Prompt (Optional)
-                </span>
-              </div>
-            </div>
-
-            <div
-              className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
-              style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
-            >
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Handle
-                      type="source"
-                      position={Position.Right}
-                      id="video"
-                      className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
-                    />
-                  }
-                />
-                <TooltipContent>
-                  <p>Extended Video Output</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-
+        <ContextMenuTrigger
+          render={
+            // biome-ignore lint/a11y/noStaticElementInteractions: hover-only affordance on a canvas node wrapper; the node's controls carry the real semantics
             <div
               className={cn(
-                'pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity',
-                selected || isHovered ? 'opacity-100' : 'opacity-0',
+                'relative group h-full w-full min-w-[260px] min-h-[160px] rounded-xl transition-shadow',
+                isSelectedByOther && 'selected-by-other',
               )}
+              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
             >
-              {generatorDescription}
+              <NodeResizer
+                minWidth={260}
+                minHeight={160}
+                isVisible={selected}
+                lineClassName="border-brand-primary/60"
+                handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
+              />
+
+              <Toolbar
+                isVisible={isToolbarVisible}
+                position={Position.Top}
+                className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
+              >
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={handleRun}
+                  title="Run Node"
+                >
+                  <PlayIcon className="h-4 w-4" />
+                </Button>
+              </Toolbar>
+
+              <CanvasNode
+                handles={{ target: false, source: false }}
+                selected={selected}
+                className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <NodeContent className="relative flex-1 p-0 flex items-center justify-center overflow-hidden bg-muted/30 text-xs text-secondary group/preview">
+                  <AspectRatio ratio={16 / 9} className="h-full w-full overflow-hidden bg-muted">
+                    {data.isExecuting ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-muted p-4">
+                        <GenerationPulseLoader />
+                      </div>
+                    ) : displayVideo ? (
+                      <div className="relative h-full w-full bg-black/85">
+                        {/* biome-ignore lint/a11y/useMediaCaption: user-generated canvas output; no caption track exists */}
+                        <video
+                          src={displayVideo as string}
+                          controls
+                          className="h-full w-full object-contain"
+                        />
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDownload();
+                          }}
+                          title="Download Output"
+                          aria-label="Download generated video"
+                        >
+                          <DownloadIcon className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                        <VideoIcon className="h-8 w-8 opacity-20" />
+                        <span className="text-2xs opacity-50">Ready to extend video</span>
+                      </div>
+                    )}
+                  </AspectRatio>
+                </NodeContent>
+              </CanvasNode>
+
+              <div className="absolute -left-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 pointer-events-none">
+                <div
+                  className="relative flex flex-col items-center group/handle"
+                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+                >
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id="video"
+                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
+                  />
+                  <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                    Video Input
+                  </span>
+                </div>
+
+                <div
+                  className="relative flex flex-col items-center group/handle"
+                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
+                >
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id="prompt"
+                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
+                  />
+                  <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                    Prompt (Optional)
+                  </span>
+                </div>
+              </div>
+
+              <div
+                className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+              >
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Handle
+                        type="source"
+                        position={Position.Right}
+                        id="video"
+                        className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
+                      />
+                    }
+                  />
+                  <TooltipContent>
+                    <p>Extended Video Output</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+
+              <div
+                className={cn(
+                  'pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity',
+                  selected || isHovered ? 'opacity-100' : 'opacity-0',
+                )}
+              >
+                {generatorDescription}
+              </div>
             </div>
-          </div>
-        </ContextMenuTrigger>
+          }
+        />
         <ContextMenuContent className="w-52">
           <ContextMenuLabel>Extend Video</ContextMenuLabel>
           <ContextMenuSeparator />

@@ -188,59 +188,61 @@ const DraftRow = React.memo(function DraftRow({
       <ContextMenu>
         <HoverCardTrigger
           render={
-            <ContextMenuTrigger asChild>
-              <div
-                className={cn(
-                  'group flex cursor-pointer items-center gap-3 border-b border-border/40 px-4 py-2.5 transition-colors hover:bg-muted/40',
-                  statusFrameClasses(framePlatform, draft.status, 'row'),
-                  isSelected && 'bg-primary/[0.05]',
-                )}
-                {...rowActivationProps(onSelect)}
-              >
-                <Checkbox
-                  checked={isMultiSelected}
-                  aria-label={`Select ${draft.title || 'Untitled'}`}
-                  onClick={(e) => e.stopPropagation()}
-                  onCheckedChange={() => onToggle()}
-                  className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 data-[state=checked]:opacity-100"
-                />
+            <ContextMenuTrigger
+              render={
+                <div
+                  className={cn(
+                    'group flex cursor-pointer items-center gap-3 border-b border-border/40 px-4 py-2.5 transition-colors hover:bg-muted/40',
+                    statusFrameClasses(framePlatform, draft.status, 'row'),
+                    isSelected && 'bg-primary/[0.05]',
+                  )}
+                  {...rowActivationProps(onSelect)}
+                >
+                  <Checkbox
+                    checked={isMultiSelected}
+                    aria-label={`Select ${draft.title || 'Untitled'}`}
+                    onClick={(e) => e.stopPropagation()}
+                    onCheckedChange={() => onToggle()}
+                    className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 data-[state=checked]:opacity-100"
+                  />
 
-                <DraftRowThumbnail draft={draft} />
+                  <DraftRowThumbnail draft={draft} />
 
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  {draft.platforms.map((p) => (
-                    <PlatformBadge key={p} platform={p} />
-                  ))}
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                    {draft.title || 'Untitled'}
-                  </span>
-                  {draft.captionPreview && (
-                    <span className="hidden min-w-0 max-w-xs truncate text-xs text-muted-foreground lg:block">
-                      {draft.captionPreview}
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    {draft.platforms.map((p) => (
+                      <PlatformBadge key={p} platform={p} />
+                    ))}
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                      {draft.title || 'Untitled'}
                     </span>
-                  )}
-                </div>
+                    {draft.captionPreview && (
+                      <span className="hidden min-w-0 max-w-xs truncate text-xs text-muted-foreground lg:block">
+                        {draft.captionPreview}
+                      </span>
+                    )}
+                  </div>
 
-                <div className="flex shrink-0 items-center gap-2">
-                  {draft.dateLabel && (
-                    <span className="text-xs text-muted-foreground">{draft.dateLabel}</span>
-                  )}
-                  {draft.contentPlanId && <PlannedBadge />}
-                  <StatusBadge status={draft.status} />
-                  <button
-                    type="button"
-                    aria-label="Remove"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete();
-                    }}
-                    className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-                  >
-                    <Cross2Icon className="size-3" />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {draft.dateLabel && (
+                      <span className="text-xs text-muted-foreground">{draft.dateLabel}</span>
+                    )}
+                    {draft.contentPlanId && <PlannedBadge />}
+                    <StatusBadge status={draft.status} />
+                    <button
+                      type="button"
+                      aria-label="Remove"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete();
+                      }}
+                      className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                    >
+                      <Cross2Icon className="size-3" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </ContextMenuTrigger>
+              }
+            />
           }
         />
         <ContextMenuContent className="w-48">

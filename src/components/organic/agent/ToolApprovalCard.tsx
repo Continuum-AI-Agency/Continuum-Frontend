@@ -92,75 +92,77 @@ export function ToolApprovalCard({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <HoverCard openDelay={400}>
-          <HoverCardTrigger
-            render={
-              <AgentDecisionCard className="mt-0 w-[210px] shrink-0 cursor-default transition-colors hover:border-border/70">
-                <CardContent className="space-y-2.5 px-3.5 pt-3.5 pb-2">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {platform && <PlatformTag platform={platform} />}
-                    {format && (
-                      <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {format}
-                      </span>
-                    )}
-                  </div>
-                  {scheduledAt && <MetaRow items={[scheduledAt]} className="text-xs" />}
-                  {caption ? (
-                    <div>
-                      <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Caption
-                      </p>
-                      <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-muted/50 p-1.5 text-xs leading-relaxed text-foreground/90">
-                        {caption}
-                      </p>
+      <ContextMenuTrigger
+        render={
+          <HoverCard openDelay={400}>
+            <HoverCardTrigger
+              render={
+                <AgentDecisionCard className="mt-0 w-[210px] shrink-0 cursor-default transition-colors hover:border-border/70">
+                  <CardContent className="space-y-2.5 px-3.5 pt-3.5 pb-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {platform && <PlatformTag platform={platform} />}
+                      {format && (
+                        <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {format}
+                        </span>
+                      )}
                     </div>
-                  ) : null}
-                  {angle && !caption && (
-                    <p className="line-clamp-3 text-sm leading-relaxed text-foreground/80">
-                      {angle}
-                    </p>
-                  )}
-                  {!platform && !angle && !caption && (
-                    <p className="text-xs text-muted-foreground">{approval.toolName}</p>
-                  )}
-                </CardContent>
-                <CardFooter className="flex items-center justify-end gap-1 border-t border-border/50 px-3 py-2">
-                  <AgentButton
-                    variant="ghost"
-                    disabled={disabled}
-                    onClick={onDenyAction}
-                    className="h-7 min-h-0 gap-1 px-2.5 text-xs"
-                  >
-                    <X className="h-3 w-3" />
-                    Deny
-                  </AgentButton>
-                  <AgentButton
-                    variant="primary"
-                    disabled={disabled}
-                    onClick={onApproveAction}
-                    className="h-7 min-h-0 gap-1 px-2.5 text-xs"
-                  >
-                    <Check className="h-3 w-3" />
-                    Approve
-                  </AgentButton>
-                </CardFooter>
-              </AgentDecisionCard>
-            }
-          />
-          <HoverCardContent side="top" align="start" className="w-72 p-0">
-            <div className="space-y-2 p-3.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {approval.toolName}
-              </p>
-              <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/60 p-2.5 text-2xs leading-relaxed text-muted-foreground">
-                {inputSummary(approval.input)}
-              </pre>
-            </div>
-          </HoverCardContent>
-        </HoverCard>
-      </ContextMenuTrigger>
+                    {scheduledAt && <MetaRow items={[scheduledAt]} className="text-xs" />}
+                    {caption ? (
+                      <div>
+                        <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Caption
+                        </p>
+                        <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-muted/50 p-1.5 text-xs leading-relaxed text-foreground/90">
+                          {caption}
+                        </p>
+                      </div>
+                    ) : null}
+                    {angle && !caption && (
+                      <p className="line-clamp-3 text-sm leading-relaxed text-foreground/80">
+                        {angle}
+                      </p>
+                    )}
+                    {!platform && !angle && !caption && (
+                      <p className="text-xs text-muted-foreground">{approval.toolName}</p>
+                    )}
+                  </CardContent>
+                  <CardFooter className="flex items-center justify-end gap-1 border-t border-border/50 px-3 py-2">
+                    <AgentButton
+                      variant="ghost"
+                      disabled={disabled}
+                      onClick={onDenyAction}
+                      className="h-7 min-h-0 gap-1 px-2.5 text-xs"
+                    >
+                      <X className="h-3 w-3" />
+                      Deny
+                    </AgentButton>
+                    <AgentButton
+                      variant="primary"
+                      disabled={disabled}
+                      onClick={onApproveAction}
+                      className="h-7 min-h-0 gap-1 px-2.5 text-xs"
+                    >
+                      <Check className="h-3 w-3" />
+                      Approve
+                    </AgentButton>
+                  </CardFooter>
+                </AgentDecisionCard>
+              }
+            />
+            <HoverCardContent side="top" align="start" className="w-72 p-0">
+              <div className="space-y-2 p-3.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {approval.toolName}
+                </p>
+                <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/60 p-2.5 text-2xs leading-relaxed text-muted-foreground">
+                  {inputSummary(approval.input)}
+                </pre>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
+        }
+      />
       <ContextMenuContent className="w-44">
         <ContextMenuLabel className="text-xs text-muted-foreground">
           {approval.toolName}

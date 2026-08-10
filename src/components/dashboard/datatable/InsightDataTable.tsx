@@ -273,7 +273,7 @@ export function InsightDataTable<T>({
                 <Fragment key={id}>
                   {contextMenu ? (
                     <ContextMenu>
-                      <ContextMenuTrigger asChild>{dataRow}</ContextMenuTrigger>
+                      <ContextMenuTrigger render={dataRow} />
                       <ContextMenuContent className="w-52">{contextMenu(row)}</ContextMenuContent>
                     </ContextMenu>
                   ) : (

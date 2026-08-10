@@ -2064,26 +2064,28 @@ export function CampaignAdSetWorkspace({
                   </div>
 
                   <ContextMenu>
-                    <ContextMenuTrigger asChild>
-                      <div
-                        data-tour-id="paid-performance-chart"
-                        className={cn('mt-1.5 min-h-0', CHART_MIN_HEIGHT_CLASS)}
-                      >
-                        {compareChartSeries.length > 0 ? (
-                          <ObservabilityLightweightChart
-                            series={compareChartSeries}
-                            visibleWindowSeconds={chartVisibleWindowSeconds}
-                            focusTime={campaignChartFocusTime}
-                            onMarkerSelect={handleCampaignMarkerSelect}
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                            Add at least one campaign or index to visualize{' '}
-                            {labelForMetric(campaignMetric)}.
-                          </div>
-                        )}
-                      </div>
-                    </ContextMenuTrigger>
+                    <ContextMenuTrigger
+                      render={
+                        <div
+                          data-tour-id="paid-performance-chart"
+                          className={cn('mt-1.5 min-h-0', CHART_MIN_HEIGHT_CLASS)}
+                        >
+                          {compareChartSeries.length > 0 ? (
+                            <ObservabilityLightweightChart
+                              series={compareChartSeries}
+                              visibleWindowSeconds={chartVisibleWindowSeconds}
+                              focusTime={campaignChartFocusTime}
+                              onMarkerSelect={handleCampaignMarkerSelect}
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                              Add at least one campaign or index to visualize{' '}
+                              {labelForMetric(campaignMetric)}.
+                            </div>
+                          )}
+                        </div>
+                      }
+                    />
                     <ContextMenuContent className="w-56">
                       <ContextMenuLabel>Chart actions</ContextMenuLabel>
                       <ContextMenuSeparator />
@@ -2201,11 +2203,13 @@ export function CampaignAdSetWorkspace({
                         Campaigns
                       </Button>
                       <ContextMenu>
-                        <ContextMenuTrigger asChild>
-                          <Button size="icon-xs" variant="ghost" className="ml-auto">
-                            <DotsHorizontalIcon />
-                          </Button>
-                        </ContextMenuTrigger>
+                        <ContextMenuTrigger
+                          render={
+                            <Button size="icon-xs" variant="ghost" className="ml-auto">
+                              <DotsHorizontalIcon />
+                            </Button>
+                          }
+                        />
                         <ContextMenuContent className="w-56">
                           <ContextMenuLabel>Rail filters</ContextMenuLabel>
                           <ContextMenuSeparator />
@@ -2381,32 +2385,34 @@ export function CampaignAdSetWorkspace({
                                       return (
                                         <SidebarMenuItem key={indexKey}>
                                           <ContextMenu>
-                                            <ContextMenuTrigger asChild>
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  setScope({ type: 'index', id: entry.index.id });
-                                                  toggleCompareEntity(indexKey);
-                                                  onSelectedCampaignChange?.(undefined);
-                                                }}
-                                                className={cn(
-                                                  'grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-xs',
-                                                  isAdded
-                                                    ? 'bg-sidebar-accent/70'
-                                                    : 'hover:bg-sidebar-accent/50',
-                                                )}
-                                              >
-                                                <span className="truncate font-medium">
-                                                  {entry.index.name}
-                                                </span>
-                                                <span className="text-sidebar-foreground/65">
-                                                  {formatMetric(
-                                                    campaignMetric,
-                                                    entry.aggregate.metrics[campaignMetric] ?? 0,
+                                            <ContextMenuTrigger
+                                              render={
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setScope({ type: 'index', id: entry.index.id });
+                                                    toggleCompareEntity(indexKey);
+                                                    onSelectedCampaignChange?.(undefined);
+                                                  }}
+                                                  className={cn(
+                                                    'grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-xs',
+                                                    isAdded
+                                                      ? 'bg-sidebar-accent/70'
+                                                      : 'hover:bg-sidebar-accent/50',
                                                   )}
-                                                </span>
-                                              </button>
-                                            </ContextMenuTrigger>
+                                                >
+                                                  <span className="truncate font-medium">
+                                                    {entry.index.name}
+                                                  </span>
+                                                  <span className="text-sidebar-foreground/65">
+                                                    {formatMetric(
+                                                      campaignMetric,
+                                                      entry.aggregate.metrics[campaignMetric] ?? 0,
+                                                    )}
+                                                  </span>
+                                                </button>
+                                              }
+                                            />
                                             <ContextMenuContent className="w-52">
                                               <ContextMenuItem
                                                 onSelect={() => {

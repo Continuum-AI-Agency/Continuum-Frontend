@@ -314,143 +314,148 @@ export function VideoReferenceNode({
   return (
     <TooltipProvider>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: the node body is a
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: the node body is a
               drag-and-drop target for reference media; the same media is settable from
               the keyboard through the file input below. */}
-          <div
-            className={cn(
-              'relative group w-full h-full min-w-[180px] min-h-[180px] rounded-xl transition-shadow',
-              isSelectedByOther && 'selected-by-other',
-            )}
-            style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-          >
-            <NodeResizer
-              minWidth={160}
-              minHeight={160}
-              keepAspectRatio
-              isVisible={selected}
-              lineClassName="border-brand-primary/60"
-              handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
-            />
-            <CanvasNode
-              handles={{ target: false, source: false }}
-              selected={selected}
-              className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+        <ContextMenuTrigger
+          render={
+            // biome-ignore lint/a11y/noStaticElementInteractions: hover-only affordance on a canvas node wrapper; the node controls carry the real semantics
+            <div
+              className={cn(
+                'relative group w-full h-full min-w-[180px] min-h-[180px] rounded-xl transition-shadow',
+                isSelectedByOther && 'selected-by-other',
+              )}
+              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
             >
-              <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30 group/preview">
-                {refBadge && refBadge.tone !== 'error' && (
-                  <div
-                    className={cn(
-                      'absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium shadow-sm',
-                      refBadge.tone === 'processing' && 'bg-blue-500/90 text-white',
-                      refBadge.tone === 'ready' && 'bg-emerald-500/90 text-white',
-                    )}
-                  >
-                    {refBadge.tone === 'processing' && <Loader2 className="h-3 w-3 animate-spin" />}
-                    {refBadge.tone === 'ready' && <CheckCircle2 className="h-3 w-3" />}
-                    {refBadge.label}
-                  </div>
-                )}
-                {refBadge && refBadge.tone === 'error' && (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <div className="absolute left-2 top-2 z-20 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-2xs font-medium text-white shadow-sm">
-                          <XCircle className="h-3 w-3" />
-                          {refBadge.label}
-                        </div>
-                      }
-                    />
-                    <TooltipContent className="flex max-w-[220px] flex-col items-start gap-1.5">
-                      <p className="text-xs">
-                        {data.referenceError ?? 'Upload failed — try again'}
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="h-6 px-2 text-xs"
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onClick={handleRetryUpload}
-                      >
-                        <ReloadIcon className="mr-1 h-3 w-3" />
-                        Retry
-                      </Button>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                <label
-                  htmlFor={`video-file-${id}`}
-                  className="absolute right-2 top-2 z-20 cursor-pointer rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100 focus-visible:opacity-100"
-                  onMouseDown={(event) => event.stopPropagation()}
-                >
-                  <UploadIcon className="h-3 w-3" />
-                </label>
-                <label
-                  htmlFor={`video-file-${id}`}
-                  className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                >
-                  {preview ? (
-                    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black/80">
-                      <video
-                        src={preview}
-                        className="h-full w-full object-contain"
-                        muted
-                        loop
-                        onMouseEnter={(e) => e.currentTarget.play()}
-                        onMouseLeave={(e) => e.currentTarget.pause()}
-                      />
-                    </div>
-                  ) : (
-                    <Empty>
-                      <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                          <VideoIcon />
-                        </EmptyMedia>
-                        <EmptyTitle>Upload Video</EmptyTitle>
-                        <EmptyDescription>Drag & drop or click</EmptyDescription>
-                      </EmptyHeader>
-                    </Empty>
-                  )}
-                </label>
-                <Input
-                  id={`video-file-${id}`}
-                  type="file"
-                  accept="video/*"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
-
-                {data.fileName && (
-                  <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-surface/90 backdrop-blur border-t border-subtle text-3xs text-secondary truncate">
-                    {data.fileName}
-                  </div>
-                )}
-              </NodeContent>
-            </CanvasNode>
-
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id="video"
-                    style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
-                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
-                  />
-                }
+              <NodeResizer
+                minWidth={160}
+                minHeight={160}
+                keepAspectRatio
+                isVisible={selected}
+                lineClassName="border-brand-primary/60"
+                handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
               />
-              <TooltipContent>
-                <p>Video Output: {videoConnections} connections</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </ContextMenuTrigger>
+              <CanvasNode
+                handles={{ target: false, source: false }}
+                selected={selected}
+                className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30 group/preview">
+                  {refBadge && refBadge.tone !== 'error' && (
+                    <div
+                      className={cn(
+                        'absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium shadow-sm',
+                        refBadge.tone === 'processing' && 'bg-blue-500/90 text-white',
+                        refBadge.tone === 'ready' && 'bg-emerald-500/90 text-white',
+                      )}
+                    >
+                      {refBadge.tone === 'processing' && (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      )}
+                      {refBadge.tone === 'ready' && <CheckCircle2 className="h-3 w-3" />}
+                      {refBadge.label}
+                    </div>
+                  )}
+                  {refBadge && refBadge.tone === 'error' && (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <div className="absolute left-2 top-2 z-20 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-2xs font-medium text-white shadow-sm">
+                            <XCircle className="h-3 w-3" />
+                            {refBadge.label}
+                          </div>
+                        }
+                      />
+                      <TooltipContent className="flex max-w-[220px] flex-col items-start gap-1.5">
+                        <p className="text-xs">
+                          {data.referenceError ?? 'Upload failed — try again'}
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="h-6 px-2 text-xs"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={handleRetryUpload}
+                        >
+                          <ReloadIcon className="mr-1 h-3 w-3" />
+                          Retry
+                        </Button>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  <label
+                    htmlFor={`video-file-${id}`}
+                    className="absolute right-2 top-2 z-20 cursor-pointer rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100 focus-visible:opacity-100"
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    <UploadIcon className="h-3 w-3" />
+                  </label>
+                  <label
+                    htmlFor={`video-file-${id}`}
+                    className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                  >
+                    {preview ? (
+                      <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black/80">
+                        <video
+                          src={preview}
+                          className="h-full w-full object-contain"
+                          muted
+                          loop
+                          onMouseEnter={(e) => e.currentTarget.play()}
+                          onMouseLeave={(e) => e.currentTarget.pause()}
+                        />
+                      </div>
+                    ) : (
+                      <Empty>
+                        <EmptyHeader>
+                          <EmptyMedia variant="icon">
+                            <VideoIcon />
+                          </EmptyMedia>
+                          <EmptyTitle>Upload Video</EmptyTitle>
+                          <EmptyDescription>Drag & drop or click</EmptyDescription>
+                        </EmptyHeader>
+                      </Empty>
+                    )}
+                  </label>
+                  <Input
+                    id={`video-file-${id}`}
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+
+                  {data.fileName && (
+                    <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-surface/90 backdrop-blur border-t border-subtle text-3xs text-secondary truncate">
+                      {data.fileName}
+                    </div>
+                  )}
+                </NodeContent>
+              </CanvasNode>
+
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id="video"
+                      style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+                      className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
+                    />
+                  }
+                />
+                <TooltipContent>
+                  <p>Video Output: {videoConnections} connections</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          }
+        />
         <ContextMenuContent className="w-52">
           <ContextMenuLabel>Video Reference</ContextMenuLabel>
           <ContextMenuSeparator />

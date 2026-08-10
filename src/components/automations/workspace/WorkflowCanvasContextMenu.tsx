@@ -19,7 +19,7 @@ import {
   Trash2,
   Unplug,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -41,7 +41,8 @@ export type WorkflowMenuTarget =
   | { kind: 'edge'; edgeId: string };
 
 type WorkflowCanvasContextMenuProps = {
-  children: ReactNode;
+  /** Single element: it becomes the context-menu trigger via Base UI `render`. */
+  children: ReactElement;
   target: WorkflowMenuTarget;
   locked: boolean;
   node: AutomationWorkflowNode | null;
@@ -92,7 +93,7 @@ export function WorkflowCanvasContextMenu({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger render={children} />
       <ContextMenuContent className="automation-workflow-popover w-64 rounded-lg p-1.5">
         {target.kind === 'pane' ? (
           <>

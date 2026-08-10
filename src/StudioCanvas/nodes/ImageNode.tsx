@@ -492,82 +492,43 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   return (
     <TooltipProvider>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: the node body is a
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: the node body is a
               drag-and-drop target for reference media; the same media is settable from
               the keyboard through the file input below. */}
-          <div
-            data-tour-id={data.isTourSeed ? 'studio-node-reference-image' : undefined}
-            className={cn(
-              'relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow',
-              isSelectedByOther && 'selected-by-other',
-            )}
-            style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-          >
-            <NodeResizer
-              minWidth={200}
-              minHeight={200}
-              keepAspectRatio
-              isVisible={selected}
-              lineClassName="border-brand-primary/60"
-              handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
-            />
-            <CanvasNode
-              handles={{ target: false, source: false }}
-              selected={selected}
-              className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+        <ContextMenuTrigger
+          render={
+            // biome-ignore lint/a11y/noStaticElementInteractions: hover-only affordance on a canvas node wrapper; the node controls carry the real semantics
+            <div
+              data-tour-id={data.isTourSeed ? 'studio-node-reference-image' : undefined}
+              className={cn(
+                'relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow',
+                isSelectedByOther && 'selected-by-other',
+              )}
+              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
             >
-              <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
-                {/* biome-ignore lint/a11y/noStaticElementInteractions: mousedown is swallowed
-                    only so React Flow does not start dragging the node when the buttons inside
-                    are pressed; the buttons carry the interactivity. */}
-                <div
-                  className="absolute right-2 top-2 z-20 flex items-center gap-1 opacity-0 transition-opacity group-hover/preview:opacity-100 focus-within:opacity-100"
-                  onMouseDown={(event) => event.stopPropagation()}
-                >
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="secondary"
-                    className="h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground"
+              <NodeResizer
+                minWidth={200}
+                minHeight={200}
+                keepAspectRatio
+                isVisible={selected}
+                lineClassName="border-brand-primary/60"
+                handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
+              />
+              <CanvasNode
+                handles={{ target: false, source: false }}
+                selected={selected}
+                className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
+                  {/* biome-ignore lint/a11y/noStaticElementInteractions: mousedown is swallowed
+                      only so React Flow does not start dragging the node when the buttons inside
+                      are pressed; the buttons carry the interactivity. */}
+                  <div
+                    className="absolute right-2 top-2 z-20 flex items-center gap-1 opacity-0 transition-opacity group-hover/preview:opacity-100 focus-within:opacity-100"
                     onMouseDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      fileInputRef.current?.click();
-                    }}
-                    title={preview ? 'Replace image' : 'Upload image'}
-                    aria-label={preview ? 'Replace image' : 'Upload image'}
                   >
-                    <UploadIcon className="h-3 w-3" />
-                  </Button>
-                  {preview && (
-                    <QuickReformatMenu
-                      asset={{
-                        id: data.assetId ?? '',
-                        kind: 'image',
-                        signedUrl: data.sourceUrl ?? preview,
-                      }}
-                      brandId={brandId ?? ''}
-                      onCompleted={addReformattedNode}
-                      trigger={
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="secondary"
-                          className="h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground"
-                          disabled={!data.assetId || !brandId}
-                          onMouseDown={(event) => event.stopPropagation()}
-                          title="Reformat image"
-                          aria-label="Reformat image"
-                        >
-                          <Scaling className="h-3 w-3" />
-                        </Button>
-                      }
-                    />
-                  )}
-                  {preview && (
                     <Button
                       type="button"
                       size="icon"
@@ -576,164 +537,206 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                       onMouseDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation();
-                        handleClearReference();
+                        fileInputRef.current?.click();
                       }}
-                      title="Clear image"
-                      aria-label="Clear image"
+                      title={preview ? 'Replace image' : 'Upload image'}
+                      aria-label={preview ? 'Replace image' : 'Upload image'}
                     >
-                      <Cross1Icon className="h-3 w-3" />
+                      <UploadIcon className="h-3 w-3" />
                     </Button>
-                  )}
-                  {preview && (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="secondary"
-                      className={cn(
-                        'h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground',
-                        data.hasMarkup && 'text-amber-500',
-                      )}
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setMarkupOpen(true);
-                      }}
-                      title="Markup image"
-                      aria-label="Markup image"
-                    >
-                      <Pencil2Icon className="h-3 w-3" />
-                    </Button>
-                  )}
-                  <Select value={refType} onValueChange={handleRefTypeChange}>
-                    <SelectTrigger className="h-6 w-[94px] text-2xs px-1.5 py-0 border border-border/60 bg-background/90 shadow-sm">
-                      <SelectValue placeholder="Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="default">Default</SelectItem>
-                      <SelectItem value="product">Product</SelectItem>
-                      <SelectItem value="color">Color/Theme</SelectItem>
-                      <SelectItem value="person">Person</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {preview ? (
-                  <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-default">
-                    <img
-                      src={data.originalImage ?? preview}
-                      alt="Preview"
-                      className="h-full w-full select-none object-contain"
-                      draggable={false}
-                    />
-                    {data.markupLayer && (
-                      <img
-                        src={data.markupLayer}
-                        alt="Markup overlay"
-                        className="absolute inset-0 h-full w-full select-none object-contain pointer-events-none"
-                        draggable={false}
+                    {preview && (
+                      <QuickReformatMenu
+                        asset={{
+                          id: data.assetId ?? '',
+                          kind: 'image',
+                          signedUrl: data.sourceUrl ?? preview,
+                        }}
+                        brandId={brandId ?? ''}
+                        onCompleted={addReformattedNode}
+                        trigger={
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="secondary"
+                            className="h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground"
+                            disabled={!data.assetId || !brandId}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            title="Reformat image"
+                            aria-label="Reformat image"
+                          >
+                            <Scaling className="h-3 w-3" />
+                          </Button>
+                        }
                       />
                     )}
-                    {data.hasMarkup && (
-                      <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-amber-500/90 px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm">
-                        <Pencil2Icon className="h-2.5 w-2.5" />
-                        <span>Marked up</span>
-                      </div>
-                    )}
-                    {refBadge && refBadge.tone !== 'error' && (
-                      <div
-                        className={cn(
-                          'absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm',
-                          refBadge.tone === 'processing' && 'bg-blue-500/90',
-                          refBadge.tone === 'ready' && 'bg-emerald-500/90',
-                        )}
+                    {preview && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="secondary"
+                        className="h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleClearReference();
+                        }}
+                        title="Clear image"
+                        aria-label="Clear image"
                       >
-                        {refBadge.tone === 'processing' && (
-                          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                        <Cross1Icon className="h-3 w-3" />
+                      </Button>
+                    )}
+                    {preview && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="secondary"
+                        className={cn(
+                          'h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground',
+                          data.hasMarkup && 'text-amber-500',
                         )}
-                        {refBadge.tone === 'ready' && <CheckCircle2 className="h-2.5 w-2.5" />}
-                        <span>{refBadge.label}</span>
-                      </div>
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setMarkupOpen(true);
+                        }}
+                        title="Markup image"
+                        aria-label="Markup image"
+                      >
+                        <Pencil2Icon className="h-3 w-3" />
+                      </Button>
                     )}
-                    {refBadge && refBadge.tone === 'error' && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <div className="absolute top-2 right-2 z-10 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm">
-                              <XCircle className="h-2.5 w-2.5" />
-                              <span>{refBadge.label}</span>
-                            </div>
-                          }
+                    <Select value={refType} onValueChange={handleRefTypeChange}>
+                      <SelectTrigger className="h-6 w-[94px] text-2xs px-1.5 py-0 border border-border/60 bg-background/90 shadow-sm">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default</SelectItem>
+                        <SelectItem value="product">Product</SelectItem>
+                        <SelectItem value="color">Color/Theme</SelectItem>
+                        <SelectItem value="person">Person</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {preview ? (
+                    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-default">
+                      <img
+                        src={data.originalImage ?? preview}
+                        alt="Preview"
+                        className="h-full w-full select-none object-contain"
+                        draggable={false}
+                      />
+                      {data.markupLayer && (
+                        <img
+                          src={data.markupLayer}
+                          alt="Markup overlay"
+                          className="absolute inset-0 h-full w-full select-none object-contain pointer-events-none"
+                          draggable={false}
                         />
-                        <TooltipContent className="flex max-w-[220px] flex-col items-start gap-1.5">
-                          <p className="text-xs">
-                            {data.referenceError ?? 'Upload failed — try again'}
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="h-6 px-2 text-xs"
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onClick={handleRetryUpload}
-                          >
-                            <ReloadIcon className="mr-1 h-3 w-3" />
-                            Retry
-                          </Button>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                ) : (
-                  <Label
-                    htmlFor={`file-${id}`}
-                    className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                  >
-                    <Empty>
-                      <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                          <ImageIcon />
-                        </EmptyMedia>
-                        <EmptyTitle>Upload Image</EmptyTitle>
-                        <EmptyDescription>Drag & drop or click</EmptyDescription>
-                      </EmptyHeader>
-                    </Empty>
-                  </Label>
-                )}
-                <Input
-                  id={`file-${id}`}
-                  type="file"
-                  accept="image/*"
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
-
-                {data.fileName && (
-                  <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-surface/90 backdrop-blur border-t border-subtle text-3xs text-secondary truncate">
-                    {data.fileName}
-                  </div>
-                )}
-              </NodeContent>
-            </CanvasNode>
-
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id="image"
-                    style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
-                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
+                      )}
+                      {data.hasMarkup && (
+                        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-amber-500/90 px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm">
+                          <Pencil2Icon className="h-2.5 w-2.5" />
+                          <span>Marked up</span>
+                        </div>
+                      )}
+                      {refBadge && refBadge.tone !== 'error' && (
+                        <div
+                          className={cn(
+                            'absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm',
+                            refBadge.tone === 'processing' && 'bg-blue-500/90',
+                            refBadge.tone === 'ready' && 'bg-emerald-500/90',
+                          )}
+                        >
+                          {refBadge.tone === 'processing' && (
+                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                          )}
+                          {refBadge.tone === 'ready' && <CheckCircle2 className="h-2.5 w-2.5" />}
+                          <span>{refBadge.label}</span>
+                        </div>
+                      )}
+                      {refBadge && refBadge.tone === 'error' && (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <div className="absolute top-2 right-2 z-10 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm">
+                                <XCircle className="h-2.5 w-2.5" />
+                                <span>{refBadge.label}</span>
+                              </div>
+                            }
+                          />
+                          <TooltipContent className="flex max-w-[220px] flex-col items-start gap-1.5">
+                            <p className="text-xs">
+                              {data.referenceError ?? 'Upload failed — try again'}
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-6 px-2 text-xs"
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onClick={handleRetryUpload}
+                            >
+                              <ReloadIcon className="mr-1 h-3 w-3" />
+                              Retry
+                            </Button>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  ) : (
+                    <Label
+                      htmlFor={`file-${id}`}
+                      className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                    >
+                      <Empty>
+                        <EmptyHeader>
+                          <EmptyMedia variant="icon">
+                            <ImageIcon />
+                          </EmptyMedia>
+                          <EmptyTitle>Upload Image</EmptyTitle>
+                          <EmptyDescription>Drag & drop or click</EmptyDescription>
+                        </EmptyHeader>
+                      </Empty>
+                    </Label>
+                  )}
+                  <Input
+                    id={`file-${id}`}
+                    type="file"
+                    accept="image/*"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleFileUpload}
                   />
-                }
-              />
-              <TooltipContent>
-                <p>Image Output: {imageConnections} connections</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </ContextMenuTrigger>
+
+                  {data.fileName && (
+                    <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-surface/90 backdrop-blur border-t border-subtle text-3xs text-secondary truncate">
+                      {data.fileName}
+                    </div>
+                  )}
+                </NodeContent>
+              </CanvasNode>
+
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id="image"
+                      style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+                      className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
+                    />
+                  }
+                />
+                <TooltipContent>
+                  <p>Image Output: {imageConnections} connections</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          }
+        />
         <ContextMenuContent className="w-56">
           <ContextMenuLabel>Image Reference</ContextMenuLabel>
           <ContextMenuSub>

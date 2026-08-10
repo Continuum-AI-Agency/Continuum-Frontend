@@ -373,205 +373,212 @@ export function TimelineEditorBlock({
   return (
     <TooltipProvider>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: node hover only toggles toolbar visibility; no semantic role applies */}
-          <div
-            className={cn(
-              'relative group h-full w-full min-w-[280px] min-h-[220px] rounded-xl transition-shadow',
-              isSelectedByOther && 'selected-by-other',
-            )}
-            style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-          >
-            <NodeResizer
-              minWidth={280}
-              minHeight={220}
-              isVisible={selected}
-              lineClassName="border-brand-primary/60"
-              handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
-            />
-
-            <Toolbar
-              isVisible={isToolbarVisible}
-              position={Position.Top}
-              className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
+        <ContextMenuTrigger
+          render={
+            // biome-ignore lint/a11y/noStaticElementInteractions: node hover only toggles toolbar visibility; no semantic role applies
+            <div
+              className={cn(
+                'relative group h-full w-full min-w-[280px] min-h-[220px] rounded-xl transition-shadow',
+                isSelectedByOther && 'selected-by-other',
+              )}
+              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
             >
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => {
-                  setEditorOpen(true);
-                }}
-                title="Open editor"
+              <NodeResizer
+                minWidth={280}
+                minHeight={220}
+                isVisible={selected}
+                lineClassName="border-brand-primary/60"
+                handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
+              />
+
+              <Toolbar
+                isVisible={isToolbarVisible}
+                position={Position.Top}
+                className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
               >
-                <Pencil2Icon className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => {
-                  if (data.videoProjectId) {
-                    setEditorOpen(true);
-                    return;
-                  }
-                  void render();
-                }}
-                disabled={data.videoProjectId ? false : renderDisabled}
-                title={data.videoProjectId ? 'Open production' : 'Render & Continue'}
-              >
-                <PlayIcon className="h-4 w-4" />
-              </Button>
-            </Toolbar>
-
-            <CanvasNode
-              handles={{ target: false, source: false }}
-              selected={selected}
-              className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
-            >
-              <NodeContent
-                className="flex h-full w-full flex-col gap-2 p-3"
-                onDoubleClick={(event) => {
-                  event.stopPropagation();
-                  setEditorOpen(true);
-                }}
-              >
-                <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                  <span>Video Editor</span>
-                  <span>
-                    {production
-                      ? `${production.approvedMasters}/${production.shotCount} masters`
-                      : `${inputCount} input${inputCount === 1 ? '' : 's'} · ${clipCount} clip${clipCount === 1 ? '' : 's'}`}
-                  </span>
-                </div>
-
-                {support && !support.ok ? (
-                  <div className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-xs text-destructive">
-                    {support.reason}
-                  </div>
-                ) : null}
-
-                {isAwaiting ? (
-                  <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-600 dark:text-amber-400">
-                    Paused — open the editor and click Render &amp; Continue to resume the workflow.
-                  </div>
-                ) : null}
-
-                <div
-                  className="relative flex-1 overflow-hidden rounded-md border border-border/60 bg-black/85"
-                  style={{ aspectRatio: '16 / 9' }}
-                >
-                  {isRunning ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted p-4">
-                      <GenerationPulseLoader />
-                      <Progress value={progress * 100} className="h-1.5 w-3/4" />
-                      <span className="text-2xs text-muted-foreground">
-                        {status === 'queued'
-                          ? 'Queued for browser rendering'
-                          : status === 'preparing'
-                            ? 'Preparing media…'
-                            : status === 'saving'
-                              ? 'Saving render…'
-                              : `${Math.round(progress * 100)}% rendering in browser`}
-                      </span>
-                    </div>
-                  ) : displayVideo ? (
-                    <>
-                      {/* biome-ignore lint/a11y/useMediaCaption: user-rendered edited clip has no caption track */}
-                      <video src={displayVideo} controls className="h-full w-full object-contain" />
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm hover:opacity-100"
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleDownload();
-                        }}
-                        title="Download output"
-                        aria-label="Download edited video"
-                      >
-                        <DownloadIcon className="h-4 w-4" />
-                      </Button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditorOpen(true);
-                      }}
-                      className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <VideoIcon className="h-6 w-6 opacity-30" />
-                      <span className="text-2xs">
-                        {production
-                          ? production.stage.replaceAll('_', ' ')
-                          : 'Double-click to open the editor'}
-                      </span>
-                    </button>
-                  )}
-                </div>
-
                 <Button
-                  variant="default"
-                  size="sm"
-                  className="h-8 w-full justify-center text-xs"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
                   onClick={() => {
                     setEditorOpen(true);
                   }}
+                  title="Open editor"
                 >
-                  <Pencil2Icon className="mr-1 h-3.5 w-3.5" />
-                  {production ? 'Open production' : 'Open editor'}
+                  <Pencil2Icon className="h-4 w-4" />
                 </Button>
-              </NodeContent>
-            </CanvasNode>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    if (data.videoProjectId) {
+                      setEditorOpen(true);
+                      return;
+                    }
+                    void render();
+                  }}
+                  disabled={data.videoProjectId ? false : renderDisabled}
+                  title={data.videoProjectId ? 'Open production' : 'Render & Continue'}
+                >
+                  <PlayIcon className="h-4 w-4" />
+                </Button>
+              </Toolbar>
 
-            <div
-              className="pointer-events-none absolute -left-2 top-1/2 -translate-y-1/2"
-              style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
-            >
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <LimitedHandle
-                      type="target"
-                      position={Position.Left}
-                      id={TIMELINE_MEDIA_INPUT_HANDLE}
-                      maxConnections={TIMELINE_MEDIA_POOL_LIMIT}
-                      className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                    />
-                  }
-                />
-                <TooltipContent>
-                  <p>Connect images &amp; videos to place in the editor</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
+              <CanvasNode
+                handles={{ target: false, source: false }}
+                selected={selected}
+                className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <NodeContent
+                  className="flex h-full w-full flex-col gap-2 p-3"
+                  onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    setEditorOpen(true);
+                  }}
+                >
+                  <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+                    <span>Video Editor</span>
+                    <span>
+                      {production
+                        ? `${production.approvedMasters}/${production.shotCount} masters`
+                        : `${inputCount} input${inputCount === 1 ? '' : 's'} · ${clipCount} clip${clipCount === 1 ? '' : 's'}`}
+                    </span>
+                  </div>
 
-            <div
-              className="pointer-events-none absolute -right-2 top-1/2 -translate-y-1/2"
-              style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
-            >
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Handle
-                      type="source"
-                      position={Position.Right}
-                      id="video"
-                      className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                    />
-                  }
-                />
-                <TooltipContent>
-                  <p>Edited Video Output</p>
-                </TooltipContent>
-              </Tooltip>
+                  {support && !support.ok ? (
+                    <div className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-xs text-destructive">
+                      {support.reason}
+                    </div>
+                  ) : null}
+
+                  {isAwaiting ? (
+                    <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-600 dark:text-amber-400">
+                      Paused — open the editor and click Render &amp; Continue to resume the
+                      workflow.
+                    </div>
+                  ) : null}
+
+                  <div
+                    className="relative flex-1 overflow-hidden rounded-md border border-border/60 bg-black/85"
+                    style={{ aspectRatio: '16 / 9' }}
+                  >
+                    {isRunning ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted p-4">
+                        <GenerationPulseLoader />
+                        <Progress value={progress * 100} className="h-1.5 w-3/4" />
+                        <span className="text-2xs text-muted-foreground">
+                          {status === 'queued'
+                            ? 'Queued for browser rendering'
+                            : status === 'preparing'
+                              ? 'Preparing media…'
+                              : status === 'saving'
+                                ? 'Saving render…'
+                                : `${Math.round(progress * 100)}% rendering in browser`}
+                        </span>
+                      </div>
+                    ) : displayVideo ? (
+                      <>
+                        {/* biome-ignore lint/a11y/useMediaCaption: user-rendered edited clip has no caption track */}
+                        <video
+                          src={displayVideo}
+                          controls
+                          className="h-full w-full object-contain"
+                        />
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm hover:opacity-100"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDownload();
+                          }}
+                          title="Download output"
+                          aria-label="Download edited video"
+                        >
+                          <DownloadIcon className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditorOpen(true);
+                        }}
+                        className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <VideoIcon className="h-6 w-6 opacity-30" />
+                        <span className="text-2xs">
+                          {production
+                            ? production.stage.replaceAll('_', ' ')
+                            : 'Double-click to open the editor'}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-8 w-full justify-center text-xs"
+                    onClick={() => {
+                      setEditorOpen(true);
+                    }}
+                  >
+                    <Pencil2Icon className="mr-1 h-3.5 w-3.5" />
+                    {production ? 'Open production' : 'Open editor'}
+                  </Button>
+                </NodeContent>
+              </CanvasNode>
+
+              <div
+                className="pointer-events-none absolute -left-2 top-1/2 -translate-y-1/2"
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+              >
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <LimitedHandle
+                        type="target"
+                        position={Position.Left}
+                        id={TIMELINE_MEDIA_INPUT_HANDLE}
+                        maxConnections={TIMELINE_MEDIA_POOL_LIMIT}
+                        className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                      />
+                    }
+                  />
+                  <TooltipContent>
+                    <p>Connect images &amp; videos to place in the editor</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+
+              <div
+                className="pointer-events-none absolute -right-2 top-1/2 -translate-y-1/2"
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+              >
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Handle
+                        type="source"
+                        position={Position.Right}
+                        id="video"
+                        className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                      />
+                    }
+                  />
+                  <TooltipContent>
+                    <p>Edited Video Output</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
-          </div>
-        </ContextMenuTrigger>
+          }
+        />
         <ContextMenuContent className="w-56">
           <ContextMenuLabel>Video Editor</ContextMenuLabel>
           <ContextMenuSeparator />

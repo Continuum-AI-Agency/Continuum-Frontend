@@ -21,7 +21,8 @@ type AddPostContextMenuProps = {
   onCreatePost: (options: CreatePostOptions) => void;
   // The day surface being wrapped — must be a single element that accepts a ref
   // (Radix Trigger asChild), e.g. the planner/month day cell div.
-  children: React.ReactNode;
+  /** Single element: it becomes the context-menu trigger via Base UI `render`. */
+  children: React.ReactElement;
   dayId: string;
   platformKey?: PlannerPlatformKey;
   platformLabel?: string;
@@ -53,7 +54,7 @@ export const AddPostContextMenu = React.memo(function AddPostContextMenu({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-52">
         <ContextMenuLabel className="text-xs text-muted-foreground">{heading}</ContextMenuLabel>
         <ContextMenuItem onSelect={() => select(AI_ONE_SHOT_ACTION.options)}>

@@ -80,57 +80,59 @@ export function NoteNode({ id, data, selected }: NodeProps<ReactFlowNode<NoteNod
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div
-          className={cn(
-            'relative min-w-[200px] min-h-[120px] w-full h-full max-w-[500px] rounded-lg transition-shadow',
-          )}
-        >
-          <NodeResizer
-            minWidth={200}
-            minHeight={120}
-            isVisible={selected}
-            lineClassName="border-amber-400/60"
-            handleClassName="h-3 w-3 bg-amber-400 border-2 border-background rounded-full"
-          />
-
-          <CanvasNode
-            handles={{ target: false, source: false }}
-            selected={selected}
+      <ContextMenuTrigger
+        render={
+          <div
             className={cn(
-              'border border-amber-300/60 bg-amber-50/90 dark:bg-amber-950/40 rounded-lg overflow-hidden',
-              'transition-all duration-300 h-full w-full flex flex-col min-h-[inherit] shadow-sm hover:shadow-md',
-              selected && 'ring-2 ring-amber-400/60',
+              'relative min-w-[200px] min-h-[120px] w-full h-full max-w-[500px] rounded-lg transition-shadow',
             )}
           >
-            <NodeContent className="flex-1 flex flex-col min-h-0 p-0 bg-transparent">
-              {/* biome-ignore lint/a11y/noStaticElementInteractions: contentEditable rich-text editor; a semantic textarea cannot support execCommand bold */}
-              <div
-                ref={editorRef}
-                contentEditable
-                suppressContentEditableWarning
-                onInput={handleInput}
-                onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
-                onCompositionStart={handleCompositionStart}
-                onCompositionEnd={handleCompositionEnd}
-                className={cn(
-                  'nodrag nopan flex-1 w-full min-h-[100px] p-3 text-sm text-foreground',
-                  'outline-none resize-none bg-transparent overflow-y-auto whitespace-pre-wrap break-words',
-                  '[&_b]:font-bold [&_strong]:font-bold empty:before:content-[attr(data-placeholder)]',
-                  'empty:before:text-muted-foreground/50 empty:before:pointer-events-none',
-                )}
-                data-placeholder="Write a note…"
-              />
-              <div className="shrink-0 border-t border-amber-300/40 bg-amber-100/60 dark:bg-amber-900/20 px-3 py-1">
-                <span className="text-2xs text-amber-700/70 dark:text-amber-400/70 select-none">
-                  ⌘B bold
-                </span>
-              </div>
-            </NodeContent>
-          </CanvasNode>
-        </div>
-      </ContextMenuTrigger>
+            <NodeResizer
+              minWidth={200}
+              minHeight={120}
+              isVisible={selected}
+              lineClassName="border-amber-400/60"
+              handleClassName="h-3 w-3 bg-amber-400 border-2 border-background rounded-full"
+            />
+
+            <CanvasNode
+              handles={{ target: false, source: false }}
+              selected={selected}
+              className={cn(
+                'border border-amber-300/60 bg-amber-50/90 dark:bg-amber-950/40 rounded-lg overflow-hidden',
+                'transition-all duration-300 h-full w-full flex flex-col min-h-[inherit] shadow-sm hover:shadow-md',
+                selected && 'ring-2 ring-amber-400/60',
+              )}
+            >
+              <NodeContent className="flex-1 flex flex-col min-h-0 p-0 bg-transparent">
+                {/* biome-ignore lint/a11y/noStaticElementInteractions: contentEditable rich-text editor; a semantic textarea cannot support execCommand bold */}
+                <div
+                  ref={editorRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={handleInput}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  onCompositionStart={handleCompositionStart}
+                  onCompositionEnd={handleCompositionEnd}
+                  className={cn(
+                    'nodrag nopan flex-1 w-full min-h-[100px] p-3 text-sm text-foreground',
+                    'outline-none resize-none bg-transparent overflow-y-auto whitespace-pre-wrap break-words',
+                    '[&_b]:font-bold [&_strong]:font-bold empty:before:content-[attr(data-placeholder)]',
+                    'empty:before:text-muted-foreground/50 empty:before:pointer-events-none',
+                  )}
+                  data-placeholder="Write a note…"
+                />
+                <div className="shrink-0 border-t border-amber-300/40 bg-amber-100/60 dark:bg-amber-900/20 px-3 py-1">
+                  <span className="text-2xs text-amber-700/70 dark:text-amber-400/70 select-none">
+                    ⌘B bold
+                  </span>
+                </div>
+              </NodeContent>
+            </CanvasNode>
+          </div>
+        }
+      />
 
       <ContextMenuContent className="w-52">
         <ContextMenuLabel>Note</ContextMenuLabel>

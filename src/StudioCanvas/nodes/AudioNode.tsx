@@ -236,116 +236,118 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
   return (
     <TooltipProvider>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: the canvas drop surface must receive native drag events */}
-          <div
-            className={cn(
-              'relative group w-full h-full min-w-[180px] min-h-[100px] rounded-xl transition-shadow',
-              isSelectedByOther && 'selected-by-other',
-            )}
-            style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-          >
-            <NodeResizer
-              minWidth={160}
-              minHeight={100}
-              isVisible={selected}
-              lineClassName="border-brand-primary/60"
-              handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
-            />
-            <CanvasNode
-              handles={{ target: false, source: false }}
-              selected={selected}
-              className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+        <ContextMenuTrigger
+          render={
+            // biome-ignore lint/a11y/noStaticElementInteractions: the canvas drop surface must receive native drag events
+            <div
+              className={cn(
+                'relative group w-full h-full min-w-[180px] min-h-[100px] rounded-xl transition-shadow',
+                isSelectedByOther && 'selected-by-other',
+              )}
+              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
             >
-              <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30">
-                <Label
-                  htmlFor={`file-${id}`}
-                  className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                >
-                  {audioSrc ? (
-                    <div className="flex h-full w-full items-center justify-center p-4">
-                      {/* biome-ignore lint/a11y/useMediaCaption: this is an arbitrary user audio reference, not authored dialogue */}
-                      <audio
-                        ref={audioRef}
-                        src={audioSrc}
-                        onEnded={handleEnded}
-                        className="hidden"
-                      />
+              <NodeResizer
+                minWidth={160}
+                minHeight={100}
+                isVisible={selected}
+                lineClassName="border-brand-primary/60"
+                handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
+              />
+              <CanvasNode
+                handles={{ target: false, source: false }}
+                selected={selected}
+                className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30">
+                  <Label
+                    htmlFor={`file-${id}`}
+                    className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                  >
+                    {audioSrc ? (
+                      <div className="flex h-full w-full items-center justify-center p-4">
+                        {/* biome-ignore lint/a11y/useMediaCaption: this is an arbitrary user audio reference, not authored dialogue */}
+                        <audio
+                          ref={audioRef}
+                          src={audioSrc}
+                          onEnded={handleEnded}
+                          className="hidden"
+                        />
 
-                      <div className="nodrag flex w-full max-w-[220px] items-center gap-3 rounded-md border border-border/70 bg-background/90 px-3 py-2 shadow-sm">
-                        <button
-                          type="button"
-                          onClick={togglePlay}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white transition-colors hover:bg-emerald-700"
-                          aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
-                        >
-                          {isPlaying ? (
-                            <PauseIcon className="h-4 w-4" />
-                          ) : (
-                            <PlayIcon className="ml-0.5 h-4 w-4" />
-                          )}
-                        </button>
+                        <div className="nodrag flex w-full max-w-[220px] items-center gap-3 rounded-md border border-border/70 bg-background/90 px-3 py-2 shadow-sm">
+                          <button
+                            type="button"
+                            onClick={togglePlay}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white transition-colors hover:bg-emerald-700"
+                            aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
+                          >
+                            {isPlaying ? (
+                              <PauseIcon className="h-4 w-4" />
+                            ) : (
+                              <PlayIcon className="ml-0.5 h-4 w-4" />
+                            )}
+                          </button>
 
-                        <div className="min-w-0 flex-1 text-left">
-                          <p className="truncate text-xs font-medium text-foreground">
-                            {data.fileName || 'Audio File'}
-                          </p>
-                          <p className="text-2xs text-muted-foreground">
-                            {isPlaying ? 'Playing…' : 'Click to play'}
-                          </p>
-                        </div>
+                          <div className="min-w-0 flex-1 text-left">
+                            <p className="truncate text-xs font-medium text-foreground">
+                              {data.fileName || 'Audio File'}
+                            </p>
+                            <p className="text-2xs text-muted-foreground">
+                              {isPlaying ? 'Playing…' : 'Click to play'}
+                            </p>
+                          </div>
 
-                        <div className="rounded-sm bg-emerald-500/10 p-1.5 text-emerald-600">
-                          <SpeakerLoudIcon className="h-4 w-4" />
+                          <div className="rounded-sm bg-emerald-500/10 p-1.5 text-emerald-600">
+                            <SpeakerLoudIcon className="h-4 w-4" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <Empty>
-                      <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                          <SpeakerLoudIcon />
-                        </EmptyMedia>
-                        <EmptyTitle>Upload Audio</EmptyTitle>
-                        <EmptyDescription>Drag & drop or click</EmptyDescription>
-                      </EmptyHeader>
-                    </Empty>
-                  )}
-                </Label>
-                <Input
-                  id={`file-${id}`}
-                  type="file"
-                  accept="audio/*"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
-              </NodeContent>
-            </CanvasNode>
-
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id="audio"
-                    style={{
-                      ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-audio, #10b981)',
-                    }}
-                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
+                    ) : (
+                      <Empty>
+                        <EmptyHeader>
+                          <EmptyMedia variant="icon">
+                            <SpeakerLoudIcon />
+                          </EmptyMedia>
+                          <EmptyTitle>Upload Audio</EmptyTitle>
+                          <EmptyDescription>Drag & drop or click</EmptyDescription>
+                        </EmptyHeader>
+                      </Empty>
+                    )}
+                  </Label>
+                  <Input
+                    id={`file-${id}`}
+                    type="file"
+                    accept="audio/*"
+                    className="hidden"
+                    onChange={handleFileUpload}
                   />
-                }
-              />
-              <TooltipContent>
-                <p>Audio Output: {audioConnections} connections</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </ContextMenuTrigger>
+                </NodeContent>
+              </CanvasNode>
+
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id="audio"
+                      style={{
+                        ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-audio, #10b981)',
+                      }}
+                      className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
+                    />
+                  }
+                />
+                <TooltipContent>
+                  <p>Audio Output: {audioConnections} connections</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          }
+        />
         <ContextMenuContent className="w-52">
           <ContextMenuLabel>Audio Reference</ContextMenuLabel>
           <ContextMenuSeparator />
