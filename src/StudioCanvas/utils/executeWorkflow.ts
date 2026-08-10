@@ -3,6 +3,7 @@
 import {
   type RegisterCanvasAssetResponse,
   TIMELINE_MEDIA_INPUT_HANDLE,
+  variationIndexFromHandle,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { registerCanvasOutput } from '@/lib/creative-assets/registerCanvasAsset';
@@ -158,6 +159,10 @@ const isHttpUrl = (value?: string | null): value is string =>
 
 // Readiness/availability check for an image reference. A signed URL counts as
 // available (the Backend resolves it to bytes), so base64 may be empty.
+//
+// A multi-variation (`images`) upstream is routed by the edge's source handle,
+// exactly as `imageRefFromOutput` routes the payload — the two must agree or a
+// 4-up node reads as "ready" to the payload builder and "missing" to readiness.
 const resolveImageInput = (
   edge: Edge,
   resolvedOutputs: Map<string, NodeOutput>,
@@ -166,6 +171,13 @@ const resolveImageInput = (
   const output = resolvedOutputs.get(edge.source);
   if (output?.type === 'image' && (output.base64 || isHttpUrl(output.url))) {
     return { base64: output.base64 ?? '', mimeType: output.mimeType };
+  }
+
+  if (output?.type === 'images') {
+    const item = output.items[variationIndexFromHandle(edge.sourceHandle)] ?? output.items[0];
+    if (item && (item.base64 || isHttpUrl(item.url))) {
+      return { base64: item.base64 ?? '', mimeType: item.mimeType };
+    }
   }
 
   const sourceNode = nodeById.get(edge.source);

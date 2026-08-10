@@ -289,6 +289,105 @@ describe('useStudioStore', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Bug #261: copy/cut carried nodes only, so a pasted group arrived unwired.
+// ---------------------------------------------------------------------------
+describe('clipboard carries the edges inside the selection', () => {
+  const connectedPair = (): { nodes: StudioNode[]; edges: Edge[] } => ({
+    nodes: [
+      {
+        id: 'gen',
+        position: { x: 0, y: 0 },
+        type: 'nanoGen',
+        data: { model: 'nano-banana' },
+        selected: true,
+      },
+      {
+        id: 'consumer',
+        position: { x: 300, y: 0 },
+        type: 'nanoGen',
+        data: { model: 'nano-banana' },
+        selected: true,
+      },
+      { id: 'outside', position: { x: 0, y: 300 }, type: 'image', data: { image: '' } },
+    ],
+    edges: [
+      {
+        id: 'e-internal',
+        source: 'gen',
+        sourceHandle: 'image-2',
+        target: 'consumer',
+        targetHandle: 'ref-image',
+      },
+      {
+        id: 'e-dangling',
+        source: 'outside',
+        sourceHandle: 'image',
+        target: 'consumer',
+        targetHandle: 'ref-images',
+      },
+    ],
+  });
+
+  beforeEach(() => {
+    const { nodes, edges } = connectedPair();
+    useStudioStore.setState({ nodes: [], edges: [], clipboard: [], clipboardEdges: [] });
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+    expect(useStudioStore.getState().edges).toHaveLength(2);
+  });
+
+  it('pastes the internal edge with both handles preserved', () => {
+    useStudioStore.getState().copySelectedNodes();
+    useStudioStore.getState().pasteNodes();
+
+    const state = useStudioStore.getState();
+    const pastedNodes = state.nodes.filter((node) => node.selected);
+    expect(pastedNodes).toHaveLength(2);
+
+    const pastedIds = new Set(pastedNodes.map((node) => node.id));
+    const pastedEdges = state.edges.filter(
+      (edge) => pastedIds.has(edge.source) && pastedIds.has(edge.target),
+    );
+    expect(pastedEdges).toHaveLength(1);
+    expect(pastedEdges[0].sourceHandle).toBe('image-2');
+    expect(pastedEdges[0].targetHandle).toBe('ref-image');
+    // Remapped onto the copies, not left pointing at the originals.
+    expect(pastedEdges[0].source).not.toBe('gen');
+    expect(pastedEdges[0].target).not.toBe('consumer');
+    expect(pastedEdges[0].id).not.toBe('e-internal');
+    // The originals and the dangling edge are untouched.
+    expect(state.edges.filter((edge) => edge.id === 'e-internal')).toHaveLength(1);
+    expect(state.edges.filter((edge) => edge.source === 'outside')).toHaveLength(1);
+  });
+
+  it('does not carry an edge with one endpoint outside the selection', () => {
+    useStudioStore.getState().copySelectedNodes();
+    expect(useStudioStore.getState().clipboardEdges.map((edge) => edge.id)).toEqual(['e-internal']);
+
+    useStudioStore.getState().pasteNodes();
+    const state = useStudioStore.getState();
+    const pastedIds = new Set(state.nodes.filter((node) => node.selected).map((node) => node.id));
+    expect(state.edges.filter((edge) => pastedIds.has(edge.target))).toHaveLength(1);
+  });
+
+  it('cut then paste restores the internal edge', () => {
+    useStudioStore.getState().cutSelectedNodes();
+    expect(useStudioStore.getState().nodes.map((node) => node.id)).toEqual(['outside']);
+    expect(useStudioStore.getState().edges).toHaveLength(0);
+
+    useStudioStore.getState().pasteNodes();
+    const state = useStudioStore.getState();
+    const pastedIds = new Set(state.nodes.filter((node) => node.selected).map((node) => node.id));
+    expect(pastedIds.size).toBe(2);
+    expect(state.edges).toHaveLength(1);
+    expect(state.edges[0].sourceHandle).toBe('image-2');
+    expect(state.edges[0].targetHandle).toBe('ref-image');
+    expect(pastedIds.has(state.edges[0].source)).toBe(true);
+    expect(pastedIds.has(state.edges[0].target)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // normalizeEdges — legacy handle remapping and survival tests
 // These verify the root cause fix: setEdges/setNodes must not silently drop
 // edges whose handles need a canonical rename.

@@ -86,8 +86,10 @@ interface StudioState {
   resetForRoomSwitch: () => void;
   resetForBrandSwitch: () => void;
 
-  // Clipboard — canvas-level copy/cut/paste for selected nodes
+  // Clipboard — canvas-level copy/cut/paste for selected nodes and the edges
+  // wholly inside that selection, so a pasted group keeps its wiring.
   clipboard: StudioNode[];
+  clipboardEdges: Edge[];
   copySelectedNodes: () => void;
   cutSelectedNodes: () => void;
   pasteNodes: () => void;
@@ -177,6 +179,12 @@ const remapLegacyTargetHandle = (handle: string, targetNode: StudioNode): string
 
   return handle;
 };
+
+// Edges with BOTH endpoints inside the selection. A dangling edge (one endpoint
+// left behind on the canvas) has no counterpart to remap onto, so it is not
+// carried — pasting it would either re-wire the original or drop silently.
+const edgesWithinSelection = (edges: Edge[], selectedIds: Set<string>): Edge[] =>
+  edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target));
 
 const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
   if (!nodes || !Array.isArray(nodes)) return edges || [];
@@ -295,6 +303,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   brandId: undefined,
   activeRoomId: undefined,
   clipboard: [],
+  clipboardEdges: [],
 
   setBrandId: (id: string) => set({ brandId: id }),
   setActiveRoomId: (id: string | undefined) => set({ activeRoomId: id }),
@@ -592,10 +601,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   copySelectedNodes: () => {
-    const { nodes } = get();
+    const { nodes, edges } = get();
     const selected = nodes.filter((n) => n.selected);
     if (selected.length === 0) return;
-    set({ clipboard: selected });
+    set({
+      clipboard: selected,
+      clipboardEdges: edgesWithinSelection(edges, new Set(selected.map((n) => n.id))),
+    });
   },
 
   cutSelectedNodes: () => {
@@ -607,6 +619,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     get().takeSnapshot();
     set((state) => ({
       clipboard: selected,
+      clipboardEdges: edgesWithinSelection(edges, selectedIds),
       nodes: state.nodes.filter((n) => !n.selected),
       edges: state.edges.filter((e) => !selectedIds.has(e.source) && !selectedIds.has(e.target)),
       deletedNodeIds: [...state.deletedNodeIds, ...selected.map((n) => n.id)],
@@ -621,26 +634,46 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   pasteNodes: () => {
-    const { clipboard } = get();
+    const { clipboard, clipboardEdges } = get();
     if (clipboard.length === 0) return;
 
     get().takeSnapshot();
     const now = Date.now();
-    const pasted = clipboard.map((node, index) => ({
-      ...node,
-      id: `${node.type ?? 'node'}-paste-${now}-${index}`,
-      position: {
-        x: node.position.x + 20,
-        y: node.position.y + 20,
-      },
-      data: { ...node.data },
-      selected: true,
-    }));
+    const pastedIdByOriginalId = new Map<string, string>();
+    const pasted = clipboard.map((node, index) => {
+      const id = `${node.type ?? 'node'}-paste-${now}-${index}`;
+      pastedIdByOriginalId.set(node.id, id);
+      return {
+        ...node,
+        id,
+        position: {
+          x: node.position.x + 20,
+          y: node.position.y + 20,
+        },
+        data: { ...node.data },
+        selected: true,
+      };
+    });
+
+    // Handles are carried verbatim: a copy of a 4-up feeding `image-2` must paste
+    // as a copy feeding `image-2`, not collapse onto variation 0.
+    const pastedEdges = clipboardEdges.flatMap((edge, index) => {
+      const source = pastedIdByOriginalId.get(edge.source);
+      const target = pastedIdByOriginalId.get(edge.target);
+      if (!source || !target) return [];
+      return [{ ...edge, id: `e-paste-${now}-${index}`, source, target, selected: false }];
+    });
 
     set((state) => ({
       nodes: state.nodes.map((n) => ({ ...n, selected: false })).concat(pasted),
       saveTrigger: state.saveTrigger + 1,
     }));
+
+    // Through setEdges so normalizeEdges still validates handles and enforces the
+    // per-handle connection limits against the newly pasted nodes.
+    if (pastedEdges.length > 0) {
+      get().setEdges([...get().edges, ...pastedEdges]);
+    }
   },
 
   resetForBrandSwitch: () =>
@@ -653,6 +686,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       brandId: undefined,
       activeRoomId: undefined,
       clipboard: [],
+      clipboardEdges: [],
       history: { past: [], future: [] },
     }),
 
@@ -663,6 +697,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       deletedNodeIds: [],
       deletedEdgeIds: [],
       clipboard: [],
+      clipboardEdges: [],
       history: { past: [], future: [] },
     }),
 }));

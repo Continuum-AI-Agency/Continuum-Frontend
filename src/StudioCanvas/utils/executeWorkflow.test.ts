@@ -1548,6 +1548,105 @@ describe('executeWorkflow', () => {
       expect(second.generatedImages).toBeUndefined();
       expect(second.generatedImage).toBe('https://signed/solo.png');
     });
+
+    // Bug #258: a saved 4-up rehydrates as an `images` output, and readiness used
+    // to resolve every variation handle to undefined — the downstream consumer
+    // failed with "Missing connected input for ref-image" while the payload
+    // builder had already been routing the handle correctly.
+    const fourUpConsumerGraph = (
+      sourceHandle: string,
+      targetHandle: string,
+      consumer: StudioNode,
+    ) => ({
+      nodes: [
+        {
+          id: 'four-up',
+          position: { x: 0, y: 0 },
+          type: 'nanoGen',
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'four variations',
+            variationCount: 4,
+            generatedImage: 'https://signed/v0.png',
+            generatedImageUrl: 'https://signed/v0.png',
+            generatedImages: Array.from({ length: 4 }, (_unused, index) => ({
+              id: `v${index}`,
+              preview: `https://signed/v${index}.png`,
+              url: `https://signed/v${index}.png`,
+              storagePath: `brand-1/canvas/v${index}.png`,
+              storageBucket: 'brand-profile-assets',
+              assetId: `asset-${index}`,
+            })),
+          },
+        },
+        consumer,
+      ] as StudioNode[],
+      edges: [
+        {
+          id: 'e1',
+          source: 'four-up',
+          sourceHandle,
+          target: consumer.id,
+          targetHandle,
+        },
+      ] as Edge[],
+    });
+
+    it('feeds a chosen variation into a downstream generator instead of failing readiness', async () => {
+      const { nodes, edges } = fourUpConsumerGraph('image-2', 'ref-image', {
+        id: 'consumer',
+        position: { x: 400, y: 0 },
+        type: 'nanoGen',
+        data: { model: 'nano-banana', positivePrompt: 'remix the reference' },
+      } as StudioNode);
+      useStudioStore.getState().setNodes(nodes);
+      useStudioStore.getState().setEdges(edges);
+      expect(useStudioStore.getState().edges).toHaveLength(1);
+
+      const executeGeneration = mock(async () => ({
+        success: true,
+        output: { type: 'image', base64: 'remixed', mimeType: 'image/png' },
+      }));
+      await executeWorkflow(buildControls(executeGeneration) as never);
+
+      // Only the consumer runs — the 4-up is reused — and it runs at all.
+      expect(executeGeneration).toHaveBeenCalledTimes(1);
+      expect(executeGeneration.mock.calls[0][0]).toBe('consumer');
+      const payload = executeGeneration.mock.calls[0][1] as {
+        reference_images?: Array<{ image_url?: string; storage_path?: string }>;
+      };
+      expect(payload.reference_images?.[0]?.image_url).toBe('https://signed/v2.png');
+      expect(payload.reference_images?.[0]?.storage_path).toBe('brand-1/canvas/v2.png');
+      const consumerNode = useStudioStore.getState().nodes.find((n) => n.id === 'consumer');
+      expect(consumerNode?.data.error).toBeUndefined();
+    });
+
+    it('feeds a chosen variation into a video generator first-frame', async () => {
+      const { nodes, edges } = fourUpConsumerGraph('image-3', 'first-frame', {
+        id: 'video',
+        position: { x: 400, y: 0 },
+        type: 'veoFast',
+        data: { model: 'veo-3.1-fast', prompt: 'animate the frame' },
+      } as StudioNode);
+      useStudioStore.getState().setNodes(nodes);
+      useStudioStore.getState().setEdges(edges);
+      expect(useStudioStore.getState().edges).toHaveLength(1);
+
+      const executeGeneration = mock(async () => ({
+        success: true,
+        output: { type: 'video', url: 'https://signed/clip.mp4' },
+      }));
+      await executeWorkflow(buildControls(executeGeneration) as never);
+
+      expect(executeGeneration).toHaveBeenCalledTimes(1);
+      expect(executeGeneration.mock.calls[0][0]).toBe('video');
+      const payload = executeGeneration.mock.calls[0][1] as {
+        first_frame?: { image_url?: string };
+      };
+      expect(payload.first_frame?.image_url).toBe('https://signed/v3.png');
+      const videoNode = useStudioStore.getState().nodes.find((n) => n.id === 'video');
+      expect(videoNode?.data.error).toBeUndefined();
+    });
   });
 
   describe('skip / regenerate by content', () => {
