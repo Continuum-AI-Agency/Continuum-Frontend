@@ -123,17 +123,19 @@ export function ApplyReallocationDialog({
         }
       }}
     >
-      <AlertDialogTrigger asChild>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 shrink-0 gap-1.5 px-2 text-xs"
-        >
-          <WandSparklesIcon className="size-3.5" />
-          Apply budgets
-        </Button>
-      </AlertDialogTrigger>
+      <AlertDialogTrigger
+        render={
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 gap-1.5 px-2 text-xs"
+          >
+            <WandSparklesIcon className="size-3.5" />
+            Apply budgets
+          </Button>
+        }
+      />
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Apply the proposed budgets</AlertDialogTitle>

@@ -140,17 +140,19 @@ export function RevertApplyDialog({
         }
       }}
     >
-      <AlertDialogTrigger asChild>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-6 shrink-0 gap-1 px-1.5 text-2xs text-muted-foreground hover:text-foreground"
-        >
-          <Undo2Icon aria-hidden="true" className="size-3" />
-          {isStatus ? 'Unpause' : 'Revert'}
-        </Button>
-      </AlertDialogTrigger>
+      <AlertDialogTrigger
+        render={
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-6 shrink-0 gap-1 px-1.5 text-2xs text-muted-foreground hover:text-foreground"
+          >
+            <Undo2Icon aria-hidden="true" className="size-3" />
+            {isStatus ? 'Unpause' : 'Revert'}
+          </Button>
+        }
+      />
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>

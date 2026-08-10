@@ -252,9 +252,7 @@ export function PromptTemplatePicker({
           </div>
 
           <div className="mt-4 flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button variant="secondary">Cancel</Button>
-            </DialogClose>
+            <DialogClose render={<Button variant="secondary">Cancel</Button>} />
             <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? 'Saving…' : 'Save'}
             </Button>

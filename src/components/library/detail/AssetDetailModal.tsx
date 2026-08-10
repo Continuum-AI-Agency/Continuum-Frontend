@@ -315,10 +315,19 @@ function AssetDetailDialog({
     // Non-modal on purpose: the grid stays legible, scrollable and clickable
     // beside the panel, and clicking another creative swaps what is docked here
     // rather than closing it. Escape and the close button are the ways out.
-    <Dialog open modal={false} onOpenChange={(open) => (!open ? onClose() : undefined)}>
+    <Dialog
+      open
+      modal={false}
+      onOpenChange={(open, details) => {
+        // Clicking another creative swaps what is docked here rather than closing the panel.
+        // Radix expressed this as onInteractOutside+preventDefault on the content; Base UI
+        // reports the reason on the open-change instead.
+        if (!open && details?.reason === 'outside-press') return;
+        if (!open) onClose();
+      }}
+    >
       <DialogContent
         showOverlay={false}
-        onInteractOutside={(event) => event.preventDefault()}
         className="fixed inset-4 flex h-auto w-auto max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0 shadow-2xl sm:max-w-none"
       >
         <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 pr-14">

@@ -125,12 +125,14 @@ export function CreateCampaignGoalDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" size="sm" variant={compact ? 'secondary' : 'default'}>
-          <Plus className="size-3.5" />
-          {compact ? 'New' : 'Create campaign Goal'}
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          <Button type="button" size="sm" variant={compact ? 'secondary' : 'default'}>
+            <Plus className="size-3.5" />
+            {compact ? 'New' : 'Create campaign Goal'}
+          </Button>
+        }
+      />
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <form onSubmit={submit}>
           <DialogHeader>

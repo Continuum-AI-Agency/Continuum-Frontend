@@ -66,17 +66,19 @@ export function JainaHeader({
 
       <div className="flex items-center gap-2">
         <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="hover:bg-white/10"
-              aria-label="Clear Memory"
-            >
-              <ResetIcon />
-              <span className="hidden xs:inline">Memory</span>
-            </Button>
-          </AlertDialogTrigger>
+          <AlertDialogTrigger
+            render={
+              <Button
+                variant="secondary"
+                size="sm"
+                className="hover:bg-white/10"
+                aria-label="Clear Memory"
+              >
+                <ResetIcon />
+                <span className="hidden xs:inline">Memory</span>
+              </Button>
+            }
+          />
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Clear Jaina's memory?</AlertDialogTitle>
@@ -98,17 +100,19 @@ export function JainaHeader({
         </AlertDialog>
 
         <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="hover:bg-white/10"
-              aria-label="Clear Conversation"
-            >
-              <Cross2Icon />
-              <span className="hidden xs:inline">Clear</span>
-            </Button>
-          </AlertDialogTrigger>
+          <AlertDialogTrigger
+            render={
+              <Button
+                variant="secondary"
+                size="sm"
+                className="hover:bg-white/10"
+                aria-label="Clear Conversation"
+              >
+                <Cross2Icon />
+                <span className="hidden xs:inline">Clear</span>
+              </Button>
+            }
+          />
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Clear this conversation?</AlertDialogTitle>

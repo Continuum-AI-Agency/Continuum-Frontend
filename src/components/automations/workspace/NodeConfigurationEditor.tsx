@@ -301,16 +301,18 @@ function PromptField({
           ) : null}
           {!expanded ? (
             <Dialog>
-              <DialogTrigger asChild>
-                <InputGroupButton
-                  size="icon-xs"
-                  aria-label="Open large prompt editor"
-                  title="Open large prompt editor"
-                  disabled={disabled}
-                >
-                  <Expand aria-hidden="true" />
-                </InputGroupButton>
-              </DialogTrigger>
+              <DialogTrigger
+                render={
+                  <InputGroupButton
+                    size="icon-xs"
+                    aria-label="Open large prompt editor"
+                    title="Open large prompt editor"
+                    disabled={disabled}
+                  >
+                    <Expand aria-hidden="true" />
+                  </InputGroupButton>
+                }
+              />
               <DialogContent className="automation-workflow-popover rounded-lg sm:max-w-3xl">
                 <DialogHeader>
                   <DialogTitle>{label}</DialogTitle>

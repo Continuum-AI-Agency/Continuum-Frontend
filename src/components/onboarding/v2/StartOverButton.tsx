@@ -20,17 +20,19 @@ type StartOverButtonProps = {
 export function StartOverButton({ onConfirm, disabled }: StartOverButtonProps) {
   return (
     <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          className="gap-1.5 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash className="h-3.5 w-3.5" />
-          Start over
-        </Button>
-      </AlertDialogTrigger>
+      <AlertDialogTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            className="gap-1.5 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash className="h-3.5 w-3.5" />
+            Start over
+          </Button>
+        }
+      />
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Start over?</AlertDialogTitle>

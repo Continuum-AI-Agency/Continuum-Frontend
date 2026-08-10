@@ -80,12 +80,14 @@ export function GoalRoutingDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-2xs">
-          <Settings2 className="size-3" />
-          Configure
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-2xs">
+            <Settings2 className="size-3" />
+            Configure
+          </Button>
+        }
+      />
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Route Goal stakeholders</DialogTitle>

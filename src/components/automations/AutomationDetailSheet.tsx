@@ -222,12 +222,14 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
                   </Button>
                 )}
                 <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button type="button" size="sm" variant="ghost" className="text-destructive">
-                      <Trash2Icon className="size-3.5" />
-                      Delete
-                    </Button>
-                  </AlertDialogTrigger>
+                  <AlertDialogTrigger
+                    render={
+                      <Button type="button" size="sm" variant="ghost" className="text-destructive">
+                        <Trash2Icon className="size-3.5" />
+                        Delete
+                      </Button>
+                    }
+                  />
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete this automation?</AlertDialogTitle>

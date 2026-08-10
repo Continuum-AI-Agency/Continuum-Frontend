@@ -918,12 +918,14 @@ export function PortfolioManagePanel({
 
       <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
         <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-destructive">
-              <Archive className="size-3.5" />
-              Archive
-            </Button>
-          </AlertDialogTrigger>
+          <AlertDialogTrigger
+            render={
+              <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-destructive">
+                <Archive className="size-3.5" />
+                Archive
+              </Button>
+            }
+          />
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Archive “{portfolio.name}”?</AlertDialogTitle>

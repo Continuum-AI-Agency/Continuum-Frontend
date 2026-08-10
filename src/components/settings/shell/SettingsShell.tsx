@@ -62,12 +62,14 @@ export function SettingsShell({
         <SwitchingIndicator />
         <div className="flex items-center justify-between @[56rem]/settings:hidden">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Menu className="h-4 w-4" />
-                Sections
-              </Button>
-            </SheetTrigger>
+            <SheetTrigger
+              render={
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Menu className="h-4 w-4" />
+                  Sections
+                </Button>
+              }
+            />
             <SheetContent
               side="left"
               className="w-[min(var(--shell-secondary-w),calc(100vw-1rem))] px-3 py-6"

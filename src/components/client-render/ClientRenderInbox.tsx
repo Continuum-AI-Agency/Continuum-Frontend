@@ -43,23 +43,25 @@ export function ClientRenderInbox() {
   return (
     <>
       <Dialog open={queue.inboxOpen} onOpenChange={queue.setInboxOpen}>
-        <DialogTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="relative"
-            aria-label={`${queue.readyCount} render jobs ready`}
-            title="Ready to render"
-          >
-            <Cpu className="size-4" />
-            {queue.readyCount > 0 ? (
-              <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-4 text-primary-foreground">
-                {queue.readyCount > 99 ? '99+' : queue.readyCount}
-              </span>
-            ) : null}
-          </Button>
-        </DialogTrigger>
+        <DialogTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="relative"
+              aria-label={`${queue.readyCount} render jobs ready`}
+              title="Ready to render"
+            >
+              <Cpu className="size-4" />
+              {queue.readyCount > 0 ? (
+                <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-4 text-primary-foreground">
+                  {queue.readyCount > 99 ? '99+' : queue.readyCount}
+                </span>
+              ) : null}
+            </Button>
+          }
+        />
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Ready to render</DialogTitle>

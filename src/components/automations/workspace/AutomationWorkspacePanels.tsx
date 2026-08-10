@@ -362,21 +362,17 @@ export function WebhookManager({
         setOpen(next);
       }}
     >
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <Webhook data-icon="inline-start" />
-          <span className="hidden xl:inline">Webhooks</span>
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          <Button size="sm" variant="outline">
+            <Webhook data-icon="inline-start" />
+            <span className="hidden xl:inline">Webhooks</span>
+          </Button>
+        }
+      />
       <DialogContent
         className="max-h-[85vh] overflow-y-auto sm:max-w-2xl"
         showCloseButton={!secretHeld}
-        onEscapeKeyDown={(event) => {
-          if (secretHeld) event.preventDefault();
-        }}
-        onInteractOutside={(event) => {
-          if (secretHeld) event.preventDefault();
-        }}
       >
         <DialogHeader>
           <DialogTitle>Managed webhooks</DialogTitle>
@@ -462,17 +458,19 @@ export function WebhookManager({
                         {endpoint.enabled ? 'Active' : 'Draft'}
                       </Badge>
                       <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="size-7"
-                            disabled={busy || secretHeld}
-                            aria-label={`Rotate ${endpoint.name} signing secret`}
-                          >
-                            <RefreshCw aria-hidden="true" />
-                          </Button>
-                        </AlertDialogTrigger>
+                        <AlertDialogTrigger
+                          render={
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="size-7"
+                              disabled={busy || secretHeld}
+                              aria-label={`Rotate ${endpoint.name} signing secret`}
+                            >
+                              <RefreshCw aria-hidden="true" />
+                            </Button>
+                          }
+                        />
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Rotate this signing secret?</AlertDialogTitle>

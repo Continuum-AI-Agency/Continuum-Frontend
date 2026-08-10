@@ -55,15 +55,17 @@ export function CreativeLibrarySidebar({
                   <Archive className="h-5 w-5" />
                   <SheetTitle className="font-medium text-white">Creative Library</SheetTitle>
                 </div>
-                <SheetClose asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="h-8 w-8 rounded-full p-0 text-gray-400 hover:bg-white/10 hover:text-white"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </SheetClose>
+                <SheetClose
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="h-8 w-8 rounded-full p-0 text-gray-400 hover:bg-white/10 hover:text-white"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  }
+                />
               </div>
 
               <div className="flex-1 overflow-hidden">

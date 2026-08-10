@@ -2,9 +2,9 @@
 
 import type { FigmaFile, FigmaFrame, FigmaProject } from '@continuum/contracts';
 import { Check, Loader2, RefreshCw } from 'lucide-react';
-import { FigmaIcon } from '@/components/shared/icons';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { FigmaIcon } from '@/components/shared/icons';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -131,12 +131,14 @@ export function FigmaImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
-          <FigmaIcon className="size-4" />
-          <span className="hidden sm:inline">Figma</span>
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          <Button type="button" variant="outline" size="sm">
+            <FigmaIcon className="size-4" />
+            <span className="hidden sm:inline">Figma</span>
+          </Button>
+        }
+      />
       <DialogContent className="flex max-h-[82dvh] flex-col overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="border-b border-border px-5 py-4">
           <DialogTitle>Import from Figma</DialogTitle>

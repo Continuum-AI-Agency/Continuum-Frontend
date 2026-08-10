@@ -88,12 +88,14 @@ export function LibraryTagManager({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="ghost" className="h-8 text-muted-foreground">
-          <Tags className="size-3.5" />
-          Manage tags
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          <Button type="button" size="sm" variant="ghost" className="h-8 text-muted-foreground">
+            <Tags className="size-3.5" />
+            Manage tags
+          </Button>
+        }
+      />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Manage tags</DialogTitle>

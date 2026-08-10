@@ -323,11 +323,13 @@ export function ImageMarkupDialog({
               Draw on top of the image. Use pen, eraser, and undo.
             </DialogDescription>
           </div>
-          <DialogClose asChild>
-            <Button size="icon" variant="ghost" aria-label="Close">
-              <Cross2Icon />
-            </Button>
-          </DialogClose>
+          <DialogClose
+            render={
+              <Button size="icon" variant="ghost" aria-label="Close">
+                <Cross2Icon />
+              </Button>
+            }
+          />
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -450,9 +452,7 @@ export function ImageMarkupDialog({
         </div>
 
         <div className="mt-4 flex items-center justify-end gap-2">
-          <DialogClose asChild>
-            <Button variant="secondary">Cancel</Button>
-          </DialogClose>
+          <DialogClose render={<Button variant="secondary">Cancel</Button>} />
           <Button onClick={handleSave}>Save markup</Button>
         </div>
       </DialogContent>

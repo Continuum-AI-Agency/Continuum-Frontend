@@ -232,18 +232,20 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
                 </Button>
               ) : null}
               <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={isMutating}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <Unplug className="size-3.5" />
-                    Revoke
-                  </Button>
-                </AlertDialogTrigger>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={isMutating}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Unplug className="size-3.5" />
+                      Revoke
+                    </Button>
+                  }
+                />
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Revoke this chat identity?</AlertDialogTitle>

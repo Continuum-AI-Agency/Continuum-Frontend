@@ -153,18 +153,20 @@ function CboCampaignRow({
       </div>
 
       <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-7 shrink-0 gap-1.5 px-3 text-xs"
-            onClick={requestPreview}
-          >
-            <SplitIcon className="size-3.5" />
-            Convert to ad-set budgets
-          </Button>
-        </AlertDialogTrigger>
+        <AlertDialogTrigger
+          render={
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 shrink-0 gap-1.5 px-3 text-xs"
+              onClick={requestPreview}
+            >
+              <SplitIcon className="size-3.5" />
+              Convert to ad-set budgets
+            </Button>
+          }
+        />
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>

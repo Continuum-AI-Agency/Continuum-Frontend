@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { useState } from 'react';
 import {
   AlertDialog,
@@ -17,7 +17,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type AdminActionConfirmationProps = {
-  trigger: ReactNode;
+  /** Single element: it becomes the alert-dialog trigger via Base UI `render`. */
+  trigger: ReactElement;
   title: string;
   description: string;
   confirmLabel: string;
@@ -48,7 +49,7 @@ export function AdminActionConfirmation({
         if (!nextOpen) setTypedEmail('');
       }}
     >
-      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+      <AlertDialogTrigger render={trigger} />
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>

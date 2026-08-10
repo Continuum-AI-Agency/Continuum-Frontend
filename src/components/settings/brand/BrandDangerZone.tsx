@@ -76,11 +76,13 @@ export function BrandDangerZone({ brandName, hasProfile, canDelete }: BrandDange
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button variant="destructive" disabled={isPending || !hasProfile}>
-              Delete brand profile
-            </Button>
-          </DialogTrigger>
+          <DialogTrigger
+            render={
+              <Button variant="destructive" disabled={isPending || !hasProfile}>
+                Delete brand profile
+              </Button>
+            }
+          />
           <DialogContent className="sm:max-w-[420px]">
             <DialogTitle>Delete this brand profile?</DialogTitle>
             <DialogDescription>
