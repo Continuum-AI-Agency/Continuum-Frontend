@@ -39,7 +39,7 @@ describe('coerceNodeConfig — the agent write-time guard', () => {
   it('rejects a model that is not an image generator', () => {
     const result = coerceNodeConfig('nanoGen', { model: 'veo-3.1' });
 
-    expect(result.data.model).toBe('nano-banana-2');
+    expect(result.data.model).toBe('nano-banana-2-lite');
     expect(result.changes.join(' ')).toContain('not an image generator');
   });
 

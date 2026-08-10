@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   coerceImageSize,
   DEFAULT_IMAGE_GENERATOR_MODEL,
+  DEFAULT_IMAGE_SIZE,
   isImageGeneratorModel,
 } from './image-size';
 import {
@@ -526,7 +527,8 @@ const apiRenderTargetHandles = (node: GraphNodeLike): string[] => {
   return variables.flatMap((variable) => {
     if (!variable || typeof variable !== 'object') return [];
     const value = variable as { key?: unknown; kind?: unknown };
-    if (!['image', 'video'].includes(String(value.kind)) || typeof value.key !== 'string') return [];
+    if (!['image', 'video'].includes(String(value.kind)) || typeof value.key !== 'string')
+      return [];
     return [`variable-${value.key}`];
   });
 };
@@ -1142,7 +1144,10 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
       return {
         data: {
           model: DEFAULT_IMAGE_GENERATOR_MODEL,
-          imageSize: '512px',
+          // Derived, not literal: coerceNodeConfig re-checks the size against the
+          // model anyway, so a hardcoded tier here would silently disagree with the
+          // node it actually produces the moment the default model changes.
+          imageSize: DEFAULT_IMAGE_SIZE[DEFAULT_IMAGE_GENERATOR_MODEL],
           positivePrompt: '',
           negativePrompt: '',
           aspectRatio: '16:9',

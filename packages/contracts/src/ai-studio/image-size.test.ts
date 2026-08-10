@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import {
   coerceImageSize,
+  DEFAULT_IMAGE_GENERATOR_MODEL,
+  FIXED_IMAGE_PIXELS,
+  IMAGE_MODEL_SIZES,
   IMAGE_SIZES,
   imageResolutionFor,
   imageSizeSchema,
@@ -79,5 +82,34 @@ describe('imageResolutionFor', () => {
     expect(imageResolutionFor('nano-banana-2', '1K')).toBe('1024x1024');
     expect(imageResolutionFor('nano-banana-pro', '2K')).toBe('2048x2048');
     expect(imageResolutionFor('nano-banana-pro', '4K')).toBe('4096x4096');
+  });
+});
+
+/*
+ * Flash-Lite is the default a new image node is born on, and it is the one model in the
+ * table that accepts exactly one size. Measured against the live API on 2026-08-08: 512px,
+ * 2K and 4K each return `400 Image size <N> is not supported for this model`. That is the
+ * honest opposite of `nano-banana` (which accepts 2K with a 200 and renders 1024 anyway),
+ * and it is why offering any other tier would ship a guaranteed 400.
+ */
+describe('nano-banana-2-lite', () => {
+  it('is the default model a new image node is born on', () => {
+    expect(DEFAULT_IMAGE_GENERATOR_MODEL).toBe('nano-banana-2-lite');
+  });
+
+  it('offers 1K and nothing else', () => {
+    expect(IMAGE_MODEL_SIZES['nano-banana-2-lite']).toEqual(['1K']);
+    expect(supportsImageSize('nano-banana-2-lite')).toBe(true);
+  });
+
+  it('corrects every tier it cannot render to 1K rather than passing a 400 along', () => {
+    for (const requested of ['512px', '2K', '4K', '1024px', 'enormous', undefined]) {
+      expect(coerceImageSize('nano-banana-2-lite', requested)).toBe('1K');
+    }
+  });
+
+  it('reports a 1024 square resolution, not a fixed-pixel label', () => {
+    expect(imageResolutionFor('nano-banana-2-lite', '1K')).toBe('1024x1024');
+    expect(FIXED_IMAGE_PIXELS['nano-banana-2-lite']).toBeUndefined();
   });
 });

@@ -592,13 +592,15 @@ export function buildNanoGenPayload(
         ? 'gemini-3-pro-image'
         : data.model === 'nano-banana-2'
           ? 'gemini-3.1-flash-image'
-          : data.model === 'gpt-image-2'
-            ? 'openai/gpt-image-2/edit'
-            : data.model === 'flux-2-pro'
-              ? 'fal-ai/flux-2-pro/edit'
-              : data.model === 'flux-2-max'
-                ? 'fal-ai/flux-2-max/edit'
-                : data.model;
+          : data.model === 'nano-banana-2-lite'
+            ? 'gemini-3.1-flash-lite-image'
+            : data.model === 'gpt-image-2'
+              ? 'openai/gpt-image-2/edit'
+              : data.model === 'flux-2-pro'
+                ? 'fal-ai/flux-2-pro/edit'
+                : data.model === 'flux-2-max'
+                  ? 'fal-ai/flux-2-max/edit'
+                  : data.model;
   // The size the model will actually be sent. Every value that is not legal FOR THIS
   // MODEL — an agent-written "1024px", a 512px left behind by a switch to Pro — is
   // corrected here rather than travelling on to a 400. `undefined` means the model

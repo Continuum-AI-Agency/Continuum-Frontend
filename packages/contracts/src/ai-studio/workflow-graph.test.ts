@@ -75,7 +75,7 @@ describe('node type enum + schema', () => {
     expect(STUDIO_NODE_TYPES).toContain('frameExtract');
     expect(STUDIO_NODE_TYPES).not.toContain('videoEditor');
     expect(STUDIO_NODE_TYPES).toContain('omniGen');
-    expect(STUDIO_NODE_TYPES).toHaveLength(17);
+    expect(STUDIO_NODE_TYPES).toHaveLength(18);
   });
 
   it('rejects an unknown node type', () => {
@@ -995,8 +995,10 @@ describe('media kind ↔ handle compatibility', () => {
 describe('createNodeData defaults', () => {
   it('mirrors the canvas nanoGen defaults', () => {
     const { data, style } = createNodeData('nanoGen');
-    expect(data.model).toBe('nano-banana-2');
-    expect(data.imageSize).toBe('512px');
+    // Both derived from DEFAULT_IMAGE_GENERATOR_MODEL: Flash-Lite is the baseline a new
+    // image node is born on, and 1K is the only tier it accepts.
+    expect(data.model).toBe('nano-banana-2-lite');
+    expect(data.imageSize).toBe('1K');
     expect(style).toEqual({ width: 400, height: 225 });
   });
 

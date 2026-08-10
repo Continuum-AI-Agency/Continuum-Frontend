@@ -26,6 +26,7 @@ export const IMAGE_GENERATOR_MODELS = [
   'nano-banana',
   'nano-banana-pro',
   'nano-banana-2',
+  'nano-banana-2-lite',
   'gpt-image-2',
   'flux-2-pro',
   'flux-2-max',
@@ -34,7 +35,7 @@ export const IMAGE_GENERATOR_MODELS = [
 export type ImageGeneratorModel = (typeof IMAGE_GENERATOR_MODELS)[number];
 export const imageGeneratorModelSchema = z.enum(IMAGE_GENERATOR_MODELS);
 
-export const DEFAULT_IMAGE_GENERATOR_MODEL: ImageGeneratorModel = 'nano-banana-2';
+export const DEFAULT_IMAGE_GENERATOR_MODEL: ImageGeneratorModel = 'nano-banana-2-lite';
 
 export const isImageGeneratorModel = (value: unknown): value is ImageGeneratorModel =>
   typeof value === 'string' && (IMAGE_GENERATOR_MODELS as readonly string[]).includes(value);
@@ -52,12 +53,18 @@ export const isImageGeneratorModel = (value: unknown): value is ImageGeneratorMo
  * "images create in 1024px". The node therefore offers no size for it and says
  * `1024px (fixed)` on its label instead of implying a choice it does not have.
  *
+ * `nano-banana-2-lite` is the honest opposite and was measured the same way: every
+ * tier other than `1K` comes back `400 Image size <N> is not supported for this
+ * model`, including `512px`. It is genuinely 1K-only, so offering any other tier
+ * would ship a guaranteed 400 rather than a silent downgrade.
+ *
  * The fal-hosted models (gpt-image-2, flux-2-*) size by aspect ratio alone.
  */
 export const IMAGE_MODEL_SIZES: Record<ImageGeneratorModel, readonly ImageSize[]> = {
   'nano-banana': [],
   'nano-banana-pro': ['1K', '2K', '4K'],
   'nano-banana-2': ['512px', '1K', '2K', '4K'],
+  'nano-banana-2-lite': ['1K'],
   'gpt-image-2': [],
   'flux-2-pro': [],
   'flux-2-max': [],
@@ -71,6 +78,7 @@ export const FIXED_IMAGE_PIXELS: Partial<Record<ImageGeneratorModel, number>> = 
 export const DEFAULT_IMAGE_SIZE: Partial<Record<ImageGeneratorModel, ImageSize>> = {
   'nano-banana-pro': '1K',
   'nano-banana-2': '512px',
+  'nano-banana-2-lite': '1K',
 };
 
 export const supportsImageSize = (model: ImageGeneratorModel): boolean =>

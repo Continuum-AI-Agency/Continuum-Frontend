@@ -1,7 +1,9 @@
+import { Copy, Download, Image, Play, Trash2, TriangleAlert } from 'lucide-react';
 import {
   type BrandBookPieceKind,
   type BrandDirectionPiece,
   coerceImageSize,
+  DEFAULT_IMAGE_GENERATOR_MODEL,
   FIXED_IMAGE_PIXELS,
   getImageVariationHandleId,
   type ImageGeneratorModel,
@@ -9,14 +11,6 @@ import {
   supportsImageSize,
   variationIndexFromHandle,
 } from '@continuum/contracts';
-import {
-  CopyIcon,
-  DownloadIcon,
-  ExclamationTriangleIcon,
-  ImageIcon,
-  PlayIcon,
-  TrashIcon,
-} from '@radix-ui/react-icons';
 import {
   Handle,
   type HandleProps,
@@ -333,7 +327,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   const aspectRatio = data.aspectRatio || '16:9';
   const fileBaseName = `image-${id}`;
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
-  const model = data.model ?? 'nano-banana-2';
+  const model = data.model ?? DEFAULT_IMAGE_GENERATOR_MODEL;
   const sizeOptions = imageSizesForModel(model);
   const currentImageSize = coerceImageSize(model, data.imageSize);
   const modelLabel =
@@ -341,13 +335,15 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       ? 'Nano Banana Pro'
       : model === 'nano-banana-2'
         ? 'Nano Banana 2'
-        : model === 'gpt-image-2'
-          ? 'GPT Image 2'
-          : model === 'flux-2-pro'
-            ? 'FLUX.2 Pro'
-            : model === 'flux-2-max'
-              ? 'FLUX.2 Max'
-              : 'Nano Banana';
+        : model === 'nano-banana-2-lite'
+          ? 'Nano Banana 2 Lite'
+          : model === 'gpt-image-2'
+            ? 'GPT Image 2'
+            : model === 'flux-2-pro'
+              ? 'FLUX.2 Pro'
+              : model === 'flux-2-max'
+                ? 'FLUX.2 Max'
+                : 'Nano Banana';
   // A model with no size parameter still renders at SOME size. Saying nothing let
   // users believe the node had chosen one; say the size it actually produces.
   const fixedPixels = FIXED_IMAGE_PIXELS[model];
@@ -445,7 +441,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                 onClick={handleRun}
                 title="Run Node"
               >
-                <PlayIcon className="h-4 w-4" />
+                <Play className="h-4 w-4" />
               </Button>
             </Toolbar>
 
@@ -475,7 +471,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                     <Empty>
                       <EmptyHeader>
                         <EmptyMedia variant="icon">
-                          <ExclamationTriangleIcon className="text-destructive" />
+                          <TriangleAlert className="text-destructive" />
                         </EmptyMedia>
                         <EmptyTitle>{errorCopy.title}</EmptyTitle>
                         <EmptyDescription>{errorCopy.guidance}</EmptyDescription>
@@ -522,7 +518,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                           title={`Download variation ${index + 1}`}
                           aria-label={`Download variation ${index + 1}`}
                         >
-                          <DownloadIcon className="h-3 w-3" />
+                          <Download className="h-3 w-3" />
                         </Button>
                       </div>
                     ))}
@@ -547,7 +543,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                       title="Download Output"
                       aria-label="Download generated image"
                     >
-                      <DownloadIcon className="h-4 w-4" />
+                      <Download className="h-4 w-4" />
                     </Button>
                   </div>
                 ) : (
@@ -555,7 +551,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                     <Empty>
                       <EmptyHeader>
                         <EmptyMedia variant="icon">
-                          <ImageIcon />
+                          <Image />
                         </EmptyMedia>
                         <EmptyTitle>No Image</EmptyTitle>
                         <EmptyDescription>Generated image will appear here</EmptyDescription>
@@ -655,22 +651,28 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           <ContextMenuSubTrigger>Model</ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-44">
             <ContextMenuCheckboxItem
-              checked={(data.model || 'nano-banana-2') === 'nano-banana'}
+              checked={model === 'nano-banana'}
               onClick={() => handleModelChange('nano-banana')}
             >
               Nano Banana
             </ContextMenuCheckboxItem>
             <ContextMenuCheckboxItem
-              checked={data.model === 'nano-banana-pro'}
+              checked={model === 'nano-banana-pro'}
               onClick={() => handleModelChange('nano-banana-pro')}
             >
               Nano Banana Pro
             </ContextMenuCheckboxItem>
             <ContextMenuCheckboxItem
-              checked={(data.model || 'nano-banana-2') === 'nano-banana-2'}
+              checked={model === 'nano-banana-2'}
               onClick={() => handleModelChange('nano-banana-2')}
             >
               Nano Banana 2
+            </ContextMenuCheckboxItem>
+            <ContextMenuCheckboxItem
+              checked={model === 'nano-banana-2-lite'}
+              onClick={() => handleModelChange('nano-banana-2-lite')}
+            >
+              Nano Banana 2 Lite
             </ContextMenuCheckboxItem>
             <ContextMenuCheckboxItem
               checked={data.model === 'gpt-image-2'}
@@ -711,9 +713,9 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
         <ContextMenuSub>
           <ContextMenuSubTrigger>Aspect Ratio</ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-36">
-            {(data.model === 'nano-banana-2'
+            {(model === 'nano-banana-2'
               ? ['1:1', '4:5', '5:4', '16:9', '9:16', '4:3', '3:4']
-              : data.model === 'flux-2-pro' || data.model === 'flux-2-max'
+              : model === 'nano-banana-2-lite' || model === 'flux-2-pro' || model === 'flux-2-max'
                 ? ['1:1', '4:5', '5:4', '16:9', '9:16', '4:3', '3:4', '21:9']
                 : ['1:1', '16:9', '9:16', '4:3', '3:4']
             ).map((value) => (
@@ -729,17 +731,17 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
         </ContextMenuSub>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={handleRun}>
-          <PlayIcon className="mr-2 h-4 w-4" />
+          <Play className="mr-2 h-4 w-4" />
           Run Node
           <ContextMenuShortcut>R</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={() => duplicateNode(id)}>
-          <CopyIcon className="mr-2 h-4 w-4" />
+          <Copy className="mr-2 h-4 w-4" />
           Duplicate
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={handleDownload} disabled={!previewImage}>
-          <DownloadIcon className="mr-2 h-4 w-4" />
+          <Download className="mr-2 h-4 w-4" />
           Download Output
         </ContextMenuItem>
         <ContextMenuSeparator />
@@ -747,7 +749,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           className="text-destructive focus:text-destructive"
           onClick={() => deleteNode(id)}
         >
-          <TrashIcon className="mr-2 h-4 w-4" />
+          <Trash2 className="mr-2 h-4 w-4" />
           Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
         </ContextMenuItem>
