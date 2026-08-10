@@ -396,11 +396,18 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
                 error: undefined,
               }
             : {
+                // The clip exists — persistTimelineRender already put a real
+                // media.assets row in the Library — it just could not be applied to
+                // the node. Carrying the asset id (without generatedVideo, which
+                // would read as a successful render) is what lets the node say where
+                // the output went instead of sitting there paused and mute (#253).
                 committed: false,
+                renderOutputAssetId: persisted.assetId,
+                renderOutputAssetVersionId: persisted.versionId,
                 error:
                   response.outcome === 'stale'
-                    ? 'Timeline changed while this render was running. Render again to apply it.'
-                    : 'The Video Editor node was removed before the render finished.',
+                    ? 'Timeline changed while this render was running. The clip is in your Library — render again to apply it here.'
+                    : 'The Video Editor node was removed before the render finished. The clip is in your Library.',
               }),
           ...(request
             ? {

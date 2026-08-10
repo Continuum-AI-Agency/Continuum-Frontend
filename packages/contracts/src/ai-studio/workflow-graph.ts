@@ -198,6 +198,50 @@ export const VIDEO_GENERATOR_MODEL_GROUPS: readonly VideoGeneratorModelGroup[] =
     ),
   }));
 
+/**
+ * Clip length, in seconds. Veo renders 4, 6 or 8 and nothing else, and it renders
+ * anything above 720p at 8 seconds only — both rules are enforced by the Backend
+ * request schema (App/ai-studio/types.ts `veoResolutionsRequiring8s`), so a node
+ * carrying an illegal length does not fail at write time, it 400s at Run.
+ */
+export const VIDEO_GENERATOR_DURATIONS = [4, 6, 8] as const;
+export type VideoGeneratorDurationSeconds = (typeof VIDEO_GENERATOR_DURATIONS)[number];
+export const DEFAULT_VIDEO_GENERATOR_DURATION: VideoGeneratorDurationSeconds = 8;
+export const VIDEO_GENERATOR_DURATION_NOTE =
+  'Veo renders 4, 6 or 8 seconds only. 1080p and above render at 8 seconds.';
+
+const VIDEO_RESOLUTIONS_REQUIRING_8S = new Set(['1080p', '2K', '4K']);
+
+/** The canvas has written both `4k` and `4K` for one tier; the Backend upper-cases too. */
+const canonicalVideoResolution = (value: unknown): string =>
+  typeof value === 'string' ? value.replace(/k$/, 'K') : '';
+
+/** Only the Google-hosted (Veo) models tie duration to resolution; fal models do not. */
+export const videoResolutionRequiresEightSeconds = (
+  model: VideoGeneratorModel,
+  resolution: unknown,
+): boolean =>
+  getVideoGeneratorProvider(model) === 'google' &&
+  VIDEO_RESOLUTIONS_REQUIRING_8S.has(canonicalVideoResolution(resolution));
+
+/**
+ * The length this node will ACTUALLY render at. `undefined` means the model has no
+ * fixed ladder (the fal models take 3-15s), so the requested value is left alone
+ * rather than silently clamped down to something the provider never asked for.
+ */
+export function coerceVideoGeneratorDuration(
+  model: VideoGeneratorModel,
+  resolution: unknown,
+  requested: unknown,
+): VideoGeneratorDurationSeconds | undefined {
+  if (getVideoGeneratorProvider(model) !== 'google') return undefined;
+  if (videoResolutionRequiresEightSeconds(model, resolution)) return 8;
+  const value = Number(requested);
+  return (VIDEO_GENERATOR_DURATIONS as readonly number[]).includes(value)
+    ? (value as VideoGeneratorDurationSeconds)
+    : DEFAULT_VIDEO_GENERATOR_DURATION;
+}
+
 const VIDEO_GENERATOR_NODE_TYPES = new Set(['videoGen', 'veoDirector', 'veoFast']);
 
 export const VIDEO_IMAGE_REFERENCE_HANDLES = ['ref-image', 'ref-images'] as const;
@@ -1183,6 +1227,10 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
           // but the family never carried it, so a video node was born ratio-less and
           // sized by a hardcoded 16:9 style. Style is derived from it by nodeStyleFor.
           aspectRatio: '16:9',
+          // Seeded, not implied: buildNodePayload fell back to 8s when this was
+          // absent, so every canvas video was 8s with no control saying so and no
+          // way to pick 4s or 6s (Airtable #252/#254).
+          durationSeconds: DEFAULT_VIDEO_GENERATOR_DURATION,
         },
       };
     }
@@ -1374,6 +1422,26 @@ function coerceVideoGeneratorConfig(
       );
     }
     next.referenceMode = mode;
+  }
+
+  // Resolution and duration are one setting on Veo: above 720p only 8s renders. A
+  // resolution write that leaves a 4s duration behind produces a node that looks
+  // configured and 400s at Run, so the pair is re-derived whenever either moves.
+  if ('durationSeconds' in next || 'resolution' in next || 'model' in next) {
+    const requested = 'durationSeconds' in next ? next.durationSeconds : current.durationSeconds;
+    const resolution = 'resolution' in next ? next.resolution : current.resolution;
+    const duration = coerceVideoGeneratorDuration(model, resolution, requested);
+
+    if (duration !== undefined) {
+      if (requested !== undefined && Number(requested) !== duration) {
+        changes.push(
+          videoResolutionRequiresEightSeconds(model, resolution)
+            ? `${String(resolution)} renders only at 8 seconds — using 8s instead of ${String(requested)}`
+            : `durationSeconds "${String(requested)}" is not valid for ${model} — using ${duration}s`,
+        );
+      }
+      next.durationSeconds = duration;
+    }
   }
 
   return { data: next, changes };

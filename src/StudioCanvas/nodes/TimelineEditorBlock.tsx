@@ -15,7 +15,16 @@ import {
   useEdges,
   useNodeId,
 } from '@xyflow/react';
-import { Copy, Download, Play, SquarePen, Trash2, Video } from 'lucide-react';
+import {
+  Copy,
+  Download,
+  ExternalLink,
+  Library,
+  Play,
+  SquarePen,
+  Trash2,
+  Video,
+} from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -344,6 +353,13 @@ export function TimelineEditorBlock({
       ? Math.max(0, Math.min(1, data.progress))
       : 0;
   const displayVideo = data.generatedVideo ?? data.generatedVideoUrl;
+  // A finished render always lands in the media Library, even when it could not be
+  // applied back to the node (timeline changed mid-render). Nothing on the node used
+  // to name that destination, so the tester watched it render and had no idea where
+  // it went (#253).
+  const libraryHref = data.renderOutputAssetId
+    ? `/library?assetId=${encodeURIComponent(data.renderOutputAssetId)}`
+    : null;
 
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
@@ -512,6 +528,31 @@ export function TimelineEditorBlock({
                       </button>
                     )}
                   </div>
+
+                  {data.error ? (
+                    <div
+                      className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-xs text-destructive"
+                      data-testid="studio-timeline-render-error"
+                    >
+                      {data.error}
+                    </div>
+                  ) : null}
+
+                  {libraryHref ? (
+                    <a
+                      href={libraryHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      data-testid="studio-timeline-render-destination"
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => event.stopPropagation()}
+                      className="nodrag nopan flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <Library className="h-3.5 w-3.5" />
+                      <span className="font-medium text-foreground">Saved to Library</span>
+                      <ExternalLink className="ml-auto h-3 w-3" />
+                    </a>
+                  ) : null}
 
                   <Button
                     variant="default"

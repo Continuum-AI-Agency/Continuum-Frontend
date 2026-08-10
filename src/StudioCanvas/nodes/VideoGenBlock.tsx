@@ -1,4 +1,12 @@
-import type { BrandBookPieceKind } from '@continuum/contracts';
+import {
+  type BrandBookPieceKind,
+  coerceNodeConfig,
+  coerceVideoGeneratorDuration,
+  isVideoGeneratorNodeType,
+  VIDEO_GENERATOR_DURATION_NOTE,
+  VIDEO_GENERATOR_DURATIONS,
+  videoResolutionRequiresEightSeconds,
+} from '@continuum/contracts';
 import {
   Handle,
   type HandleProps,
@@ -9,7 +17,7 @@ import {
   useEdges,
   useNodeId,
 } from '@xyflow/react';
-import { Copy, Download, Play, Trash2, Video } from 'lucide-react';
+import { ChevronDown, Clock, Copy, Download, Play, Trash2, Video } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -132,9 +140,21 @@ export function VideoGenBlock({
   const supportsReferenceVideo = targetHandles.includes('ref-video');
   const referenceImageHandle = getVideoGeneratorImageReferenceHandle(model, referenceMode);
 
+  // What the node will ACTUALLY render at, not what is merely stored: above 720p Veo
+  // renders 8s whatever the node says, so the chip has to show the effective value or
+  // it lies about the clip the user is about to pay for.
+  const resolution = data.resolution ?? '720p';
+  const lockedToEightSeconds = videoResolutionRequiresEightSeconds(model, resolution);
+  const durationSeconds = coerceVideoGeneratorDuration(model, resolution, data.durationSeconds);
+  const durationNote = lockedToEightSeconds
+    ? `${resolution} renders at 8 seconds only — switch to 720p for 4s or 6s.`
+    : VIDEO_GENERATOR_DURATION_NOTE;
+
   const [isHovered, setIsHovered] = useState(false);
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
-  const generatorDescription = `${modelLabel} • ${data.resolution ?? '720p'} • ${data.aspectRatio ?? '16:9'}`;
+  const generatorDescription = `${modelLabel} • ${resolution} • ${data.aspectRatio ?? '16:9'}${
+    durationSeconds ? ` • ${durationSeconds}s` : ''
+  }`;
 
   const promptConnections = flowEdges.filter(
     (edge) => edge.target === id && ['prompt-in', 'prompt'].includes(edge.targetHandle ?? ''),
@@ -250,18 +270,38 @@ export function VideoGenBlock({
     [id, triggerSave, updateNode],
   );
 
-  const handleResolutionChange = useCallback(
-    (value: string) => {
-      updateNode(id, (node) => ({
-        ...node,
-        data: {
-          ...(node.data as VideoGenNodeData),
-          resolution: value as VideoGenNodeData['resolution'],
-        },
-      }));
+  // Resolution and duration are coupled on Veo, so neither is written raw. The same
+  // write-time guard the canvas agent goes through re-derives the pair here, which is
+  // why picking 1080p silently repairs a 4s node instead of shipping it to a 400.
+  const applyConfigPatch = useCallback(
+    (patch: Partial<VideoGenNodeData>) => {
+      const nodeType = isVideoGeneratorNodeType(type) ? type : 'videoGen';
+      updateNode(id, (node) => {
+        const current = node.data as VideoGenNodeData;
+        const { data: coerced } = coerceNodeConfig(
+          nodeType,
+          patch as Record<string, unknown>,
+          current as unknown as Record<string, unknown>,
+        );
+        return { ...node, data: { ...current, ...coerced } as VideoGenNodeData };
+      });
       triggerSave();
     },
-    [id, triggerSave, updateNode],
+    [id, triggerSave, type, updateNode],
+  );
+
+  const handleResolutionChange = useCallback(
+    (value: string) => {
+      applyConfigPatch({ resolution: value as VideoGenNodeData['resolution'] });
+    },
+    [applyConfigPatch],
+  );
+
+  const handleDurationChange = useCallback(
+    (value: NonNullable<VideoGenNodeData['durationSeconds']>) => {
+      applyConfigPatch({ durationSeconds: value });
+    },
+    [applyConfigPatch],
   );
 
   const handleToggleSkill = useCallback(
@@ -333,17 +373,65 @@ export function VideoGenBlock({
               onMouseLeave={() => setIsHovered(false)}
             >
               {/* Inside the card's top-left, not straddling its border: `-top-3` against a
-                  24px chip put exactly half of it outside the node (Airtable #229). */}
-              <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
-                <GroundingChip
-                  brandId={brandId}
-                  skillIds={data.skillIds}
-                  brandBookPieces={data.brandBookPieces}
-                  editable
-                  onToggleSkill={handleToggleSkill}
-                  onTogglePiece={handleToggleBrandPiece}
-                  className="bg-background/90 shadow-sm backdrop-blur-sm"
-                />
+                  24px chip put exactly half of it outside the node (Airtable #229). The
+                  duration sits beside Brand rather than three levels into the context
+                  menu — a setting nobody can find is a setting nobody has (#254). */}
+              <div className="absolute left-2 top-2 z-10 flex items-center gap-1.5">
+                <div data-testid="studio-grounding-chip">
+                  <GroundingChip
+                    brandId={brandId}
+                    skillIds={data.skillIds}
+                    brandBookPieces={data.brandBookPieces}
+                    editable
+                    onToggleSkill={handleToggleSkill}
+                    onTogglePiece={handleToggleBrandPiece}
+                    className="bg-background/90 shadow-sm backdrop-blur-sm"
+                  />
+                </div>
+                {durationSeconds ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        // A native select, not a portalled menu: it is one element,
+                        // it disables the illegal lengths itself, and it opens the
+                        // OS picker on touch. Nothing here needs a popover.
+                        <div className="nodrag nopan relative flex h-6 items-center gap-1 rounded-full border border-border/70 bg-background/90 pl-2 pr-1 text-[0.65rem] font-medium text-foreground shadow-sm backdrop-blur-sm">
+                          <Clock className="h-3 w-3 shrink-0 opacity-70" />
+                          <select
+                            aria-label="Clip duration in seconds"
+                            data-testid="studio-video-duration-select"
+                            value={durationSeconds}
+                            title={durationNote}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onChange={(event) =>
+                              handleDurationChange(
+                                Number(event.target.value) as NonNullable<
+                                  VideoGenNodeData['durationSeconds']
+                                >,
+                              )
+                            }
+                            className="cursor-pointer appearance-none bg-transparent pr-4 text-[0.65rem] font-medium outline-none"
+                          >
+                            {VIDEO_GENERATOR_DURATIONS.map((seconds) => (
+                              <option
+                                key={seconds}
+                                value={seconds}
+                                disabled={lockedToEightSeconds && seconds !== 8}
+                              >
+                                {seconds}s
+                                {lockedToEightSeconds && seconds !== 8 ? ' — 720p only' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-1.5 h-3 w-3 opacity-70" />
+                        </div>
+                      }
+                    />
+                    <TooltipContent side="top">
+                      <p className="max-w-[16rem]">{durationNote}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
               </div>
               <NodeResizer
                 minWidth={VIDEO_GENERATOR_NODE_BOUNDS.minWidth}

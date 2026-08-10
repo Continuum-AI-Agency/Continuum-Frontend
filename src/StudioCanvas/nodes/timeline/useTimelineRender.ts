@@ -5,7 +5,10 @@ import {
   studioRenderOriginKey,
   useStudioRenderStore,
 } from '@/lib/studio-render/renderStore';
-import { useStudioRenderQueue } from '@/lib/studio-render/StudioRenderProvider';
+import {
+  type StudioRenderTaskResult,
+  useStudioRenderQueue,
+} from '@/lib/studio-render/StudioRenderProvider';
 import { resolveExportPreset } from '../../utils/render/exportPresets';
 import { checkSpliceSupport, type WebCodecsSupport } from '../../utils/splice/webcodecsSupport';
 import { runTimelineInWorker } from '../../workers/spliceWorkerClient';
@@ -16,6 +19,37 @@ import type {
   TimelineRenderSnapshot,
 } from './adapter';
 import { resolveOverlayTracks } from './multiTrack';
+
+// Every finished render lands in the media Library, whatever happened to the node
+// afterwards. Saying so is the whole answer to "once it renders, where does it go?"
+// (#253) — and the local (non-queued) path used to say nothing at all.
+export function renderOutcomeMessage(
+  outcome?: TimelineRenderCompletion['outcome'],
+): StudioRenderTaskResult {
+  if (outcome === 'stale') {
+    return {
+      status: 'stale',
+      title: 'Video rendered, but the timeline changed',
+      description: 'The clip was saved to your media Library. Render again to apply it here.',
+      variant: 'warning',
+    };
+  }
+  if (outcome === 'missing') {
+    return {
+      status: 'stale',
+      title: 'Video rendered after the node was removed',
+      description:
+        'The clip is safe in your media Library, but the deleted node was not recreated.',
+      variant: 'warning',
+    };
+  }
+  return {
+    status: 'completed',
+    title: 'Video render finished',
+    description: 'The clip was saved to your media Library and is ready on the canvas.',
+    variant: 'success',
+  };
+}
 
 export interface UseTimelineRenderResult {
   render: (sink?: TimelineRenderSinkKind) => Promise<boolean>;
@@ -165,28 +199,7 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
             URL.revokeObjectURL(result.objectUrl);
           }
 
-          if (completion?.outcome === 'stale') {
-            return {
-              status: 'stale',
-              title: 'Video rendered, but the timeline changed',
-              description: 'The clip was saved to Library. Render again to apply it to the node.',
-              variant: 'warning',
-            };
-          }
-          if (completion?.outcome === 'missing') {
-            return {
-              status: 'stale',
-              title: 'Video rendered after the node was removed',
-              description: 'The clip is safe in Library, but the deleted node was not recreated.',
-              variant: 'warning',
-            };
-          }
-          return {
-            status: 'completed',
-            title: 'Video render finished',
-            description: 'The clip is saved to Library and ready on the canvas.',
-            variant: 'success',
-          };
+          return renderOutcomeMessage(completion?.outcome);
         },
         onFailure: (error) =>
           reportRenderState({ isExecuting: false, error: error.message || 'Render failed' }),
@@ -247,12 +260,14 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
             reportRenderProgress(progress);
           },
         });
+        let completion: TimelineRenderCompletion | void;
         try {
-          await completeRender(result.blob, target);
+          completion = await completeRender(result.blob, target);
         } finally {
           URL.revokeObjectURL(result.objectUrl);
         }
         setLocalProgress(1);
+        show(renderOutcomeMessage(completion?.outcome));
         return true;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Render failed';
