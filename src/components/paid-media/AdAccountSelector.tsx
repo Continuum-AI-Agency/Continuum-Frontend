@@ -257,25 +257,27 @@ export function AdAccountSelector({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          role="combobox"
-          aria-expanded={open}
-          disabled={isLoading || visibleAccounts.length === 0}
-          className="h-8 min-w-[12rem] max-w-[24rem] justify-between px-2 text-xs font-normal sm:min-w-[16rem]"
-        >
-          <span className="truncate">
-            {isLoading
-              ? 'Loading accounts...'
-              : selectedAccount
-                ? selectedAccount.name
-                : 'Select ad account'}
-          </span>
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            role="combobox"
+            aria-expanded={open}
+            disabled={isLoading || visibleAccounts.length === 0}
+            className="h-8 min-w-[12rem] max-w-[24rem] justify-between px-2 text-xs font-normal sm:min-w-[16rem]"
+          >
+            <span className="truncate">
+              {isLoading
+                ? 'Loading accounts...'
+                : selectedAccount
+                  ? selectedAccount.name
+                  : 'Select ad account'}
+            </span>
+            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          </Button>
+        }
+      />
 
       <PopoverContent className="w-[320px] p-0" align="start">
         <Command>

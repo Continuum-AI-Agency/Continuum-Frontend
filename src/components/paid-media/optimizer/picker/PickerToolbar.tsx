@@ -93,18 +93,20 @@ export function PickerToolbar({
         </div>
 
         <Popover open={jumpOpen} onOpenChange={setJumpOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={disabled || counts.total === 0}
-              className="h-8 gap-1.5 px-2 text-xs"
-            >
-              <ListFilterIcon className="size-3.5" aria-hidden="true" />
-              Jump to…
-            </Button>
-          </PopoverTrigger>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={disabled || counts.total === 0}
+                className="h-8 gap-1.5 px-2 text-xs"
+              >
+                <ListFilterIcon className="size-3.5" aria-hidden="true" />
+                Jump to…
+              </Button>
+            }
+          />
           <PopoverContent align="end" className="w-[22rem] p-0">
             <Command>
               <CommandInput placeholder="Type an ad set name…" className="text-xs" />

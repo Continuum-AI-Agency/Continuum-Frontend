@@ -181,9 +181,7 @@ export function MediaSelectPopover({
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverAnchor asChild>
-        <div className="w-full">{anchor}</div>
-      </PopoverAnchor>
+      <PopoverAnchor render={<div className="w-full">{anchor}</div>} />
       <PopoverContent side="right" align="start" sideOffset={10} className="w-[22rem] p-2.5">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

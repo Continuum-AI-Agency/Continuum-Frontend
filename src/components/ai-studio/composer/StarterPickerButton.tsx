@@ -31,15 +31,17 @@ export function StarterPickerButton({ brandProfileId }: Props) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label="Add a saved starter"
-          className="mb-1 inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-        >
-          <StackIcon />
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-label="Add a saved starter"
+            className="mb-1 inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          >
+            <StackIcon />
+          </button>
+        }
+      />
       <PopoverContent align="start" className="w-72 p-0">
         <Command>
           <CommandInput placeholder="Add a saved starter…" />

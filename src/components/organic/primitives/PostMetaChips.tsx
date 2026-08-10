@@ -119,11 +119,13 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className={chipClass} aria-label="Edit posting time">
-          {value}
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <button type="button" className={chipClass} aria-label="Edit posting time">
+            {value}
+          </button>
+        }
+      />
       <PopoverContent side="bottom" align="start" className="w-56 p-3">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Posting time

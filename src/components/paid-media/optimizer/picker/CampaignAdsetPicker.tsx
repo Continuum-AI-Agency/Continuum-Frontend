@@ -292,15 +292,17 @@ const AdsetRow = memo(function AdsetRow({
             virtualizer, and the old one shoved everything below it off-screen. */}
         {showAds && row.adCount > 0 ? (
           <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                aria-label={`Show ads in ${row.name}`}
-                className="rounded p-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <ImageIcon className="size-3.5" aria-hidden="true" />
-              </button>
-            </PopoverTrigger>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={`Show ads in ${row.name}`}
+                  className="rounded p-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ImageIcon className="size-3.5" aria-hidden="true" />
+                </button>
+              }
+            />
             <PopoverContent align="end" className="max-h-80 w-96 overflow-y-auto p-2">
               <AdsetAdList adsetId={row.id} brandId={brandId} accountId={accountId} />
             </PopoverContent>

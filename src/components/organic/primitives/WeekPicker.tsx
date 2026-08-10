@@ -56,15 +56,17 @@ export function WeekPicker({
         <ChevronLeft className="h-4 w-4" />
       </Button>
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            className="gap-2 border-slate-400/80 bg-white/90 text-slate-900 hover:bg-slate-100"
-          >
-            <CalendarIcon className="h-4 w-4 text-slate-900" />
-            <span className="text-sm font-semibold text-slate-900">{rangeLabel}</span>
-          </Button>
-        </PopoverTrigger>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="outline"
+              className="gap-2 border-slate-400/80 bg-white/90 text-slate-900 hover:bg-slate-100"
+            >
+              <CalendarIcon className="h-4 w-4 text-slate-900" />
+              <span className="text-sm font-semibold text-slate-900">{rangeLabel}</span>
+            </Button>
+          }
+        />
         <PopoverContent className="w-[22rem] border-slate-400/80 bg-white p-2" align="end">
           <CalendarProvider
             className="overflow-hidden rounded-lg border border-slate-300/90 bg-white"

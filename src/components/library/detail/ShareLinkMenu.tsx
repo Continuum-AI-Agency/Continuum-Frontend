@@ -168,12 +168,14 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
 
   return (
     <Popover onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Link2 className="size-3.5" aria-hidden />
-          Share
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" size="sm">
+            <Link2 className="size-3.5" aria-hidden />
+            Share
+          </Button>
+        }
+      />
       <PopoverContent align="end" className="w-80 p-3">
         <div className="grid grid-cols-2 gap-2">
           <Select

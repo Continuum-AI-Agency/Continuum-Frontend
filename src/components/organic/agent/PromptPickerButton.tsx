@@ -45,16 +45,18 @@ export function PromptPickerButton({ prompts, onPickAction, isError = false }: P
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label="Insert a saved prompt"
-          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-        >
-          <BookText className="h-3.5 w-3.5" />
-          Prompts
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-label="Insert a saved prompt"
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          >
+            <BookText className="h-3.5 w-3.5" />
+            Prompts
+          </button>
+        }
+      />
       <PopoverContent align="start" className="w-72 p-0">
         <Command>
           <CommandInput placeholder="Insert a saved prompt…" />

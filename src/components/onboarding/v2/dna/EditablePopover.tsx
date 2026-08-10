@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 type EditablePopoverProps = {
-  trigger: React.ReactNode;
+  /** Single element: it becomes the popover trigger via Base UI `render`. */
+  trigger: React.ReactElement;
   content: (close: () => void) => React.ReactNode;
   align?: 'start' | 'center' | 'end';
 };
@@ -11,7 +12,7 @@ export function EditablePopover({ trigger, content, align = 'start' }: EditableP
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverTrigger render={trigger} />
       <PopoverContent align={align} className="w-72 border-[#e5e7eb] p-3">
         {content(() => setOpen(false))}
       </PopoverContent>

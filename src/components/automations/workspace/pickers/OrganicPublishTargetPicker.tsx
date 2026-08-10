@@ -130,20 +130,22 @@ export function OrganicPublishTargetPicker({
     <div className="flex flex-col gap-1.5">
       <Label>Publish target</Label>
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            role="combobox"
-            aria-label="Publish target"
-            aria-expanded={open}
-            disabled={disabled || isLoading || items.length === 0}
-            className="w-full justify-between font-normal"
-          >
-            <span className="truncate">{triggerLabel}</span>
-            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-          </Button>
-        </PopoverTrigger>
+        <PopoverTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-label="Publish target"
+              aria-expanded={open}
+              disabled={disabled || isLoading || items.length === 0}
+              className="w-full justify-between font-normal"
+            >
+              <span className="truncate">{triggerLabel}</span>
+              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+            </Button>
+          }
+        />
         <PopoverContent className="w-[320px] p-0" align="start">
           <Command>
             <CommandInput placeholder="Search connected accounts..." className="h-9 text-xs" />

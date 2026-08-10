@@ -494,18 +494,20 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                       })}
                     </div>
                     <Popover open={editOpen} onOpenChange={setEditOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="nodrag h-8 shrink-0"
-                          disabled={!canEdit || isEditing}
-                          onMouseDown={(event) => event.stopPropagation()}
-                          title={canEdit ? 'Edit this clip' : 'Generate a clip first'}
-                        >
-                          <Pencil1Icon className="mr-1 h-3.5 w-3.5" /> Edit
-                        </Button>
-                      </PopoverTrigger>
+                      <PopoverTrigger
+                        render={
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="nodrag h-8 shrink-0"
+                            disabled={!canEdit || isEditing}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            title={canEdit ? 'Edit this clip' : 'Generate a clip first'}
+                          >
+                            <Pencil1Icon className="mr-1 h-3.5 w-3.5" /> Edit
+                          </Button>
+                        }
+                      />
                       <PopoverContent
                         align="end"
                         className="nodrag w-72"

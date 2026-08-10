@@ -300,29 +300,31 @@ function TimelineCommentMarker({
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`${label}: ${thread.root.body.slice(0, 80)}`}
-          title={thread.root.body}
-          onClick={() => onSeek(marker.outputStartSec)}
-          className="group absolute top-0 h-5"
-          style={{ left: `${leftPx}px`, width: widthPx === null ? undefined : `${widthPx}px` }}
-        >
-          {widthPx !== null && (
-            <span
-              className={cn(
-                'absolute inset-x-0 bottom-0 h-1 rounded-full bg-primary/25 transition-colors group-hover:bg-primary/60',
-                // A clipped span was cut by the trim, not authored that way.
-                marker.clipped && 'opacity-70',
-              )}
-            />
-          )}
-          <span className="absolute left-0 top-0 flex size-5 -translate-x-1/2 items-center justify-center rounded-full bg-background text-3xs font-semibold uppercase text-foreground shadow-sm ring-1 ring-border transition-transform group-hover:scale-110">
-            {initials}
-          </span>
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`${label}: ${thread.root.body.slice(0, 80)}`}
+            title={thread.root.body}
+            onClick={() => onSeek(marker.outputStartSec)}
+            className="group absolute top-0 h-5"
+            style={{ left: `${leftPx}px`, width: widthPx === null ? undefined : `${widthPx}px` }}
+          >
+            {widthPx !== null && (
+              <span
+                className={cn(
+                  'absolute inset-x-0 bottom-0 h-1 rounded-full bg-primary/25 transition-colors group-hover:bg-primary/60',
+                  // A clipped span was cut by the trim, not authored that way.
+                  marker.clipped && 'opacity-70',
+                )}
+              />
+            )}
+            <span className="absolute left-0 top-0 flex size-5 -translate-x-1/2 items-center justify-center rounded-full bg-background text-3xs font-semibold uppercase text-foreground shadow-sm ring-1 ring-border transition-transform group-hover:scale-110">
+              {initials}
+            </span>
+          </button>
+        }
+      />
       <PopoverContent align="start" className="w-72 p-2.5">
         <ThreadPopover
           thread={thread}

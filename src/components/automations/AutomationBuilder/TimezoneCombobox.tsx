@@ -26,19 +26,21 @@ export function TimezoneCombobox({ value, onChange }: TimezoneComboboxProps) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          aria-label="Timezone"
-          className="w-full justify-between font-normal"
-        >
-          <span className="truncate">{value || 'Pick a timezone'}</span>
-          <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            aria-label="Timezone"
+            className="w-full justify-between font-normal"
+          >
+            <span className="truncate">{value || 'Pick a timezone'}</span>
+            <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
+          </Button>
+        }
+      />
       <PopoverContent className="w-[280px] p-0" align="start">
         <Command>
           <CommandInput placeholder="Search timezones…" />

@@ -82,22 +82,24 @@ export function DateRangeField({
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
       <Popover onOpenChange={setOpen} open={open}>
-        <PopoverTrigger asChild>
-          <Button
-            className={cn(
-              'h-9 min-w-[220px] justify-start gap-1.5 text-left font-normal text-xs',
-              open && 'border-primary/60 bg-primary/5 text-primary ring-1 ring-primary/20',
-              !hasValue && 'text-muted-foreground',
-            )}
-            disabled={disabled}
-            id={id}
-            size="sm"
-            variant="outline"
-          >
-            <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{formatDateRange(value, placeholder)}</span>
-          </Button>
-        </PopoverTrigger>
+        <PopoverTrigger
+          render={
+            <Button
+              className={cn(
+                'h-9 min-w-[220px] justify-start gap-1.5 text-left font-normal text-xs',
+                open && 'border-primary/60 bg-primary/5 text-primary ring-1 ring-primary/20',
+                !hasValue && 'text-muted-foreground',
+              )}
+              disabled={disabled}
+              id={id}
+              size="sm"
+              variant="outline"
+            >
+              <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{formatDateRange(value, placeholder)}</span>
+            </Button>
+          }
+        />
         <PopoverContent align="start" className="w-auto p-0">
           <Calendar
             defaultMonth={toDate(value.from)}

@@ -16,21 +16,23 @@ export function NotificationsBell() {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative size-9 active:scale-[0.96] transition-[transform]"
-          aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
-        >
-          <BellIcon className="size-4" />
-          {unreadCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-3xs font-bold tabular-nums text-primary-foreground">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative size-9 active:scale-[0.96] transition-[transform]"
+            aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
+          >
+            <BellIcon className="size-4" />
+            {unreadCount > 0 && (
+              <span className="absolute right-1.5 top-1.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-3xs font-bold tabular-nums text-primary-foreground">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </Button>
+        }
+      />
       <PopoverContent align="end" className="w-80 p-2">
         <NotificationsPanel
           notifications={notifications}

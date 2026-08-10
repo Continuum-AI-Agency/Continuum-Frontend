@@ -140,11 +140,13 @@ export function GroundingChip({
         <Tooltip>
           <TooltipTrigger
             render={
-              <PopoverTrigger asChild>
-                <button type="button" className="nodrag nopan cursor-pointer">
-                  {chipInner}
-                </button>
-              </PopoverTrigger>
+              <PopoverTrigger
+                render={
+                  <button type="button" className="nodrag nopan cursor-pointer">
+                    {chipInner}
+                  </button>
+                }
+              />
             }
           />
           <TooltipContent side="top">{tooltip}</TooltipContent>

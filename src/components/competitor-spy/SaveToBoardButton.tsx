@@ -72,17 +72,19 @@ export function SaveToBoardButton({
         if (!next) setStatus(null);
       }}
     >
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground',
-            className,
-          )}
-        >
-          <span className="text-sm leading-none">+</span> Save
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              'inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground',
+              className,
+            )}
+          >
+            <span className="text-sm leading-none">+</span> Save
+          </button>
+        }
+      />
       <PopoverContent align="end" className="w-60 p-0">
         <Command>
           <CommandInput value={query} onValueChange={setQuery} placeholder="Save to board…" />

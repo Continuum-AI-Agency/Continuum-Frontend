@@ -98,11 +98,13 @@ export function SaveWorkflowDialog({ brandProfileId, roomId }: SaveWorkflowDialo
 
   return (
     <Popover open={open} onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : closePanel())}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
-          <UploadIcon className="mr-2 h-4 w-4" /> Save
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" size="sm">
+            <UploadIcon className="mr-2 h-4 w-4" /> Save
+          </Button>
+        }
+      />
       <PopoverContent align="end" className="w-[clamp(320px,80vw,460px)] p-0">
         <form onSubmit={onSubmit} className="grid gap-3 p-3">
           <div className="flex items-start justify-between gap-2">

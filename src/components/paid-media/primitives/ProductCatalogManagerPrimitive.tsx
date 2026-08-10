@@ -1240,27 +1240,29 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                   <div className="space-y-1.5">
                     <Label>Meta Business</Label>
                     <Popover open={businessOpen} onOpenChange={setBusinessOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={businessOpen}
-                          className="h-10 w-full cursor-pointer justify-between text-left font-normal"
-                          disabled={selectableAssetsQuery.isLoading}
-                        >
-                          <span className="truncate">
-                            {selectedBusinessOption
-                              ? `${selectedBusinessOption.name} (${selectedBusinessOption.id})`
-                              : watchedBusinessId?.trim()
-                                ? watchedBusinessId.trim()
-                                : selectableAssetsQuery.isLoading
-                                  ? 'Loading…'
-                                  : 'Select business'}
-                          </span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
+                      <PopoverTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={businessOpen}
+                            className="h-10 w-full cursor-pointer justify-between text-left font-normal"
+                            disabled={selectableAssetsQuery.isLoading}
+                          >
+                            <span className="truncate">
+                              {selectedBusinessOption
+                                ? `${selectedBusinessOption.name} (${selectedBusinessOption.id})`
+                                : watchedBusinessId?.trim()
+                                  ? watchedBusinessId.trim()
+                                  : selectableAssetsQuery.isLoading
+                                    ? 'Loading…'
+                                    : 'Select business'}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        }
+                      />
                       <PopoverContent className="w-[400px] p-0" align="start">
                         <Command>
                           <CommandInput placeholder="Search by name or ID…" className="h-9" />
@@ -1331,29 +1333,31 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                       </span>
                     </Label>
                     <Popover open={catalogStoreOpen} onOpenChange={setCatalogStoreOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={catalogStoreOpen}
-                          className="h-10 w-full cursor-pointer justify-between text-left font-normal"
-                          disabled={selectableAssetsQuery.isLoading || !watchedBusinessId?.trim()}
-                        >
-                          <span className="truncate">
-                            {selectedCatalogStoreOption
-                              ? `${selectedCatalogStoreOption.name} (${selectedCatalogStoreOption.id})`
-                              : watchedCatalogStoreId?.trim()
-                                ? watchedCatalogStoreId.trim()
-                                : !watchedBusinessId?.trim()
-                                  ? 'Select a business first'
-                                  : selectableAssetsQuery.isLoading
-                                    ? 'Loading pages…'
-                                    : 'Select page'}
-                          </span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
+                      <PopoverTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={catalogStoreOpen}
+                            className="h-10 w-full cursor-pointer justify-between text-left font-normal"
+                            disabled={selectableAssetsQuery.isLoading || !watchedBusinessId?.trim()}
+                          >
+                            <span className="truncate">
+                              {selectedCatalogStoreOption
+                                ? `${selectedCatalogStoreOption.name} (${selectedCatalogStoreOption.id})`
+                                : watchedCatalogStoreId?.trim()
+                                  ? watchedCatalogStoreId.trim()
+                                  : !watchedBusinessId?.trim()
+                                    ? 'Select a business first'
+                                    : selectableAssetsQuery.isLoading
+                                      ? 'Loading pages…'
+                                      : 'Select page'}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        }
+                      />
                       <PopoverContent className="w-[400px] p-0" align="start">
                         <Command>
                           <CommandInput placeholder="Search pages…" className="h-9" />

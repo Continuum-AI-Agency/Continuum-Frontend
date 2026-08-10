@@ -38,21 +38,23 @@ export function BrandTransferCombobox({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          id={id}
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between font-normal"
-        >
-          <span className="truncate">
-            {selectedBrand ? formatBrandDisambiguationLabel(selectedBrand) : placeholder}
-          </span>
-          <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between font-normal"
+          >
+            <span className="truncate">
+              {selectedBrand ? formatBrandDisambiguationLabel(selectedBrand) : placeholder}
+            </span>
+            <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
+          </Button>
+        }
+      />
       <PopoverContent className="w-[360px] p-0" align="start">
         <Command>
           <CommandInput placeholder="Search brands, owners, or ids…" />

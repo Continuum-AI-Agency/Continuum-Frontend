@@ -76,7 +76,9 @@ mock.module('@/components/ui/popover', () => ({
     <>{render ?? children}</>
   ),
   PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  PopoverAnchor: ({ children }: { children: ReactNode }) => <>{children}</>,
+  PopoverAnchor: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
 }));
 
 mock.module('@/components/ui/ToastProvider', () => ({

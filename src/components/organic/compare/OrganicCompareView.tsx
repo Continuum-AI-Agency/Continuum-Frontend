@@ -360,11 +360,13 @@ export function OrganicCompareView({
             );
           })}
           <Popover>
-            <PopoverTrigger asChild>
-              <Button type="button" size="sm" variant="outline" className="h-7 px-2.5 text-xs">
-                More metrics
-              </Button>
-            </PopoverTrigger>
+            <PopoverTrigger
+              render={
+                <Button type="button" size="sm" variant="outline" className="h-7 px-2.5 text-xs">
+                  More metrics
+                </Button>
+              }
+            />
             <PopoverContent align="start" className="w-64 p-2">
               <div className="flex max-h-64 flex-col gap-1 overflow-y-auto">
                 {ORGANIC_METRIC_CATALOG.map((entry) => {

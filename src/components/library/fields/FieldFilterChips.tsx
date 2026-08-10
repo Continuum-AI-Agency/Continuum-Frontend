@@ -187,15 +187,17 @@ function LiteralFieldChip({ field, filter, summary, compact, filters, onChange }
         if (next) setDraft(literal);
       }}
     >
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-pressed={filter !== null}
-          className={chipClass(filter !== null, compact)}
-        >
-          <ChipLabel field={field} summary={summary} />
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-pressed={filter !== null}
+            className={chipClass(filter !== null, compact)}
+          >
+            <ChipLabel field={field} summary={summary} />
+          </button>
+        }
+      />
       <PopoverContent align="start" className="w-auto p-2">
         {field.type === 'date' ? (
           <Calendar

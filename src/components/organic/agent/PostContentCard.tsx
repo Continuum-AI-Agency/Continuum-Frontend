@@ -6,9 +6,9 @@ import { motion } from 'motion/react';
 import { useState } from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromFetchedPost } from '@/components/chat/media/media';
+import { MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 
 const PLATFORM_GRADIENTS: Record<string, string> = {
   instagram: 'from-purple-600 to-pink-500',
@@ -75,61 +75,67 @@ export function PostContentCard({ post }: Props) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <motion.button
-          className={cn(
-            'w-[132px] shrink-0 rounded-xl overflow-hidden cursor-pointer text-left',
-            'border border-border/40 bg-card',
-            'transition-[border-color,box-shadow] duration-150',
-            'hover:border-primary/30 hover:shadow-[0_2px_12px_rgba(0,0,0,0.10)]',
-            'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-          )}
-          whileHover={{ scale: 1.02, y: -1 }}
-          transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-          aria-label={post.caption ? `Post: ${post.caption.slice(0, 60)}` : `${platformLabel} post`}
-        >
-          {/* The card stays a card — only its media goes through the shared primitive, which is
-              what makes a reel render as a video rather than an <img> of an MP4. */}
-          <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted">
-            {media ? (
-              <ChatMediaThumb media={media} className="absolute inset-0 rounded-none" />
-            ) : (
-              <div className={cn('absolute inset-0 bg-gradient-to-br', gradient)} />
+      <PopoverTrigger
+        render={
+          <motion.button
+            className={cn(
+              'w-[132px] shrink-0 rounded-xl overflow-hidden cursor-pointer text-left',
+              'border border-border/40 bg-card',
+              'transition-[border-color,box-shadow] duration-150',
+              'hover:border-primary/30 hover:shadow-[0_2px_12px_rgba(0,0,0,0.10)]',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
             )}
-            {post.rank != null && (
-              <span className="absolute top-1.5 right-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-bold text-amber-300 backdrop-blur-sm leading-none">
-                #{post.rank}
-              </span>
-            )}
-          </div>
-
-          <div className="p-2 space-y-1">
-            <div className="flex items-center justify-between gap-1 min-w-0">
-              <PlatformTag platform={platformLabel} />
-              {post.format && (
-                <span className="text-2xs text-muted-foreground capitalize shrink-0">
-                  {post.format}
+            whileHover={{ scale: 1.02, y: -1 }}
+            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            aria-label={
+              post.caption ? `Post: ${post.caption.slice(0, 60)}` : `${platformLabel} post`
+            }
+          >
+            {/* The card stays a card — only its media goes through the shared primitive, which is
+                what makes a reel render as a video rather than an <img> of an MP4. */}
+            <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted">
+              {media ? (
+                <ChatMediaThumb media={media} className="absolute inset-0 rounded-none" />
+              ) : (
+                <div className={cn('absolute inset-0 bg-gradient-to-br', gradient)} />
+              )}
+              {post.rank != null && (
+                <span className="absolute top-1.5 right-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-bold text-amber-300 backdrop-blur-sm leading-none">
+                  #{post.rank}
                 </span>
               )}
             </div>
-            {post.caption ? (
-              <p className="line-clamp-2 text-xs leading-snug text-foreground/80">{post.caption}</p>
-            ) : post.topic ? (
-              <p className="line-clamp-2 text-xs leading-snug text-muted-foreground italic">
-                {post.topic}
-              </p>
-            ) : null}
-            {topMetric && (
-              <p className="text-xs text-muted-foreground tabular-nums">
-                <span className="font-medium text-foreground/90">
-                  {formatMetricValue(topMetric[1])}
-                </span>{' '}
-                {formatMetricName(topMetric[0])}
-              </p>
-            )}
-          </div>
-        </motion.button>
-      </PopoverTrigger>
+
+            <div className="p-2 space-y-1">
+              <div className="flex items-center justify-between gap-1 min-w-0">
+                <PlatformTag platform={platformLabel} />
+                {post.format && (
+                  <span className="text-2xs text-muted-foreground capitalize shrink-0">
+                    {post.format}
+                  </span>
+                )}
+              </div>
+              {post.caption ? (
+                <p className="line-clamp-2 text-xs leading-snug text-foreground/80">
+                  {post.caption}
+                </p>
+              ) : post.topic ? (
+                <p className="line-clamp-2 text-xs leading-snug text-muted-foreground italic">
+                  {post.topic}
+                </p>
+              ) : null}
+              {topMetric && (
+                <p className="text-xs text-muted-foreground tabular-nums">
+                  <span className="font-medium text-foreground/90">
+                    {formatMetricValue(topMetric[1])}
+                  </span>{' '}
+                  {formatMetricName(topMetric[0])}
+                </p>
+              )}
+            </div>
+          </motion.button>
+        }
+      />
 
       <PopoverContent className="w-80 p-0 overflow-hidden" align="center" side="top" sideOffset={8}>
         {/* The popover used to show a 1px bar where the media should be — you opened a post and

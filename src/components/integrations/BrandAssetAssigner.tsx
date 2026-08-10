@@ -8,7 +8,14 @@
 
 import { Loader2, Plug, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
-import { type ReactNode, useCallback, useMemo, useState, useTransition } from 'react';
+import {
+  type ReactElement,
+  type ReactNode,
+  useCallback,
+  useMemo,
+  useState,
+  useTransition,
+} from 'react';
 import { applyBrandIntegrationAssignmentsAction } from '@/app/(post-auth)/settings/integrations/actions';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import {
@@ -241,21 +248,24 @@ function ProviderConnectMenu({
 }: {
   onConnect: (group: ProviderGroup, options?: SyncOptions) => void;
   syncingGroups: Set<string>;
-  children?: ReactNode;
+  /** Single element: it becomes the popover trigger via Base UI `render`. */
+  children?: ReactElement;
 }) {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        {children ?? (
-          <button
-            type="button"
-            aria-label="Connect a provider"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        )}
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          children ?? (
+            <button
+              type="button"
+              aria-label="Connect a provider"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          )
+        }
+      />
       <PopoverContent align="end" className="w-80 p-2">
         <div className="px-2 py-1.5">
           <p className="text-sm font-semibold text-foreground">Connect a provider</p>

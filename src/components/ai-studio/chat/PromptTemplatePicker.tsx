@@ -137,11 +137,13 @@ export function PromptTemplatePicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button size="icon-sm" variant="ghost" aria-label="Prompt templates" disabled={isLoading}>
-          <BookmarkIcon />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button size="icon-sm" variant="ghost" aria-label="Prompt templates" disabled={isLoading}>
+            <BookmarkIcon />
+          </Button>
+        }
+      />
       <PopoverContent className="w-80 p-3">
         <div className="mb-2 flex items-center justify-between">
           <span className="font-medium">Prompt templates</span>

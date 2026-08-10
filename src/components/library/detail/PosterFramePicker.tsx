@@ -78,12 +78,14 @@ export function PosterFramePicker({ brandId, asset, src, onPosterChanged }: Prop
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
-          <Aperture className="size-3.5" aria-hidden />
-          Poster
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button type="button" variant="outline" size="sm">
+            <Aperture className="size-3.5" aria-hidden />
+            Poster
+          </Button>
+        }
+      />
       <PopoverContent align="end" className="w-80 space-y-3">
         <div>
           <p className="text-sm font-medium">Choose poster frame</p>

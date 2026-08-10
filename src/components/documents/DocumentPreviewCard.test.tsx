@@ -1,5 +1,66 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { createContext, type ReactNode, useContext } from 'react';
+
+// Base UI's Positioner drives @floating-ui autoUpdate, which re-arms a frame for as long as a
+// popup is mounted. Under happy-dom that chain never settles and `bun test` hangs on this file
+// with no output. Rendering the popup bodies inline keeps every assertion below intact — what is
+// NOT covered here is the real positioning/portal behaviour of Popover and HoverCard, matching
+// how CalendarToolbar and MediaSelectPopover already mock these primitives.
+// One context per primitive: the card nests HoverCard INSIDE Popover, so a shared context would
+// let the inner root shadow the outer one and the popover body would follow the peek's state.
+function openAwarePrimitive() {
+  const OpenContext = createContext(false);
+  const ToggleContext = createContext<((open: boolean) => void) | undefined>(undefined);
+  return {
+    Root: ({
+      children,
+      open,
+      onOpenChange,
+    }: {
+      children: ReactNode;
+      open?: boolean;
+      onOpenChange?: (open: boolean) => void;
+    }) => (
+      <OpenContext.Provider value={Boolean(open)}>
+        <ToggleContext.Provider value={onOpenChange}>
+          <div>{children}</div>
+        </ToggleContext.Provider>
+      </OpenContext.Provider>
+    ),
+    // The real trigger opens on click; the wrapper catches the bubbled click so the
+    // rendered element keeps its own role and accessible name for queries.
+    Trigger: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => {
+      const toggle = useContext(ToggleContext);
+      return (
+        // biome-ignore lint/a11y/noStaticElementInteractions: test double for a trigger; the rendered child carries the real semantics
+        // biome-ignore lint/a11y/useKeyWithClickEvents: test double; keyboard activation is upstream primitive behaviour
+        <div onClick={() => toggle?.(true)}>{render ?? children}</div>
+      );
+    },
+    // Mirrors the real primitives: content only exists in the DOM while open.
+    Content: ({ children }: { children: ReactNode }) => {
+      const open = useContext(OpenContext);
+      return open ? <div>{children}</div> : null;
+    },
+  };
+}
+
+const popoverMock = openAwarePrimitive();
+const hoverCardMock = openAwarePrimitive();
+
+mock.module('@/components/ui/popover', () => ({
+  Popover: popoverMock.Root,
+  PopoverTrigger: popoverMock.Trigger,
+  PopoverAnchor: popoverMock.Trigger,
+  PopoverContent: popoverMock.Content,
+}));
+mock.module('@/components/ui/hover-card', () => ({
+  HoverCard: hoverCardMock.Root,
+  HoverCardTrigger: hoverCardMock.Trigger,
+  HoverCardContent: hoverCardMock.Content,
+}));
+
 import { DocumentPreviewCard } from './DocumentPreviewCard';
 import type { DocumentView } from './types';
 

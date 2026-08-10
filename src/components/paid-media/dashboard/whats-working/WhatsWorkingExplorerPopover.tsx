@@ -224,12 +224,14 @@ export function WhatsWorkingExplorerPopover({ brandId }: { brandId: string }) {
 
   return (
     <Popover onOpenChange={setOpen} open={open}>
-      <PopoverTrigger asChild>
-        <Button className="h-8 gap-1.5 px-2 text-xs" size="sm" type="button" variant="secondary">
-          <Sparkles className="size-3.5" />
-          What&apos;s working
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button className="h-8 gap-1.5 px-2 text-xs" size="sm" type="button" variant="secondary">
+            <Sparkles className="size-3.5" />
+            What&apos;s working
+          </Button>
+        }
+      />
       <PopoverContent
         align="end"
         className="flex max-h-[80vh] w-[40rem] max-w-[92vw] flex-col gap-0 p-0"

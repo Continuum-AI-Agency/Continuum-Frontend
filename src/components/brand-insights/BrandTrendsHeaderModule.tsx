@@ -105,29 +105,31 @@ export function BrandTrendsHeaderModule({
       >
         <HoverCardTrigger
           render={
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                data-tour-id="organic-metrics-brand-trends"
-                className={cn('h-8 gap-1.5 px-2 text-xs', className)}
-              >
-                <LineChart className="size-3.5" aria-hidden />
-                Trends
-                {/* The badge counts trends, so it is gated on trends. Gating it on the
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="outline"
+                  data-tour-id="organic-metrics-brand-trends"
+                  className={cn('h-8 gap-1.5 px-2 text-xs', className)}
+                >
+                  <LineChart className="size-3.5" aria-hidden />
+                  Trends
+                  {/* The badge counts trends, so it is gated on trends. Gating it on the
                   wider signal count (trends + events + questions) rendered a literal
                   "0" beside a chip that had just been shown for having signals. */}
-                {trends.length > 0 ? (
-                  <Badge
-                    variant="secondary"
-                    className="h-4 px-1 text-[10px] tabular-nums"
-                    aria-label={`${trends.length} trends available`}
-                  >
-                    {trends.length}
-                  </Badge>
-                ) : null}
-                {needsAttention ? <PillIndicator variant="warning" /> : null}
-              </Button>
-            </PopoverTrigger>
+                  {trends.length > 0 ? (
+                    <Badge
+                      variant="secondary"
+                      className="h-4 px-1 text-[10px] tabular-nums"
+                      aria-label={`${trends.length} trends available`}
+                    >
+                      {trends.length}
+                    </Badge>
+                  ) : null}
+                  {needsAttention ? <PillIndicator variant="warning" /> : null}
+                </Button>
+              }
+            />
           }
         />
 

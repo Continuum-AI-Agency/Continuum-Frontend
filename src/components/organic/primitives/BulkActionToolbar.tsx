@@ -125,16 +125,18 @@ export function BulkActionToolbar({
             </Button>
           ) : null}
           <Popover open={moveOpen} onOpenChange={setMoveOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-2 text-secondary hover:text-primary"
-              >
-                <MixerHorizontalIcon className="w-4 h-4" />
-                Move
-              </Button>
-            </PopoverTrigger>
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-2 text-secondary hover:text-primary"
+                >
+                  <MixerHorizontalIcon className="w-4 h-4" />
+                  Move
+                </Button>
+              }
+            />
             <PopoverContent align="center" className="w-auto p-0">
               <Calendar
                 mode="single"

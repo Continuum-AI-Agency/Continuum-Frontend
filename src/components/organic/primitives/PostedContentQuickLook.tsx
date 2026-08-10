@@ -66,23 +66,25 @@ export function PostedContentQuickLook({
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`View posted content: ${post.title}`}
-          className={cn(
-            'flex w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 text-left text-muted-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
-            compact ? 'px-1.5 py-1 text-2xs' : 'px-2 py-1.5 text-xs',
-          )}
-        >
-          <Badge variant="success" className="px-1.5 py-0 text-3xs">
-            Posted
-          </Badge>
-          <span className="shrink-0 font-mono text-3xs">{post.timeLabel}</span>
-          {isCarousel ? <GalleryHorizontalEnd aria-label="Carousel" /> : null}
-          <span className="truncate text-foreground">{post.title}</span>
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`View posted content: ${post.title}`}
+            className={cn(
+              'flex w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 text-left text-muted-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+              compact ? 'px-1.5 py-1 text-2xs' : 'px-2 py-1.5 text-xs',
+            )}
+          >
+            <Badge variant="success" className="px-1.5 py-0 text-3xs">
+              Posted
+            </Badge>
+            <span className="shrink-0 font-mono text-3xs">{post.timeLabel}</span>
+            {isCarousel ? <GalleryHorizontalEnd aria-label="Carousel" /> : null}
+            <span className="truncate text-foreground">{post.title}</span>
+          </button>
+        }
+      />
       <PopoverContent
         side="right"
         align="start"

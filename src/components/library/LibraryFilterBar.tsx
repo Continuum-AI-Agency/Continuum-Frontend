@@ -272,19 +272,21 @@ function AdvancedFilterPopover({
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
-        >
-          <SlidersHorizontal className="size-3.5 text-muted-foreground" />
-          Filter
-          {activeCount > 0 ? (
-            <span className="rounded-full bg-primary/10 px-1.5 text-primary">{activeCount}</span>
-          ) : null}
-          <ChevronDown className="size-3.5 text-muted-foreground" />
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
+          >
+            <SlidersHorizontal className="size-3.5 text-muted-foreground" />
+            Filter
+            {activeCount > 0 ? (
+              <span className="rounded-full bg-primary/10 px-1.5 text-primary">{activeCount}</span>
+            ) : null}
+            <ChevronDown className="size-3.5 text-muted-foreground" />
+          </button>
+        }
+      />
       <PopoverContent align="start" className="w-80 p-0">
         <div className="sticky top-0 z-10 border-b border-border bg-popover p-2">
           <div className="relative">
@@ -493,21 +495,23 @@ function TagChipRow({
     <fieldset className="flex min-w-0 flex-wrap items-center gap-1.5 border-0 p-0">
       <legend className="sr-only">Filter by tag</legend>
       <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
-          >
-            <Tags className="size-3.5 text-muted-foreground" />
-            Tags
-            {selected.length > 0 ? (
-              <span className="rounded-full bg-primary/10 px-1.5 text-primary">
-                {selected.length}
-              </span>
-            ) : null}
-            <ChevronDown className="size-3.5 text-muted-foreground" />
-          </button>
-        </PopoverTrigger>
+        <PopoverTrigger
+          render={
+            <button
+              type="button"
+              className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
+            >
+              <Tags className="size-3.5 text-muted-foreground" />
+              Tags
+              {selected.length > 0 ? (
+                <span className="rounded-full bg-primary/10 px-1.5 text-primary">
+                  {selected.length}
+                </span>
+              ) : null}
+              <ChevronDown className="size-3.5 text-muted-foreground" />
+            </button>
+          }
+        />
         <PopoverContent align="start" className="w-72 p-2">
           <div className="relative mb-2">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -603,16 +607,18 @@ function FacetSelect<T extends string>({
     <fieldset aria-label={`Filter by ${label.toLowerCase()}`} className="border-0 p-0">
       <legend className="sr-only">{label}</legend>
       <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
-          >
-            <span className="text-muted-foreground">{label}</span>
-            <span>{activeLabel}</span>
-            <ChevronDown className="size-3.5 text-muted-foreground" />
-          </button>
-        </PopoverTrigger>
+        <PopoverTrigger
+          render={
+            <button
+              type="button"
+              className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
+            >
+              <span className="text-muted-foreground">{label}</span>
+              <span>{activeLabel}</span>
+              <ChevronDown className="size-3.5 text-muted-foreground" />
+            </button>
+          }
+        />
         <PopoverContent align="start" className="w-56 p-1.5">
           {options.map((option) => {
             const isActive = option.value === active;

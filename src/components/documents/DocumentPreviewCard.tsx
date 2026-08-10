@@ -54,9 +54,10 @@ export function DocumentPreviewCard({
         openDelay={180}
         closeDelay={120}
       >
-        <PopoverTrigger asChild>
-          <HoverCardTrigger render={children} />
-        </PopoverTrigger>
+        {/* One element is both triggers. The Popover trigger must be the INNER render: with
+            PopoverTrigger on the outside the two Base UI triggers fight over the same node and
+            re-render each other forever. */}
+        <HoverCardTrigger render={<PopoverTrigger render={children} />} />
 
         <HoverCardContent
           align="start"

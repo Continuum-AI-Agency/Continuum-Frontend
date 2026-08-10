@@ -490,11 +490,13 @@ export function LoadWorkflowDialog({
 
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
-          <DownloadIcon className="mr-2 h-4 w-4" /> My Workflows
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" size="sm">
+            <DownloadIcon className="mr-2 h-4 w-4" /> My Workflows
+          </Button>
+        }
+      />
       <PopoverContent align="end" className="w-[clamp(340px,85vw,500px)] p-0">
         <WorkflowPanel {...panelProps} />
       </PopoverContent>

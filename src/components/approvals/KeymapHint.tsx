@@ -18,17 +18,19 @@ const KEYMAP: Array<{ keys: string[]; label: string }> = [
 export function KeymapHint() {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground"
-          aria-label="Keyboard shortcuts"
-        >
-          <HelpCircle className="h-4 w-4" strokeWidth={1.5} />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground"
+            aria-label="Keyboard shortcuts"
+          >
+            <HelpCircle className="h-4 w-4" strokeWidth={1.5} />
+          </Button>
+        }
+      />
       <PopoverContent side="bottom" align="end" className="w-72 p-3">
         <div className="mb-2 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
           Keyboard

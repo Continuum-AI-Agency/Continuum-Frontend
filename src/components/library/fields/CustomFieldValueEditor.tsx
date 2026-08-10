@@ -163,22 +163,24 @@ function DateEditor({ field, value, disabled, onChange }: CustomFieldValueEditor
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <div className="flex items-center gap-1">
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-            aria-label={field.name}
-            className={cn(
-              'h-8 flex-1 justify-start gap-1.5 text-xs font-normal',
-              !iso && 'text-muted-foreground',
-            )}
-          >
-            <CalendarIcon className="size-3.5 shrink-0" />
-            {iso ? formatDateValue(iso) : 'Not set'}
-          </Button>
-        </PopoverTrigger>
+        <PopoverTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled}
+              aria-label={field.name}
+              className={cn(
+                'h-8 flex-1 justify-start gap-1.5 text-xs font-normal',
+                !iso && 'text-muted-foreground',
+              )}
+            >
+              <CalendarIcon className="size-3.5 shrink-0" />
+              {iso ? formatDateValue(iso) : 'Not set'}
+            </Button>
+          }
+        />
         {iso ? (
           <Button
             type="button"

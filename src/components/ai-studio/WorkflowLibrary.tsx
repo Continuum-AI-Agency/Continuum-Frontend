@@ -289,12 +289,14 @@ export function WorkflowLibrary() {
         }
       }}
     >
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
-          <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-          Templates
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" size="sm">
+            <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+            Templates
+          </Button>
+        }
+      />
       <PopoverContent className="w-[440px] p-0" align="end">
         <div className="border-b border-border p-3">
           <p className="text-sm font-semibold">Workflow Templates</p>

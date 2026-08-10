@@ -1077,7 +1077,7 @@ function MetricCard({
 
   return (
     <Popover>
-      <PopoverTrigger asChild>{cardContent}</PopoverTrigger>
+      <PopoverTrigger render={cardContent} />
       <PopoverContent
         side="bottom"
         align="start"

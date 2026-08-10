@@ -145,22 +145,24 @@ function SingleAccountCombobox({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          role="combobox"
-          aria-expanded={open}
-          data-tour-id="metrics-scope-account-trigger"
-          className="h-8 min-w-[12rem] max-w-[20rem] justify-between gap-2 px-2.5 text-xs font-normal"
-        >
-          <span className="flex min-w-0 items-center gap-1.5">
-            {selected ? <PlatformIcon platform={selected.platform} size={14} /> : null}
-            <span className="truncate">{selected ? selected.name : 'Select account'}</span>
-          </span>
-          <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" aria-hidden />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            role="combobox"
+            aria-expanded={open}
+            data-tour-id="metrics-scope-account-trigger"
+            className="h-8 min-w-[12rem] max-w-[20rem] justify-between gap-2 px-2.5 text-xs font-normal"
+          >
+            <span className="flex min-w-0 items-center gap-1.5">
+              {selected ? <PlatformIcon platform={selected.platform} size={14} /> : null}
+              <span className="truncate">{selected ? selected.name : 'Select account'}</span>
+            </span>
+            <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" aria-hidden />
+          </Button>
+        }
+      />
 
       <PopoverContent className="w-[280px] p-0" align="start">
         <Command>
@@ -269,34 +271,37 @@ function MultiAccountCombobox({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          role="combobox"
-          aria-expanded={open}
-          data-tour-id="metrics-scope-accounts-trigger"
-          className="h-8 min-w-[12rem] max-w-[24rem] justify-between gap-2 px-2.5 text-xs font-normal"
-        >
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="flex -space-x-1" aria-hidden>
-              {selectedAccountKeys.slice(0, 4).map((key, index) => (
-                <span
-                  key={key}
-                  className="size-2 rounded-full ring-1 ring-background"
-                  style={{
-                    background: colorByKey.get(key) ?? SERIES_COLORS[index % SERIES_COLORS.length],
-                  }}
-                />
-              ))}
+      <PopoverTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            role="combobox"
+            aria-expanded={open}
+            data-tour-id="metrics-scope-accounts-trigger"
+            className="h-8 min-w-[12rem] max-w-[24rem] justify-between gap-2 px-2.5 text-xs font-normal"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="flex -space-x-1" aria-hidden>
+                {selectedAccountKeys.slice(0, 4).map((key, index) => (
+                  <span
+                    key={key}
+                    className="size-2 rounded-full ring-1 ring-background"
+                    style={{
+                      background:
+                        colorByKey.get(key) ?? SERIES_COLORS[index % SERIES_COLORS.length],
+                    }}
+                  />
+                ))}
+              </span>
+              <span className="truncate">
+                {count} {count === 1 ? 'account' : 'accounts'}
+              </span>
             </span>
-            <span className="truncate">
-              {count} {count === 1 ? 'account' : 'accounts'}
-            </span>
-          </span>
-          <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" aria-hidden />
-        </Button>
-      </PopoverTrigger>
+            <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" aria-hidden />
+          </Button>
+        }
+      />
 
       <PopoverContent className="w-[300px] p-0" align="start">
         <Command>

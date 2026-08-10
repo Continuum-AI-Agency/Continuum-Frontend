@@ -100,19 +100,21 @@ const Combobox = ({ value, setValue, data, labels, className }: ComboboxProps) =
 
   return (
     <Popover onOpenChange={setOpen} open={open}>
-      <PopoverTrigger asChild>
-        <Button
-          aria-expanded={open}
-          className={cn(
-            'w-40 justify-between capitalize border-slate-400/80 bg-white text-slate-900 hover:bg-slate-100',
-            className,
-          )}
-          variant="outline"
-        >
-          {value ? data.find((item) => item.value === value)?.label : labels.button}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button
+            aria-expanded={open}
+            className={cn(
+              'w-40 justify-between capitalize border-slate-400/80 bg-white text-slate-900 hover:bg-slate-100',
+              className,
+            )}
+            variant="outline"
+          >
+            {value ? data.find((item) => item.value === value)?.label : labels.button}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        }
+      />
       <PopoverContent className="w-40 border-slate-400/80 bg-white p-0">
         <Command
           filter={(value, search) => {

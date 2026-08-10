@@ -1614,18 +1614,20 @@ function Flow({
             {validationIssues.length > 0 ? (
               <Panel position="top-right" className="border-none bg-transparent p-0 shadow-none">
                 <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8 gap-2 bg-background/95 text-xs"
-                      aria-label={`${validationIssues.length} workflow validation issue${validationIssues.length === 1 ? '' : 's'}`}
-                    >
-                      <ShieldCheck className="size-3.5" aria-hidden />
-                      {validationIssues.length} to review
-                    </Button>
-                  </PopoverTrigger>
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-2 bg-background/95 text-xs"
+                        aria-label={`${validationIssues.length} workflow validation issue${validationIssues.length === 1 ? '' : 's'}`}
+                      >
+                        <ShieldCheck className="size-3.5" aria-hidden />
+                        {validationIssues.length} to review
+                      </Button>
+                    }
+                  />
                   <PopoverContent align="end" className="w-80 p-2">
                     <p className="px-2 py-1 text-xs font-medium">Workflow checks</p>
                     <div className="flex max-h-64 flex-col overflow-y-auto">
@@ -1698,18 +1700,20 @@ function Flow({
 
             <Panel position="bottom-center" className="border-none bg-transparent p-0 shadow-none">
               <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-2 bg-background/90 px-2.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
-                    aria-label="Show canvas keyboard shortcuts"
-                  >
-                    <Keyboard className="h-3.5 w-3.5" />
-                    Shortcuts
-                  </Button>
-                </PopoverTrigger>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-2 bg-background/90 px-2.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
+                      aria-label="Show canvas keyboard shortcuts"
+                    >
+                      <Keyboard className="h-3.5 w-3.5" />
+                      Shortcuts
+                    </Button>
+                  }
+                />
                 <PopoverContent align="center" side="top" className="w-64 p-3">
                   <p className="mb-2 text-xs font-medium text-foreground">Canvas shortcuts</p>
                   <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-xs">

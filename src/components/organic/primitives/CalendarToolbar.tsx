@@ -48,11 +48,13 @@ const WEEK_OPTS = { weekStartsOn: 1 } as const; // Monday-started, matches the p
 function StatusLegend() {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs">
-          Status legend
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs">
+            Status legend
+          </Button>
+        }
+      />
       <PopoverContent align="start" className="w-72">
         <div className="flex flex-col gap-2">
           <p className="text-xs font-semibold text-foreground">Post status</p>
@@ -151,20 +153,22 @@ function TimeframeSelector({
       {presetButton('week', 'Week')}
       {presetButton('month', 'Month')}
       <Popover open={customOpen} onOpenChange={setCustomOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            size="sm"
-            variant={activePreset === 'custom' ? 'secondary' : 'ghost'}
-            aria-pressed={activePreset === 'custom'}
-            className={cn('h-7 gap-1.5 rounded px-2 text-xs font-normal')}
-          >
-            <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">
-              {activePreset === 'custom' && dateRange ? formatRangeLabel(dateRange) : 'Custom'}
-            </span>
-          </Button>
-        </PopoverTrigger>
+        <PopoverTrigger
+          render={
+            <Button
+              type="button"
+              size="sm"
+              variant={activePreset === 'custom' ? 'secondary' : 'ghost'}
+              aria-pressed={activePreset === 'custom'}
+              className={cn('h-7 gap-1.5 rounded px-2 text-xs font-normal')}
+            >
+              <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">
+                {activePreset === 'custom' && dateRange ? formatRangeLabel(dateRange) : 'Custom'}
+              </span>
+            </Button>
+          }
+        />
         <PopoverContent align="start" className="w-auto p-0">
           <Calendar
             mode="range"

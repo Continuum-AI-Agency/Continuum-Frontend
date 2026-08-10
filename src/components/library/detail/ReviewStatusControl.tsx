@@ -173,17 +173,19 @@ export function ReviewStatusControl({ brandId, asset, onChanged }: ReviewStatusC
       </DropdownMenu>
 
       <Popover open={historyOpen} onOpenChange={handleHistoryOpenChange}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-6 text-muted-foreground"
-            aria-label="Review history"
-          >
-            <History className="size-3.5" />
-          </Button>
-        </PopoverTrigger>
+        <PopoverTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6 text-muted-foreground"
+              aria-label="Review history"
+            >
+              <History className="size-3.5" />
+            </Button>
+          }
+        />
         <PopoverContent align="start" className="w-72 p-3">
           <p className="mb-1 font-medium text-xs">Review history</p>
           <HistoryList events={events} />

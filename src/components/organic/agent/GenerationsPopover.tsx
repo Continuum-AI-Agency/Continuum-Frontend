@@ -241,17 +241,21 @@ export function GenerationsPopover({ brandId, onViewDraftAction }: Props) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-          {running > 0 ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" />
-          ) : (
-            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} />
-          )}
-          {rows.length} {rows.length === 1 ? 'generation' : 'generations'}
-          {running > 0 && <span className="text-muted-foreground">· {running} running</span>}
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+            {running > 0 ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" />
+            ) : (
+              <ChevronDown
+                className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')}
+              />
+            )}
+            {rows.length} {rows.length === 1 ? 'generation' : 'generations'}
+            {running > 0 && <span className="text-muted-foreground">· {running} running</span>}
+          </Button>
+        }
+      />
       <PopoverContent align="end" className="w-80 p-0">
         <div className="border-b border-border/60 px-3 py-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

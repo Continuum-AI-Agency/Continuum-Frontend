@@ -106,12 +106,14 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5">
-          <UserRoundPlusIcon className="size-3.5" />
-          Request review
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" size="sm" className="gap-1.5">
+            <UserRoundPlusIcon className="size-3.5" />
+            Request review
+          </Button>
+        }
+      />
       <PopoverContent align="start" className="w-80 p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Ping teammates

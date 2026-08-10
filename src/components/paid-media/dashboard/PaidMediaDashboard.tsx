@@ -374,20 +374,22 @@ export function PaidMediaDashboard({
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
           >
             <Popover open={customRangeOpen} onOpenChange={setCustomRangeOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    'h-8 min-w-[220px] justify-start gap-1.5 text-left text-xs font-normal',
-                    customRangeOpen &&
-                      'border-primary/60 bg-primary/5 text-primary ring-1 ring-primary/20',
-                  )}
-                >
-                  <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{customRangeLabel}</span>
-                </Button>
-              </PopoverTrigger>
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      'h-8 min-w-[220px] justify-start gap-1.5 text-left text-xs font-normal',
+                      customRangeOpen &&
+                        'border-primary/60 bg-primary/5 text-primary ring-1 ring-primary/20',
+                    )}
+                  >
+                    <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{customRangeLabel}</span>
+                  </Button>
+                }
+              />
               <PopoverContent align="start" className="w-auto p-0">
                 <Calendar
                   mode="range"
@@ -405,18 +407,20 @@ export function PaidMediaDashboard({
       </AnimatePresence>
 
       <Popover open={indexDialogOpen} onOpenChange={setIndexDialogOpen} modal={false}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => {
-              setSelectedCampaignIndexId('all');
-            }}
-          >
-            New index
-          </Button>
-        </PopoverTrigger>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => {
+                setSelectedCampaignIndexId('all');
+              }}
+            >
+              New index
+            </Button>
+          }
+        />
         <PopoverContent align="end" className="z-[60] w-[min(96vw,560px)] p-0">
           <CampaignIndexManagerDialog
             campaigns={campaigns.map((campaign) => ({
@@ -462,16 +466,18 @@ export function PaidMediaDashboard({
       </DropdownMenu>
 
       <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="h-8 w-8 text-muted-foreground"
-            aria-label="Chart attribution"
-          >
-            <InfoCircledIcon className="h-4 w-4" />
-          </Button>
-        </PopoverTrigger>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-8 w-8 text-muted-foreground"
+              aria-label="Chart attribution"
+            >
+              <InfoCircledIcon className="h-4 w-4" />
+            </Button>
+          }
+        />
         <PopoverContent align="end" className="w-72 text-xs text-muted-foreground">
           Charting library provided by{' '}
           <a

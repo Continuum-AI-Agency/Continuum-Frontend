@@ -34,7 +34,9 @@ mock.module('@/lib/creative-assets/assetUrl', () => ({
 
 mock.module('@/components/ui/popover', () => ({
   Popover: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  PopoverAnchor: ({ children }: { children: ReactNode }) => <>{children}</>,
+  PopoverAnchor: ({ children, render }: { children?: ReactNode; render?: ReactNode }) => (
+    <>{render ?? children}</>
+  ),
   PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
