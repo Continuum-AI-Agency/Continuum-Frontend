@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { InstagramTopMediaResponse, UnfurlMediaItem } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import { parseReferenceDropPayload } from '@/lib/ai-studio/referenceDrop';
 import { ApiError } from '@/lib/api/errors';
+import { STUDIO_ASSET_DROP_EFFECT } from '@/lib/creative-assets/studioAssetDrop';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -54,6 +64,24 @@ const carouselResponse: InstagramTopMediaResponse = {
 const renderBrowser = (onPlace = mock((_items: UnfurlMediaItem[]) => {})) => {
   render(<InstagramMediaBrowser brandProfileId="b-1" onPlace={onPlace} onClose={mock(() => {})} />);
   return { onPlace };
+};
+
+// Minimal DataTransfer stand-in — the code under test only sets effectAllowed
+// and one text/plain entry. The DOM's DragEvent constructor ignores a
+// `dataTransfer` init, so it has to be pinned onto the event by hand.
+const dragStartWithDataTransfer = (element: Element) => {
+  const store = new Map<string, string>();
+  const dataTransfer = {
+    effectAllowed: 'uninitialized',
+    setData: (format: string, value: string) => {
+      store.set(format, value);
+    },
+    getData: (format: string) => store.get(format) ?? '',
+  };
+  const event = createEvent.dragStart(element);
+  Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+  fireEvent(element, event);
+  return dataTransfer;
 };
 
 const search = async (handle: string) => {
@@ -122,6 +150,46 @@ describe('InstagramMediaBrowser', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/temporarily unavailable/i)).toBeDefined();
+    });
+  });
+
+  // #249/#250: the tiles used to emit no drag payload at all, so both canvas drop
+  // paths (which read CREATIVE_ASSET_DRAG_TYPE / reactflow-node-data / text/plain)
+  // saw nothing and dropping an Instagram photo did nothing.
+  it('emits a drag payload the canvas drop resolver can read, from a post tile', async () => {
+    fetchMock.mockResolvedValue(carouselResponse);
+    renderBrowser();
+    await search('nasa');
+
+    const tile = await screen.findByRole('button', { name: /import from carousel SC1/i });
+    const dataTransfer = dragStartWithDataTransfer(tile);
+
+    // Must match the canvas dropzone's dropEffect or Chrome swallows the drop.
+    expect(dataTransfer.effectAllowed).toBe(STUDIO_ASSET_DROP_EFFECT);
+    expect(parseReferenceDropPayload(dataTransfer.getData('text/plain'))).toEqual({
+      kind: 'remote',
+      publicUrl: 'https://cdn/cover.jpg',
+      mimeType: 'image/jpeg',
+    });
+  });
+
+  it('emits a drag payload from an individual carousel slide tile', async () => {
+    fetchMock.mockResolvedValue(carouselResponse);
+    renderBrowser();
+    await search('nasa');
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: /import from carousel SC1/i }));
+    });
+
+    const slide = await screen.findByRole('button', { name: /toggle slide 2/i });
+    const dataTransfer = dragStartWithDataTransfer(slide);
+
+    expect(dataTransfer.effectAllowed).toBe(STUDIO_ASSET_DROP_EFFECT);
+    expect(parseReferenceDropPayload(dataTransfer.getData('text/plain'))).toEqual({
+      kind: 'remote',
+      publicUrl: 'https://cdn/2.jpg',
+      mimeType: 'image/jpeg',
     });
   });
 

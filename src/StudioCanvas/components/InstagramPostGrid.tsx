@@ -4,6 +4,7 @@ import type { InstagramPost } from '@continuum/contracts';
 import { ChevronLeft, ChevronRight, Images, Play } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { setInstagramMediaDragData } from './instagramMediaDrag';
 
 interface InstagramPostGridProps {
   posts: InstagramPost[];
@@ -15,8 +16,12 @@ interface InstagramPostGridProps {
 
 const PostCover = ({ post }: { post: InstagramPost }) => {
   if (post.coverUrl) {
+    // draggable={false} so the tile button owns the drag: a natively draggable
+    // <img> starts its own drag with the browser's default payload instead.
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={post.coverUrl} alt="" className="h-full w-full object-cover" />;
+    return (
+      <img src={post.coverUrl} alt="" draggable={false} className="h-full w-full object-cover" />
+    );
   }
   const firstVideo = post.items.find((item) => item.kind === 'video');
   if (firstVideo) {
@@ -70,6 +75,13 @@ export function InstagramPostGrid({
             type="button"
             aria-label={`Import from ${post.kind} ${post.shortcode || post.id}`}
             onClick={() => onSelect(post)}
+            // Only image covers are draggable: a video reference cannot be inlined
+            // through the image proxy, so a dragged reel would land as a dead node.
+            draggable={Boolean(post.coverUrl)}
+            onDragStart={(event) => {
+              if (!post.coverUrl) return;
+              setInstagramMediaDragData(event.dataTransfer, post.coverUrl);
+            }}
             className="relative aspect-square overflow-hidden rounded-md border transition hover:ring-2 hover:ring-primary"
           >
             <PostCover post={post} />

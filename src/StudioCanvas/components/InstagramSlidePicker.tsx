@@ -3,6 +3,7 @@
 import type { InstagramMediaItem, InstagramPost } from '@continuum/contracts';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { setInstagramMediaDragData } from './instagramMediaDrag';
 
 interface InstagramSlidePickerProps {
   post: InstagramPost;
@@ -28,6 +29,14 @@ const SlideTile = ({
     aria-label={`Toggle slide ${index + 1}`}
     aria-pressed={isSelected}
     onClick={() => onToggle(index)}
+    // Only stills are draggable: a video reference cannot be inlined through the
+    // image proxy, so a dragged clip would land as a dead node. Videos still
+    // reach the canvas through "Add to canvas".
+    draggable={item.kind === 'image'}
+    onDragStart={(event) => {
+      if (item.kind !== 'image') return;
+      setInstagramMediaDragData(event.dataTransfer, item.url);
+    }}
     className={`relative aspect-square overflow-hidden rounded-md border transition ${
       isSelected ? 'ring-2 ring-primary' : 'opacity-50'
     }`}
@@ -35,8 +44,15 @@ const SlideTile = ({
     {item.kind === 'video' ? (
       <video src={item.url} className="h-full w-full object-cover" muted />
     ) : (
+      // draggable={false} so the tile button owns the drag: a natively draggable
+      // <img> starts its own drag with the browser's default payload instead.
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={item.url} alt={`slide ${index + 1}`} className="h-full w-full object-cover" />
+      <img
+        src={item.url}
+        alt={`slide ${index + 1}`}
+        draggable={false}
+        className="h-full w-full object-cover"
+      />
     )}
   </button>
 );

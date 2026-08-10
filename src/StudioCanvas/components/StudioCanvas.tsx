@@ -75,7 +75,6 @@ import {
 import { useToast } from '@/components/ui/ToastProvider';
 import { canvasRoomHref } from '@/lib/ai-studio/canvasRoomLocation';
 import { inlineRemoteImage } from '@/lib/ai-studio/inlineRemoteImage';
-import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { STUDIO_ASSET_DROP_EFFECT } from '@/lib/creative-assets/studioAssetDrop';
 import {
@@ -120,16 +119,15 @@ import { computeGenerationSignature } from '../utils/generationSignature';
 import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
 import { isValidConnection } from '../utils/isValidConnection';
 import { layoutInRow } from '../utils/layoutImportedNodes';
+import { resolveCanvasDropBase64 } from '../utils/resolveCanvasDropBase64';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { resolveSidebarDropTarget } from '../utils/resolveSidebarDropTarget';
 import {
   DEFAULT_VIDEO_GENERATOR_MODEL,
   getVideoGeneratorReferenceMode,
-  VIDEO_GENERATOR_MODEL_GROUPS,
   VIDEO_GENERATOR_MODEL_LABELS,
   VIDEO_GENERATOR_MODELS,
   type VideoGeneratorModel,
-  type VideoGeneratorModelGroup,
 } from '../utils/videoModel';
 import { CanvasFloatingPanel } from './CanvasFloatingPanel';
 import { InstagramMediaBrowser } from './InstagramMediaBrowser';
@@ -202,18 +200,20 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
     value: 'video',
     label: 'Video',
     items: [
-      {
-        type: 'hyperframesAgent',
-        label: 'HyperFrames Agent',
-        desc: 'Agentic HTML video creation with media references',
-        tag: 'Creative',
-      },
+      // First: the models expand in place, so the most-reached node in this
+      // section is also the first row of it.
       {
         type: 'videoGen',
         label: 'Video Generation',
         desc: 'Generate clips with selectable models',
         tag: 'Creative',
         modelOptions: VIDEO_GENERATOR_MODELS,
+      },
+      {
+        type: 'hyperframesAgent',
+        label: 'HyperFrames Agent',
+        desc: 'Agentic HTML video creation with media references',
+        tag: 'Creative',
       },
       {
         type: 'omniGen',
@@ -316,18 +316,19 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
 ];
 
 /**
- * A menu item may offer a narrowed model list, so the provider groups are intersected
- * with what the item actually offers and empty providers drop out of the menu.
+ * Models render flat, default first. Grouping them by provider bought nothing the
+ * labels don't already say ("Veo 3.1 Fast", "Kling Omni") and cost a whole menu
+ * level, so reaching a video generator took four hover-throughs (#260).
  */
-const modelGroupsFor = (
+const modelsInMenuOrder = (
   modelOptions: readonly VideoGeneratorModel[],
-): VideoGeneratorModelGroup[] => {
-  const offered = new Set<VideoGeneratorModel>(modelOptions);
-  return VIDEO_GENERATOR_MODEL_GROUPS.map((group) => ({
-    ...group,
-    models: group.models.filter((model) => offered.has(model)),
-  })).filter((group) => group.models.length > 0);
-};
+): readonly VideoGeneratorModel[] =>
+  modelOptions.includes(DEFAULT_VIDEO_GENERATOR_MODEL)
+    ? [
+        DEFAULT_VIDEO_GENERATOR_MODEL,
+        ...modelOptions.filter((model) => model !== DEFAULT_VIDEO_GENERATOR_MODEL),
+      ]
+    : modelOptions;
 
 const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'nanoGen',
@@ -609,6 +610,30 @@ function buildSeedPrompt(seed: PlannerAiStudioHandoff): string {
   return promptSections.join('\n\n');
 }
 
+// Instagram publishes at most 10 slides per carousel, so a draft that claims more
+// still seeds 10 generators.
+const CAROUSEL_MAX_SLIDES = 10;
+
+// One text node per slide, each carrying the shared brief VERBATIM plus that
+// slide's own direction. A wired prompt REPLACES a generator's positivePrompt, so
+// N generators fed by one shared text node render N identical images — the slide
+// marker alone is what keeps the seeded prompts distinct when the draft carries no
+// per-slide copy at all.
+function buildCarouselSlidePrompt(
+  seed: PlannerAiStudioHandoff,
+  index: number,
+  count: number,
+): string {
+  const direction = seed.slides?.find((slide) => slide.index === index)?.prompt.trim();
+  return [
+    `Slide ${index + 1} of ${count}`,
+    direction ? `Slide direction:\n${direction}` : '',
+    buildSeedPrompt(seed),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 function sortNodesByCanvasPosition(nodes: StudioNode[]): StudioNode[] {
   return [...nodes].sort((left, right) => {
     const xDiff = (left.position?.x ?? 0) - (right.position?.x ?? 0);
@@ -678,7 +703,7 @@ function seedGeneratorStyle(aspectRatio: string, edge: number): { width: number;
   });
 }
 
-function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
+export function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
   const workflowSpec = resolveWorkflowConceptSpec({
     platform: seed.platform,
     postType: seed.postType,
@@ -751,8 +776,8 @@ function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
   }
 
   if (workflowSpec.outputMode === 'ordered') {
-    const count = Math.max(1, Math.min(seed.authoritativeCount ?? 1, 10));
-    const nodes: StudioNode[] = [textNode];
+    const count = Math.max(1, Math.min(seed.authoritativeCount ?? 1, CAROUSEL_MAX_SLIDES));
+    const nodes: StudioNode[] = [];
     const edges: Edge[] = [];
     let seedNodeId: string | null = null;
 
@@ -761,20 +786,34 @@ function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
       nodes.push({
         id: seedNodeId,
         type: 'image',
-        position: { x: 120, y: 470 },
+        position: { x: 120, y: -260 },
         data: buildSeedImageNodeData(seedImage),
         style: { width: 180, height: 180 },
       } as StudioNode);
     }
 
+    // Two prompt/generator pairs per row so a slide's copy sits next to the slide
+    // it drives, instead of every generator hanging off one anonymous text block.
     for (let index = 0; index < count; index += 1) {
-      const row = Math.floor(index / 3);
-      const col = index % 3;
+      const row = Math.floor(index / 2);
+      const col = index % 2;
+      const x = 120 + col * 880;
+      const y = 120 + row * 420;
+      const slideTextNodeId = `organic-seed-text-${seed.draftId}-${index + 1}`;
       const nodeId = `organic-seed-carousel-${seed.draftId}-${index + 1}`;
+
+      nodes.push({
+        id: slideTextNodeId,
+        type: 'string',
+        position: { x, y },
+        data: { value: buildCarouselSlidePrompt(seed, index, count) },
+        style: { width: 380, height: 300 },
+      } as StudioNode);
+
       nodes.push({
         id: nodeId,
         type: 'nanoGen',
-        position: { x: 620 + col * 380, y: 140 + row * 360 },
+        position: { x: x + 440, y },
         data: {
           model: workflowSpec.defaultModel,
           positivePrompt: '',
@@ -786,8 +825,8 @@ function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
       } as StudioNode);
 
       edges.push({
-        id: `e-${textNodeId}-${nodeId}-prompt`,
-        source: textNodeId,
+        id: `e-${slideTextNodeId}-${nodeId}-prompt`,
+        source: slideTextNodeId,
         sourceHandle: 'text',
         target: nodeId,
         targetHandle: 'prompt',
@@ -1382,7 +1421,7 @@ function Flow({
         return;
       }
 
-      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveDroppedBase64);
+      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveCanvasDropBase64);
       if (resolved.status === 'error') {
         show({
           title: resolved.title,
@@ -1754,47 +1793,32 @@ function Flow({
                 <ContextMenuSub key={section.value}>
                   <ContextMenuSubTrigger inset>{section.label}</ContextMenuSubTrigger>
                   <ContextMenuSubContent className="w-72">
-                    {section.items.map((item) =>
-                      item.modelOptions ? (
-                        <ContextMenuSub key={`${item.type}-models`}>
-                          <ContextMenuSubTrigger inset>{item.label}</ContextMenuSubTrigger>
-                          <ContextMenuSubContent className="w-56">
-                            {modelGroupsFor(item.modelOptions).map((group) => (
-                              <ContextMenuSub key={`${item.type}-${group.provider}`}>
-                                <ContextMenuSubTrigger inset>{group.label}</ContextMenuSubTrigger>
-                                <ContextMenuSubContent className="w-56">
-                                  {group.models.map((model) => (
-                                    <ContextMenuItem
-                                      key={`${item.type}-${model}`}
-                                      onClick={() => addNodeAtPointer(item.type, { model })}
-                                    >
-                                      <div className="flex min-w-0 flex-col">
-                                        <span>{VIDEO_GENERATOR_MODEL_LABELS[model]}</span>
-                                        <span className="text-xs text-muted-foreground">
-                                          {item.desc}
-                                        </span>
-                                      </div>
-                                      <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
-                                    </ContextMenuItem>
-                                  ))}
-                                </ContextMenuSubContent>
-                              </ContextMenuSub>
-                            ))}
-                          </ContextMenuSubContent>
-                        </ContextMenuSub>
-                      ) : (
-                        <ContextMenuItem
-                          key={item.type}
-                          disabled={Boolean(item.disabled)}
-                          onClick={() => addNodeAtPointer(item.type)}
-                        >
-                          <div className="flex min-w-0 flex-col">
-                            <span>{item.label}</span>
-                            <span className="text-xs text-muted-foreground">{item.desc}</span>
-                          </div>
-                          <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
-                        </ContextMenuItem>
-                      ),
+                    {section.items.flatMap((item) =>
+                      item.modelOptions
+                        ? modelsInMenuOrder(item.modelOptions).map((model) => (
+                            <ContextMenuItem
+                              key={`${item.type}-${model}`}
+                              onClick={() => addNodeAtPointer(item.type, { model })}
+                            >
+                              <div className="flex min-w-0 flex-col">
+                                <span>{VIDEO_GENERATOR_MODEL_LABELS[model]}</span>
+                              </div>
+                              <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
+                            </ContextMenuItem>
+                          ))
+                        : [
+                            <ContextMenuItem
+                              key={item.type}
+                              disabled={Boolean(item.disabled)}
+                              onClick={() => addNodeAtPointer(item.type)}
+                            >
+                              <div className="flex min-w-0 flex-col">
+                                <span>{item.label}</span>
+                                <span className="text-xs text-muted-foreground">{item.desc}</span>
+                              </div>
+                              <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
+                            </ContextMenuItem>,
+                          ],
                     )}
                   </ContextMenuSubContent>
                 </ContextMenuSub>

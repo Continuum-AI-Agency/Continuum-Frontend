@@ -39,6 +39,17 @@ export const plannerHandoffAssetHintSchema = z.object({
   suggestion: z.string().min(1),
 });
 
+// One carousel slide's own creative direction. Carried per slide (rather than
+// folded into a single blob) because AI Studio seeds one text node per slide: a
+// wired prompt REPLACES a generator's positivePrompt, so N generators fed by one
+// shared text node render N identical images.
+export const plannerHandoffSlideSchema = z.object({
+  index: z.number().int().nonnegative(),
+  prompt: z.string().min(1),
+});
+
+export type PlannerHandoffSlide = z.infer<typeof plannerHandoffSlideSchema>;
+
 export const plannerAiStudioHandoffSchema = z.object({
   schemaVersion: z.literal('planner_ai_handoff_v1'),
   draftId: z.string().min(1),
@@ -57,6 +68,7 @@ export const plannerAiStudioHandoffSchema = z.object({
   seedTrendId: z.string().optional(),
   mediaSuggestion: plannerHandoffMediaSuggestionSchema,
   assetHints: z.array(plannerHandoffAssetHintSchema).optional(),
+  slides: z.array(plannerHandoffSlideSchema).optional(),
   updatedAt: z.string().min(1),
 });
 
@@ -192,7 +204,44 @@ export function buildAiStudioHandoffStorageCandidates(
     });
   }
 
+  // Last resort. Per-slide direction is the most valuable optional payload, so it
+  // is the last thing dropped — but a handoff that cannot be written at all is
+  // worse than one that opens with the shared brief only.
+  if (handoff.slides?.length) {
+    candidates.push({
+      ...handoff,
+      mediaSuggestion: undefined,
+      assetHints: undefined,
+      slides: undefined,
+    });
+  }
+
   return dedupeHandoffCandidates(candidates);
+}
+
+// Per-slide creative direction for a carousel handoff. The blueprint writes one
+// mediaSuggestion asset per slide and that asset's `prompt` IS the slide's own
+// visual direction; assetHints is the pre-blueprint fallback. Each slide keeps
+// its own index so one slide with no direction cannot shift the rest.
+export function deriveCarouselSlideSeeds(input: {
+  assets?: ReadonlyArray<{ order?: number | null; prompt?: string | null }> | null;
+  assetHints?: ReadonlyArray<{ suggestion?: string | null }> | null;
+}): PlannerHandoffSlide[] {
+  // `order` is 1-based when the blueprint writes it; an asset without one keeps
+  // its position rather than collapsing to the front of the list.
+  const assets = (input.assets ?? [])
+    .map((asset, index) => ({ asset, sortKey: asset.order ?? index + 1 }))
+    .sort((left, right) => left.sortKey - right.sortKey)
+    .map((entry) => entry.asset);
+  const hints = input.assetHints ?? [];
+  const slides: PlannerHandoffSlide[] = [];
+
+  for (let index = 0; index < Math.max(assets.length, hints.length); index += 1) {
+    const prompt = assets[index]?.prompt?.trim() || hints[index]?.suggestion?.trim() || '';
+    if (prompt) slides.push({ index, prompt });
+  }
+
+  return slides;
 }
 
 export function buildAiStudioStorageKey(draftId: string): string {

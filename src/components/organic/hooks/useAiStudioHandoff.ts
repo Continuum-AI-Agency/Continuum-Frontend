@@ -11,6 +11,7 @@ import {
   buildAiStudioStorageKey,
   buildPendingApplyStorageKey,
   buildSessionHistoryStorageKey,
+  deriveCarouselSlideSeeds,
   normalizeDraftPostType,
   type PlannerAiStudioHandoff,
   type PlannerAiStudioRevision,
@@ -18,6 +19,7 @@ import {
   plannerAiStudioHandoffSchema,
   resolveWorkflowConcept,
 } from '@/lib/organic/ai-studio-bridge';
+import { resolveCarouselSlideCount } from '@/lib/organic/carousel';
 import { getLocalStorageJSON, removeLocalStorage, setLocalStorageJSON } from '@/lib/storage';
 import * as storeRegistry from '@/lib/storage/storeRegistry';
 import { brandStorageKeyAiStudioKeyIndex, migrateLegacyAiStudioKeyIndex } from '@/lib/storage-keys';
@@ -127,6 +129,13 @@ export function useAiStudioHandoff({
       const postType = normalizeDraftPostType(draft.format);
       const platform = draft.platforms[0] === 'linkedin' ? 'linkedin' : 'instagram';
       const workflowConcept = resolveWorkflowConcept({ platform, postType });
+      const slides =
+        postType === 'carousel'
+          ? deriveCarouselSlideSeeds({
+              assets: draft.mediaSuggestion?.assets,
+              assetHints: draft.assetHints,
+            })
+          : [];
 
       return {
         schemaVersion: 'planner_ai_handoff_v1',
@@ -137,8 +146,25 @@ export function useAiStudioHandoff({
         postType,
         workflowConcept,
         format: draft.format,
+        // A carousel's slide count is evidenced, not declared: `slideCount` is only
+        // ever restored from a persisted snapshot, so an agent-generated draft has
+        // none and `mediaCount` defaults to 1. Reading those alone collapsed every
+        // agent carousel to a single slide in AI Studio.
         authoritativeCount:
-          postType === 'carousel' ? Math.max(1, draft.slideCount ?? draft.mediaCount ?? 1) : 1,
+          postType === 'carousel'
+            ? Math.max(
+                1,
+                resolveCarouselSlideCount({
+                  slideCount: draft.slideCount,
+                  realizedMediaCount: Math.max(
+                    draft.publishingAssets?.length ?? 0,
+                    draft.mediaSuggestion?.assets?.length ?? 0,
+                    draft.mediaCount ?? 0,
+                  ),
+                }),
+                slides.length,
+              )
+            : 1,
         title: draft.title,
         summary: draft.summary,
         captionPreview: draft.captionPreview,
@@ -159,6 +185,7 @@ export function useAiStudioHandoff({
             }
           : undefined,
         assetHints: draft.assetHints,
+        slides: slides.length > 0 ? slides : undefined,
         updatedAt: new Date().toISOString(),
       };
     },

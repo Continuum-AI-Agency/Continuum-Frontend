@@ -70,7 +70,6 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -79,6 +78,7 @@ import type { ImageNodeData, ImageReferenceType, StudioNode } from '../types';
 import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import { parseDataUrl } from '../utils/dataUrl';
 import { resolveCollisions } from '../utils/nodeCollisions';
+import { resolveCanvasDropBase64 } from '../utils/resolveCanvasDropBase64';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { stageAndUploadReferenceFile, uploadReferenceFile } from '../utils/uploadReferenceFile';
 import { referenceStatusBadge } from './referenceStatusBadge';
@@ -412,7 +412,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
 
       if (!rawPayload) return;
 
-      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveDroppedBase64);
+      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveCanvasDropBase64);
       if (resolved.status === 'error') {
         show({
           title: resolved.title,

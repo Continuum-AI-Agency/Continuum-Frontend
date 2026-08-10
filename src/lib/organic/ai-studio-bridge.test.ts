@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   buildAiStudioHandoffStorageCandidates,
+  deriveCarouselSlideSeeds,
   normalizeDraftPostType,
   plannerAiStudioApplyRequestSchema,
   plannerAiStudioHandoffSchema,
@@ -106,5 +107,70 @@ describe('ai-studio-bridge', () => {
     expect(candidates[2].mediaSuggestion?.generationContext).toBeUndefined();
     expect(candidates[3].mediaSuggestion).toBeUndefined();
     expect(candidates[4].assetHints).toBeUndefined();
+  });
+
+  it('drops per-slide direction only on the last storage fallback', () => {
+    const handoff = plannerAiStudioHandoffSchema.parse({
+      schemaVersion: 'planner_ai_handoff_v1',
+      draftId: 'seeded-2',
+      brandProfileId: 'brand-1',
+      weekStartId: '2026-03-23',
+      platform: 'instagram',
+      postType: 'carousel',
+      format: 'Carousel',
+      title: 'Seeded title',
+      summary: 'Seeded summary',
+      captionPreview: 'Seeded caption',
+      assetHints: [{ role: 'slide_1', suggestion: 'Hero subject' }],
+      slides: [
+        { index: 0, prompt: 'Hook slide' },
+        { index: 1, prompt: 'Proof slide' },
+      ],
+      updatedAt: new Date().toISOString(),
+    });
+
+    const candidates = buildAiStudioHandoffStorageCandidates(handoff);
+
+    expect(candidates[0].slides).toHaveLength(2);
+    expect(candidates[candidates.length - 2].slides).toHaveLength(2);
+    expect(candidates[candidates.length - 1].slides).toBeUndefined();
+  });
+
+  it('derives per-slide direction from blueprint asset prompts, ordered by slide order', () => {
+    const slides = deriveCarouselSlideSeeds({
+      assets: [
+        { order: 2, prompt: '  Second slide direction  ' },
+        { order: 1, prompt: 'First slide direction' },
+        { order: 3, prompt: 'Third slide direction' },
+      ],
+      assetHints: [],
+    });
+
+    expect(slides).toEqual([
+      { index: 0, prompt: 'First slide direction' },
+      { index: 1, prompt: 'Second slide direction' },
+      { index: 2, prompt: 'Third slide direction' },
+    ]);
+  });
+
+  it('falls back to asset hints and keeps positional index across a blank slide', () => {
+    const slides = deriveCarouselSlideSeeds({
+      assets: [{ order: 1, prompt: 'Blueprint direction' }, { order: 2, prompt: '   ' }, {}],
+      assetHints: [
+        { suggestion: 'ignored, the asset prompt wins' },
+        { suggestion: '' },
+        { suggestion: 'Hint direction' },
+      ],
+    });
+
+    expect(slides).toEqual([
+      { index: 0, prompt: 'Blueprint direction' },
+      { index: 2, prompt: 'Hint direction' },
+    ]);
+  });
+
+  it('returns no slides when the draft carries no per-slide direction at all', () => {
+    expect(deriveCarouselSlideSeeds({})).toEqual([]);
+    expect(deriveCarouselSlideSeeds({ assets: [{ prompt: null }], assetHints: null })).toEqual([]);
   });
 });
