@@ -1,6 +1,5 @@
 'use client';
 
-import { useControllableState } from '@radix-ui/react-use-controllable-state';
 import { ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type {
@@ -13,6 +12,7 @@ import type {
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { useControllableState } from '@/hooks/useControllableState';
 import { cn } from '@/lib/utils';
 
 // Explicit type for reel items

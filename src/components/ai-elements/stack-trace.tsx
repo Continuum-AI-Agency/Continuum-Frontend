@@ -1,6 +1,5 @@
 'use client';
 
-import { useControllableState } from '@radix-ui/react-use-controllable-state';
 import { AlertTriangleIcon, CheckIcon, ChevronDownIcon, CopyIcon } from 'lucide-react';
 import type { ComponentProps } from 'react';
 import {
@@ -15,6 +14,7 @@ import {
 } from 'react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useControllableState } from '@/hooks/useControllableState';
 import { cn } from '@/lib/utils';
 
 // Regex patterns for parsing stack traces

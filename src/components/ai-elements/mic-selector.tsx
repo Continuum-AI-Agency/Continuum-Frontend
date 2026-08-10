@@ -1,6 +1,5 @@
 'use client';
 
-import { useControllableState } from '@radix-ui/react-use-controllable-state';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 import {
@@ -21,6 +20,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useControllableState } from '@/hooks/useControllableState';
 import { cn } from '@/lib/utils';
 
 const deviceIdRegex = /\(([\da-fA-F]{4}:[\da-fA-F]{4})\)$/;
