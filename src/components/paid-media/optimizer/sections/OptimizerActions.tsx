@@ -12,6 +12,7 @@ import { CheckCircle2Icon } from 'lucide-react';
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { Button } from '@/components/ui/button';
 import { nextCycleLabel, soonestNextCycle } from '../format';
+import { hasPendingWork } from '../reportModel';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { RenewalTaskRow } from './RenewalTaskRow';
 
@@ -30,9 +31,9 @@ export function OptimizerActions({
   renewals,
   onBrowsePortfolios,
 }: OptimizerActionsProps) {
-  const portfoliosWithPending = portfolios.filter(
-    (portfolio) => portfolio.pending_recommendations > 0,
-  );
+  // Budget moves are cycle_items, not recommendations — a portfolio with money work and no
+  // fired trigger belongs here just as much as one with a pause to approve.
+  const portfoliosWithPending = portfolios.filter(hasPendingWork);
 
   const hasWork = portfoliosWithPending.length > 0 || renewals.length > 0;
 

@@ -98,4 +98,30 @@ describe('OptimizerActions — work pending', () => {
     expect(screen.getAllByTestId('portfolio-group')).toHaveLength(2);
     expect(document.body.textContent).not.toContain('Nothing needs your decision');
   });
+
+  it('renders a portfolio whose only work is BUDGET MOVES', () => {
+    // The regression: budget moves are cycle_items, not recommendations, so a cycle that
+    // wanted to move money without firing a trigger counted as zero pending and the whole
+    // portfolio vanished from the queue. Four live portfolios were in exactly this state.
+    renderActions([portfolio({ id: 'p1', pending_recommendations: 0, pending_budget_moves: 2 })]);
+
+    expect(screen.getAllByTestId('portfolio-group')).toHaveLength(1);
+    expect(document.body.textContent).not.toContain('Nothing needs your decision');
+  });
+
+  it('counts recommendations and budget moves independently', () => {
+    renderActions([
+      portfolio({ id: 'p1', pending_recommendations: 2, pending_budget_moves: 0 }),
+      portfolio({ id: 'p2', pending_recommendations: 0, pending_budget_moves: 8 }),
+      portfolio({ id: 'p3', pending_recommendations: 1, pending_budget_moves: 3 }),
+      portfolio({ id: 'p4', pending_recommendations: 0, pending_budget_moves: 0 }),
+    ]);
+
+    expect(screen.getAllByTestId('portfolio-group')).toHaveLength(3);
+  });
+
+  it('still says "caught up" when neither kind of work is waiting', () => {
+    renderActions([portfolio({ pending_recommendations: 0, pending_budget_moves: 0 })]);
+    expect(document.body.textContent).toContain('Nothing needs your decision');
+  });
 });

@@ -75,6 +75,7 @@ import { z } from 'zod';
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { recommendationInsightKey } from './insightKey';
+import { hasPendingWork } from './reportModel';
 import { type AccountSnapshotsResult, parseOptimizerSnapshotEnvelope } from './snapshotEnvelope';
 
 // The optimizer RPCs/edge functions are not yet in the generated Supabase types
@@ -1493,9 +1494,11 @@ export function usePrefetchPortfolioDetail(brandId: string) {
   );
 }
 
-/** Warm the performance read for every portfolio that has pending recommendations, so
- *  the Actions queue lands from cache instead of firing one optimizer-status invoke per
- *  portfolio on tab entry. Fired from the Actions tab trigger's hover/focus. */
+/** Warm the performance read for every portfolio that has pending work, so the Actions
+ *  queue lands from cache instead of firing one optimizer-status invoke per portfolio on
+ *  tab entry. Fired from the Actions tab trigger's hover/focus. Must use the SAME predicate
+ *  the tab filters on — warming only rec-bearing portfolios left every money-only group
+ *  cold on entry. */
 export function useWarmActionsQueue(brandId: string) {
   const queryClient = useQueryClient();
 
@@ -1503,7 +1506,7 @@ export function useWarmActionsQueue(brandId: string) {
     (portfolios: PortfolioListItem[]) => {
       if (!brandId) return;
       for (const portfolio of portfolios) {
-        if (portfolio.pending_recommendations <= 0) continue;
+        if (!hasPendingWork(portfolio)) continue;
         void queryClient.prefetchQuery({
           queryKey: optimizerQueryKeys.performance(portfolio.id),
           queryFn: () => withReadTimeout(fetchPerformance(portfolio.id)),
