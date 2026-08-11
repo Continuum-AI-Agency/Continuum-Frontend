@@ -54,6 +54,19 @@ if (typeof globalThis.getComputedStyle !== 'function') {
   }) as typeof globalThis.getComputedStyle;
 }
 
+// happy-dom ships no ResizeObserver, and anything that measures itself on mount — cmdk
+// (the command palette), the shadcn chart container, Base UI's positioner — constructs one
+// during render. Without it the component throws before a single assertion runs, which
+// reads as a broken component rather than a missing browser API. Inert on purpose: these
+// suites assert behaviour, never layout, so a recording no-op is the whole contract.
+if (typeof globalThis.ResizeObserver !== 'function') {
+  globalThis.ResizeObserver = class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  } as unknown as typeof globalThis.ResizeObserver;
+}
+
 mock.module('next/navigation', () => {
   return {
     useRouter: () => ({
