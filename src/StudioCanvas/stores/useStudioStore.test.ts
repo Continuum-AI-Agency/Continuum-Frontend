@@ -289,6 +289,33 @@ describe('useStudioStore', () => {
 });
 
 // ---------------------------------------------------------------------------
+// A brand switch used to clear the canvas brand outright. The mounted canvas only
+// re-reads it from a prop effect, so every generation after an in-place switch ran
+// brand-less and the Backend answered it as a permissions denial.
+// ---------------------------------------------------------------------------
+describe('resetForBrandSwitch', () => {
+  it('clears the graph but carries the brand being switched to', () => {
+    useStudioStore.setState({
+      brandId: 'brand-a',
+      nodes: [{ id: '1', position: { x: 0, y: 0 }, type: 'nanoGen', data: {} } as StudioNode],
+    });
+
+    useStudioStore.getState().resetForBrandSwitch('brand-b');
+
+    expect(useStudioStore.getState().brandId).toBe('brand-b');
+    expect(useStudioStore.getState().nodes).toEqual([]);
+  });
+
+  it('leaves no brand when the switch names none', () => {
+    useStudioStore.setState({ brandId: 'brand-a' });
+
+    useStudioStore.getState().resetForBrandSwitch();
+
+    expect(useStudioStore.getState().brandId).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Bug #261: copy/cut carried nodes only, so a pasted group arrived unwired.
 // ---------------------------------------------------------------------------
 describe('clipboard carries the edges inside the selection', () => {

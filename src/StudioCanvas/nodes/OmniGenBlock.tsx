@@ -194,7 +194,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
     const instruction = editText.trim();
     const base = activeVariation;
     if (!instruction || !base || base.status !== 'done') return;
-    if (!brandId || brandId === 'default-brand') {
+    if (!brandId) {
       show({
         title: 'Select a brand',
         description: 'Editing needs an active brand.',

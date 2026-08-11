@@ -23,11 +23,13 @@ describe('executeWorkflow', () => {
       rehydrateWorkflowMediaNodes,
     }));
 
-    // Reset store state
+    // Reset store state. The brand is part of that state: a mounted canvas always has
+    // one, and a run without it is its own scenario (see 'refuses to run with no brand').
     useStudioStore.setState({
       nodes: [],
       edges: [],
       defaultEdgeType: 'bezier',
+      brandId: 'brand-test',
     });
   });
 
@@ -91,6 +93,54 @@ describe('executeWorkflow', () => {
     const updatedNode2 = finalNodes.find((n) => n.id === '2');
     expect(updatedNode2?.data.generatedImage).toBeDefined();
     expect(updatedNode2?.data.isComplete).toBe(true);
+  });
+
+  it('refuses to run with no brand instead of generating under a placeholder', async () => {
+    // A brand switch used to leave the store brand-less, and the run then sent a
+    // literal 'default-brand' the Backend could only answer with a 403.
+    useStudioStore.setState({ brandId: undefined });
+    useStudioStore.getState().setNodes([
+      {
+        id: '1',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'test' },
+        type: 'nanoGen',
+      },
+    ]);
+
+    const executeGeneration = mock(async () => ({
+      success: true,
+      output: { type: 'image', base64: 'base64data', mimeType: 'image/png' },
+    }));
+
+    await executeWorkflow(buildControls(executeGeneration) as any);
+
+    expect(executeGeneration).not.toHaveBeenCalled();
+    const node = useStudioStore.getState().nodes.find((n) => n.id === '1');
+    expect(node?.data.error).toContain('No brand selected');
+  });
+
+  it('passes the store brand to generation when the caller names none', async () => {
+    useStudioStore.setState({ brandId: 'brand-from-store' });
+    useStudioStore.getState().setNodes([
+      {
+        id: '1',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'test' },
+        type: 'nanoGen',
+      },
+    ]);
+
+    const executeGeneration = mock(async () => ({
+      success: true,
+      output: { type: 'image', base64: 'base64data', mimeType: 'image/png' },
+    }));
+
+    await executeWorkflow(buildControls(executeGeneration) as any);
+
+    expect(executeGeneration.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ brand_id: 'brand-from-store' }),
+    );
   });
 
   it('should handle execution failure', async () => {

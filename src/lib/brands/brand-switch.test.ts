@@ -86,6 +86,23 @@ describe('brand-switch', () => {
       expect(reset).toHaveBeenCalledTimes(1);
     });
 
+    it('hands reset the switch event, so a store can adopt the brand being switched TO', () => {
+      // Dropping the event here is what left the canvas store brand-less after a switch:
+      // it cleared its brand and had nothing to put back.
+      const reset = mock((_event?: { nextBrandId: string | null }) => {});
+      registerBrandScopedStore({ name: 'my-store', reset });
+
+      storeRegistry.teardown('brand-a', {
+        prevBrandId: 'brand-a',
+        nextBrandId: 'brand-b',
+        reason: 'local-switch',
+      });
+
+      expect(reset).toHaveBeenCalledWith(
+        expect.objectContaining({ prevBrandId: 'brand-a', nextBrandId: 'brand-b' }),
+      );
+    });
+
     it('calls purge on storeRegistry.purge', () => {
       const reset = mock(() => {});
       const purge = mock(() => {});

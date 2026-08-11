@@ -84,7 +84,7 @@ interface StudioState {
   undo: () => void;
   redo: () => void;
   resetForRoomSwitch: () => void;
-  resetForBrandSwitch: () => void;
+  resetForBrandSwitch: (nextBrandId?: string) => void;
 
   // Clipboard — canvas-level copy/cut/paste for selected nodes and the edges
   // wholly inside that selection, so a pasted group keeps its wiring.
@@ -676,14 +676,17 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }
   },
 
-  resetForBrandSwitch: () =>
+  // Carries the brand FORWARD. The mounted canvas re-reads its brand from a prop effect
+  // that only fires when the prop changes, so a switch that cleared this left every
+  // generation running brand-less until a full page reload.
+  resetForBrandSwitch: (nextBrandId?: string) =>
     set({
       nodes: [],
       edges: [],
       deletedNodeIds: [],
       deletedEdgeIds: [],
       saveTrigger: 0,
-      brandId: undefined,
+      brandId: nextBrandId,
       activeRoomId: undefined,
       clipboard: [],
       clipboardEdges: [],
@@ -705,6 +708,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 if (typeof window !== 'undefined') {
   registerBrandScopedStore({
     name: 'studio-canvas',
-    reset: () => useStudioStore.getState().resetForBrandSwitch(),
+    reset: (event) =>
+      useStudioStore.getState().resetForBrandSwitch(event?.nextBrandId ?? undefined),
   });
 }
