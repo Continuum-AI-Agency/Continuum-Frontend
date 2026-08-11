@@ -219,9 +219,8 @@ mock.module('./RecommendationInsight', () => ({
   RecommendationInsight: ({ kind }: { kind: string }) => <span>{kind}</span>,
 }));
 
-const { OptimizerActionsPortfolioGroup, buildActionQueue, isSelectableRow } = await import(
-  './OptimizerActionsPortfolioGroup'
-);
+const { OptimizerActionsPortfolioGroup, buildActionQueue, isSelectableRow, selectionLabel } =
+  await import('./OptimizerActionsPortfolioGroup');
 
 afterEach(() => {
   cleanup();
@@ -306,12 +305,12 @@ describe('OptimizerActionsPortfolioGroup — the unified queue', () => {
       screen.getByLabelText('Ad-level execution is in progress — not yet surfaced here'),
     ).toBeDefined();
     // The hidden row has no selection checkbox.
-    expect(screen.queryByLabelText('Select as-ad')).toBeNull();
+    expect(screen.queryByLabelText('Select pause this ad for as-ad')).toBeNull();
   });
 
   it('selecting a budget row and approving calls requestApplyItems with its adset id', () => {
     renderGroup();
-    fireEvent.click(screen.getByLabelText('Select Budget Set'));
+    fireEvent.click(screen.getByLabelText('Select budget move for Budget Set'));
     fireEvent.click(screen.getByRole('button', { name: /approve selected/i }));
 
     expect(requestApplyItemsMutate).toHaveBeenCalledTimes(1);
@@ -324,7 +323,7 @@ describe('OptimizerActionsPortfolioGroup — the unified queue', () => {
 
   it('routes an approved pause selection to setStatuses(approved), not requestApplyItems', () => {
     renderGroup();
-    fireEvent.click(screen.getByLabelText('Select Pause Set'));
+    fireEvent.click(screen.getByLabelText('Select pause ad set for Pause Set'));
     fireEvent.click(screen.getByRole('button', { name: /approve selected/i }));
 
     expect(setStatusesMutate).toHaveBeenCalledTimes(1);
@@ -336,7 +335,7 @@ describe('OptimizerActionsPortfolioGroup — the unified queue', () => {
 
   it('selecting a creative row and approving flips its status to approved (opens a request)', () => {
     renderGroup();
-    fireEvent.click(screen.getByLabelText('Select Winner Set'));
+    fireEvent.click(screen.getByLabelText('Select make variations of the winner for Winner Set'));
     fireEvent.click(screen.getByRole('button', { name: /approve selected/i }));
 
     expect(setStatusMutate).toHaveBeenCalledTimes(1);
@@ -355,7 +354,9 @@ describe('OptimizerActionsPortfolioGroup — the unified queue', () => {
     // A selectable checkbox (not the pause_ad danger icon). The headline is the stubbed
     // RecommendationInsight, which renders the kind — proving it took the insight path, not
     // the muted hidden-row path the pause_ad row uses.
-    expect(screen.getByLabelText('Select Winner Set')).toBeDefined();
+    expect(
+      screen.getByLabelText('Select make variations of the winner for Winner Set'),
+    ).toBeDefined();
     expect(document.body.textContent).toContain('variate_creative');
   });
 
@@ -492,7 +493,7 @@ describe('OptimizerActionsPortfolioGroup — confirm-dialog execute (Meta writes
     expect(
       screen.getByLabelText('Ad-level execution is in progress — not yet surfaced here'),
     ).toBeDefined();
-    expect(screen.queryByLabelText('Select as-ad')).toBeNull();
+    expect(screen.queryByLabelText('Select pause this ad for as-ad')).toBeNull();
     // No money-write affordance exists for it, and it cannot be approved from this surface.
     expect(screen.queryByRole('button', { name: /budget move/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /ad set/i })).toBeNull();
@@ -552,8 +553,8 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
   it('keeps BOTH ad sets individually selectable, held one included', () => {
     activeReport = rebalanceReport;
     renderGroup();
-    expect(screen.getByLabelText('Select Cold Lookalike')).toBeTruthy();
-    expect(screen.getByLabelText('Select Retarget 30d')).toBeTruthy();
+    expect(screen.getByLabelText('Select budget move for Cold Lookalike')).toBeTruthy();
+    expect(screen.getByLabelText('Select budget move for Retarget 30d')).toBeTruthy();
     expect(screen.getByLabelText('Select all budget moves in this cycle')).toBeTruthy();
   });
 
@@ -561,10 +562,10 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     activeReport = rebalanceReport;
     const { container } = renderGroup();
 
-    fireEvent.click(screen.getByLabelText('Select Retarget 30d'));
+    fireEvent.click(screen.getByLabelText('Select budget move for Retarget 30d'));
     expect(container.textContent).toContain('Net +$15/day');
 
-    fireEvent.click(screen.getByLabelText('Select Cold Lookalike'));
+    fireEvent.click(screen.getByLabelText('Select budget move for Cold Lookalike'));
     expect(container.textContent).toContain('Spend stays flat');
     expect(container.textContent).not.toContain('Net +$15/day');
   });
@@ -617,5 +618,71 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     expect(container.textContent).not.toContain('Reallocating');
     expect(container.textContent).not.toContain('Moving');
     expect(screen.queryByLabelText('Select all budget moves in this cycle')).toBeNull();
+  });
+});
+
+// Found by optimizer:rebalance:e2e:bench against the live Agency account: one cycle queued a
+// budget move AND a creative refresh on the SAME ad set, and both checkboxes were labelled
+// "Select ALEIRA // $12 PRIMER MES // AGOSTO". Two different Meta writes, one accessible
+// name — a screen reader user could not tell which one they were authorizing.
+describe('two decisions on one ad set are separately nameable', () => {
+  const sameAdset = {
+    adset_id: 'as-shared',
+    adset_name: 'ALEIRA // $12 PRIMER MES // AGOSTO',
+  };
+
+  it('names the budget move and the recommendation differently', () => {
+    const rows = buildActionQueue({
+      portfolio: null,
+      latest_run: null,
+      history: [],
+      latest_items: [
+        {
+          ...sameAdset,
+          current_budget: 50,
+          final_budget: 65,
+          change_abs: 15,
+          change_pct: 0.3,
+          apply_status: null,
+        },
+      ],
+      recommendations: [
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          ...sameAdset,
+          kind: 'creative_refresh',
+          trigger: 'F1_creative_fatigue',
+          severity: 'medium',
+          reason: 'CTR down 42%',
+          status: 'pending',
+        },
+      ],
+    });
+
+    expect(rows).toHaveLength(2);
+    const labels = rows.map(selectionLabel);
+    expect(new Set(labels).size).toBe(2);
+    expect(labels).toContain('Select budget move for ALEIRA // $12 PRIMER MES // AGOSTO');
+    expect(labels).toContain('Select refresh creative for ALEIRA // $12 PRIMER MES // AGOSTO');
+  });
+
+  it('falls back to the ad-set id when the roster carries no name', () => {
+    const rows = buildActionQueue({
+      portfolio: null,
+      latest_run: null,
+      history: [],
+      latest_items: [
+        {
+          adset_id: 'as-nameless',
+          current_budget: 50,
+          final_budget: 65,
+          change_abs: 15,
+          change_pct: 0.3,
+          apply_status: null,
+        },
+      ],
+      recommendations: [],
+    });
+    expect(selectionLabel(rows[0])).toBe('Select budget move for as-nameless');
   });
 });

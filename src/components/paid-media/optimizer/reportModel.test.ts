@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import type { PortfolioListItem } from '@continuum/contracts';
 import { FreezeReasonSchema } from '@continuum/contracts';
 
 import {
@@ -8,6 +9,7 @@ import {
   confidenceBand,
   creativeBriefForRec,
   explainConfidence,
+  firstCycleState,
   freezeLabel,
   hasPendingWork,
   isExecutable,
@@ -18,6 +20,62 @@ import {
   recommendationActionCopy,
   recommendationLabel,
 } from './reportModel';
+
+describe('pending work spans two stores, and the queue must count both', () => {
+  const portfolio = (over: Partial<PortfolioListItem>): PortfolioListItem =>
+    ({ pending_recommendations: 0, pending_budget_moves: 0, ...over }) as PortfolioListItem;
+
+  it('counts a budget-move-only portfolio as having work', () => {
+    // The live shape that vanished from the Actions queue: cycle_items had two approvable
+    // moves, optimizer.recommendations had nothing.
+    expect(pendingWorkCount(portfolio({ pending_budget_moves: 2 }))).toBe(2);
+  });
+
+  it('sums both stores rather than picking one', () => {
+    expect(
+      pendingWorkCount(portfolio({ pending_recommendations: 3, pending_budget_moves: 2 })),
+    ).toBe(5);
+  });
+
+  it('is zero only when neither store has work', () => {
+    expect(pendingWorkCount(portfolio({}))).toBe(0);
+  });
+});
+
+describe('a null cycle report means four different things', () => {
+  const base = { isSuccess: true, isError: false, hasRun: false, pollExpired: false };
+
+  it('calls a failed read an error, never a first-cycle wait', () => {
+    // The reported bug: ALEIRA / FORMULARIOS showed "Scoring your first cycle…" forever with
+    // five days of persisted runs, because a failed read and a new portfolio both produce
+    // latest_run === null.
+    expect(firstCycleState({ ...base, isSuccess: false, isError: true })).toBe('error');
+  });
+
+  it('waits on nothing while the read is still in flight', () => {
+    expect(firstCycleState({ ...base, isSuccess: false })).toBe('none');
+  });
+
+  it('waits when the read succeeded and the portfolio genuinely has no cycle', () => {
+    expect(firstCycleState(base)).toBe('waiting');
+  });
+
+  it('stops waiting once a run exists', () => {
+    expect(firstCycleState({ ...base, hasRun: true })).toBe('none');
+  });
+
+  it('stops waiting on a SKIPPED cycle, which can never produce a run', () => {
+    expect(firstCycleState({ ...base, runStatus: 'skipped' })).toBe('none');
+  });
+
+  it('reports a stall once the poll window lapses instead of spinning unattended', () => {
+    expect(firstCycleState({ ...base, pollExpired: true })).toBe('stalled');
+  });
+
+  it('lets an error win over a lapsed poll', () => {
+    expect(firstCycleState({ ...base, isError: true, pollExpired: true })).toBe('error');
+  });
+});
 
 describe('pause is an executable ad-set write, not an advisory', () => {
   it('labels a pause recommendation as the write it authorizes', () => {
@@ -425,16 +483,44 @@ describe('budgetMoveWhy explains one move from what cycle_items already stores',
     ).toBeNull();
   });
 
-  it('reports the velocity cap when the guardrail truncated the move', () => {
+  // velocityCapped is the engine's raw proportional budget after the velocity clamp — a
+  // BUDGET, not a flag. The old assertion passed `true` and matched a `=== true` test, so
+  // both sides of a wrong contract agreed with each other and neither matched a real row.
+  it('reports the velocity cap when the clamp actually moved the number', () => {
     const why = budgetMoveWhy({
       adset_id: 'g',
       current_budget: 50,
       final_budget: 65,
       change_abs: 15,
       change_pct: 0.3,
-      diagnostics: { velocityCapped: true },
+      // Raw share wanted 82.4; the per-cycle velocity band allowed 65.
+      diagnostics: { rawBudget: 82.4, velocityCapped: 65 },
     });
     expect(why?.capped).toBe(true);
+  });
+
+  it('does not claim a cap when the clamp left the raw budget alone', () => {
+    const why = budgetMoveWhy({
+      adset_id: 'g',
+      current_budget: 50,
+      final_budget: 55.78,
+      change_abs: 5.78,
+      change_pct: 0.11,
+      diagnostics: { rawBudget: 55.78, velocityCapped: 55.78 },
+    });
+    expect(why?.capped).toBe(false);
+  });
+
+  it('does not claim a cap on a row that predates rawBudget', () => {
+    const why = budgetMoveWhy({
+      adset_id: 'g',
+      current_budget: 50,
+      final_budget: 65,
+      change_abs: 15,
+      change_pct: 0.3,
+      diagnostics: { velocityCapped: 65 },
+    });
+    expect(why?.capped).toBe(false);
   });
 });
 

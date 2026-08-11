@@ -32,6 +32,7 @@ const portfolio = (over: Partial<PortfolioListItem> = {}): PortfolioListItem =>
     next_realloc_at: null,
     adset_count: 6,
     pending_recommendations: 0,
+    pending_budget_moves: 0,
     ...over,
   }) as PortfolioListItem;
 

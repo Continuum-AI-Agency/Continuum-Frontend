@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ApplyModePill } from '../ApplyModePill';
 import { humanize } from '../format';
+import { pendingWorkCount } from '../reportModel';
 import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
 
 type OptimizerPortfolioBrowserProps = {
@@ -48,9 +49,9 @@ function PortfolioBrowserRow({
             applyMode={portfolio.apply_mode}
             autopilotPaused={portfolio.autopilot_paused}
           />
-          {portfolio.pending_recommendations > 0 ? (
+          {pendingWorkCount(portfolio) > 0 ? (
             <Badge variant="secondary" className="text-3xs">
-              {portfolio.pending_recommendations} pending
+              {pendingWorkCount(portfolio)} pending
             </Badge>
           ) : null}
         </p>

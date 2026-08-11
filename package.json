@@ -6,9 +6,6 @@
   "workspaces": [
     "packages/contracts"
   ],
-  "overrides": {
-    "@radix-ui/react-primitive": "2.1.7"
-  },
   "scripts": {
     "dev": "bun run --bun next dev --turbopack",
     "build": "bun run typecheck:build && next build --webpack && bun run bundle:check",
@@ -30,6 +27,7 @@
     "optimizer:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir coverage src/components/paid-media/optimizer",
     "optimizer:e2e:bench": "playwright test --config playwright.optimizer.config.ts --workers=1",
     "optimizer:rebalance:e2e:bench": "playwright test --config playwright.optimizer-rebalance.config.ts --workers=1",
+    "optimizer:tooltip:e2e:bench": "playwright test --config playwright.optimizer-tooltip.config.ts --workers=1",
     "organic:metrics:compare:bench": "bun run src/lib/organic/organic-metrics-compare.bench.ts",
     "posthog:logs:bench": "NODE_ENV=production bun run src/lib/observability/posthog-logs.bench.ts",
     "trends:render:e2e:bench": "bun run src/lib/brand-insights/trends-render.bench.ts",
@@ -123,7 +121,6 @@
     "bun": "^1.3.10",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "cmdk": "^1.1.1",
     "croner": "^10.0.1",
     "d3-array": "^3.2.4",
     "d3-geo": "^3.1.1",

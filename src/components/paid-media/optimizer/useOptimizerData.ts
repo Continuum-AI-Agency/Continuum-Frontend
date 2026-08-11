@@ -316,7 +316,15 @@ async function fetchPerformance(portfolioId: string): Promise<CycleRunReport | n
   });
   if (error) throw new Error('optimizer-status unreachable');
   const parsed = CycleRunReportSchema.safeParse(data);
-  return parsed.success ? parsed.data : null;
+  // Returning null on a shape mismatch used to be silent, and the Performance tab reads a
+  // null report as "no cycle has run yet" — so schema drift presented as "Scoring your
+  // first cycle…" forever on a portfolio with five months of runs. Throw: React Query
+  // owns the error and the surface renders a retry.
+  if (!parsed.success) {
+    console.error('optimizer-status: unexpected report shape', parsed.error.issues);
+    throw new Error('optimizer-status returned an unexpected report shape');
+  }
+  return parsed.data;
 }
 
 async function fetchCpaSeries(portfolioId: string): Promise<CpaSeriesPoint[]> {
@@ -349,7 +357,13 @@ async function fetchLogs(brandId: string): Promise<OptimizerLogRow[]> {
   });
   if (error) throw new Error('optimizer-status logs unreachable');
   const parsed = OptimizerLogsResponseSchema.safeParse(data);
-  return parsed.success ? parsed.data.logs : [];
+  // Same reason as fetchPerformance: an empty array is indistinguishable from "this brand
+  // has never run a cycle", so a malformed response has to be an error, not a blank feed.
+  if (!parsed.success) {
+    console.error('optimizer-status logs: unexpected shape', parsed.error.issues);
+    throw new Error('optimizer-status returned an unexpected logs shape');
+  }
+  return parsed.data.logs;
 }
 
 async function fetchSuggestions(
@@ -1422,22 +1436,35 @@ export function useOptimizerInsight(
 
 /** Poll a freshly-enrolled portfolio every five seconds for at most two minutes.
  * The scheduler remains the source of truth; polling only removes the manual
- * refresh tax while its first real cycle lands. */
-export function useOptimizerFirstRunPoll(active: boolean, refetch: () => unknown): void {
+ * refresh tax while its first real cycle lands.
+ *
+ * Returns whether that two-minute window has LAPSED with the wait still on. The caller
+ * needs it because the spinner outlives the poll: past 120s nothing is refreshing, so an
+ * animation is a lie about work in progress. Report the stall and offer a retry instead. */
+export function useOptimizerFirstRunPoll(active: boolean, refetch: () => unknown): boolean {
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      setExpired(false);
+      return;
+    }
     const interval = window.setInterval(() => {
       void refetchRef.current();
     }, 5_000);
-    const stop = window.setTimeout(() => window.clearInterval(interval), 120_000);
+    const stop = window.setTimeout(() => {
+      window.clearInterval(interval);
+      setExpired(true);
+    }, 120_000);
     return () => {
       window.clearInterval(interval);
       window.clearTimeout(stop);
     };
   }, [active]);
+
+  return expired;
 }
 
 /** Warm the lightweight overview reads before the Optimization tab mounts. */

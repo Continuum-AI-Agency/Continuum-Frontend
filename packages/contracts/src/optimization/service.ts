@@ -506,7 +506,18 @@ export const CycleItemDiagnosticsSchema = z
     score14d: z.number().optional(),
     compositeScore: z.number().optional(),
     portfolioShare: z.number().optional(),
-    velocityCapped: z.boolean().optional(),
+    /** The engine's per-item budgets, in the order it derives them:
+     *  rawBudget = portfolioShare x pool (pre-constraint), then velocityCapped = that raw
+     *  figure clamped to the ad set's per-cycle velocity band. They are BUDGETS, not flags
+     *  — see ItemDiagnostics in packages/optimization-engine/src/types.ts, where both are
+     *  `number`. velocityCapped was declared here as z.boolean(), which every real row
+     *  failed; because the row schemas narrow the whole report at once, ONE bad field
+     *  emptied latest_items AND nulled latest_run for every portfolio. That is what hid
+     *  every budget move from the Actions queue and pinned freshly-read portfolios on
+     *  "Scoring your first cycle…". Loose containers do not save a wrongly-typed field:
+     *  unknown keys pass, declared ones are enforced. */
+    rawBudget: z.number().optional(),
+    velocityCapped: z.number().optional(),
     // When present, the ad set was HELD (budget unchanged on purpose) — the FE
     // renders a labeled "Held" state instead of a $0.00 change.
     freezeReason: FreezeReasonSchema.optional(),

@@ -122,7 +122,8 @@ export const portfoliosPopulated: PortfolioListItem[] = [
     status: 'active',
     next_realloc_at: null,
     adset_count: 2,
+    // 0 recommendations, 2 budget moves — the shape the Actions queue used to hide entirely.
     pending_recommendations: 0,
-    pending_budget_moves: 0,
+    pending_budget_moves: 2,
   },
 ];

@@ -35,6 +35,7 @@ import {
   readSettingChange,
   type SettingChange,
 } from './logFilters';
+import { OptimizerReadError } from './OptimizerReadError';
 import { RevertApplyDialog } from './RevertApplyDialog';
 
 type OptimizerLogsProps = { brandId: string };
@@ -370,6 +371,18 @@ export function OptimizerLogs({ brandId }: OptimizerLogsProps) {
           <Skeleton key={key} className="h-12 rounded-lg" />
         ))}
       </div>
+    );
+  }
+
+  // Before this branch existed, a failed read fell straight through to "No optimizer
+  // activity yet" — the outage and the genuinely-quiet brand rendered identically.
+  if (logsQuery.isError) {
+    return (
+      <OptimizerReadError
+        error={logsQuery.error}
+        onRetry={() => void logsQuery.refetch()}
+        subject="the activity log"
+      />
     );
   }
 

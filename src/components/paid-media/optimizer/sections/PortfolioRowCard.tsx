@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
 import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
+import { pendingWorkCount } from '../reportModel';
 
 type PortfolioRowCardProps = {
   portfolio: PortfolioListItem;
@@ -27,7 +28,7 @@ export function PortfolioRowCard({
   onSelect,
   onPrefetch,
 }: PortfolioRowCardProps) {
-  const pending = portfolio.pending_recommendations;
+  const pending = pendingWorkCount(portfolio);
 
   return (
     <button

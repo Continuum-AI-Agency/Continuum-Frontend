@@ -8,12 +8,47 @@ import {
   buildCreativeRequestBrief,
   type CreativeRequestBrief,
   type CreativeVariationSeedInput,
+  type CycleItemDiagnostics,
   type CycleItemRow,
   type CycleRunReport,
   type ParsedCycleRunReport,
   ParsedCycleRunReportSchema,
+  type PortfolioListItem,
   type RunConfidence,
 } from '@continuum/contracts';
+
+/** What the Performance tab should say about a portfolio with no cycle on screen.
+ *
+ *  This used to be one expression — `!latestRun && run.data?.status !== 'skipped'` — and it
+ *  conflated four different situations into one spinner. A null report is what the FE sees
+ *  when the read FAILED, when it TIMED OUT (8s x retry: 1), when the payload failed its
+ *  schema, and when the portfolio genuinely has not scored yet. Only the last one is a wait.
+ *  ALEIRA / FORMULARIOS sat on "Scoring your first cycle…" with five days of persisted runs
+ *  behind it because the read never landed and nothing distinguished that from a new
+ *  portfolio.
+ *
+ *  'stalled' exists because the poll is finite: it stops at two minutes, after which an
+ *  animated spinner claims work that nothing is doing. */
+export type FirstCycleState = 'error' | 'waiting' | 'stalled' | 'none';
+
+export function firstCycleState(input: {
+  /** The performance read resolved successfully — the ONLY case where a null report is
+   *  evidence about the portfolio rather than about the request. */
+  isSuccess: boolean;
+  isError: boolean;
+  hasRun: boolean;
+  /** The Run-now outcome, when one has come back. A SKIPPED cycle ends the wait: nothing
+   *  is enrolled, so no cycle can ever arrive to end it otherwise. */
+  runStatus?: string;
+  /** The 120s poll window has lapsed. */
+  pollExpired: boolean;
+}): FirstCycleState {
+  if (input.isError) return 'error';
+  if (!input.isSuccess) return 'none';
+  if (input.hasRun) return 'none';
+  if (input.runStatus === 'skipped') return 'none';
+  return input.pollExpired ? 'stalled' : 'waiting';
+}
 
 export function parseReport(
   report: CycleRunReport | null | undefined,
@@ -153,7 +188,7 @@ export function budgetMoveWhy(item: CycleItemRow): BudgetMoveWhy | null {
       cpa == null
         ? null
         : { cpa, lo: finite(ci?.lo), hi: finite(ci?.hi), events: finite(ci?.events) },
-    capped: diag?.velocityCapped === true,
+    capped: velocityCapTruncated(diag),
   };
 }
 
@@ -164,6 +199,9 @@ export function budgetMoveWhy(item: CycleItemRow): BudgetMoveWhy | null {
 // fired no trigger was filtered out of the queue and its moves were unreachable.
 // The tab badge and the prefetch warmer read the same proxy, so all three have to
 // agree; they now all call this.
+//
+// Deliberately derived from the LIST row, never from the performance report: queue
+// visibility must not depend on a per-portfolio edge read having succeeded.
 
 export function pendingWorkCount(portfolio: {
   pending_recommendations: number;
@@ -177,6 +215,20 @@ export function hasPendingWork(portfolio: {
   pending_budget_moves?: number;
 }): boolean {
   return pendingWorkCount(portfolio) > 0;
+}
+
+/** Did the per-cycle velocity guardrail actually truncate this move?
+ *
+ *  velocityCapped is the raw proportional budget CLAMPED to the ad set's velocity band, so
+ *  the guardrail bit exactly when the clamp changed the number. The old test was
+ *  `velocityCapped === true`, which never fired on a real row — the field is a budget, not
+ *  a flag — so this hint has been silently absent since it shipped. Epsilon because both
+ *  sides are floating-point money. */
+function velocityCapTruncated(diag: CycleItemDiagnostics | null | undefined): boolean {
+  const raw = finite(diag?.rawBudget);
+  const capped = finite(diag?.velocityCapped);
+  if (raw == null || capped == null) return false;
+  return Math.abs(raw - capped) > 0.005;
 }
 
 /** Confidence band → badge variant + label, tolerant of loose DB strings. */

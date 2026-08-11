@@ -57,7 +57,7 @@ import {
 } from '../charts/vizData';
 import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { costCiLegend, itemToRow, kpiColumns } from '../kpiColumns';
-import { applyModeExplainer, parseReport } from '../reportModel';
+import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
 import {
   useOptimizerAccountSnapshots,
   useOptimizerAdAngles,
@@ -77,6 +77,7 @@ import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
 import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { OptimizerPanel } from './OptimizerPanel';
+import { OptimizerReadError } from './OptimizerReadError';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
 import { RunOutcomeNotice } from './RunOutcomeNotice';
 import { SignalReadinessCard } from './SignalReadinessCard';
@@ -134,15 +135,21 @@ export function PortfolioDetailWorkspace({
   // account snapshots the engine scores (frozen kpi_mismatch, too-young account,
   // no tracked events) rather than leaving the surface unexplained.
   const noRecommendations = Boolean(latestRun) && (report?.recommendations.length ?? 0) === 0;
-  // A freshly-enrolled portfolio has no cycle yet. The create path kicked off a run
-  // and the scheduler backstops it (next_realloc_at=now), so poll the performance
-  // read until the first result lands rather than leaving the user on empty panels.
-  //
-  // A SKIPPED run ends the wait. "Scoring your first cycle…" used to spin forever on a
-  // portfolio with nothing enrolled, because no cycle would ever arrive to stop it — the
-  // spinner promised a result that could not exist.
-  const awaitingFirstCycle = !latestRun && run.data?.status !== 'skipped';
-  useOptimizerFirstRunPoll(awaitingFirstCycle, performanceQuery.refetch);
+  // A freshly-enrolled portfolio has no cycle yet. The create path kicked off a run and the
+  // scheduler backstops it (next_realloc_at=now), so poll the performance read until the
+  // first result lands rather than leaving the user on empty panels. firstCycleState keeps
+  // the four outcomes apart — see its contract in reportModel.
+  const pollExpired = useOptimizerFirstRunPoll(
+    performanceQuery.isSuccess && !latestRun && run.data?.status !== 'skipped',
+    performanceQuery.refetch,
+  );
+  const firstCycle = firstCycleState({
+    isSuccess: performanceQuery.isSuccess,
+    isError: performanceQuery.isError,
+    hasRun: Boolean(latestRun),
+    runStatus: run.data?.status,
+    pollExpired,
+  });
   // Offer the manual apply only when there are actual moves and the portfolio is in
   // recommend mode (observe hard-halts Meta writes; autopilot applies automatically).
   // runId pins the apply to this run.
@@ -320,7 +327,15 @@ export function PortfolioDetailWorkspace({
             no skip reason, no error. */}
           <RunOutcomeNotice outcome={run.data} isPending={run.isPending} />
 
-          {awaitingFirstCycle ? (
+          {firstCycle === 'error' ? (
+            <OptimizerReadError
+              error={performanceQuery.error}
+              onRetry={() => void performanceQuery.refetch()}
+              subject="this portfolio's cycle"
+            />
+          ) : null}
+
+          {firstCycle === 'waiting' ? (
             <div
               role="status"
               aria-busy="true"
@@ -331,6 +346,27 @@ export function PortfolioDetailWorkspace({
                 Scoring your first cycle — this can take up to a couple of minutes. Results appear
                 here automatically; you can keep working.
               </span>
+            </div>
+          ) : null}
+
+          {/* The poll stops at two minutes. Past that the spinner would keep animating with
+              nothing behind it, so hand the wait back to the user instead. */}
+          {firstCycle === 'stalled' ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 px-4 py-3 text-foreground text-xs">
+              <span className="flex-1">
+                The first cycle hasn't landed yet. It normally scores within a couple of minutes —
+                the scheduler will keep trying.
+              </span>
+              <Button
+                className="h-7 gap-1.5 px-2 text-xs"
+                onClick={() => void performanceQuery.refetch()}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                <RefreshCwIcon aria-hidden className="size-3.5" />
+                Check again
+              </Button>
             </div>
           ) : null}
 
@@ -362,7 +398,7 @@ export function PortfolioDetailWorkspace({
                   value: `${humanize(portfolio.objective)} · ${metric.resultLabel}`,
                 },
                 { label: portfolioLevelLabel(level), value: String(portfolio.adset_count) },
-                { label: 'Pending', value: String(portfolio.pending_recommendations) },
+                { label: 'Pending', value: String(pendingWorkCount(portfolio)) },
                 { label: 'Lookback', value: LOOKBACK_LABEL[lookbackWindow] ?? lookbackWindow },
                 ...(flightLabel ? [{ label: 'Period', value: flightLabel }] : []),
               ]}
@@ -662,8 +698,10 @@ export function PortfolioDetailWorkspace({
         <TabsContent value="activity" className="min-h-0 overflow-y-auto p-3">
           {/* The same unified queue the account-wide Actions tab renders, scoped to THIS
               portfolio: budget moves + recommendations, approved and executed on Meta from
-              here. The group carries its own search + approve/execute toolbar. */}
-          {portfolio.pending_recommendations > 0 || movedCount > 0 ? (
+              here. The group carries its own search + approve/execute toolbar.
+              pendingWorkCount comes from the LIST read, so a failed performance read (which
+              zeroes movedCount) can no longer hide a portfolio's own actionable work. */}
+          {pendingWorkCount(portfolio) > 0 || movedCount > 0 ? (
             <OptimizerActionsPortfolioGroup
               adAccountId={adAccountId}
               brandId={brandId}

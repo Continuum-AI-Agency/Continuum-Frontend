@@ -65,6 +65,7 @@ import {
   useOptimizerMutations,
   useOptimizerPerformance,
 } from '../useOptimizerData';
+import { OptimizerReadError } from './OptimizerReadError';
 import { RecommendationInsight } from './RecommendationInsight';
 
 /** A budget move needing a decision — held by autopilot, approved and awaiting the drain,
@@ -93,6 +94,16 @@ export type RecQueueRow = {
 };
 
 export type QueueRow = BudgetQueueRow | RecQueueRow;
+
+/** The checkbox's accessible name. It has to name the DECISION, not just the ad set: one
+ *  cycle can queue a budget move AND a creative refresh on the same ad set, and labelling
+ *  both "Select <ad set>" gave two different writes one indistinguishable name — a screen
+ *  reader user could not tell which one they were authorizing. */
+export function selectionLabel(row: QueueRow): string {
+  const subject = row.name ?? row.adsetId;
+  if (row.route === 'budget') return `Select budget move for ${subject}`;
+  return `Select ${recommendationLabel(row.rec.kind).label.toLowerCase()} for ${subject}`;
+}
 
 /** A row a human can select and approve. Approved rows (awaiting execute) and hidden
  *  ad-level rows are shown but never selectable. */
@@ -293,6 +304,18 @@ export function OptimizerActionsPortfolioGroup({
       : selectedBudgetRows.reduce((sum, row) => sum + (row.item.change_abs ?? 0), 0);
 
   if (performanceQuery.isLoading) return <Skeleton className="h-28 rounded-lg" />;
+  // A failed read used to fall through to rows.length === 0 and return null, so the whole
+  // group disappeared from a queue that had just counted this portfolio as having work.
+  // Name it instead — the count and the list must never disagree in silence.
+  if (performanceQuery.isError) {
+    return (
+      <OptimizerReadError
+        error={performanceQuery.error}
+        onRetry={() => void performanceQuery.refetch()}
+        subject={`actions for ${portfolio.name}`}
+      />
+    );
+  }
   if (rows.length === 0) return null;
 
   const clearTransient = () => {
@@ -899,7 +922,7 @@ function QueueRowView({
           <AdLevelDangerIcon />
         ) : (
           <Checkbox
-            aria-label={`Select ${row.name ?? row.adsetId}`}
+            aria-label={selectionLabel(row)}
             checked={selected}
             className="mt-0.5"
             disabled={!selectable || writesBlocked}

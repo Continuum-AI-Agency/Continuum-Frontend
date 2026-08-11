@@ -19,6 +19,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
 import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
+import { pendingWorkCount } from '../reportModel';
 import { useOptimizerArchivedPortfolios, useOptimizerMutations } from '../useOptimizerData';
 import { OptimizerPortfolioBrowser } from './OptimizerPortfolioBrowser';
 import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
@@ -81,9 +82,9 @@ function PortfolioCard({
             applyMode={portfolio.apply_mode}
             autopilotPaused={portfolio.autopilot_paused}
           />
-          {portfolio.pending_recommendations > 0 ? (
+          {pendingWorkCount(portfolio) > 0 ? (
             <Badge variant="secondary" className="text-3xs">
-              {portfolio.pending_recommendations} pending
+              {pendingWorkCount(portfolio)} pending
             </Badge>
           ) : null}
         </p>
