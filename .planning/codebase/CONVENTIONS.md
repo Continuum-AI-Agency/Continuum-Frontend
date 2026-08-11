@@ -114,7 +114,7 @@ import { useCalendarStore } from "@/lib/organic/store"; // alias, cross-module
 
 **Import grouping (observed, not enforced by tooling):**
 1. React / framework imports
-2. Third-party libraries (`@xyflow/react`, `@radix-ui/themes`, `zod`)
+2. Third-party libraries (`@xyflow/react`, `@base-ui/react`, `zod`)
 3. Internal `@/` alias imports (lib, components, types)
 4. Relative imports
 

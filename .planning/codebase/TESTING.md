@@ -230,12 +230,14 @@ vi.mock("@/lib/supabase/server", () => ({
 (globalThis as any).__testCreateSupabaseServerClient = vi.fn().mockResolvedValue({ auth: { getUser: ... } });
 ```
 
-**Radix UI component mocking:** When Radix UI components interfere with happy-dom rendering, they are replaced with minimal React implementations that preserve the event contract:
+**Base UI component mocking:** Prefer asserting on rendered output (roles, `aria-selected`, visible text) over mocking the primitive — a spy on a primitive's internals only proves which library is installed, and dies at the next swap. Mock only where a primitive genuinely cannot run under happy-dom: `@floating-ui`'s `autoUpdate` hangs `bun test` with no output, so `DocumentPreviewCard.test` mocks popover/hover-card for that reason.
+
+When you must mock, **wrap** the real module rather than replacing it — `mock.module` is process-wide in bun, so replacing a widely-imported module (`lucide-react` has ~400 importers) silently breaks unrelated specs:
 ```typescript
-mock.module("@radix-ui/themes", () => {
-  const TabsContext = React.createContext({ value: "", onValueChange: undefined });
-  return { Tabs: { Root: ..., List: ..., Trigger: ... } };
-});
+mock.module("@base-ui/react/popover", () => ({
+  ...require("@base-ui/react/popover"),
+  Popover: { ...require("@base-ui/react/popover").Popover, Positioner: PassThrough },
+}));
 ```
 
 ### What is NOT mocked

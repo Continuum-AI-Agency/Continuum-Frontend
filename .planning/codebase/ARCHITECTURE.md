@@ -35,7 +35,7 @@ Continuum is a Next.js 16 App Router application built server-first: RSCs handle
 **Domain Component Layer:**
 - Purpose: Feature-specific UI components organized by product area
 - Location: `src/components/ai-studio/`, `src/components/organic/`, `src/components/paid-media/`, `src/components/dashboard/`
-- Contains: Client components with hooks, Radix UI / shadcn primitives, Framer Motion animations
+- Contains: Client components with hooks, Base UI / shadcn primitives, Framer Motion animations
 - Depends on: `src/lib/api/*.client.ts` for data, `src/hooks/` for shared logic
 - Used by: Client entry components
 

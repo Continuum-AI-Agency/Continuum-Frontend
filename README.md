@@ -38,7 +38,7 @@ This repository contains the Continuum web application. The app code uses Next.j
 - React 19 + Next.js 15 (App Router, React Server Components)
 - TypeScript 5
 - Tailwind CSS 4 + PostCSS
-- Radix UI (`@radix-ui/themes`, `@radix-ui/react-icons`) for accessible primitives and theming
+- Base UI (`@base-ui/react`) via shadcn (`base-nova` preset) for accessible primitives; `lucide-react` for icons
 - Framer Motion for animations
 - React Hook Form + Zod for forms and validation
 - Supabase (Auth, Database, Storage)
@@ -87,8 +87,8 @@ For detailed authentication setup instructions, see [AUTH_SETUP.md](./AUTH_SETUP
   - App Router in `src/app/` with nested `layout.tsx` per route group, and route handlers in `src/app/api/*/route.ts`.
   - Use route groups `(group)` to separate marketing vs. app areas.
 - UI system
-  - Base components built with Radix primitives and themed via `@radix-ui/themes`.
-  - Centralized design tokens and theme config; icons via `@radix-ui/react-icons`.
+  - Base components built with Base UI primitives (`@base-ui/react`) via shadcn `ui/*` and the vetted registries (`@kibo-ui`, `@bklit`, `@supabase`).
+  - Centralized design tokens and theme config in `src/app/globals.css`; theming is `data-theme` + `html.dark`/`html.light`. Icons via `lucide-react`; brand marks from `@/components/shared/icons`.
 - Styling
   - Tailwind CSS 4 utilities; global styles in `src/styles/globals.css`.
   - Co-locate component styles when necessary; avoid deep custom CSS where utilities suffice.
@@ -105,4 +105,4 @@ For detailed authentication setup instructions, see [AUTH_SETUP.md](./AUTH_SETUP
 - Animations
   - Framer Motion variants for entrance/exit and layout transitions; lazy-load where appropriate.
 - Accessibility
-  - Use Radix primitives for focus management and ARIA; ensure keyboard and screen reader support.
+  - Use Base UI primitives for focus management and ARIA; ensure keyboard and screen reader support.

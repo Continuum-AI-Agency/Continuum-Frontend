@@ -55,7 +55,7 @@ Continuum-Frontend/
 │   │   ├── providers/                # ActiveBrandProvider
 │   │   ├── realtime/                 # Supabase Realtime client components
 │   │   ├── settings/                 # Settings page components
-│   │   ├── ui/                       # Shared primitives (shadcn/ui recipes, Radix wrappers)
+│   │   ├── ui/                       # Shared primitives (shadcn/ui recipes, Base UI wrappers)
 │   │   └── [misc]/                   # loader-animations, presence, site, strategic-analyses, etc.
 │   ├── hooks/                        # Shared React hooks (useAuth, useSession, useBrandIntegrations, etc.)
 │   ├── lib/                          # Business logic, API clients, schemas, utilities (no React)
@@ -121,7 +121,7 @@ Continuum-Frontend/
 - Key files: `src/CampaignCanvas/stores/useCampaignStore.ts`, `src/CampaignCanvas/validation/applyCampaignGraphValidation.ts`
 
 **`src/components/ui/`:**
-- Purpose: Shared primitive components — shadcn/ui recipes adapted to project design system, Radix UI wrappers, generic utilities
+- Purpose: Shared primitive components — shadcn/ui recipes adapted to project design system, Base UI wrappers, generic utilities
 - Key files: `ClientOnly.tsx`, `TierAccessRedirect.tsx`, `ToastProvider.tsx`, `GalaxyBackground.tsx`
 
 **`src/lib/api/`:**

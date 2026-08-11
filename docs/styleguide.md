@@ -1,6 +1,6 @@
 # Style Guide: Continuum Design System
 
-The visual language and implementation standards for the **Continuum** app, built on **Tailwind CSS 4** + **Radix UI**. The product is an information-dense marketing operations dashboard. The aesthetic target is **calm-dense** — Linear / Cloudflare / ClickUp: maximum useful information per screen, disciplined spacing, hairline structure, restrained color. Function over form, yet beautiful.
+The visual language and implementation standards for the **Continuum** app, built on **Tailwind CSS 4** + **Base UI** (`@base-ui/react`, via shadcn's `base-nova` preset). The product is an information-dense marketing operations dashboard. The aesthetic target is **calm-dense** — Linear / Cloudflare / ClickUp: maximum useful information per screen, disciplined spacing, hairline structure, restrained color. Function over form, yet beautiful.
 
 > **Source of truth for sizing is `src/app/globals.css`.** Every size derives from the rem-based density tokens there so proportions hold across screen sizes. Do not hardcode pixel sizes in components — see §2 and §3.
 
@@ -116,13 +116,17 @@ Match button heights: default 32px (`h-8`), `sm` 28px (`h-7`), `lg` 40px. `round
 `rounded-full`, `text-3xs`/`text-2xs`, optionally uppercase with light tracking. Muted/desaturated backgrounds only.
 
 ### Iconography
-`lucide-react` or `@radix-ui/react-icons`, sized to adjacent text (`size-4` with body, `size-3` in dense rows). Icons are `text-muted-foreground` unless active (`text-primary`) or destructive.
+`lucide-react`, sized to adjacent text (`size-4` with body, `size-3` in dense rows). Icons are `text-muted-foreground` unless active (`text-primary`) or destructive. lucide ships no brand glyphs — brand marks come from `@/components/shared/icons` (`makeSvgIcon`).
 
 ### Motion (`motion/react`)
 Fast, subtle, GPU-only (`transform`/`opacity`). `duration-200`–`300`, ease-out curves. Respect `prefers-reduced-motion` with a crossfade/instant fallback. Motion supports state changes; it is not decoration.
 
-### Radix rules
-Wrap the app in Radix `Theme` (`theme-provider.tsx`), `appearance` synced to `data-theme`. Prefer Radix primitives for accessible interactive components (menus, dialogs, tabs, accordion). All interactive elements show a visible `ring` focus state.
+### Base UI rules
+Theming is driven by `theme-provider.tsx`, which keeps `data-theme` and `html.dark`/`html.light` in sync so Tailwind `dark:` utilities, CSS variables, and chart theme detection all agree. Prefer Base UI primitives (via shadcn `ui/*`) for accessible interactive components (menus, dialogs, tabs, accordion). All interactive elements show a visible `ring` focus state.
+
+Base UI differs from Radix in three ways worth remembering: there is no `asChild` (pass a `render` element, which keeps that element's own children); there is no `Slot` (`useRender` + `mergeProps` is the equivalent); and floating parts gain a `Positioner` between `Portal` and `Popup`, where `side`/`align`/`sideOffset` live. A link styled as a button must use `buttonVariants()` on the `<Link>` — routing it through `<Button>` injects button semantics that destroy the anchor's link role.
+
+Uncontrolled primitives capture `defaultValue`/`defaultOpen` on first render, so any initial state derived from data that arrives later must be controlled (`value` + `onValueChange`) or it silently never applies.
 
 ---
 

@@ -108,9 +108,8 @@ Continuum is a Next.js 16 (App Router) application built with React 19, TypeScri
 - tw-animate-css ^1.4.0 — animation utility classes
 
 **Component Libraries:**
-- Radix UI primitives — full suite of headless components (`@radix-ui/react-*` ~25 packages)
-- @radix-ui/themes ^3.3.0 — Radix Themes design system
-- shadcn/ui — new-york style, zinc base color, CSS variables (`components.json`)
+- @base-ui/react ^1.7.0 — headless primitives (menus, dialogs, tabs, accordion, popovers). Radix has been removed; `@radix-ui/*` survives only transitively under `cmdk`
+- shadcn/ui — `base-nova` preset (`components.json` `style`; the `base` field is derived from that prefix, not written), CSS variables
   - Config: `src/app/globals.css` is the CSS entry, icon library is `lucide`
 - lucide-react ^0.575.0 — icon set
 - @heroicons/react ^2.2.0 — secondary icon set
