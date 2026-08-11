@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
+import { useDeferredDefault } from '@/hooks/useDeferredDefault';
 import {
   AUTOMATIONS_PRODUCTION_DISABLED_REASON,
   type AutomationDeploymentEnvironment,
@@ -114,6 +115,18 @@ function ActiveMarker({
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
+}
+
+// `defaultOpen` is captured on first render, so a section whose route becomes active later would
+// never open on its own.
+function RouteAwareCollapsible({
+  shouldOpen,
+  ...props
+}: Omit<ComponentProps<typeof Collapsible>, 'open' | 'onOpenChange' | 'defaultOpen'> & {
+  shouldOpen: boolean;
+}) {
+  const [open, setOpen] = useDeferredDefault(shouldOpen);
+  return <Collapsible open={open} onOpenChange={setOpen} {...props} />;
 }
 
 function AppSidebarInner({
@@ -303,9 +316,9 @@ function AppSidebarInner({
 
     if (hasSubItems) {
       return (
-        <Collapsible
+        <RouteAwareCollapsible
           key={item.href}
-          defaultOpen={active || isSubActive}
+          shouldOpen={active || isSubActive}
           className="group/collapsible"
           render={
             <SidebarMenuItem>

@@ -3,6 +3,7 @@
 import type * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useDeferredDefault } from '@/hooks/useDeferredDefault';
 import { usePendingActions } from '@/lib/approvals/queries';
 import { cn } from '@/lib/utils';
 import { ApprovalsCompact } from './ApprovalsCompact';
@@ -31,10 +32,16 @@ export function PendingActivityTabs({
 }: Props) {
   const list = usePendingActions(brandId, 'PENDING');
   const pendingCount = list.data?.total ?? 0;
+  // Clicking the already-active tab fires no change event, so the triggers record the choice
+  // themselves; without that, a click during loading is overwritten when the count lands.
+  const [selectedTab, setSelectedTab] = useDeferredDefault(
+    pendingCount > 0 ? 'pending' : 'activity',
+  );
 
   return (
     <Tabs
-      defaultValue={pendingCount > 0 ? 'pending' : 'activity'}
+      value={selectedTab}
+      onValueChange={setSelectedTab}
       className={cn('flex h-full min-h-0 flex-col', className)}
     >
       <div
@@ -44,7 +51,11 @@ export function PendingActivityTabs({
         )}
       >
         <TabsList className="h-7 p-0.5">
-          <TabsTrigger value="pending" className="h-6 gap-1.5 px-2 text-xs">
+          <TabsTrigger
+            value="pending"
+            onClick={() => setSelectedTab('pending')}
+            className="h-6 gap-1.5 px-2 text-xs"
+          >
             Pending
             {pendingCount > 0 ? (
               <Badge
@@ -55,7 +66,11 @@ export function PendingActivityTabs({
               </Badge>
             ) : null}
           </TabsTrigger>
-          <TabsTrigger value="activity" className="h-6 px-2 text-xs">
+          <TabsTrigger
+            value="activity"
+            onClick={() => setSelectedTab('activity')}
+            className="h-6 px-2 text-xs"
+          >
             Activity
           </TabsTrigger>
         </TabsList>

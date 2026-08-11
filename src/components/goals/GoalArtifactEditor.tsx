@@ -42,10 +42,19 @@ export function GoalArtifactEditor({
   onAction,
 }: GoalArtifactEditorProps) {
   const [draft, setDraft] = useState(artifact?.markdown ?? '');
+  // Undefined means "the user has not picked a tab" — the tab that suits the artifact wins until
+  // then. The derived tab depends on values computed past the early return below, so this stays
+  // inline rather than going through useDeferredDefault.
+  const [selectedTab, setSelectedTab] = useState<string>();
 
   useEffect(() => {
     setDraft(artifact?.markdown ?? '');
   }, [artifact?.id, artifact?.markdown]);
+
+  // Switching artifacts clears the pick — the previous tab may not exist on the new one.
+  useEffect(() => {
+    setSelectedTab(undefined);
+  }, [artifact?.id]);
 
   if (!artifact) {
     return (
@@ -179,7 +188,8 @@ export function GoalArtifactEditor({
       ) : null}
 
       <Tabs
-        defaultValue={editable ? 'edit' : structuredDocument ? 'overview' : 'preview'}
+        value={selectedTab ?? (editable ? 'edit' : structuredDocument ? 'overview' : 'preview')}
+        onValueChange={setSelectedTab}
         className="flex min-h-0 flex-1 flex-col"
       >
         <div className="shrink-0 border-b border-border/70 px-4 py-2">

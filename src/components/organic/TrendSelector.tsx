@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { GlassPanel } from '@/components/ui/GlassPanel';
+import { useDeferredDefault } from '@/hooks/useDeferredDefault';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import type { Trend } from '@/lib/organic/trends';
 import { cn } from '@/lib/utils';
@@ -50,6 +51,7 @@ export function TrendSelector({
 }: TrendSelectorProps) {
   const hasLimit = typeof maxSelections === 'number' && Number.isFinite(maxSelections);
   const hasTrends = trendTypes.some((type) => type.groups.some((group) => group.trends.length > 0));
+  const [openTypeIds, setOpenTypeIds] = useDeferredDefault(trendTypes.map((t) => t.id));
 
   const Wrapper: React.ElementType = withContainer ? GlassPanel : 'div';
   const wrapperClassName = cn(withContainer ? 'p-5' : '', className);
@@ -92,7 +94,8 @@ export function TrendSelector({
 
       <Accordion
         type="multiple"
-        defaultValue={trendTypes.map((t) => t.id)}
+        value={openTypeIds}
+        onValueChange={setOpenTypeIds}
         className="flex-1 overflow-y-auto space-y-4 pr-1 custom-scrollbar"
       >
         {trendTypes.map((type) => (

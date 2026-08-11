@@ -9,6 +9,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { useDeferredDefault } from '@/hooks/useDeferredDefault';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import type {
   BrandInsightsEvent,
@@ -81,8 +82,17 @@ export function BrandInsightsCollapsibleSignals({
     { id: 'questions', label: 'Audience Questions', data: mappedQuestions, showMomentum: false },
   ].filter((s) => s.data.length > 0);
 
+  // Sections only appear once their data is non-empty, so an uncontrolled default would be
+  // captured before any of them exist.
+  const [openSectionIds, setOpenSectionIds] = useDeferredDefault(sections.map((s) => s.id));
+
   return (
-    <Accordion type="multiple" defaultValue={sections.map((s) => s.id)} className="space-y-4">
+    <Accordion
+      type="multiple"
+      value={openSectionIds}
+      onValueChange={setOpenSectionIds}
+      className="space-y-4"
+    >
       {sections.map((section) => (
         <AccordionItem
           key={section.id}
