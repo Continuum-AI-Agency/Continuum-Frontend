@@ -1,47 +1,37 @@
-import { expect, test, vi } from 'bun:test';
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { afterEach, expect, test } from 'bun:test';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TrendsDataTable } from '@/components/organic/TrendsDataTable';
 
-// Mock radix-ui components to track usage
-const accordionTriggerSpy = vi.fn();
+afterEach(cleanup);
 
-vi.mock('@radix-ui/react-accordion', () => ({
-  Root: ({ children }: any) =>
-    React.createElement('div', { 'data-accordion-root': true }, children),
-  Item: ({ children }: any) =>
-    React.createElement('div', { 'data-accordion-item': true }, children),
-  Header: ({ children }: any) =>
-    React.createElement('div', { 'data-accordion-header': true }, children),
-  Trigger: ({ children, ...props }: any) => {
-    accordionTriggerSpy(props);
-    return React.createElement('button', { 'data-accordion-trigger': true, ...props }, children);
-  },
-  Content: ({ children }: any) =>
-    React.createElement('div', { 'data-accordion-content': true }, children),
-}));
+const trend = {
+  id: '1',
+  title: 'Test Trend',
+  summary: 'This is a summary',
+  momentum: 'rising' as const,
+  platforms: ['instagram'] as never,
+  tags: [],
+};
 
-test('TrendsDataTable uses accordion for expandable rows', () => {
-  const mockData = [
-    {
-      id: '1',
-      title: 'Test Trend',
-      summary: 'This is a summary',
-      momentum: 'rising' as const,
-      platforms: ['instagram'] as any,
-      tags: [],
-    },
-  ];
-
-  renderToStaticMarkup(
+// Clicking a row reveals the detail panel for that trend, and clicking it again hides it.
+test('TrendsDataTable expands a row on click', () => {
+  render(
     <TrendsDataTable
-      data={mockData}
+      data={[trend]}
       selectedTrendIds={[]}
       onToggleTrend={() => {}}
       activePlatforms={['instagram']}
     />,
   );
 
-  // This test should FAIL initially because it uses a flat table
-  expect(accordionTriggerSpy).toHaveBeenCalled();
+  expect(screen.queryByText('Distribution')).toBeNull();
+
+  const row = screen.getByText('Test Trend').closest('tr');
+  if (!row) throw new Error('trend row not rendered');
+
+  fireEvent.click(row);
+  expect(screen.getByText('Distribution')).toBeTruthy();
+
+  fireEvent.click(row);
+  expect(screen.queryByText('Distribution')).toBeNull();
 });
