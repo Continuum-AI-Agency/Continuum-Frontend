@@ -532,6 +532,7 @@ const SidebarGroupLabel = React.forwardRef<
       },
       asChild ? rest : props,
     ),
+    ref,
     render: asChild && isValidElement(children) ? children : undefined,
     state: { sidebar: 'group-label' },
   });
@@ -558,6 +559,7 @@ const SidebarGroupAction = React.forwardRef<
       },
       asChild ? rest : props,
     ),
+    ref,
     render: asChild && isValidElement(children) ? children : undefined,
     state: { sidebar: 'group-action' },
   });
@@ -657,6 +659,10 @@ const SidebarMenuButton = React.forwardRef<
         { className: cn(sidebarMenuButtonVariants({ variant, size }), className) },
         asChild ? rest : props,
       ),
+      // Base UI triggers (Menu, Tooltip, Popover) reach their anchor element through
+      // this ref. Dropping it leaves the trigger anchorless: tooltips never open on
+      // hover and menu popups lose their positioning reference.
+      ref,
       render: asChild && isValidElement(children) ? children : undefined,
       state: { sidebar: 'menu-button', size, active: isActive },
     });
@@ -714,6 +720,7 @@ const SidebarMenuAction = React.forwardRef<
       },
       asChild ? rest : props,
     ),
+    ref,
     render: asChild && isValidElement(children) ? children : undefined,
     state: { sidebar: 'menu-action' },
   });
@@ -824,6 +831,7 @@ const SidebarMenuSubButton = React.forwardRef<
       },
       asChild ? rest : props,
     ),
+    ref,
     render: asChild && isValidElement(children) ? children : undefined,
     state: { sidebar: 'menu-sub-button', size, active: isActive },
   });

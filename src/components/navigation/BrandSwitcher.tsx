@@ -14,11 +14,7 @@ import {
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -59,8 +55,11 @@ export function BrandSwitcher() {
   return (
     <SidebarMenu className="group-data-[collapsible=icon]:items-center">
       <SidebarMenuItem>
-        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger
+        {/* Popover, not DropdownMenu: a menu popup runs its own typeahead and swallows every
+            character key before cmdk's CommandInput sees it, so brand search never filters.
+            This is the Popover + Command pairing every other combobox in the app uses. */}
+        <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+          <PopoverTrigger
             render={
               <SidebarMenuButton
                 size="lg"
@@ -92,8 +91,8 @@ export function BrandSwitcher() {
               </SidebarMenuButton>
             }
           />
-          <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)] p-0"
+          <PopoverContent
+            className="min-w-56 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)] p-0"
             align="start"
             side={isMobile ? 'bottom' : 'right'}
             sideOffset={4}
@@ -109,6 +108,10 @@ export function BrandSwitcher() {
                   {brands.map((brand) => (
                     <CommandItem
                       key={brand.id}
+                      // An invite is not membership: the RLS check on
+                      // user_brand_preferences rejects a pending brand, so selecting one
+                      // could only ever produce a "Switch failed" toast.
+                      disabled={brand.isPending}
                       onSelect={() => handleBrandSelect(brand.id)}
                       className="gap-2 p-2 text-[var(--popover-foreground)] data-[selected=true]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[selected=true]:text-[var(--popover-foreground)]"
                     >
@@ -165,8 +168,8 @@ export function BrandSwitcher() {
                 </CommandGroup>
               </CommandList>
             </Command>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </PopoverContent>
+        </Popover>
       </SidebarMenuItem>
     </SidebarMenu>
   );
