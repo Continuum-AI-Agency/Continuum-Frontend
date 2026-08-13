@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'bun:test';
-import { render } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'bun:test';
+import { cleanup, render } from '@testing-library/react';
 import * as React from 'react';
 
 import {
@@ -17,6 +17,9 @@ import {
 // ref — so an anchorless trigger is how the brand switcher and the sidebar tooltips
 // silently stopped working.
 describe('sidebar primitives forward their ref', () => {
+  // No global auto-cleanup in this suite; leaving trees mounted leaks into other files.
+  afterEach(cleanup);
+
   const cases: Array<[string, (ref: React.Ref<never>) => React.ReactElement]> = [
     ['SidebarMenuButton', (ref) => <SidebarMenuButton ref={ref}>Brand</SidebarMenuButton>],
     ['SidebarMenuAction', (ref) => <SidebarMenuAction ref={ref} />],

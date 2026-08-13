@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 
 // happy-dom ships no ResizeObserver, and Base UI's positioner constructs one while the
@@ -61,6 +61,10 @@ describe('BrandSwitcher', () => {
   beforeEach(() => {
     switchBrand.mockClear();
   });
+
+  // No global auto-cleanup in this suite: without it, a previous file's mounted tree
+  // stays in the document and the popover queries below resolve against stale markup.
+  afterEach(cleanup);
 
   it('opens the brand list from the sidebar trigger', async () => {
     renderSwitcher();
