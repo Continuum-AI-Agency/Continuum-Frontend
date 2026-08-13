@@ -2,6 +2,17 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 
+// happy-dom ships no ResizeObserver, and Base UI's positioner constructs one while the
+// popover opens — without it the popover throws instead of mounting, which reads as a
+// broken switcher rather than a missing browser API. Guarded so it defers to a real one.
+if (typeof globalThis.ResizeObserver !== 'function') {
+  globalThis.ResizeObserver = class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  } as unknown as typeof globalThis.ResizeObserver;
+}
+
 const switchBrand = mock(async (_brandId: string) => ({
   switched: true,
   prevBrandId: 'brand-a',
