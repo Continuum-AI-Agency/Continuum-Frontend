@@ -48,6 +48,19 @@ describe('buildNodePayload', () => {
       expect(payload?.model).toBe('gemini-3-pro-image');
     });
 
+    it('should send the canonical Azure GPT Image 2 model id', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: { model: 'gpt-image-2', positivePrompt: 'A cat', aspectRatio: '16:9' },
+      };
+
+      const payload = buildNanoGenPayload(node, new Map(), [], []);
+      expect(payload?.model).toBe('gpt-image-2');
+      expect(payload?.resolution).toBe('1344x768');
+    });
+
     it('should map nano-banana-2 to stable gemini-3.1-flash-image with selectable size options', () => {
       const node: StudioNode = {
         id: 'nano',

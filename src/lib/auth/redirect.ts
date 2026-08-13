@@ -65,15 +65,19 @@ export function resolveAuthRedirectPath({
   }
 }
 
-export function resolveAuthRedirect({
-  requestedRedirect,
-  siteUrl,
-  fallbackPath = '/dashboard',
-}: ResolveAuthRedirectOptions): string {
-  const origin = normalizeSiteUrl(siteUrl);
-  return `${origin}${resolveAuthRedirectPath({ requestedRedirect, siteUrl: origin, fallbackPath })}`;
-}
-
+/**
+ * The URL Supabase should return a user to after it verifies them.
+ *
+ * Always `/auth/callback`, with the real destination in `next` — because that route
+ * handler is the only code that calls `exchangeCodeForSession`. Handing Supabase the
+ * destination directly delivers a `?code=` to a page that never redeems it, so the
+ * page sees no session; for `/invite/callback` that meant bouncing to `/login`, which
+ * mailed another link to the same dead end. Invitees looped until they gave up and
+ * onboarded into a duplicate of the brand they were invited to.
+ *
+ * (This replaced a `resolveAuthRedirect` that returned the bare destination. It was
+ * only ever used as a Supabase redirect target, which is exactly what it must not be.)
+ */
 export function buildAuthCallbackUrl({
   siteUrl,
   next,

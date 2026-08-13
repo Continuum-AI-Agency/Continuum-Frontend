@@ -5,7 +5,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { resolveHeadersOrigin } from '@/lib/server/origin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { resolveAuthRedirect, resolveAuthRedirectPath } from './redirect';
+import { buildAuthCallbackUrl, resolveAuthRedirectPath } from './redirect';
 import type { MagicLinkInput, PasswordSignInInput } from './schemas';
 import { magicLinkSchema, passwordSignInSchema } from './schemas';
 
@@ -76,11 +76,7 @@ export async function signInWithGoogleAction(
 ): Promise<ActionResult<{ url: string }>> {
   const supabase = await createSupabaseServerClient();
   const siteUrl = await resolveRuntimeSiteUrl();
-  const oauthRedirectTo = resolveAuthRedirect({
-    requestedRedirect: redirectTo,
-    siteUrl,
-    fallbackPath: '/callback',
-  });
+  const oauthRedirectTo = buildAuthCallbackUrl({ siteUrl, next: redirectTo });
 
   try {
     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -175,11 +171,7 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
 
   const supabase = await createSupabaseServerClient();
   const siteUrl = await resolveRuntimeSiteUrl();
-  const emailRedirectTo = resolveAuthRedirect({
-    requestedRedirect: validation.data.redirectTo,
-    siteUrl,
-    fallbackPath: '/callback',
-  });
+  const emailRedirectTo = buildAuthCallbackUrl({ siteUrl, next: validation.data.redirectTo });
 
   try {
     const { error } = await supabase.auth.signInWithOtp({

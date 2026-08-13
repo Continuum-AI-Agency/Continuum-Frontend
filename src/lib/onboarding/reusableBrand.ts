@@ -61,6 +61,11 @@ export async function findReusableBrandId(
  * canPersistBrandRecord guard still blocks them from overwriting its name.
  * Fail-safe: any error / no pending invite returns null so the caller falls
  * back to its normal path.
+ *
+ * Returning a brand id is NOT the same as granting access to it — a caller that
+ * only does this leaves the user on a brand `has_brand_access` says no to, and
+ * every backend brand-scoped route 403s. `claimPendingInvite` in storage.ts is
+ * the other half; keep them together.
  */
 export async function findPendingInviteBrandId(
   supabase: Client,

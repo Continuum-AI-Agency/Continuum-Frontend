@@ -41,6 +41,7 @@
  */
 
 import { coerceImageSize, createNodeData, IMAGE_SIZE_PIXELS } from '@continuum/contracts';
+import { createClient } from '@supabase/supabase-js';
 import type { Edge } from '@xyflow/react';
 import type { StudioNode } from '../src/StudioCanvas/types';
 import type { NodeOutput } from '../src/StudioCanvas/types/execution';
@@ -52,6 +53,8 @@ const OWNER_EMAIL = process.env.BENCH_OWNER_EMAIL ?? 'local@continuum.test';
 const BRAND_ID = process.env.BENCH_BRAND_ID ?? '00000000-0000-4000-8000-0000000000b2';
 const FULL = process.argv.includes('--full');
 const LATENCY = process.argv.includes('--latency');
+const AZURE = process.argv.includes('--azure');
+const IMAGE_BUCKET = 'brand-profile-assets';
 
 let failures = 0;
 const notes: string[] = [];
@@ -116,6 +119,10 @@ interface GenerationOutcome {
   };
   wireBytes?: number;
   assetId?: string;
+  signedUrl?: string;
+  storagePath?: string;
+  storageBucket?: string;
+  resolution?: string;
 }
 
 async function generate(body: Record<string, unknown>, token: string): Promise<GenerationOutcome> {
@@ -138,6 +145,9 @@ async function generate(body: Record<string, unknown>, token: string): Promise<G
   let durableAt: number | undefined;
   let completeAt: number | undefined;
   let assetId: string | undefined;
+  let storagePath: string | undefined;
+  let storageBucket: string | undefined;
+  let resolution: string | undefined;
   let wireBytes = 0;
 
   const reader = res.body.getReader();
@@ -164,10 +174,13 @@ async function generate(body: Record<string, unknown>, token: string): Promise<G
           signedUrl = data.signed_url;
           durableAt ??= performance.now();
         }
+        if (typeof data.path === 'string') storagePath = data.path;
+        if (typeof data.bucket === 'string') storageBucket = data.bucket;
         if (typeof data.base64 === 'string') {
           base64 = data.base64;
         }
         if (typeof data.mime_type === 'string') mimeType = data.mime_type;
+        if (typeof data.resolution === 'string') resolution = data.resolution;
       }
       if (event === 'complete') {
         completeAt = performance.now();
@@ -201,6 +214,10 @@ async function generate(body: Record<string, unknown>, token: string): Promise<G
       timings: { ...timingBase, downloadMs: performance.now() - downloadStartedAt },
       wireBytes,
       assetId,
+      signedUrl,
+      storagePath,
+      storageBucket,
+      resolution,
     };
   }
   return { status: 200, error: 'stream carried no image' };
@@ -218,17 +235,174 @@ const genNode = (data: Record<string, unknown>): StudioNode =>
     ...createNodeData('nanoGen', data),
   }) as unknown as StudioNode;
 
-function payloadFor(node: StudioNode, extra: { nodes?: StudioNode[]; edges?: Edge[] } = {}) {
+function payloadFor(
+  node: StudioNode,
+  extra: { nodes?: StudioNode[]; edges?: Edge[]; resolvedData?: Map<string, NodeOutput> } = {},
+) {
   const allNodes = [node, ...(extra.nodes ?? [])];
   const built = buildNanoGenPayload(
     node,
-    new Map<string, NodeOutput>(),
+    extra.resolvedData ?? new Map<string, NodeOutput>(),
     allNodes,
     extra.edges ?? [],
     BRAND_ID,
   );
   if (!built) throw new Error('payload builder returned null');
   return toBackendPayload(built);
+}
+
+async function cleanupAzureAssets(
+  assetIds: readonly string[],
+  objects: readonly { bucket?: string; path?: string }[],
+  removeBenchBucket: boolean,
+): Promise<void> {
+  const url =
+    process.env.SUPABASE_URL ??
+    process.env.SUPABASE_PROJECT_URL ??
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Azure image bench cleanup requires Supabase service config.');
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
+  const byBucket = new Map<string, string[]>();
+  for (const object of objects) {
+    if (!object.bucket || !object.path) continue;
+    byBucket.set(object.bucket, [...(byBucket.get(object.bucket) ?? []), object.path]);
+  }
+  for (const [bucket, paths] of byBucket) {
+    const { error } = await supabase.storage.from(bucket).remove(paths);
+    if (error) throw error;
+  }
+  if (assetIds.length > 0) {
+    const { error } = await supabase.schema('media').from('assets').delete().in('id', assetIds);
+    if (error) throw error;
+  }
+  if (removeBenchBucket) {
+    const { error } = await supabase.storage.deleteBucket(IMAGE_BUCKET);
+    if (error) throw error;
+  }
+}
+
+async function ensureAzureBenchBucket(): Promise<boolean> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Azure image bench requires Supabase service config.');
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
+  const { data, error } = await supabase.storage.listBuckets();
+  if (error) throw error;
+  if (data.some((bucket) => bucket.name === IMAGE_BUCKET)) return false;
+  const { error: createError } = await supabase.storage.createBucket(IMAGE_BUCKET, {
+    public: false,
+  });
+  if (createError) throw createError;
+  return true;
+}
+
+async function runAzureCases(token: string): Promise<void> {
+  console.log('Azure GPT Image 2 — real Canvas generation and edit');
+  const assetIds: string[] = [];
+  const objects: Array<{ bucket?: string; path?: string }> = [];
+  const removeBenchBucket = await ensureAzureBenchBucket();
+
+  try {
+    const sourceNode = genNode({
+      model: 'gpt-image-2',
+      positivePrompt: 'a cobalt blue running shoe on clean white seamless paper',
+      aspectRatio: '16:9',
+    });
+    const sourceBody = payloadFor(sourceNode);
+    check('Canvas sends canonical gpt-image-2', sourceBody.model === 'gpt-image-2');
+    const source = await generate(sourceBody as unknown as Record<string, unknown>, token);
+    if (!source.bytes || !source.signedUrl) {
+      check('Azure 16:9 generation', false, source.error ?? `status=${source.status}`);
+      return;
+    }
+    const sourceDimensions = decodeDimensions(source.bytes);
+    check(
+      'Azure 16:9 generation delivers 1344x768',
+      sourceDimensions?.width === 1344 && sourceDimensions.height === 768,
+      sourceDimensions ? `${sourceDimensions.width}x${sourceDimensions.height}` : 'undecodable',
+    );
+    check(
+      'Azure SSE metadata reports 1344x768',
+      source.resolution === '1344x768',
+      source.resolution,
+    );
+    check('Azure generation stays URL-only', (source.wireBytes ?? Infinity) < 128_000);
+    check('Azure generation registers a durable asset', Boolean(source.assetId), source.assetId);
+    if (source.assetId) assetIds.push(source.assetId);
+    objects.push({ bucket: source.storageBucket, path: source.storagePath });
+
+    const editNode = {
+      ...genNode({
+        model: 'gpt-image-2',
+        positivePrompt: 'keep the shoe identical and place it on a brushed steel pedestal',
+        aspectRatio: '1:1',
+        variationCount: 2,
+      }),
+      id: 'bench-edit',
+    } as StudioNode;
+    const edge = {
+      id: 'bench-source-to-edit',
+      source: sourceNode.id,
+      sourceHandle: 'image',
+      target: editNode.id,
+      targetHandle: 'ref-image',
+    } as Edge;
+    const editBody = payloadFor(editNode, {
+      nodes: [sourceNode],
+      edges: [edge],
+      resolvedData: new Map([
+        [
+          sourceNode.id,
+          {
+            type: 'image',
+            mimeType: source.mimeType ?? 'image/png',
+            url: source.signedUrl,
+            storagePath: source.storagePath,
+            storageBucket: source.storageBucket,
+            assetId: source.assetId,
+          } as NodeOutput,
+        ],
+      ]),
+    });
+    check(
+      'Canvas edit carries the real generated reference URL',
+      Boolean(editBody.reference_images?.[0]?.image_url),
+    );
+    check('Canvas edit asks Azure for two variations', editBody.num_images === 2);
+
+    const edited = await generateVariations(editBody as unknown as Record<string, unknown>, token);
+    if (edited.error) {
+      check('Azure reference edit', false, edited.error);
+      return;
+    }
+    const editPaths = new Set(edited.images.map((image) => image.path).filter(Boolean));
+    const editUrls = new Set(edited.images.map((image) => image.signedUrl).filter(Boolean));
+    const editAssetIds = (edited.completeVariations ?? []).flatMap((variation) =>
+      typeof variation.asset_id === 'string' ? [variation.asset_id] : [],
+    );
+    check('Azure edit returns two durable image events', edited.images.length === 2);
+    check('Azure edit persists two distinct storage objects', editPaths.size === 2);
+    check('Azure edit returns two distinct signed URLs', editUrls.size === 2);
+    check('Azure edit registers two media ledger rows', new Set(editAssetIds).size === 2);
+    check(
+      'Azure edit stream stays URL-only',
+      edited.images.every((image) => !image.base64 && image.delivery === 'durable') &&
+        edited.wireBytes < 128_000,
+    );
+    assetIds.push(...editAssetIds);
+    objects.push(...edited.images.map((image) => ({ bucket: image.bucket, path: image.path })));
+
+    let downloadable = 0;
+    for (const url of editUrls) {
+      const response = await fetch(url);
+      if (response.ok && (await response.arrayBuffer()).byteLength > 1000) downloadable += 1;
+    }
+    check('both Azure edit URLs download real bytes', downloadable === 2, `${downloadable}/2`);
+  } finally {
+    await cleanupAzureAssets([...new Set(assetIds)], objects, removeBenchBucket);
+    console.log('  PASS  Azure bench assets cleaned up');
+  }
 }
 
 /**
@@ -561,6 +735,17 @@ async function main(): Promise<void> {
 
   const token = await mintAccessTokenForEmail(OWNER_EMAIL);
 
+  if (AZURE) {
+    await runAzureCases(token);
+    console.log('');
+    console.log(
+      failures === 0
+        ? 'PASS — Azure GPT Image 2 generated, edited, persisted, registered, and cleaned up.'
+        : `FAIL — Azure GPT Image 2: ${failures} check(s) failed.`,
+    );
+    process.exit(failures === 0 ? 0 : 1);
+  }
+
   console.log('model x size — every combination the canvas can produce');
 
   // gemini-2.5-flash-image takes no size parameter at all: it always renders 1024px.
@@ -722,8 +907,8 @@ async function main(): Promise<void> {
       'Continuum-Backend/App/ai-studio/services/image-service.spec.ts.',
   );
   note(
-    'NOT covered by this run: gpt-image-2 / flux-2-* (fal-hosted, need FAL_KEY and paid credit). ' +
-      'They take no imageSize, which the node now reflects.',
+    'NOT covered by this run: gpt-image-2 (run with -- --azure) or flux-2-* (need FAL_KEY). ' +
+      'They take no imageSize, which the node reflects.',
   );
 
   console.log('');
