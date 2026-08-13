@@ -595,7 +595,7 @@ export function buildNanoGenPayload(
           : data.model === 'nano-banana-2-lite'
             ? 'gemini-3.1-flash-lite-image'
             : data.model === 'gpt-image-2'
-              ? 'openai/gpt-image-2/edit'
+              ? 'gpt-image-2'
               : data.model === 'flux-2-pro'
                 ? 'fal-ai/flux-2-pro/edit'
                 : data.model === 'flux-2-max'
@@ -606,7 +606,7 @@ export function buildNanoGenPayload(
   // corrected here rather than travelling on to a 400. `undefined` means the model
   // takes no size at all (gemini-2.5-flash-image always renders 1024px).
   const imageSize = coerceImageSize(data.model, data.imageSize);
-  const resolution = imageResolutionFor(data.model, imageSize);
+  const resolution = imageResolutionFor(data.model, imageSize, data.aspectRatio);
 
   let negativePrompt = typeof data.negativePrompt === 'string' ? data.negativePrompt : '';
   const negativeInput = resolveInputValue(node.id, 'negative', resolvedData, allNodes, allEdges);

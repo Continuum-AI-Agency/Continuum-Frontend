@@ -17,9 +17,12 @@ export function useBrandChange(handler: (event: BrandSwitchEvent) => void): void
   }, []);
 }
 
+// `reset` receives the switch event because a store that is brand-scoped usually needs
+// the brand being switched TO, not just the fact that one is gone: dropping it here left
+// the canvas running with no brand at all until a full page reload.
 export function registerBrandScopedStore(opts: {
   name: string;
-  reset: () => void;
+  reset: (event?: BrandSwitchEvent) => void;
   purge?: () => void;
 }): () => void {
   if (typeof window === 'undefined') {
@@ -27,9 +30,9 @@ export function registerBrandScopedStore(opts: {
   }
   return storeRegistry.register({
     name: opts.name,
-    teardown: () => {
+    teardown: (_prevBrandId, event) => {
       try {
-        opts.reset();
+        opts.reset(event);
       } catch (error) {
         if (process.env.NODE_ENV !== 'production') {
           console.error(`[brand-switch] reset failed for "${opts.name}"`, error);

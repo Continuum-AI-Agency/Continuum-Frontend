@@ -59,7 +59,7 @@ export const isImageGeneratorModel = (value: unknown): value is ImageGeneratorMo
  * model`, including `512px`. It is genuinely 1K-only, so offering any other tier
  * would ship a guaranteed 400 rather than a silent downgrade.
  *
- * The fal-hosted models (gpt-image-2, flux-2-*) size by aspect ratio alone.
+ * GPT Image 2 and the fal-hosted FLUX models size by aspect ratio alone.
  */
 export const IMAGE_MODEL_SIZES: Record<ImageGeneratorModel, readonly ImageSize[]> = {
   'nano-banana': [],
@@ -82,6 +82,14 @@ export const DEFAULT_IMAGE_SIZE: Partial<Record<ImageGeneratorModel, ImageSize>>
   'nano-banana-2-lite': '1K',
 };
 
+export const GPT_IMAGE_2_RESOLUTIONS = {
+  '1:1': '1024x1024',
+  '16:9': '1344x768',
+  '9:16': '768x1344',
+  '4:3': '1152x864',
+  '3:4': '864x1152',
+} as const;
+
 /**
  * What the picker says about each generator, and whether it can be picked at all.
  *
@@ -89,9 +97,8 @@ export const DEFAULT_IMAGE_SIZE: Partial<Record<ImageGeneratorModel, ImageSize>>
  * clickable and the only way to learn a model was out of reach was a red node reading
  * "Generation failed — Forbidden" (Airtable #248).
  *
- * The fal-hosted tier (gpt-image-2, flux-2-*) reaches its provider through FAL_KEY and
- * nothing else, and there is no fallback provider. They stay selectable because a
- * workspace WITH fal credits runs them fine — the note says what they need, and a run
+ * External models have no fallback provider. They stay selectable because a configured
+ * workspace runs them fine — the note names the provider, and a run
  * that comes back `model_unavailable` disables that model for the rest of the session
  * (see `imageModelOptions`).
  */
@@ -103,7 +110,7 @@ export const IMAGE_MODEL_INFO: Record<
   'nano-banana-pro': { label: 'Nano Banana Pro', status: 'available' },
   'nano-banana-2': { label: 'Nano Banana 2', status: 'available' },
   'nano-banana-2-lite': { label: 'Nano Banana 2 Lite', status: 'available' },
-  'gpt-image-2': { label: 'GPT Image 2', status: 'beta', note: 'Needs fal credits' },
+  'gpt-image-2': { label: 'GPT Image 2', status: 'available', note: 'Azure' },
   'flux-2-pro': { label: 'FLUX.2 Pro', status: 'beta', note: 'Needs fal credits' },
   'flux-2-max': { label: 'FLUX.2 Max', status: 'beta', note: 'Needs fal credits' },
 };
@@ -204,7 +211,17 @@ export function coerceImageSize(model: unknown, value: unknown): ImageSize | und
 }
 
 /** The `resolution` string the Backend's image request carries alongside the size. */
-export function imageResolutionFor(model: unknown, size: ImageSize | undefined): string {
+export function imageResolutionFor(
+  model: unknown,
+  size: ImageSize | undefined,
+  aspectRatio?: string,
+): string {
+  if (model === 'gpt-image-2') {
+    return (
+      GPT_IMAGE_2_RESOLUTIONS[aspectRatio as keyof typeof GPT_IMAGE_2_RESOLUTIONS] ??
+      GPT_IMAGE_2_RESOLUTIONS['16:9']
+    );
+  }
   if (isImageGeneratorModel(model) && !supportsImageSize(model)) {
     const fixed = FIXED_IMAGE_PIXELS[model] ?? 1024;
     return `${fixed}x${fixed}`;

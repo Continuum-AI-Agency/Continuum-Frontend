@@ -84,7 +84,7 @@ export function CpaHeroTimeline({
   const zone = goldilocksZone(targetCpa);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-slot="cpa-hero-timeline">
       {hasProjection && last != null && projectedEnd != null ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground">
@@ -264,9 +264,10 @@ function HeroTooltip({
   costLabel: string;
   resultLabel: string;
 }) {
-  // The tooltip panel is dark in BOTH themes (--chart-tooltip-background), so it needs its
-  // own foreground tokens. Using the page's text-foreground rendered near-black text on a
-  // near-black panel in light mode — the card was there, and unreadable.
+  // The panel carries its own --chart-tooltip-* palette (popover-derived, per theme) rather
+  // than the page's text-foreground: the tooltip is a chart surface, and a chart may set a
+  // custom panel background, at which point the page's foreground is no longer guaranteed
+  // to contrast against it.
   const delta = point.deltaCpa;
   return (
     <div className="min-w-[196px] max-w-[260px] space-y-2 p-1">
@@ -299,7 +300,7 @@ function HeroTooltip({
       {point.events.length > 0 ? (
         // Capped + scrollable: a busy cycle can carry a dozen events, and an uncapped card
         // grows past the plot and gets clipped by the chart container.
-        <div className="max-h-32 space-y-1 overflow-y-auto border-white/15 border-t pt-1.5">
+        <div className="max-h-32 space-y-1 overflow-y-auto border-chart-tooltip-border border-t pt-1.5">
           {point.events.map((event, index) => {
             const { Icon, color } = eventStyle(event.kind);
             const at = Date.parse(event.ts);

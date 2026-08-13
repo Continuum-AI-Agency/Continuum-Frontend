@@ -11,10 +11,10 @@ import { z } from 'zod';
 // invalidate frames that are already correct. Narrow on the read side.
 
 /**
- * `model_unavailable` is the provider refusing the workspace, not the request: fal
- * answers 401/402/403 for a missing key, no credits, or a model the account is not
- * enabled for, and every fal-hosted generator (gpt-image-2, flux-2-*) has no fallback
- * provider behind it. It reached the canvas as "Generation failed — Forbidden"
+ * `model_unavailable` is the provider refusing the workspace, not the request: Azure or
+ * fal answers with an auth, deployment, entitlement, or credit error, and the selected
+ * external generator has no fallback provider behind it. It reached the canvas as
+ * "Generation failed — Forbidden"
  * (Airtable #248). The message names the model; the canvas disables that model for the
  * session on this code.
  */

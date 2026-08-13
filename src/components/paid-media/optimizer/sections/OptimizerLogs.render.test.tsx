@@ -5,7 +5,13 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
 
-type LogsState = { data: OptimizerLogRow[]; isLoading: boolean };
+type LogsState = {
+  data: OptimizerLogRow[];
+  isLoading: boolean;
+  isError?: boolean;
+  error?: unknown;
+  refetch?: () => void;
+};
 let logsState: LogsState = { data: [], isLoading: false };
 
 mock.module('../useOptimizerData', () => ({
@@ -89,6 +95,39 @@ describe('OptimizerLogs', () => {
   it('shows the empty state when there is no activity', () => {
     render(<OptimizerLogs brandId="b" />);
     expect(screen.getByText('No optimizer activity yet')).toBeTruthy();
+  });
+
+  // A failed read used to render byte-identically to a brand that had simply never run a
+  // cycle — the only tell was that it took ~16s to say nothing.
+  it('reports a failed read as a failure, not as an empty feed', () => {
+    logsState = {
+      data: [],
+      isLoading: false,
+      isError: true,
+      error: new Error('optimizer-status logs unreachable'),
+    };
+    render(<OptimizerLogs brandId="b" />);
+
+    expect(screen.queryByText('No optimizer activity yet')).toBeNull();
+    expect(screen.getByText(/Couldn't load the activity log/)).toBeTruthy();
+    expect(document.body.textContent).toContain('optimizer-status logs unreachable');
+  });
+
+  it('offers a retry that re-runs the read', () => {
+    let refetched = 0;
+    logsState = {
+      data: [],
+      isLoading: false,
+      isError: true,
+      error: new Error('boom'),
+      refetch: () => {
+        refetched++;
+      },
+    };
+    render(<OptimizerLogs brandId="b" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    expect(refetched).toBe(1);
   });
 
   it('renders a money row as prior → target with the actor kind and a copyable receipt', () => {

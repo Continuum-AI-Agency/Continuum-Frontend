@@ -17,6 +17,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { BudgetMixChart } from '../charts/BudgetMixChart';
 import { budgetMix } from '../charts/chartData';
 import { formatCurrency } from '../format';
+import { pendingActionCount } from '../reportModel';
 import { OptimizerPanel } from './OptimizerPanel';
 import { PortfolioRowCard } from './PortfolioRowCard';
 
@@ -35,7 +36,7 @@ export function sortPortfolios(
     let delta: number;
     if (key === 'name') delta = a.name.localeCompare(b.name);
     else if (key === 'daily') delta = (a.daily_total ?? 0) - (b.daily_total ?? 0);
-    else delta = a.pending_recommendations - b.pending_recommendations;
+    else delta = pendingActionCount(a) - pendingActionCount(b);
     return delta * factor;
   });
 }

@@ -12,6 +12,7 @@ import { CheckCircle2Icon } from 'lucide-react';
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { Button } from '@/components/ui/button';
 import { nextCycleLabel, soonestNextCycle } from '../format';
+import { pendingActionCount } from '../reportModel';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { RenewalTaskRow } from './RenewalTaskRow';
 
@@ -30,9 +31,7 @@ export function OptimizerActions({
   renewals,
   onBrowsePortfolios,
 }: OptimizerActionsProps) {
-  const portfoliosWithPending = portfolios.filter(
-    (portfolio) => portfolio.pending_recommendations > 0,
-  );
+  const portfoliosWithPending = portfolios.filter((portfolio) => pendingActionCount(portfolio) > 0);
 
   const hasWork = portfoliosWithPending.length > 0 || renewals.length > 0;
 

@@ -32,6 +32,7 @@ const portfolio = (over: Partial<PortfolioListItem> = {}): PortfolioListItem =>
     next_realloc_at: null,
     adset_count: 6,
     pending_recommendations: 0,
+    pending_budget_moves: 0,
     ...over,
   }) as PortfolioListItem;
 
@@ -97,5 +98,22 @@ describe('OptimizerActions — work pending', () => {
 
     expect(screen.getAllByTestId('portfolio-group')).toHaveLength(2);
     expect(document.body.textContent).not.toContain('Nothing needs your decision');
+  });
+
+  // Budget moves are optimizer.cycle_items, recommendations are optimizer.recommendations.
+  // Filtering on the second alone hid four live Aleria portfolios that each had two
+  // approvable moves — the work existed, was counted nowhere, and could not be reached.
+  it('renders a group for a portfolio whose only work is budget moves', () => {
+    renderActions([portfolio({ id: 'p1', pending_recommendations: 0, pending_budget_moves: 2 })]);
+
+    expect(screen.getAllByTestId('portfolio-group')).toHaveLength(1);
+    expect(document.body.textContent).not.toContain('Nothing needs your decision');
+  });
+
+  it('still reports caught up when neither store has work', () => {
+    renderActions([portfolio({ pending_recommendations: 0, pending_budget_moves: 0 })]);
+
+    expect(screen.queryAllByTestId('portfolio-group')).toHaveLength(0);
+    expect(document.body.textContent).toContain('Nothing needs your decision');
   });
 });

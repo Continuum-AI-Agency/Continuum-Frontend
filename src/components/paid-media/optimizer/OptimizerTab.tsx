@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
+import { pendingActionCount } from './reportModel';
 import { OptimizerActions } from './sections/OptimizerActions';
 import { OptimizerLogs } from './sections/OptimizerLogs';
 import { OptimizerOffline } from './sections/OptimizerOffline';
@@ -61,7 +62,7 @@ type OptimizerTabProps = {
 };
 
 function totalPending(portfolios: PortfolioListItem[]): number {
-  return portfolios.reduce((sum, portfolio) => sum + portfolio.pending_recommendations, 0);
+  return portfolios.reduce((sum, portfolio) => sum + pendingActionCount(portfolio), 0);
 }
 
 function OptimizerSkeleton() {

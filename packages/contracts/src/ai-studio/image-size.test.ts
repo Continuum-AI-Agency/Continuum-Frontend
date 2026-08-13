@@ -76,6 +76,11 @@ describe('model capabilities', () => {
 });
 
 describe('imageResolutionFor', () => {
+  it('maps GPT Image 2 aspect ratios to the exact Azure dimensions', () => {
+    expect(imageResolutionFor('gpt-image-2', undefined, '16:9')).toBe('1344x768');
+    expect(imageResolutionFor('gpt-image-2', undefined, '3:4')).toBe('864x1152');
+  });
+
   it('reports the fixed 1024px a size-less model always renders at', () => {
     expect(imageResolutionFor('nano-banana', undefined)).toBe('1024x1024');
   });
@@ -112,8 +117,10 @@ describe('imageModelOptions', () => {
     expect(imageModelLabel('flux-2-max')).toBe('FLUX.2 Max');
   });
 
-  it('warns that the fal tier needs credits while still letting a funded workspace pick it', () => {
-    for (const model of ['gpt-image-2', 'flux-2-pro', 'flux-2-max']) {
+  it('names the provider needed by each external model', () => {
+    expect(optionFor('gpt-image-2').note).toBe('Azure');
+    expect(optionFor('gpt-image-2').selectable).toBe(true);
+    for (const model of ['flux-2-pro', 'flux-2-max']) {
       expect(optionFor(model).note).toBe('Needs fal credits');
       expect(optionFor(model).selectable).toBe(true);
     }

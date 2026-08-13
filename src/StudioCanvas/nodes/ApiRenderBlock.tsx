@@ -71,13 +71,13 @@ export function ApiRenderBlock({
   );
 
   const refreshJobs = useCallback(async () => {
-    if (!brandId || brandId === 'default-brand') return;
+    if (!brandId) return;
     const response = await apiRendersApi.listJobs(brandId, 8);
     setJobs(response.items);
   }, [brandId]);
 
   useEffect(() => {
-    if (!brandId || brandId === 'default-brand') return;
+    if (!brandId) return;
     let cancelled = false;
     void Promise.all([apiRendersApi.listTemplates(brandId), apiRendersApi.listJobs(brandId, 8)])
       .then(([templateResponse, jobResponse]) => {
@@ -97,7 +97,7 @@ export function ApiRenderBlock({
 
   const paidLevel = data.delivery?.campaignId ? 'adset' : 'campaign';
   useEffect(() => {
-    if (!brandId || brandId === 'default-brand') return;
+    if (!brandId) return;
     let cancelled = false;
     void publishingApi
       .searchPaid({

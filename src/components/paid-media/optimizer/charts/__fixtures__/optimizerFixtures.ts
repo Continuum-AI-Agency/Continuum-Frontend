@@ -107,6 +107,7 @@ export const portfoliosPopulated: PortfolioListItem[] = [
     next_realloc_at: '2026-06-23T00:00:00.000Z',
     adset_count: 4,
     pending_recommendations: 2,
+    pending_budget_moves: 0,
   },
   {
     id: '22222222-2222-4222-8222-222222222222',
@@ -121,6 +122,8 @@ export const portfoliosPopulated: PortfolioListItem[] = [
     status: 'active',
     next_realloc_at: null,
     adset_count: 2,
+    // 0 recommendations, 2 budget moves — the shape the Actions queue used to hide entirely.
     pending_recommendations: 0,
+    pending_budget_moves: 2,
   },
 ];

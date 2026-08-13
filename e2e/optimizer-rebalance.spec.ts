@@ -211,7 +211,7 @@ test.describe('Optimizer — a conserved rebalance reads as one decision', () =>
     for (const move of [...live.donors, ...live.recipients]) {
       if (!move.name) continue;
       await expect(
-        page.getByLabel(`Select ${move.name}`),
+        page.getByLabel(`Select budget move for ${move.name}`),
         `${move.name} lost its own checkbox to the group`,
       ).toBeVisible();
     }
@@ -228,7 +228,7 @@ test.describe('Optimizer — a conserved rebalance reads as one decision', () =>
     const named = live.recipients.filter((m) => m.name);
     test.skip(named.length === 0, 'no named recipient in the live run to select');
 
-    for (const move of named) await page.getByLabel(`Select ${move.name}`).click();
+    for (const move of named) await page.getByLabel(`Select budget move for ${move.name}`).click();
     const expected = named.reduce((sum, m) => sum + m.changeAbs, 0);
     await expect(page.getByText(/Net \+/).first()).toBeVisible();
     await expect(
@@ -239,7 +239,7 @@ test.describe('Optimizer — a conserved rebalance reads as one decision', () =>
     // Adding the donors back must bring it to flat on a conserved run.
     if (Math.abs(live.net) < 1) {
       for (const move of live.donors.filter((m) => m.name)) {
-        await page.getByLabel(`Select ${move.name}`).click();
+        await page.getByLabel(`Select budget move for ${move.name}`).click();
       }
       await expect(page.getByText('Spend stays flat')).toBeVisible();
       await shoot(page, 'full-selection-flat');

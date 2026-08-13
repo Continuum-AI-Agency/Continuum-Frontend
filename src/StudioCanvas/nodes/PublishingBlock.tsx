@@ -93,7 +93,7 @@ function PublisherBlock({
   const paidLevel = !data.campaignId ? 'campaign' : !data.adsetId ? 'adset' : 'ad';
 
   useEffect(() => {
-    if (!brandId || brandId === 'default-brand') return;
+    if (!brandId) return;
     const timer = window.setTimeout(async () => {
       setLoading(true);
       setSearchError(null);

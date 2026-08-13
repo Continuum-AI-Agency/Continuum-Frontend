@@ -948,9 +948,14 @@ body {
   --chart-crosshair: color-mix(in srgb, var(--primary) 60%, transparent);
   --chart-grid: var(--border);
   --chart-brush-border: var(--chart-grid);
-  --chart-tooltip-background: #0b1220f2;
-  --chart-tooltip-foreground: #f8fafc;
-  --chart-tooltip-muted: #94a3b8;
+  /* The tooltip panel is a popover that happens to float over a plot, so it takes the
+     popover's palette in each theme rather than a fixed near-black. The 95% mix keeps
+     the plot faintly readable behind it (and keeps backdrop-blur meaningful); the
+     border is what separates the panel from a same-coloured card underneath. */
+  --chart-tooltip-background: color-mix(in srgb, var(--popover) 95%, transparent);
+  --chart-tooltip-foreground: var(--popover-foreground);
+  --chart-tooltip-muted: var(--muted-foreground);
+  --chart-tooltip-border: var(--border);
   --chart-marker-background: var(--card);
   --chart-marker-border: var(--border);
   --chart-marker-foreground: var(--foreground);
@@ -1130,6 +1135,7 @@ body {
   --color-chart-tooltip-muted: var(--chart-tooltip-muted);
   --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
   --color-chart-tooltip-background: var(--chart-tooltip-background);
+  --color-chart-tooltip-border: var(--chart-tooltip-border);
   --chart-brush-border: var(--chart-brush-border);
   --color-chart-grid: var(--chart-grid);
   --color-chart-crosshair: var(--chart-crosshair);
@@ -1396,9 +1402,14 @@ button:focus-visible .mention-inline__label {
   --chart-crosshair: color-mix(in srgb, var(--primary) 55%, transparent);
   --chart-grid: var(--border);
   --chart-brush-border: var(--chart-grid);
-  --chart-tooltip-background: #0b1220f2;
-  --chart-tooltip-foreground: #f8fafc;
-  --chart-tooltip-muted: #94a3b8;
+  /* The tooltip panel is a popover that happens to float over a plot, so it takes the
+     popover's palette in each theme rather than a fixed near-black. The 95% mix keeps
+     the plot faintly readable behind it (and keeps backdrop-blur meaningful); the
+     border is what separates the panel from a same-coloured card underneath. */
+  --chart-tooltip-background: color-mix(in srgb, var(--popover) 95%, transparent);
+  --chart-tooltip-foreground: var(--popover-foreground);
+  --chart-tooltip-muted: var(--muted-foreground);
+  --chart-tooltip-border: var(--border);
   --chart-marker-background: var(--card);
   --chart-marker-border: var(--border);
   --chart-marker-foreground: var(--foreground);

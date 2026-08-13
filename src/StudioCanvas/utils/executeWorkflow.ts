@@ -891,6 +891,12 @@ export async function executeWorkflow(
   controls: ExecutorControls,
   options: ExecuteWorkflowOptions = {},
 ) {
+  // The store is the canvas's own answer for "which brand am I", and it survives a caller
+  // that forgot to pass one. Nothing below substitutes a placeholder for a missing brand:
+  // an id no brand can have used to reach the Backend and come back as a permissions
+  // denial, which is not what had gone wrong.
+  const workflowBrandId = options.brandId ?? useStudioStore.getState().brandId;
+
   // Inline/re-sign reference media feeding the run BEFORE building payloads. A
   // Library/Continuum reference arrives as a signed URL (which expires ~1h) or had
   // its inline base64 stripped on save; left as-is, a single-node generate sends an
@@ -939,7 +945,7 @@ export async function executeWorkflow(
       snapshot.nodes,
       snapshot.edges,
       new Set(scopeNodeIds),
-      options.brandId,
+      workflowBrandId,
     );
   }
 
@@ -1263,8 +1269,8 @@ export async function executeWorkflow(
       sizeBytes?: number;
     },
   ): Promise<RegisterCanvasAssetResponse | null> => {
-    const brandProfileId = options.brandId;
-    if (!brandProfileId || brandProfileId === 'default-brand') return Promise.resolve(null);
+    const brandProfileId = workflowBrandId;
+    if (!brandProfileId) return Promise.resolve(null);
     if (!asset.url || asset.url.startsWith('data:') || !asset.bucket || !asset.storagePath) {
       return Promise.resolve(null);
     }
@@ -1460,7 +1466,11 @@ export async function executeWorkflow(
     updateNodeStatus(nodeId, 'running');
 
     try {
-      const brandId = options.brandId || 'default-brand';
+      const brandId = workflowBrandId;
+      if (!brandId) {
+        updateNodeStatus(nodeId, 'failed', 'No brand selected — reload AI Studio');
+        return false;
+      }
       if (node.type === 'string') {
         // A run scoped to THIS node is the node's own "Enrich Prompt" button, the
         // one explicit request to enrich; a whole-graph run merely passes through.
@@ -1673,17 +1683,11 @@ export async function executeWorkflow(
           sourceAssetVersionId,
         });
 
-        if (
-          selector !== 'timestamp' &&
-          options.brandId &&
-          options.brandId !== 'default-brand' &&
-          sourceAssetId &&
-          sourceAssetVersionId
-        ) {
+        if (selector !== 'timestamp' && workflowBrandId && sourceAssetId && sourceAssetVersionId) {
           try {
             await persistAssetRendition({
               client: createSupabaseBrowserClient(),
-              brandId: options.brandId,
+              brandId: workflowBrandId,
               assetId: sourceAssetId,
               assetVersionId: sourceAssetVersionId,
               role: selector === 'first' ? 'first_frame' : 'last_frame',
@@ -1729,8 +1733,8 @@ export async function executeWorkflow(
         }
 
         const requestBody: Record<string, unknown> = {};
-        if (options.brandId && options.brandId !== 'default-brand') {
-          requestBody.brandId = options.brandId;
+        if (workflowBrandId) {
+          requestBody.brandId = workflowBrandId;
         }
         if ('base64' in resolvedVideo) {
           requestBody.videoBase64 = resolvedVideo.base64;

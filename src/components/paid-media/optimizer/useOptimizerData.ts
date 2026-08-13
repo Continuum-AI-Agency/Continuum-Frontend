@@ -75,6 +75,7 @@ import { z } from 'zod';
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { recommendationInsightKey } from './insightKey';
+import { pendingActionCount } from './reportModel';
 import { type AccountSnapshotsResult, parseOptimizerSnapshotEnvelope } from './snapshotEnvelope';
 
 // The optimizer RPCs/edge functions are not yet in the generated Supabase types
@@ -315,7 +316,15 @@ async function fetchPerformance(portfolioId: string): Promise<CycleRunReport | n
   });
   if (error) throw new Error('optimizer-status unreachable');
   const parsed = CycleRunReportSchema.safeParse(data);
-  return parsed.success ? parsed.data : null;
+  // Returning null on a shape mismatch used to be silent, and the Performance tab reads a
+  // null report as "no cycle has run yet" — so schema drift presented as "Scoring your
+  // first cycle…" forever on a portfolio with five months of runs. Throw: React Query
+  // owns the error and the surface renders a retry.
+  if (!parsed.success) {
+    console.error('optimizer-status: unexpected report shape', parsed.error.issues);
+    throw new Error('optimizer-status returned an unexpected report shape');
+  }
+  return parsed.data;
 }
 
 async function fetchCpaSeries(portfolioId: string): Promise<CpaSeriesPoint[]> {
@@ -348,7 +357,13 @@ async function fetchLogs(brandId: string): Promise<OptimizerLogRow[]> {
   });
   if (error) throw new Error('optimizer-status logs unreachable');
   const parsed = OptimizerLogsResponseSchema.safeParse(data);
-  return parsed.success ? parsed.data.logs : [];
+  // Same reason as fetchPerformance: an empty array is indistinguishable from "this brand
+  // has never run a cycle", so a malformed response has to be an error, not a blank feed.
+  if (!parsed.success) {
+    console.error('optimizer-status logs: unexpected shape', parsed.error.issues);
+    throw new Error('optimizer-status returned an unexpected logs shape');
+  }
+  return parsed.data.logs;
 }
 
 async function fetchSuggestions(
@@ -1421,22 +1436,35 @@ export function useOptimizerInsight(
 
 /** Poll a freshly-enrolled portfolio every five seconds for at most two minutes.
  * The scheduler remains the source of truth; polling only removes the manual
- * refresh tax while its first real cycle lands. */
-export function useOptimizerFirstRunPoll(active: boolean, refetch: () => unknown): void {
+ * refresh tax while its first real cycle lands.
+ *
+ * Returns whether that two-minute window has LAPSED with the wait still on. The caller
+ * needs it because the spinner outlives the poll: past 120s nothing is refreshing, so an
+ * animation is a lie about work in progress. Report the stall and offer a retry instead. */
+export function useOptimizerFirstRunPoll(active: boolean, refetch: () => unknown): boolean {
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      setExpired(false);
+      return;
+    }
     const interval = window.setInterval(() => {
       void refetchRef.current();
     }, 5_000);
-    const stop = window.setTimeout(() => window.clearInterval(interval), 120_000);
+    const stop = window.setTimeout(() => {
+      window.clearInterval(interval);
+      setExpired(true);
+    }, 120_000);
     return () => {
       window.clearInterval(interval);
       window.clearTimeout(stop);
     };
   }, [active]);
+
+  return expired;
 }
 
 /** Warm the lightweight overview reads before the Optimization tab mounts. */
@@ -1493,9 +1521,11 @@ export function usePrefetchPortfolioDetail(brandId: string) {
   );
 }
 
-/** Warm the performance read for every portfolio that has pending recommendations, so
- *  the Actions queue lands from cache instead of firing one optimizer-status invoke per
- *  portfolio on tab entry. Fired from the Actions tab trigger's hover/focus. */
+/** Warm the performance read for every portfolio with pending work, so the Actions queue
+ *  lands from cache instead of firing one optimizer-status invoke per portfolio on tab
+ *  entry. Fired from the Actions tab trigger's hover/focus. The gate must match the one
+ *  OptimizerActions renders on, or the portfolios it newly shows are exactly the ones
+ *  that never get warmed. */
 export function useWarmActionsQueue(brandId: string) {
   const queryClient = useQueryClient();
 
@@ -1503,7 +1533,7 @@ export function useWarmActionsQueue(brandId: string) {
     (portfolios: PortfolioListItem[]) => {
       if (!brandId) return;
       for (const portfolio of portfolios) {
-        if (portfolio.pending_recommendations <= 0) continue;
+        if (pendingActionCount(portfolio) <= 0) continue;
         void queryClient.prefetchQuery({
           queryKey: optimizerQueryKeys.performance(portfolio.id),
           queryFn: () => withReadTimeout(fetchPerformance(portfolio.id)),

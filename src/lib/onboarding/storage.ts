@@ -6,6 +6,7 @@ import { getFunctionsInvokeErrorMessage } from '@/lib/supabase/functions-errors'
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database, Json } from '@/lib/supabase/types';
 import { canPersistBrandRecord } from './brandRecordGuard';
+import { claimPendingInvite } from './claimInvite';
 import {
   findMatchingActiveBrandId,
   findPendingInviteBrandId,
@@ -122,6 +123,7 @@ async function ensureBrandProfileRecord(
   // letting them write it overwrote the canonical brand_name for everyone (the
   // shell, the switcher). Invited members are read-only on the brand row.
   if (!canPersistBrandRecord(data, owner.id)) {
+    await claimPendingInvite(supabase, brandId, owner.id);
     return brandId;
   }
 
