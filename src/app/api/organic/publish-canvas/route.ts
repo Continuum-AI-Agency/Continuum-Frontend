@@ -1,4 +1,4 @@
-import { deriveOrganicMediaStage } from '@continuum/contracts';
+import { deriveOrganicMediaStage, syncDraftSnapshotFormat } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
@@ -166,7 +166,7 @@ export async function POST(request: Request) {
     if (payload.draftId) {
       const { data: draftRow, error: draftError } = await organic
         .from('organic_calendar_drafts')
-        .select('id, content_json, scheduled_date')
+        .select('id, content_json, scheduled_date, slot_data')
         .eq('id', payload.draftId)
         .eq('brand_id', payload.brandId)
         .single();
@@ -187,11 +187,18 @@ export async function POST(request: Request) {
       if (payload.compositionId) {
         markPlannerCompositionReady(contentJson, payload.compositionId, resultAssetId, nowIso);
       }
+      // A rendered MP4 makes this a REEL; the cached snapshot format outranks content.format
+      // in `resolveDraftPublishFormat`, so it has to move with it.
+      const nextSlotData = syncDraftSnapshotFormat(
+        (draftRow as { slot_data?: unknown }).slot_data,
+        'REEL',
+      );
 
       const { error: updateError } = await organic
         .from('organic_calendar_drafts')
         .update({
           content_json: contentJson,
+          ...(nextSlotData ? { slot_data: nextSlotData } : {}),
           media_stage: deriveOrganicMediaStage(contentJson),
           updated_at: nowIso,
         })

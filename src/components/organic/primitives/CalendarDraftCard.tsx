@@ -42,7 +42,7 @@ import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
 import { PlatformBadge, StatusBadge } from './DraftCardBadges';
 import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
-import { MediaStagePill, resolveDraftMediaStage } from './DraftLifecycle';
+import { isReelMissingVideo, MediaStagePill, resolveDraftMediaStage } from './DraftLifecycle';
 import { DuplicateDayPicker } from './DuplicateDayPicker';
 import { cardVariants, draftStatusPresentation } from './draft-card-styles';
 import type { OrganicCalendarDraft } from './types';
@@ -543,7 +543,10 @@ export function CalendarDraftCard({
                           </span>
                         ) : null}
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <MediaStagePill mediaStage="storyboard_ready" />
+                          <MediaStagePill
+                            mediaStage="storyboard_ready"
+                            missingReelVideo={isReelMissingVideo(draft)}
+                          />
                           {draft.mediaSuggestion?.reel?.composition &&
                           onStitch &&
                           draft.backendDraftId &&

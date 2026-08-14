@@ -23,7 +23,12 @@ function makeInviteSupabase(opts: {
 function makeSupabase(opts: {
   perms?: Array<{ brand_profile_id: string }>;
   permErr?: unknown;
-  brands?: Array<{ id: string; brand_name?: string | null; context?: unknown }>;
+  brands?: Array<{
+    id: string;
+    brand_name?: string | null;
+    context?: unknown;
+    completed_at?: string | null;
+  }>;
   brandErr?: unknown;
 }) {
   return {
@@ -208,5 +213,75 @@ describe('findMatchingActiveBrandId', () => {
       { brandName: 'Acme Co' },
     );
     expect(result).toBeNull();
+  });
+});
+
+// The "+ Add brand" button (BrandSwitcher) sends NO name, so every click produced
+// another default-named "<handle>'s Brand". In prod one user stacked 4 brands in
+// 4 minutes that way. With onlyEmptyShell the click lands back on the untouched
+// shell — but must never swallow a brand the user actually filled in.
+describe('findMatchingActiveBrandId — onlyEmptyShell', () => {
+  const shell = {
+    id: 'shell',
+    brand_name: "duanecscott's Brand",
+    context: {},
+    completed_at: null,
+  };
+
+  it('reuses an unfinished shell: empty context and no completed_at', async () => {
+    const result = await findMatchingActiveBrandId(
+      makeSupabase({ perms: [{ brand_profile_id: 'shell' }], brands: [shell] }),
+      'u1',
+      { brandName: "duanecscott's Brand", onlyEmptyShell: true },
+    );
+    expect(result).toBe('shell');
+  });
+
+  it('treats a null context as an empty shell too', async () => {
+    const result = await findMatchingActiveBrandId(
+      makeSupabase({
+        perms: [{ brand_profile_id: 'shell' }],
+        brands: [{ ...shell, context: null }],
+      }),
+      'u1',
+      { brandName: "duanecscott's Brand", onlyEmptyShell: true },
+    );
+    expect(result).toBe('shell');
+  });
+
+  it('refuses a same-named brand that finished onboarding', async () => {
+    const result = await findMatchingActiveBrandId(
+      makeSupabase({
+        perms: [{ brand_profile_id: 'shell' }],
+        brands: [{ ...shell, completed_at: '2026-08-14T00:13:38.140Z' }],
+      }),
+      'u1',
+      { brandName: "duanecscott's Brand", onlyEmptyShell: true },
+    );
+    expect(result).toBeNull();
+  });
+
+  it('refuses a same-named brand that has a populated context', async () => {
+    const result = await findMatchingActiveBrandId(
+      makeSupabase({
+        perms: [{ brand_profile_id: 'shell' }],
+        brands: [{ ...shell, context: { platform_urls: ['www.instagram.com/x/'] } }],
+      }),
+      'u1',
+      { brandName: "duanecscott's Brand", onlyEmptyShell: true },
+    );
+    expect(result).toBeNull();
+  });
+
+  it('still matches a filled-in brand when onlyEmptyShell is off (ticket #162 path)', async () => {
+    const result = await findMatchingActiveBrandId(
+      makeSupabase({
+        perms: [{ brand_profile_id: 'shell' }],
+        brands: [{ ...shell, completed_at: '2026-08-14T00:13:38.140Z' }],
+      }),
+      'u1',
+      { brandName: "duanecscott's Brand" },
+    );
+    expect(result).toBe('shell');
   });
 });

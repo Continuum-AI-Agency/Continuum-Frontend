@@ -37,6 +37,7 @@ import { fetchBrandAdNamingSchema } from '@/lib/brands/adNaming';
 import { fetchBrandBook } from '@/lib/brands/brandBook';
 import { fetchBrandIntelligenceOverview } from '@/lib/brands/brandIntelligence.server';
 import { fetchBrandDocuments } from '@/lib/brands/documents';
+import { fetchBrandInviteLedger } from '@/lib/brands/members';
 import { fetchBrandProfileDetails } from '@/lib/brands/profile';
 import { fetchPulseRecipients } from '@/lib/brands/pulseRecipients';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
@@ -97,7 +98,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     const [brandProfile, members, invites, pulseRecipients] = await Promise.all([
       fetchBrandProfileDetails(activeBrandId),
       repo.fetchMembers(activeBrandId),
-      repo.fetchInvites(activeBrandId),
+      fetchBrandInviteLedger(activeBrandId),
       fetchPulseRecipients(activeBrandId),
     ]);
     const brandName = brandProfile?.name ?? defaultBrandName;

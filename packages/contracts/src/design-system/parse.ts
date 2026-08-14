@@ -381,17 +381,42 @@ export function parseDesignSystemExport(files: DesignSourceFiles): ParsedDesignS
 }
 
 /**
- * Build the sections a deterministic read can justify.
+ * Build the sections a set of tokens justifies.
  *
  * Only sections with actual evidence are emitted. An empty `motion` card on a system
  * that never mentioned motion is worse than no card: it invites someone to switch on
  * enforcement of nothing, and it inflates the token-count-adjacent signals the rigor
  * tier reads. Prose extraction adds the rest later, and marks them `inferred`.
+ *
+ * Exported because tokens do not only arrive from the export parse. A DTCG file and a
+ * brand guideline both produce their tokens AFTER this function has already run over an
+ * empty set, and a system carrying tokens but no sections renders an empty block —
+ * `renderDesignSystemBlock` returns early on zero sections — so it is stored and
+ * reaches no generator at all. Those callers rebuild with `provenance: 'inferred'`,
+ * which is the honest label for a value read out of a page rather than out of code.
  */
+export function buildTokenSections(args: {
+  tokens: readonly DesignToken[];
+  adherence: DesignAdherence;
+  exemplarsBySection?: ReadonlyMap<DesignSection, DesignSystemSection['exemplars']>;
+  provenance?: DesignSystemSection['provenance'];
+  confidence?: number;
+}): DesignSystemSection[] {
+  return buildDeterministicSections({
+    tokens: args.tokens,
+    adherence: args.adherence,
+    exemplarsBySection: args.exemplarsBySection ?? new Map(),
+    provenance: args.provenance ?? 'declared',
+    confidence: args.confidence ?? 1,
+  });
+}
+
 function buildDeterministicSections(args: {
   tokens: readonly DesignToken[];
   adherence: DesignAdherence;
   exemplarsBySection: ReadonlyMap<DesignSection, DesignSystemSection['exemplars']>;
+  provenance?: DesignSystemSection['provenance'];
+  confidence?: number;
 }): DesignSystemSection[] {
   const bySection = new Map<DesignSection, DesignToken[]>();
   for (const token of args.tokens) {
@@ -416,9 +441,11 @@ function buildDeterministicSections(args: {
       content: { tokens: sectionTokens.map((token) => token.name) },
       rules: deterministicRules(section, sectionTokens, args.adherence),
       exemplars,
-      // Every value here came out of a manifest, a stylesheet, or a lint config.
-      provenance: 'declared',
-      confidence: 1,
+      // Every value here came out of a manifest, a stylesheet, or a lint config —
+      // unless the caller says otherwise, which is how a guideline's observed palette
+      // gets sections without claiming to have been declared in code.
+      provenance: args.provenance ?? 'declared',
+      confidence: args.confidence ?? 1,
       enabled: true,
       editedAt: null,
     });

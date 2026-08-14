@@ -14,6 +14,7 @@
  */
 
 import { z } from 'zod';
+import type { PublishFormat } from '../organic/publishing';
 import type { OrganicMediaSuggestion, OrganicPublishingAsset } from '../streaming/organic-pipeline';
 import { type MediaAsset, mediaKindSchema } from './asset';
 
@@ -69,7 +70,51 @@ export type ShapedUserSuppliedMedia = {
   mediaSuggestionPatch: Omit<Partial<OrganicMediaSuggestion>, keyof ClearedMediaOutputs> &
     ClearedMediaOutputs;
   publishingAssets: OrganicPublishingAsset[];
+  /**
+   * The draft's `content.format`, restated from what was actually attached. Callers MUST apply it
+   * onto `content_json.content` — the attached media IS the answer, exactly as `publishingAssets`
+   * is replaced wholesale rather than appended to.
+   *
+   * Without it, `content.format` keeps whatever the generator wrote and drifts from the media:
+   * three images landing on a "Reel" draft left a reel with no video, which the kind-blind publish
+   * gate passed and `stageMediaForPublish` then died on ("reel: no signable media source") once
+   * per scheduler tick, forever.
+   */
+  contentPatch: { format: PublishFormat };
 };
+
+/**
+ * The post format a set of asset kinds can actually publish as — one video → REEL, several images
+ * → CAROUSEL, otherwise POST. The single rule behind both `shapeUserSuppliedMedia`'s `contentPatch`
+ * and the planner attach path, which shapes its own assets but must reach the same verdict.
+ */
+export function publishFormatForAssetKinds(kinds: ReadonlyArray<'image' | 'video'>): PublishFormat {
+  if (kinds[0] === 'video') return 'REEL';
+  return kinds.length > 1 ? 'CAROUSEL' : 'POST';
+}
+
+/**
+ * `slot_data` with its cached `draftSnapshot.format` brought in line with a format just written
+ * onto `content_json.content` — or `null` when there is no snapshot to update.
+ *
+ * Load-bearing: `resolveDraftPublishFormat` reads the snapshot BEFORE `content.format`, so an
+ * attach that rewrites only `content.format` leaves a stale snapshot outranking it, trading the
+ * old drift for a subtler one. Only an EXISTING snapshot is rewritten — minting one would invent
+ * browser-autosave state the row never had, and the resolver falls through to `content.format`
+ * quite happily when there is no snapshot to consult.
+ */
+export function syncDraftSnapshotFormat(
+  slotData: unknown,
+  format: PublishFormat,
+): Record<string, unknown> | null {
+  if (!slotData || typeof slotData !== 'object' || Array.isArray(slotData)) return null;
+  const snapshot = (slotData as { draftSnapshot?: unknown }).draftSnapshot;
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
+  return {
+    ...(slotData as Record<string, unknown>),
+    draftSnapshot: { ...(snapshot as Record<string, unknown>), format },
+  };
+}
 
 /** Map a unified-library `MediaAsset` (FE list / BE media.assets row) → `CreativeRef`. */
 export function creativeRefFromAsset(asset: MediaAsset): CreativeRef {
@@ -149,6 +194,7 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
   // VIDEO / REEL — a single user video fills the reel slot.
   if (primary.kind === 'video') {
     return {
+      contentPatch: { format: 'REEL' },
       publishingAssets: [
         {
           role: 'primary',
@@ -184,6 +230,7 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
   // CAROUSEL — multiple images, selection order = slide order.
   if (list.length > 1) {
     return {
+      contentPatch: { format: 'CAROUSEL' },
       publishingAssets: list.map((creative, index) => imagePublishingAsset(creative, index)),
       mediaSuggestionPatch: {
         ...ALL_MEDIA_SLOTS_CLEARED,
@@ -206,6 +253,7 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
 
   // SINGLE IMAGE.
   return {
+    contentPatch: { format: 'POST' },
     publishingAssets: [imagePublishingAsset(primary)],
     mediaSuggestionPatch: {
       ...ALL_MEDIA_SLOTS_CLEARED,

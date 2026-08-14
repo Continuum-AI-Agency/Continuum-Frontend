@@ -9,7 +9,7 @@
 
 import type { DesignSystemSnapshot } from '@continuum/contracts';
 import { AlertTriangle, CheckCircle2, FileUp, FolderUp, Loader2 } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { uploadDesignSystem } from '@/lib/brands/designSystem.client';
@@ -62,18 +62,20 @@ export function DesignSystemCard({
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const busy = state.phase === 'parsing' || uploadStage !== null;
-  const notifyBusy = useCallback(
-    (next: boolean) => {
-      onBusyChange?.(next);
-    },
-    [onBusyChange],
-  );
+
+  // Derived, not announced from the handler. Announcing it imperatively means every
+  // exit from the upload has to remember to say so, and the success exit did not —
+  // which left onboarding's Continue disabled under "Reading design system…" forever.
+  // `busy` is already the whole truth, and Realtime moving the row to `ready` releases
+  // it without this component being told.
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
 
   const handleFiles = useCallback(
     async (fileList: FileList | null) => {
       if (!fileList || fileList.length === 0) return;
       setUploadError(null);
-      notifyBusy(true);
       try {
         await uploadDesignSystem({
           brandId,
@@ -83,12 +85,11 @@ export function DesignSystemCard({
         await state.refresh();
       } catch (error) {
         setUploadError((error as Error).message);
-        notifyBusy(false);
       } finally {
         setUploadStage(null);
       }
     },
-    [brandId, notifyBusy, state],
+    [brandId, state],
   );
 
   const snapshot = state.snapshot;

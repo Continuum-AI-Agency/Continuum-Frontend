@@ -1,4 +1,9 @@
 import {
+  type BrandInviteRecord,
+  brandInviteSchema as contractsInviteSchema,
+  deriveInviteStatus,
+} from '@continuum/contracts';
+import {
   type BrandInvite,
   type BrandMember,
   brandInviteSchema,
@@ -90,6 +95,62 @@ export async function fetchBrandInvites(brandId: string): Promise<BrandInvite[]>
       token: '',
       createdAt: row.created_at,
       expiresAt: row.expires_at,
+    });
+
+    if (!parsed.success) {
+      console.error(`[members] Skipping malformed invite row for brand ${brandId}`, parsed.error);
+      continue;
+    }
+
+    invites.push(parsed.data);
+  }
+
+  return invites;
+}
+
+/**
+ * Every invite for a brand, in every state, with what we know about delivery.
+ *
+ * `fetchBrandInvites` above is structurally pending-only, which is why an
+ * inviter could never tell an ignored invite from a bounced one, or see that 27
+ * of 79 had quietly expired. This is the settings view; that one still backs the
+ * onboarding state shape.
+ */
+export async function fetchBrandInviteLedger(brandId: string): Promise<BrandInviteRecord[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = (await supabase
+    .schema('brand_profiles')
+    .from('invites')
+    .select(
+      'id, email, role, created_at, expires_at, accepted_at, revoked_at, last_emailed_at, last_email_message_id, last_email_error',
+    )
+    .eq('brand_profile_id', brandId)
+    .order('created_at', { ascending: false })) as any;
+
+  if (error) {
+    console.error(`[members] Failed to fetch invite ledger for brand ${brandId}`, error);
+    return [];
+  }
+
+  const invites: BrandInviteRecord[] = [];
+  for (const row of data ?? []) {
+    const timestamps = {
+      acceptedAt: (row.accepted_at as string | null) ?? null,
+      revokedAt: (row.revoked_at as string | null) ?? null,
+      expiresAt: (row.expires_at as string | null) ?? null,
+    };
+    const parsed = contractsInviteSchema.safeParse({
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      status: deriveInviteStatus(timestamps),
+      createdAt: row.created_at,
+      ...timestamps,
+      delivery: {
+        lastEmailedAt: (row.last_emailed_at as string | null) ?? null,
+        lastEmailMessageId: (row.last_email_message_id as string | null) ?? null,
+        lastEmailError: (row.last_email_error as string | null) ?? null,
+      },
     });
 
     if (!parsed.success) {

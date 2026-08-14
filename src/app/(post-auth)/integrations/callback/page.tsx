@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import posthog from 'posthog-js';
 import { useEffect, useMemo } from 'react';
+import { errorMessage, successMessage } from '@/lib/integrations/callbackMessages';
 import { publishOAuthCompletion } from '@/lib/popup';
 
 type PopupSuccessPayload = {
@@ -14,19 +15,6 @@ type PopupSuccessPayload = {
   returnTo?: string | null;
   warning?: string | null;
 };
-
-// A successful OAuth connect can still carry a non-fatal warning (e.g. the token
-// was stored but no Google Ads accounts could be enumerated). Surface that rather
-// than reporting a clean "connected".
-function successMessage(reason?: string | null): string {
-  if (reason === 'no_ads_accounts' || reason === 'ads_enrichment_failed') {
-    return 'Connected, but no Google Ads accounts were found.';
-  }
-  if (reason === 'meta_partial_sync') {
-    return "Connected, but some Meta accounts may be missing. We'll keep trying to load them.";
-  }
-  return 'Integration connected.';
-}
 
 type PopupErrorPayload = {
   type: 'oauth:error';
@@ -78,7 +66,7 @@ export default function IntegrationCallbackPage() {
       type: 'oauth:error',
       provider,
       context,
-      message: reason ?? 'Connection failed.',
+      message: errorMessage(reason),
       state,
     };
     return { payload: errorPayload, status: false, reason };
@@ -116,7 +104,7 @@ export default function IntegrationCallbackPage() {
   }, [payload, router]);
 
   const isSuccess = payload.status;
-  const message = isSuccess ? successMessage(payload.reason) : 'Integration failed.';
+  const message = isSuccess ? successMessage(payload.reason) : errorMessage(payload.reason);
   return (
     <div
       style={{

@@ -76,15 +76,21 @@ export function buildUserSuppliedContentJson(params: {
     signedUrl: asset.storageUrl,
   }));
 
-  const { mediaSuggestionPatch, publishingAssets } = shapeUserSuppliedMedia(refs);
+  const { mediaSuggestionPatch, publishingAssets, contentPatch } = shapeUserSuppliedMedia(refs);
 
   const preservedMs: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(existingMs)) {
     if (!MEDIA_OUTPUT_KEYS.has(key)) preservedMs[key] = value;
   }
 
+  const existingContent = (existing.content as Record<string, unknown> | undefined) ?? {};
+
   return {
     ...existing,
+    // The applied media IS the format. `mediaSuggestion.kind` was already reconciled here;
+    // `content.format` was not, so applying three images to a reel left a reel with no video
+    // that the publish gate passed and staging then failed on, once per scheduler tick.
+    content: { ...existingContent, ...contentPatch },
     creative: {
       ...existingCreative,
       mediaSuggestion: { ...preservedMs, ...mediaSuggestionPatch },

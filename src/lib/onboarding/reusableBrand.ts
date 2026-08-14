@@ -95,6 +95,21 @@ export async function findPendingInviteBrandId(
 export interface BrandIdentityCandidate {
   brandName: string;
   websiteUrl?: string | null;
+  /**
+   * Restrict matches to brands the user started and never finished: no
+   * `completed_at` and an empty `context`. Set by the unnamed "+ Add brand"
+   * path so repeat clicks land back on the same untouched shell, while a brand
+   * that has actually been named/onboarded is never swallowed by a later click.
+   */
+  onlyEmptyShell?: boolean;
+}
+
+/** A brand row nobody has put anything into yet. Shells carry `context = {}`, not null. */
+function isEmptyShell(brand: { completed_at: string | null; context: unknown }): boolean {
+  if (brand.completed_at !== null) return false;
+  if (brand.context === null || brand.context === undefined) return true;
+  if (typeof brand.context !== 'object') return false;
+  return Object.keys(brand.context as Record<string, unknown>).length === 0;
 }
 
 function normalizeBrandName(name: string): string {
@@ -136,7 +151,7 @@ export async function findMatchingActiveBrandId(
     const { data: brands, error: brandErr } = await supabase
       .schema('brand_profiles')
       .from('brand_profiles')
-      .select('id, brand_name, context')
+      .select('id, brand_name, context, completed_at')
       .in('id', ids)
       .eq('active', true);
     if (brandErr) return null;
@@ -146,8 +161,11 @@ export async function findMatchingActiveBrandId(
         id: string;
         brand_name: string | null;
         context: unknown;
+        completed_at: string | null;
       }>
     ).find((brand) => {
+      if (candidate.onlyEmptyShell && !isEmptyShell(brand)) return false;
+
       const nameMatches =
         normalizedName.length > 0 &&
         typeof brand.brand_name === 'string' &&

@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 import { applySupabaseCookies, getSupabaseCookieOptions } from './lib/supabase/cookies';
-import { authRedirectTarget, isProtectedRoute } from './proxy-config';
+import { authedAuthPageDestination, authRedirectTarget, isProtectedRoute } from './proxy-config';
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -47,9 +47,11 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims verifies the JWT locally against the project's cached ES256 JWKS;
+  // getUser costs a round trip to Supabase on every matched request. The rest of
+  // the app already identifies users this way (lib/auth/claims.ts).
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims?.sub ? claimsData.claims : null;
 
   const isAuthPage =
     request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/signup');
@@ -61,7 +63,8 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && isAuthPage) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    const destination = authedAuthPageDestination(request.nextUrl.searchParams);
+    return NextResponse.redirect(new URL(destination, request.url));
   }
 
   return supabaseResponse;

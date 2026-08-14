@@ -96,7 +96,7 @@ async function ensureBrandProfileRecord(
   brandId: string,
   owner: BrandMember,
   state?: OnboardingState,
-  options: { reuseMatchingBrand?: boolean } = {},
+  options: { reuseMatchingBrand?: boolean; onlyEmptyShell?: boolean } = {},
 ): Promise<string> {
   const { data: rawData, error } = await supabase
     .schema('brand_profiles')
@@ -140,6 +140,7 @@ async function ensureBrandProfileRecord(
       const duplicateBrandId = await findMatchingActiveBrandId(supabase, owner.id, {
         brandName,
         websiteUrl: state?.brand?.website ?? null,
+        onlyEmptyShell: options.onlyEmptyShell,
       });
       if (duplicateBrandId && duplicateBrandId !== brandId) {
         return duplicateBrandId;
@@ -678,7 +679,7 @@ function parseLegacyMetadata(raw: unknown): OnboardingMetadata | null {
   return ensureActiveSelection(parsed);
 }
 
-function ensureActiveBrand(
+export function ensureActiveBrand(
   metadata: OnboardingMetadata,
   owner: BrandMember,
   preferredBrandId?: string,
@@ -692,7 +693,12 @@ function ensureActiveBrand(
   }
 
   if (!brandId) {
-    brandId = createBrandId();
+    // activeBrandId is only set from a user_onboarding_states row with
+    // is_active = true, and a brand switch leaves every row false — so it reads
+    // null for users who already HAVE brands. Minting here in that case handed
+    // them a fresh "<handle>'s Brand" on each load. Adopt a brand they already
+    // have; only mint when there is genuinely nothing to adopt.
+    brandId = Object.keys(metadata.brands)[0] ?? createBrandId();
     if (!metadata.brands[brandId]) {
       metadata.brands[brandId] = createDefaultOnboardingState(owner);
       dirty = true;
@@ -1101,7 +1107,12 @@ export async function setActiveBrand(brandId: string): Promise<OnboardingState> 
 export async function createBrandProfile(
   name?: string,
 ): Promise<{ brandId: string; state: OnboardingState }> {
-  const { supabase, owner, metadata, user } = await loadOnboardingContext();
+  // Deliberately NOT loadOnboardingContext(): that helper inserts a brand row of
+  // its own (via ensureBrandProfileRecord), so opening with it made a single
+  // "+ Add brand" click create TWO brands. Read auth + metadata without side
+  // effects, the way deleteBrandFromMetadata does.
+  const { supabase, user, owner } = await getAuthContext();
+  const metadata = await fetchMetadataFromTable(supabase, user.id, owner);
   const brandId = createBrandId();
   const state = createDefaultOnboardingState(owner);
   if (name) {
@@ -1113,11 +1124,16 @@ export async function createBrandProfile(
   metadata.activeBrandId = brandId;
   await persistMetadata(supabase, user, metadata);
 
-  // "Add brand" is an explicit request for a distinct workspace. Reusing an
-  // existing brand with the same default name would silently redirect the user
-  // back into their current brand instead of creating the requested one.
+  // A NAMED "add brand" is an explicit request for a distinct workspace — reusing
+  // an existing brand would silently redirect the user away from the one they
+  // asked for. An UNNAMED one (the "+ Add brand" button, which sends no name) only
+  // ever produces the default "<handle>'s Brand", so repeat clicks used to stack
+  // identical empty shells forever. For that case, land on an existing unfinished
+  // shell instead; once it is named or onboarded it no longer matches and the next
+  // click creates a genuinely new brand.
   const resolvedBrandId = await ensureBrandProfileRecord(supabase, brandId, owner, state, {
-    reuseMatchingBrand: false,
+    reuseMatchingBrand: !name,
+    onlyEmptyShell: true,
   });
   if (resolvedBrandId !== brandId) {
     // An existing active brand already matches this candidate by name/website

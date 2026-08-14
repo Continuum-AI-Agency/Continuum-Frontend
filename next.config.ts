@@ -66,12 +66,17 @@ const nextConfig: NextConfig = {
     '@opentelemetry/exporter-logs-otlp-http',
     '@opentelemetry/resources',
   ],
+  // Next 16.3 writes its own instructions into AGENTS.md on every `next dev`.
+  // Ours is the canonical hand-written guide; keep the generator out of it.
+  agentRules: false,
   experimental: {
     serverActions: {
       bodySizeLimit: '25mb',
     },
-    viewTransition: true,
-    optimizePackageImports: ['@phosphor-icons/react', 'lucide-react'],
+    // `experimental.viewTransition` graduated in Next 16.3 — React's
+    // <ViewTransition> now works in the App Router with no configuration.
+    // lucide-react is already in Next's built-in optimizePackageImports list.
+    optimizePackageImports: ['@phosphor-icons/react'],
   },
   turbopack: {
     root: workspaceRoot,

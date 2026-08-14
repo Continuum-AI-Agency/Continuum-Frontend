@@ -29,4 +29,19 @@ describe('/invite page', () => {
       'REDIRECT:/invite/callback?token=token-abc&brand=a90c3556-30a6-4d0d-9a04-1b5c058d05c5',
     );
   });
+
+  it('forwards the sign-in handoff to the callback instead of stripping it', async () => {
+    await expect(
+      InvitePage({
+        searchParams: Promise.resolve({
+          token: 'token-abc',
+          brand: 'a90c3556-30a6-4d0d-9a04-1b5c058d05c5',
+          otp: 'hashed-abc',
+          type: 'invite',
+        }),
+      }),
+    ).rejects.toThrow(
+      'REDIRECT:/invite/callback?token=token-abc&brand=a90c3556-30a6-4d0d-9a04-1b5c058d05c5&otp=hashed-abc&type=invite',
+    );
+  });
 });

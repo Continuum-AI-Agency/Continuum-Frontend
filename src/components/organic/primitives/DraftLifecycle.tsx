@@ -1,4 +1,8 @@
-import { deriveOrganicMediaStage, type OrganicMediaStage } from '@continuum/contracts';
+import {
+  deriveOrganicMediaStage,
+  type OrganicMediaStage,
+  resolvePublishFormat,
+} from '@continuum/contracts';
 import {
   AlertCircle,
   ArrowRight,
@@ -53,6 +57,15 @@ const STAGE_META: Record<OrganicMediaStage, StageMeta> = {
   },
 };
 
+/**
+ * Not a media_stage of its own — the ladder position really is `storyboard_ready`. It is the one
+ * case where that stage means "stuck" rather than "next step is yours", so it gets its own face.
+ */
+const MISSING_REEL_VIDEO_META: StageMeta = {
+  label: 'No video yet',
+  tone: 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+};
+
 export function deriveMediaStageLabel(mediaStage: OrganicMediaStage): string {
   return STAGE_META[mediaStage].label;
 }
@@ -72,14 +85,31 @@ export function resolveDraftMediaStage(draft: OrganicCalendarDraft): OrganicMedi
   });
 }
 
+/**
+ * A reel whose storyboard exists but whose video never will.
+ *
+ * `deriveOrganicMediaStage` reads only `mediaStatus` and `storyboard` — it never looks at
+ * `mediaSuggestion.reel`. So a reel whose scene generation produced nothing renders exactly like
+ * a healthy un-rendered one: "Blueprint ready", storyboard stills, the same button. The last one
+ * was only noticed when its scheduled publish failed, silently, every minute for 45 minutes.
+ */
+export function isReelMissingVideo(draft: OrganicCalendarDraft): boolean {
+  if (resolveDraftMediaStage(draft) !== 'storyboard_ready') return false;
+  if (resolvePublishFormat(draft.format ?? null) !== 'REEL') return false;
+  return !draft.mediaSuggestion?.reel;
+}
+
 export function MediaStagePill({
   mediaStage,
+  missingReelVideo = false,
   className,
 }: {
   mediaStage: OrganicMediaStage;
+  /** Renders the amber "No video yet" variant — see `isReelMissingVideo`. */
+  missingReelVideo?: boolean;
   className?: string;
 }) {
-  const meta = STAGE_META[mediaStage];
+  const meta = missingReelVideo ? MISSING_REEL_VIDEO_META : STAGE_META[mediaStage];
   return (
     <span
       className={cn(

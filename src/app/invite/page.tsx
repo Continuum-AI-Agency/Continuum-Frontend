@@ -3,7 +3,7 @@ import { normalizeInviteBrandId, normalizeInviteToken } from '@/lib/invites/para
 import { buildInviteCallbackPath } from '@/lib/invites/urls';
 
 type InvitePageProps = {
-  searchParams?: Promise<{ token?: string; brand?: string }>;
+  searchParams?: Promise<{ token?: string; brand?: string; otp?: string; type?: string }>;
 };
 
 export default async function InvitePage({ searchParams }: InvitePageProps) {
@@ -15,5 +15,5 @@ export default async function InvitePage({ searchParams }: InvitePageProps) {
     redirect('/dashboard?invite=missing_params');
   }
 
-  redirect(buildInviteCallbackPath(token, brandId));
+  redirect(buildInviteCallbackPath(token, brandId, { otp: params.otp, type: params.type }));
 }

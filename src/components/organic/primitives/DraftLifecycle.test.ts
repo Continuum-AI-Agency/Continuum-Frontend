@@ -1,55 +1,46 @@
 import { describe, expect, it } from 'bun:test';
-import { deriveMediaStageLabel, resolveDraftMediaStage } from './DraftLifecycle';
+import { isReelMissingVideo } from './DraftLifecycle';
 import type { OrganicCalendarDraft } from './types';
 
-const baseDraft = (overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft => ({
-  id: 'd1',
-  title: 't',
-  summary: '',
-  timeLabel: '9:00 AM',
-  dateLabel: 'Mon, Apr 21',
-  status: 'draft',
-  platforms: ['instagram'],
-  format: 'Post',
-  objective: 'Draft',
-  captionPreview: '',
-  tags: [],
-  mediaCount: 0,
-  ...overrides,
-});
+/**
+ * `deriveOrganicMediaStage` never looks at `mediaSuggestion.reel`, so a reel that lost its video
+ * and a reel that simply has not been rendered yet are the same `storyboard_ready` to the ladder.
+ * This helper is the only thing that separates them on the card.
+ */
+function reelDraft(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
+  return {
+    id: 'draft-1',
+    format: 'Reel',
+    mediaStage: 'storyboard_ready',
+    mediaSuggestion: { storyboard: [{ role: 'hook', storageUrl: 'https://x/1.jpg' }] },
+    ...overrides,
+  } as unknown as OrganicCalendarDraft;
+}
 
-describe('resolveDraftMediaStage', () => {
-  it('prefers the authoritative draft.mediaStage', () => {
-    expect(resolveDraftMediaStage(baseDraft({ mediaStage: 'realizing' }))).toBe('realizing');
+describe('isReelMissingVideo', () => {
+  it('flags a reel whose storyboard exists but whose reel asset does not', () => {
+    expect(isReelMissingVideo(reelDraft())).toBe(true);
   });
 
-  it('falls back to text_only when there are no media signals', () => {
-    expect(resolveDraftMediaStage(baseDraft())).toBe('text_only');
-  });
-
-  it('derives realized from publishingAssets when mediaStage is absent', () => {
+  it('stays quiet once the reel asset lands — clips ready is not stuck', () => {
     expect(
-      resolveDraftMediaStage(
-        baseDraft({ publishingAssets: [{ storagePath: 'p/1.jpg' }] as never }),
+      isReelMissingVideo(
+        reelDraft({
+          mediaSuggestion: {
+            storyboard: [{ role: 'hook', storageUrl: 'https://x/1.jpg' }],
+            reel: { scenes: [], generated: false },
+          },
+        } as unknown as Partial<OrganicCalendarDraft>),
       ),
-    ).toBe('realized');
+    ).toBe(false);
   });
 
-  it('derives storyboard_ready from a non-empty storyboard', () => {
-    expect(
-      resolveDraftMediaStage(
-        baseDraft({ mediaSuggestion: { storyboard: [{ storageUrl: 'u' }] } as never }),
-      ),
-    ).toBe('storyboard_ready');
+  it('does not flag a carousel — only a reel needs a video', () => {
+    expect(isReelMissingVideo(reelDraft({ format: 'Carousel' }))).toBe(false);
   });
-});
 
-describe('deriveMediaStageLabel', () => {
-  it('labels each enrichment stage', () => {
-    expect(deriveMediaStageLabel('text_only')).toBe('Text only');
-    expect(deriveMediaStageLabel('storyboard_ready')).toBe('Blueprint ready');
-    expect(deriveMediaStageLabel('realizing')).toBe('Realizing');
-    expect(deriveMediaStageLabel('realized')).toBe('Realized');
-    expect(deriveMediaStageLabel('failed')).toBe('Media failed');
+  it('does not flag a reel that has moved past the blueprint rung', () => {
+    expect(isReelMissingVideo(reelDraft({ mediaStage: 'realized' }))).toBe(false);
+    expect(isReelMissingVideo(reelDraft({ mediaStage: 'text_only' }))).toBe(false);
   });
 });

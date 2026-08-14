@@ -142,10 +142,14 @@ export async function setPulseRecipientAction(
   revalidatePath('/settings');
 }
 
+// `forceResend` blanks the Resend idempotency key on the edge side, so it must
+// only be set when a human explicitly asked to resend. It used to be hardcoded
+// true here, which made every double-click of Invite a second real email.
 export async function createMagicLinkAction(
   brandId: string,
   email: string,
   role: BrandRole,
+  forceResend = false,
 ): Promise<{
   link: string;
   inviteId: string | null;
@@ -181,7 +185,7 @@ export async function createMagicLinkAction(
       brandId,
       email: email.trim(),
       role,
-      forceResend: true,
+      forceResend,
     },
     headers: session?.access_token
       ? { Authorization: `Bearer ${session.access_token}` }

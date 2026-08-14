@@ -1,6 +1,8 @@
 import {
   deriveOrganicMediaStage,
   registerGeneratedAssetResponseSchema,
+  resolvePublishFormat,
+  syncDraftSnapshotFormat,
 } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
@@ -267,7 +269,7 @@ export async function POST(request: Request) {
     const organic = (createSupabaseAdminClient() as unknown as SupabaseClient).schema('organic');
     const { data: draftRow, error: draftError } = await organic
       .from('organic_calendar_drafts')
-      .select('content_json')
+      .select('content_json, slot_data')
       .eq('id', payload.draftId)
       .eq('brand_id', payload.brandProfileId)
       .single();
@@ -282,11 +284,18 @@ export async function POST(request: Request) {
       assets: persistedAssets,
       bucket,
     });
+    const nextSlotData = syncDraftSnapshotFormat(
+      (draftRow as { slot_data: unknown }).slot_data,
+      resolvePublishFormat(
+        (nextContentJson.content as { format?: string } | undefined)?.format ?? null,
+      ),
+    );
 
     const { error: draftUpdateError } = await organic
       .from('organic_calendar_drafts')
       .update({
         content_json: nextContentJson,
+        ...(nextSlotData ? { slot_data: nextSlotData } : {}),
         media_stage: deriveOrganicMediaStage(nextContentJson),
         updated_at: new Date().toISOString(),
       })

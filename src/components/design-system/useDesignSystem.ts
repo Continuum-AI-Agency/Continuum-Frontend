@@ -3,14 +3,22 @@
 // Live view of a brand's design system.
 //
 // Ingest is asynchronous and can run for ten seconds or more, so the page cannot poll
-// a promise and call it done. It subscribes to the same Realtime channel document
-// upload uses, for the same reason: the row IS the progress, and the server is already
-// writing to it step by step.
+// a promise and call it done. It follows the row over Realtime, for the same reason
+// document upload does: the row IS the progress, and the server is already writing to
+// it step by step.
+//
+// The subscription goes through `subscribeToPostgresChanges` rather than building a
+// channel here. Settings mounts this hook twice — `DesignSystemSection` for the section
+// cards, and the `DesignSystemCard` inside it for the uploader — and a hand-built topic
+// of `design-system-${brandId}` is the same string both times. `supabase.channel()`
+// hands back the EXISTING channel for a matching topic, so the second mount's `.on()`
+// landed on an already-subscribed channel and threw, taking the settings page to the
+// global error boundary.
 
 import type { DesignSystemSnapshot } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchDesignSystem } from '@/lib/brands/designSystem.client';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 export type DesignSystemPhase = 'idle' | 'loading' | 'parsing' | 'ready' | 'error' | 'absent';
 
@@ -24,15 +32,9 @@ export interface DesignSystemState {
   refresh: () => Promise<void>;
 }
 
-interface SystemRow {
-  brand_id: string;
-  status?: 'parsing' | 'ready' | 'error';
-  progress_step?: string | null;
-  progress_percent?: number | null;
-  error_message?: string | null;
-  version?: number | null;
-  is_active?: boolean;
-}
+/** A Realtime row is untrusted JSON, so every field is read rather than cast. */
+const readString = (row: Record<string, unknown>, key: string): string | null =>
+  typeof row[key] === 'string' ? (row[key] as string) : null;
 
 /**
  * A stale-parse watchdog, mirroring the 2-minute one on document upload.
@@ -74,43 +76,36 @@ export function useDesignSystem(brandId: string | null): DesignSystemState {
 
   useEffect(() => {
     if (!brandId) return;
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`design-system-${brandId}`)
-      .on(
-        'postgres_changes',
+    return subscribeToPostgresChanges({
+      label: `design-system-${brandId}`,
+      bindings: [
         {
           event: '*',
           schema: 'brand_profiles',
           table: 'brand_design_systems',
           filter: `brand_id=eq.${brandId}`,
+          onRow: (row) => {
+            lastUpdateRef.current = Date.now();
+            setProgressStep(readString(row, 'progress_step'));
+            setProgressPercent(typeof row.progress_percent === 'number' ? row.progress_percent : 0);
+            const status = readString(row, 'status');
+            if (status === 'error') {
+              setErrorMessage(readString(row, 'error_message') ?? 'The import failed.');
+              setPhase('error');
+              return;
+            }
+            if (status === 'parsing') {
+              setPhase('parsing');
+              return;
+            }
+            // A row reaching `ready` carries only the columns Realtime replicated, not
+            // the sections — so refetch rather than reconstructing a partial snapshot
+            // from a payload that was never meant to be the whole system.
+            if (status === 'ready' && row.is_active === true) void refresh();
+          },
         },
-        (payload) => {
-          const row = payload.new as SystemRow | null;
-          if (!row) return;
-          lastUpdateRef.current = Date.now();
-          setProgressStep(row.progress_step ?? null);
-          setProgressPercent(row.progress_percent ?? 0);
-          if (row.status === 'error') {
-            setErrorMessage(row.error_message ?? 'The import failed.');
-            setPhase('error');
-            return;
-          }
-          if (row.status === 'parsing') {
-            setPhase('parsing');
-            return;
-          }
-          // A row reaching `ready` carries only the columns Realtime replicated, not
-          // the sections — so refetch rather than reconstructing a partial snapshot
-          // from a payload that was never meant to be the whole system.
-          if (row.status === 'ready' && row.is_active) void refresh();
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+      ],
+    });
   }, [brandId, refresh]);
 
   useEffect(() => {

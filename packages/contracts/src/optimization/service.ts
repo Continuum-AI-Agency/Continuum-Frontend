@@ -707,11 +707,11 @@ export const PortfolioListItemSchema = z.object({
   next_realloc_at: z.string().nullable(),
   adset_count: z.number().int().nonnegative(),
   pending_recommendations: z.number().int().nonnegative(),
-  /** Actionable budget moves on the LATEST run — held, approved-pending, or an unwritten
-   *  scored change. A budget move is a cycle_items row, NOT a recommendation, so this is the
-   *  only signal that a portfolio has money work waiting; gating the Actions queue on
-   *  pending_recommendations alone hid those portfolios entirely. Defaulted so a payload
-   *  from before the RPC change still parses (z.object would otherwise drop the row). */
+  /** Actionable budget moves on the LATEST cycle run: held, approved_pending, or a scored
+   *  change not yet written. Budget moves are optimizer.cycle_items, NOT recommendations —
+   *  a portfolio can have real work to approve with pending_recommendations at 0. Undeclared
+   *  here, z.object strips the key optimizer_list_portfolios returns and the Actions queue
+   *  filters that portfolio out entirely. Defaulted so a caller on an older RPC still parses. */
   pending_budget_moves: z.number().int().nonnegative().default(0),
   // Autopilot state. optimizer_list_portfolios returns all three; they must be DECLARED
   // here or z.object strips them and the FE reads undefined (which is how the paused

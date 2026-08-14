@@ -4,7 +4,7 @@ import { Check, CircleNotch, Envelope, Sparkle, Users, X } from '@phosphor-icons
 import { AnimatePresence, motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 
-import { createMagicLinkAction } from '@/app/(post-auth)/settings/actions';
+import { createMagicLinkAction, revokeInviteAction } from '@/app/(post-auth)/settings/actions';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -125,7 +125,20 @@ export function TeamInviteSection() {
     }
   };
 
+  // The button says "Revoke invite" and used to only drop the row from local
+  // onboarding state — the invite stayed live and redeemable. Revoke for real,
+  // then reflect it.
   const handleRemove = async (inviteId: string) => {
+    try {
+      await revokeInviteAction(brandId, inviteId);
+    } catch (error) {
+      show({
+        title: "Couldn't revoke invite",
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'error',
+      });
+      return;
+    }
     const next = sentInvites.filter((invite) => invite.id !== inviteId);
     await updateState({ invites: next });
   };
@@ -198,8 +211,7 @@ export function TeamInviteSection() {
             />
           </div>
 
-          <div
-            role="radiogroup"
+          <fieldset
             aria-label="Role"
             className="relative flex items-center gap-1 rounded-full border border-border bg-muted p-1"
           >
@@ -209,8 +221,7 @@ export function TeamInviteSection() {
                 <button
                   key={option}
                   type="button"
-                  role="radio"
-                  aria-checked={selected}
+                  aria-pressed={selected}
                   onClick={() => setRole(option)}
                   disabled={submitting}
                   className={cn(
@@ -231,7 +242,7 @@ export function TeamInviteSection() {
                 </button>
               );
             })}
-          </div>
+          </fieldset>
           <p
             key={role}
             className="px-1 text-xs leading-snug text-muted-foreground motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"

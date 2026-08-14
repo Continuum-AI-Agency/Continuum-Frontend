@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'bun:test';
+import { resolvePublishFormat } from '../organic/publish-body';
 import type { MediaAsset } from './asset';
 import {
   type CreativeRef,
   creativeRefFromAsset,
   creativeRefSchema,
   findMultiVideoSelectionError,
+  publishFormatForAssetKinds,
   shapeUserSuppliedMedia,
 } from './attach';
 
@@ -191,5 +193,43 @@ describe('shapeUserSuppliedMedia — images', () => {
 
   it('rejects an empty selection', () => {
     expect(() => shapeUserSuppliedMedia([])).toThrow(/at least one creative/);
+  });
+});
+
+/**
+ * The shaper always knew which format the attached media could publish as — it just kept the
+ * answer to itself. Three images landing on a "Reel" draft left `content.format` saying Reel with
+ * no video anywhere, which died in staging once per scheduler tick.
+ */
+describe('publishFormatForAssetKinds', () => {
+  it('maps kinds to the format that can actually publish them', () => {
+    expect(publishFormatForAssetKinds(['image'])).toBe('POST');
+    expect(publishFormatForAssetKinds(['image', 'image', 'image'])).toBe('CAROUSEL');
+    expect(publishFormatForAssetKinds(['video'])).toBe('REEL');
+  });
+
+  it('follows the video-first rule the shaper uses, not the count', () => {
+    expect(publishFormatForAssetKinds(['video', 'image'])).toBe('REEL');
+  });
+});
+
+describe('shapeUserSuppliedMedia — contentPatch', () => {
+  it('restates the format from the media, so a reel carrying images becomes a carousel', () => {
+    const { contentPatch } = shapeUserSuppliedMedia([
+      imageRef({ assetId: 'i1', storagePath: 'library/one.jpg' }),
+      imageRef({ assetId: 'i2', storagePath: 'library/two.jpg' }),
+      imageRef({ assetId: 'i3', storagePath: 'library/three.jpg' }),
+    ]);
+    expect(contentPatch.format).toBe('CAROUSEL');
+  });
+
+  it('agrees with mediaSuggestion.kind on every branch', () => {
+    expect(shapeUserSuppliedMedia([videoRef()]).contentPatch.format).toBe('REEL');
+    expect(shapeUserSuppliedMedia([imageRef()]).contentPatch.format).toBe('POST');
+  });
+
+  it('resolves back to itself — the token it writes is one resolvePublishFormat reads', () => {
+    const { contentPatch } = shapeUserSuppliedMedia([videoRef()]);
+    expect(resolvePublishFormat(contentPatch.format)).toBe('REEL');
   });
 });
