@@ -4,6 +4,7 @@ import {
   compileControlledPairWorkflow,
   compileMasterAndCropsWorkflow,
 } from './format-workflows';
+import { buildWorkflowGraph } from './workflow-builder';
 
 const promptEdgesInto = (
   connections: Array<{ from_ref: string; to_ref: string; role?: string }>,
@@ -62,6 +63,20 @@ describe('compileCarouselSetWorkflow', () => {
         .filter((edge) => edge.to_ref === publisher?.ref)
         .map((edge) => edge.from_ref),
     ).toEqual(['slide:s1:image', 'slide:s2:image', 'slide:s3:image']);
+  });
+
+  // Asserting the compiled spec is not enough: the spec was always right. The publisher
+  // inherited a two-slot default, so the third slide had no handle to land on and
+  // buildWorkflowGraph silently dropped its edge. Resolve the graph for real.
+  it('resolves every slide edge through buildWorkflowGraph', () => {
+    const compiled = compileCarouselSetWorkflow(recipe);
+    const { graph, errors } = buildWorkflowGraph(compiled.nodes, compiled.connections);
+    const publisher = graph.nodes.find((node) => node.type === 'organicPublisher');
+    const intoPublisher = graph.edges.filter((edge) => edge.target === publisher?.id);
+
+    expect(errors).toEqual([]);
+    expect(intoPublisher).toHaveLength(recipe.slides.length);
+    expect(new Set(intoPublisher.map((edge) => edge.targetHandle)).size).toBe(recipe.slides.length);
   });
 
   it('rejects duplicate slide ids', () => {

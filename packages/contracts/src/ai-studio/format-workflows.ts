@@ -122,7 +122,14 @@ export function compileCarouselSetWorkflow(input: CarouselSetRecipe): CompiledFo
   nodes.push({
     ref: publisherRef,
     type: 'organicPublisher',
-    data: { format: 'carousel' },
+    // One slot per slide. A publisher's only legal target handles are derived from
+    // assetSlots, and each holds exactly one edge, so inheriting the two-slot default
+    // left every slide past the second with nowhere to land — the canvas reported
+    // "no compatible handle from nanoGen to organicPublisher" and dropped the edge.
+    data: {
+      format: 'carousel',
+      assetSlots: recipe.slides.map((slide, order) => ({ id: slide.id, order })),
+    },
   });
   for (const slideRef of slideRefs) {
     connections.push({ from_ref: slideRef, to_ref: publisherRef });
@@ -213,7 +220,15 @@ export function compileControlledPairWorkflow(input: ControlledPairRecipe): Comp
   nodes.push({
     ref: publisherRef,
     type: 'organicPublisher',
-    data: { format: 'carousel' },
+    // Two frames, two slots. This happens to match the default today; state it anyway so
+    // the pair does not silently break if that default ever changes.
+    data: {
+      format: 'carousel',
+      assetSlots: [
+        { id: 'before', order: 0 },
+        { id: 'after', order: 1 },
+      ],
+    },
   });
   connections.push({ from_ref: before.imageRef, to_ref: publisherRef });
   connections.push({ from_ref: after.imageRef, to_ref: publisherRef });
