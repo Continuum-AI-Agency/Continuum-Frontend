@@ -1533,8 +1533,21 @@ function Flow({
     [edges, nodes],
   );
 
+  // xyflow only fires onReconnect when the dragged endpoint lands on a handle. Dropping it
+  // on empty canvas fires nothing at all, so without the pair below the edge silently snaps
+  // back: the user watches the image detach and reattach, and the publisher keeps counting
+  // it as connected because state.edges never changed.
+  const reconnectLandedOnHandle = useRef(false);
+
+  const onReconnectStart = useCallback(() => {
+    reconnectLandedOnHandle.current = false;
+  }, []);
+
   const onReconnect = useCallback(
     (oldEdge: Edge, connection: ReactFlowConnection) => {
+      // Set before validating: an incompatible handle is still a drop on a handle, and that
+      // must keep the edge — we warn instead — rather than fall through to deletion.
+      reconnectLandedOnHandle.current = true;
       const normalized = connection as ReactFlowConnection;
       const remainingEdges = edges.filter((edge) => edge.id !== oldEdge.id);
       if (!isValidConnection(normalized, remainingEdges, nodes)) {
@@ -1550,6 +1563,16 @@ function Flow({
       triggerSave();
     },
     [edges, nodes, setEdges, show, takeSnapshot, triggerSave],
+  );
+
+  const onReconnectEnd = useCallback(
+    (_event: MouseEvent | TouchEvent, oldEdge: Edge) => {
+      if (reconnectLandedOnHandle.current) return;
+      takeSnapshot();
+      setEdges(edges.filter((edge) => edge.id !== oldEdge.id));
+      triggerSave();
+    },
+    [edges, setEdges, takeSnapshot, triggerSave],
   );
 
   if (isLoading) {
@@ -1572,6 +1595,8 @@ function Flow({
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onReconnect={onReconnect}
+            onReconnectStart={onReconnectStart}
+            onReconnectEnd={onReconnectEnd}
             edgesReconnectable
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
