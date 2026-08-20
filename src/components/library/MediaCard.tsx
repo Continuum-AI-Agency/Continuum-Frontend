@@ -546,9 +546,9 @@ export function MediaCard({
     year: 'numeric',
   });
   // Clip generation re-reads the source bytes and re-transcribes from scratch, so it
-  // consumes nothing vision analysis produces. Both terminal analysed states qualify;
-  // skipped_long_form is in fact the common case, since anything worth clipping is
-  // longer than the window vision analysis covers.
+  // consumes nothing vision analysis produces. Both terminal outcomes qualify — the
+  // analysed one and the deliberately skipped one. skipped_long_form is the common
+  // case, since anything worth clipping is longer than vision analysis covers.
   const canGenerateClips =
     asset.kind === 'video' && (asset.status === 'ready' || asset.status === 'skipped_long_form');
   const activeProgress = progress && progress.sourceAssetId === asset.id ? progress : null;
