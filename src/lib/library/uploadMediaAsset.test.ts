@@ -123,6 +123,51 @@ describe('uploadMediaAsset', () => {
     });
   });
 
+  // analyze_media only sees bytes, so it cannot work out a duration for itself. The
+  // browser has the decoded file already, and register is the call that enqueues
+  // analysis — so the duration has to ride along with it or the long-form skip is
+  // blind.
+  it('sends a probed duration with register for a video', async () => {
+    const calls: string[] = [];
+    const bodies: Record<string, unknown>[] = [];
+    const client = makeClient({ calls, bodies });
+
+    await uploadMediaAsset(
+      { file: mp4File(), brandId: 'b1' },
+      { createClient: () => client, attachPoster: async () => null, probeDuration: async () => 96 },
+    );
+
+    const register = bodies.find((body) => body.action === 'register');
+    expect(register?.durationSec).toBe(96);
+  });
+
+  it('omits the duration for an image, and when the probe cannot read one', async () => {
+    const imageCalls: string[] = [];
+    const imageBodies: Record<string, unknown>[] = [];
+    await uploadMediaAsset(
+      { file: pngFile(), brandId: 'b1' },
+      {
+        createClient: () => makeClient({ calls: imageCalls, bodies: imageBodies }),
+        probeDuration: async () => {
+          throw new Error('an image must never reach the probe');
+        },
+      },
+    );
+    expect(imageBodies.find((b) => b.action === 'register')).not.toHaveProperty('durationSec');
+
+    const videoCalls: string[] = [];
+    const videoBodies: Record<string, unknown>[] = [];
+    await uploadMediaAsset(
+      { file: mp4File(), brandId: 'b1' },
+      {
+        createClient: () => makeClient({ calls: videoCalls, bodies: videoBodies }),
+        attachPoster: async () => null,
+        probeDuration: async () => null,
+      },
+    );
+    expect(videoBodies.find((b) => b.action === 'register')).not.toHaveProperty('durationSec');
+  });
+
   it('generates and persists a poster for a video, and reports its path', async () => {
     const calls: string[] = [];
     const client = makeClient({ calls });

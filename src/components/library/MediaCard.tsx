@@ -142,6 +142,10 @@ function StatusBadge({ status }: { status: MediaAsset['status'] }) {
       </span>
     ) : status === 'skipped_free' ? (
       <span className={cn(BADGE_BASE, 'bg-amber-900/80 text-amber-200')}>Upgrade to analyze</span>
+    ) : status === 'skipped_long_form' ? (
+      // Neutral, not a warning: the video is fine and fully usable, it just has no
+      // AI metadata because vision analysis only covers short ad creative.
+      <span className={cn(BADGE_BASE, 'bg-black/60 text-white')}>Not analyzed</span>
     ) : status === 'error' ? (
       <span className={cn(BADGE_BASE, 'bg-red-900/80 text-red-200')}>Error</span>
     ) : (
@@ -541,7 +545,12 @@ export function MediaCard({
     day: 'numeric',
     year: 'numeric',
   });
-  const canGenerateClips = asset.kind === 'video' && asset.status === 'ready';
+  // Clip generation re-reads the source bytes and re-transcribes from scratch, so it
+  // consumes nothing vision analysis produces. Both terminal analysed states qualify;
+  // skipped_long_form is in fact the common case, since anything worth clipping is
+  // longer than the window vision analysis covers.
+  const canGenerateClips =
+    asset.kind === 'video' && (asset.status === 'ready' || asset.status === 'skipped_long_form');
   const activeProgress = progress && progress.sourceAssetId === asset.id ? progress : null;
   const openDetail = () => {
     // Hover content is portalled above the grid. Close it before docking the
