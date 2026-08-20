@@ -24,7 +24,7 @@ import {
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { attachAssetPreview } from './assetPreview';
 import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
-import type { attachVideoPoster } from './videoPoster';
+import { type attachVideoPoster, isVideoMimeType, probeVideoDurationSec } from './videoPoster';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
@@ -70,6 +70,7 @@ export interface UploadMediaAssetDeps {
   /** Injected for tests; decodes a frame in the browser and persists it. */
   attachPoster?: typeof attachVideoPoster;
   attachPreview?: typeof attachAssetPreview;
+  probeDuration?: typeof probeVideoDurationSec;
   resumableUpload?: typeof resumableStorageUpload;
   supabaseUrl?: string;
   anonKey?: string;
@@ -219,6 +220,13 @@ export async function uploadMediaAsset(
     : file.size > MAX_BUFFERED_CHECKSUM_BYTES
       ? 'skipped_large_file'
       : 'unknown';
+  // Read before register because register is what enqueues analysis, and analysis
+  // needs the duration to decide whether this is long-form. Videos only, and never
+  // fatal: a null just leaves analyze_media without that signal.
+  const durationSec = isVideoMimeType(mimeType)
+    ? await (deps.probeDuration ?? probeVideoDurationSec)(file)
+    : null;
+
   const data = await invokeLibraryUpload(supabase, {
     action: 'register',
     brandId,
@@ -230,6 +238,7 @@ export async function uploadMediaAsset(
     sizeBytes: file.size,
     ...(checksum ? { checksum } : {}),
     integrityState,
+    ...(durationSec === null ? {} : { durationSec }),
   });
 
   const ok = registerMediaResponseSchema.safeParse(data);

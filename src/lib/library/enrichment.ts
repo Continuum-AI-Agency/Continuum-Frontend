@@ -25,6 +25,9 @@ const NEEDS_ENRICHMENT: ReadonlySet<string> = new Set(['stored']);
  *   error        — a retry path already exists inside analyze_media; re-driving
  *                  a permanently-failing asset from every page view is a loop.
  *   skipped_free — a billing decision was taken. Honour it.
+ *   skipped_long_form
+ *                — the video is longer than vision analysis is scoped for. Re-driving
+ *                  it would fail the same way every time someone opened the asset.
  */
 export type EnrichmentCandidate = {
   id: string;
