@@ -36,6 +36,33 @@ export interface RenderedDesignSystem {
   gating: boolean;
 }
 
+export interface RenderDesignSystemOptions {
+  /**
+   * The prompt already carries a `<brand_book>` built from `brand_tokens`.
+   *
+   * `brand_tokens` is DOWNSTREAM of this system — `projectToBrandTokens` writes the
+   * system's own colours and families into it at ingest, and `reconcile.ts` resolves
+   * every disagreement in the system's favour before that write. So when a brand book
+   * is present its palette IS this palette, narrowed, and emitting the token lines
+   * again states the same identity twice with two different scopes: the book's five
+   * roles say "use ONLY these" and this block's sixteen tokens say "use ONLY these" of
+   * a superset. A model cannot satisfy both, and the pair is also pure prompt mass on
+   * the surface that already carries the most.
+   *
+   * Rules are unaffected — a rule is what no palette can express, and it is the whole
+   * reason this block exists next to the book rather than instead of it.
+   *
+   * HyperFrames needs no exemption despite authoring HTML: its `:root{}` stylesheet is
+   * rendered from the SNAPSHOT by `renderDesignSystemStylesheet`, not from this block,
+   * and it states every token literally under its original name. Suppressing the prose
+   * copy there removes a restatement of something the stylesheet already says better.
+   *
+   * Defaults to false, so a caller that has not thought about it keeps the old, whole
+   * block rather than silently losing the palette.
+   */
+  brandBlockCarriesTokens?: boolean;
+}
+
 function selected(
   snapshot: DesignSystemSnapshot,
   selection: DesignSectionSelection,
@@ -77,22 +104,24 @@ function typographyLine(snapshot: DesignSystemSnapshot): string | null {
 export function renderDesignSystemBlock(
   snapshot: DesignSystemSnapshot,
   selection: DesignSectionSelection = undefined,
+  options: RenderDesignSystemOptions = {},
 ): RenderedDesignSystem {
   const sections = selected(snapshot, selection);
   const tier = effectiveRigorTier(snapshot);
   const gating = tier === 'strict';
   if (sections.length === 0) return { block: '', renderedSections: [], gating };
 
+  const tokenLines = options.brandBlockCarriesTokens !== true;
   const renderedSections: DesignSection[] = [];
   const lines: string[] = [];
 
   for (const section of sections) {
     const parts: string[] = [];
-    if (section.section === 'palette') {
+    if (tokenLines && section.section === 'palette') {
       const line = paletteLine(snapshot);
       if (line) parts.push(line);
     }
-    if (section.section === 'typography') {
+    if (tokenLines && section.section === 'typography') {
       const line = typographyLine(snapshot);
       if (line) parts.push(line);
     }

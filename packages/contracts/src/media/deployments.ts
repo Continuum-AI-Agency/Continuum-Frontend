@@ -18,6 +18,10 @@ import { z } from 'zod';
 // which breaks EVERY consumer importing it from the root entry — the only import
 // style the Backend supports.
 import { paidMetricWindowSchema } from '../creative-strategy/paid';
+import {
+  OptimizerDecisionOutcomeSummarySchema,
+  PaidAdViralitySummarySchema,
+} from '../optimization/service';
 
 // Where a creative ran.
 export const deploymentSurfaceSchema = z.enum(['meta_ad', 'organic_post']);
@@ -135,9 +139,21 @@ export const deploymentAdSchema = z
     hookArchetype: z.string().nullable().optional(),
     window: z.string(),
     metrics: adWindowMetricsSchema,
+    virality: PaidAdViralitySummarySchema.nullable().optional(),
+    outcome: OptimizerDecisionOutcomeSummarySchema.nullable().optional(),
+    attributionSetting: z.string().nullable().optional(),
   })
   .strip();
 export type DeploymentAd = z.infer<typeof deploymentAdSchema>;
+
+export const assetAdAttributionSchema = z.object({
+  metrics: adWindowMetricsSchema,
+  virality: PaidAdViralitySummarySchema.nullable(),
+  outcome: OptimizerDecisionOutcomeSummarySchema.nullable(),
+  attributionSetting: z.string().nullable(),
+});
+export const assetAdAttributionMapSchema = z.record(z.string(), assetAdAttributionSchema);
+export type AssetAdAttributionMap = z.infer<typeof assetAdAttributionMapSchema>;
 
 // Named for the DEPLOYMENT, not for organic: `organicPostMetricsSchema` already
 // means something else in organic/metrics.ts, and two different shapes under one
@@ -259,6 +275,22 @@ export type AssetUsage = z.infer<typeof assetUsageSchema>;
 // ---------------------------------------------------------------------------
 // Writer input (server-side only — the ledger is never written from a client).
 // ---------------------------------------------------------------------------
+
+/**
+ * Which Continuum surface DECIDED a deployment.
+ *
+ * Absent is a real answer, not a missing one: a matcher or an importer discovers a link
+ * after the fact, and "we found this" must stay distinguishable from "we did this".
+ * Polymorphic — the id lives in a different table per kind — which is why the pair is
+ * validated here rather than carried by a foreign key.
+ */
+export const deploymentProducerKindSchema = z.enum([
+  'creative_swap_job',
+  'api_render_job',
+  'canvas_replacement',
+]);
+export type DeploymentProducerKind = z.infer<typeof deploymentProducerKindSchema>;
+
 export const recordDeploymentInputSchema = z
   .object({
     brandId: z.string().min(1),
@@ -272,6 +304,8 @@ export const recordDeploymentInputSchema = z
     linkMethod: deploymentLinkMethodSchema,
     confidence: z.number().min(0).max(1).default(1),
     createdBy: z.string().min(1).nullable().optional(),
+    producerKind: deploymentProducerKindSchema.nullable().optional(),
+    producerId: z.string().min(1).nullable().optional(),
   })
   .strict()
   .superRefine((input, ctx) => {
@@ -290,6 +324,19 @@ export const recordDeploymentInputSchema = z
         code: 'custom',
         path: ['platformPostId'],
         message: 'platformPostId is required for an organic_post deployment',
+      });
+    }
+    // Mirrors asset_deployments_producer_pair_chk. The pair moves together or not at
+    // all: a kind with no id names a decision nobody can look up, and an id with no
+    // kind names a row in an unknown table. Either half alone is unjoinable, which is
+    // the one thing this column exists to prevent.
+    const hasKind = input.producerKind != null;
+    const hasId = input.producerId != null;
+    if (hasKind !== hasId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [hasKind ? 'producerId' : 'producerKind'],
+        message: 'producerKind and producerId must be supplied together, or not at all',
       });
     }
   });

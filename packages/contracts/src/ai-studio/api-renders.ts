@@ -3,6 +3,20 @@ import { z } from 'zod';
 export const API_RENDER_TEMPLATES_ROUTE = '/api/ai-studio/renders/templates';
 export const API_RENDER_PREFLIGHT_ROUTE = '/api/ai-studio/renders/preflight';
 export const API_RENDER_JOBS_ROUTE = '/api/ai-studio/renders/jobs';
+export const API_RENDER_INPUT_SETS_ROUTE = '/api/ai-studio/renders/input-sets';
+export const API_RENDER_BATCH_PREFLIGHT_ROUTE = '/api/ai-studio/renders/batch-preflight';
+export const API_RENDER_BATCHES_ROUTE = '/api/ai-studio/renders/batches';
+
+/**
+ * A caller-facing variable name. Physical `f_<hash>` renderer field names are private
+ * and must never cross this boundary in either direction.
+ */
+export const apiRenderVariableKeySchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9_]*$/)
+  .refine((key) => !/^f_[a-z0-9]+$/i.test(key), {
+    message: 'Physical renderer field names are private',
+  });
 
 export const apiRenderVariableKindSchema = z.enum([
   'text',
@@ -16,12 +30,7 @@ export type ApiRenderVariableKind = z.infer<typeof apiRenderVariableKindSchema>;
 
 export const apiRenderVariableSchema = z
   .object({
-    key: z
-      .string()
-      .regex(/^[a-z][a-z0-9_]*$/)
-      .refine((key) => !/^f_[a-z0-9]+$/i.test(key), {
-        message: 'Physical renderer field names are private',
-      }),
+    key: apiRenderVariableKeySchema,
     label: z.string().min(1),
     kind: apiRenderVariableKindSchema,
     required: z.boolean(),
@@ -57,10 +66,32 @@ export const apiRenderTemplateContractSchema = z
   .strict();
 export type ApiRenderTemplateContract = z.infer<typeof apiRenderTemplateContractSchema>;
 
+/**
+ * Whether the render fleet will honour this brand's workspace at all.
+ *
+ * Independent of having a binding: a brand can be correctly bound and still be
+ * unable to render, because the workspace allowlist lives on the render fleet
+ * (the FlowStream `CONTINUUM_RENDER_APPS` variable), not in Supabase.
+ * `env_plane_undeployed` is the state that most needs surfacing — the fleet does
+ * not reject the request, it renders it against the shared workspace's
+ * templates instead, which looks like success.
+ */
+export const apiRenderWorkspaceStatusSchema = z
+  .object({
+    workspace: z.string(),
+    renderEligible: z.boolean(),
+    state: z.enum(['eligible', 'not_allowlisted', 'env_plane_undeployed', 'unknown']),
+    detail: z.string(),
+  })
+  .strict();
+export type ApiRenderWorkspaceStatus = z.infer<typeof apiRenderWorkspaceStatusSchema>;
+
 export const apiRenderTemplateListResponseSchema = z
   .object({
     items: z.array(apiRenderTemplateSummarySchema),
     nextCursor: z.string().nullable(),
+    // Optional so an older server stays contract-valid against a newer client.
+    workspace: apiRenderWorkspaceStatusSchema.optional(),
   })
   .strict();
 export type ApiRenderTemplateListResponse = z.infer<typeof apiRenderTemplateListResponseSchema>;
@@ -93,48 +124,103 @@ export const apiRenderDeliveryTargetSchema = z
   .strict();
 export type ApiRenderDeliveryTarget = z.infer<typeof apiRenderDeliveryTargetSchema>;
 
+export const apiRenderVariableMapSchema = z.record(
+  apiRenderVariableKeySchema,
+  apiRenderInputValueSchema,
+);
+export type ApiRenderVariableMap = z.infer<typeof apiRenderVariableMapSchema>;
+
+/**
+ * Variables come from exactly one place: supplied inline, or read from a saved input
+ * set. Accepting both and picking one would mean silently rendering something the
+ * caller did not ask for — the same reason `brand_id` and `delivery.brand_id` must
+ * agree rather than take a precedence rule.
+ */
+const oneVariableSource = (value: { variables?: unknown; inputSetId?: unknown }) =>
+  (value.variables === undefined) !== (value.inputSetId === undefined);
+const oneVariableSourceMessage = {
+  message: 'Supply either variables or inputSetId, never both and never neither',
+};
+
 export const apiRenderPreflightRequestSchema = z
   .object({
     brandId: z.string().uuid(),
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
-    variables: z.record(
-      z
-        .string()
-        .regex(/^[a-z][a-z0-9_]*$/)
-        .refine((key) => !/^f_[a-z0-9]+$/i.test(key), {
-          message: 'Physical renderer field names are private and cannot be submitted',
-        }),
-      apiRenderInputValueSchema,
-    ),
-    delivery: apiRenderDeliveryTargetSchema,
+    variables: apiRenderVariableMapSchema.optional(),
+    inputSetId: z.string().uuid().optional(),
+    // Optional on purpose. A render that goes to the brand's own media library and
+    // nowhere else is the common case; requiring a delivery block forced every caller
+    // to name a live Meta campaign and ad set — and made preflight validate them
+    // against the Graph API — just to produce a file.
+    delivery: apiRenderDeliveryTargetSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(oneVariableSource, oneVariableSourceMessage);
 export type ApiRenderPreflightRequest = z.infer<typeof apiRenderPreflightRequestSchema>;
 
-export const resolvedRenderTargetSchema = z
+export const apiRenderInputSetSchema = z
   .object({
-    adAccountId: z.string().min(1),
-    campaignId: z.string().min(1),
-    campaignName: z.string().min(1),
-    adsetId: z.string().min(1),
-    adsetName: z.string().min(1),
-    adStatus: z.literal('PAUSED'),
+    id: z.string().uuid(),
+    brandId: z.string().uuid(),
+    templateKey: z.string().min(1),
+    contractHash: z.string().min(1),
+    name: z.string().min(1),
+    variables: apiRenderVariableMapSchema,
+    createdAt: z.string(),
+    updatedAt: z.string(),
   })
   .strict();
+export type ApiRenderInputSet = z.infer<typeof apiRenderInputSetSchema>;
 
-export const apiRenderPreflightResponseSchema = z
+export const apiRenderInputSetListResponseSchema = z
+  .object({ items: z.array(apiRenderInputSetSchema), nextCursor: z.string().nullable() })
+  .strict();
+export type ApiRenderInputSetListResponse = z.infer<typeof apiRenderInputSetListResponseSchema>;
+
+export const apiRenderCreateInputSetRequestSchema = z
   .object({
-    confirmationToken: z.string().min(1),
-    confirmationHash: z.string().regex(/^[a-f0-9]{64}$/),
-    expiresAt: z.string(),
-    template: apiRenderTemplateSummarySchema,
-    target: resolvedRenderTargetSchema,
-    inputKeys: z.array(z.string()),
-    effects: z.literal('none'),
+    brandId: z.string().uuid(),
+    templateKey: z.string().min(1),
+    contractHash: z.string().min(1),
+    name: z.string().trim().min(1).max(200),
+    variables: apiRenderVariableMapSchema,
   })
   .strict();
-export type ApiRenderPreflightResponse = z.infer<typeof apiRenderPreflightResponseSchema>;
+export type ApiRenderCreateInputSetRequest = z.infer<typeof apiRenderCreateInputSetRequestSchema>;
+
+export const apiRenderUpdateInputSetRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    name: z.string().trim().min(1).max(200).optional(),
+    variables: apiRenderVariableMapSchema.optional(),
+  })
+  .strict()
+  .refine((value) => value.name !== undefined || value.variables !== undefined, {
+    message: 'Update at least one of name or variables',
+  });
+export type ApiRenderUpdateInputSetRequest = z.infer<typeof apiRenderUpdateInputSetRequestSchema>;
+
+export const apiRenderBatchRecordSchema = z
+  .object({
+    label: z.string().trim().min(1).max(200).optional(),
+    variables: apiRenderVariableMapSchema.optional(),
+    inputSetId: z.string().uuid().optional(),
+  })
+  .strict()
+  .refine(oneVariableSource, oneVariableSourceMessage);
+export type ApiRenderBatchRecord = z.infer<typeof apiRenderBatchRecordSchema>;
+
+export const apiRenderBatchPreflightRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    templateKey: z.string().min(1),
+    contractHash: z.string().min(1),
+    delivery: apiRenderDeliveryTargetSchema.optional(),
+    records: z.array(apiRenderBatchRecordSchema).min(1).max(50),
+  })
+  .strict();
+export type ApiRenderBatchPreflightRequest = z.infer<typeof apiRenderBatchPreflightRequestSchema>;
 
 export const apiRenderCreateJobRequestSchema = z
   .object({
@@ -152,8 +238,15 @@ export const apiRenderOutputSchema = z
     url: z.string().url(),
     width: z.number().int().positive().nullable(),
     height: z.number().int().positive().nullable(),
+    // The library asset this output was saved as. Null while the ingest is still in
+    // flight, or if it failed — a render is not held back by its library copy.
+    // Together the pair is a `pinnedRenderAsset`, so an output can be fed straight
+    // back in as the input to the next render.
+    assetId: z.string().uuid().nullable().default(null),
+    versionId: z.string().uuid().nullable().default(null),
   })
   .strict();
+export type ApiRenderOutput = z.infer<typeof apiRenderOutputSchema>;
 
 export const apiRenderDeliveryReceiptSchema = z
   .object({
@@ -202,3 +295,48 @@ export const apiRenderCallbackSchema = z
   })
   .passthrough();
 export type ApiRenderCallback = z.infer<typeof apiRenderCallbackSchema>;
+
+export const resolvedRenderTargetSchema = z
+  .object({
+    adAccountId: z.string().min(1),
+    campaignId: z.string().min(1),
+    campaignName: z.string().min(1),
+    adsetId: z.string().min(1),
+    adsetName: z.string().min(1),
+    adStatus: z.literal('PAUSED'),
+  })
+  .strict();
+
+export const apiRenderPreflightResponseSchema = z
+  .object({
+    confirmationToken: z.string().min(1),
+    confirmationHash: z.string().regex(/^[a-f0-9]{64}$/),
+    expiresAt: z.string(),
+    template: apiRenderTemplateSummarySchema,
+    target: resolvedRenderTargetSchema.nullable(),
+    inputKeys: z.array(z.string()),
+    effects: z.literal('none'),
+  })
+  .strict();
+export type ApiRenderPreflightResponse = z.infer<typeof apiRenderPreflightResponseSchema>;
+
+export const apiRenderBatchPreflightResponseSchema = z
+  .object({
+    batchId: z.string().uuid(),
+    confirmationToken: z.string().min(1),
+    confirmationHash: z.string().regex(/^[a-f0-9]{64}$/),
+    expiresAt: z.string(),
+    template: apiRenderTemplateSummarySchema,
+    target: resolvedRenderTargetSchema.nullable(),
+    records: z.array(z.object({ label: z.string(), inputKeys: z.array(z.string()) }).strict()),
+    effects: z.literal('none'),
+  })
+  .strict();
+export type ApiRenderBatchPreflightResponse = z.infer<
+  typeof apiRenderBatchPreflightResponseSchema
+>;
+
+export const apiRenderBatchSchema = z
+  .object({ batchId: z.string().uuid(), jobs: z.array(apiRenderJobSchema) })
+  .strict();
+export type ApiRenderBatch = z.infer<typeof apiRenderBatchSchema>;

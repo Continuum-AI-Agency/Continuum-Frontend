@@ -29,6 +29,14 @@ export const organicCanvasTargetStatusSchema = z.enum([
   'scheduled',
 ]);
 
+/**
+ * A reason a draft must not receive canvas creative. `account_orphaned` means its
+ * `platform_account_id` is not one of the brand's connected accounts, so where it
+ * would publish is undefined.
+ */
+export const organicCanvasTargetBlockerSchema = z.enum(['account_orphaned']);
+export type OrganicCanvasTargetBlocker = z.infer<typeof organicCanvasTargetBlockerSchema>;
+
 export const organicCanvasTargetSchema = z
   .object({
     id: z.string().uuid(),
@@ -40,6 +48,19 @@ export const organicCanvasTargetSchema = z
     title: z.string(),
     captionPreview: z.string(),
     updatedAt: z.string(),
+    /**
+     * The delivery verdict, computed server-side so every surface shows the same one.
+     * It used to be derived only inside the MCP handler, which left the canvas picker
+     * happily offering destinations the agent path refused — and expensive creative
+     * landing on a months-old empty placeholder with no warning at all.
+     */
+    empty: z.boolean(),
+    blockers: z.array(organicCanvasTargetBlockerSchema),
+    deliverable: z.boolean(),
+    /** How much creative the draft already carries — i.e. what an attach replaces. */
+    mediaCount: z.number().int().nonnegative(),
+    /** A freshly signed preview of the draft's first asset, when it has one. */
+    thumbnailUrl: z.string().nullable(),
   })
   .strict();
 export type OrganicCanvasTarget = z.infer<typeof organicCanvasTargetSchema>;
@@ -47,10 +68,27 @@ export type OrganicCanvasTarget = z.infer<typeof organicCanvasTargetSchema>;
 export const organicCanvasTargetSearchRequestSchema = z
   .object({
     brandId: z.string().uuid(),
-    format: canvasPublishingFormatSchema,
+    /**
+     * Absent = EVERY format. Requiring it is what made the canvas picker report "no
+     * editable drafts match this format" on a brand full of drafts: reels and
+     * carousels — the two formats the generator produces by default — were filtered
+     * out before the user ever saw them.
+     */
+    format: canvasPublishingFormatSchema.optional(),
     query: z.string().max(200).optional(),
     platform: z.string().min(1).optional(),
     platformAccountId: z.string().min(1).optional(),
+    statuses: z
+      .union([
+        z.array(organicCanvasTargetStatusSchema),
+        // Query strings cannot carry arrays; the browser sends `draft,approved`.
+        z.string().transform((value) => value.split(',').map((part) => part.trim())),
+      ])
+      .pipe(z.array(organicCanvasTargetStatusSchema).min(1))
+      .optional(),
+    /** Inclusive `scheduled_date` window, ISO. Unscheduled drafts fall outside both. */
+    scheduledFrom: z.string().optional(),
+    scheduledTo: z.string().optional(),
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(50).default(20),
   })
@@ -91,6 +129,60 @@ export const attachOrganicCanvasCreativeResponseSchema = z
 export type AttachOrganicCanvasCreativeResponse = z.infer<
   typeof attachOrganicCanvasCreativeResponseSchema
 >;
+
+/**
+ * One canvas write against the organic Planner: create a draft, or edit the one it is
+ * bound to. `draftId` absent means CREATE, and a create needs the two things a planner
+ * row cannot be born without — a platform and the day it sits on.
+ *
+ * Platform and account are create-only by design: they are columns, not `content_json`,
+ * and the canonical planner field-edit funnel cannot move them. Accepting them on an
+ * edit would be accepting a change that silently does nothing.
+ */
+export const organicCanvasDraftWriteRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    draftId: z.string().uuid().optional(),
+    platform: z.string().min(1).optional(),
+    platformAccountId: z.string().min(1).optional(),
+    caption: z.string().max(2200).optional(),
+    hashtags: z
+      .object({
+        high: z.array(z.string()).optional(),
+        medium: z.array(z.string()).optional(),
+        low: z.array(z.string()).optional(),
+      })
+      .strict()
+      .optional(),
+    format: canvasPublishingFormatSchema.optional(),
+    dayId: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'day must be YYYY-MM-DD')
+      .optional(),
+    timeOfDay: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'time must be HH:mm')
+      .optional(),
+    assets: z.array(canvasPublishingAssetSchema).max(20).optional(),
+    expectedUpdatedAt: z.string().min(1).optional(),
+    /** The canvas node's stable identity, carried into `client_key` for retry convergence. */
+    clientKey: z.string().min(1).max(200).optional(),
+  })
+  .strict()
+  .refine((input) => input.draftId !== undefined || (!!input.platform && !!input.dayId), {
+    message: 'A new draft needs both a platform and the calendar day it belongs on',
+  });
+export type OrganicCanvasDraftWriteRequest = z.infer<typeof organicCanvasDraftWriteRequestSchema>;
+
+export const organicCanvasDraftWriteResponseSchema = z
+  .object({
+    draftId: z.string().uuid(),
+    updatedAt: z.string(),
+    /** True when this write minted the row, so the caller can deep-link a new draft. */
+    created: z.boolean(),
+  })
+  .strict();
+export type OrganicCanvasDraftWriteResponse = z.infer<typeof organicCanvasDraftWriteResponseSchema>;
 
 export const paidCanvasTargetStatusSchema = z.enum(['PAUSED', 'ACTIVE']);
 export const paidCanvasTargetLevelSchema = z.enum(['campaign', 'adset', 'ad']);

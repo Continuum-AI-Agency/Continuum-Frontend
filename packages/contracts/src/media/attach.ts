@@ -143,10 +143,18 @@ export function findMultiVideoSelectionError(creatives: CreativeRef[]): string |
   return videoCount > 1 ? 'Only one video per post' : null;
 }
 
-function imagePublishingAsset(creative: CreativeRef, slideIndex?: number): OrganicPublishingAsset {
+/**
+ * One publishable slot, carrying the creative's REAL kind.
+ *
+ * The kind used to be hardcoded to `image`, so a video slide in a mixed carousel was
+ * persisted as an image — and publish then handed the platform an image container for a
+ * video file. Instagram carousels genuinely mix the two, so the kind has to be the
+ * creative's own.
+ */
+function slidePublishingAsset(creative: CreativeRef, slideIndex?: number): OrganicPublishingAsset {
   return {
     role: 'primary',
-    kind: 'image',
+    kind: creative.kind === 'video' ? 'video' : 'image',
     ...(slideIndex !== undefined ? { slideIndex } : {}),
     assetId: creative.assetId,
     bucket: creative.bucket,
@@ -180,7 +188,18 @@ const ALL_MEDIA_SLOTS_CLEARED: Required<ClearedMediaOutputs> = {
  *
  * Two or more videos is a caller error — ask `findMultiVideoSelectionError` first.
  */
-export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSuppliedMedia {
+export function shapeUserSuppliedMedia(
+  creatives: CreativeRef[],
+  options?: {
+    /**
+     * The format the CALLER already knows, when it does. `[video, image]` is genuinely
+     * ambiguous from the assets alone — a reel with a cover, or a mixed carousel — and the
+     * AI Studio canvas is not guessing: the user picked a format and the node validated the
+     * selection against it. Omitted, the format is inferred as before.
+     */
+    format?: PublishFormat;
+  },
+): ShapedUserSuppliedMedia {
   const list = creatives.filter(Boolean);
   if (list.length === 0) {
     throw new Error('shapeUserSuppliedMedia: at least one creative is required');
@@ -190,9 +209,10 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
     throw new Error(`shapeUserSuppliedMedia: ${multiVideo}`);
   }
   const primary = list[0];
+  const format = options?.format ?? publishFormatForAssetKinds(list.map((item) => item.kind));
 
   // VIDEO / REEL — a single user video fills the reel slot.
-  if (primary.kind === 'video') {
+  if (format === 'REEL' && primary.kind === 'video') {
     return {
       contentPatch: { format: 'REEL' },
       publishingAssets: [
@@ -227,11 +247,12 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
     };
   }
 
-  // CAROUSEL — multiple images, selection order = slide order.
-  if (list.length > 1) {
+  // CAROUSEL — several creatives, selection order = slide order. Slides may mix image
+  // and video; each keeps its own kind.
+  if (format === 'CAROUSEL' && list.length > 1) {
     return {
       contentPatch: { format: 'CAROUSEL' },
-      publishingAssets: list.map((creative, index) => imagePublishingAsset(creative, index)),
+      publishingAssets: list.map((creative, index) => slidePublishingAsset(creative, index)),
       mediaSuggestionPatch: {
         ...ALL_MEDIA_SLOTS_CLEARED,
         kind: 'carousel',
@@ -254,7 +275,7 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
   // SINGLE IMAGE.
   return {
     contentPatch: { format: 'POST' },
-    publishingAssets: [imagePublishingAsset(primary)],
+    publishingAssets: [slidePublishingAsset(primary)],
     mediaSuggestionPatch: {
       ...ALL_MEDIA_SLOTS_CLEARED,
       kind: 'image',

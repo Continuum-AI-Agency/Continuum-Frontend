@@ -197,6 +197,40 @@ describe('shapeUserSuppliedMedia — images', () => {
 });
 
 /**
+ * `[video, image]` is ambiguous from the assets alone — a reel with a cover, or a carousel
+ * whose first slide is a video. Inference reads it as a reel and silently discards every
+ * other slide, so a caller that already knows says so.
+ */
+describe('shapeUserSuppliedMedia — an explicitly named format', () => {
+  const mixed = [
+    videoRef({ assetId: 'v1', storagePath: 'library/clip.mp4' }),
+    imageRef({ assetId: 'i1', storagePath: 'library/two.png' }),
+  ];
+
+  it('keeps every slide of a mixed carousel, in order', () => {
+    const { contentPatch, publishingAssets } = shapeUserSuppliedMedia(mixed, {
+      format: 'CAROUSEL',
+    });
+
+    expect(contentPatch.format).toBe('CAROUSEL');
+    expect(publishingAssets.map((asset) => asset.storagePath)).toEqual([
+      'library/clip.mp4',
+      'library/two.png',
+    ]);
+  });
+
+  it('keeps each slide’s real kind, so publish does not send a video as an image', () => {
+    const { publishingAssets } = shapeUserSuppliedMedia(mixed, { format: 'CAROUSEL' });
+    expect(publishingAssets.map((asset) => asset.kind)).toEqual(['video', 'image']);
+  });
+
+  it('still infers when no format is named — the same verdict as before', () => {
+    expect(shapeUserSuppliedMedia(mixed).contentPatch.format).toBe('REEL');
+    expect(shapeUserSuppliedMedia(mixed).publishingAssets).toHaveLength(1);
+  });
+});
+
+/**
  * The shaper always knew which format the attached media could publish as — it just kept the
  * answer to itself. Three images landing on a "Reel" draft left `content.format` saying Reel with
  * no video anywhere, which died in staging once per scheduler tick.

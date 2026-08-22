@@ -35,7 +35,7 @@ describe('describeNodeVocabulary', () => {
 
   it('marks publishing sinks as producing no output', () => {
     const lines = block.split('\n');
-    for (const type of ['organicPublisher', 'paidPublisher']) {
+    for (const type of ['organicPublish', 'paidPublisher']) {
       const index = lines.findIndex((line) => line.startsWith(`- ${type} —`));
       expect(lines[index + 2]).toContain('(none — it is a sink)');
     }

@@ -78,7 +78,19 @@ export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
     'status',
     'revisionNumber',
   ],
-  organicPublisher: ['format', 'targetDraftId'],
+  plannerDraft: [
+    'mode',
+    'format',
+    'targetDraftId',
+    'caption',
+    'dayId',
+    'timeOfDay',
+    'platform',
+    'platformAccountId',
+  ],
+  // Only the schedule choice. A confirmation is a human act bound to what the human was
+  // shown, so nothing an agent writes onto this node can stand in for one.
+  organicPublish: ['schedule'],
   paidPublisher: ['format', 'adAccountId', 'campaignId', 'adsetId', 'targetAdId'],
   apiRender: [
     'templateKey',

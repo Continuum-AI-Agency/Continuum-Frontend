@@ -54,7 +54,7 @@ describe('compileCarouselSetWorkflow', () => {
 
   it('terminates on a carousel publisher carrying every slide in order', () => {
     const compiled = compileCarouselSetWorkflow(recipe);
-    const publisher = compiled.nodes.find((node) => node.type === 'organicPublisher');
+    const publisher = compiled.nodes.find((node) => node.type === 'plannerDraft');
 
     expect(publisher?.data?.format).toBe('carousel');
     expect(

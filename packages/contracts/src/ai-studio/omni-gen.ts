@@ -41,6 +41,8 @@ export const omniGenRequestSchema = z
     // actually EARNED into the prompt as <asset_performance>, so a variant is made
     // knowing how the original performed rather than blind.
     referenceAssetIds: z.array(z.string().min(1)).max(14).optional(),
+    // Sections of the brand's uploaded design system. Same tri-state as the pieces above.
+    designSystemSections: z.array(z.string().min(1)).max(12).optional(),
     // Required for edit turns — the interaction id of the clip being edited.
     previousInteractionId: z.string().min(1).optional(),
   })

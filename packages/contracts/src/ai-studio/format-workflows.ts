@@ -121,7 +121,7 @@ export function compileCarouselSetWorkflow(input: CarouselSetRecipe): CompiledFo
   const publisherRef = 'carousel:publisher';
   nodes.push({
     ref: publisherRef,
-    type: 'organicPublisher',
+    type: 'plannerDraft',
     data: { format: 'carousel' },
   });
   for (const slideRef of slideRefs) {
@@ -212,7 +212,7 @@ export function compileControlledPairWorkflow(input: ControlledPairRecipe): Comp
   const publisherRef = 'proof:publisher';
   nodes.push({
     ref: publisherRef,
-    type: 'organicPublisher',
+    type: 'plannerDraft',
     data: { format: 'carousel' },
   });
   connections.push({ from_ref: before.imageRef, to_ref: publisherRef });

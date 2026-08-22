@@ -76,8 +76,32 @@ describe('migrateStudioWorkflowGraph', () => {
     });
 
     expect(result.graph.nodes[0]).toMatchObject({
-      type: 'organicPublisher',
+      type: 'plannerDraft',
       data: { format: 'video', targetDraftId: 'draft-1' },
+    });
+  });
+
+  it('re-points a stored organicPublisher at plannerDraft, keeping its data', () => {
+    const result = migrateStudioWorkflowGraph({
+      nodes: [
+        {
+          id: 'pub1',
+          type: 'organicPublisher',
+          position: { x: 0, y: 0 },
+          data: {
+            format: 'carousel',
+            targetDraftId: 'draft-9',
+            assetSlots: [{ id: 's1', order: 0 }],
+          },
+        },
+      ],
+      edges: [],
+    });
+
+    expect(result.migrated).toBe(true);
+    expect(result.graph.nodes[0]).toMatchObject({
+      type: 'plannerDraft',
+      data: { format: 'carousel', targetDraftId: 'draft-9', assetSlots: [{ id: 's1', order: 0 }] },
     });
   });
 });

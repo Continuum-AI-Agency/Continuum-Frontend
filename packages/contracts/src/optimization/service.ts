@@ -1255,20 +1255,49 @@ export const AdDailyTrendPointSchema = z.object({
   spend: z.number(),
   impressions: z.number(),
   clicks: z.number(),
+  link_clicks: z.number().optional(),
   ctr: z.number(),
   cpc: z.number(),
   cpa: z.number().nullable(),
   roas: z.number().nullable(),
   purchases: z.number(),
   purchase_value: z.number(),
+  hook_rate: z.number().nullable().optional(),
+  hold_rate: z.number().nullable().optional(),
+  as_of: z.string().nullable().optional(),
+  attribution_setting: z.string().nullable().optional(),
 });
 export type AdDailyTrendPoint = z.infer<typeof AdDailyTrendPointSchema>;
+
+export const PaidAdViralitySummarySchema = z.object({
+  predicted_overall: z.number(),
+  grade: z.string(),
+  confidence: z.number().nullable(),
+  observed_hook_rate: z.number().nullable(),
+  observed_retention: z.number().nullable(),
+  observed_captured_at: z.string().nullable(),
+  prediction_only: z.boolean(),
+});
+export type PaidAdViralitySummary = z.infer<typeof PaidAdViralitySummarySchema>;
+
+export const OptimizerDecisionOutcomeSummarySchema = z.object({
+  decision_kind: z.string(),
+  status: z.enum(['pending', 'matured']),
+  actioned_at: z.string(),
+  matured_at: z.string().nullable(),
+  delivery_days: z.number().int().nonnegative(),
+  score: z.number().nullable(),
+  result: z.enum(['positive', 'negative', 'inconclusive']).nullable(),
+});
+export type OptimizerDecisionOutcomeSummary = z.infer<typeof OptimizerDecisionOutcomeSummarySchema>;
 
 /** One ad's date-ascending daily series (paid-media-metrics scope=ad_daily_trends). */
 export const AdDailyTrendSchema = z.object({
   ad_id: z.string(),
   ad_name: z.string().nullable(),
   series: z.array(AdDailyTrendPointSchema),
+  virality: PaidAdViralitySummarySchema.nullable().optional(),
+  outcome: OptimizerDecisionOutcomeSummarySchema.nullable().optional(),
 });
 export type AdDailyTrend = z.infer<typeof AdDailyTrendSchema>;
 
@@ -1278,6 +1307,38 @@ export const AdDailyTrendsResponseSchema = z.object({
   ads: z.array(AdDailyTrendSchema),
 });
 export type AdDailyTrendsResponse = z.infer<typeof AdDailyTrendsResponseSchema>;
+
+/** Service-only paid-media-metrics scope used by the Optimizer cycle writer. */
+export const AdAttributionDailyRowSchema = z.object({
+  brand_id: z.string().uuid(),
+  ad_account_id: z.string(),
+  ad_id: z.string(),
+  ad_name: z.string().nullable(),
+  adset_id: z.string(),
+  date: z.string(),
+  impressions: z.number().int().nonnegative(),
+  clicks: z.number().int().nonnegative(),
+  link_clicks: z.number().int().nonnegative(),
+  spend: z.number().nonnegative(),
+  actions: z.record(z.string(), z.number()),
+  action_values: z.record(z.string(), z.number()),
+  video_3s: z.number().int().nonnegative().nullable(),
+  video_p25: z.number().int().nonnegative().nullable(),
+  video_p50: z.number().int().nonnegative().nullable(),
+  video_p75: z.number().int().nonnegative().nullable(),
+  video_thruplays: z.number().int().nonnegative().nullable(),
+  observed_at: z.string(),
+  as_of: z.string(),
+  attribution_setting: z.string().nullable(),
+});
+export type AdAttributionDailyRow = z.infer<typeof AdAttributionDailyRowSchema>;
+
+export const AdAttributionDailyEnvelopeSchema = z.object({
+  rows: z.array(AdAttributionDailyRowSchema),
+  observed_at: z.string(),
+  as_of: z.string(),
+});
+export type AdAttributionDailyEnvelope = z.infer<typeof AdAttributionDailyEnvelopeSchema>;
 
 /** One point of optimizer_get_cpa_series — portfolio spend/objective-results per
  * cycle, aggregated across ad sets for each trailing window. The established

@@ -171,7 +171,7 @@ export function buildPlannerReelCompositionCluster(
 
   const publishNode: StudioGraphNode = {
     id: publishNodeId,
-    type: 'organicPublisher',
+    type: 'plannerDraft',
     position: { x: origin.x + 840, y: origin.y + 20 },
     data: {
       label: 'Attach to Planner',

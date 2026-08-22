@@ -97,7 +97,7 @@ describe('buildPlannerReelCompositionCluster', () => {
       'video',
       'video',
       'timelineEditor',
-      'organicPublisher',
+      'plannerDraft',
     ]);
 
     const [hook, body, timeline, publish] = graph.nodes;

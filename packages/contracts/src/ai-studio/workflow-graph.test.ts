@@ -2,6 +2,8 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   createNodeData,
+  DRAFT_INPUT_HANDLE,
+  DRAFT_OUTPUT_HANDLE,
   getAllowedSourceHandles,
   getAllowedTargetHandles,
   getImageVariationHandleId,
@@ -16,6 +18,7 @@ import {
   isTimelineMediaHandle,
   isValidConnection,
   mediaKindForHandle,
+  PLANNER_DRAFT_TEXT_INPUT_HANDLE,
   PUBLISH_IMAGE_INPUT_HANDLE,
   PUBLISH_VIDEO_INPUT_HANDLE,
   resolveVideoGeneratorModel,
@@ -60,7 +63,7 @@ const nodes = [
       { id: 'b', order: 1 },
     ],
   }),
-  node('publish1', 'organicPublisher', { format: 'video' }),
+  node('publish1', 'plannerDraft', { format: 'video' }),
   node('hyperframes1', 'hyperframesAgent', { prompt: '' }),
 ];
 
@@ -69,13 +72,14 @@ describe('node type enum + schema', () => {
     expect(STUDIO_NODE_TYPES).toContain('nanoGen');
     expect(STUDIO_NODE_TYPES).toContain('videoDecode');
     expect(STUDIO_NODE_TYPES).toContain('timelineEditor');
-    expect(STUDIO_NODE_TYPES).toContain('organicPublisher');
+    expect(STUDIO_NODE_TYPES).toContain('plannerDraft');
     expect(STUDIO_NODE_TYPES).toContain('paidPublisher');
     expect(STUDIO_NODE_TYPES).toContain('hyperframesAgent');
     expect(STUDIO_NODE_TYPES).toContain('frameExtract');
     expect(STUDIO_NODE_TYPES).not.toContain('videoEditor');
     expect(STUDIO_NODE_TYPES).toContain('omniGen');
-    expect(STUDIO_NODE_TYPES).toHaveLength(18);
+    expect(STUDIO_NODE_TYPES).toContain('organicPublish');
+    expect(STUDIO_NODE_TYPES).toHaveLength(19);
   });
 
   it('rejects an unknown node type', () => {
@@ -634,7 +638,8 @@ describe('isValidConnection — type matrix', () => {
   });
 
   it('uses the selected publishing format to expose contextual media handles', () => {
-    expect(getAllowedTargetHandles(node('p', 'organicPublisher', { format: 'video' }))).toEqual([
+    expect(getAllowedTargetHandles(node('p', 'plannerDraft', { format: 'video' }))).toEqual([
+      PLANNER_DRAFT_TEXT_INPUT_HANDLE,
       PUBLISH_VIDEO_INPUT_HANDLE,
     ]);
     expect(getAllowedTargetHandles(node('p', 'paidPublisher', { format: 'image' }))).toEqual([
@@ -642,7 +647,7 @@ describe('isValidConnection — type matrix', () => {
     ]);
     expect(
       getAllowedTargetHandles(
-        node('p', 'organicPublisher', {
+        node('p', 'plannerDraft', {
           format: 'carousel',
           assetSlots: [
             { id: 'first', order: 0 },
@@ -650,8 +655,10 @@ describe('isValidConnection — type matrix', () => {
           ],
         }),
       ),
-    ).toEqual(['asset-first', 'asset-second']);
-    expect(getAllowedSourceHandles(node('p', 'organicPublisher'))).toEqual([]);
+    ).toEqual([PLANNER_DRAFT_TEXT_INPUT_HANDLE, 'asset-first', 'asset-second']);
+    // The draft wire, not media: a plannerDraft hands its saved draft downstream.
+    expect(getAllowedSourceHandles(node('p', 'plannerDraft'))).toEqual([DRAFT_OUTPUT_HANDLE]);
+    expect(getAllowedTargetHandles(node('pub', 'organicPublish'))).toEqual([DRAFT_INPUT_HANDLE]);
     expect(
       isValidConnection(
         {

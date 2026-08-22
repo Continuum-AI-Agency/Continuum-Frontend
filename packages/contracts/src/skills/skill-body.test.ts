@@ -15,7 +15,7 @@ One still frame carries the whole message.
 
 ## Canvas recipe
 - One \`string\` prompt node into one \`nanoGen\`.
-- Terminate on \`organicPublisher\`.`;
+- Terminate on \`plannerDraft\`.`;
 
 describe('splitSkillBody', () => {
   it('splits a two-section body at the canvas-recipe heading', () => {
@@ -24,13 +24,13 @@ describe('splitSkillBody', () => {
     expect(modelFacing).toStartWith('## Poster and Key Visual');
     expect(modelFacing).toContain('Malformed letterforms');
     expect(agentFacing).toStartWith('- One `string` prompt node');
-    expect(agentFacing).toContain('organicPublisher');
+    expect(agentFacing).toContain('plannerDraft');
   });
 
   it('keeps node vocabulary out of the model-facing half', () => {
     const modelFacing = skillModelFacingBody(BODY);
 
-    for (const nodeType of ['nanoGen', 'organicPublisher', 'string`']) {
+    for (const nodeType of ['nanoGen', 'plannerDraft', 'string`']) {
       expect(modelFacing).not.toContain(nodeType);
     }
     expect(modelFacing).not.toContain(SKILL_CANVAS_RECIPE_HEADING);

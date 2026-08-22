@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { designSectionSchema } from '../design-system/sections';
 import { brandBookPieceKindSchema } from './brand-enforcement';
 
 // The request a Studio Canvas text box sends when the user hits "Enrich Prompt".
@@ -57,5 +58,6 @@ export const enrichPromptRequestSchema = z.object({
   // Grounding data piece — inherited from the downstream generation node.
   skillIds: z.array(z.string().min(1)).max(20).optional(),
   brandBookPieces: z.array(brandBookPieceKindSchema).max(8).optional(),
+  designSystemSections: z.array(designSectionSchema).max(12).optional(),
 });
 export type EnrichPromptRequest = z.infer<typeof enrichPromptRequestSchema>;

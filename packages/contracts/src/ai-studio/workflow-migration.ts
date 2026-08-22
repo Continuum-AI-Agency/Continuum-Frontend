@@ -94,7 +94,7 @@ function migratePlannerPublisher(node: WorkflowNode): WorkflowNode {
   const { draftId, ...data } = node.data;
   return {
     ...node,
-    type: 'organicPublisher',
+    type: 'plannerDraft',
     data: {
       ...data,
       format: 'video',
@@ -159,6 +159,14 @@ export function migrateStudioWorkflowGraph(input: {
     if (node.type === 'publishToPlanner') {
       migrated = true;
       return migratePlannerPublisher(node);
+    }
+    // `organicPublisher` was one node that found a draft AND was the publish sink. It is
+    // now `plannerDraft` (find/create/edit) with publishing split out into its own node,
+    // so a stored graph re-points on load. Data carries over unchanged — the node kept
+    // every field it had.
+    if (node.type === 'organicPublisher') {
+      migrated = true;
+      return { ...node, type: 'plannerDraft' };
     }
     const reconciled = reconcileVideoReferenceMode(node, originalEdges);
     if (reconciled) {

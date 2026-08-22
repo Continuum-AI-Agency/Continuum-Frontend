@@ -28,7 +28,8 @@ export const STUDIO_NODE_TYPES = [
   'extendVideo',
   'timelineEditor',
   'hyperframesAgent',
-  'organicPublisher',
+  'plannerDraft',
+  'organicPublish',
   'paidPublisher',
   'apiRender',
   'omniGen',
@@ -534,13 +535,29 @@ export const HYPERFRAMES_MEDIA_INPUT_HANDLES = [
 export const HYPERFRAMES_MEDIA_POOL_LIMIT = 20;
 
 // Publishing sinks accept a format-specific single input or explicit ordered
-// carousel slots. They have no source output, so they are deliberately absent
+// carousel slots. They have no MEDIA source output, so they are deliberately absent
 // from the media-producing source predicates.
 export const PUBLISH_IMAGE_INPUT_HANDLE = 'image-in';
 export const PUBLISH_VIDEO_INPUT_HANDLE = 'video-in';
 export const PUBLISH_ASSET_INPUT_PREFIX = 'asset-';
 export const isPublishAssetHandle = (handleId?: string | null): boolean =>
   typeof handleId === 'string' && handleId.startsWith(PUBLISH_ASSET_INPUT_PREFIX);
+
+/**
+ * The DRAFT wire: `plannerDraft` hands the Planner draft it is bound to downstream,
+ * and `organicPublish` posts it.
+ *
+ * A draft reference is not media, so these handles map to no media kind — the agent's
+ * `attach_media` cannot target them, and a generator's output cannot be wired straight
+ * into a publish. Publishing is deliberately downstream of a SAVED draft: the row (with
+ * its caption, its account and its approval state) is what gets posted, never a loose
+ * canvas asset.
+ */
+export const DRAFT_OUTPUT_HANDLE = 'draft';
+export const DRAFT_INPUT_HANDLE = 'draft-in';
+
+/** A caption/copy input, so a draft's text can come from an upstream node. */
+export const PLANNER_DRAFT_TEXT_INPUT_HANDLE = 'text-in';
 
 type PublisherFormat = 'image' | 'carousel' | 'video';
 
@@ -649,6 +666,8 @@ export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
       return ['video'];
     case 'omniGen':
       return ['video'];
+    case 'plannerDraft':
+      return [DRAFT_OUTPUT_HANDLE];
     default:
       return isVideoGeneratorNode(node) ? ['video'] : [];
   }
@@ -664,9 +683,12 @@ export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
       return [TIMELINE_MEDIA_INPUT_HANDLE];
     case 'hyperframesAgent':
       return [HYPERFRAMES_PROMPT_INPUT_HANDLE, ...HYPERFRAMES_MEDIA_INPUT_HANDLES];
-    case 'organicPublisher':
+    case 'plannerDraft':
+      return [PLANNER_DRAFT_TEXT_INPUT_HANDLE, ...publisherTargetHandles(node)];
     case 'paidPublisher':
       return publisherTargetHandles(node);
+    case 'organicPublish':
+      return [DRAFT_INPUT_HANDLE];
     case 'apiRender':
       return apiRenderTargetHandles(node);
     case 'omniGen':
@@ -720,10 +742,14 @@ export function getTargetHandleConnectionLimit(
     return HYPERFRAMES_MEDIA_POOL_LIMIT;
   }
   if (
-    (node.type === 'organicPublisher' || node.type === 'paidPublisher') &&
+    (node.type === 'plannerDraft' || node.type === 'paidPublisher') &&
     publisherTargetHandles(node).includes(targetHandle)
   )
     return 1;
+  if (node.type === 'plannerDraft' && targetHandle === PLANNER_DRAFT_TEXT_INPUT_HANDLE) return 1;
+  // One draft per publish. Fanning several drafts into one publish node would make
+  // "Post now" mean N irreversible posts behind a single confirmation.
+  if (node.type === 'organicPublish' && targetHandle === DRAFT_INPUT_HANDLE) return 1;
   if (node.type === 'apiRender' && apiRenderTargetHandles(node).includes(targetHandle)) return 1;
   if (node.type === 'omniGen' && isImageReferenceHandle(targetHandle)) return 3;
 
@@ -823,7 +849,10 @@ function isConnectionCompatible(
   } else if (targetNode.type === 'frameExtract') {
     if (targetHandle !== 'video') return false;
     if (!isVideoProducingSource(sourceNode)) return false;
-  } else if (targetNode.type === 'organicPublisher' || targetNode.type === 'paidPublisher') {
+  } else if (targetNode.type === 'plannerDraft' || targetNode.type === 'paidPublisher') {
+    if (targetHandle === PLANNER_DRAFT_TEXT_INPUT_HANDLE) {
+      return targetNode.type === 'plannerDraft' && isTextProducingSource(sourceNode);
+    }
     const format = publisherFormat(targetNode);
     if (!publisherTargetHandles(targetNode).includes(targetHandle)) return false;
     const isImageSource = isImageProducingSource(sourceNode);
@@ -831,6 +860,12 @@ function isConnectionCompatible(
     if (format === 'image' && !isImageSource) return false;
     if (format === 'video' && !isVideoSource) return false;
     if (format === 'carousel' && !isImageSource && !isVideoSource) return false;
+  } else if (targetNode.type === 'organicPublish') {
+    // Only a saved Planner draft can be published, and only `plannerDraft` produces one.
+    // Wiring a generator straight in would publish a loose canvas asset with no caption,
+    // no account and no approval — the exact thing the publish gate exists to refuse.
+    if (targetHandle !== DRAFT_INPUT_HANDLE) return false;
+    if (sourceNode.type !== 'plannerDraft') return false;
   } else if (targetNode.type === 'apiRender') {
     const kind = apiRenderVariableKindForHandle(targetNode, targetHandle);
     if (kind === 'image' && !isImageProducingSource(sourceNode)) return false;
@@ -896,6 +931,9 @@ const PORT_LABELS: Record<string, string> = {
   text: 'Text',
   prompt: 'Prompt',
   'prompt-in': 'Prompt',
+  draft: 'Planner draft',
+  'draft-in': 'Planner draft',
+  'text-in': 'Caption',
   negative: 'Negative prompt',
   image: 'Image',
   'ref-image': 'Reference image',
@@ -927,9 +965,10 @@ const isRequiredInputPort = (node: GraphNodeLike, handle: string): boolean => {
       node.type === 'extendVideo' || node.type === 'videoDecode' || node.type === 'frameExtract'
     );
   }
-  if (node.type === 'organicPublisher' || node.type === 'paidPublisher') {
+  if (node.type === 'plannerDraft' || node.type === 'paidPublisher') {
     return publisherTargetHandles(node).includes(handle);
   }
+  if (node.type === 'organicPublish') return handle === DRAFT_INPUT_HANDLE;
   return false;
 };
 
@@ -1261,7 +1300,18 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
         },
         style: { width: 420, height: 360 },
       };
-    case 'organicPublisher':
+    case 'plannerDraft':
+      return {
+        data: {
+          mode: 'find',
+          format: 'image',
+          assetSlots: [
+            { id: newSlotId(1), order: 0 },
+            { id: newSlotId(2), order: 1 },
+          ],
+        },
+        style: { width: 340, height: 420 },
+      };
     case 'paidPublisher':
       return {
         data: {
@@ -1273,6 +1323,8 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
         },
         style: { width: 320, height: 300 },
       };
+    case 'organicPublish':
+      return { data: { schedule: 'now' }, style: { width: 300, height: 260 } };
     case 'omniGen':
       // Style is derived from the aspect ratio by createNodeData (nodeStyleFor);
       // 16:9 lands on the historical 512x360.

@@ -40,8 +40,10 @@ const NODE_PURPOSE: Record<StudioNodeType, string> = {
     'Video Editor — the real timeline. Wire clips into its `media-in` pool, then place them as timeline items',
   hyperframesAgent:
     'agentic HTML-to-video composer — accepts a prompt plus image, video, and audio references, then renders a video',
-  organicPublisher:
-    'terminal sink — attaches image, carousel, or video creative to an existing organic Planner draft',
+  plannerDraft:
+    'organic Planner draft — finds an existing draft or creates a new one, and attaches image, carousel, or video creative plus a caption and a schedule to it. Outputs the saved draft on `draft` for a downstream organicPublish',
+  organicPublish:
+    'terminal sink — posts a saved Planner draft to its social account, now or on its schedule. Takes only a `plannerDraft` on `draft-in`; it never publishes a loose canvas asset',
   paidPublisher:
     'terminal sink — replaces image, carousel, or video creative on an existing Meta ad',
   apiRender:

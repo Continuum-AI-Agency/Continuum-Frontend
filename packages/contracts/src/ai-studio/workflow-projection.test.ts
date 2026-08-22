@@ -281,13 +281,13 @@ describe('scoped projection', () => {
   it('findNodeIds locates nodes by id, type, label and free text', () => {
     const graph = {
       nodes: [
-        { id: 'n1', type: 'organicPublisher', data: { label: 'Ship it' } },
+        { id: 'n1', type: 'plannerDraft', data: { label: 'Ship it' } },
         { id: 'n2', type: 'nanoGen', data: { positivePrompt: 'copper espresso machine' } },
         { id: 'hero-3', type: 'string', data: {} },
       ],
       edges: [],
     };
-    expect(findNodeIds(graph, 'publish')).toEqual(['n1']);
+    expect(findNodeIds(graph, 'planner')).toEqual(['n1']);
     expect(findNodeIds(graph, 'ship')).toEqual(['n1']);
     expect(findNodeIds(graph, 'copper')).toEqual(['n2']);
     expect(findNodeIds(graph, 'hero')).toEqual(['hero-3']);
