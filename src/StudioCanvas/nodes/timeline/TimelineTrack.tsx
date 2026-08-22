@@ -40,6 +40,8 @@ export function TimelineTrack({
   onTrim,
   onRemove,
   onSplit,
+  onDuplicate,
+  onSetMute,
   commentLane,
 }: {
   layout: TimelineLayout;
@@ -59,6 +61,9 @@ export function TimelineTrack({
   onTrim: (itemId: string, range: { startSec?: number; endSec?: number }) => void;
   onRemove: (itemId: string) => void;
   onSplit: (itemId: string, localSec: number) => void;
+  // Clip-menu actions only some hosts model. Left out, the menu hides the item.
+  onDuplicate?: (itemId: string) => void;
+  onSetMute?: (itemId: string, mute: boolean) => void;
   // Review-comment markers, rendered on this track's pixel scale so they scroll
   // and zoom with the clips. Only the Library host supplies one.
   commentLane?: ReactNode;
@@ -122,6 +127,7 @@ export function TimelineTrack({
   }, [layout, onSplit, playheadSec]);
 
   const sortableIds = layout.clips.map((clip) => `${CLIP_DRAG_PREFIX}${clip.item.id}`);
+  const playheadClipId = clipAtTime(layout, playheadSec)?.item.id;
   const playheadLeft = playheadSec * pxPerSec;
 
   return (
@@ -197,6 +203,11 @@ export function TimelineTrack({
                   onSelect={() => onSelectItem(clip.item.id)}
                   onTrim={(range) => onTrim(clip.item.id, range)}
                   onRemove={() => onRemove(clip.item.id)}
+                  onSplitAtPlayhead={playheadClipId === clip.item.id ? handleSplit : undefined}
+                  onDuplicate={onDuplicate ? () => onDuplicate(clip.item.id) : undefined}
+                  onToggleMute={
+                    onSetMute ? () => onSetMute(clip.item.id, !clip.item.muteAudio) : undefined
+                  }
                 />
               ))}
             </SortableContext>

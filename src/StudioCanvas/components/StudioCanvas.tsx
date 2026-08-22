@@ -99,7 +99,9 @@ import { ImageGenBlock } from '../nodes/ImageGenBlock';
 import { ImageNode } from '../nodes/ImageNode';
 import { NoteNode } from '../nodes/NoteNode';
 import { OmniGenBlock } from '../nodes/OmniGenBlock';
-import { OrganicPublisherBlock, PaidPublisherBlock } from '../nodes/PublishingBlock';
+import { OrganicPublishBlock } from '../nodes/OrganicPublishBlock';
+import { PlannerDraftBlock } from '../nodes/PlannerDraftBlock';
+import { PaidPublisherBlock } from '../nodes/PublishingBlock';
 import { StringNode } from '../nodes/StringNode';
 import { TimelineEditorBlock } from '../nodes/TimelineEditorBlock';
 import { VideoDecoderBlock } from '../nodes/VideoDecoderBlock';
@@ -125,10 +127,9 @@ import { resolveSidebarDropTarget } from '../utils/resolveSidebarDropTarget';
 import {
   DEFAULT_VIDEO_GENERATOR_MODEL,
   getVideoGeneratorReferenceMode,
-  VIDEO_GENERATOR_MODEL_LABELS,
-  VIDEO_GENERATOR_MODELS,
   type VideoGeneratorModel,
 } from '../utils/videoModel';
+import { ADD_NODE_GROUPS, type StudioCanvasNodeType } from './addNodeCatalog';
 import { CanvasFloatingPanel } from './CanvasFloatingPanel';
 import { InstagramMediaBrowser } from './InstagramMediaBrowser';
 import { InteractionModeToggle } from './InteractionModeToggle';
@@ -141,195 +142,6 @@ import { Toolbar } from './Toolbar';
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 
-type StudioCanvasNodeType =
-  | 'nanoGen'
-  | 'videoGen'
-  | 'veoDirector'
-  | 'veoFast'
-  | 'omniGen'
-  | 'extendVideo'
-  | 'hyperframesAgent'
-  | 'timelineEditor'
-  | 'organicPublisher'
-  | 'paidPublisher'
-  | 'apiRender'
-  | 'string'
-  | 'note'
-  | 'image'
-  | 'audio'
-  | 'document'
-  | 'video'
-  | 'videoDecode'
-  | 'frameExtract';
-
-type LibraryItem = {
-  type: StudioCanvasNodeType;
-  label: string;
-  desc: string;
-  tag: string;
-  modelOptions?: readonly VideoGeneratorModel[];
-  disabled?: boolean;
-};
-
-type LibrarySection = {
-  value: string;
-  label: string;
-  items: LibraryItem[];
-};
-
-const LIBRARY_SECTIONS: LibrarySection[] = [
-  {
-    value: 'image',
-    label: 'Image',
-    items: [
-      {
-        type: 'nanoGen',
-        label: 'Image Generation',
-        desc: 'Canvas and generator output',
-        tag: 'Creative',
-      },
-      {
-        type: 'image',
-        label: 'Image Reference',
-        desc: 'Image file input',
-        tag: 'Utility',
-      },
-    ],
-  },
-  {
-    value: 'video',
-    label: 'Video',
-    items: [
-      // First: the models expand in place, so the most-reached node in this
-      // section is also the first row of it.
-      {
-        type: 'videoGen',
-        label: 'Video Generation',
-        desc: 'Generate clips with selectable models',
-        tag: 'Creative',
-        modelOptions: VIDEO_GENERATOR_MODELS,
-      },
-      {
-        type: 'hyperframesAgent',
-        label: 'HyperFrames Agent',
-        desc: 'Agentic HTML video creation with media references',
-        tag: 'Creative',
-      },
-      {
-        type: 'omniGen',
-        label: 'Omni Flash (Edit)',
-        desc: 'Generate a clip, then chat to edit it into variations',
-        tag: 'Creative',
-      },
-      {
-        type: 'extendVideo',
-        label: 'Extend Video',
-        desc: 'Continue existing footage',
-        tag: 'Creative',
-      },
-      {
-        type: 'timelineEditor',
-        label: 'Video Editor',
-        desc: 'Full editor — trim, split & sequence clips + stills',
-        tag: 'Editing',
-      },
-      {
-        type: 'video',
-        label: 'Video Reference',
-        desc: 'Video file input',
-        tag: 'Utility',
-      },
-      {
-        type: 'videoDecode',
-        label: 'Video Decoder',
-        desc: 'Frame-by-frame creative breakdown',
-        tag: 'Intelligence',
-      },
-      {
-        type: 'frameExtract',
-        label: 'Continuity Frame',
-        desc: 'Extract a first, last, or exact video frame',
-        tag: 'Editing',
-      },
-    ],
-  },
-  {
-    value: 'utility',
-    label: 'Utility',
-    items: [
-      {
-        type: 'audio',
-        label: 'Audio Reference',
-        desc: 'Voice or sound input',
-        tag: 'Utility',
-      },
-      {
-        type: 'document',
-        label: 'Document Context',
-        desc: 'PDF and text knowledge',
-        tag: 'Utility',
-      },
-      {
-        type: 'string',
-        label: 'Text Block',
-        desc: 'Prompt and enrichment input',
-        tag: 'Intelligence',
-      },
-      {
-        type: 'note',
-        label: 'Note / Annotation',
-        desc: 'Free-text canvas note with bold (⌘B)',
-        tag: 'Utility',
-      },
-    ],
-  },
-  {
-    value: 'renders',
-    label: 'Render templates',
-    items: [
-      {
-        type: 'apiRender',
-        label: 'API Render',
-        desc: 'Discover a template, prepare variables, and hand off a PAUSED Meta delivery',
-        tag: 'Render',
-      },
-    ],
-  },
-  {
-    value: 'publishing',
-    label: 'Publishing',
-    items: [
-      {
-        type: 'organicPublisher',
-        label: 'Organic Planner',
-        desc: 'Attach an image, carousel, or video to a Planner draft',
-        tag: 'Publishing',
-      },
-      {
-        type: 'paidPublisher',
-        label: 'Paid Ad',
-        desc: 'Replace creative on a paused or active Meta ad',
-        tag: 'Publishing',
-      },
-    ],
-  },
-];
-
-/**
- * Models render flat, default first. Grouping them by provider bought nothing the
- * labels don't already say ("Veo 3.1 Fast", "Kling Omni") and cost a whole menu
- * level, so reaching a video generator took four hover-throughs (#260).
- */
-const modelsInMenuOrder = (
-  modelOptions: readonly VideoGeneratorModel[],
-): readonly VideoGeneratorModel[] =>
-  modelOptions.includes(DEFAULT_VIDEO_GENERATOR_MODEL)
-    ? [
-        DEFAULT_VIDEO_GENERATOR_MODEL,
-        ...modelOptions.filter((model) => model !== DEFAULT_VIDEO_GENERATOR_MODEL),
-      ]
-    : modelOptions;
-
 const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'nanoGen',
   'videoGen',
@@ -339,7 +151,8 @@ const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'extendVideo',
   'hyperframesAgent',
   'timelineEditor',
-  'organicPublisher',
+  'plannerDraft',
+  'organicPublish',
   'paidPublisher',
   'apiRender',
   'string',
@@ -408,7 +221,12 @@ const createNodeConfig = (
     return { data: { value: '' } };
   }
 
-  if (type === 'organicPublisher' || type === 'paidPublisher' || type === 'apiRender') {
+  if (
+    type === 'plannerDraft' ||
+    type === 'organicPublish' ||
+    type === 'paidPublisher' ||
+    type === 'apiRender'
+  ) {
     return createNodeData(type);
   }
 
@@ -467,7 +285,8 @@ const nodeTypes = {
   extendVideo: ExtendVideoBlock,
   hyperframesAgent: HyperframesAgentBlock,
   timelineEditor: TimelineEditorBlock,
-  organicPublisher: OrganicPublisherBlock,
+  plannerDraft: PlannerDraftBlock,
+  organicPublish: OrganicPublishBlock,
   paidPublisher: PaidPublisherBlock,
   apiRender: ApiRenderBlock,
   string: StringNode,
@@ -1563,7 +1382,12 @@ function Flow({
       ref={reactFlowWrapper}
       onMouseMove={handleMouseMove}
     >
-      <ContextMenu onOpenChange={handleContextMenuOpenChange}>
+      {/* A modal editor portals to document.body but stays inside the REACT tree under
+          the trigger, so its right-clicks bubble into ContextMenuTrigger's onContextMenu
+          and open the canvas menu over the dialog. Base UI's trigger has no disabled prop
+          of its own — it reads the menu ROOT's `disabled` off the store and bails before
+          opening — so the stand-down belongs here, on the root, mirroring deleteKeyCode. */}
+      <ContextMenu disabled={keyboardScope === 'modal'} onOpenChange={handleContextMenuOpenChange}>
         <ContextMenuTrigger className="block h-full w-full">
           <Canvas
             nodes={nodes}
@@ -1789,37 +1613,28 @@ function Flow({
               Add Node
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-72">
-              {LIBRARY_SECTIONS.map((section) => (
-                <ContextMenuSub key={section.value}>
+              {ADD_NODE_GROUPS.map((section) => (
+                <ContextMenuSub key={section.group}>
                   <ContextMenuSubTrigger inset>{section.label}</ContextMenuSubTrigger>
                   <ContextMenuSubContent className="w-72">
-                    {section.items.flatMap((item) =>
-                      item.modelOptions
-                        ? modelsInMenuOrder(item.modelOptions).map((model) => (
-                            <ContextMenuItem
-                              key={`${item.type}-${model}`}
-                              onClick={() => addNodeAtPointer(item.type, { model })}
-                            >
-                              <div className="flex min-w-0 flex-col">
-                                <span>{VIDEO_GENERATOR_MODEL_LABELS[model]}</span>
-                              </div>
-                              <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
-                            </ContextMenuItem>
-                          ))
-                        : [
-                            <ContextMenuItem
-                              key={item.type}
-                              disabled={Boolean(item.disabled)}
-                              onClick={() => addNodeAtPointer(item.type)}
-                            >
-                              <div className="flex min-w-0 flex-col">
-                                <span>{item.label}</span>
-                                <span className="text-xs text-muted-foreground">{item.desc}</span>
-                              </div>
-                              <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
-                            </ContextMenuItem>,
-                          ],
-                    )}
+                    {section.rows.map((row) => (
+                      <ContextMenuItem
+                        key={row.model ? `${row.type}-${row.model}` : row.type}
+                        onClick={() =>
+                          row.model
+                            ? addNodeAtPointer(row.type, { model: row.model })
+                            : addNodeAtPointer(row.type)
+                        }
+                      >
+                        <div className="flex min-w-0 flex-col">
+                          <span>{row.label}</span>
+                          {row.desc ? (
+                            <span className="text-xs text-muted-foreground">{row.desc}</span>
+                          ) : null}
+                        </div>
+                        <ContextMenuShortcut>{row.tag}</ContextMenuShortcut>
+                      </ContextMenuItem>
+                    ))}
                   </ContextMenuSubContent>
                 </ContextMenuSub>
               ))}

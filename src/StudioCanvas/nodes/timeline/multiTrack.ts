@@ -36,6 +36,11 @@ export function addOverlayTrack(tracks: TimelineTrack[]): TimelineTrack[] {
   return [...ensured, { id: `overlay-${uuidv4()}`, kind: 'overlay', items: [] }];
 }
 
+/** Drop one overlay lane and the items on it. An unknown id leaves the list as-is. */
+export function removeOverlayTrack(tracks: TimelineTrack[], trackId: string): TimelineTrack[] {
+  return tracks.filter((track) => track.id !== trackId);
+}
+
 /** Every overlay item across all overlay tracks, for rendering. */
 export function allOverlayItems(tracks: TimelineTrack[]): TimelineItem[] {
   return tracks.flatMap((track) => track.items);

@@ -9,6 +9,7 @@ import {
   type BrandBookPieceKind,
   type BrandDirectionPiece,
   type BrandMdTokens,
+  type DesignSection,
   expandBrandBookPieces,
 } from '@continuum/contracts';
 
@@ -199,26 +200,44 @@ export function toggleSkillId(skillIds: string[] | undefined, skillId: string): 
 }
 
 /**
- * Toggle one v2 creative-direction piece, preserving the tri-state.
+ * Toggle one member of a tri-state selection, preserving the tri-state.
  *
- * `undefined` means "no preference", which the compiler reads as every piece the plan
- * admits. So the FIRST toggle has to materialise the full authored set and remove one from
- * it — otherwise switching a piece off would land on `[piece]`, quietly turning eleven other
- * pieces off as a side effect of touching one.
+ * `undefined` means "no preference", which the Backend reads as everything `available`
+ * admits. So the FIRST toggle has to materialise that full set and remove one from it —
+ * otherwise switching one member off would land on `[member]`, quietly turning every other
+ * one off as a side effect of touching one.
  *
- * `authored` is what the brand has actually written, which is the only correct starting set:
- * expanding to the full thirteen-member vocabulary would select pieces this brand has no
- * rules for, and the selection would then read as deliberate.
+ * `available` is what the brand actually HAS, which is the only correct starting set:
+ * expanding to the full vocabulary would select members this brand has no rules for, and
+ * the selection would then read as deliberate.
  */
+export function toggleTriStateSelection<T extends string>(
+  selected: T[] | undefined,
+  member: T,
+  available: readonly T[],
+): T[] {
+  const current = selected ?? [...available];
+  const next = current.includes(member)
+    ? current.filter((entry) => entry !== member)
+    : [...current, member];
+  /* Available order, so the same set always serialises identically. */
+  return available.filter((entry) => next.includes(entry));
+}
+
+/** The v2 creative-direction half. `authored` is what the brand has written. */
 export function toggleDirectionPiece(
   selected: BrandDirectionPiece[] | undefined,
   piece: BrandDirectionPiece,
   authored: readonly BrandDirectionPiece[],
 ): BrandDirectionPiece[] {
-  const current = selected ?? [...authored];
-  const next = current.includes(piece)
-    ? current.filter((entry) => entry !== piece)
-    : [...current, piece];
-  /* Authored order, so the same set always serialises identically. */
-  return authored.filter((entry) => next.includes(entry));
+  return toggleTriStateSelection(selected, piece, authored);
+}
+
+/** The design-system half. `enabled` is the sections the brand left switched on. */
+export function toggleDesignSection(
+  selected: DesignSection[] | undefined,
+  section: DesignSection,
+  enabled: readonly DesignSection[],
+): DesignSection[] {
+  return toggleTriStateSelection(selected, section, enabled);
 }

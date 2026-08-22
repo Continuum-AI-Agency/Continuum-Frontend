@@ -10,6 +10,8 @@ import type { StudioNode } from '../types';
 import { buildDataUrl, parseDataUrl } from './dataUrl';
 import { resignCanvasNodes } from './resignCanvasNodes';
 
+type Resign = (nodes: StudioNode[], brandProfileId?: string) => Promise<StudioNode[]>;
+
 type Base64Resolver = (
   parsed: ParsedReferenceDropPayload,
   maxBytes: number,
@@ -105,9 +107,24 @@ export async function rehydrateWorkflowMediaNodes(
   nodes: StudioNode[],
   resolver: Base64Resolver = resolveDroppedBase64,
   brandProfileId?: string,
+  resign: Resign = resignCanvasNodes,
 ): Promise<StudioNode[]> {
-  const rehydrated = await Promise.all(
-    nodes.map(async (node) => {
+  // Re-sign BEFORE inlining anything. A reference node with durable coordinates
+  // (sourcePath + bucket) gets a fresh signed URL written straight into its media
+  // value, and the Backend resolves that to bytes itself. Downloading the same image
+  // into the browser and base64-encoding it first only produces a data URL that the
+  // re-sign then overwrites — pure waste, paid on every generate.
+  //
+  // Also re-signs durable storage paths on generator nodes (nanoGen, video gen types),
+  // whose generated image/video URLs are stripped on save.
+  const resigned = await resign(nodes, brandProfileId);
+
+  return Promise.all(
+    resigned.map(async (node, index) => {
+      // Left untouched by re-signing means there was nothing durable to re-sign (a
+      // remote CDN reference with no bucket) or the re-sign failed. Inlining the bytes
+      // is then the only way that reference reaches the model, so the fallback stands.
+      if (node !== nodes[index]) return node;
       if (node.type === 'image') {
         return rehydrateMediaNode(node, {
           key: 'image',
@@ -125,8 +142,4 @@ export async function rehydrateWorkflowMediaNodes(
       return node;
     }),
   );
-
-  // Re-sign durable storage paths on generator nodes (nanoGen, video gen types).
-  // Generated image/video URLs are stripped on save; this restores fresh signed URLs.
-  return resignCanvasNodes(rehydrated, brandProfileId);
 }

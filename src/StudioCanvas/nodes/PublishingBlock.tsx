@@ -2,7 +2,6 @@
 
 import {
   type CanvasPublishingFormat,
-  type OrganicCanvasTarget,
   type PaidCanvasTarget,
   PUBLISH_IMAGE_INPUT_HANDLE,
   PUBLISH_VIDEO_INPUT_HANDLE,
@@ -28,8 +27,6 @@ import type { PublisherNodeData, StudioNode } from '../types';
 import { publishingApi } from './publish/publishingApi';
 import { resolvePublishingAssets } from './publish/resolvePublishingAssets';
 
-type PublisherKind = 'organic' | 'paid';
-
 const FORMAT_OPTIONS: Array<{ value: CanvasPublishingFormat; label: string }> = [
   { value: 'image', label: 'Post / Image' },
   { value: 'carousel', label: 'Carousel' },
@@ -49,19 +46,25 @@ function inputHandles(data: PublisherNodeData): Array<{ id: string; label: strin
     .map((slot, index) => ({ id: `asset-${slot.id}`, label: String(index + 1) }));
 }
 
-function PublisherBlock({
+/**
+ * Replace the creative on an existing Meta ad with canvas creative.
+ *
+ * Organic publishing used to share this component. It now lives in `PlannerDraftBlock`
+ * (find/create/edit a Planner draft) and `OrganicPublishBlock` (post it), because the two
+ * worlds only ever looked alike: an ad swap is one immutable-creative replacement with a
+ * restore handle, while an organic post is a draft row a human approves and publishes.
+ */
+export function PaidPublisherBlock({
   id,
   data,
   selected,
-  publisher,
-}: NodeProps<ReactFlowNode<PublisherNodeData>> & { publisher: PublisherKind }) {
+}: NodeProps<ReactFlowNode<PublisherNodeData>>) {
   const updateNode = useStudioStore((state) => state.updateNode);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   const { show } = useToast();
   const [query, setQuery] = useState('');
-  const [organicTargets, setOrganicTargets] = useState<OrganicCanvasTarget[]>([]);
   const [paidTargets, setPaidTargets] = useState<PaidCanvasTarget[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionPending, setActionPending] = useState(false);
@@ -98,29 +101,19 @@ function PublisherBlock({
       setLoading(true);
       setSearchError(null);
       try {
-        if (publisher === 'organic') {
-          const result = await publishingApi.searchOrganic({
-            brandId,
-            format,
-            query: query || undefined,
-            limit: 12,
-          });
-          setOrganicTargets(result.items);
-        } else {
-          const result = await publishingApi.searchPaid({
-            brandId,
-            adAccountId: data.adAccountId,
-            level: paidLevel,
-            parentId: data.adsetId ?? data.campaignId,
-            format: paidLevel === 'ad' ? format : undefined,
-            query: query || undefined,
-            limit: 20,
-          });
-          if (result.adAccountId !== data.adAccountId) {
-            patchData({ adAccountId: result.adAccountId });
-          }
-          setPaidTargets(result.items);
+        const result = await publishingApi.searchPaid({
+          brandId,
+          adAccountId: data.adAccountId,
+          level: paidLevel,
+          parentId: data.adsetId ?? data.campaignId,
+          format: paidLevel === 'ad' ? format : undefined,
+          query: query || undefined,
+          limit: 20,
+        });
+        if (result.adAccountId !== data.adAccountId) {
+          patchData({ adAccountId: result.adAccountId });
         }
+        setPaidTargets(result.items);
       } catch (error) {
         setSearchError(error instanceof Error ? error.message : 'Search failed');
       } finally {
@@ -136,7 +129,6 @@ function PublisherBlock({
     format,
     paidLevel,
     patchData,
-    publisher,
     query,
   ]);
 
@@ -148,9 +140,6 @@ function PublisherBlock({
       patchData({
         format: nextFormat,
         assetSlots: slots,
-        targetDraftId: undefined,
-        targetUpdatedAt: undefined,
-        targetTitle: undefined,
         targetAdId: undefined,
         targetAdName: undefined,
         expectedCreativeId: undefined,
@@ -162,10 +151,9 @@ function PublisherBlock({
 
   const addCarouselCard = useCallback(() => {
     const slots = [...(data.assetSlots ?? [])];
-    const limit = publisher === 'paid' ? 10 : 20;
-    if (slots.length >= limit) return;
+    if (slots.length >= 10) return;
     patchData({ assetSlots: [...slots, randomSlot(slots.length)], confirmToken: undefined });
-  }, [data.assetSlots, patchData, publisher]);
+  }, [data.assetSlots, patchData]);
 
   const removeCarouselCard = useCallback(() => {
     const slots = [...(data.assetSlots ?? [])];
@@ -181,35 +169,6 @@ function PublisherBlock({
     }
     patchData({ assetSlots: slots.slice(0, -1), confirmToken: undefined });
   }, [data.assetSlots, id, patchData]);
-
-  const attachOrganic = useCallback(async () => {
-    if (!brandId || !data.targetDraftId || !data.targetUpdatedAt) return;
-    setActionPending(true);
-    try {
-      const result = await publishingApi.attachOrganic(data.targetDraftId, {
-        brandId,
-        expectedUpdatedAt: data.targetUpdatedAt,
-        format,
-        assets,
-      });
-      patchData({
-        targetUpdatedAt: result.updatedAt,
-        publishedAt: new Date().toISOString(),
-        error: undefined,
-      });
-      show({
-        title: 'Planner draft updated',
-        description: 'The Canvas creative is attached to the selected draft.',
-        variant: 'success',
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Attachment failed';
-      patchData({ error: message });
-      show({ title: 'Could not update draft', description: message, variant: 'warning' });
-    } finally {
-      setActionPending(false);
-    }
-  }, [assets, brandId, data.targetDraftId, data.targetUpdatedAt, format, patchData, show]);
 
   const replacePaid = useCallback(async () => {
     if (
@@ -278,9 +237,7 @@ function PublisherBlock({
     }
   }, [assets, brandId, data, format, patchData, show]);
 
-  const targetSelected =
-    publisher === 'organic' ? Boolean(data.targetDraftId) : Boolean(data.targetAdId);
-  const actionDisabled = actionPending || !assetsReady || !targetSelected;
+  const actionDisabled = actionPending || !assetsReady || !data.targetAdId;
 
   return (
     <div
@@ -303,9 +260,9 @@ function PublisherBlock({
       >
         <NodeContent className="flex h-full flex-col gap-2 p-3 text-xs">
           <div className="flex items-center justify-between font-medium">
-            <span>{publisher === 'organic' ? 'Organic Planner' : 'Paid Ad'}</span>
+            <span>Paid Ad</span>
             <span className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
-              {publisher === 'organic' ? 'Drafts' : 'Meta'}
+              Meta
             </span>
           </div>
 
@@ -316,9 +273,7 @@ function PublisherBlock({
             className="rounded bg-muted/60 px-2 py-1 text-2xs text-muted-foreground"
           >
             {data.publishedAt
-              ? publisher === 'organic'
-                ? 'Delivered — creative attached to the draft.'
-                : 'Delivered — ad creative replaced.'
+              ? 'Delivered — ad creative replaced.'
               : 'Delivery handoff — a canvas run never publishes this. Deliver below.'}
           </p>
 
@@ -326,6 +281,7 @@ function PublisherBlock({
             className="nodrag h-8 rounded-md border border-border bg-background px-2"
             value={format}
             onChange={(event) => changeFormat(event.target.value as CanvasPublishingFormat)}
+            aria-label="Creative format"
           >
             {FORMAT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -356,54 +312,46 @@ function PublisherBlock({
             </div>
           ) : null}
 
-          {publisher === 'paid' ? (
-            <>
-              <p className="truncate text-2xs text-muted-foreground">
-                {data.adAccountId ? `Meta account ${data.adAccountId}` : 'Resolving Meta account…'}
-              </p>
-              {data.campaignId ? (
-                <button
-                  type="button"
-                  className="nodrag truncate text-left text-2xs text-brand-primary"
-                  onClick={() =>
-                    patchData({
-                      campaignId: undefined,
-                      campaignName: undefined,
-                      adsetId: undefined,
-                      adsetName: undefined,
-                      targetAdId: undefined,
-                    })
-                  }
-                >
-                  Campaign: {data.campaignName ?? data.campaignId} ×
-                </button>
-              ) : null}
-              {data.adsetId ? (
-                <button
-                  type="button"
-                  className="nodrag truncate text-left text-2xs text-brand-primary"
-                  onClick={() =>
-                    patchData({
-                      adsetId: undefined,
-                      adsetName: undefined,
-                      targetAdId: undefined,
-                      confirmToken: undefined,
-                    })
-                  }
-                >
-                  Ad set: {data.adsetName ?? data.adsetId} ×
-                </button>
-              ) : null}
-            </>
+          <p className="truncate text-2xs text-muted-foreground">
+            {data.adAccountId ? `Meta account ${data.adAccountId}` : 'Resolving Meta account…'}
+          </p>
+          {data.campaignId ? (
+            <button
+              type="button"
+              className="nodrag truncate text-left text-2xs text-brand-primary"
+              onClick={() =>
+                patchData({
+                  campaignId: undefined,
+                  campaignName: undefined,
+                  adsetId: undefined,
+                  adsetName: undefined,
+                  targetAdId: undefined,
+                })
+              }
+            >
+              Campaign: {data.campaignName ?? data.campaignId} ×
+            </button>
+          ) : null}
+          {data.adsetId ? (
+            <button
+              type="button"
+              className="nodrag truncate text-left text-2xs text-brand-primary"
+              onClick={() =>
+                patchData({
+                  adsetId: undefined,
+                  adsetName: undefined,
+                  targetAdId: undefined,
+                  confirmToken: undefined,
+                })
+              }
+            >
+              Ad set: {data.adsetName ?? data.adsetId} ×
+            </button>
           ) : null}
 
           <Input
             className="nodrag h-8 text-xs"
-            placeholder={
-              publisher === 'organic'
-                ? `Search ${FORMAT_OPTIONS.find((item) => item.value === format)?.label} drafts`
-                : `Search ${paidLevel}s`
-            }
+            placeholder={`Search ${paidLevel}s`}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -411,37 +359,7 @@ function PublisherBlock({
           <div className="nodrag min-h-0 flex-1 overflow-y-auto rounded-md border border-border/60">
             {loading ? <p className="p-2 text-muted-foreground">Searching…</p> : null}
             {searchError ? <p className="p-2 text-destructive">{searchError}</p> : null}
-            {!loading && !searchError && publisher === 'organic'
-              ? organicTargets.map((target) => (
-                  <button
-                    type="button"
-                    key={target.id}
-                    className={cn(
-                      'block w-full border-b p-2 text-left last:border-b-0 hover:bg-muted/60',
-                      data.targetDraftId === target.id && 'bg-muted',
-                    )}
-                    onClick={() =>
-                      patchData({
-                        targetDraftId: target.id,
-                        targetUpdatedAt: target.updatedAt,
-                        targetTitle: target.title,
-                      })
-                    }
-                  >
-                    <span className="block truncate font-medium">{target.title}</span>
-                    <span className="block truncate text-2xs text-muted-foreground">
-                      {target.platform} · {target.status}
-                      {target.scheduledAt
-                        ? ` · ${new Date(target.scheduledAt).toLocaleDateString()}`
-                        : ''}
-                    </span>
-                  </button>
-                ))
-              : null}
-            {!loading && !searchError && publisher === 'organic' && organicTargets.length === 0 ? (
-              <p className="p-2 text-muted-foreground">No editable drafts match this format.</p>
-            ) : null}
-            {!loading && !searchError && publisher === 'paid'
+            {!loading && !searchError
               ? paidTargets.map((target) => (
                   <button
                     type="button"
@@ -470,7 +388,7 @@ function PublisherBlock({
                   </button>
                 ))
               : null}
-            {!loading && !searchError && publisher === 'paid' && paidTargets.length === 0 ? (
+            {!loading && !searchError && paidTargets.length === 0 ? (
               <p className="p-2 text-muted-foreground">No {paidLevel}s match this search.</p>
             ) : null}
           </div>
@@ -484,16 +402,14 @@ function PublisherBlock({
           <Button
             className="nodrag h-8 w-full text-xs"
             disabled={actionDisabled}
-            onClick={publisher === 'organic' ? attachOrganic : replacePaid}
+            onClick={replacePaid}
           >
             <Send className="mr-1.5" />
             {actionPending
               ? 'Working…'
-              : publisher === 'organic'
-                ? 'Attach to draft'
-                : data.confirmToken
-                  ? 'Confirm replacement'
-                  : 'Preview replacement'}
+              : data.confirmToken
+                ? 'Confirm replacement'
+                : 'Preview replacement'}
           </Button>
           <div className="flex justify-end gap-1">
             <Button
@@ -533,12 +449,4 @@ function PublisherBlock({
       ))}
     </div>
   );
-}
-
-export function OrganicPublisherBlock(props: NodeProps<ReactFlowNode<PublisherNodeData>>) {
-  return <PublisherBlock {...props} publisher="organic" />;
-}
-
-export function PaidPublisherBlock(props: NodeProps<ReactFlowNode<PublisherNodeData>>) {
-  return <PublisherBlock {...props} publisher="paid" />;
 }

@@ -2,6 +2,7 @@ import {
   type BrandBookPieceKind,
   coerceNodeConfig,
   coerceVideoGeneratorDuration,
+  type DesignSection,
   isVideoGeneratorNodeType,
   VIDEO_GENERATOR_DURATION_NOTE,
   VIDEO_GENERATOR_DURATIONS,
@@ -47,6 +48,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
+import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
 import { GroundingChip } from '../components/GroundingChip';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
@@ -56,7 +58,9 @@ import {
   snapNodeDimensionsToAspectRatio,
   VIDEO_GENERATOR_NODE_BOUNDS,
 } from '../utils/aspectRatioSizing';
-import { toggleBrandPiece, toggleSkillId } from '../utils/brandEnforcement';
+import { toggleBrandPiece, toggleSkillId,
+  toggleDesignSection,
+} from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import {
@@ -332,6 +336,32 @@ export function VideoGenBlock({
     [id, triggerSave, updateNode],
   );
 
+  /*
+   * The design-system half of the same control. `designSections` is what the brand's
+   * uploaded system actually has switched on, and it is the set the first toggle expands
+   * into: `undefined` is "no preference", so landing on `[section]` would switch every
+   * other section off as a side effect of touching one.
+   */
+  const { sections: designSections } = useBrandDesignSections(brandId);
+  const handleToggleDesignSection = useCallback(
+    (section: DesignSection) => {
+      const enabled = designSections.map((entry) => entry.section);
+      updateNode(id, (node) => ({
+        ...node,
+        data: {
+          ...(node.data as VideoGenNodeData),
+          designSystemSections: toggleDesignSection(
+            (node.data as VideoGenNodeData).designSystemSections,
+            section,
+            enabled,
+          ),
+        },
+      }));
+      triggerSave();
+    },
+    [designSections, id, triggerSave, updateNode],
+  );
+
   const handleRun = useCallback(async () => {
     console.info('[studio] run video node', { nodeId: id, model });
     await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
@@ -385,6 +415,8 @@ export function VideoGenBlock({
                     editable
                     onToggleSkill={handleToggleSkill}
                     onTogglePiece={handleToggleBrandPiece}
+                    designSystemSections={data.designSystemSections}
+                    onToggleDesignSection={handleToggleDesignSection}
                     className="bg-background/90 shadow-sm backdrop-blur-sm"
                   />
                 </div>

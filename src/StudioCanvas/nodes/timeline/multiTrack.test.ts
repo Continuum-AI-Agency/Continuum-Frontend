@@ -7,6 +7,7 @@ import {
   findOverlayItem,
   placeOverlayItem,
   removeOverlayItem,
+  removeOverlayTrack,
   resolveOverlayTracks,
   setOverlayStart,
 } from './multiTrack';
@@ -79,5 +80,36 @@ describe('addOverlayTrack / multi-lane placement', () => {
     const placed = placeOverlayItem(tracks, 'src-x', 'image', 0, 'nope');
     expect(placed[0].items).toHaveLength(1);
     expect(placed[1].items).toHaveLength(0);
+  });
+});
+
+describe('removeOverlayTrack', () => {
+  const twoLanes = (): TimelineTrack[] => {
+    const lanes = addOverlayTrack(ensureOverlayTrack([]));
+    const first = placeOverlayItem(lanes, 'src-a', 'video', 1, lanes[0].id);
+    return placeOverlayItem(first, 'src-b', 'image', 2, lanes[1].id);
+  };
+
+  it('removes only the named lane and keeps the other lane its items', () => {
+    const lanes = twoLanes();
+    const remaining = removeOverlayTrack(lanes, lanes[0].id);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(lanes[1].id);
+    expect(remaining[0].items).toEqual(lanes[1].items);
+    expect(allOverlayItems(remaining)).toHaveLength(1);
+  });
+
+  it('no-ops on an unknown lane id', () => {
+    const lanes = twoLanes();
+    expect(removeOverlayTrack(lanes, 'nope')).toEqual(lanes);
+  });
+
+  it('leaves an empty list the resolvers still handle after the last lane goes', () => {
+    const lanes = twoLanes();
+    const emptied = removeOverlayTrack(removeOverlayTrack(lanes, lanes[0].id), lanes[1].id);
+    expect(emptied).toEqual([]);
+    expect(allOverlayItems(emptied)).toEqual([]);
+    expect(resolveOverlayTracks({ items: [], overlayTracks: emptied })).toEqual([]);
+    expect(ensureOverlayTrack(emptied)).toHaveLength(1);
   });
 });

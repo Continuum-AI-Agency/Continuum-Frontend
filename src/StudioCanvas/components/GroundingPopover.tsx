@@ -18,6 +18,7 @@ import React from 'react';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandBook } from '@/lib/brands/useBrandBook.client';
+import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
 import { useBrandDirectionPieces } from '@/lib/brands/useBrandDirectionPieces.client';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
@@ -126,7 +127,6 @@ export function GroundingPopover({
   onTogglePiece,
   onToggleDirectionPiece,
   designSystemSections,
-  designSections = [],
   onToggleDesignSection,
 }: {
   brandId?: string;
@@ -137,18 +137,15 @@ export function GroundingPopover({
   onToggleSkill: (skillId: string) => void;
   onTogglePiece: (kind: BrandBookPieceKind) => void;
   onToggleDirectionPiece?: (piece: BrandDirectionPiece) => void;
-  /** `undefined` = no preference (all enabled sections apply); `[]` = off. */
+  /** `undefined` = no preference (the Backend resolves it from the rigor tier); `[]` = off. */
   designSystemSections?: DesignSection[] | undefined;
-  /** Sections this brand actually has, with enough context to explain each row. */
-  designSections?: Array<{
-    section: DesignSection;
-    title: string;
-    ruleCount: number;
-    gates: boolean;
-  }>;
   onToggleDesignSection?: (section: DesignSection) => void;
 }) {
   const direction = useBrandDirectionPieces(brandId);
+  // Read here rather than passed down, matching `direction` above: the rows describe the
+  // BRAND's system, not this node's selection, so every chip on the canvas would otherwise
+  // thread the same list through props to render the same panel.
+  const { sections: designSections } = useBrandDesignSections(brandId);
   const { brandTokens } = useBrandBook(brandId);
   const availability = React.useMemo(() => brandBookAvailability(brandTokens), [brandTokens]);
   const { all, isLoading } = useBrandSkills(brandId);

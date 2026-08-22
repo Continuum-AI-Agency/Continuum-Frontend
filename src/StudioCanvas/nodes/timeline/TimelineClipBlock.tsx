@@ -2,9 +2,17 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Image, Video, X } from 'lucide-react';
+import { Copy, Image, Scissors, Trash2, Video, Volume2, VolumeX, X } from 'lucide-react';
 import type React from 'react';
 import { useCallback } from 'react';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { ClipWaveform } from './ClipWaveform';
 import { useClipMediaPreview } from './useClipMediaPreview';
@@ -15,7 +23,9 @@ export const CLIP_DRAG_PREFIX = 'clip:';
 // One placement on the timeline track. The body is the dnd-kit sortable drag
 // surface (reorder); the left/right edges are pointer-drag trim handles for
 // video clips (image stills resize via the inspector). Trim handles stop
-// propagation so they never start a sort drag.
+// propagation so they never start a sort drag. The block is its own context-menu
+// trigger: the editor dialog is portaled to the body, so without one the
+// right-click bubbles the React tree and opens the canvas node menu instead.
 export function TimelineClipBlock({
   clip,
   pxPerSec,
@@ -25,6 +35,9 @@ export function TimelineClipBlock({
   onSelect,
   onTrim,
   onRemove,
+  onSplitAtPlayhead,
+  onDuplicate,
+  onToggleMute,
 }: {
   clip: ClipLayout;
   pxPerSec: number;
@@ -34,6 +47,13 @@ export function TimelineClipBlock({
   onSelect: () => void;
   onTrim: (range: { startSec?: number; endSec?: number }) => void;
   onRemove: () => void;
+  // Omitted while the playhead sits outside this clip: there is nothing here to
+  // cut, so the menu item renders disabled rather than silently doing nothing.
+  onSplitAtPlayhead?: () => void;
+  // Omitted by hosts whose document model has no such mutation; the menu hides
+  // the item rather than offering a no-op.
+  onDuplicate?: () => void;
+  onToggleMute?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `${CLIP_DRAG_PREFIX}${clip.item.id}`,
@@ -73,7 +93,9 @@ export function TimelineClipBlock({
     opacity: isDragging ? 0.6 : 1,
   };
 
-  return (
+  const muted = Boolean(clip.item.muteAudio);
+
+  const clipBlock = (
     // biome-ignore lint/a11y/noStaticElementInteractions: sortable clip surface; dnd-kit supplies keyboard reorder
     // biome-ignore lint/a11y/useKeyWithClickEvents: selection mirrors the dnd-kit keyboard handlers on this element
     <div
@@ -81,6 +103,8 @@ export function TimelineClipBlock({
       data-testid="timeline-clip"
       style={style}
       onClick={onSelect}
+      // Right-click selects too, so the inspector follows whatever the menu will act on.
+      onContextMenu={onSelect}
       className={cn(
         'group/clip relative flex h-14 shrink-0 cursor-grab items-center overflow-hidden rounded-md border bg-gradient-to-b from-muted/60 to-muted/30 active:cursor-grabbing',
         selected ? 'border-primary ring-1 ring-primary' : 'border-border/60',
@@ -161,5 +185,37 @@ export function TimelineClipBlock({
         <X className="h-2.5 w-2.5" />
       </button>
     </div>
+  );
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger className="contents">{clipBlock}</ContextMenuTrigger>
+      <ContextMenuContent className="w-52">
+        <ContextMenuItem disabled={!onSplitAtPlayhead} onClick={() => onSplitAtPlayhead?.()}>
+          <Scissors />
+          Split at playhead
+          <ContextMenuShortcut>S</ContextMenuShortcut>
+        </ContextMenuItem>
+        {onDuplicate ? (
+          <ContextMenuItem onClick={onDuplicate}>
+            <Copy />
+            Duplicate
+            <ContextMenuShortcut>D</ContextMenuShortcut>
+          </ContextMenuItem>
+        ) : null}
+        {onToggleMute && isVideo ? (
+          <ContextMenuItem onClick={onToggleMute}>
+            {muted ? <Volume2 /> : <VolumeX />}
+            {muted ? 'Unmute' : 'Mute'}
+          </ContextMenuItem>
+        ) : null}
+        <ContextMenuSeparator />
+        <ContextMenuItem variant="destructive" onClick={onRemove}>
+          <Trash2 />
+          Remove
+          <ContextMenuShortcut>⌫</ContextMenuShortcut>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

@@ -1,4 +1,11 @@
-import type { BrandBookPieceKind, BrandDirectionPiece, Edge, ImageSize, StudioNode } from './index';
+import type {
+  BrandBookPieceKind,
+  BrandDirectionPiece,
+  DesignSection,
+  Edge,
+  ImageSize,
+  StudioNode,
+} from './index';
 
 export type ExecutionStatus = 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
@@ -72,6 +79,15 @@ export interface EnrichPromptPayload {
   brandBookPieces?: BrandBookPieceKind[];
   /** v2 compiler pieces; see `StudioCanvas/types/index.ts`. Tri-state. */
   brandDirectionPieces?: BrandDirectionPiece[];
+  /**
+   * Which sections of the brand's uploaded design system apply to this generation.
+   *
+   * Tri-state, matching the Backend: `undefined` = no preference, and the Backend resolves
+   * it from the system's own rigor tier (`sectionsForTier`) rather than a fixed default;
+   * `[]` = off; a list narrows. A third switch alongside the two above, because a design
+   * system is a third source with its own vocabulary.
+   */
+  designSystemSections?: DesignSection[];
   context: {
     // A reference carries a signed `imageUrl` (preferred) OR inline base64 `data`
     // (fallback). The backend resolves the URL to bytes for the model.
@@ -119,6 +135,15 @@ export interface GenerationPayload {
   brandBookPieces?: BrandBookPieceKind[];
   /** v2 compiler pieces; see `StudioCanvas/types/index.ts`. Tri-state. */
   brandDirectionPieces?: BrandDirectionPiece[];
+  /**
+   * Which sections of the brand's uploaded design system apply to this generation.
+   *
+   * Tri-state, matching the Backend: `undefined` = no preference, and the Backend resolves
+   * it from the system's own rigor tier (`sectionsForTier`) rather than a fixed default;
+   * `[]` = off; a list narrows. A third switch alongside the two above, because a design
+   * system is a third source with its own vocabulary.
+   */
+  designSystemSections?: DesignSection[];
   // Library ids of the reference creatives. The Backend folds what they actually
   // EARNED into the prompt (<asset_performance>) so a variant is not made blind.
   referenceAssetIds?: string[];

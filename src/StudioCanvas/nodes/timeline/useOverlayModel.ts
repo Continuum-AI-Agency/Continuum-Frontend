@@ -9,6 +9,7 @@ import {
   findOverlayItem,
   placeOverlayItem,
   removeOverlayItem,
+  removeOverlayTrack,
   resolveOverlayTracks,
   setOverlayStart,
   updateOverlayItem,
@@ -49,6 +50,7 @@ export interface OverlayModel {
     trackId?: string,
   ) => void;
   addTrack: () => void;
+  removeTrack: (trackId: string) => void;
   remove: (itemId: string) => void;
   setStart: (itemId: string, startSec: number) => void;
   trim: (itemId: string, range: { startSec?: number; endSec?: number }) => void;
@@ -125,6 +127,10 @@ export function useOverlayModel(params: {
       [write],
     ),
     addTrack: useCallback(() => write((next) => addOverlayTrack(next)), [write]),
+    removeTrack: useCallback(
+      (trackId) => write((next) => removeOverlayTrack(next, trackId)),
+      [write],
+    ),
     remove: useCallback((itemId) => write((next) => removeOverlayItem(next, itemId)), [write]),
     setStart: useCallback(
       (itemId, startSec) => write((next) => setOverlayStart(next, itemId, startSec)),

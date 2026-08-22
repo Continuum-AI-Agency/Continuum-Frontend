@@ -365,6 +365,19 @@ export function TimelineEditorDialog({
     if (selectedItemId) model.duplicate(selectedItemId);
   }, [model.duplicate, selectedItemId]);
 
+  // Dropping a lane drops its overlays with it, so a selection that lived there has
+  // to go too or the inspector would edit an item no longer in the document.
+  const handleRemoveOverlayTrack = useCallback(
+    (trackId: string) => {
+      const lane = overlayModel.lanes.find((candidate) => candidate.trackId === trackId);
+      if (lane?.items.some((item) => item.id === selectedOverlayId)) {
+        setSelectedOverlayId(undefined);
+      }
+      overlayModel.removeTrack(trackId);
+    },
+    [overlayModel.lanes, overlayModel.removeTrack, selectedOverlayId],
+  );
+
   // Library review feedback, projected onto this cut. Canvas-scoped timelines
   // are deliberately excluded: there a clip's source id names an upstream canvas
   // node, not a media.assets row, so there is nothing for a comment to hang off.
@@ -888,7 +901,10 @@ export function TimelineEditorDialog({
                   }}
                 />
               </div>
-              <div className="min-h-0 shrink-0 overflow-y-auto">
+              {/* Bounded so the lane list can be shorter than its content and scroll:
+                  a shrink-0 box with no max height is always exactly as tall as its
+                  lanes, which starves the timeline track below it. Two lanes fit. */}
+              <div className="max-h-44 min-h-0 shrink-0 overflow-y-auto">
                 <OverlayTracks
                   lanes={overlayModel.lanes}
                   pxPerSec={pxPerSec}
@@ -897,6 +913,7 @@ export function TimelineEditorDialog({
                   onSelect={selectOverlayClip}
                   onSetStart={overlayModel.setStart}
                   onAddTrack={overlayModel.addTrack}
+                  onRemoveTrack={handleRemoveOverlayTrack}
                   onRemove={(itemId) => {
                     overlayModel.remove(itemId);
                     if (selectedOverlayId === itemId) setSelectedOverlayId(undefined);
@@ -922,6 +939,8 @@ export function TimelineEditorDialog({
                     if (selectedItemId === itemId) setSelectedItemId(undefined);
                   }}
                   onSplit={model.split}
+                  onDuplicate={model.duplicate}
+                  onSetMute={model.setMuteAudio}
                   commentLane={
                     commentPlacements && adapter.brandId ? (
                       <TimelineCommentLayer

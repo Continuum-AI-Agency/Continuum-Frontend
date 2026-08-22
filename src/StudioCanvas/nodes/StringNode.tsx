@@ -220,6 +220,7 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                     brandId={brandId}
                     skillIds={inheritedGrounding.skillIds}
                     brandBookPieces={inheritedGrounding.brandBookPieces}
+                    designSystemSections={inheritedGrounding.designSystemSections}
                   />
                   <Button
                     size="sm"

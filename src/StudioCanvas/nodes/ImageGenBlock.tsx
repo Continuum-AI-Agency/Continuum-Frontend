@@ -2,6 +2,7 @@ import {
   type BrandBookPieceKind,
   type BrandDirectionPiece,
   coerceImageSize,
+  type DesignSection,
   DEFAULT_IMAGE_GENERATOR_MODEL,
   FIXED_IMAGE_PIXELS,
   getImageVariationHandleId,
@@ -54,6 +55,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { useBrandDirectionPieces } from '@/lib/brands/useBrandDirectionPieces.client';
 import { cn } from '@/lib/utils';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
+import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
 import { GroundingChip } from '../components/GroundingChip';
 import { NodeStatus } from '../components/NodeStatus';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -64,7 +66,9 @@ import {
   IMAGE_GENERATOR_NODE_BOUNDS,
   snapNodeDimensionsToAspectRatio,
 } from '../utils/aspectRatioSizing';
-import { toggleBrandPiece, toggleDirectionPiece, toggleSkillId } from '../utils/brandEnforcement';
+import { toggleBrandPiece, toggleDirectionPiece, toggleSkillId,
+  toggleDesignSection,
+} from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { generationErrorCopy } from '../utils/generationErrorCopy';
@@ -246,6 +250,32 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
     [authoredDirection, id, triggerSave, updateNode],
   );
 
+  /*
+   * The design-system half of the same control. `designSections` is what the brand's
+   * uploaded system actually has switched on, and it is the set the first toggle expands
+   * into: `undefined` is "no preference", so landing on `[section]` would switch every
+   * other section off as a side effect of touching one.
+   */
+  const { sections: designSections } = useBrandDesignSections(brandId);
+  const handleToggleDesignSection = useCallback(
+    (section: DesignSection) => {
+      const enabled = designSections.map((entry) => entry.section);
+      updateNode(id, (node) => ({
+        ...node,
+        data: {
+          ...(node.data as NanoGenNodeData),
+          designSystemSections: toggleDesignSection(
+            (node.data as NanoGenNodeData).designSystemSections,
+            section,
+            enabled,
+          ),
+        },
+      }));
+      triggerSave();
+    },
+    [designSections, id, triggerSave, updateNode],
+  );
+
   const handleVariationCountChange = useCallback(
     (count: VariationCount) => {
       const previousCount = data.variationCount ?? 1;
@@ -422,6 +452,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                 editable
                 onToggleSkill={handleToggleSkill}
                 onTogglePiece={handleToggleBrandPiece}
+                designSystemSections={data.designSystemSections}
+                onToggleDesignSection={handleToggleDesignSection}
                 brandDirectionPieces={data.brandDirectionPieces}
                 onToggleDirectionPiece={handleToggleDirectionPiece}
                 className="bg-background/90 shadow-sm backdrop-blur-sm"

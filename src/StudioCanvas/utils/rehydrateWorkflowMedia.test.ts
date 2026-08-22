@@ -64,4 +64,54 @@ describe('rehydrateWorkflowMediaNodes', () => {
     expect((hydrated[0].data as any).image).toBe('data:image/png;base64,already_here');
     expect(resolver).toHaveBeenCalledTimes(0);
   });
+  it('skips the base64 download when re-signing already refreshed the reference', async () => {
+    const resolver = mock(async () => ({ base64: 'should_not_be_fetched' }));
+    const nodes: StudioNode[] = [
+      {
+        id: 'img-1',
+        type: 'image',
+        position: { x: 0, y: 0 },
+        data: {
+          image: undefined,
+          sourcePath: 'media-library/image.png',
+          bucket: 'media-library',
+        } as any,
+      },
+    ];
+    // Stands in for the sign route: returns a NEW node object carrying a fresh URL,
+    // exactly as resignCanvasNodes does for a reference with durable coordinates.
+    const resign = mock(async (input: StudioNode[]) =>
+      input.map((node) => ({
+        ...node,
+        data: { ...(node.data as any), image: 'https://x/signed', sourceUrl: 'https://x/signed' },
+      })),
+    );
+
+    const hydrated = await rehydrateWorkflowMediaNodes(nodes, resolver, 'brand-1', resign as any);
+
+    expect((hydrated[0].data as any).image).toBe('https://x/signed');
+    expect(resolver).toHaveBeenCalledTimes(0);
+  });
+
+  it('still inlines bytes for a reference the re-sign could not refresh', async () => {
+    const resolver = mock(async () => ({ base64: 'cdn_base64', sourceName: 'remote.png' }));
+    const nodes: StudioNode[] = [
+      {
+        id: 'img-1',
+        type: 'image',
+        position: { x: 0, y: 0 },
+        data: {
+          image: undefined,
+          // No bucket: a remote CDN reference has nothing durable to re-sign.
+          sourceUrl: 'https://cdn.instagram.test/image.png',
+        } as any,
+      },
+    ];
+    const resign = mock(async (input: StudioNode[]) => input);
+
+    const hydrated = await rehydrateWorkflowMediaNodes(nodes, resolver, 'brand-1', resign as any);
+
+    expect((hydrated[0].data as any).image).toBe('data:image/png;base64,cdn_base64');
+    expect(resolver).toHaveBeenCalledTimes(1);
+  });
 });

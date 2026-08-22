@@ -17,6 +17,7 @@ export function OverlayTracks({
   onSetStart,
   onRemove,
   onAddTrack,
+  onRemoveTrack,
 }: {
   lanes: OverlayLane[];
   pxPerSec: number;
@@ -26,6 +27,7 @@ export function OverlayTracks({
   onSetStart: (id: string, startSec: number) => void;
   onRemove: (id: string) => void;
   onAddTrack: () => void;
+  onRemoveTrack: (trackId: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -48,6 +50,7 @@ export function OverlayTracks({
           onSelect={onSelect}
           onSetStart={onSetStart}
           onRemove={onRemove}
+          onRemoveTrack={() => onRemoveTrack(lane.trackId)}
         />
       ))}
     </div>

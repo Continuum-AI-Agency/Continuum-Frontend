@@ -8,7 +8,7 @@
 // it is read-only — it surfaces the grounding inherited from the downstream
 // generator so "tele-fill" visibly shows it is brand-guarded + skill-aware.
 
-import type { BrandBookPieceKind, BrandDirectionPiece } from '@continuum/contracts';
+import type { BrandBookPieceKind, BrandDirectionPiece, DesignSection } from '@continuum/contracts';
 import { ChevronDown, Gem } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -34,6 +34,9 @@ type Props = {
   /** Tri-state: undefined = everything the plan admits, [] = none, a list narrows. */
   brandDirectionPieces?: BrandDirectionPiece[];
   onToggleDirectionPiece?: (piece: BrandDirectionPiece) => void;
+  /** Tri-state: undefined = the Backend resolves it from the rigor tier, [] = off. */
+  designSystemSections?: DesignSection[] | undefined;
+  onToggleDesignSection?: (section: DesignSection) => void;
   // Read-only → the chip surfaces grounding inherited by the enrich node.
   inherited?: boolean;
   className?: string;
@@ -44,10 +47,12 @@ export function GroundingChip({
   skillIds,
   brandBookPieces,
   brandDirectionPieces,
+  designSystemSections,
   editable,
   onToggleSkill,
   onTogglePiece,
   onToggleDirectionPiece,
+  onToggleDesignSection,
   inherited,
   className,
 }: Props) {
@@ -162,9 +167,11 @@ export function GroundingChip({
             skillIds={ids}
             brandBookPieces={brandBookPieces}
             brandDirectionPieces={brandDirectionPieces}
+            designSystemSections={designSystemSections}
             onToggleSkill={(id) => onToggleSkill?.(id)}
             onTogglePiece={(kind) => onTogglePiece?.(kind)}
             {...(onToggleDirectionPiece ? { onToggleDirectionPiece } : {})}
+            {...(onToggleDesignSection ? { onToggleDesignSection } : {})}
           />
         </PopoverContent>
       </Popover>

@@ -1,3 +1,4 @@
+import { withForcedDownload } from '@/lib/media/downloadUrl';
 import { parseDataUrl } from './dataUrl';
 
 const MIME_EXTENSION_MAP: Record<string, string> = {
@@ -63,11 +64,11 @@ export const downloadAsset = (options: {
 
   if (!url) return false;
 
+  const fileName = buildDownloadName(baseName, extension);
   const link = document.createElement('a');
-  link.href = url;
-  link.download = buildDownloadName(baseName, extension);
+  link.href = withForcedDownload(url, fileName);
+  link.download = fileName;
   link.rel = 'noopener';
-  link.target = '_blank';
   link.click();
 
   if (revokeUrl) {

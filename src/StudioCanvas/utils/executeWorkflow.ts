@@ -62,7 +62,11 @@ const isMediaNodeType = (nodeType: string | undefined): nodeType is string =>
 // backed by the same publishing service as the studio_deliver MCP tool). Surfacing
 // them keeps a run from looking complete while its terminal node silently no-ops.
 const PUBLISHER_NODE_KINDS: Record<string, 'organic' | 'paid' | 'render'> = {
-  organicPublisher: 'organic',
+  plannerDraft: 'organic',
+  // Publishing is the one handoff a Run must never perform on its own: it is
+  // irreversible and publicly visible, and it is gated on a human confirmation bound
+  // to what that human was shown.
+  organicPublish: 'organic',
   paidPublisher: 'paid',
   apiRender: 'render',
 };

@@ -1,9 +1,26 @@
 'use client';
 
+// The discovery failures a brand owner can actually hit, in words they can act
+// on. Echoing the raw server code told them nothing and gave them no next step.
+const RENDER_DISCOVERY_MESSAGES: Record<string, string> = {
+  render_workspace_not_bound:
+    'This brand is not connected to a render workspace yet. Ask your Continuum contact to set one up.',
+  render_binding_lookup_failed: 'Could not read this brand’s render workspace. Try again shortly.',
+  render_api_not_configured: 'Rendering is not configured for this environment yet.',
+};
+
+export function describeRenderDiscoveryFailure(message: string): string {
+  for (const [code, copy] of Object.entries(RENDER_DISCOVERY_MESSAGES)) {
+    if (message.includes(code)) return copy;
+  }
+  return message || 'Render discovery failed';
+}
+
 import type {
   ApiRenderJob,
   ApiRenderPreflightResponse,
   ApiRenderTemplateSummary,
+  ApiRenderWorkspaceStatus,
   PaidCanvasTarget,
 } from '@continuum/contracts';
 import {
@@ -58,6 +75,10 @@ export function ApiRenderBlock({
   const [prepared, setPrepared] = useState<ApiRenderPreflightResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error`: a workspace that the render fleet does not honour is
+  // not a failed request, it is a working request with the wrong destination.
+  // Showing it as an error would be wrong, and showing nothing is worse.
+  const [workspace, setWorkspace] = useState<ApiRenderWorkspaceStatus | null>(null);
 
   const patchData = useCallback(
     (patch: Partial<ApiRenderNodeData>) => {
@@ -76,6 +97,22 @@ export function ApiRenderBlock({
     setJobs(response.items);
   }, [brandId]);
 
+  // A render takes minutes and finishes long after the click. Without this the node
+  // only ever updated when someone pressed refresh, so a finished render — and the
+  // library asset behind it — stayed invisible on screen that was already showing it.
+  const inFlight = jobs.some(
+    (job) => job.status === 'submitting' || job.status === 'queued' || job.status === 'rendering',
+  );
+  useEffect(() => {
+    if (!inFlight) return;
+    const timer = setInterval(() => {
+      void refreshJobs().catch(() => {
+        // A dropped poll is not a render failure; the next tick retries.
+      });
+    }, 5_000);
+    return () => clearInterval(timer);
+  }, [inFlight, refreshJobs]);
+
   useEffect(() => {
     if (!brandId) return;
     let cancelled = false;
@@ -84,16 +121,28 @@ export function ApiRenderBlock({
         if (cancelled) return;
         setTemplates(templateResponse.items);
         setJobs(jobResponse.items);
+        setWorkspace(templateResponse.workspace ?? null);
       })
       .catch(
         (cause) =>
           !cancelled &&
-          setError(cause instanceof Error ? cause.message : 'Render discovery failed'),
+          setError(
+            cause instanceof Error
+              ? describeRenderDiscoveryFailure(cause.message)
+              : 'Render discovery failed',
+          ),
       );
     return () => {
       cancelled = true;
     };
   }, [brandId]);
+
+  const latestJob = data.latestJobId ? jobs.find((job) => job.id === data.latestJobId) : undefined;
+  useEffect(() => {
+    if (!latestJob || latestJob.status !== 'finished' || latestJob.outputs.length === 0) return;
+    if (JSON.stringify(data.latestOutputs ?? []) === JSON.stringify(latestJob.outputs)) return;
+    patchData({ latestOutputs: latestJob.outputs, status: 'finished' });
+  }, [latestJob, data.latestOutputs, patchData]);
 
   const paidLevel = data.delivery?.campaignId ? 'adset' : 'campaign';
   useEffect(() => {
@@ -366,6 +415,11 @@ export function ApiRenderBlock({
           {error ? (
             <p className="rounded bg-destructive/10 px-2 py-1 text-2xs text-destructive">{error}</p>
           ) : null}
+          {workspace && !workspace.renderEligible ? (
+            <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-2xs">
+              {workspace.detail}
+            </p>
+          ) : null}
           {prepared ? (
             <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-2xs">
               <p>{prepared.template.name}</p>
@@ -411,7 +465,21 @@ export function ApiRenderBlock({
           </div>
           <div className="space-y-1">
             {jobs.length === 0 ? (
-              <p className="text-2xs text-muted-foreground">No renders for this brand yet.</p>
+              // On remount the job list is empty until the fetch lands. Showing the
+              // last render from the saved node data means the canvas is never blank
+              // about work it already did.
+              data.latestOutputs?.[0] ? (
+                <a
+                  className="nodrag block text-2xs text-brand-primary underline-offset-2 hover:underline"
+                  href={data.latestOutputs[0].url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Last render · {data.latestOutputs[0].fileName}
+                </a>
+              ) : (
+                <p className="text-2xs text-muted-foreground">No renders for this brand yet.</p>
+              )
             ) : null}
             {jobs.map((job) => (
               <div key={job.id} className="rounded border border-border/60 p-2 text-2xs">
@@ -430,14 +498,39 @@ export function ApiRenderBlock({
                   <span className="block truncate text-muted-foreground">{statusLabel(job)}</span>
                 </button>
                 {job.outputs[0] ? (
-                  <a
-                    className="nodrag mt-1 inline-block text-brand-primary underline-offset-2 hover:underline"
-                    href={job.outputs[0].url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View {job.outputs[0].fileName}
-                  </a>
+                  <div className="mt-1 space-y-1">
+                    {job.outputs[0].kind === 'video' ? (
+                      // biome-ignore lint/a11y/useMediaCaption: a rendered ad has no caption track
+                      <video
+                        className="nodrag w-full rounded border border-border/60"
+                        src={job.outputs[0].url}
+                        controls
+                        preload="metadata"
+                      />
+                    ) : (
+                      <img
+                        className="nodrag w-full rounded border border-border/60"
+                        src={job.outputs[0].url}
+                        alt={`${job.templateName} render`}
+                        loading="lazy"
+                      />
+                    )}
+                    <div className="flex items-center justify-between gap-2">
+                      <a
+                        className="nodrag text-brand-primary underline-offset-2 hover:underline"
+                        href={job.outputs[0].url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open {job.outputs[0].fileName}
+                      </a>
+                      <span className="text-muted-foreground">
+                        {job.outputs[0].assetId
+                          ? `Saved to Library${job.outputs.length > 1 ? ` · ${job.outputs.length} outputs` : ''}`
+                          : 'Saving to Library…'}
+                      </span>
+                    </div>
+                  </div>
                 ) : null}
               </div>
             ))}

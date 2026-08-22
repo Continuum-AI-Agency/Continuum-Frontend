@@ -1,7 +1,7 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
-import { Image, Video, X } from 'lucide-react';
+import { Image, Trash2, Video, X } from 'lucide-react';
 import type React from 'react';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +39,7 @@ export function OverlayTrack({
   onSelect,
   onSetStart,
   onRemove,
+  onRemoveTrack,
 }: {
   items: OverlayLaneItem[];
   pxPerSec: number;
@@ -50,6 +51,7 @@ export function OverlayTrack({
   onSelect: (id: string) => void;
   onSetStart: (id: string, startSec: number) => void;
   onRemove: (id: string) => void;
+  onRemoveTrack: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
   const contentWidth = Math.max(totalSec * pxPerSec + TRACK_PADDING_PX, 480);
@@ -71,9 +73,19 @@ export function OverlayTrack({
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
+      <div className="flex items-center gap-1">
+        <span className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </span>
+        <button
+          type="button"
+          onClick={onRemoveTrack}
+          className="flex h-4 w-4 items-center justify-center rounded-sm text-muted-foreground hover:bg-destructive hover:text-destructive-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <Trash2 className="h-2.5 w-2.5" />
+          <span className="sr-only">Remove {label} layer</span>
+        </button>
+      </div>
       <div className="min-h-0 overflow-x-auto rounded-lg border border-border/60 bg-muted/10">
         <div
           ref={setNodeRef}
@@ -93,7 +105,7 @@ export function OverlayTrack({
               onPointerDown={startDrag(item.id, item.startSec)}
               onClick={() => onSelect(item.id)}
               className={cn(
-                'group/ov absolute top-1 bottom-1 flex items-center gap-1 overflow-hidden rounded-md border bg-gradient-to-b from-muted/60 to-muted/30 px-2 cursor-grab active:cursor-grabbing',
+                'group/ov absolute top-1 bottom-1 rounded-md border bg-gradient-to-b from-muted/60 to-muted/30 cursor-grab active:cursor-grabbing',
                 item.id === selectedId ? 'border-primary ring-1 ring-primary' : 'border-border/60',
               )}
               style={{
@@ -101,12 +113,16 @@ export function OverlayTrack({
                 width: Math.max(24, item.durationSec * pxPerSec),
               }}
             >
-              {item.kind === 'video' ? (
-                <Video className="h-3 w-3 shrink-0 text-muted-foreground" />
-              ) : (
-                <Image className="h-3 w-3 shrink-0 text-muted-foreground" />
-              )}
-              <span className="truncate text-2xs font-medium">{item.label}</span>
+              {/* The label row owns the overflow clip so the remove control, which sits
+                  outside the flow, stays visible on a clip only a few pixels wide. */}
+              <div className="flex h-full items-center gap-1 overflow-hidden pl-2 pr-5">
+                {item.kind === 'video' ? (
+                  <Video className="h-3 w-3 shrink-0 text-muted-foreground" />
+                ) : (
+                  <Image className="h-3 w-3 shrink-0 text-muted-foreground" />
+                )}
+                <span className="truncate text-2xs font-medium">{item.label}</span>
+              </div>
               <button
                 type="button"
                 aria-label="Remove overlay"
@@ -115,7 +131,7 @@ export function OverlayTrack({
                   event.stopPropagation();
                   onRemove(item.id);
                 }}
-                className="ml-auto hidden h-4 w-4 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground hover:bg-destructive hover:text-destructive-foreground group-hover/ov:flex"
+                className="absolute right-0.5 top-1/2 hidden h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground hover:bg-destructive hover:text-destructive-foreground group-hover/ov:flex"
               >
                 <X className="h-2.5 w-2.5" />
               </button>

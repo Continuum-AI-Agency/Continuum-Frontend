@@ -2118,7 +2118,7 @@ describe('collectPublisherHandoffs', () => {
   it('reports a publisher sink fed by the run scope as a handoff', () => {
     const nodes: StudioNode[] = [
       { id: 'gen', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
-      { id: 'pub', position: { x: 0, y: 0 }, data: { format: 'image' }, type: 'organicPublisher' },
+      { id: 'pub', position: { x: 0, y: 0 }, data: { format: 'image' }, type: 'plannerDraft' },
     ];
     const edges: Edge[] = [{ id: 'e1', source: 'gen', target: 'pub', targetHandle: 'image-in' }];
 
@@ -2140,7 +2140,7 @@ describe('collectPublisherHandoffs', () => {
   it('ignores a publisher not reachable from the run scope', () => {
     const nodes: StudioNode[] = [
       { id: 'gen', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
-      { id: 'orphan', position: { x: 0, y: 0 }, data: {}, type: 'organicPublisher' },
+      { id: 'orphan', position: { x: 0, y: 0 }, data: {}, type: 'plannerDraft' },
     ];
     // No edge from gen → orphan, so a run of `gen` never feeds it.
     expect(collectPublisherHandoffs(nodes, [], ['gen'])).toEqual([]);
@@ -2148,10 +2148,11 @@ describe('collectPublisherHandoffs', () => {
 
   it('returns every publisher when no scope is given', () => {
     const nodes: StudioNode[] = [
-      { id: 'a', position: { x: 0, y: 0 }, data: {}, type: 'organicPublisher' },
+      { id: 'a', position: { x: 0, y: 0 }, data: {}, type: 'plannerDraft' },
       { id: 'b', position: { x: 0, y: 0 }, data: {}, type: 'paidPublisher' },
       { id: 'c', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
+      { id: 'd', position: { x: 0, y: 0 }, data: {}, type: 'organicPublish' },
     ];
-    expect(collectPublisherHandoffs(nodes, [])).toHaveLength(2);
+    expect(collectPublisherHandoffs(nodes, [])).toHaveLength(3);
   });
 });

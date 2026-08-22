@@ -1,4 +1,5 @@
 import type {
+  ApiRenderOutput,
   ApiRenderVariable,
   BrandBookPieceKind,
   BrandDirectionPiece,
@@ -7,6 +8,7 @@ import type {
   CanvasRenderContinuation,
   CanvasTimelineRenderRequest,
   HyperframesAgentNodeData as ContractHyperframesAgentNodeData,
+  DesignSection,
   EditorProductionSummary,
   ImageGeneratorModel,
   ImageSize,
@@ -30,6 +32,7 @@ export type {
   BrandBookPieceKind,
   BrandDirectionPiece,
   Connection,
+  DesignSection,
   Edge,
   EdgeChange,
   ImageGeneratorModel,
@@ -112,6 +115,15 @@ export interface NanoGenNodeData extends BaseNodeData {
    * brand direction at all, a list narrows.
    */
   brandDirectionPieces?: BrandDirectionPiece[];
+  /**
+   * Which sections of the brand's uploaded design system apply to this generation.
+   *
+   * Tri-state, matching the Backend: `undefined` = no preference, and the Backend resolves
+   * it from the system's own rigor tier (`sectionsForTier`) rather than a fixed default;
+   * `[]` = off; a list narrows. A third switch alongside the two above, because a design
+   * system is a third source with its own vocabulary.
+   */
+  designSystemSections?: DesignSection[];
   seed?: number;
   steps?: number;
   guidance?: number;
@@ -251,6 +263,15 @@ export interface VideoGenNodeData extends BaseNodeData {
    * brand direction at all, a list narrows.
    */
   brandDirectionPieces?: BrandDirectionPiece[];
+  /**
+   * Which sections of the brand's uploaded design system apply to this generation.
+   *
+   * Tri-state, matching the Backend: `undefined` = no preference, and the Backend resolves
+   * it from the system's own rigor tier (`sectionsForTier`) rather than a fixed default;
+   * `[]` = off; a list narrows. A third switch alongside the two above, because a design
+   * system is a third source with its own vocabulary.
+   */
+  designSystemSections?: DesignSection[];
   aspectRatio?: '16:9' | '9:16';
   resolution?: '720p' | '1080p' | '2K' | '4K' | '4k';
   durationSeconds?: 4 | 6 | 8;
@@ -413,13 +434,47 @@ export interface TimelineEditorNodeData extends BaseNodeData {
   unsupportedReason?: string;
 }
 
+/**
+ * The organic Planner draft a canvas branch is bound to — found or created here.
+ *
+ * `targetUpdatedAt` is the optimistic-concurrency token every write carries: it is the
+ * `updated_at` this node last saw, and the planner refuses a write against a stale one.
+ * Platform and account are only settable while creating, because the canonical planner
+ * field-edit funnel cannot move them once the row exists.
+ */
+export interface PlannerDraftNodeData extends BaseNodeData {
+  mode?: 'find' | 'create';
+  format: CanvasPublishingFormat;
+  assetSlots?: CanvasPublishingSlot[];
+  targetDraftId?: string;
+  targetUpdatedAt?: string;
+  targetTitle?: string;
+  targetStatus?: string;
+  targetFormat?: CanvasPublishingFormat;
+  caption?: string;
+  dayId?: string;
+  timeOfDay?: string;
+  platform?: string;
+  platformAccountId?: string;
+  /** Set once a save lands, so a downstream publish knows the row is real. */
+  savedAt?: string;
+  error?: string;
+}
+
+/** Post the upstream draft — now, or on the schedule the draft already carries. */
+export interface OrganicPublishNodeData extends BaseNodeData {
+  schedule?: 'now' | 'scheduled';
+  publishedAt?: string;
+  platformPostId?: string;
+  error?: string;
+}
+
 export interface PublisherNodeData extends BaseNodeData {
   format: CanvasPublishingFormat;
   assetSlots?: CanvasPublishingSlot[];
   targetDraftId?: string;
   targetUpdatedAt?: string;
   targetTitle?: string;
-  weekStartId?: string;
   adAccountId?: string;
   campaignId?: string;
   campaignName?: string;
@@ -453,6 +508,13 @@ export interface ApiRenderNodeData extends BaseNodeData {
   } | null;
   status: 'idle' | 'prepared' | 'submitting' | 'queued' | 'rendering' | 'finished' | 'failed';
   latestJobId?: string;
+  /**
+   * The latest job's finished outputs, kept on the node so a render survives a
+   * remount. Jobs themselves live in component state and are re-fetched; these
+   * exist so the canvas still shows what it produced before that returns.
+   * Safe to persist in the graph: URLs and library ids, no brand claim.
+   */
+  latestOutputs?: ApiRenderOutput[];
 }
 
 // One clip in an Omni node's variation micro-library. The first is the
@@ -496,6 +558,15 @@ export interface OmniGenNodeData extends BaseNodeData {
    * brand direction at all, a list narrows.
    */
   brandDirectionPieces?: BrandDirectionPiece[];
+  /**
+   * Which sections of the brand's uploaded design system apply to this generation.
+   *
+   * Tri-state, matching the Backend: `undefined` = no preference, and the Backend resolves
+   * it from the system's own rigor tier (`sectionsForTier`) rather than a fixed default;
+   * `[]` = off; a list narrows. A third switch alongside the two above, because a design
+   * system is a third source with its own vocabulary.
+   */
+  designSystemSections?: DesignSection[];
   variations?: OmniVariation[];
   activeVariationId?: string;
   previousInteractionId?: string;
@@ -513,6 +584,8 @@ export type StudioNodeData =
   | OmniGenNodeData
   | ExtendVideoNodeData
   | TimelineEditorNodeData
+  | PlannerDraftNodeData
+  | OrganicPublishNodeData
   | PublisherNodeData
   | ApiRenderNodeData
   | ImageNodeData

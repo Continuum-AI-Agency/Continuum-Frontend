@@ -406,7 +406,7 @@ export function resolveInheritedGrounding(
   nodeId: string,
   allNodes: StudioNode[],
   allEdges: Edge[],
-): Pick<EnrichPromptPayload, 'skillIds' | 'brandBookPieces'> {
+): Pick<EnrichPromptPayload, 'skillIds' | 'brandBookPieces' | 'designSystemSections'> {
   const nodeById = new Map(allNodes.map((n) => [n.id, n]));
   const targetGenNode = allEdges
     .filter((edge) => edge.source === nodeId)
@@ -421,6 +421,7 @@ export function resolveInheritedGrounding(
     return {
       skillIds: genData.skillIds && genData.skillIds.length > 0 ? genData.skillIds : undefined,
       brandBookPieces: effectiveBrandBookPieces(genData.brandBookPieces),
+      designSystemSections: genData.designSystemSections,
     };
   }
 
@@ -643,6 +644,11 @@ export function buildNanoGenPayload(
      * into "all", which is the one mistake this field cannot survive.
      */
     brandDirectionPieces: data.brandDirectionPieces,
+    // Same tri-state discipline as the line above: passed through untouched, never
+    // coerced. `[]` is the user switching the design system off for this node and
+    // `undefined` is the Backend resolving it from the rigor tier — collapsing one
+    // into the other silently swaps "off" for "apply everything".
+    designSystemSections: data.designSystemSections,
   };
 }
 
@@ -817,6 +823,7 @@ export function buildVeoPayload(
         : undefined,
     skillIds: data.skillIds && data.skillIds.length > 0 ? data.skillIds : undefined,
     brandBookPieces: effectiveBrandBookPieces(data.brandBookPieces),
+    designSystemSections: data.designSystemSections,
   };
 }
 
@@ -905,6 +912,7 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
     skill_ids: payload.skillIds,
     brand_book_pieces: payload.brandBookPieces,
     brand_direction_pieces: payload.brandDirectionPieces,
+    design_system_sections: payload.designSystemSections,
     reference_asset_ids: payload.referenceAssetIds,
   };
 }
