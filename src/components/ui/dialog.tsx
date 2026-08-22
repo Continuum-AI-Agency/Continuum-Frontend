@@ -57,7 +57,11 @@ function DialogContent({
         className={cn(
           // max-h + overflow are ours, not base-nova's: without them a dialog taller than the
           // viewport runs off-screen with no way to reach its actions.
-          'fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-lg data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          // [&>*]:min-w-0 is the horizontal half of the same idea, and the sibling of the
+          // flex-1/min-h-0 rule in docs/styleguide.md: grid items default to min-width:auto,
+          // so one long unbreakable label (a metric key, a URL) sets the item's floor wider
+          // than max-w-lg and paints outside the dialog instead of wrapping inside it.
+          'fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-lg data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 [&>*]:min-w-0',
           className,
         )}
         {...props}

@@ -7,6 +7,7 @@ import type {
   MediaKind,
   MediaReviewStatus,
   MediaSource,
+  MediaStatus,
   VideoCreativeInsights,
 } from '@continuum/contracts';
 
@@ -25,7 +26,7 @@ export type MediaAssetRow = {
   duration_ms: number | null;
   source: MediaSource;
   origin_ref: Record<string, unknown> | null;
-  status: 'stored' | 'analyzing' | 'ready' | 'error' | 'skipped_free';
+  status: MediaStatus;
   // Optional so pre-v2 cached payloads/fixtures without the columns still
   // typecheck; the mapper defaults them ('none' / null).
   review_status?: MediaReviewStatus;

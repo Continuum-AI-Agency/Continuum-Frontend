@@ -271,6 +271,37 @@ export async function generateVideoPoster(
   }
 }
 
+/**
+ * Source duration in seconds, read off the container without decoding a frame.
+ *
+ * Sent with `register` so analyze_media can skip long-form video: that function
+ * receives bytes and cannot cheaply learn a duration from them, whereas the browser
+ * already has the decoded file in hand.
+ *
+ * Fail-soft, like everything else on the upload path — null on an unsupported
+ * container, a missing video track, or a header carrying no duration. A null only
+ * means the long-form skip cannot be applied; it never fails the upload.
+ */
+export async function probeVideoDurationSec(file: Blob): Promise<number | null> {
+  try {
+    const { Input, BlobSource, ALL_FORMATS } = await import('mediabunny');
+    const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+    try {
+      const track = await input.getPrimaryVideoTrack();
+      if (!track) return null;
+      const durationSec = await track.computeDuration().catch(() => null);
+      return typeof durationSec === 'number' && Number.isFinite(durationSec) && durationSec > 0
+        ? durationSec
+        : null;
+    } finally {
+      input.dispose();
+    }
+  } catch (error) {
+    console.warn('[library/videoPoster] duration probe failed', error);
+    return null;
+  }
+}
+
 export const POSTER_FILE_NAME = 'thumb';
 
 // Uploads the poster through the brand-guarded thumbnail route, which derives the

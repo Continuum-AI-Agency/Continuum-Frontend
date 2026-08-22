@@ -56,8 +56,19 @@ export type MediaSource = z.infer<typeof mediaSourceSchema>;
 
 // stored: persisted, not yet analyzed. analyzing: pipeline running.
 // ready: analysis complete. error: pipeline failed. skipped_free: analysis
-// withheld because the brand is not on a paid tier.
-export const mediaStatusSchema = z.enum(['stored', 'analyzing', 'ready', 'error', 'skipped_free']);
+// withheld because the brand is not on a paid tier. skipped_long_form: the video
+// is longer than vision analysis is scoped for (that pass reads ad creative), so
+// it was deliberately not analyzed. Like skipped_free it is a TERMINAL state, not
+// a failure — the bytes are intact and the asset is fully usable, which is why
+// clip generation accepts it.
+export const mediaStatusSchema = z.enum([
+  'stored',
+  'analyzing',
+  'ready',
+  'error',
+  'skipped_free',
+  'skipped_long_form',
+]);
 export type MediaStatus = z.infer<typeof mediaStatusSchema>;
 
 // Normalized 0..1 bounding box (origin top-left). The edge pipeline converts

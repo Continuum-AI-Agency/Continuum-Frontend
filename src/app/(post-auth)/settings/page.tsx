@@ -100,7 +100,14 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   } else if (initialSection === 'general') {
     const repo = createBrandProfileRepository();
     const [brandProfile, members, invites, pulseRecipients] = await Promise.all([
-      fetchBrandProfileDetails(activeBrandId),
+      // The only fetch here that rejects rather than returning empty — deliberately, and
+      // its test says so. In a Promise.all that took the whole Settings route down through
+      // the error boundary, so an unreadable brand row cost the user the members list, the
+      // brand list, and every other section too. brandName already falls back below.
+      fetchBrandProfileDetails(activeBrandId).catch((error) => {
+        console.error(`[settings] Failed to load brand profile ${activeBrandId}`, error);
+        return null;
+      }),
       repo.fetchMembers(activeBrandId),
       fetchBrandInviteLedger(activeBrandId),
       fetchPulseRecipients(activeBrandId),
