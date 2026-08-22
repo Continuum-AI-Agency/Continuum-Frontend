@@ -209,7 +209,8 @@ export function shapeUserSuppliedMedia(
     throw new Error(`shapeUserSuppliedMedia: ${multiVideo}`);
   }
   const primary = list[0];
-  const format = options?.format ?? publishFormatForAssetKinds(list.map((item) => item.kind));
+  const publishableKinds = list.flatMap((item) => (item.kind === 'file' ? [] : [item.kind]));
+  const format = options?.format ?? publishFormatForAssetKinds(publishableKinds);
 
   // VIDEO / REEL — a single user video fills the reel slot.
   if (format === 'REEL' && primary.kind === 'video') {

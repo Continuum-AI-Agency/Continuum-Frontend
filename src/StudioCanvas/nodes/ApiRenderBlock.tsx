@@ -420,7 +420,7 @@ export function ApiRenderBlock({
               {workspace.detail}
             </p>
           ) : null}
-          {prepared ? (
+          {prepared?.target ? (
             <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-2xs">
               <p>{prepared.template.name}</p>
               <p>

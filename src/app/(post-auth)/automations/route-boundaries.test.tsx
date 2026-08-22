@@ -172,7 +172,7 @@ let automationsPage: typeof import('./page')['default'] | null = null;
 // The workspace page's default export is now just the Suspense wrapper; the
 // redirect/notFound/throw contract under test lives in the loader beneath it.
 let automationWorkspacePage:
-  | typeof import('./[automationId]/page')['AutomationWorkspaceLoader']
+  | typeof import('./[automationId]/automationWorkspaceLoader')['AutomationWorkspaceLoader']
   | null = null;
 
 const NAVIGATION_SHADOW_DIAGNOSTIC =
@@ -186,7 +186,8 @@ beforeAll(async () => {
   mock.module('next/navigation', navigationModuleFactory);
   try {
     automationsPage = (await import('./page')).default;
-    automationWorkspacePage = (await import('./[automationId]/page')).AutomationWorkspaceLoader;
+    automationWorkspacePage = (await import('./[automationId]/automationWorkspaceLoader'))
+      .AutomationWorkspaceLoader;
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause);
     throw new Error(`${NAVIGATION_SHADOW_DIAGNOSTIC} Loader error: ${detail}`);
