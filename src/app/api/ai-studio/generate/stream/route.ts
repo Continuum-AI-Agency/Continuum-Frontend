@@ -3,9 +3,6 @@ import { NextResponse } from 'next/server';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 function buildBackendUrl(path: string): string {
   return new URL(path, getApiBaseUrl()).toString();
 }

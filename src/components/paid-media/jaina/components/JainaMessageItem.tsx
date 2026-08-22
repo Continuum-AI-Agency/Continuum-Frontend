@@ -107,7 +107,13 @@ type JainaMessageItemProps = {
   state: JainaStreamState;
   onSuggestionClick?: (query: string) => void;
   onPlanFeedback?: (payload: PlanFeedbackPayload) => void;
-  onRegenerate?: () => void;
+  /**
+   * Takes the prompt rather than a prepared thunk: a thunk closed over the preceding message
+   * would be a new function on every parent render, which is exactly what defeats the memo
+   * below and puts every finished message back into each streaming frame's render.
+   */
+  onRegenerate?: (prompt: string) => void;
+  regeneratePrompt?: string;
   onFocusInput?: () => void;
   onScaffoldDecision?: (
     approval: JainaToolApprovalRequiredPayload,
@@ -117,13 +123,14 @@ type JainaMessageItemProps = {
   optimisticScaffoldDecisions?: Record<string, ScaffoldDecision>;
 };
 
-export function JainaMessageItem({
+function JainaMessageItemImpl({
   message,
   activeResponseId,
   state,
   onSuggestionClick,
   onPlanFeedback,
   onRegenerate,
+  regeneratePrompt,
   onFocusInput,
   onScaffoldDecision,
   optimisticScaffoldDecisions,
@@ -375,7 +382,14 @@ export function JainaMessageItem({
             ) : null}
 
             {!isStreaming && message.status === 'done' ? (
-              <MessageActionBar content={message.content} onRegenerate={onRegenerate} />
+              <MessageActionBar
+                content={message.content}
+                onRegenerate={
+                  onRegenerate && regeneratePrompt
+                    ? () => onRegenerate(regeneratePrompt)
+                    : undefined
+                }
+              />
             ) : null}
           </>
         )}
@@ -383,3 +397,14 @@ export function JainaMessageItem({
     </ChatMessage>
   );
 }
+
+/**
+ * A streaming turn re-folds state many times a second, and each fold re-renders the transcript.
+ * Without this, every prior message re-runs its Markdown parse (Shiki/math/mermaid) and every
+ * chart in every earlier report re-renders — for messages that cannot have changed.
+ *
+ * The memo only bites while the props of a finished message stay referentially equal: the surface
+ * keeps each message object's identity across updates, hands non-live items a shared idle stream
+ * state, and passes the regenerate prompt as a string rather than a freshly-closed thunk.
+ */
+export const JainaMessageItem = React.memo(JainaMessageItemImpl);

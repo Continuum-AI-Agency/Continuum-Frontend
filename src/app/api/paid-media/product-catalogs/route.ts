@@ -118,8 +118,6 @@ function normalizeMetaCatalogCreateResponse(input: unknown): MetaCatalogCreateRe
   };
 }
 
-export const runtime = 'nodejs';
-
 export async function GET(request: NextRequest) {
   const brandId = request.nextUrl.searchParams.get('brandId');
   if (!brandId) {

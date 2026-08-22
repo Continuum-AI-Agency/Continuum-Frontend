@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import { useToast } from '@/components/ui/ToastProvider';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { registerStrategicRunsCatchUp } from './realtimeBus';
 
@@ -80,40 +81,42 @@ export function StrategicAnalysisRealtimeListener({ brandId }: Props) {
 
     const unregister = registerStrategicRunsCatchUp(brandId, catchUpMissed);
 
-    const channel = supabase
-      .channel(`strategic_runs_${brandId}`)
-      .on(
-        'postgres_changes',
+    const unsubscribe = subscribeToPostgresChanges({
+      label: `strategic_runs_${brandId}`,
+      bindings: [
         {
           event: 'UPDATE',
           schema: 'brand_trends',
           table: 'strategic_analysis_runs',
           filter: `brand_id=eq.${brandId}`,
-        },
-        (payload) => {
-          const previous = payload.old?.status;
-          const next = payload.new?.status;
-          const runId = payload.new?.id;
-          if (!runId) return;
-          if (previous === 'completed' || next !== 'completed') return;
-          if (seenRunIdsRef.current.has(runId)) return;
+          // `meta.old` is the reason the helper carries it at all: this is an EDGE
+          // detector, not a state read. Splitting the binding per event cannot express
+          // "was not completed a moment ago and is now", which is what keeps a run from
+          // announcing itself again on every later touch of the row.
+          onRow: (row, meta) => {
+            const previous = meta.old.status;
+            const next = row.status;
+            const runId = typeof row.id === 'string' ? row.id : null;
+            if (!runId) return;
+            if (previous === 'completed' || next !== 'completed') return;
+            if (seenRunIdsRef.current.has(runId)) return;
 
-          const completedAt = payload.new?.completed_at ?? null;
-          handleCompletion(runId, completedAt);
+            const completedAt = typeof row.completed_at === 'string' ? row.completed_at : null;
+            handleCompletion(runId, completedAt);
+          },
         },
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          void catchUpMissed();
-        }
-      });
+      ],
+      onSubscribed: () => {
+        void catchUpMissed();
+      },
+    });
 
     return () => {
       isActive = false;
-      supabase.removeChannel(channel);
+      unsubscribe();
       unregister();
     };
-  }, [brandId, queryClient, setLastCompletedAt, show, supabase]);
+  }, [brandId, queryClient, setLastCompletedAt, show]);
 
   return null;
 }

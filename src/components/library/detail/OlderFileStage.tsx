@@ -10,6 +10,7 @@
 import type { MediaAssetVersion } from '@continuum/contracts';
 import { Download, FileIcon } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
+import { withForcedDownload } from '@/lib/media/downloadUrl';
 import { fileExtension, formatBytes } from './assetFileMeta';
 
 export type OlderFileStageProps = {
@@ -41,7 +42,7 @@ export function OlderFileStage({ version }: OlderFileStageProps) {
 
       {version.signedUrl ? (
         <a
-          href={version.signedUrl}
+          href={withForcedDownload(version.signedUrl, version.fileName)}
           download={version.fileName}
           rel="noopener"
           className={buttonVariants({ size: 'sm' })}

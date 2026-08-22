@@ -15,8 +15,6 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildUserSuppliedContentJson } from '../ai-studio/apply/userSuppliedContentJson';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
-export const runtime = 'nodejs';
-
 type OrganicDraftRow = {
   id: string;
   content_json: Record<string, unknown> | null;

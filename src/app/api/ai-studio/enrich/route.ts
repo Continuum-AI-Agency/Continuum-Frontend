@@ -19,9 +19,6 @@ import { z } from 'zod';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 // ---------------------------------------------------------------------------
 // Input schema (Zod at API boundary)
 // ---------------------------------------------------------------------------

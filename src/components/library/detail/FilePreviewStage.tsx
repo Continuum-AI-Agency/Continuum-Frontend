@@ -10,6 +10,7 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { uploadCompanionPreview } from '@/lib/library/assetPreview';
 import { ensureAssetHeadVersion } from '@/lib/library/creativeOperations';
+import { withForcedDownload } from '@/lib/media/downloadUrl';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { fileExtension, formatBytes } from './assetFileMeta';
 
@@ -40,7 +41,7 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
       const { signedUrl } = (await response.json()) as { signedUrl?: string };
       if (!signedUrl) throw new Error('Sign failed');
       const anchor = document.createElement('a');
-      anchor.href = signedUrl;
+      anchor.href = withForcedDownload(signedUrl, asset.fileName);
       anchor.download = asset.fileName;
       anchor.rel = 'noopener';
       anchor.click();

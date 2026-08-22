@@ -10,8 +10,6 @@ import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 // A decoded video frame at 640px wide is tens of KB. Anything approaching a
 // megabyte is not a poster, so it is refused rather than stored.
 const MAX_POSTER_BYTES = 1_500_000;

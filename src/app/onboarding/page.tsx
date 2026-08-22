@@ -6,6 +6,10 @@ import { isOnboardingComplete } from '@/lib/onboarding/state';
 import { ensureOnboardingState } from '@/lib/onboarding/storage';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
+// TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+export const instant = false;
+
 type OnboardingPageProps = {
   searchParams?: Promise<{ brand?: string }>;
 };

@@ -22,7 +22,11 @@
 import { isTerminalAgentRunStatus } from '@continuum/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { type AgentRunRecord, selectRunForSession, useAgentRunStore } from '@/lib/agents/runStore';
+import {
+  type AgentRunRecord,
+  selectProjectableRunForSession,
+  useAgentRunStore,
+} from '@/lib/agents/runStore';
 import {
   createInitialJainaStreamState,
   type JainaStreamState,
@@ -117,7 +121,11 @@ export function useProjectedJainaRun({
   sessionId,
   liveRunId,
 }: UseProjectedJainaRunParams): ProjectedJainaRun {
-  const record = useAgentRunStore(useShallow(selectRunForSession(sessionId ?? '')));
+  // Selecting past the live run (rather than filtering after) keeps the surface from re-rendering
+  // on every frame the RunTail persists for a run this reader is already streaming off the wire.
+  const record = useAgentRunStore(
+    useShallow(selectProjectableRunForSession(sessionId ?? '', liveRunId)),
+  );
 
   const projectionRef = useRef<JainaRunProjection>(createJainaRunProjection());
   const [published, setPublished] = useState<{

@@ -2,9 +2,6 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
 
-// Gated rollout: enable Cache Components by setting NEXT_CACHE_COMPONENTS=1.
-// Off by default until Phase 2 audits dynamic boundaries for every page.
-const cacheComponentsEnabled = process.env.NEXT_CACHE_COMPONENTS === '1';
 const distDir = process.env.NEXT_DIST_DIR?.trim();
 const tsconfigPath = process.env.NEXT_TSCONFIG_PATH?.trim();
 
@@ -22,8 +19,8 @@ const nextConfig: NextConfig = {
   // of contending with a developer's existing `.next/dev/lock`.
   ...(distDir ? { distDir } : {}),
   // `bun run build` performs the same strict TypeScript gate in a fresh process
-  // before Turbopack. Keeping it separate prevents Next's large type graph from
-  // competing with retained compiler memory on Vercel's two-core builder.
+  // before the bundler runs. Keeping it separate prevents Next's large type graph
+  // from competing with retained compiler memory on Vercel's two-core builder.
   typescript: {
     ignoreBuildErrors: true,
     ...(tsconfigPath ? { tsconfigPath } : {}),
@@ -52,11 +49,11 @@ const nextConfig: NextConfig = {
         : []),
     ],
   },
-  // Disable fetch cache in development to prevent infinite cache growth
-  ...(process.env.NODE_ENV === 'development' && {
-    cacheHandler: require.resolve('./cache-handler.js'),
-  }),
-  ...(cacheComponentsEnabled && { cacheComponents: true }),
+  // Static shell per route, dynamic content streamed in. Also the prerequisite
+  // for partialPrefetching, which throws at config validation without it.
+  cacheComponents: true,
+  // One reusable App Shell per route instead of one prefetch per visible link.
+  partialPrefetching: true,
   // The OpenTelemetry log SDK (instrumentation.ts -> PostHog) must stay out of the Turbopack
   // server bundle; bundling it breaks its global registry, which is how instrumentation and the
   // route handlers share one provider.

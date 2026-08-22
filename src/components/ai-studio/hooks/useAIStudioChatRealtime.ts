@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useSession } from '@/hooks/useSession';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 export type ChatMessage = {
   id: string;
@@ -44,7 +45,6 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [channelStatus, setChannelStatus] = useState<RealtimeStatus>('INITIALIZING');
-  const channelRef = useRef<any>(null);
 
   const loadLatestMessages = useCallback(
     async (showErrorToast: boolean = true) => {
@@ -97,43 +97,34 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
   useEffect(() => {
     if (!brandProfileId) return;
 
-    const channel = supabase.channel(`chat:${brandProfileId}:${roomId}`, {
-      config: {
-        broadcast: { self: true },
-      },
-    });
-
-    channel
-      .on(
-        'postgres_changes',
+    // `config: { broadcast: { self: true } }` used to sit on this channel with no
+    // broadcast binding anywhere on it. Dropped rather than carried.
+    const unsubscribe = subscribeToPostgresChanges({
+      label: `chat:${brandProfileId}:${roomId}`,
+      bindings: [
         {
           event: 'INSERT',
           schema: 'brand_profiles',
           table: 'chat_messages',
           filter: `brand_profile_id=eq.${brandProfileId}`,
+          onRow: (row) => {
+            const newMessage = row as ChatMessage;
+            if (newMessage.room_id !== roomId) return;
+            setMessages((prev) => mergeMessages(prev, [newMessage]));
+          },
         },
-        async (payload) => {
-          const newMessage = payload.new as ChatMessage;
-          if (newMessage.room_id !== roomId) return;
-          setMessages((prev) => mergeMessages(prev, [newMessage]));
-        },
-      )
-      .subscribe((subStatus) => {
-        const normalizedStatus = normalizeRealtimeStatus(subStatus);
-        setChannelStatus(normalizedStatus);
-        if (subStatus === 'SUBSCRIBED') {
-          void loadLatestMessages(false);
-        }
-      });
-
-    channelRef.current = channel;
+      ],
+      onStatus: (subStatus) => setChannelStatus(normalizeRealtimeStatus(subStatus)),
+      onSubscribed: () => {
+        void loadLatestMessages(false);
+      },
+    });
 
     return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
+      unsubscribe();
       setChannelStatus('INITIALIZING');
     };
-  }, [brandProfileId, roomId, supabase, loadLatestMessages]);
+  }, [brandProfileId, roomId, loadLatestMessages]);
 
   const sendMessage = useCallback(
     async (content: string) => {

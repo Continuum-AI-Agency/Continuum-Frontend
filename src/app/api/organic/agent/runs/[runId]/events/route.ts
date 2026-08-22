@@ -2,9 +2,6 @@ import { NextResponse } from 'next/server';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 const HOP_BY_HOP_HEADERS = [
   'connection',
   'keep-alive',

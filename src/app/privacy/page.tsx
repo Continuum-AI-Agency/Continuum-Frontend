@@ -3,7 +3,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { LOGIN_GLOW_GRADIENT } from '@/lib/ui/backgrounds';
 
-export const dynamic = 'force-static';
+// This was `new Date()`, which claimed the policy had been updated today, every
+// day — wrong for a legal document, and unprerenderable. Bump it when the policy
+// text below actually changes.
+const LAST_UPDATED = 'July 22, 2026';
 
 export default function PrivacyPage() {
   return (
@@ -39,14 +42,7 @@ export default function PrivacyPage() {
         {/* Card */}
         <div className="glass-panel rounded-3xl p-12 shadow-2xl border-subtle">
           <h1 className="text-4xl font-bold text-primary mb-2 tracking-tight">Privacy Policy</h1>
-          <p className="text-secondary text-sm mb-8">
-            Last updated:{' '}
-            {new Date().toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </p>
+          <p className="text-secondary text-sm mb-8">Last updated: {LAST_UPDATED}</p>
           <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent mb-8" />
 
           <div className="prose dark:prose-invert max-w-none text-secondary prose-headings:text-primary">

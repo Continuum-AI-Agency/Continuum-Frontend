@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import LinkPlatformClient from './LinkPlatformClient';
 
 type LinkPlatformPageProps = {
@@ -14,7 +15,7 @@ function firstParam(value: string | string[] | undefined): string | null {
   return value ?? null;
 }
 
-export default async function LinkPlatformPage({ params, searchParams }: LinkPlatformPageProps) {
+async function LinkPlatform({ params, searchParams }: LinkPlatformPageProps) {
   const emptySearchParams: LinkPlatformSearchParams = {};
   const [{ platform }, query] = await Promise.all([
     params,
@@ -22,4 +23,14 @@ export default async function LinkPlatformPage({ params, searchParams }: LinkPla
   ]);
 
   return <LinkPlatformClient platform={platform} token={firstParam(query.token)} />;
+}
+
+// The page awaits nothing: params and searchParams resolve inside the boundary,
+// so everything above it prerenders as the shell.
+export default function LinkPlatformPage(props: LinkPlatformPageProps) {
+  return (
+    <Suspense fallback={null}>
+      <LinkPlatform {...props} />
+    </Suspense>
+  );
 }

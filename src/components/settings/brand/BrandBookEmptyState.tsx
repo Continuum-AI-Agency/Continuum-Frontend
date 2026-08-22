@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { PreviewRateLimitedError, runOnboardingPreview } from '@/lib/onboarding/agentClient';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import {
   type BrandBookGenerationPayload,
   brandBookGenerationStatus,
@@ -31,38 +31,32 @@ export function BrandBookEmptyState({
 }) {
   const router = useRouter();
   const { show } = useToast();
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusLine, setStatusLine] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const refreshedRef = useRef(false);
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`brand_book_generate_${brandId}`)
-      .on(
-        'postgres_changes',
+    return subscribeToPostgresChanges({
+      label: `brand_book_generate_${brandId}`,
+      bindings: [
         {
           event: '*',
           schema: 'brand_profiles',
           table: 'brand_report_composites',
           filter: `brand_profile_id=eq.${brandId}`,
+          onRow: () => {
+            // The composite was just written — pull it in. Guard so a flurry of
+            // INSERT/UPDATE events only triggers one refresh.
+            if (!refreshedRef.current) {
+              refreshedRef.current = true;
+              router.refresh();
+            }
+          },
         },
-        () => {
-          // The composite was just written — pull it in. Guard so a flurry of
-          // INSERT/UPDATE events only triggers one refresh.
-          if (!refreshedRef.current) {
-            refreshedRef.current = true;
-            router.refresh();
-          }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [brandId, supabase, router]);
+      ],
+    });
+  }, [brandId, router]);
 
   // Abort an in-flight run if the user navigates away from the panel.
   useEffect(() => () => abortRef.current?.abort(), []);

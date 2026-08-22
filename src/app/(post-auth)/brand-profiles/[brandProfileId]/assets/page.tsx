@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { fetchSelectableAssetsForCurrentUser } from '@/lib/api/integrations/server';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import {
@@ -6,7 +7,9 @@ import {
 } from '@/lib/integrations/selectableAssets';
 import { BrandAssetsForm } from './BrandAssetsForm';
 
-export default async function Page({ params }: { params: Promise<{ brandProfileId: string }> }) {
+type BrandAssetsPageProps = { params: Promise<{ brandProfileId: string }> };
+
+async function BrandAssets({ params }: BrandAssetsPageProps) {
   const { brandProfileId } = await params;
   const [selectableAssetsResponse, integrationSummary] = await Promise.all([
     fetchSelectableAssetsForCurrentUser(),
@@ -29,5 +32,15 @@ export default async function Page({ params }: { params: Promise<{ brandProfileI
       selectableAssetsResponse={brandSelectableAssetsResponse}
       assignedIntegrationAccountIds={assignedIntegrationAccountIds}
     />
+  );
+}
+
+// The page awaits nothing: params and both fetches resolve inside the boundary,
+// so everything above it prerenders as the shell.
+export default function Page(props: BrandAssetsPageProps) {
+  return (
+    <Suspense fallback={null}>
+      <BrandAssets {...props} />
+    </Suspense>
   );
 }

@@ -16,8 +16,6 @@ import {
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
 // Register-in-place: the generator already uploaded the bytes to its own bucket

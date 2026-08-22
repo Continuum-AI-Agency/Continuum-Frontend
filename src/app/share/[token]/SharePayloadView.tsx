@@ -15,6 +15,7 @@ import type {
 } from '@continuum/contracts';
 import { Download, FileArchive } from 'lucide-react';
 import { initialsFor } from '@/lib/library/comments';
+import { withForcedDownload } from '@/lib/media/downloadUrl';
 import { ExternalApprovalControl } from './ExternalApprovalControl';
 import { ExternalCommentComposer } from './ExternalCommentComposer';
 import {
@@ -26,12 +27,6 @@ import {
 import { type ShareTimeMarker, ShareVideoPlayer } from './ShareVideoPlayer';
 
 const MARKER_TITLE_MAX = 80;
-
-function downloadUrl(asset: MediaAsset): string | null {
-  if (!asset.signedUrl) return null;
-  const separator = asset.signedUrl.includes('?') ? '&' : '?';
-  return `${asset.signedUrl}${separator}download=${encodeURIComponent(asset.fileName)}`;
-}
 
 function formatBytes(bytes: number | null | undefined): string | null {
   if (typeof bytes !== 'number' || bytes <= 0) return null;
@@ -46,11 +41,10 @@ function formatBytes(bytes: number | null | undefined): string | null {
 }
 
 function DownloadButton({ asset }: { asset: MediaAsset }) {
-  const href = downloadUrl(asset);
-  if (!href) return null;
+  if (!asset.signedUrl) return null;
   return (
     <a
-      href={href}
+      href={withForcedDownload(asset.signedUrl, asset.fileName)}
       className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
     >
       <Download className="size-3.5" aria-hidden />

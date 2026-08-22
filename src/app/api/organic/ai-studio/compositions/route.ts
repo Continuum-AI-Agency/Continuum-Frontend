@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 const FUNCTION_NAME = 'planner-compositions';
 
 function edgeUrl(request: Request): string | null {

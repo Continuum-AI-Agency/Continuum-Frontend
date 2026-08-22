@@ -6,9 +6,6 @@ import { mapBackendJob } from '@/lib/ai-studio/backend';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 const querySchema = z.object({
   brandProfileId: z.string().min(1, 'brandProfileId is required'),
 });

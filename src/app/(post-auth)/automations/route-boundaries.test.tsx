@@ -169,7 +169,11 @@ const navigationModuleFactory = () => ({
 mock.module('next/navigation', navigationModuleFactory);
 
 let automationsPage: typeof import('./page')['default'] | null = null;
-let automationWorkspacePage: typeof import('./[automationId]/page')['default'] | null = null;
+// The workspace page's default export is now just the Suspense wrapper; the
+// redirect/notFound/throw contract under test lives in the loader beneath it.
+let automationWorkspacePage:
+  | typeof import('./[automationId]/page')['AutomationWorkspaceLoader']
+  | null = null;
 
 const NAVIGATION_SHADOW_DIAGNOSTIC =
   'Could not link the automations page modules. mock.module is process-wide and ' +
@@ -182,7 +186,7 @@ beforeAll(async () => {
   mock.module('next/navigation', navigationModuleFactory);
   try {
     automationsPage = (await import('./page')).default;
-    automationWorkspacePage = (await import('./[automationId]/page')).default;
+    automationWorkspacePage = (await import('./[automationId]/page')).AutomationWorkspaceLoader;
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause);
     throw new Error(`${NAVIGATION_SHADOW_DIAGNOSTIC} Loader error: ${detail}`);

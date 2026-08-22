@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 type SpeechProxyRequest = {
   audioBase64: string;
   mimeType?: string;

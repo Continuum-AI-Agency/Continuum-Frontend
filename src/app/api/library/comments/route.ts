@@ -24,8 +24,6 @@ import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 // Threaded comments on a Library asset (media.comments). All handlers run on
 // the user-scoped client: RLS (has_brand_access on brand_id) is the hard
 // boundary, callerHasBrandAccess gives the friendly 403 before any query.

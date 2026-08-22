@@ -5,8 +5,6 @@ import { mintSignedUrl } from '@/lib/media/signed-urls';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 const bodySchema = z.object({
   brandId: z.string().uuid(),
   assetId: z.string().uuid(),

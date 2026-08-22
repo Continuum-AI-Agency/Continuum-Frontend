@@ -24,8 +24,6 @@ import { mintSignedUrls } from '@/lib/media/signed-urls';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 const DRAFT_SELECT =
   'id, brand_id, asset_id, created_by, schema_version, document, status, ' +
   'rendered_asset_id, last_rendered_at, created_at, updated_at';

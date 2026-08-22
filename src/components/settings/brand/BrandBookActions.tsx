@@ -18,7 +18,7 @@ import {
   downloadBrandBookPdf,
   downloadBrandSystemArchive,
 } from '@/lib/brands/brand-system-export';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { useBrandMdDirtyOptional } from './BrandMdDirtyContext';
 
 /**
@@ -35,7 +35,6 @@ export function BrandBookActions({
   brandName: string;
 }) {
   const brandId = brandBook.brand_id;
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const router = useRouter();
   const { show } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -51,32 +50,27 @@ export function BrandBookActions({
   }, [editorIsDirty]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`brand_book_${brandId}`)
-      .on(
-        'postgres_changes',
+    return subscribeToPostgresChanges({
+      label: `brand_book_${brandId}`,
+      bindings: [
         {
           event: 'UPDATE',
           schema: 'brand_profiles',
           table: 'brand_report_composites',
           filter: `brand_profile_id=eq.${brandId}`,
+          onRow: () => {
+            // The composite changed (e.g. the deep pass landed) — re-run the RSC
+            // fetch so the viewer reflects the new tiers without a manual reload.
+            // Skip the refresh when the editor has unsaved changes: blowing away a
+            // draft mid-edit is worse than the viewer being briefly stale.
+            if (!editorIsDirtyRef.current) {
+              router.refresh();
+            }
+          },
         },
-        () => {
-          // The composite changed (e.g. the deep pass landed) — re-run the RSC
-          // fetch so the viewer reflects the new tiers without a manual reload.
-          // Skip the refresh when the editor has unsaved changes: blowing away a
-          // draft mid-edit is worse than the viewer being briefly stale.
-          if (!editorIsDirtyRef.current) {
-            router.refresh();
-          }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [brandId, supabase, router]);
+      ],
+    });
+  }, [brandId, router]);
 
   const handleDeepen = () => {
     startTransition(async () => {

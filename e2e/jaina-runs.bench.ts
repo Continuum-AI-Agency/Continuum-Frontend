@@ -60,7 +60,9 @@ import { mintAccessTokenForEmail } from './support/auth';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 const OWNER_EMAIL = 'local@continuum.test';
-const BRAND_ID = '00000000-0000-0000-0000-0000000000b1';
+// Must match the brand `supabase/baseline/fixtures.sql` seeds, or every brand-scoped call comes
+// back PERMISSION_DENIED before the run contract is ever reached.
+const BRAND_ID = process.env.BENCH_BRAND_ID ?? '00000000-0000-4000-8000-0000000000b2';
 
 // Jaina's chat contract requires a `context.adAccountId`. The fixture brand has no linked
 // Meta account, so this is a well-formed id that Meta will reject — see (a) above. Seeding a

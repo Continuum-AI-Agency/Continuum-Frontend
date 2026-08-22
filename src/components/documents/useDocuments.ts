@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OnboardingDocument } from '@/lib/onboarding/state';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import type { DocumentView } from './types';
 
 type RealtimeRow = {
@@ -84,44 +84,50 @@ export function useDocuments(brandId: string, seed: DocumentView[]): DocumentVie
 
   useEffect(() => {
     if (!brandId) return;
-    const supabase = createSupabaseBrowserClient();
 
-    const channel = supabase
-      .channel(`brand-documents-${brandId}`)
-      .on(
-        'postgres_changes',
+    const table = { schema: 'brand_profiles', table: 'brand_documents' } as const;
+    const filter = `brand_id=eq.${brandId}`;
+
+    return subscribeToPostgresChanges({
+      label: `brand-documents-${brandId}`,
+      bindings: [
         {
-          event: '*',
-          schema: 'brand_profiles',
-          table: 'brand_documents',
-          filter: `brand_id=eq.${brandId}`,
-        },
-        (payload) => {
-          if (payload.eventType === 'UPDATE') {
-            const updated = payload.new as RealtimeRow;
+          ...table,
+          filter,
+          event: 'UPDATE',
+          onRow: (row) => {
+            const updated = row as RealtimeRow;
             lastSeenRef.current[updated.id] = Date.now();
             setDocuments((prev) =>
               prev.map((doc) => (doc.id === updated.id ? mergeRealtimeUpdate(doc, updated) : doc)),
             );
-          } else if (payload.eventType === 'INSERT') {
-            const inserted = payload.new as RealtimeRow;
+          },
+        },
+        {
+          ...table,
+          filter,
+          event: 'INSERT',
+          onRow: (row) => {
+            const inserted = row as RealtimeRow;
             lastSeenRef.current[inserted.id] = Date.now();
             setDocuments((prev) => {
               if (prev.some((doc) => doc.id === inserted.id)) return prev;
               return [...prev, rowToView(inserted)];
             });
-          } else if (payload.eventType === 'DELETE') {
-            const removedId = (payload.old as { id?: string }).id;
+          },
+        },
+        {
+          ...table,
+          filter,
+          event: 'DELETE',
+          onRow: (row) => {
+            const removedId = (row as { id?: string }).id;
             if (!removedId) return;
             setDocuments((prev) => prev.filter((doc) => doc.id !== removedId));
-          }
+          },
         },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      ],
+    });
   }, [brandId]);
 
   // Fail documents that have gone silent mid-processing so the row reaches a

@@ -456,19 +456,20 @@ async function fetchAdsetAds(
   return parsed.success ? parsed.data.ads : [];
 }
 
-/** Per-ad DAILY trends for one ad set — the finest paid grain (spend/CPA/ROAS/CTR
- *  per day per creative). Powers the creative HoverCard sparkline + charting an
- *  individual creative onto the ad-set timeline. Same edge as the snapshots,
- *  scope=ad_daily_trends. Lazy: reads only when an ad set is in focus. */
+/** Per-ad DAILY trends from the persisted as-of ledger. The cutoff is mandatory at
+ *  the RPC boundary, so attribution arriving later cannot rewrite a historical read. */
 async function fetchAdDailyTrends(
   brandId: string,
-  accountId: string,
+  _accountId: string,
   adsetId: string,
 ): Promise<AdDailyTrend[]> {
-  const { data, error } = await getClient().functions.invoke('paid-media-metrics', {
-    body: { platform: 'meta', scope: 'ad_daily_trends', brandId, accountId, adsetId },
+  const { data, error } = await getClient().rpc('paid_media_get_ad_daily_trends', {
+    p_brand_id: brandId,
+    p_adset_id: adsetId,
+    p_cutoff: new Date().toISOString().slice(0, 10),
+    p_days: 30,
   });
-  if (error) throw new Error('paid-media-metrics ad_daily_trends unreachable');
+  if (error) throw new Error('paid_media_get_ad_daily_trends unreachable');
   const parsed = AdDailyTrendsResponseSchema.safeParse(data);
   return parsed.success ? parsed.data.ads : [];
 }

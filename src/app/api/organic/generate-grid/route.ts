@@ -16,9 +16,6 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const clientRequestSchema = generationRequestSchema;
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 const NDJSON_HEADERS = {
   'Content-Type': 'application/x-ndjson',
   'Cache-Control': 'no-cache, no-transform',

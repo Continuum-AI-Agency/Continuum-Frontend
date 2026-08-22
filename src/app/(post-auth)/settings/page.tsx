@@ -51,6 +51,10 @@ import { mapOnboardingStateToAgentPayload } from '@/lib/onboarding/mapping';
 import { ensureOnboardingState, fetchOnboardingState } from '@/lib/onboarding/storage';
 import { createBrandProfileRepository } from '@/lib/repositories/brandProfile';
 
+// TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+export const instant = false;
+
 type SettingsPageProps = {
   searchParams?: Promise<{ section?: string | string[] }>;
 };

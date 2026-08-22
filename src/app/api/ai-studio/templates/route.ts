@@ -8,9 +8,6 @@ import { aiStudioMediumSchema, aiStudioProviderSchema } from '@/lib/schemas/aiSt
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getFallbackTemplates } from '../fallback';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 const querySchema = z.object({
   brandProfileId: z.string().min(1, 'brandProfileId is required'),
   medium: aiStudioMediumSchema.optional(),

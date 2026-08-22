@@ -5,8 +5,6 @@ import { fetchLibraryBrowsePage } from '@/lib/media/browse.server';
 import { parseTagsParam } from '@/lib/media/filters';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 function optionalBoolean(value: string | null): boolean | null | undefined {
   if (value === null) return undefined;
   if (value === 'true') return true;

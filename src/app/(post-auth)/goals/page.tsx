@@ -3,6 +3,10 @@ import { redirect } from 'next/navigation';
 import { GoalsPageClient } from '@/components/goals/GoalsPageClient';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 
+// TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+export const instant = false;
+
 export const metadata: Metadata = {
   title: 'Goals | Continuum AI',
   description: 'Shared outcomes, evidence, and reviewed deliverables for your marketing team.',

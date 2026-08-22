@@ -192,6 +192,23 @@ export const selectRunForSession = (sessionId: string) => (state: AgentRunStoreS
 export const selectEventsForSession = (sessionId: string) => (state: AgentRunStoreState) =>
   selectRunForSession(sessionId)(state)?.events;
 
+/**
+ * The session's run, but only when it is one a projection should fold — i.e. NOT the run the
+ * caller's own live reader already owns.
+ *
+ * `appendEvents` allocates a fresh `events` array per durable frame, so a component subscribed to
+ * the record re-renders on every frame the RunTail persists. While a reader is attached that work
+ * is pure waste: it is already folding the same run off the wire, and the projection declines the
+ * run anyway. Filtering inside the selector means the subscriber never wakes, rather than waking
+ * and bailing.
+ */
+export const selectProjectableRunForSession =
+  (sessionId: string, liveRunId: string | null) => (state: AgentRunStoreState) => {
+    const record = selectRunForSession(sessionId)(state);
+    if (!record || record.run.runId === liveRunId) return undefined;
+    return record;
+  };
+
 /** Runs still in flight, across every session and both agents — what the tailer subscribes to. */
 export const selectLiveRuns = (state: AgentRunStoreState): AgentRunDto[] =>
   Object.values(state.runs)

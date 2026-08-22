@@ -17,8 +17,6 @@ import { assetSignablePaths, mintSignedUrls } from '@/lib/media/signed-urls';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 // search_assets_ranked scores by field priority (title 3 / tags 2 / description 1).
 // Normalized so a lexical hit and a cosine hit both land in the contract's [0,1].
 const LEXICAL_MAX_SCORE = 3;

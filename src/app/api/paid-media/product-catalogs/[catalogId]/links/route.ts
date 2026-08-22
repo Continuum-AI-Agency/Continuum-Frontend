@@ -149,8 +149,6 @@ function buildLinkRecord(
   return parsed.success ? parsed.data : null;
 }
 
-export const runtime = 'nodejs';
-
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ catalogId: string }> },

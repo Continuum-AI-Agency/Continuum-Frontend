@@ -7,8 +7,6 @@ import { NextResponse } from 'next/server';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 type AuthResult = { ok: true; accessToken: string } | { ok: false; response: NextResponse };
 
 async function authorizeConversationRequest(): Promise<AuthResult> {

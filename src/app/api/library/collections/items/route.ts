@@ -5,8 +5,6 @@ import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 const itemSchema = z.object({
   brandId: z.string().uuid(),
   collectionId: z.string().uuid(),

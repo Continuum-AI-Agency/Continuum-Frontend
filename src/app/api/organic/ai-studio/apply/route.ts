@@ -18,8 +18,6 @@ import { type AppliedMediaAssetInput, buildApplyRegisterOperation } from './regi
 import { buildUserSuppliedContentJson } from './userSuppliedContentJson';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
-export const runtime = 'nodejs';
-
 // Register a generated creative as a durable media.assets row so it is
 // searchable by the Organic agent in future sessions.
 //

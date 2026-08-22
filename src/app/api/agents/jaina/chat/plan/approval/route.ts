@@ -3,8 +3,6 @@ import { getApiBaseUrl } from '@/lib/api/config';
 import { planApprovalCommandSchema } from '@/lib/jaina/schemas';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();

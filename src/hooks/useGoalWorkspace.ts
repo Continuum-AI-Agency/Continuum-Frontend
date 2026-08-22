@@ -4,32 +4,30 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { getGoalEvents, getGoalSnapshot } from '@/lib/api/goals.client';
 import { projectGoalWorkspace } from '@/lib/goals/projection';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 export function useGoalWorkspace(goalId: string) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`goal:${goalId}`, { config: { private: true } })
-      .on(
-        'postgres_changes',
+    return subscribeToPostgresChanges({
+      label: `goal:${goalId}`,
+      // `private: true` must survive the move. An authorized channel that loses this
+      // option becomes an ordinary public one — Realtime stops enforcing the channel
+      // policy, and nothing in the types or the tests would say so.
+      channelOptions: { config: { private: true } },
+      bindings: [
         {
           event: 'INSERT',
           schema: 'agent_workspace',
           table: 'events',
           filter: `goal_id=eq.${goalId}`,
+          onRow: () => {
+            void queryClient.invalidateQueries({ queryKey: ['goal-workspace', goalId] });
+          },
         },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: ['goal-workspace', goalId] });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+      ],
+    });
   }, [goalId, queryClient]);
 
   return useQuery({

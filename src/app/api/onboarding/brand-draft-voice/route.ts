@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 export async function POST(request: Request) {
   const url = new URL(request.url);
   const brandId = url.searchParams.get('brand');

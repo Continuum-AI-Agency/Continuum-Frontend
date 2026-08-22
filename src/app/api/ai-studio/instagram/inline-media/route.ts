@@ -11,8 +11,6 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { IMAGE_REFERENCE_MAX_BYTES } from '@/lib/ai-studio/referenceDrop';
 
-export const runtime = 'nodejs';
-
 const ALLOWED_HOST_SUFFIXES = ['.cdninstagram.com', '.fbcdn.net'];
 
 function isAllowedImageUrl(rawUrl: string): boolean {

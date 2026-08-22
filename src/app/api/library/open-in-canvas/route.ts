@@ -20,8 +20,6 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Json } from '@/lib/supabase/types';
 
-export const runtime = 'nodejs';
-
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
 type SeedAssetRow = {

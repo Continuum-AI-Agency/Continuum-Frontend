@@ -16,8 +16,6 @@ const bodySchema = z.object({
   source: z.string().trim().min(1).max(64).optional(),
 });
 
-export const runtime = 'nodejs';
-
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ catalogId: string }> },

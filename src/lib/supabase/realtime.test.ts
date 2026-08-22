@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, mock } from 'bun:test';
 
 type FakeChannel = {
   topic: string;
+  options?: unknown;
   joining: boolean;
+  /** Statuses this channel will report, in order. Defaults to a clean join. */
+  statuses: string[];
   handlers: ((payload: Record<string, unknown>) => void)[];
   filters: Record<string, unknown>[];
   on: (
@@ -15,11 +18,15 @@ type FakeChannel = {
 
 const channels: FakeChannel[] = [];
 const removed: string[] = [];
+/** Statuses the NEXT created channel will report. Reset per test. */
+let nextStatuses: string[] | null = null;
 
-const makeChannel = (topic: string): FakeChannel => {
+const makeChannel = (topic: string, options?: unknown): FakeChannel => {
   const channel: FakeChannel = {
     topic,
+    options,
     joining: false,
+    statuses: nextStatuses ?? ['SUBSCRIBED'],
     handlers: [],
     filters: [],
     on: (type, filter, callback) => {
@@ -34,7 +41,7 @@ const makeChannel = (topic: string): FakeChannel => {
     },
     subscribe: (callback) => {
       channel.joining = true;
-      callback?.('SUBSCRIBED');
+      for (const status of channel.statuses) callback?.(status);
       return channel;
     },
   };
@@ -42,10 +49,10 @@ const makeChannel = (topic: string): FakeChannel => {
 };
 
 const fakeClient = {
-  channel: (topic: string): FakeChannel => {
+  channel: (topic: string, options?: unknown): FakeChannel => {
     const existing = channels.find((candidate) => candidate.topic === topic);
     if (existing) return existing;
-    const created = makeChannel(topic);
+    const created = makeChannel(topic, options);
     channels.push(created);
     return created;
   },
@@ -73,6 +80,7 @@ const binding = (onRow: (row: Record<string, unknown>) => void) => ({
 afterEach(() => {
   channels.length = 0;
   removed.length = 0;
+  nextStatuses = null;
 });
 
 describe('subscribeToPostgresChanges', () => {
@@ -123,6 +131,70 @@ describe('subscribeToPostgresChanges', () => {
     channels[0]?.handlers[0]?.({ eventType: 'DELETE', new: {}, old: { seq: 2 } });
 
     expect(seen).toEqual([{ seq: 1 }, { seq: 2 }]);
+  });
+
+  it('hands the caller the event type and the pre-change row', () => {
+    const seen: { row: Record<string, unknown>; eventType: string; old: unknown }[] = [];
+    subscribeToPostgresChanges({
+      label: 'rows',
+      bindings: [
+        {
+          event: '*',
+          schema: 'organic',
+          table: 'events',
+          onRow: (row, meta) => seen.push({ row, eventType: meta.eventType, old: meta.old }),
+        },
+      ],
+    });
+
+    channels[0]?.handlers[0]?.({
+      eventType: 'UPDATE',
+      new: { status: 'completed' },
+      old: { status: 'running' },
+    });
+    channels[0]?.handlers[0]?.({ eventType: 'INSERT', new: { status: 'queued' }, old: {} });
+
+    // An UPDATE is the case a per-event binding split cannot express: the caller needs
+    // BOTH rows to detect the edge.
+    expect(seen[0]).toEqual({
+      row: { status: 'completed' },
+      eventType: 'UPDATE',
+      old: { status: 'running' },
+    });
+    expect(seen[1]?.old).toEqual({});
+  });
+
+  it('passes channel options through, so a private channel stays private', () => {
+    subscribeToPostgresChanges({
+      label: 'goal:g1',
+      bindings: [binding(() => {})],
+      channelOptions: { config: { private: true } },
+    });
+
+    expect(channels[0]?.options).toEqual({ config: { private: true } });
+  });
+
+  it('omits the options argument entirely when the caller passes none', () => {
+    subscribeToPostgresChanges({ label: 'rows', bindings: [binding(() => {})] });
+    expect(channels[0]?.options).toBeUndefined();
+  });
+
+  it('reports every status to onStatus but only SUBSCRIBED to onSubscribed', () => {
+    nextStatuses = ['CHANNEL_ERROR', 'SUBSCRIBED', 'CLOSED'];
+    const statuses: string[] = [];
+    let backfills = 0;
+
+    subscribeToPostgresChanges({
+      label: 'rows',
+      bindings: [binding(() => {})],
+      onStatus: (status) => statuses.push(status),
+      onSubscribed: () => {
+        backfills += 1;
+      },
+    });
+
+    expect(statuses).toEqual(['CHANNEL_ERROR', 'SUBSCRIBED', 'CLOSED']);
+    expect(backfills).toBe(1);
   });
 
   it('runs onSubscribed once the channel is live', () => {

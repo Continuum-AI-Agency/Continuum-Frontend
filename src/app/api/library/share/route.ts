@@ -17,8 +17,6 @@ import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 type AuthedCaller = { userId: string };
 
 async function authorizeBrandCaller(brandId: string): Promise<AuthedCaller | NextResponse> {

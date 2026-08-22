@@ -12,10 +12,14 @@ The following cache directories are tracked and managed:
 
 | Location | Purpose | Environment |
 |----------|---------|-------------|
+| `.next/dev/cache/turbopack` | **Turbopack persistent compiler cache — by far the largest** | Dev |
+| `.next/build/cache` | Turbopack compiler cache for builds | Build |
 | `.next/cache/fetch-cache` | Fetch API response cache | All |
 | `.next/cache/images` | Image optimization cache | All |
-| `.next/cache/webpack` | Turbopack/Webpack build cache | All |
+| `.next/cache/webpack` | Webpack build cache | Build |
 | `node_modules/.cache` | Package manager and tool caches | All |
+
+> **The one that actually grows.** `.next/dev/cache/turbopack` is a `turbo-persistence` SST database that compaction does not always keep up with. It reached **39 GB across 3,020 `.sst` files** in this repo before anyone measured it, and every cache lookup and HMR write fanned out across all of them — which is what made dev feel slow. It is **not** under `.next/cache`, so any script scoped to `.next/cache/*` will report a clean bill of health while it grows unbounded. Next 16.3 (#97304) adds a TTL and retains fewer stale cache versions, which should keep it in check.
 
 ## Cache Management Scripts
 
@@ -37,24 +41,15 @@ Remove all cache directories:
 bun run cache:clear
 ```
 
-This command deletes:
-- All `.next/cache/*` directories
-- The `node_modules/.cache` directory
+This command deletes the whole of `.next` plus `node_modules/.cache`. It deliberately does **not** target `.next/cache/*` alone — that was the original bug: it left `.next/dev/cache/turbopack` untouched, which is the directory that actually grows.
 
 **Note:** The caches will be rebuilt on the next `bun dev` or `bun run build`.
 
 ## Development Configuration
 
-In development (`NODE_ENV=development`), the Next.js fetch cache is disabled to prevent infinite growth. This is configured in:
+There is no custom cache handler. A previous `cache-handler.js` returned `null` for everything in development, on the theory that the fetch cache was the thing growing without bound. It was not — the growth was Turbopack's compiler cache (see above). The handler has been removed: it solved nothing, and under Cache Components a no-op handler hides exactly the caching behaviour you need to observe in dev.
 
-- `next.config.ts` - Conditionally sets `cacheHandler` for development
-- `cache-handler.js` - Custom cache handler that returns null (no caching)
-
-**Why disable in development?**
-- Prevents disk space issues from unbounded cache growth
-- Faster dev server startup (no cache to load)
-- Fresh data on every request (useful for API development)
-- Cache is rebuilt quickly in dev anyway
+If you ever do need a custom cache backend for `'use cache'`, the modern config key is `cacheHandlers` (plural, per-profile), not the legacy singular `cacheHandler`.
 
 ## Production Behavior
 
@@ -94,5 +89,4 @@ Clear caches when:
 ## Related Files
 
 - `next.config.ts` - Next.js configuration with cache settings
-- `cache-handler.js` - Custom cache handler for development
 - `scripts/check-cache.mjs` - Cache diagnostic script

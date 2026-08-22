@@ -5,8 +5,6 @@ import { CreativeOperationError, signVersionUpload } from '@/lib/library/creativ
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 // Storage signing is part of creating a version, so it shares the same
 // Edge-owned boundary as registration and rollback. The Vercel route never
 // constructs a service-role client.

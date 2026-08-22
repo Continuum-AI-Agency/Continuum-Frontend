@@ -47,11 +47,16 @@ describe('useJainaRunStatusRealtime', () => {
     cleanup();
   });
 
-  it('subscribes to the jaina run-status channel', async () => {
+  it('subscribes on a topic unique to this mount', async () => {
     await act(async () => {
       renderHook(() => useJainaRunStatusRealtime({ onRunStatus: () => {} }));
     });
-    expect(mockSupabase.channel).toHaveBeenCalledWith('jaina:run-status', expect.any(Object));
+    // The topic carries the label as a devtools aid but is uniquified per subscription:
+    // the bare `jaina:run-status` string it used to claim is a global name, and a second
+    // mount would have been handed this channel mid-join and thrown on `.on(...)`.
+    const topic = mockSupabase.channel.mock.calls[0]?.[0] as string;
+    expect(topic.startsWith('jaina:run-status:')).toBe(true);
+    expect(topic).not.toBe('jaina:run-status');
     expect(mockChannel.subscribe).toHaveBeenCalled();
   });
 

@@ -18,8 +18,6 @@ import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 const EVENT_PAGE_SIZE = 100;
 
 const listQuerySchema = z.object({
@@ -107,6 +105,7 @@ export async function POST(request: Request) {
       assetId,
       reviewStatus: toStatus,
       reviewStatusUpdatedAt: write.reviewStatusUpdatedAt,
+      changed: fromStatus !== toStatus,
       event: reviewEventRowToContract(write.event, user.email ?? null),
     }),
   );

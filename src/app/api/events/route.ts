@@ -17,10 +17,6 @@ const SSE_HEADERS = {
 
 const encoder = new TextEncoder();
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-export const runtime = 'nodejs';
-
 const ingestEnvelopeSchema = z
   .object({
     type: continuumEventNameSchema,

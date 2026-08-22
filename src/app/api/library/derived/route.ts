@@ -6,8 +6,6 @@ import { mintSignedUrls } from '@/lib/media/signed-urls';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 const MAX_DERIVED = 50;
 
 // media_get_asset_usage is SECURITY DEFINER, asserts brand membership itself

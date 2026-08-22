@@ -6,6 +6,11 @@
 
 @custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 
+/* Base UI emits data-orientation="horizontal|vertical"; shadcn base-nova components
+   (tabs, slider, separator, scroll-area, toggle-group) style against data-horizontal:/data-vertical:. */
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
+
 :root,
 [data-theme="light"] {
   /* --- Continuum Default (Light) --- */

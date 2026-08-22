@@ -50,7 +50,12 @@ function getDirectorySize(dirPath) {
 function checkCache() {
   const rootDir = path.resolve(__dirname, '..');
 
+  // Turbopack's persistent compiler cache lives under `.next/dev`, NOT `.next/cache`,
+  // and it is by far the largest of these — it reached 39 GB before anyone looked,
+  // because every entry here used to point somewhere else.
   const cacheLocations = [
+    { name: 'Turbopack Dev Cache', path: path.join(rootDir, '.next', 'dev', 'cache') },
+    { name: 'Turbopack Build Cache', path: path.join(rootDir, '.next', 'build', 'cache') },
     { name: 'Fetch Cache', path: path.join(rootDir, '.next', 'cache', 'fetch-cache') },
     { name: 'Image Cache', path: path.join(rootDir, '.next', 'cache', 'images') },
     { name: 'Webpack Cache', path: path.join(rootDir, '.next', 'cache', 'webpack') },

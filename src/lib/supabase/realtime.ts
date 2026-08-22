@@ -25,6 +25,20 @@ import { createSupabaseBrowserClient } from './client';
 
 type ChangeEvent = 'INSERT' | 'UPDATE' | 'DELETE' | '*';
 
+/**
+ * What a row arrived as, for the rare caller that cannot infer it from its binding.
+ *
+ * Reach for this ONLY when the event genuinely cannot be split apart — an UPDATE that
+ * has to compare the previous row against the new one is the real case. When a handler
+ * merely branches on `eventType`, register one binding per event instead: three small
+ * handlers read better than one with a switch, and the binding already carries the fact.
+ */
+export type PostgresChangeMeta = {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  /** The pre-change row. Populated on UPDATE and DELETE, `{}` on INSERT. */
+  old: Record<string, unknown>;
+};
+
 export type PostgresChangesBinding = {
   event: ChangeEvent;
   schema: string;
@@ -32,7 +46,7 @@ export type PostgresChangesBinding = {
   /** `column=operator.value`, e.g. `run_id=eq.<uuid>`. */
   filter?: string;
   /** A Realtime row is untrusted JSON — narrow it in the caller, never cast it. */
-  onRow: (row: Record<string, unknown>) => void;
+  onRow: (row: Record<string, unknown>, meta: PostgresChangeMeta) => void;
 };
 
 export type PostgresChangesSubscription = {
@@ -42,7 +56,24 @@ export type PostgresChangesSubscription = {
   bindings: readonly PostgresChangesBinding[];
   /** Runs once the channel is live. Suppressed after teardown. */
   onSubscribed?: () => void | Promise<void>;
+  /**
+   * Every status the socket reports, for callers that show connection state.
+   * `onSubscribed` stays the place to run a backfill; this is for the UI.
+   */
+  onStatus?: (status: string) => void;
+  /**
+   * Passed straight to `supabase.channel(topic, options)`.
+   *
+   * Load-bearing for `config: { private: true }` — an authorized channel that loses its
+   * option silently becomes a public one, which is a permissions regression no type
+   * checks. A `config: { broadcast: … }` on a channel with no broadcast binding is cargo
+   * cult; drop it rather than threading it through here.
+   */
+  channelOptions?: Parameters<ReturnType<typeof createSupabaseBrowserClient>['channel']>[1];
 };
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
 /** A DELETE reports the vanished row under `old`; everything else reports it under `new`. */
 const rowFromPayload = (
@@ -63,7 +94,12 @@ const bind = (channel: RealtimeChannel, binding: PostgresChangesBinding): void =
     },
     (payload) => {
       const row = rowFromPayload(payload);
-      if (row) binding.onRow(row);
+      if (row) {
+        binding.onRow(row, {
+          eventType: payload.eventType,
+          old: asRecord(payload.old),
+        });
+      }
     },
   );
 };
@@ -78,22 +114,29 @@ export function subscribeToPostgresChanges({
   label,
   bindings,
   onSubscribed,
+  onStatus,
+  channelOptions,
 }: PostgresChangesSubscription): () => void {
   const supabase = createSupabaseBrowserClient();
-  const channel = supabase.channel(`${label}:${crypto.randomUUID()}`);
+  const topic = `${label}:${crypto.randomUUID()}`;
+  const channel = channelOptions
+    ? supabase.channel(topic, channelOptions)
+    : supabase.channel(topic);
   let closed = false;
 
   for (const binding of bindings) {
     bind(channel, {
       ...binding,
-      onRow: (row) => {
-        if (!closed) binding.onRow(row);
+      onRow: (row, meta) => {
+        if (!closed) binding.onRow(row, meta);
       },
     });
   }
 
   channel.subscribe((status) => {
-    if (closed || status !== 'SUBSCRIBED') return;
+    if (closed) return;
+    onStatus?.(status);
+    if (status !== 'SUBSCRIBED') return;
     void onSubscribed?.();
   });
 

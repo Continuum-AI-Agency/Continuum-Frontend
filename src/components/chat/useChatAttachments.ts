@@ -10,7 +10,7 @@ import {
   MAX_DOCUMENT_MB,
 } from '@/lib/documents/uploadLimits';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { classifyChatAttachment } from './attachmentRouting';
 import type { Attachment } from './attachments';
 
@@ -204,43 +204,41 @@ export function useChatAttachments({
 
   useEffect(() => {
     if (!brandId || indexingIds.length === 0) return;
-    const supabase = createSupabaseBrowserClient();
 
-    const channel = supabase
-      .channel(`chat-documents-${brandId}-${indexingKey}`)
-      .on(
-        'postgres_changes',
+    const unsubscribe = subscribeToPostgresChanges({
+      label: `chat-documents-${brandId}-${indexingKey}`,
+      bindings: [
         {
           event: 'UPDATE',
           schema: 'brand_profiles',
           table: 'brand_documents',
           filter: `brand_id=eq.${brandId}`,
+          onRow: (raw) => {
+            const row = raw as {
+              id?: string;
+              progress_step?: string;
+              error_message?: string;
+            };
+            if (!row.id || !indexingIds.includes(row.id)) return;
+            if (row.progress_step === 'ready') {
+              setFiles((previous) =>
+                previous.map((file) =>
+                  file.documentId === row.id ? { ...file, status: 'ready' } : file,
+                ),
+              );
+            } else if (row.progress_step === 'error') {
+              setFiles((previous) =>
+                previous.map((file) =>
+                  file.documentId === row.id
+                    ? { ...file, status: 'error', error: row.error_message ?? 'Indexing failed' }
+                    : file,
+                ),
+              );
+            }
+          },
         },
-        (payload) => {
-          const row = payload.new as {
-            id?: string;
-            progress_step?: string;
-            error_message?: string;
-          };
-          if (!row.id || !indexingIds.includes(row.id)) return;
-          if (row.progress_step === 'ready') {
-            setFiles((previous) =>
-              previous.map((file) =>
-                file.documentId === row.id ? { ...file, status: 'ready' } : file,
-              ),
-            );
-          } else if (row.progress_step === 'error') {
-            setFiles((previous) =>
-              previous.map((file) =>
-                file.documentId === row.id
-                  ? { ...file, status: 'error', error: row.error_message ?? 'Indexing failed' }
-                  : file,
-              ),
-            );
-          }
-        },
-      )
-      .subscribe();
+      ],
+    });
 
     // Same ceiling the settings list uses. An isolate that dies before writing a
     // terminal row must not leave the composer permanently un-sendable.
@@ -256,7 +254,7 @@ export function useChatAttachments({
 
     return () => {
       clearTimeout(timeout);
-      supabase.removeChannel(channel);
+      unsubscribe();
     };
   }, [brandId, indexingKey, indexingIds]);
 

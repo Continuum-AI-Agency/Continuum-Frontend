@@ -3,8 +3,6 @@ import { getApiBaseUrl } from '@/lib/api/config';
 import { type PlanDecisionAnyCommand, planDecisionAnyCommandSchema } from '@/lib/jaina/schemas';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 type ParsedCommandBody = {
   primary?: unknown;
   compatibility?: unknown;

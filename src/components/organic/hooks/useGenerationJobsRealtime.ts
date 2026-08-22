@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { generationSummariesQueryKey } from '@/lib/organic/generationSummaries';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 /**
  * Keeps the live generations ticker authoritative with the server: subscribes to
@@ -19,7 +19,6 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
  */
 export function useGenerationJobsRealtime(brandId?: string | null) {
   const queryClient = useQueryClient();
-  const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
 
   React.useEffect(() => {
     if (!brandId) return;
@@ -32,23 +31,22 @@ export function useGenerationJobsRealtime(brandId?: string | null) {
       }, 400);
     };
 
-    const channel = supabase
-      .channel(`organic-post-generation-jobs-${brandId}`)
-      .on(
-        'postgres_changes',
+    const unsubscribe = subscribeToPostgresChanges({
+      label: `organic-post-generation-jobs-${brandId}`,
+      bindings: [
         {
           event: '*',
           schema: 'organic',
           table: 'post_generation_jobs',
           filter: `brand_id=eq.${brandId}`,
+          onRow: handleChange,
         },
-        handleChange,
-      )
-      .subscribe();
+      ],
+    });
 
     return () => {
       if (debounce) clearTimeout(debounce);
-      void supabase.removeChannel(channel);
+      unsubscribe();
     };
-  }, [brandId, queryClient, supabase]);
+  }, [brandId, queryClient]);
 }

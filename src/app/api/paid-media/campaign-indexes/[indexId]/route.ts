@@ -52,8 +52,6 @@ function normalizeCampaignIndexRow(input: unknown): CampaignIndexRecord | null {
   };
 }
 
-export const runtime = 'nodejs';
-
 export async function PUT(request: NextRequest, context: { params: Promise<{ indexId: string }> }) {
   const params = paramsSchema.safeParse(await context.params);
   if (!params.success) {

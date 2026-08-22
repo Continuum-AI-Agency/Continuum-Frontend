@@ -13,8 +13,6 @@ import {
 } from '@/lib/jaina/conversations';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 type AuthResult = { ok: true; accessToken: string } | { ok: false; response: NextResponse };
 
 async function authorizeConversationRequest(): Promise<AuthResult> {

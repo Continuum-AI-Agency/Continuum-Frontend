@@ -20,6 +20,7 @@ import {
   upsertComment,
 } from '@/lib/library/comments';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 export type PostCommentInput = {
   body: string;
@@ -94,40 +95,44 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
   }, [brandId, assetId]);
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`media-comments-${assetId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'media', table: 'comments', filter: `asset_id=eq.${assetId}` },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            const removedId = (payload.old as { id?: string }).id;
-            if (removedId) setComments((prev) => prev.filter((c) => c.id !== removedId));
-            return;
-          }
-          const row = payload.new as MediaCommentRow;
-          if (row.deleted_at) {
-            setComments((prev) => prev.filter((c) => c.id !== row.id));
-            return;
-          }
-          const mapped = commentRowToMediaComment(row, authorsRef.current);
-          setComments((prev) => {
-            // Keep author display already resolved locally (optimistic post /
-            // initial fetch) — realtime rows would blank it out.
-            const known = prev.find((c) => c.id === mapped.id);
-            const merged = known
-              ? { ...mapped, authorName: known.authorName, authorEmail: known.authorEmail }
-              : mapped;
-            return upsertComment(prev, merged);
-          });
-        },
-      )
-      .subscribe();
+    const scoped = {
+      schema: 'media',
+      table: 'comments',
+      filter: `asset_id=eq.${assetId}`,
+    } as const;
 
-    return () => {
-      void supabase.removeChannel(channel);
+    const applyComment = (row: MediaCommentRow) => {
+      if (row.deleted_at) {
+        setComments((prev) => prev.filter((c) => c.id !== row.id));
+        return;
+      }
+      const mapped = commentRowToMediaComment(row, authorsRef.current);
+      setComments((prev) => {
+        // Keep author display already resolved locally (optimistic post /
+        // initial fetch) — realtime rows would blank it out.
+        const known = prev.find((c) => c.id === mapped.id);
+        const merged = known
+          ? { ...mapped, authorName: known.authorName, authorEmail: known.authorEmail }
+          : mapped;
+        return upsertComment(prev, merged);
+      });
     };
+
+    return subscribeToPostgresChanges({
+      label: `media-comments-${assetId}`,
+      bindings: [
+        {
+          ...scoped,
+          event: 'DELETE',
+          onRow: (row) => {
+            const removedId = (row as { id?: string }).id;
+            if (removedId) setComments((prev) => prev.filter((c) => c.id !== removedId));
+          },
+        },
+        { ...scoped, event: 'INSERT', onRow: (row) => applyComment(row as MediaCommentRow) },
+        { ...scoped, event: 'UPDATE', onRow: (row) => applyComment(row as MediaCommentRow) },
+      ],
+    });
   }, [assetId]);
 
   const markPending = useCallback((id: string, pending: boolean) => {

@@ -13,9 +13,11 @@ import {
   jainaChatRequestSchema,
 } from '@/lib/jaina/schemas';
 import {
+  coalesceJainaStreamEvents,
   createInitialJainaStreamState,
   hasRenderableStreamContent,
   type JainaStreamState,
+  type ParsedJainaStreamEvent,
   parseJainaStreamEvent,
   reduceJainaStreamEvent,
 } from '@/lib/jaina/stream';
@@ -63,12 +65,29 @@ const STREAM_INACTIVITY_TIMEOUT_MS = 120_000;
 // a merely slow (but alive) run is never falsely aborted.
 const MAX_TRANSIENT_WATCHDOG_POLLS = 3;
 
+/**
+ * How long frames accumulate before they are folded into state as one batch.
+ *
+ * Reducing per line is what freezes the tab: `reduceJainaStreamEvent` re-parses the whole
+ * accumulated report on every delta, so the cost is quadratic in report size — `jaina:stream:bench`
+ * measures ~1.0s of solid blocking for a 19KB report, and each of those 3272 folds also re-renders
+ * the transcript. Batching cuts it to ~0.12s spread across the turn (~9x) and 205 folds instead of
+ * 3272; what remains is linear per-line NDJSON parsing.
+ *
+ * The backend already flushes its own frames on a 100ms interval, so a window near that captures
+ * roughly one burst per fold while still repainting ~12x/sec, which reads as streaming. Raise it if
+ * the bench moves; lowering it below ~40ms gives most of the work back.
+ */
+const JAINA_DELTA_COALESCE_MS = 80;
+
 export function useJainaChatStream() {
   const [state, setState] = useState<JainaStreamState>(() => createInitialJainaStreamState());
   const stateRef = useRef(state);
   const abortRef = useRef<AbortController | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingEventsRef = useRef<ParsedJainaStreamEvent[]>([]);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The run THIS reader owns, as reactive state so the projection can skip it (exactly one
   // folder per run — the same invariant as organic's `liveRunId`).
   const [liveRunId, setLiveRunId] = useState<string | null>(null);
@@ -86,6 +105,33 @@ export function useJainaChatStream() {
       watchdogRef.current = null;
     }
   }, []);
+
+  const clearFlushTimer = useCallback(() => {
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+  }, []);
+
+  // Fold everything buffered since the last flush in ONE state update. Coalescing is exact —
+  // deltas are string concatenation — so the resulting state matches a per-line fold byte for
+  // byte (`stream.coalesce.test.ts` asserts exactly that).
+  const flushPendingEvents = useCallback(() => {
+    clearFlushTimer();
+    const batch = pendingEventsRef.current;
+    if (batch.length === 0) return;
+    pendingEventsRef.current = [];
+    const coalesced = coalesceJainaStreamEvents(batch);
+    setState((prev) => coalesced.reduce(reduceJainaStreamEvent, prev));
+  }, [clearFlushTimer]);
+
+  // Abandoning the view (detach/cancel/reset) drops the buffer rather than folding it: the state
+  // it would land in is about to be replaced or reset, and folding it first would briefly render
+  // a turn the user just left.
+  const discardPendingEvents = useCallback(() => {
+    clearFlushTimer();
+    pendingEventsRef.current = [];
+  }, [clearFlushTimer]);
 
   // Register the durable run into the app-level store the moment its runId is known. This is
   // what makes AgentRunsProvider tail it live (RunTail) and what lets useProjectedJainaRun
@@ -109,6 +155,7 @@ export function useJainaChatStream() {
 
   const reset = useCallback(() => {
     clearWatchdog();
+    discardPendingEvents();
     abortRef.current?.abort();
     readerRef.current?.cancel().catch(() => {});
     abortRef.current = null;
@@ -116,13 +163,14 @@ export function useJainaChatStream() {
     registeredRunRef.current = null;
     setLiveRunId(null);
     setState(createInitialJainaStreamState());
-  }, [clearWatchdog]);
+  }, [clearWatchdog, discardPendingEvents]);
 
   // Release the LOCAL view without stopping the run — the session-switch / unmount path. The
   // run keeps executing (Backend) and the store keeps tailing it (RunTail), so the projection
   // takes over rendering it when the user returns. Mirrors organic's detach.
   const detach = useCallback(() => {
     clearWatchdog();
+    discardPendingEvents();
     abortRef.current?.abort();
     readerRef.current?.cancel().catch(() => {});
     abortRef.current = null;
@@ -130,7 +178,7 @@ export function useJainaChatStream() {
     registeredRunRef.current = null;
     setLiveRunId(null);
     setState((prev) => ({ ...prev, status: 'idle' }));
-  }, [clearWatchdog]);
+  }, [clearWatchdog, discardPendingEvents]);
 
   // Actually STOP the run — Backend row flipped to `cancelled` so it can't keep burning tokens
   // or be resurrected by the projection. `targetRunId` lets the caller stop a run this reader
@@ -139,6 +187,7 @@ export function useJainaChatStream() {
     async (targetRunId?: string) => {
       const runId = targetRunId ?? stateRef.current.runId;
       clearWatchdog();
+      discardPendingEvents();
       abortRef.current?.abort();
       readerRef.current?.cancel().catch(() => {});
       setLiveRunId(null);
@@ -163,7 +212,7 @@ export function useJainaChatStream() {
         // Best-effort: the row may already be terminal (a 409), which is fine.
       }
     },
-    [clearWatchdog],
+    [clearWatchdog, discardPendingEvents],
   );
 
   // Unmount releases the view but does NOT stop the run — leaving /paid-media must not kill a
@@ -356,13 +405,23 @@ export function useJainaChatStream() {
             transientWatchdogPolls = 0;
             armWatchdog();
             const event = parseJainaStreamEvent(line);
-            if (event) {
-              setState((prev) => reduceJainaStreamEvent(prev, event));
+            if (!event) return;
+            pendingEventsRef.current.push(event);
+            if (!flushTimerRef.current) {
+              flushTimerRef.current = setTimeout(flushPendingEvents, JAINA_DELTA_COALESCE_MS);
             }
           },
         });
 
         clearWatchdog();
+        // The stream is done; the tail of the buffer has to land before the terminal status is
+        // decided below, which reads the folded content to tell "complete" from "empty". Skipped on
+        // an abort: a cancelled reader must not fold a detached turn back onto the screen.
+        if (controller.signal.aborted) {
+          discardPendingEvents();
+        } else {
+          flushPendingEvents();
+        }
 
         // Reader closed. If a terminal frame already set complete/error, keep it.
         // Otherwise finalize from whatever was streamed: render if there is content,
@@ -379,6 +438,9 @@ export function useJainaChatStream() {
         });
       } catch (error) {
         clearWatchdog();
+        // At most one coalescing window of frames, belonging to a turn that just died. Folding
+        // them would paint content underneath the error banner.
+        discardPendingEvents();
         const message = error instanceof Error ? error.message : 'Stream failed';
         if (!controller.signal.aborted) {
           setState((prev) => ({ ...prev, status: 'error', error: message }));
@@ -389,7 +451,7 @@ export function useJainaChatStream() {
 
       return {};
     },
-    [getAccessToken, reset, clearWatchdog],
+    [getAccessToken, reset, clearWatchdog, flushPendingEvents, discardPendingEvents],
   );
 
   return {

@@ -5,6 +5,7 @@ import type { Edge } from '@xyflow/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { stringToColor } from '@/lib/utils/color';
 import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
 import type { StudioNode } from '@/StudioCanvas/types';
@@ -121,7 +122,6 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const lastRevisionRef = useRef<number | null>(null);
   const isRemoteChangeRef = useRef<boolean>(false);
   const broadcastChannelRef = useRef<any>(null);
-  const dbChannelRef = useRef<any>(null);
   const lastSyncAtRef = useRef<number>(0);
   const hasLoadedInitialDataRef = useRef<boolean>(false);
   const lastRemoteNodeIdsRef = useRef<Set<string>>(new Set());
@@ -563,39 +563,39 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   useEffect(() => {
     if (!brandProfileId || !roomId) return;
 
-    const channelTopic = `canvas:db:${brandProfileId}:${roomId}`;
-    console.log('[Canvas Sync] Creating DB channel:', channelTopic);
+    const scoped = {
+      schema: 'brand_profiles',
+      table: 'canvas_sessions',
+      filter: `room_id=eq.${roomId}`,
+    } as const;
 
-    const channel = supabase.channel(channelTopic, {
-      config: { broadcast: { self: false } },
-    });
+    const applySession = (row: Record<string, unknown>) => {
+      if (row.brand_profile_id !== brandProfileId) return;
+      handleRemoteUpdate({
+        nodes: row.nodes,
+        edges: row.edges,
+        deleted_node_ids: row.deleted_node_ids,
+        deleted_edge_ids: row.deleted_edge_ids,
+        updated_at: row.updated_at,
+        revision: row.revision,
+        editor_session_id: row.editor_session_id,
+      } as Parameters<typeof handleRemoteUpdate>[0]);
+    };
 
-    channel
-      .on(
-        'postgres_changes' as any,
+    // ONLY the db half moves onto the helper. The sibling `canvas:broadcast:` channel
+    // above keeps its hand-built topic on purpose: for broadcast and presence the topic
+    // IS the rendezvous between peers, and uniquifying it would leave every client alone
+    // in its own room with working cursors nobody else can see.
+    return subscribeToPostgresChanges({
+      label: `canvas:db:${brandProfileId}:${roomId}`,
+      bindings: [
+        { ...scoped, event: 'INSERT', onRow: applySession },
+        { ...scoped, event: 'UPDATE', onRow: applySession },
         {
-          event: '*',
-          schema: 'brand_profiles',
-          table: 'canvas_sessions',
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload: any) => {
-          const record = payload.new || payload.old;
-          if (record?.brand_profile_id !== brandProfileId) return;
-
-          console.log('[Canvas Sync] Postgres Change:', payload.eventType);
-
-          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-            handleRemoteUpdate({
-              nodes: payload.new.nodes,
-              edges: payload.new.edges,
-              deleted_node_ids: payload.new.deleted_node_ids,
-              deleted_edge_ids: payload.new.deleted_edge_ids,
-              updated_at: payload.new.updated_at,
-              revision: payload.new.revision,
-              editor_session_id: payload.new.editor_session_id,
-            });
-          } else if (payload.eventType === 'DELETE') {
+          ...scoped,
+          event: 'DELETE',
+          onRow: (row) => {
+            if (row.brand_profile_id !== brandProfileId) return;
             const store = useStudioStore.getState();
             if (store.nodes.length === 0 && store.edges.length === 0) {
               lastRemoteNodeIdsRef.current = new Set();
@@ -608,31 +608,19 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
               lastRevisionRef.current = null;
               store.triggerSave?.();
             }
-          }
+          },
         },
-      )
-      .subscribe((subStatus, err) => {
-        console.log('[Canvas Sync] DB channel status:', subStatus);
-        if (err) console.error('[Canvas Sync] DB Realtime error:', err);
-        const normalizedStatus = normalizeRealtimeStatus(subStatus);
-        setDbStatus(normalizedStatus);
-        if (subStatus === 'SUBSCRIBED') {
-          const now = Date.now();
-          if (now - lastSyncAtRef.current > 2000) {
-            lastSyncAtRef.current = now;
-            void syncLatestCanvasSession();
-          }
+      ],
+      onStatus: (subStatus) => setDbStatus(normalizeRealtimeStatus(subStatus)),
+      onSubscribed: () => {
+        const now = Date.now();
+        if (now - lastSyncAtRef.current > 2000) {
+          lastSyncAtRef.current = now;
+          void syncLatestCanvasSession();
         }
-      });
-
-    dbChannelRef.current = channel;
-
-    return () => {
-      console.log('[Canvas Sync] Tearing down DB channel');
-      supabase.removeChannel(channel);
-      dbChannelRef.current = null;
-    };
-  }, [brandProfileId, roomId, supabase, handleRemoteUpdate, syncLatestCanvasSession]);
+      },
+    });
+  }, [brandProfileId, roomId, handleRemoteUpdate, syncLatestCanvasSession]);
 
   useEffect(() => {
     if (status === 'SUBSCRIBED' && user && broadcastChannelRef.current) {

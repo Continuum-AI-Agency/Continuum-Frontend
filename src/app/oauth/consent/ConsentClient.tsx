@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   type ConsentBrandOption,
@@ -17,7 +17,7 @@ type AuthorizationDetails = {
   scope: string;
 };
 
-function ConsentContent() {
+export function ConsentContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const authorizationId = searchParams.get('authorization_id');
@@ -114,7 +114,15 @@ function ConsentContent() {
       <ConsentShell>
         <div className="text-center space-y-3">
           <div className="h-10 w-10 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mx-auto">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-red-500">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              role="img"
+              aria-label="Error"
+              className="text-red-500"
+            >
               <path
                 d="M10 6v4m0 4h.01M19 10a9 9 0 11-18 0 9 9 0 0118 0z"
                 stroke="currentColor"
@@ -217,6 +225,7 @@ function ConsentContent() {
                   height="14"
                   viewBox="0 0 14 14"
                   fill="none"
+                  aria-hidden="true"
                   className="shrink-0 text-[#5A48F9]"
                 >
                   <path
@@ -236,6 +245,7 @@ function ConsentContent() {
 
       <div className="space-y-2 pt-1">
         <button
+          type="button"
           onClick={approve}
           disabled={submitting}
           className="w-full rounded-lg bg-[#5A48F9] hover:bg-[#4a38e9] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 px-4 transition-colors"
@@ -243,6 +253,7 @@ function ConsentContent() {
           {submitting ? 'Authorizing…' : 'Allow access'}
         </button>
         <button
+          type="button"
           onClick={deny}
           disabled={submitting}
           className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-700 dark:text-zinc-300 text-sm font-medium py-2.5 px-4 transition-colors"
@@ -264,7 +275,7 @@ function ConsentShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ConsentSkeleton() {
+export function ConsentSkeleton() {
   return (
     <ConsentShell>
       <div className="space-y-4 animate-pulse">
@@ -277,13 +288,5 @@ function ConsentSkeleton() {
         </div>
       </div>
     </ConsentShell>
-  );
-}
-
-export default function OAuthConsentPage() {
-  return (
-    <Suspense fallback={<ConsentSkeleton />}>
-      <ConsentContent />
-    </Suspense>
   );
 }

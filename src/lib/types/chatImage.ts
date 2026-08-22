@@ -1,7 +1,12 @@
 // Shared types for chat-based image/video generation in AI Studio.
 // SupportedModel is kept in sync with MODEL_CATALOG in @continuum/contracts.
 
-import type { BrandBookPieceKind, BrandDirectionPiece, ImageSize } from '@continuum/contracts';
+import type {
+  BrandBookPieceKind,
+  BrandDirectionPiece,
+  DesignSection,
+  ImageSize,
+} from '@continuum/contracts';
 
 export type SupportedModel =
   | 'nano-banana'
@@ -161,6 +166,10 @@ export type BackendChatImageRequestPayload = {
   // from `brand_book_pieces` above — the two vocabularies share no member. Tri-state:
   // absent = everything the plan admits, [] = no brand direction, a list narrows.
   brand_direction_pieces?: BrandDirectionPiece[];
+  // Sections of the brand's uploaded design system. A third switch again, with its own
+  // vocabulary. Tri-state: absent = the Backend resolves it from the system's rigor tier,
+  // [] = off, a list narrows.
+  design_system_sections?: DesignSection[];
   // Library ids of the reference creatives; the Backend folds what they earned into
   // the prompt as <asset_performance>.
   reference_asset_ids?: string[];

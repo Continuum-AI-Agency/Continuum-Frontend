@@ -7,6 +7,10 @@ import { ensureOnboardingState } from '@/lib/onboarding/storage';
 import type { BrandGuidelineSummary } from '@/lib/schemas/brandGuidelines';
 import type { BrandInsightsQuestionsByNiche } from '@/lib/schemas/brandInsights';
 
+// TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+export const instant = false;
+
 export default async function PrimitivesPage() {
   const { activeBrandId } = await getActiveBrandContext();
   if (!activeBrandId) {

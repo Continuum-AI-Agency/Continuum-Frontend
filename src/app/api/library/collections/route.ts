@@ -7,8 +7,6 @@ import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 function rowToCollection(row: MediaCollectionRow): MediaCollection {
   return {
     id: row.id,

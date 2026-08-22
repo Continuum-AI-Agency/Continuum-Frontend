@@ -24,6 +24,7 @@ import {
   upsertComment,
 } from '@/lib/library/comments';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 export type PostMultiCommentInput = {
   assetId: string;
@@ -152,49 +153,57 @@ export function useMultiAssetComments(
     };
   }, [brandId, assetKey]);
 
+  /** INSERT and UPDATE land the same way; a soft-deleted row leaves the list. */
+  const applyComment = useCallback((row: MediaCommentRow) => {
+    if (row.deleted_at) {
+      setComments((prev) => prev.filter((c) => c.id !== row.id));
+      return;
+    }
+    const mapped = commentRowToMediaComment(row, authorsRef.current);
+    setComments((prev) => {
+      // Realtime rows carry no author fields; keep whatever the fetch or
+      // the optimistic post already resolved locally.
+      const known = prev.find((c) => c.id === mapped.id);
+      const merged = known
+        ? { ...mapped, authorName: known.authorName, authorEmail: known.authorEmail }
+        : mapped;
+      return upsertComment(prev, merged);
+    });
+  }, []);
+
   useEffect(() => {
     if (!assetKey) return;
 
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`media-comments-multi-${assetKey}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'media',
-          table: 'comments',
-          filter: `asset_id=in.(${assetKey})`,
-        },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            const removedId = (payload.old as { id?: string }).id;
-            if (removedId) setComments((prev) => prev.filter((c) => c.id !== removedId));
-            return;
-          }
-          const row = payload.new as MediaCommentRow;
-          if (row.deleted_at) {
-            setComments((prev) => prev.filter((c) => c.id !== row.id));
-            return;
-          }
-          const mapped = commentRowToMediaComment(row, authorsRef.current);
-          setComments((prev) => {
-            // Realtime rows carry no author fields; keep whatever the fetch or
-            // the optimistic post already resolved locally.
-            const known = prev.find((c) => c.id === mapped.id);
-            const merged = known
-              ? { ...mapped, authorName: known.authorName, authorEmail: known.authorEmail }
-              : mapped;
-            return upsertComment(prev, merged);
-          });
-        },
-      )
-      .subscribe();
+    const scoped = {
+      schema: 'media',
+      table: 'comments',
+      filter: `asset_id=in.(${assetKey})`,
+    } as const;
 
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [assetKey]);
+    return subscribeToPostgresChanges({
+      label: `media-comments-multi-${assetKey}`,
+      bindings: [
+        {
+          ...scoped,
+          event: 'DELETE',
+          onRow: (row) => {
+            const removedId = (row as { id?: string }).id;
+            if (removedId) setComments((prev) => prev.filter((c) => c.id !== removedId));
+          },
+        },
+        {
+          ...scoped,
+          event: 'INSERT',
+          onRow: (row) => applyComment(row as MediaCommentRow),
+        },
+        {
+          ...scoped,
+          event: 'UPDATE',
+          onRow: (row) => applyComment(row as MediaCommentRow),
+        },
+      ],
+    });
+  }, [assetKey, applyComment]);
 
   const markPending = useCallback((id: string, pending: boolean) => {
     setPendingIds((prev) => {

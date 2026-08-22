@@ -5,8 +5,8 @@
 // consumer matches the run/session it cares about. The heavy result payload is
 // NOT broadcast (excluded from the Realtime publication) — fetch it via REST.
 
-import { useEffect, useMemo, useRef } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useEffect, useRef } from 'react';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 export type JainaRunStatus = 'pending' | 'running' | 'completed' | 'failed';
 
@@ -33,40 +33,37 @@ export function useJainaRunStatusRealtime({
   enabled = true,
   onRunStatus,
 }: UseJainaRunStatusRealtimeParams): void {
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const callbackRef = useRef(onRunStatus);
   callbackRef.current = onRunStatus;
 
   useEffect(() => {
     if (!enabled) return;
 
-    const channel = supabase.channel('jaina:run-status', {
-      config: { broadcast: { self: false } },
-    });
-
-    channel
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'jaina', table: 'jaina_conversation_runs' },
-        (payload) => {
-          const row = (payload.new ?? null) as Record<string, unknown> | null;
-          if (!row) return;
-          const runId = typeof row.run_id === 'string' ? row.run_id : null;
-          const status = typeof row.status === 'string' ? (row.status as JainaRunStatus) : null;
-          if (!runId || !status) return;
-          callbackRef.current({
-            runId,
-            sessionId: typeof row.session_id === 'string' ? row.session_id : '',
-            status,
-            resultType: typeof row.result_type === 'string' ? row.result_type : null,
-            errorMessage: typeof row.error_message === 'string' ? row.error_message : null,
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
+    // The old topic was the bare literal `jaina:run-status` — no brand, no user, no
+    // discriminator of any kind — so a second mount anywhere in the tree would have been
+    // handed the first one's channel and thrown. Two render sites already exist.
+    const onRow = (row: Record<string, unknown>): void => {
+      const runId = typeof row.run_id === 'string' ? row.run_id : null;
+      const status = typeof row.status === 'string' ? (row.status as JainaRunStatus) : null;
+      if (!runId || !status) return;
+      callbackRef.current({
+        runId,
+        sessionId: typeof row.session_id === 'string' ? row.session_id : '',
+        status,
+        resultType: typeof row.result_type === 'string' ? row.result_type : null,
+        errorMessage: typeof row.error_message === 'string' ? row.error_message : null,
+      });
     };
-  }, [enabled, supabase]);
+
+    // INSERT and UPDATE only, not `*`. The old handler read `payload.new` and bailed
+    // when it was empty, so a DELETE was silently ignored; `*` through the helper would
+    // hand it the deleted row instead and report a finished run as a live status change.
+    return subscribeToPostgresChanges({
+      label: 'jaina:run-status',
+      bindings: [
+        { event: 'INSERT', schema: 'jaina', table: 'jaina_conversation_runs', onRow },
+        { event: 'UPDATE', schema: 'jaina', table: 'jaina_conversation_runs', onRow },
+      ],
+    });
+  }, [enabled]);
 }

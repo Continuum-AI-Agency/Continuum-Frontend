@@ -11,9 +11,6 @@ const SSE_HEADERS = {
   'X-Accel-Buffering': 'no',
 };
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const jobId = searchParams.get('job_id');

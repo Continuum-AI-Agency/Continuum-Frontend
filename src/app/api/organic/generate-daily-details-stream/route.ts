@@ -4,9 +4,6 @@ import { getApiUrl } from '@/lib/api/config';
 import { dailyDetailsRequestSchema } from '@/lib/organic/types';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 export async function POST(request: NextRequest) {
   let json: unknown;
   try {

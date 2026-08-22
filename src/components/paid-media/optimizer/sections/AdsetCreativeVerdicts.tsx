@@ -128,6 +128,14 @@ function CreativeRow({
       )}
       <span className="min-w-0 flex-1 truncate text-xs text-foreground">{label}</span>
       {angle ? <AngleChip angle={angle} /> : null}
+      {trend?.virality ? (
+        <span className="shrink-0 text-3xs text-muted-foreground tabular-nums">
+          V{trend.virality.predicted_overall}
+        </span>
+      ) : null}
+      {trend?.outcome?.result ? (
+        <span className="shrink-0 text-3xs text-muted-foreground">{trend.outcome.result}</span>
+      ) : null}
       {verdict ? (
         <>
           <span

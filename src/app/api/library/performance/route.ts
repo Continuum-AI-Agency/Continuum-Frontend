@@ -1,4 +1,5 @@
 import {
+  assetAdAttributionMapSchema,
   assetPerformanceSchema,
   assetUsageSchema,
   paidMetricWindowSchema,
@@ -8,8 +9,6 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-
-export const runtime = 'nodejs';
 
 const querySchema = z.object({
   brandId: z.string().uuid(),
@@ -60,16 +59,22 @@ export async function GET(request: Request) {
   }
 
   const rpc = publicRpc(supabase);
-  const [performanceResult, usageResult] = await Promise.all([
+  const [performanceResult, usageResult, attributionResult] = await Promise.all([
     rpc.rpc('media_get_asset_performance', {
       p_brand_id: brandId,
       p_asset_id: assetId,
       p_window: window,
     }),
     rpc.rpc('media_get_asset_usage', { p_brand_id: brandId, p_asset_id: assetId }),
+    rpc.rpc('paid_media_get_asset_ad_attribution', {
+      p_brand_id: brandId,
+      p_asset_id: assetId,
+      p_window: window,
+      p_cutoff: new Date().toISOString().slice(0, 10),
+    }),
   ]);
 
-  const rpcError = performanceResult.error ?? usageResult.error;
+  const rpcError = performanceResult.error ?? usageResult.error ?? attributionResult.error;
   if (rpcError) {
     console.error('[library/performance] rpc failed', { assetId, window, error: rpcError.message });
     return NextResponse.json({ error: 'Performance query failed' }, { status: 500 });
@@ -77,7 +82,8 @@ export async function GET(request: Request) {
 
   const performance = assetPerformanceSchema.safeParse(performanceResult.data);
   const usage = assetUsageSchema.safeParse(usageResult.data);
-  if (!performance.success || !usage.success) {
+  const attribution = assetAdAttributionMapSchema.safeParse(attributionResult.data ?? {});
+  if (!performance.success || !usage.success || !attribution.success) {
     // A shape we cannot vouch for is worse than no panel: refuse rather than
     // hand the viewer numbers whose meaning we could not verify.
     console.error('[library/performance] unexpected rpc shape', {
@@ -85,9 +91,29 @@ export async function GET(request: Request) {
       window,
       performanceError: performance.success ? null : performance.error.message,
       usageError: usage.success ? null : usage.error.message,
+      attributionError: attribution.success ? null : attribution.error.message,
     });
     return NextResponse.json({ error: 'Performance query failed' }, { status: 500 });
   }
 
-  return NextResponse.json({ performance: performance.data, usage: usage.data });
+  const merged = {
+    ...performance.data,
+    deployments: performance.data.deployments.map((deployment) => {
+      const adId = deployment.ad?.adId;
+      const observed = adId ? attribution.data[adId] : null;
+      if (!deployment.ad || !observed) return deployment;
+      return {
+        ...deployment,
+        ad: {
+          ...deployment.ad,
+          metrics: { ...deployment.ad.metrics, ...observed.metrics },
+          virality: observed.virality,
+          outcome: observed.outcome,
+          attributionSetting: observed.attributionSetting,
+        },
+      };
+    }),
+  };
+
+  return NextResponse.json({ performance: merged, usage: usage.data });
 }

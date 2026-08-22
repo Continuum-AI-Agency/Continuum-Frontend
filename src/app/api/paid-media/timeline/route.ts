@@ -3,8 +3,6 @@ import { z } from 'zod';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 const requestSchema = z.object({
   brandId: z.string().min(1),
   accountId: z.string().min(1),

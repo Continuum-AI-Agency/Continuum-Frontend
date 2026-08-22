@@ -11,8 +11,6 @@ import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 const listQuerySchema = z.object({
   brandId: z.string().uuid(),
   assetId: z.string().uuid(),

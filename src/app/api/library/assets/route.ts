@@ -34,8 +34,6 @@ import { resolveSmartQueryFilter } from '@/lib/media/smart-collections';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 const PAGE_SIZE = 48;
 
 const querySchema = z.object({

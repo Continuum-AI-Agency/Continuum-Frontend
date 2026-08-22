@@ -24,6 +24,22 @@ const mockChannel = {
   unsubscribe: mock(() => {}),
 };
 
+/**
+ * The registered handler for one event on the db channel.
+ *
+ * The hook binds INSERT, UPDATE and DELETE separately rather than one `*` with an
+ * `eventType` switch, so "the first postgres_changes call" is no longer "the only
+ * one" — asking for the first and firing a DELETE at it silently exercises the INSERT
+ * path and asserts nothing.
+ */
+const dbHandlerFor = (event: 'INSERT' | 'UPDATE' | 'DELETE') => {
+  const call = (mockChannel.on as any).mock.calls.find(
+    (c: any) => c[0] === 'postgres_changes' && c[1]?.event === event,
+  );
+  if (!call) throw new Error(`no postgres_changes binding registered for ${event}`);
+  return call[2] as (payload: any) => void;
+};
+
 const createMockQueryBuilder = () => {
   let isWrite = false;
   const captureWrite = (payload: any) => {
@@ -386,9 +402,7 @@ describe('useCanvasRealtime', () => {
       await new Promise((r) => setTimeout(r, 80));
     });
 
-    const calls = (mockChannel.on as any).mock.calls;
-    const dbChangeCall = calls.find((c: any) => c[0] === 'postgres_changes');
-    const dbChangeHandler = dbChangeCall[2];
+    const dbChangeHandler = dbHandlerFor('UPDATE');
 
     mockSetNodes.mockClear();
     const maybeSingleCountBeforeMalformedUpdate = maybeSingleCallCount;
@@ -442,9 +456,7 @@ describe('useCanvasRealtime', () => {
       await new Promise((r) => setTimeout(r, 80));
     });
 
-    const calls = (mockChannel.on as any).mock.calls;
-    const dbChangeCall = calls.find((c: any) => c[0] === 'postgres_changes');
-    const dbChangeHandler = dbChangeCall[2];
+    const dbChangeHandler = dbHandlerFor('UPDATE');
 
     mockSetNodes.mockClear();
     const maybeSingleCountBeforeSuspiciousUpdate = maybeSingleCallCount;
@@ -495,9 +507,8 @@ describe('useCanvasRealtime', () => {
     const broadcastCall = calls.find(
       (c: any) => c[0] === 'broadcast' && c[1]?.event === 'canvas_updated',
     );
-    const dbChangeCall = calls.find((c: any) => c[0] === 'postgres_changes');
     const broadcastHandler = broadcastCall[2];
-    const dbChangeHandler = dbChangeCall[2];
+    const dbChangeHandler = dbHandlerFor('UPDATE');
 
     await act(async () => {
       broadcastHandler({
@@ -614,9 +625,7 @@ describe('useCanvasRealtime', () => {
     const ownSession = lastUpsertPayload?.editor_session_id;
     expect(typeof ownSession).toBe('string');
 
-    const dbHandler = (mockChannel.on as any).mock.calls.find(
-      (c: any) => c[0] === 'postgres_changes',
-    )[2];
+    const dbHandler = dbHandlerFor('UPDATE');
     mockSetNodes.mockClear();
 
     await act(async () => {
@@ -650,9 +659,7 @@ describe('useCanvasRealtime', () => {
       await new Promise((r) => setTimeout(r, 60));
     });
 
-    const dbHandler = (mockChannel.on as any).mock.calls.find(
-      (c: any) => c[0] === 'postgres_changes',
-    )[2];
+    const dbHandler = dbHandlerFor('UPDATE');
     mockSetNodes.mockClear();
 
     await act(async () => {
@@ -689,9 +696,7 @@ describe('useCanvasRealtime', () => {
       await new Promise((r) => setTimeout(r, 60));
     });
 
-    const dbHandler = (mockChannel.on as any).mock.calls.find(
-      (c: any) => c[0] === 'postgres_changes',
-    )[2];
+    const dbHandler = dbHandlerFor('UPDATE');
     mockSetNodes.mockClear();
 
     const strippedNode = {
@@ -821,9 +826,7 @@ describe('useCanvasRealtime', () => {
       await new Promise((r) => setTimeout(r, 60));
     });
 
-    const dbHandler = (mockChannel.on as any).mock.calls.find(
-      (c: any) => c[0] === 'postgres_changes',
-    )[2];
+    const dbHandler = dbHandlerFor('DELETE');
     mockSetNodes.mockClear();
     (mockStore.triggerSave as any).mockClear();
 

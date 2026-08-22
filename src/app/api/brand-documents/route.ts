@@ -4,8 +4,6 @@ import {
   recordDocumentUpload,
 } from '@/lib/documents/recordDocumentUpload';
 
-export const runtime = 'nodejs';
-
 // The single brand-document metadata endpoint. Replaces /api/onboarding/documents and
 // /api/ai-studio/documents, which were near-identical copies that had already drifted
 // (only one honored displayName; only one coerced the category).

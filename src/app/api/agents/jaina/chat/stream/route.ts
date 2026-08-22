@@ -4,8 +4,6 @@ import { log } from '@/lib/observability/logger';
 import { getPostHogClient } from '@/lib/posthog-server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 const HOP_BY_HOP_HEADERS = [
   'connection',
   'keep-alive',

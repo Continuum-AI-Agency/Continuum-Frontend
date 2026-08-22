@@ -94,7 +94,7 @@ import {
   type JainaScaffoldAction,
   reportAssemblySchema,
 } from '@/lib/jaina/schemas';
-import type { JainaStreamState } from '@/lib/jaina/stream';
+import { createInitialJainaStreamState, type JainaStreamState } from '@/lib/jaina/stream';
 import { isPersistedResultStub, parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
 import { usePaidMediaPerformanceStore } from '@/lib/paid-media/performance-store';
 import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
@@ -138,6 +138,14 @@ import type { JainaChatMessage } from './types';
 import { useProjectedJainaRun } from './useProjectedJainaRun';
 
 export { parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
+
+/**
+ * Handed to every message that is not the live turn. `JainaMessageItem` reads the stream state
+ * only when `message.id === activeResponseId`, so the value is never observed — what matters is
+ * that it is the SAME reference on every render, which is what lets the item's memo hold while a
+ * turn streams.
+ */
+const IDLE_JAINA_STREAM_STATE: JainaStreamState = createInitialJainaStreamState();
 
 function ConversationSkeleton() {
   return (
@@ -3066,6 +3074,25 @@ export function JainaChatSurface({
     }
   }, [pendingClarificationId]);
 
+  // "Regenerate" replays the user turn that preceded an assistant message. Resolved in one pass
+  // rather than a reverse scan per assistant message, which was quadratic in transcript length on
+  // every streaming frame. The values are strings, so a rebuilt map still leaves the items' props
+  // equal and their memo intact.
+  const regeneratePromptByMessageId = React.useMemo(() => {
+    const prompts = new Map<string, string>();
+    let lastUserContent: string | undefined;
+    for (const message of messages) {
+      if (message.role === 'user') {
+        lastUserContent = message.content;
+        continue;
+      }
+      if (message.role === 'assistant' && lastUserContent) {
+        prompts.set(message.id, lastUserContent);
+      }
+    }
+    return prompts;
+  }, [messages]);
+
   const isInputDisabled = isHistoryLoading || isConversationSwitching;
   const isQueueStreaming = isViewedStreaming || Boolean(activeResponseId);
   const canStartQueuedNow = !isQueueStreaming && !isHistoryLoading && !isConversationSwitching;
@@ -3208,42 +3235,33 @@ export function JainaChatSurface({
                 />
               )}
 
-              {messages.map((message, index) => {
-                const precedingUserMessage =
-                  message.role === 'assistant'
-                    ? [...messages]
-                        .slice(0, index)
-                        .reverse()
-                        .find((m) => m.role === 'user')
-                    : undefined;
-                return (
-                  <React.Fragment key={message.id}>
-                    <JainaMessageItem
-                      message={message}
-                      activeResponseId={activeResponseId}
-                      state={state}
-                      onSuggestionClick={handleSubmit}
-                      onPlanFeedback={handlePlanFeedback}
-                      onFocusInput={handleFocusInput}
-                      onScaffoldDecision={handleScaffoldDecision}
-                      optimisticScaffoldDecisions={optimisticScaffoldDecisions}
-                      onRegenerate={
-                        precedingUserMessage
-                          ? () => handleSubmit(precedingUserMessage.content)
-                          : undefined
-                      }
+              {messages.map((message) => (
+                <React.Fragment key={message.id}>
+                  <JainaMessageItem
+                    message={message}
+                    activeResponseId={activeResponseId}
+                    // Only the live turn reads `state`; everything else reads its own message.
+                    // Handing finished items one shared instance keeps their props equal so the
+                    // memo holds through a streaming fold.
+                    state={message.id === activeResponseId ? state : IDLE_JAINA_STREAM_STATE}
+                    onSuggestionClick={handleSubmit}
+                    onPlanFeedback={handlePlanFeedback}
+                    onFocusInput={handleFocusInput}
+                    onScaffoldDecision={handleScaffoldDecision}
+                    optimisticScaffoldDecisions={optimisticScaffoldDecisions}
+                    onRegenerate={handleSubmit}
+                    regeneratePrompt={regeneratePromptByMessageId.get(message.id)}
+                  />
+                  {milestonesForJainaMessage(message).map((milestone) => (
+                    <ChatMarker
+                      key={milestone.id}
+                      id={milestone.id}
+                      kind="milestone"
+                      label={milestone.label}
                     />
-                    {milestonesForJainaMessage(message).map((milestone) => (
-                      <ChatMarker
-                        key={milestone.id}
-                        id={milestone.id}
-                        kind="milestone"
-                        label={milestone.label}
-                      />
-                    ))}
-                  </React.Fragment>
-                );
-              })}
+                  ))}
+                </React.Fragment>
+              ))}
             </ChatTranscript>
           </div>
 

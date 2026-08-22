@@ -18,8 +18,6 @@ const bodySchema = z.object({
   dryRun: z.boolean().optional(),
 });
 
-export const runtime = 'nodejs';
-
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ catalogId: string }> },

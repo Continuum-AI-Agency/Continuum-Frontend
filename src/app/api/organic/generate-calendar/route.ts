@@ -10,9 +10,6 @@ import {
 import { getPostHogClient } from '@/lib/posthog-server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 export async function POST(request: NextRequest) {
   let json: unknown;
   try {

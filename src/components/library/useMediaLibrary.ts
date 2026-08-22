@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseFieldFiltersParam, serializeFieldFilters } from '@/lib/library/customFields';
 import { buildLibraryBrowseParams, buildLibraryQuery, mediaTypeToKind } from '@/lib/media/filters';
 import type { MediaAssetRow } from '@/lib/media/schema';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 const PAGE_SIZE = 48;
 
@@ -238,18 +238,24 @@ export function useMediaLibrary(params: {
 
   useEffect(() => {
     if (!brandId) return;
-    const supabase = createSupabaseBrowserClient();
 
-    const channel = supabase
-      .channel(`media-assets-${brandId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'media', table: 'assets', filter: `brand_id=eq.${brandId}` },
-        (payload) => {
-          if (payload.eventType === 'UPDATE') {
-            const partial = rowToPartial(payload.new as MediaAssetRow);
+    const scoped = { schema: 'media', table: 'assets', filter: `brand_id=eq.${brandId}` } as const;
+
+    return subscribeToPostgresChanges({
+      label: `media-assets-${brandId}`,
+      bindings: [
+        {
+          ...scoped,
+          event: 'UPDATE',
+          onRow: (row) => {
+            const partial = rowToPartial(row as MediaAssetRow);
             setAssets((prev) => prev.map((a) => (a.id === partial.id ? { ...a, ...partial } : a)));
-          } else if (payload.eventType === 'INSERT') {
+          },
+        },
+        {
+          ...scoped,
+          event: 'INSERT',
+          onRow: (row) => {
             // Only auto-surface inserts in the unfiltered "All Media" view; a
             // collection view shows only its members, which a raw insert is not.
             // Likewise respect active source/type/tag chips so a filtered view
@@ -270,7 +276,7 @@ export function useMediaLibrary(params: {
             ) {
               return;
             }
-            const inserted = payload.new as MediaAssetRow;
+            const inserted = row as MediaAssetRow;
             const insertedTags = inserted.tags ?? [];
             // Carousel slide rows never render as grid tiles — the cover row
             // (which follows in the same batch) represents the group.
@@ -295,17 +301,18 @@ export function useMediaLibrary(params: {
               return [rowToStub(inserted), ...prev];
             });
             void hydrateSignedUrl(inserted.id);
-          } else if (payload.eventType === 'DELETE') {
-            const removedId = (payload.old as { id?: string }).id;
-            if (removedId) setAssets((prev) => prev.filter((a) => a.id !== removedId));
-          }
+          },
         },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+        {
+          ...scoped,
+          event: 'DELETE',
+          onRow: (row) => {
+            const removedId = (row as { id?: string }).id;
+            if (removedId) setAssets((prev) => prev.filter((a) => a.id !== removedId));
+          },
+        },
+      ],
+    });
   }, [brandId, queryKey, query, activeFieldFilters, hydrateSignedUrl]);
 
   return useMemo(

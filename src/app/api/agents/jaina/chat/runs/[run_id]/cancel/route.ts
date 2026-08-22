@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 
 import { getApiBaseUrl } from '@/lib/api/config';
 
-export const runtime = 'nodejs';
-
 function resolveAuthorizationHeader(request: Request): string | null {
   const authorization = request.headers.get('authorization');
   if (!authorization) {

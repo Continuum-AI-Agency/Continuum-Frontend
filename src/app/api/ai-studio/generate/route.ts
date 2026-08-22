@@ -16,9 +16,6 @@ import {
   recordFallbackJob,
 } from '../fallback';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 function buildBackendUrl(path: string): string {
   return new URL(path, getApiBaseUrl()).toString();
 }

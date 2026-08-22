@@ -347,6 +347,26 @@ function AdDeploymentCard({ deployment, ad }: { deployment: AssetDeployment; ad:
 
       <MetaRankings metrics={ad.metrics} />
 
+      {ad.virality || ad.outcome || ad.attributionSetting ? (
+        <div className="mt-1.5 flex flex-wrap gap-1 text-3xs text-muted-foreground">
+          {ad.virality ? (
+            <span className="rounded bg-muted px-1 py-0.5">
+              Virality {ad.virality.predicted_overall} · {ad.virality.grade}
+              {ad.virality.prediction_only ? ' · prediction' : ' · observed'}
+            </span>
+          ) : null}
+          {ad.outcome ? (
+            <span className="rounded bg-muted px-1 py-0.5">
+              {ad.outcome.decision_kind.replaceAll('_', ' ')} ·{' '}
+              {ad.outcome.result ?? `${ad.outcome.delivery_days}/7 delivery days`}
+            </span>
+          ) : null}
+          {ad.attributionSetting ? (
+            <span className="rounded bg-muted px-1 py-0.5">{ad.attributionSetting}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       {ad.verdictReason && (
         <p className="mt-1.5 text-2xs leading-relaxed text-muted-foreground">{ad.verdictReason}</p>
       )}

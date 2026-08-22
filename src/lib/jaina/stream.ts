@@ -1930,6 +1930,141 @@ function parseDeltaPayload<TSchema extends z.ZodTypeAny>(
   return null;
 }
 
+/**
+ * Deltas the reducer folds by pure string concatenation, so N of them in a row carry exactly the
+ * information of one merged delta. `response.plan.delta` is deliberately absent: it feeds
+ * `parsePlanFromMarkdownDelta` / `parsePlanFromKeyValueDelta`, which read the individual chunk
+ * rather than the accumulation, so merging would change what they see. Plans are short anyway —
+ * the report deltas are where the cost is.
+ */
+const COALESCIBLE_DELTA_TYPES = new Set([
+  'response.output_json.delta',
+  'response.output_text.delta',
+]);
+
+type DeltaFields = {
+  location: 'data' | 'root';
+  delta: string;
+  itemId?: string;
+  partId?: string;
+};
+
+/**
+ * Reads the three fields grouping needs, without Zod.
+ *
+ * `parseDeltaPayload` would validate the same shape, but a `safeParse` per delta costs more than
+ * the fold it is meant to save (measured: it halved the coalescing win). Validation is not skipped,
+ * only moved — the reducer still runs the schema on whatever this hands back. Anything that does
+ * not match the plain shape returns null and is passed through unmerged.
+ */
+function readDeltaFields(event: ParsedJainaStreamEvent): DeltaFields | null {
+  const asData = event as { data?: { delta?: unknown; item_id?: unknown; part_id?: unknown } };
+  const asRoot = event as { delta?: unknown; item_id?: unknown; part_id?: unknown };
+  const source = typeof asData.data?.delta === 'string' ? asData.data : undefined;
+  const location = source ? 'data' : typeof asRoot.delta === 'string' ? 'root' : null;
+  if (!location) return null;
+  const fields = source ?? asRoot;
+  if (typeof fields.delta !== 'string') return null;
+  if (fields.item_id !== undefined && typeof fields.item_id !== 'string') return null;
+  if (fields.part_id !== undefined && typeof fields.part_id !== 'string') return null;
+  return {
+    location,
+    delta: fields.delta,
+    itemId: fields.item_id,
+    partId: fields.part_id,
+  };
+}
+
+/**
+ * True when merging `next` onto `current` cannot change any decision the reducer makes.
+ *
+ * Beyond the obvious type match this pins the two content-dependent branches: `item_id`/`part_id`
+ * select `contentPartKinds` and seed `outputItemId` from the first delta, and
+ * `looksLikeStructuredReportDelta` is a per-chunk sniff that decides whether a delta lands in
+ * `reportJson` or `responseText`. Requiring both chunks to sniff the same way keeps the
+ * classification byte-identical to the unmerged fold — including across a prose→JSON boundary,
+ * where a naive merge would silently swallow the prose tail.
+ */
+function canMergeDeltas(
+  current: { type: string; itemId?: string; partId?: string; structured: boolean },
+  next: { type: string; itemId?: string; partId?: string; structured: boolean },
+): boolean {
+  if (current.type !== next.type) return false;
+  if (current.itemId !== next.itemId) return false;
+  if (current.partId !== next.partId) return false;
+  if (current.type === 'response.output_text.delta') return current.structured === next.structured;
+  return true;
+}
+
+function withMergedDelta(
+  event: ParsedJainaStreamEvent,
+  location: 'data' | 'root',
+  delta: string,
+): ParsedJainaStreamEvent {
+  if (location === 'root') return { ...event, delta } as ParsedJainaStreamEvent;
+  const withData = event as { data?: Record<string, unknown> };
+  return { ...event, data: { ...withData.data, delta } } as ParsedJainaStreamEvent;
+}
+
+/**
+ * Collapses runs of consecutive, mergeable deltas into one event each, preserving order and
+ * leaving every other frame untouched.
+ *
+ * This is the fix for the frozen tab: `reduceJainaStreamEvent` re-parses the ENTIRE accumulated
+ * report on every delta, so the per-turn cost is quadratic in report size — measured at 883ms of
+ * blocking for a 19KB report (`jaina-stream.bench.ts`), on top of one React render per delta.
+ * Folding a batch instead of each token cuts both by the batch factor, exactly.
+ */
+export function coalesceJainaStreamEvents(
+  events: readonly ParsedJainaStreamEvent[],
+): ParsedJainaStreamEvent[] {
+  const coalesced: ParsedJainaStreamEvent[] = [];
+  let pending: {
+    event: ParsedJainaStreamEvent;
+    location: 'data' | 'root';
+    deltas: string[];
+    key: { type: string; itemId?: string; partId?: string; structured: boolean };
+  } | null = null;
+
+  const flush = () => {
+    if (!pending) return;
+    coalesced.push(
+      pending.deltas.length === 1
+        ? pending.event
+        : withMergedDelta(pending.event, pending.location, pending.deltas.join('')),
+    );
+    pending = null;
+  };
+
+  for (const event of events) {
+    const type = event.type as string | undefined;
+    const fields = type && COALESCIBLE_DELTA_TYPES.has(type) ? readDeltaFields(event) : null;
+    if (!type || !fields) {
+      flush();
+      coalesced.push(event);
+      continue;
+    }
+
+    const key = {
+      type,
+      itemId: fields.itemId,
+      partId: fields.partId,
+      structured: looksLikeStructuredReportDelta(fields.delta),
+    };
+
+    if (pending && canMergeDeltas(pending.key, key)) {
+      pending.deltas.push(fields.delta);
+      continue;
+    }
+
+    flush();
+    pending = { event, location: fields.location, deltas: [fields.delta], key };
+  }
+
+  flush();
+  return coalesced;
+}
+
 export function reduceJainaStreamEvent(
   state: JainaStreamState,
   event: ParsedJainaStreamEvent,

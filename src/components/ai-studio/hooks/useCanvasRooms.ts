@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 const canvasRoomSchema = z
   .object({
@@ -35,7 +36,6 @@ type WorkspaceRpcClient = {
 
 export function useCanvasRooms(brandProfileId: string) {
   const supabase = createSupabaseBrowserClient();
-  const channelId = useId();
   const [rooms, setRooms] = useState<CanvasRoom[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -66,8 +66,8 @@ export function useCanvasRooms(brandProfileId: string) {
   useEffect(() => {
     if (!brandProfileId) return;
 
-    const receiveRoom = (payload: { new: unknown }) => {
-      const parsed = canvasRoomSchema.safeParse(payload.new);
+    const receiveRoom = (row: Record<string, unknown>) => {
+      const parsed = canvasRoomSchema.safeParse(row);
       if (!parsed.success || parsed.data.brand_profile_id !== brandProfileId) return;
       setRooms((current) =>
         [...current.filter((room) => room.id !== parsed.data.id), parsed.data].sort((a, b) =>
@@ -76,46 +76,40 @@ export function useCanvasRooms(brandProfileId: string) {
       );
     };
 
-    const channel = supabase
-      .channel(`canvas-rooms:${brandProfileId}:${channelId}`)
-      .on(
-        'postgres_changes' as any,
-        {
-          event: 'INSERT',
-          schema: 'brand_profiles',
-          table: 'canvas_rooms',
-          filter: `brand_profile_id=eq.${brandProfileId}`,
-        },
-        receiveRoom,
-      )
-      .on(
-        'postgres_changes' as any,
-        {
-          event: 'UPDATE',
-          schema: 'brand_profiles',
-          table: 'canvas_rooms',
-          filter: `brand_profile_id=eq.${brandProfileId}`,
-        },
-        receiveRoom,
-      )
-      .on(
-        'postgres_changes' as any,
-        { event: 'DELETE', schema: 'brand_profiles', table: 'canvas_rooms' },
-        (payload: { old: unknown }) => {
-          const deleted = z.object({ id: z.string().uuid() }).safeParse(payload.old);
-          if (deleted.success) {
-            setRooms((current) => current.filter((room) => room.id !== deleted.data.id));
-          }
-        },
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') void fetchRooms();
-      });
+    const scoped = {
+      schema: 'brand_profiles',
+      table: 'canvas_rooms',
+      filter: `brand_profile_id=eq.${brandProfileId}`,
+    } as const;
 
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [brandProfileId, channelId, fetchRooms, supabase]);
+    // The `useId()` this used to build into its topic is gone: the helper's UUID topic
+    // is the same guarantee, made structurally rather than by remembering to do it. That
+    // matters here more than most — StudioCanvas calls this hook AND renders
+    // CanvasRoomsTabs, which calls it again with the same brand.
+    return subscribeToPostgresChanges({
+      label: `canvas-rooms:${brandProfileId}`,
+      bindings: [
+        { ...scoped, event: 'INSERT', onRow: receiveRoom },
+        { ...scoped, event: 'UPDATE', onRow: receiveRoom },
+        {
+          // Deliberately unfiltered: a DELETE payload carries only the primary key, so
+          // Postgres cannot evaluate a brand filter against it.
+          event: 'DELETE',
+          schema: 'brand_profiles',
+          table: 'canvas_rooms',
+          onRow: (row) => {
+            const deleted = z.object({ id: z.string().uuid() }).safeParse(row);
+            if (deleted.success) {
+              setRooms((current) => current.filter((room) => room.id !== deleted.data.id));
+            }
+          },
+        },
+      ],
+      onSubscribed: () => {
+        void fetchRooms();
+      },
+    });
+  }, [brandProfileId, fetchRooms]);
 
   const createRoom = async (name: string) => {
     const generalRooms = rooms.filter((room) => room.kind !== 'planner');

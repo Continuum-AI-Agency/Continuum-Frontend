@@ -172,6 +172,7 @@ describe('POST /api/library/review', () => {
     expect(body.assetId).toBe(ASSET_ID);
     expect(body.reviewStatus).toBe('in_review');
     expect(body.reviewStatusUpdatedAt).toBeTruthy();
+    expect(body.changed).toBe(true);
     expect(body.event.fromStatus).toBe('draft');
     expect(body.event.toStatus).toBe('in_review');
     expect(body.event.actor).toBe(USER_ID);

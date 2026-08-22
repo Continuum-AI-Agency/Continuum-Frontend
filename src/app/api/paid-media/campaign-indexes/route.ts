@@ -51,8 +51,6 @@ function normalizeCampaignIndexRow(input: unknown): CampaignIndexRecord | null {
   };
 }
 
-export const runtime = 'nodejs';
-
 export async function GET(request: NextRequest) {
   const brandId = request.nextUrl.searchParams.get('brandId');
   const metaAccountId = request.nextUrl.searchParams.get('metaAccountId');

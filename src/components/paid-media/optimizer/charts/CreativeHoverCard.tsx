@@ -84,6 +84,8 @@ export function CreativeHoverCard({
   const spend = series.reduce((sum, point) => sum + point.spend, 0);
   const lastCpa = series.at(-1)?.cpa ?? null;
   const confidence = angle?.confidence ?? null;
+  const virality = trend?.virality ?? null;
+  const outcome = trend?.outcome ?? null;
 
   return (
     <HoverCard closeDelay={80} openDelay={120}>
@@ -127,6 +129,23 @@ export function CreativeHoverCard({
                 style={{ width: `${Math.round(confidence * 100)}%`, background: 'var(--chart-1)' }}
               />
             </div>
+          </div>
+        ) : null}
+
+        {virality || outcome ? (
+          <div className="flex flex-wrap gap-1 border-border/60 border-t pt-2">
+            {virality ? (
+              <Badge className="text-3xs" variant="secondary">
+                Virality {virality.predicted_overall} · {virality.grade}
+                {virality.prediction_only ? ' · prediction' : ' · observed'}
+              </Badge>
+            ) : null}
+            {outcome ? (
+              <Badge className="text-3xs" variant="outline">
+                {humanize(outcome.decision_kind)} ·{' '}
+                {outcome.result ?? `${outcome.delivery_days}/7d`}
+              </Badge>
+            ) : null}
           </div>
         ) : null}
 

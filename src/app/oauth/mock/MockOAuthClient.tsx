@@ -1,9 +1,9 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect } from 'react';
+import { useEffect } from 'react';
 
-function PopupStatus({ provider }: { provider: string }) {
+export function PopupStatus({ provider }: { provider: string }) {
   return (
     <div
       style={{
@@ -21,7 +21,7 @@ function PopupStatus({ provider }: { provider: string }) {
   );
 }
 
-function MockOAuthPopupContent() {
+export function MockOAuthPopupContent() {
   const params = useSearchParams();
   const provider = params.get('provider') ?? 'mock';
   const context = params.get('context') ?? 'onboarding';
@@ -47,12 +47,4 @@ function MockOAuthPopupContent() {
   }, [provider, context]);
 
   return <PopupStatus provider={provider} />;
-}
-
-export default function MockOAuthPopup() {
-  return (
-    <Suspense fallback={<PopupStatus provider="account" />}>
-      <MockOAuthPopupContent />
-    </Suspense>
-  );
 }

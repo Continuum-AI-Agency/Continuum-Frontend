@@ -7,9 +7,6 @@ import { getApiBaseUrl } from '@/lib/api/config';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getFallbackJobs } from '../fallback';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 const querySchema = z.object({
   brandProfileId: z.string().min(1, 'brandProfileId is required'),
   limit: z.coerce.number().int().min(1).max(50).optional(),

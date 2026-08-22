@@ -14,6 +14,32 @@ mock.module('@/lib/supabase/client', () => ({
     removeChannel: () => {},
   }),
 }));
+mock.module('@/lib/library/creativeOperations', () => ({
+  createAssetCommentOperation: async (...args: unknown[]) => {
+    const input = args[1] as Record<string, unknown>;
+    const body = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+    const now = '2026-07-06T00:00:00.000Z';
+    calls.push({ url: '/api/library/comments', method: 'POST', body });
+    return {
+      id: 'comment-created',
+      brandId: body.brandId,
+      assetId: body.assetId,
+      versionId: body.versionId ?? null,
+      parentCommentId: body.parentCommentId ?? null,
+      body: body.body,
+      annotation: body.annotation ?? null,
+      resolvedAt: null,
+      resolvedBy: null,
+      createdBy: 'user-1',
+      createdAt: now,
+      updatedAt: now,
+    };
+  },
+  updateAssetCommentOperation: async () => {
+    throw new Error('not used in this spec');
+  },
+  deleteAssetCommentOperation: async () => undefined,
+}));
 
 import { useAssetComments } from './useAssetComments';
 

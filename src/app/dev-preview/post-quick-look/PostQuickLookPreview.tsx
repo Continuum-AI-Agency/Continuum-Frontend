@@ -208,7 +208,7 @@ const cases: Array<{ label: string; post: OrganicPost }> = [
   { label: 'Big numbers + long caption + boosted', post: bigNumbersBoosted },
 ];
 
-export default function PostQuickLookPreview() {
+export function PostQuickLookPreview() {
   return (
     <div className="min-h-screen bg-muted/30 p-8">
       <h1 className="mb-6 text-lg font-semibold">PostQuickLook visual QA (temporary)</h1>

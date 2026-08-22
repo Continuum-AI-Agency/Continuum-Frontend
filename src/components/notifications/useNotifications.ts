@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { mapNotificationRow, type NotificationRow } from '@/lib/notifications/notifications';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 const FEED_LIMIT = 30;
 
@@ -56,29 +57,28 @@ export function useNotifications(): UseNotificationsResult {
     };
     void load();
 
-    const channel = supabase
-      .channel(`notifications-${userId}`)
-      .on(
-        'postgres_changes',
+    const unsubscribe = subscribeToPostgresChanges({
+      label: `notifications-${userId}`,
+      bindings: [
         {
           event: 'INSERT',
           schema: 'brand_profiles',
           table: 'notifications',
           filter: `recipient_user_id=eq.${userId}`,
+          onRow: (row) => {
+            const mapped = mapNotificationRow(row as NotificationRow);
+            if (!mapped) return;
+            setNotifications((prev) =>
+              prev.some((n) => n.id === mapped.id) ? prev : [mapped, ...prev].slice(0, FEED_LIMIT),
+            );
+          },
         },
-        (payload) => {
-          const mapped = mapNotificationRow(payload.new as NotificationRow);
-          if (!mapped) return;
-          setNotifications((prev) =>
-            prev.some((n) => n.id === mapped.id) ? prev : [mapped, ...prev].slice(0, FEED_LIMIT),
-          );
-        },
-      )
-      .subscribe();
+      ],
+    });
 
     return () => {
       cancelled = true;
-      void supabase.removeChannel(channel);
+      unsubscribe();
     };
   }, [userId]);
 

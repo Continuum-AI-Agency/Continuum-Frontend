@@ -86,8 +86,6 @@ function hasOwn<T extends object, K extends PropertyKey>(
   return Object.hasOwn(value, key);
 }
 
-export const runtime = 'nodejs';
-
 export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ catalogId: string }> },

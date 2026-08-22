@@ -3,8 +3,6 @@ import { NextResponse } from 'next/server';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { jainaChatStopRequestSchema, jainaChatStopResponseSchema } from '@/lib/jaina/schemas';
 
-export const runtime = 'nodejs';
-
 function resolveAuthorizationHeader(request: Request): string | null {
   const authorization = request.headers.get('authorization');
   if (!authorization) {

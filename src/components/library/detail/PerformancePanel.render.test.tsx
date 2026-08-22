@@ -154,6 +154,46 @@ describe('PerformanceView — display rules', () => {
     expect(container.textContent).toContain('Meta');
   });
 
+  it('shows the saved Virality prediction, action outcome, and attribution setting', () => {
+    const deployment = UNTRUSTWORTHY.deployments[0];
+    if (!deployment?.ad) throw new Error('paid deployment fixture missing');
+    const performance: AssetPerformance = {
+      ...UNTRUSTWORTHY,
+      deployments: [
+        {
+          ...deployment,
+          ad: {
+            ...deployment.ad,
+            virality: {
+              predicted_overall: 82,
+              grade: 'strong',
+              confidence: 0.9,
+              observed_hook_rate: 0.31,
+              observed_retention: 0.44,
+              observed_captured_at: '2026-08-21T00:00:00Z',
+              prediction_only: false,
+            },
+            outcome: {
+              decision_kind: 'variate_creative',
+              status: 'matured',
+              actioned_at: '2026-08-01T00:00:00Z',
+              matured_at: '2026-08-12T00:00:00Z',
+              delivery_days: 7,
+              score: 0.18,
+              result: 'positive',
+            },
+            attributionSetting: '7d_click_1d_view',
+          },
+        },
+      ],
+    };
+
+    const { container } = renderView(performance);
+    expect(container.textContent).toContain('Virality 82 · strong · observed');
+    expect(container.textContent).toContain('variate creative · positive');
+    expect(container.textContent).toContain('7d_click_1d_view');
+  });
+
   it('renders an observed organic post with a link out to the live post', () => {
     const { container, getByText } = renderView(OBSERVED_POST);
     const link = getByText('View post').closest('a');

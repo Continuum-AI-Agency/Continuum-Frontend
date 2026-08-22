@@ -7,8 +7,6 @@ import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 // GET /api/library/ping?brandId= — brand members the caller may ping.
 // RequestReviewButton uses this to populate the recipient picker; the
 // server-only fetchBrandMembers cannot run in the client component.

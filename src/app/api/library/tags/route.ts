@@ -5,8 +5,6 @@ import { aggregateTagCounts } from '@/lib/media/filters';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = 'nodejs';
-
 const TAG_CAP = 40;
 // PostgREST caps responses at max_rows (1000), so the scan pages explicitly.
 const SCAN_PAGE_SIZE = 1000;
