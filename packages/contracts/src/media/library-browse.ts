@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { CAROUSEL_SLIDE_TAG } from '../competitor-spy/saveToLibrary';
 import { mediaAssetSchema, mediaReviewStatusSchema, mediaSourceSchema } from './asset';
+import { ELEMENT_REFERENCE_TAG } from './element';
 
 /** Stable URL/API values for ordering the creative library. */
 export const librarySortSchema = z.enum([
@@ -78,3 +80,22 @@ export const libraryBrowsePageSchema = z
   })
   .strict();
 export type LibraryBrowsePage = z.infer<typeof libraryBrowsePageSchema>;
+
+// System tags whose assets are real Library rows but do NOT belong in a default browse:
+// they are components of something else the grid already shows, or machinery the user
+// never asked to see.
+//
+//   carousel-slide    — the non-cover slides of a saved carousel; the cover already
+//                       occupies one browse slot for the whole set.
+//   element-reference — the generated reference image behind an Element; a brand with
+//                       twenty Elements would otherwise find its Library full of
+//                       near-identical studio shots.
+//
+// One list rather than a literal per call site: this was previously restated at four
+// sites (backend libraryManage + metadataSearch, frontend filters + carousel), which is
+// four chances for them to disagree about what "default browse" means. Search and the
+// agent-facing tools still reach these assets — hidden is not deleted.
+export const HIDDEN_LIBRARY_TAGS: readonly string[] = [CAROUSEL_SLIDE_TAG, ELEMENT_REFERENCE_TAG];
+
+/** PostgREST array literal for a `not('tags','ov',…)` overlap exclusion. */
+export const HIDDEN_LIBRARY_TAGS_FILTER = `{${HIDDEN_LIBRARY_TAGS.join(',')}}`;

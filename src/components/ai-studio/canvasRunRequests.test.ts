@@ -144,3 +144,36 @@ describe('runCanvasRequest', () => {
     expect(calls.error).toEqual([{ id: 'run-1', error: 'generation exploded' }]);
   });
 });
+
+describe('resolveRunNodeIds — registry-derived runnable set', () => {
+  // The three types that produced media, executed, and were missing from the old
+  // hand-written list, so an MCP run summary never mentioned them.
+  it('summarizes the reconciled generator types', () => {
+    const nodes: RunNode[] = [
+      { id: 'omni', type: 'omniGen', data: {} },
+      { id: 'hyper', type: 'hyperframesAgent', data: {} },
+      { id: 'frame', type: 'frameExtract', data: {} },
+    ];
+    expect(resolveRunNodeIds(nodes, null).sort()).toEqual(['frame', 'hyper', 'omni']);
+  });
+
+  it('summarizes the Canvas V3 runtime types', () => {
+    const nodes: RunNode[] = [
+      { id: 'act', type: 'action', data: {} },
+      { id: 'route', type: 'router', data: {} },
+      { id: 'bat', type: 'batch', data: {} },
+    ];
+    expect(resolveRunNodeIds(nodes, null).sort()).toEqual(['act', 'bat', 'route']);
+  });
+
+  it('leaves reference and annotation nodes out — they never run', () => {
+    const nodes: RunNode[] = [
+      { id: 'img', type: 'image', data: {} },
+      { id: 'note', type: 'note', data: {} },
+      { id: 'el', type: 'element', data: {} },
+      { id: 'design', type: 'designRef', data: {} },
+      { id: 'publish', type: 'organicPublish', data: {} },
+    ];
+    expect(resolveRunNodeIds(nodes, null)).toEqual([]);
+  });
+});

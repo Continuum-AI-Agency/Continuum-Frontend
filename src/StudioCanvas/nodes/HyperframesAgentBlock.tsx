@@ -108,6 +108,8 @@ export function HyperframesAgentBlock({
       {/* Inside the card's top-left, not straddling its border (Airtable #229). */}
       <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
         <GroundingChip
+          nodeId={id}
+          nodeType="hyperframesAgent"
           brandId={runtime?.brandProfileId}
           skillIds={data.skillIds}
           brandBookPieces={data.brandBookPieces}

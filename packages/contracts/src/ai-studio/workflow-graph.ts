@@ -106,7 +106,15 @@ export interface ConnectionValidationResult {
 }
 
 export type StudioPortDirection = 'input' | 'output';
-export type StudioPortDataType = 'text' | 'image' | 'video' | 'audio' | 'document' | 'media';
+export const studioPortDataTypeSchema = z.enum([
+  'text',
+  'image',
+  'video',
+  'audio',
+  'document',
+  'media',
+]);
+export type StudioPortDataType = z.infer<typeof studioPortDataTypeSchema>;
 
 export interface StudioPortMetadata {
   id: string;

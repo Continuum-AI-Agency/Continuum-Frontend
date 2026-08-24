@@ -2156,3 +2156,336 @@ describe('collectPublisherHandoffs', () => {
     expect(collectPublisherHandoffs(nodes, [])).toHaveLength(3);
   });
 });
+
+describe('Canvas V3 runtime branches', () => {
+  // The action branch registers a real AbortController so a long re-encode can be
+  // cancelled, so the stub has to provide those two.
+  const controls = () => ({
+    executeGeneration: mock(async () => ({
+      success: true,
+      output: { type: 'image', base64: 'gen', mimeType: 'image/png' },
+    })),
+    executeVideoExtension: mock(async () => ({ success: true })),
+    executeEnrichment: mock(async () => ({ success: true, output: { type: 'text', value: '' } })),
+    registerController: () => new AbortController(),
+    releaseController: () => {},
+    show: () => {},
+    cancel: () => {},
+    reset: () => {},
+  });
+
+  it('routes its input straight through and stamps the modality lock', async () => {
+    // The router IS the fan-out mechanism: it republishes its upstream as its own
+    // output, so many edges leaving it all read one already-computed result.
+    const nodes: StudioNode[] = [
+      { id: 'src', position: { x: 0, y: 0 }, type: 'string', data: { value: 'hello' } },
+      { id: 'route', position: { x: 0, y: 0 }, type: 'router', data: { lockedType: null } },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore
+      .getState()
+      .setEdges([
+        { id: 'e', source: 'src', target: 'route', sourceHandle: 'text', targetHandle: 'in' },
+      ]);
+
+    await executeWorkflow(controls() as never, { targetNodeId: 'route' });
+
+    const router = useStudioStore.getState().nodes.find((n) => n.id === 'route');
+    expect(router?.data.value).toBe('hello');
+    expect(router?.data.lockedType).toBe('text');
+    expect(router?.data.isComplete).toBe(true);
+  });
+
+  it('fails a router with nothing connected instead of completing empty', async () => {
+    useStudioStore
+      .getState()
+      .setNodes([
+        { id: 'route', position: { x: 0, y: 0 }, type: 'router', data: { lockedType: null } },
+      ]);
+    useStudioStore.getState().setEdges([]);
+
+    await executeWorkflow(controls() as never, { targetNodeId: 'route' });
+
+    const router = useStudioStore.getState().nodes.find((n) => n.id === 'route');
+    expect(router?.data.isComplete).not.toBe(true);
+  });
+
+  it('materializes a batch into a collection of its items', async () => {
+    useStudioStore.getState().setNodes([
+      {
+        id: 'bat',
+        position: { x: 0, y: 0 },
+        type: 'batch',
+        data: {
+          itemType: 'text',
+          combine: 'zip',
+          items: [
+            { id: 'a', kind: 'text', value: 'one', label: 'One' },
+            { id: 'b', kind: 'text', value: 'two', label: 'Two' },
+          ],
+        },
+      },
+    ]);
+    useStudioStore.getState().setEdges([]);
+
+    await executeWorkflow(controls() as never, { targetNodeId: 'bat' });
+
+    const batch = useStudioStore.getState().nodes.find((n) => n.id === 'bat');
+    expect(batch?.data.collectionCount).toBe(2);
+    expect(batch?.data.collectionItemType).toBe('text');
+    expect(batch?.data.isComplete).toBe(true);
+  });
+
+  it('runs a text action on its connected input', async () => {
+    useStudioStore.getState().setNodes([
+      { id: 'src', position: { x: 0, y: 0 }, type: 'string', data: { value: 'a fast fox' } },
+      {
+        id: 'act',
+        position: { x: 0, y: 0 },
+        type: 'action',
+        data: { actionId: 'text.findReplace', config: { find: 'fast', replace: 'slow' } },
+      },
+    ]);
+    useStudioStore
+      .getState()
+      .setEdges([
+        { id: 'e', source: 'src', target: 'act', sourceHandle: 'text', targetHandle: 'in' },
+      ]);
+
+    await executeWorkflow(controls() as never, { targetNodeId: 'act' });
+
+    const action = useStudioStore.getState().nodes.find((n) => n.id === 'act');
+    // A TEXT op writes `value` and no media, even though the `action` node type's
+    // registry entry says producesMedia: true. That flag is about the type; the OP
+    // decides the output, and this assertion is the guard on that rule.
+    expect(action?.data.value).toBe('a slow fox');
+    expect(action?.data.generatedImage).toBeUndefined();
+    expect(action?.data.isComplete).toBe(true);
+  });
+
+  it('fans a text action out over a collection, one output per item', async () => {
+    useStudioStore.getState().setNodes([
+      {
+        id: 'bat',
+        position: { x: 0, y: 0 },
+        type: 'batch',
+        data: {
+          itemType: 'text',
+          combine: 'zip',
+          items: [
+            { id: 'a', kind: 'text', value: 'red car' },
+            { id: 'b', kind: 'text', value: 'red van' },
+            { id: 'c', kind: 'text', value: 'blue car' },
+          ],
+        },
+      },
+      {
+        id: 'act',
+        position: { x: 0, y: 0 },
+        type: 'action',
+        data: { actionId: 'text.findReplace', config: { find: 'red', replace: 'green' } },
+      },
+    ]);
+    useStudioStore
+      .getState()
+      .setEdges([
+        { id: 'e', source: 'bat', target: 'act', sourceHandle: 'collection', targetHandle: 'in' },
+      ]);
+
+    await executeWorkflow(controls() as never, { targetNodeId: 'act' });
+
+    const action = useStudioStore.getState().nodes.find((n) => n.id === 'act');
+    expect(action?.data.collectionCount).toBe(3);
+    expect(action?.data.collectionItemType).toBe('text');
+    expect(action?.data.isComplete).toBe(true);
+  });
+
+  it('refuses an action with no op rather than running something it guessed', async () => {
+    useStudioStore.getState().setNodes([
+      {
+        id: 'act',
+        position: { x: 0, y: 0 },
+        type: 'action',
+        data: { actionId: null, config: {} },
+      },
+    ]);
+    useStudioStore.getState().setEdges([]);
+
+    await executeWorkflow(controls() as never, { targetNodeId: 'act' });
+
+    const action = useStudioStore.getState().nodes.find((n) => n.id === 'act');
+    expect(action?.data.isComplete).not.toBe(true);
+    expect(String(action?.data.error)).toContain('operation');
+  });
+
+  it('says a not-yet-built node type is not built, by name', async () => {
+    // Unreachable from the palette, but the MCP agent write path can create one. A
+    // silent skip would report success for work that never happened; the generator
+    // fallthrough would blame a missing prompt on a node that has none.
+    useStudioStore
+      .getState()
+      .setNodes([
+        { id: 'exp', position: { x: 0, y: 0 }, type: 'export', data: { format: null } },
+      ]);
+    useStudioStore.getState().setEdges([]);
+
+    await executeWorkflow(controls() as never, { targetNodeId: 'exp' });
+
+    const exported = useStudioStore.getState().nodes.find((n) => n.id === 'exp');
+    expect(String(exported?.data.error)).toContain('later release');
+    expect(String(exported?.data.error)).not.toContain('prompt');
+  });
+});
+
+describe('MCP-built nanoGen graph resolves its reference image (gate regression)', () => {
+  // The shape the MCP graph builder emits: a `string` on `prompt` and an `image`
+  // reference on `ref-image`. `ref-image` and `ref-images` are ALIASES and both sit in
+  // nanoGen's allowed set, so a resolver that knows only one of them silently drops the
+  // reference and the node reports a missing input it can plainly see is connected.
+  const controls = () => {
+    const executeGeneration = mock(async () => ({
+      success: true,
+      output: { type: 'image', base64: 'generated', mimeType: 'image/png' },
+    }));
+    return {
+      executeGeneration,
+      controls: {
+        executeGeneration,
+        executeVideoExtension: mock(async () => ({ success: true })),
+        executeEnrichment: mock(async () => ({ success: true, output: { type: 'text', value: '' } })),
+        registerController: () => new AbortController(),
+        releaseController: () => {},
+        show: () => {},
+        cancel: () => {},
+        reset: () => {},
+      },
+    };
+  };
+
+  const seed = (imageEdge: Partial<Edge>) => {
+    const nodes: StudioNode[] = [
+      { id: 'bench-prompt', position: { x: 0, y: 0 }, type: 'string', data: { value: 'a prompt' } },
+      {
+        id: 'bench-image',
+        position: { x: 0, y: 0 },
+        type: 'image',
+        data: {
+          image: 'https://example.test/reference.png',
+          sourcePath: 'brand/reference.png',
+          bucket: 'media-library',
+        },
+      },
+      {
+        id: 'bench-gen',
+        position: { x: 0, y: 0 },
+        type: 'nanoGen',
+        data: { model: 'nano-banana', positivePrompt: '' },
+      },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e-prompt',
+        source: 'bench-prompt',
+        target: 'bench-gen',
+        sourceHandle: 'text',
+        targetHandle: 'prompt',
+      },
+      {
+        id: 'e-image',
+        source: 'bench-image',
+        target: 'bench-gen',
+        ...imageEdge,
+      } as Edge,
+    ]);
+  };
+
+  it('runs on a whole-graph run with explicit handles', async () => {
+    seed({ source: 'bench-image', sourceHandle: 'image', targetHandle: 'ref-image' });
+    const { executeGeneration, controls: c } = controls();
+
+    await executeWorkflow(c as never, {});
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+    expect(useStudioStore.getState().nodes.find((n) => n.id === 'bench-gen')?.data.error).toBeFalsy();
+    expect(
+      useStudioStore.getState().nodes.find((n) => n.id === 'bench-image')?.data.error,
+    ).toBeFalsy();
+  });
+
+  it('runs when the stored edge carries a null sourceHandle', async () => {
+    // MCP writes handles as nullable columns; the FE normalizes null to undefined on
+    // load. Reference resolution must not depend on the source handle being named.
+    seed({ source: 'bench-image', sourceHandle: null, targetHandle: 'ref-image' });
+    const { executeGeneration, controls: c } = controls();
+
+    await executeWorkflow(c as never, {});
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs on the plural ref-images alias too', async () => {
+    seed({ source: 'bench-image', sourceHandle: 'image', targetHandle: 'ref-images' });
+    const { executeGeneration, controls: c } = controls();
+
+    await executeWorkflow(c as never, {});
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs when targeted directly rather than as a whole graph', async () => {
+    seed({ source: 'bench-image', sourceHandle: 'image', targetHandle: 'ref-image' });
+    const { executeGeneration, controls: c } = controls();
+
+    await executeWorkflow(c as never, { targetNodeId: 'bench-gen' });
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  it('blames the unreadable reference, not the wiring, when the URL never resolved', async () => {
+    // The gate failure looked like "Missing connected input for ref-image" on a node
+    // whose input was plainly connected. It was: the reference's signed URL could not
+    // be refreshed (the canvas origin was not on the backend's CORS allowlist), so the
+    // node carried a path and no readable media. Say THAT.
+    useStudioStore.getState().setNodes([
+      { id: 'bench-prompt', position: { x: 0, y: 0 }, type: 'string', data: { value: 'a prompt' } },
+      {
+        id: 'bench-image',
+        position: { x: 0, y: 0 },
+        type: 'image',
+        data: { sourcePath: 'brand/reference.png', bucket: 'media-library' },
+      },
+      {
+        id: 'bench-gen',
+        position: { x: 0, y: 0 },
+        type: 'nanoGen',
+        data: { model: 'nano-banana', positivePrompt: '' },
+      },
+    ]);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e-prompt',
+        source: 'bench-prompt',
+        target: 'bench-gen',
+        sourceHandle: 'text',
+        targetHandle: 'prompt',
+      },
+      {
+        id: 'e-image',
+        source: 'bench-image',
+        target: 'bench-gen',
+        sourceHandle: 'image',
+        targetHandle: 'ref-image',
+      },
+    ]);
+
+    await executeWorkflow(controls().controls as never, {});
+
+    const reported = useStudioStore
+      .getState()
+      .nodes.map((n) => String(n.data.error ?? ''))
+      .join(' ');
+    expect(reported).toContain('could not be loaded');
+    expect(reported).not.toContain('Missing connected input');
+  });
+});

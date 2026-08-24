@@ -3,8 +3,8 @@
 // "Library" tab so every surface speaks the same source/type filter language.
 
 import {
-  CAROUSEL_SLIDE_TAG,
   DEFAULT_LIBRARY_SORT,
+  HIDDEN_LIBRARY_TAGS,
   type LibraryBrowseQuery,
   type LibraryMediaType,
   type LibrarySort,
@@ -248,7 +248,7 @@ export function toSearchRpcFilters(filters: MediaSearchFilters | undefined): Med
     filter_source: filters?.source ?? null,
     filter_kind: filters?.kind ?? null,
     filter_tags: filters?.tags && filters.tags.length > 0 ? filters.tags : null,
-    filter_exclude_tags: [CAROUSEL_SLIDE_TAG],
+    filter_exclude_tags: [...HIDDEN_LIBRARY_TAGS],
     filter_collection_id: filters?.collectionId ?? null,
     filter_review_status: filters?.reviewStatus ?? null,
     // The route resolves fieldFilters against the DB and folds the result in;
@@ -260,9 +260,9 @@ export function toSearchRpcFilters(filters: MediaSearchFilters | undefined): Med
 
 export type LibraryTagOption = { tag: string; count: number };
 
-// Distinct tag vocabulary with usage counts for the tag filter chips. Excludes
-// the carousel-slide system tag, sorts by count (ties alphabetical), caps the
-// row so it stays a compact chip strip.
+// Distinct tag vocabulary with usage counts for the tag filter chips. Excludes the
+// system tags that are hidden from default browse, sorts by count (ties alphabetical),
+// caps the row so it stays a compact chip strip.
 export function aggregateTagCounts(
   rows: readonly { tags: string[] | null }[],
   cap = 40,
@@ -271,7 +271,7 @@ export function aggregateTagCounts(
   for (const row of rows) {
     for (const tag of row.tags ?? []) {
       const trimmed = tag.trim();
-      if (!trimmed || trimmed === CAROUSEL_SLIDE_TAG) continue;
+      if (!trimmed || HIDDEN_LIBRARY_TAGS.includes(trimmed)) continue;
       counts.set(trimmed, (counts.get(trimmed) ?? 0) + 1);
     }
   }

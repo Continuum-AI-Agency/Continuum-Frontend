@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { CAROUSEL_SLIDE_TAG } from '@continuum/contracts';
+import { CAROUSEL_SLIDE_TAG, HIDDEN_LIBRARY_TAGS } from '@continuum/contracts';
 import {
   aggregateTagCounts,
   buildLibraryQuery,
@@ -63,7 +63,7 @@ describe('toSearchRpcFilters', () => {
       filter_source: null,
       filter_kind: null,
       filter_tags: null,
-      filter_exclude_tags: [CAROUSEL_SLIDE_TAG],
+      filter_exclude_tags: [...HIDDEN_LIBRARY_TAGS],
       filter_collection_id: null,
       filter_review_status: null,
       filter_asset_ids: null,
@@ -84,7 +84,7 @@ describe('toSearchRpcFilters', () => {
       filter_source: 'upload',
       filter_kind: 'video',
       filter_tags: ['sunset'],
-      filter_exclude_tags: [CAROUSEL_SLIDE_TAG],
+      filter_exclude_tags: [...HIDDEN_LIBRARY_TAGS],
       filter_collection_id: 'col-1',
       filter_review_status: 'approved',
       filter_asset_ids: null,
@@ -97,7 +97,7 @@ describe('toSearchRpcFilters', () => {
   });
 
   it('always excludes carousel slides so slide rows never rank', () => {
-    expect(toSearchRpcFilters({ kind: 'image' }).filter_exclude_tags).toEqual([CAROUSEL_SLIDE_TAG]);
+    expect(toSearchRpcFilters({ kind: 'image' }).filter_exclude_tags).toEqual([...HIDDEN_LIBRARY_TAGS]);
   });
 });
 

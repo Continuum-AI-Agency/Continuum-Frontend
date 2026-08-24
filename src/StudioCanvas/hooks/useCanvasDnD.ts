@@ -1,13 +1,14 @@
+import type { StudioNodeType } from '@continuum/contracts';
+import { createNodeData } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { useReactFlow } from '@xyflow/react';
 import type React from 'react';
 import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-
 import { useToast } from '@/components/ui/ToastProvider';
+import { ELEMENT_DRAG_TYPE, parseElementDragPayload } from '@/lib/ai-studio/referenceDrop';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { STUDIO_ASSET_DROP_EFFECT } from '@/lib/creative-assets/studioAssetDrop';
-import type { StudioCanvasNodeType } from '../components/addNodeCatalog';
 import { createNodeConfig, isStudioCanvasNodeType } from '../components/canvasNodeTypes';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
@@ -55,7 +56,7 @@ export function useCanvasDnD() {
       });
 
       if (isStudioCanvasNodeType(droppedType)) {
-        const canonicalType: StudioCanvasNodeType =
+        const canonicalType: StudioNodeType =
           droppedType === 'veoDirector' || droppedType === 'veoFast' ? 'videoGen' : droppedType;
         const { data, style } = createNodeConfig(canonicalType);
         const newNode: StudioNode = {
@@ -67,6 +68,29 @@ export function useCanvasDnD() {
         } as StudioNode;
 
         setNodes(nodes.concat(newNode));
+        triggerSave();
+        return;
+      }
+
+      // An Element drops a NODE that points at the Element, not the reference image:
+      // regenerating the reference then reaches every canvas already using it.
+      const elementPayload = parseElementDragPayload(event.dataTransfer.getData(ELEMENT_DRAG_TYPE));
+      if (elementPayload) {
+        const { data, style } = createNodeData('element');
+        const elementNode: StudioNode = {
+          id: uuidv4(),
+          type: 'element',
+          position,
+          data: {
+            ...data,
+            elementId: elementPayload.elementId,
+            elementName: elementPayload.name,
+            elementCategory: elementPayload.category,
+            previewUrl: elementPayload.previewUrl,
+          },
+          style,
+        } as StudioNode;
+        setNodes(nodes.concat(elementNode));
         triggerSave();
         return;
       }

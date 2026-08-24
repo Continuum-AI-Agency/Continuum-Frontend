@@ -1,6 +1,12 @@
 import {
   coerceImageSize,
+  DESIGN_REF_IMAGE_OUTPUT_HANDLE,
+  DESIGN_REF_TEXT_OUTPUT_HANDLE,
+  type DesignRefNodeData,
+  designRefEmission,
   imageResolutionFor,
+  resolveAmbientDesignSections,
+  suppressedDesignSections,
   variationIndexFromHandle,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
@@ -103,6 +109,50 @@ const imageRefFromValue = (
   return undefined;
 };
 
+// A `designRef` is a SOURCE, like an `image` node: it never runs, so nothing ever puts
+// it in `resolvedData` and the builder reads its emission straight off the node.
+//
+// WHICH port the edge left decides what comes out — the section specimen on `image`,
+// the section's token summary on `text`. Asking the wrong port yields NOTHING rather
+// than the other one, which is what stops a token summary from being handed to a
+// reference-image port as though it were a picture.
+const designRefImageRef = (node: StudioNode): ImageRef | undefined => {
+  const data = node.data as unknown as DesignRefNodeData;
+  if (!designRefEmission(data)?.emitsImage) return undefined;
+  return imageRefFromValue(data.specimenUrl, data.specimenMimeType || 'image/png');
+};
+
+const designRefText = (node: StudioNode): string | undefined => {
+  const data = node.data as unknown as DesignRefNodeData;
+  if (!designRefEmission(data)?.emitsText) return undefined;
+  return data.tokenSummary?.trim() || undefined;
+};
+
+// One edge → one reference image, for the two generator arms that resolve references
+// SYNCHRONOUSLY (`buildNanoGenPayload` and `buildVeoPayload`).
+//
+// Both arms used to read `resolvedData` and stop there. That is enough for every source
+// the executor seeds — an `image` node is written into the output map before the run
+// walks the graph — but a `designRef` is never seeded, because it never runs. Falling
+// back to the SOURCE NODE is the same two-step `resolveImageInput` takes one function
+// over; it just cannot do the async markup compositing these arms have no await for.
+//
+// Behaviour for every non-designRef source is byte-identical to before.
+const referenceImageForEdge = (
+  edge: Edge,
+  resolvedData: Map<string, NodeOutput>,
+  sourceNode: StudioNode | undefined,
+): ImageRef | undefined => {
+  const fromOutput = imageRefFromOutput(resolvedData.get(edge.source), edge.sourceHandle);
+  if (fromOutput) return fromOutput;
+  if (sourceNode?.type === 'designRef') {
+    return edge.sourceHandle === DESIGN_REF_IMAGE_OUTPUT_HANDLE
+      ? designRefImageRef(sourceNode)
+      : undefined;
+  }
+  return undefined;
+};
+
 function resolveInputValue(
   nodeId: string,
   handleId: string,
@@ -140,6 +190,17 @@ function resolveInputValue(
           fileName: (sourceNode.data as any).fileName,
         };
       }
+    }
+    if (sourceNode.type === 'designRef') {
+      if (incomingEdge.sourceHandle === DESIGN_REF_TEXT_OUTPUT_HANDLE) {
+        const text = designRefText(sourceNode);
+        return text ? { text } : undefined;
+      }
+      if (incomingEdge.sourceHandle === DESIGN_REF_IMAGE_OUTPUT_HANDLE) {
+        const ref = designRefImageRef(sourceNode);
+        return ref ? { image: ref.data, imageUrl: ref.imageUrl } : undefined;
+      }
+      return undefined;
     }
   }
 
@@ -283,6 +344,15 @@ async function resolveImageInput(
   }
 
   const sourceNode = nodeById.get(edge.source);
+  if (sourceNode?.type === 'designRef') {
+    // Only the `image` port carries a picture. A `text` edge landing on a reference-image
+    // handle is a token summary, and it contributes nothing rather than a text/plain
+    // "image" the model would be handed as though it were one.
+    if (edge.sourceHandle !== DESIGN_REF_IMAGE_OUTPUT_HANDLE) return undefined;
+    const ref = designRefImageRef(sourceNode);
+    return ref ? { data: ref.data, imageUrl: ref.imageUrl, mimeType: ref.mimeType } : undefined;
+  }
+
   if (sourceNode?.type === 'image') {
     const imageData = sourceNode.data as ImageNodeData;
 
@@ -421,11 +491,28 @@ export function resolveInheritedGrounding(
     return {
       skillIds: genData.skillIds && genData.skillIds.length > 0 ? genData.skillIds : undefined,
       brandBookPieces: effectiveBrandBookPieces(genData.brandBookPieces),
-      designSystemSections: genData.designSystemSections,
+      // The generator's RESOLVED sections, not its raw field: the enriched prompt is
+      // supposed to reflect the actual output, and the actual output is narrowed by the
+      // generator's node type and by whatever `designRef` is wired into it. Reading the
+      // raw field here would tele-fill against grounding the generation never uses.
+      designSystemSections: resolveAmbientDesignSections(
+        targetGenNode.type,
+        genData.designSystemSections,
+        suppressedDesignSections(targetGenNode.id, allNodes, allEdges),
+      ),
     };
   }
 
-  return { brandBookPieces: DEFAULT_BRAND_BOOK_PIECES };
+  // Unwired: the text box grounds as itself. Enrichment writes words, and `voice` is the
+  // only section that shapes words — a type scale or a shadow ramp cannot.
+  return {
+    brandBookPieces: DEFAULT_BRAND_BOOK_PIECES,
+    designSystemSections: resolveAmbientDesignSections(
+      'string',
+      undefined,
+      suppressedDesignSections(nodeId, allNodes, allEdges),
+    ),
+  };
 }
 
 export interface BuildEnrichPayloadOptions {
@@ -542,7 +629,6 @@ export function buildNanoGenPayload(
 
   const referenceImages = refImageEdges
     .map((edge, index) => {
-      const output = resolvedData.get(edge.source);
       const sourceNode = allNodes.find((n) => n.id === edge.source);
       const refType = (sourceNode?.data as ImageNodeData)?.referenceType || 'default';
 
@@ -561,7 +647,7 @@ export function buildNanoGenPayload(
         }
       }
 
-      const ref = imageRefFromOutput(output, edge.sourceHandle);
+      const ref = referenceImageForEdge(edge, resolvedData, sourceNode);
       if (ref) {
         return {
           data: ref.data,
@@ -644,11 +730,24 @@ export function buildNanoGenPayload(
      * into "all", which is the one mistake this field cannot survive.
      */
     brandDirectionPieces: data.brandDirectionPieces,
-    // Same tri-state discipline as the line above: passed through untouched, never
-    // coerced. `[]` is the user switching the design system off for this node and
-    // `undefined` is the Backend resolving it from the rigor tier — collapsing one
-    // into the other silently swaps "off" for "apply everything".
-    designSystemSections: data.designSystemSections,
+    /*
+     * The CONTEXTUAL design-system selection.
+     *
+     * Same tri-state discipline as the line above — `[]` is the user switching the design
+     * system off for this node, `undefined` is the Backend resolving it from the rigor
+     * tier, and collapsing one into the other silently swaps "off" for "apply everything".
+     * `resolveAmbientDesignSections` is written to preserve both ends exactly.
+     *
+     * What it adds is the middle: an unselected node now grounds on its node type's row
+     * of `SECTION_AUTO_APPLY` (an image generator gets palette/imagery/logo, not the
+     * brand's motion easing), and any section arriving through a wired `designRef` is
+     * removed because that node supplies it explicitly. Explicit beats blanket.
+     */
+    designSystemSections: resolveAmbientDesignSections(
+      node.type,
+      data.designSystemSections,
+      suppressedDesignSections(node.id, allNodes, allEdges),
+    ),
   };
 }
 
@@ -736,7 +835,6 @@ export function buildVeoPayload(
 
           const refs = edges
             .map((edge, index) => {
-              const output = resolvedData.get(edge.source);
               const sourceNode = allNodes.find((n) => n.id === edge.source);
               const refType = (sourceNode?.data as ImageNodeData)?.referenceType || 'default';
 
@@ -757,7 +855,7 @@ export function buildVeoPayload(
                 }
               }
 
-              const ref = imageRefFromOutput(output, edge.sourceHandle);
+              const ref = referenceImageForEdge(edge, resolvedData, sourceNode);
               if (ref) {
                 return {
                   data: ref.data,
@@ -823,7 +921,14 @@ export function buildVeoPayload(
         : undefined,
     skillIds: data.skillIds && data.skillIds.length > 0 ? data.skillIds : undefined,
     brandBookPieces: effectiveBrandBookPieces(data.brandBookPieces),
-    designSystemSections: data.designSystemSections,
+    // Contextual, exactly as on the image arm above. The video row is palette/motion/
+    // imagery: `motion` is meaningless to a still and load-bearing here, and the brand's
+    // type scale is neither — a diffusion model cannot set type.
+    designSystemSections: resolveAmbientDesignSections(
+      node.type,
+      data.designSystemSections,
+      suppressedDesignSections(node.id, allNodes, allEdges),
+    ),
   };
 }
 

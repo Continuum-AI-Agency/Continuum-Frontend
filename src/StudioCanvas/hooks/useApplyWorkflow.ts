@@ -18,13 +18,40 @@ import { namespaceWorkflowSnapshot } from '../utils/namespaceWorkflowSnapshot';
 import { rehydrateWorkflowMediaNodes } from '../utils/rehydrateWorkflowMedia';
 import { normalizeWorkflowSnapshot } from '../utils/workflowSerialization';
 
+/**
+ * Moves one applied module so its top-left corner sits on `position`, leaving
+ * every other node on the canvas exactly where the user put it.
+ */
+function placeModuleAt(
+  nodes: StudioNode[],
+  moduleNodeIds: Set<string>,
+  position: { x: number; y: number },
+): StudioNode[] {
+  const module = nodes.filter((node) => moduleNodeIds.has(node.id));
+  if (module.length === 0) return nodes;
+
+  const minX = Math.min(...module.map((node) => node.position.x));
+  const minY = Math.min(...module.map((node) => node.position.y));
+  const dx = position.x - minX;
+  const dy = position.y - minY;
+
+  return nodes.map((node) =>
+    moduleNodeIds.has(node.id)
+      ? { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } }
+      : node,
+  );
+}
+
 export function useApplyWorkflow() {
   const { setNodes, setEdges, takeSnapshot, triggerSave, defaultEdgeType } = useStudioStore();
   const { fitView } = useReactFlow();
   const { show } = useToast();
 
   return useCallback(
-    async (workflow: AiStudioWorkflow, options?: { toastTitle?: string }) => {
+    async (
+      workflow: AiStudioWorkflow,
+      options?: { toastTitle?: string; position?: { x: number; y: number } },
+    ) => {
       const snapshot = normalizeWorkflowSnapshot(
         {
           nodes: (workflow.nodes ?? []) as unknown as StudioNode[],
@@ -41,6 +68,7 @@ export function useApplyWorkflow() {
         { nodes: hydratedNodes, edges: snapshot.edges },
         `module:${crypto.randomUUID()}`,
       );
+      const moduleNodeIds = new Set(namespaced.nodes.map((node) => node.id));
       const current = useStudioStore.getState();
       const merged = mergeGraphs(
         {
@@ -61,8 +89,17 @@ export function useApplyWorkflow() {
         } as WorkflowGraph,
       );
 
+      // mergeGraphs drops incoming work below everything already on the canvas,
+      // which is right for an agent write into a canvas someone else is editing.
+      // A technique dropped from the palette wants to land where the pointer is
+      // instead, so translate just this module afterwards rather than teaching
+      // the shared merge about a cursor it has no business knowing.
+      const placed = options?.position
+        ? placeModuleAt(merged.nodes as StudioNode[], moduleNodeIds, options.position)
+        : (merged.nodes as StudioNode[]);
+
       takeSnapshot();
-      setNodes(merged.nodes as StudioNode[]);
+      setNodes(placed);
       setEdges(merged.edges as Edge[]);
       triggerSave();
       requestAnimationFrame(() => {

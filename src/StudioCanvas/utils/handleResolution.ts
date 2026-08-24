@@ -1,4 +1,7 @@
 import {
+  actionInputPort,
+  actionOutputModality,
+  batchItemType,
   getVideoGeneratorImageReferenceHandle,
   isVideoGeneratorNodeType,
   resolveVideoGeneratorModel,
@@ -23,6 +26,24 @@ export type NodeType =
   | 'frameExtract';
 
 export type EdgeDataType = 'text' | 'image' | 'video' | 'audio' | 'document';
+
+// A source handle id names the modality it emits; an action's ports name theirs
+// directly. `frame` handles emit stills, and the variation handles (`image-2`) all
+// emit images.
+const MODALITY_BY_SOURCE_HANDLE: Record<string, 'text' | 'image' | 'video'> = {
+  text: 'text',
+  image: 'image',
+  'image-1': 'image',
+  'image-2': 'image',
+  'image-3': 'image',
+  'first-frame': 'image',
+  'last-frame': 'image',
+  video: 'video',
+  // Deliberately NO `out` entry. An action and a router both emit on `out`, and what
+  // that carries depends on the SOURCE node's op or lock — which this function is not
+  // given. Guessing a modality here would auto-wire a rotated still into a video port;
+  // returning nothing makes the drop show its picker instead.
+};
 
 // Derives the best target handle for a newly-created (or existing) node by
 // delegating to the canonical handle vocabulary from @continuum/contracts
@@ -54,8 +75,21 @@ export function getTargetHandleCandidatesForNodeType(
 
   const ranked = (priority: string[]): string[] => priority.filter((h) => allowed.includes(h));
 
+  // An action's handles are its OP's ports, and the right one is decided by MODALITY,
+  // not by name. Ranking by name gets a one-port op right by luck and `video.watermark`
+  // wrong: an image dragged onto it would land on `in`, the video port, because `in`
+  // sorts first. Ask the catalog which port takes this modality instead.
+  if (nodeType === 'action') {
+    const wanted = MODALITY_BY_SOURCE_HANDLE[sourceHandle ?? ''] ?? sourceHandle;
+    const matching = allowed.filter(
+      (handle) => actionInputPort(nodeData.actionId, handle)?.modality === wanted,
+    );
+    if (matching.length > 0) return matching;
+    return [];
+  }
+
   if (sourceHandle === 'text') {
-    const matches = ranked(['prompt-in', 'prompt', 'negative']);
+    const matches = ranked(['prompt-in', 'prompt', 'negative', 'in']);
     if (matches.length > 0) return matches;
   }
 
@@ -84,7 +118,7 @@ export function getTargetHandleCandidatesForNodeType(
   }
 
   if (sourceHandle === 'video') {
-    const matches = ranked(['video', 'ref-video']);
+    const matches = ranked(['video', 'ref-video', 'in']);
     if (matches.length > 0) return matches;
   }
 
@@ -103,13 +137,41 @@ export function getSourceHandleForNodeType(nodeType: NodeType): string | undefin
   return getAllowedSourceHandles({ id: '__new__', type: nodeType })[0];
 }
 
+// The Canvas V3 pass-throughs name their single output `out`, which carries no
+// modality of its own — what flows through an action is its OP's output, and what flows
+// through a router is whatever it was locked to. Without the source node those edges
+// all fall through to 'text' and a rotated image is drawn in the text colour.
+function passthroughDataType(sourceNode: EdgeSourceNode): EdgeDataType | undefined {
+  const data = (sourceNode.data ?? {}) as Record<string, unknown>;
+  if (sourceNode.type === 'action') return actionOutputModality(data.actionId);
+  if (sourceNode.type === 'router') {
+    const locked = data.lockedType;
+    return locked === 'text' || locked === 'image' || locked === 'video' ? locked : undefined;
+  }
+  if (sourceNode.type === 'batch') return batchItemType(data);
+  return undefined;
+}
+
+/** The shape `resolveEdgeDataType` needs to colour a pass-through edge. */
+export interface EdgeSourceNode {
+  type?: string;
+  data?: unknown;
+}
+
 // Resolves an edge's dataType (drives edge color) from its source handle id.
 // Consolidates two previously-divergent copies (useStudioStore's
 // getDataTypeFromHandle, useEdgeDropNode's resolveDataType) that disagreed on
 // fallback behavior, mis-coloring audio/document edges created via one path
 // but not the other. 'text' is the universal fallback, matching
 // StudioCanvas's styledEdges resolver.
-export function resolveEdgeDataType(handleId?: string | null): EdgeDataType {
+export function resolveEdgeDataType(
+  handleId?: string | null,
+  sourceNode?: EdgeSourceNode,
+): EdgeDataType {
+  if (sourceNode) {
+    const passthrough = passthroughDataType(sourceNode);
+    if (passthrough) return passthrough;
+  }
   if (!handleId) return 'text';
   if (handleId === 'video' || handleId === 'ref-video') return 'video';
   if (handleId === 'audio') return 'audio';

@@ -122,3 +122,44 @@ function isReactFlowAssetDropPayload(value: unknown): value is ReactFlowAssetDro
   if (!('payload' in v)) return false;
   return typeof v.payload === 'object' && v.payload !== null;
 }
+
+// ─── Element drag ────────────────────────────────────────────────────────────
+//
+// Dragging an Element out of the Elements panel drops an `element` NODE on the
+// canvas, not an image: the node binds to the Element by id and re-reads it, so a
+// regenerated reference reaches every canvas already using it. Its own MIME keeps
+// it out of the asset-drop path above, which would otherwise treat the JSON as a
+// plain-text URL and build an image node from it.
+
+export const ELEMENT_DRAG_TYPE = 'application/x-continuum-element';
+
+export interface ElementDragPayload {
+  elementId: string;
+  name: string;
+  category: string;
+  /** Signed preview of the current reference, so the dropped node paints immediately. */
+  previewUrl?: string;
+}
+
+export function buildElementDragPayload(payload: ElementDragPayload): string {
+  return JSON.stringify({ type: 'element_drop', payload });
+}
+
+export function parseElementDragPayload(raw: string): ElementDragPayload | null {
+  const parsed = tryParseJson(raw);
+  if (!parsed || typeof parsed !== 'object') return null;
+  const envelope = parsed as { type?: unknown; payload?: unknown };
+  if (envelope.type !== 'element_drop') return null;
+  const value = envelope.payload;
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.elementId !== 'string' || candidate.elementId.length === 0) return null;
+  if (typeof candidate.name !== 'string') return null;
+  if (typeof candidate.category !== 'string') return null;
+  return {
+    elementId: candidate.elementId,
+    name: candidate.name,
+    category: candidate.category,
+    previewUrl: typeof candidate.previewUrl === 'string' ? candidate.previewUrl : undefined,
+  };
+}

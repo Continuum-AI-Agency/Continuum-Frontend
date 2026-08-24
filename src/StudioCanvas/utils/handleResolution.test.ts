@@ -168,3 +168,93 @@ describe('getTargetHandleCandidatesForNodeType — reference-mode aware image dr
     );
   });
 });
+
+describe('Canvas V3 handle resolution', () => {
+  it('lands an image on an action whose op takes one', () => {
+    expect(
+      getTargetHandleForNodeType('action', 'image', { actionId: 'image.rotate' }),
+    ).toBe('in');
+  });
+
+  it('lands a clip on the base input of a two-port op, not the overlay', () => {
+    // `video.watermark` declares `in` (video) and `overlay-in` (image). Resolving to
+    // the first ALLOWED handle would be right by luck here and wrong for the image.
+    expect(
+      getTargetHandleForNodeType('action', 'video', { actionId: 'video.watermark' }),
+    ).toBe('in');
+    expect(
+      getTargetHandleForNodeType('action', 'image', { actionId: 'video.watermark' }),
+    ).toBe('overlay-in');
+  });
+
+  it('offers nothing for an action with no op chosen', () => {
+    // Contracts gives an `actionId: null` node no handles at all — deliberately inert
+    // rather than guessing an op the user never picked.
+    expect(getTargetHandleCandidatesForNodeType('action', 'image', { actionId: null })).toEqual([]);
+  });
+
+  it('lands anything on a router', () => {
+    for (const modality of ['text', 'image', 'video'] as const) {
+      expect(getTargetHandleForNodeType('router', modality, {}), modality).toBe('in');
+    }
+  });
+});
+
+describe('resolveEdgeDataType — pass-through nodes', () => {
+  it('colours an action edge by its OP, not by the handle id', () => {
+    // Both an action and a router name their single output `out`, which carries no
+    // modality. Without the source node every one of these falls through to 'text'.
+    expect(resolveEdgeDataType('out')).toBe('text');
+    expect(resolveEdgeDataType('out', { type: 'action', data: { actionId: 'image.rotate' } })).toBe(
+      'image',
+    );
+    expect(resolveEdgeDataType('out', { type: 'action', data: { actionId: 'video.speed' } })).toBe(
+      'video',
+    );
+    expect(
+      resolveEdgeDataType('out', { type: 'action', data: { actionId: 'text.findReplace' } }),
+    ).toBe('text');
+  });
+
+  it('colours a router edge by its locked modality', () => {
+    expect(resolveEdgeDataType('out', { type: 'router', data: { lockedType: 'video' } })).toBe(
+      'video',
+    );
+    expect(resolveEdgeDataType('out', { type: 'router', data: { lockedType: null } })).toBe('text');
+  });
+
+  it('colours a batch edge by its item kind', () => {
+    expect(resolveEdgeDataType('collection', { type: 'batch', data: { itemType: 'image' } })).toBe(
+      'image',
+    );
+  });
+
+  it('leaves every existing edge exactly as it was', () => {
+    // The source node is now passed at all three call sites, so a regression here
+    // would silently recolour every edge on every saved canvas.
+    const generator = { type: 'nanoGen', data: {} };
+    expect(resolveEdgeDataType('image', generator)).toBe('image');
+    expect(resolveEdgeDataType('video', { type: 'video', data: {} })).toBe('video');
+    expect(resolveEdgeDataType('audio', { type: 'audio', data: {} })).toBe('audio');
+    expect(resolveEdgeDataType('document', { type: 'document', data: {} })).toBe('document');
+    expect(resolveEdgeDataType('text', { type: 'string', data: {} })).toBe('text');
+    expect(resolveEdgeDataType(null, { type: 'string', data: {} })).toBe('text');
+  });
+});
+
+describe('action target handles refuse to guess', () => {
+  it('offers nothing when the dragged output modality is unknowable', () => {
+    // A drag from another action's `out`: only the SOURCE node's op knows what that
+    // carries, and this function is only given the target. Auto-wiring on a guess is
+    // how a rotated still ends up in a video port.
+    expect(
+      getTargetHandleCandidatesForNodeType('action', 'out', { actionId: 'video.watermark' }),
+    ).toEqual([]);
+  });
+
+  it('offers nothing when no port takes the dragged modality', () => {
+    expect(
+      getTargetHandleCandidatesForNodeType('action', 'text', { actionId: 'image.rotate' }),
+    ).toEqual([]);
+  });
+});

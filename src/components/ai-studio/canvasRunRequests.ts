@@ -1,4 +1,9 @@
-import type { CanvasRunOutputKind, CanvasRunResult } from '@continuum/contracts';
+import {
+  type CanvasRunOutputKind,
+  type CanvasRunResult,
+  STUDIO_RUNNABLE_NODE_TYPES,
+  type StudioNodeType,
+} from '@continuum/contracts';
 
 // Pure + dependency-injected core for the collaborative run path. The MCP
 // `studio_workflow run` tool inserts a canvas_run_requests row; the open canvas
@@ -15,16 +20,13 @@ export interface RunNode {
 
 // Generation/transform node types whose run we summarize. Used to approximate the
 // executed set for a full-graph run (node_ids omitted).
-const RUNNABLE_NODE_TYPES = new Set([
-  'nanoGen',
-  'videoGen',
-  'veoDirector',
-  'veoFast',
-  'extendVideo',
-  'timelineEditor',
-  'string',
-  'videoDecode',
-]);
+//
+// Was a hand-written list of eight that had drifted from the executor's own idea of
+// what runs: omniGen, hyperframesAgent and frameExtract all produce media, all execute,
+// and none of them ever appeared in an MCP run summary. Deriving from the registry
+// closes that silently — and keeps it closed, because the registry is
+// `satisfies Record<StudioNodeType, …>`.
+const RUNNABLE_NODE_TYPES: ReadonlySet<StudioNodeType> = STUDIO_RUNNABLE_NODE_TYPES;
 
 function nodeData(node: RunNode): Record<string, unknown> {
   return node.data && typeof node.data === 'object' ? (node.data as Record<string, unknown>) : {};
@@ -63,7 +65,9 @@ export function resolveRunNodeIds(nodes: RunNode[], requestedNodeIds: string[] |
     const present = new Set(nodes.map((n) => n.id));
     return requestedNodeIds.filter((id) => present.has(id));
   }
-  return nodes.filter((n) => RUNNABLE_NODE_TYPES.has(n.type ?? '')).map((n) => n.id);
+  return nodes
+    .filter((n) => RUNNABLE_NODE_TYPES.has((n.type ?? '') as StudioNodeType))
+    .map((n) => n.id);
 }
 
 export function buildCanvasRunResult(nodes: RunNode[], executedIds: string[]): CanvasRunResult {

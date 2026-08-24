@@ -5,12 +5,12 @@
 // behaviour-preserving refactor stays behaviour-preserving.
 
 import { describe, expect, it } from 'bun:test';
+import type { StudioNodeType } from '@continuum/contracts';
 import {
   DEFAULT_VIDEO_GENERATOR_MODEL,
   getVideoGeneratorReferenceMode,
   type VideoGeneratorModel,
 } from '../utils/videoModel';
-import type { StudioCanvasNodeType } from './addNodeCatalog';
 import {
   createNodeConfig,
   edgeTypes,
@@ -30,7 +30,7 @@ describe('NODE_TYPES vs nodeTypes — the drift guard', () => {
       expect(registered).toContain(type);
     }
     for (const type of registered) {
-      expect(NODE_TYPES.has(type as StudioCanvasNodeType)).toBe(true);
+      expect(NODE_TYPES.has(type as StudioNodeType)).toBe(true);
     }
   });
 
@@ -137,7 +137,7 @@ describe('createNodeConfig — literal defaults', () => {
 });
 
 describe('createNodeConfig — video generator family', () => {
-  const cases: ReadonlyArray<[StudioCanvasNodeType, VideoGeneratorModel]> = [
+  const cases: ReadonlyArray<[StudioNodeType, VideoGeneratorModel]> = [
     ['veoDirector', 'veo-3.1'],
     ['veoFast', 'veo-3.1-fast'],
     ['videoGen', DEFAULT_VIDEO_GENERATOR_MODEL],
@@ -161,7 +161,7 @@ describe('createNodeConfig — video generator family', () => {
 });
 
 describe('createNodeConfig — contracts-backed types', () => {
-  const contractsBacked: readonly StudioCanvasNodeType[] = [
+  const contractsBacked: readonly StudioNodeType[] = [
     'nanoGen',
     'hyperframesAgent',
     'omniGen',
@@ -170,6 +170,10 @@ describe('createNodeConfig — contracts-backed types', () => {
     'organicPublish',
     'paidPublisher',
     'apiRender',
+    'action',
+    'router',
+    'element',
+    'designRef',
   ];
 
   for (const type of contractsBacked) {
@@ -181,4 +185,37 @@ describe('createNodeConfig — contracts-backed types', () => {
       expect(typeof data).toBe('object');
     });
   }
+});
+
+describe('Canvas V3 registration', () => {
+  it('registers action and router, and nothing without an implementation', () => {
+    // A registered type with no component renders as an empty box — worse than an
+    // absent one, because it looks like the node broke rather than like it is not
+    // built yet. batch/export/layerEditor/element/designRef stay contracts-only until
+    // their own shells land.
+    expect(NODE_TYPES.has('action')).toBe(true);
+    expect(NODE_TYPES.has('router')).toBe(true);
+    for (const notYet of ['batch', 'export', 'layerEditor'] as const) {
+      expect(NODE_TYPES.has(notYet), notYet).toBe(false);
+    }
+  });
+
+  it('gives an action node no op until one is chosen', () => {
+    // Contracts gives an `actionId: null` node zero handles and refuses every
+    // connection. Seeding some default op would wire a clip into whatever it guessed.
+    expect(createNodeConfig('action').data).toEqual({ actionId: null, config: {} });
+  });
+
+  it('gives a router no locked modality until it is connected', () => {
+    expect(createNodeConfig('router').data).toEqual({ lockedType: null });
+  });
+
+  it('accepts every registered type and still rejects an unregistered contracts type', () => {
+    expect(isStudioCanvasNodeType('action')).toBe(true);
+    expect(isStudioCanvasNodeType('router')).toBe(true);
+    expect(isStudioCanvasNodeType('layerEditor')).toBe(false);
+    // Landed alongside this shell by the elements / design-reference shells.
+    expect(isStudioCanvasNodeType('element')).toBe(true);
+    expect(isStudioCanvasNodeType('designRef')).toBe(true);
+  });
 });

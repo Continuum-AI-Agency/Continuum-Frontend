@@ -118,6 +118,34 @@ function ToggleRow({
   );
 }
 
+/**
+ * Where a canvas node's design-system grounding comes from.
+ *
+ * Shared with `GroundingChip`, which derives it from the graph and passes it down.
+ */
+export interface DesignGroundingContext {
+  /** The node type's ambient row from SECTION_AUTO_APPLY. */
+  readonly autoApplied: readonly DesignSection[];
+  /** Sections a connected designRef supplies, and the payload therefore suppresses. */
+  readonly wired: readonly DesignSection[];
+}
+
+/**
+ * The sections this node will actually ground on.
+ *
+ * `null` means the pre-contextual reading — no per-type row and no hand-picked list, so
+ * the Backend applies everything the brand enabled.
+ */
+export function effectiveDesignSections(
+  selected: readonly DesignSection[] | undefined,
+  contextual: DesignGroundingContext | undefined,
+): DesignSection[] | null {
+  if (selected === undefined && !contextual) return null;
+  const base = selected ?? contextual?.autoApplied ?? [];
+  const wired = new Set(contextual?.wired ?? []);
+  return base.filter((section) => !wired.has(section));
+}
+
 export function GroundingPopover({
   brandId,
   skillIds,
@@ -128,6 +156,7 @@ export function GroundingPopover({
   onToggleDirectionPiece,
   designSystemSections,
   onToggleDesignSection,
+  contextual,
 }: {
   brandId?: string;
   skillIds: string[];
@@ -140,6 +169,16 @@ export function GroundingPopover({
   /** `undefined` = no preference (the Backend resolves it from the rigor tier); `[]` = off. */
   designSystemSections?: DesignSection[] | undefined;
   onToggleDesignSection?: (section: DesignSection) => void;
+  /**
+   * Where this node's design-system sections come from when nobody picked by hand.
+   *
+   * `autoApplied` is the node type's own row — an image generator grounds on palette,
+   * imagery and logo, not on the brand's motion easing. `wired` are sections a connected
+   * Design Reference supplies explicitly, which the payload removes from the ambient set.
+   *
+   * Absent means the old reading: `undefined` is "everything the brand enabled".
+   */
+  contextual?: DesignGroundingContext;
 }) {
   const direction = useBrandDirectionPieces(brandId);
   // Read here rather than passed down, matching `direction` above: the rows describe the
@@ -158,6 +197,15 @@ export function GroundingPopover({
 
   const brandEnforced = isBrandEnforced(brandBookPieces);
   const enforcedCount = enforcedConcretePieces(brandBookPieces).length;
+
+  const effectiveSections = React.useMemo(
+    () => effectiveDesignSections(designSystemSections, contextual),
+    [designSystemSections, contextual],
+  );
+  const wiredSections = React.useMemo(
+    () => new Set(contextual?.wired ?? []),
+    [contextual],
+  );
 
   return (
     <TooltipProvider delay={250}>
@@ -253,33 +301,51 @@ export function GroundingPopover({
             <section>
               <SectionHeader title="Design system">
                 <span className="text-[0.65rem] text-muted-foreground">
-                  {designSystemSections === undefined
+                  {effectiveSections === null
                     ? 'all on'
-                    : `${designSystemSections.length} on`}
+                    : designSystemSections === undefined
+                      ? `${effectiveSections.length} auto`
+                      : `${effectiveSections.length} on`}
                 </span>
               </SectionHeader>
               <p className="px-1.5 pb-1 text-[0.65rem] text-muted-foreground">
                 The brand&apos;s approved system. Outranks the brand book where they disagree.
+                {designSystemSections === undefined && effectiveSections !== null
+                  ? ' Switched on by default for this kind of node.'
+                  : ''}
               </p>
               {designSections.map((entry) => (
                 <ToggleRow
                   key={entry.section}
-                  /* Same reading as every other control here: `undefined` is "no
-                     preference", which applies everything the brand left enabled. */
+                  /* `null` is the pre-contextual reading — no per-type row, so everything
+                     the brand enabled applies. Otherwise the row shows what this node will
+                     ACTUALLY ground on, which is the only honest thing to show once the
+                     default is narrower than "all". */
                   checked={
-                    designSystemSections === undefined ||
-                    designSystemSections.includes(entry.section)
+                    effectiveSections === null || effectiveSections.includes(entry.section)
                   }
+                  /* A wired Design Reference owns its section: toggling here would be
+                     subtracted straight back out, so the control says so instead of
+                     pretending to work. */
+                  disabled={wiredSections.has(entry.section)}
                   onToggle={() => onToggleDesignSection(entry.section)}
                   label={entry.title}
                   description={
-                    entry.ruleCount === 0
-                      ? 'No rules recorded — switching it on changes nothing yet.'
-                      : entry.gates
-                        ? `${entry.ruleCount} rules, hard enough to reject a candidate.`
-                        : `${entry.ruleCount} rules. Shapes the prompt; does not reject.`
+                    wiredSections.has(entry.section)
+                      ? 'Supplied by a connected Design Reference, which outranks this list.'
+                      : entry.ruleCount === 0
+                        ? 'No rules recorded — switching it on changes nothing yet.'
+                        : entry.gates
+                          ? `${entry.ruleCount} rules, hard enough to reject a candidate.`
+                          : `${entry.ruleCount} rules. Shapes the prompt; does not reject.`
                   }
-                  hint={entry.ruleCount === 0 ? 'empty' : undefined}
+                  hint={
+                    wiredSections.has(entry.section)
+                      ? 'wired'
+                      : entry.ruleCount === 0
+                        ? 'empty'
+                        : undefined
+                  }
                 />
               ))}
             </section>

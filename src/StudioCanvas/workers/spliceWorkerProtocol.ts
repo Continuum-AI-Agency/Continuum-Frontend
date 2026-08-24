@@ -1,3 +1,4 @@
+import type { ActionId } from '@continuum/contracts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../utils/render/effectSpec';
 import type { ClipTransition } from '../utils/render/transitions';
@@ -94,6 +95,22 @@ export type SpliceWorkerInbound =
       captionCues?: CaptionCue[];
       captionWords?: CaptionWord[];
       captionStyle?: CaptionStyle;
+    }
+  | {
+      // ONE inbound op for the whole action catalog. A per-op message kind would put
+      // this file back in every action shell's diff; the registry in
+      // `utils/splice/actionEngines.ts` is what grows instead.
+      kind: 'start_action';
+      actionId: ActionId;
+      // Handle-keyed rather than a single `blob`: `video.greenscreen`,
+      // `video.watermark` and `video.overlay` are already in the shipped catalog with
+      // TWO input ports, and widening the payload later would mean a protocol change
+      // in a file the design freezes after this wave.
+      inputs: { handle: string; blob: Blob }[];
+      /** Raw `node.data.config`; the worker parses it against the op's own schema. */
+      config: Record<string, unknown>;
+      videoBitrate?: number;
+      audioBitrate?: number;
     }
   | { kind: 'cancel' };
 

@@ -72,10 +72,17 @@ function DropdownMenuLabel({
   );
 }
 
+// Base UI's Menu.Item has no `onSelect` — activation is `onClick`. React accepts the prop
+// anyway (a `<div>` carries a DOM text-selection event of that name), so every call site
+// written against Radix typechecked and then never fired. See context-menu.tsx for the
+// same translation and the bug it healed; the edge-drop node picker was one of the dead
+// ones here.
 function DropdownMenuItem({
   className,
   inset,
   variant = 'default',
+  onClick,
+  onSelect,
   ...props
 }: MenuPrimitive.Item.Props & {
   inset?: boolean;
@@ -86,6 +93,10 @@ function DropdownMenuItem({
       data-slot="dropdown-menu-item"
       data-inset={inset}
       data-variant={variant}
+      onClick={(event) => {
+        onClick?.(event);
+        onSelect?.(event);
+      }}
       className={cn(
         "group/dropdown-menu-item relative flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-inset:pl-7 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-[variant=destructive]:*:[svg]:text-destructive",
         className,
@@ -152,6 +163,8 @@ function DropdownMenuCheckboxItem({
   children,
   checked,
   inset,
+  onClick,
+  onSelect,
   ...props
 }: MenuPrimitive.CheckboxItem.Props & {
   inset?: boolean;
@@ -160,6 +173,10 @@ function DropdownMenuCheckboxItem({
     <MenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       data-inset={inset}
+      onClick={(event) => {
+        onClick?.(event);
+        onSelect?.(event);
+      }}
       className={cn(
         "relative flex cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
@@ -188,6 +205,8 @@ function DropdownMenuRadioItem({
   className,
   children,
   inset,
+  onClick,
+  onSelect,
   ...props
 }: MenuPrimitive.RadioItem.Props & {
   inset?: boolean;
@@ -196,6 +215,10 @@ function DropdownMenuRadioItem({
     <MenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       data-inset={inset}
+      onClick={(event) => {
+        onClick?.(event);
+        onSelect?.(event);
+      }}
       className={cn(
         "relative flex cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,

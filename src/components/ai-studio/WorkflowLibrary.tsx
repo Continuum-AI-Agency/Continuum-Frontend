@@ -1,5 +1,6 @@
 'use client';
 
+import { isStudioNodeType, studioNodeDefinition } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { useReactFlow } from '@xyflow/react';
 import { BookOpen, LayoutTemplate, RefreshCw } from 'lucide-react';
@@ -24,16 +25,12 @@ const CANVAS_PAD = 24;
 const SVG_W = 252;
 const SVG_H = 152;
 
-const NODE_TYPE_LABEL: Record<string, string> = {
-  string: 'Prompt',
-  nanoGen: 'Image Gen',
-  videoGen: 'Video Gen',
-  extendVideo: 'Extend Video',
-  image: 'Image',
-  video: 'Video',
-  audio: 'Audio',
-  document: 'Document',
-};
+// Thumbnail labels come from STUDIO_NODE_REGISTRY. The map this replaced named eight
+// types and rendered the raw type string ("hyperframesAgent") for every other one.
+// A stored workflow can still carry a type this build has never heard of, hence the
+// fallback rather than a lookup that assumes the key is there.
+const nodeTypeLabel = (type: string): string =>
+  isStudioNodeType(type) ? studioNodeDefinition(type).label : type;
 
 const NODE_TYPE_COLOR: Record<string, string> = {
   string: '#5A48F9',
@@ -151,7 +148,7 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
         const y = ty(n.position.y);
         const type = n.type ?? 'string';
         const color = NODE_TYPE_COLOR[type] ?? '#5A48F9';
-        const label = n.data?.label ?? NODE_TYPE_LABEL[type] ?? type;
+        const label = n.data?.label ?? nodeTypeLabel(type);
         const fontSize = Math.max(7, Math.round(9 * scale));
         const truncated = label.length > 16 ? label.slice(0, 16) + '…' : label;
         return (

@@ -1,6 +1,10 @@
 import type {
+  ActionId,
   ApiRenderOutput,
   ApiRenderVariable,
+  BatchCombine,
+  BatchItem,
+  BatchItemKind,
   BrandBookPieceKind,
   BrandDirectionPiece,
   CanvasPublishingFormat,
@@ -12,6 +16,7 @@ import type {
   EditorProductionSummary,
   ImageGeneratorModel,
   ImageSize,
+  StudioEmittedModality,
 } from '@continuum/contracts';
 import type {
   Connection,
@@ -24,7 +29,7 @@ import type {
   OnNodesChange,
 } from '@xyflow/react';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
-import type { ClipEffectSpec } from '../utils/render/effectSpec';
+import type { BlendMode, ClipEffectSpec } from '../utils/render/effectSpec';
 import type { ClipTransition } from '../utils/render/transitions';
 import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
 
@@ -577,8 +582,136 @@ export interface OmniGenNodeData extends BaseNodeData {
   generatedVideoBucket?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Canvas V3 node payloads
+// ---------------------------------------------------------------------------
+
+/**
+ * One deterministic operation from the contracts action catalog.
+ *
+ * ONE data shape for all 32 ops, and one output bag rather than a per-modality field:
+ * the emitted modality belongs to the OP (`ACTION_DEFS[actionId].output`), not to the
+ * node type. The node type's `producesMedia` flag says `true` because most ops emit
+ * media — keying anything off it would make a `text.findReplace` node a media producer.
+ *
+ * `actionId: null` is a deliberately inert node: contracts gives it no handles and
+ * refuses every connection until an op is chosen.
+ */
+export interface ActionNodeData extends BaseNodeData {
+  actionId: ActionId | null;
+  /** Validated against `ACTION_DEFS[actionId].config` at run time, never at write time. */
+  config: Record<string, unknown>;
+  generatedImage?: string;
+  generatedImageUrl?: string;
+  generatedVideo?: string | Blob;
+  generatedVideoUrl?: string;
+  /** A text op's output. Same field a `string` node uses, so consumers need no new case. */
+  value?: string;
+}
+
+/** A list of inputs the nodes downstream of it run once per item. Capped at 100. */
+export interface BatchNodeData extends BaseNodeData {
+  items: BatchItem[];
+  /** One kind per batch — mixing images and videos makes "run per item" ambiguous. */
+  itemType: BatchItemKind | null;
+  combine: BatchCombine;
+}
+
+/** Identity pass-through. The fan-out is many edges off one output, not many handles. */
+export interface RouterNodeData extends BaseNodeData {
+  /** Stamped from contracts' `routerLockedType` on first connect; pins the modality. */
+  lockedType: StudioEmittedModality | null;
+  generatedImage?: string;
+  generatedImageUrl?: string;
+  generatedVideo?: string | Blob;
+  generatedVideoUrl?: string;
+  value?: string;
+}
+
+/** Terminal writer. The runtime lands in Wave 3; the shape is declared here. */
+export interface ExportNodeData extends BaseNodeData {
+  /** Null until there is an input — the legal formats for a still and a clip differ. */
+  format: string | null;
+}
+
+/** A saved brand Element, as a reusable reference. Runtime lands with the elements shell. */
+export interface ElementNodeData extends BaseNodeData {
+  elementId: string | null;
+}
+
+/** One section of the brand design system, emitted as a reference. */
+export interface DesignRefNodeData extends BaseNodeData {
+  section: DesignSection | null;
+  mode: 'image' | 'text' | 'both';
+}
+
+/**
+ * One placed still in the Layer Editor document.
+ *
+ * This schema is the BINDING amendment from `docs/research/aep-interop.md` §4.3 and
+ * deliberately does NOT reuse `ClipTransform`. `ClipTransform` pivots about the frame
+ * centre with fraction-of-frame offsets and a scalar scale — fine for a single clip
+ * filling the frame, a real bug for N independently placed layers, and an
+ * unrecoverable migration once documents are stored. Every field below is chosen so a
+ * future AEP importer is a pure function with no schema change.
+ */
+export interface LayerEditorLayer {
+  /** Stable and opaque. Never derived from `name`: AE does not enforce unique names. */
+  id: string;
+  /**
+   * Human label, defaulted from the source file name and preserved VERBATIM through
+   * import/export — it is the join key an AE-side template binds by. Collisions are a
+   * UI warning, never a data correction.
+   */
+  name: string;
+  /** Upstream canvas node feeding this layer's pixels. */
+  sourceNodeId: string;
+  sourceAssetId?: string;
+  sourceVersionId?: string;
+  /** Intrinsic pixel size of the source, as measured. Needed to resolve `anchor`. */
+  sourceWidth: number;
+  sourceHeight: number;
+  /**
+   * Pivot for rotation and scale, in this layer's OWN source pixels, origin at the
+   * source's top-left. Defaults to the source centre. AE calls it the Anchor Point.
+   */
+  anchor: { x: number; y: number };
+  /**
+   * Where `anchor` lands, in COMPOSITION pixels: origin at the frame's top-left, +x
+   * right, +y DOWN. Not a fraction — resizing the frame must not move a layer.
+   */
+  position: { x: number; y: number };
+  /** Multiplier, 1 = 100%. Negative flips that axis; there is no separate flip field. */
+  scale: { x: number; y: number };
+  /** Degrees clockwise, about `anchor`. */
+  rotation: number;
+  /** 0..1, matching `globalAlpha` and `ClipEffectSpec.opacity`. AE stores 0..100. */
+  opacity: number;
+  /** The existing seven-value union. Do NOT widen to AE's ~38 — see aep-interop §4.4. */
+  blendMode: BlendMode;
+  visible: boolean;
+  locked: boolean;
+}
+
+/** Runtime lands in Wave 4; the stored model is declared now so it never migrates. */
+export interface LayerEditorNodeData extends BaseNodeData {
+  /** Composition pixels. Default 2048x2048, max 4096x4096. */
+  frame: { width: number; height: number };
+  /** Paint order, BOTTOM-FIRST. The layers panel renders it reversed. No zIndex field. */
+  layers: LayerEditorLayer[];
+  generatedImage?: string;
+  generatedImageUrl?: string;
+}
+
 export type StudioNodeData =
   | StringNodeData
+  | ActionNodeData
+  | BatchNodeData
+  | RouterNodeData
+  | ExportNodeData
+  | ElementNodeData
+  | DesignRefNodeData
+  | LayerEditorNodeData
   | NanoGenNodeData
   | VideoGenNodeData
   | OmniGenNodeData

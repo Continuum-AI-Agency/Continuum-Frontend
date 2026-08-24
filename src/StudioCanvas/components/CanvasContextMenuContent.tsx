@@ -23,14 +23,12 @@ import {
 
 import type { InteractionMode } from '../stores/useStudioStore';
 import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
-import type { VideoGeneratorModel } from '../utils/videoModel';
-import { ADD_NODE_GROUPS, type StudioCanvasNodeType } from './addNodeCatalog';
 
 // The canvas menu's CONTENT only. The ContextMenu root stays in the canvas shell:
 // Base UI's trigger has no disabled prop of its own — it reads the root's
 // `disabled` off the store — so the modal stand-down cannot move here.
 export function CanvasContextMenuContent({
-  addNodeAtPointer,
+  openAddNodePalette,
   openLoadWorkflow,
   openInstagram,
   openSaveStarter,
@@ -43,7 +41,7 @@ export function CanvasContextMenuContent({
   zoomOut,
   fitView,
 }: {
-  addNodeAtPointer: (type: StudioCanvasNodeType, options?: { model?: VideoGeneratorModel }) => void;
+  openAddNodePalette: () => void;
   openLoadWorkflow: () => void;
   openInstagram: () => void;
   openSaveStarter: () => void;
@@ -59,39 +57,14 @@ export function CanvasContextMenuContent({
   return (
     <ContextMenuContent className="w-[clamp(14rem,18vw,18rem)]">
       <ContextMenuLabel>Canvas Actions</ContextMenuLabel>
-      <ContextMenuSub>
-        <ContextMenuSubTrigger inset>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Node
-        </ContextMenuSubTrigger>
-        <ContextMenuSubContent className="w-72">
-          {ADD_NODE_GROUPS.map((section) => (
-            <ContextMenuSub key={section.group}>
-              <ContextMenuSubTrigger inset>{section.label}</ContextMenuSubTrigger>
-              <ContextMenuSubContent className="w-72">
-                {section.rows.map((row) => (
-                  <ContextMenuItem
-                    key={row.model ? `${row.type}-${row.model}` : row.type}
-                    onClick={() =>
-                      row.model
-                        ? addNodeAtPointer(row.type, { model: row.model })
-                        : addNodeAtPointer(row.type)
-                    }
-                  >
-                    <div className="flex min-w-0 flex-col">
-                      <span>{row.label}</span>
-                      {row.desc ? (
-                        <span className="text-xs text-muted-foreground">{row.desc}</span>
-                      ) : null}
-                    </div>
-                    <ContextMenuShortcut>{row.tag}</ContextMenuShortcut>
-                  </ContextMenuItem>
-                ))}
-              </ContextMenuSubContent>
-            </ContextMenuSub>
-          ))}
-        </ContextMenuSubContent>
-      </ContextMenuSub>
+      {/* One row, not a three-level hover tree. The catalog is 20+ rows once the video
+          models are expanded, and reaching a generator through group → provider → row cost
+          four hover-throughs (#260) with no way to search. */}
+      <ContextMenuItem inset onSelect={openAddNodePalette}>
+        <Plus className="mr-2 h-4 w-4" />
+        Add Node
+        <ContextMenuShortcut>Search</ContextMenuShortcut>
+      </ContextMenuItem>
 
       <ContextMenuItem inset onSelect={openLoadWorkflow}>
         <FolderOpen className="mr-2 h-4 w-4" />

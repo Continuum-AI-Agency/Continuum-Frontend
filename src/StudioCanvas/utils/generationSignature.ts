@@ -1,6 +1,10 @@
+import {
+  STUDIO_NODE_TYPES,
+  type StudioNodeType,
+  studioNodeSignatureFields,
+} from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import type { StudioNode } from '../types';
-import { isVideoGeneratorNodeType } from './videoModel';
 
 // A run reuses a node's existing output unless the node was edited since it
 // generated. We detect that by comparing a canonical signature of the node's
@@ -26,29 +30,18 @@ const VIDEO_GENERATOR_FIELDS = [
   'referenceMode',
 ] as const;
 
-// Generation-relevant own fields per node type. These mirror the inputs
-// buildNodePayload sends to the Backend; a change to any of them means a
-// different asset would be produced.
-const OWN_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
-  nanoGen: [
-    'positivePrompt',
-    'negativePrompt',
-    'model',
-    'aspectRatio',
-    'imageSize',
-    'stylePreset',
-    'skillIds',
-    'seed',
-    'steps',
-    'guidance',
-    'scheduler',
-    'promptEnhancement',
-    'brandBookPieces',
-  ],
-  videoGen: VIDEO_GENERATOR_FIELDS,
-  veoDirector: VIDEO_GENERATOR_FIELDS,
-  veoFast: VIDEO_GENERATOR_FIELDS,
-};
+// Generation-relevant own fields per node type, DERIVED from the contracts node
+// registry rather than transcribed beside it. These mirror the inputs buildNodePayload
+// sends to the Backend; a change to any of them means a different asset would be
+// produced, so the ORDER and the MEMBERSHIP are load-bearing (the signature is a join
+// of `field=value` in list order). `generationSignature.test.ts` pins both against the
+// registry's own constants — that assertion is what this derivation replaces the old
+// hand-copied literal with.
+const OWN_FIELDS_BY_TYPE: Record<string, readonly string[]> = Object.fromEntries(
+  STUDIO_NODE_TYPES.map((type: StudioNodeType) => [type, studioNodeSignatureFields(type)]).filter(
+    (entry): entry is [StudioNodeType, readonly string[]] => entry[1] !== undefined,
+  ),
+);
 
 // sig1's nanoGen recipe, kept verbatim so a node stamped before the sig2 bump can
 // still be checked against the recipe that produced it.
@@ -89,7 +82,7 @@ const OWN_FIELDS_BY_VERSION: Record<string, Record<string, readonly string[]>> =
 // are intentionally NOT signature-tracked here.
 export function isSignatureTracked(nodeType?: string): boolean {
   if (typeof nodeType !== 'string') return false;
-  return nodeType === 'nanoGen' || isVideoGeneratorNodeType(nodeType);
+  return OWN_FIELDS_BY_TYPE[nodeType] !== undefined;
 }
 
 function serializeValue(value: unknown): string {

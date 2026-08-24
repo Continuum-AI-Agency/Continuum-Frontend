@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, cleanup, renderHook } from '@testing-library/react';
 
+import { buildElementDragPayload, ELEMENT_DRAG_TYPE } from '@/lib/ai-studio/referenceDrop';
 import { STUDIO_ASSET_DROP_EFFECT } from '@/lib/creative-assets/studioAssetDrop';
 import type { StudioNode } from '../types';
 
@@ -146,6 +147,40 @@ describe('useCanvasDnD', () => {
     act(() => result.current.onNodeDragStop());
     expect(triggerSave).toHaveBeenCalledTimes(1);
     expect(takeSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops an Element as an element NODE bound to the Element id', async () => {
+    const { result } = renderHook(() => useCanvasDnD());
+
+    await act(async () => {
+      await result.current.onDrop(
+        buildDragEvent({
+          data: {
+            [ELEMENT_DRAG_TYPE]: buildElementDragPayload({
+              elementId: 'element-1',
+              name: 'Aria',
+              category: 'model',
+              previewUrl: 'https://storage/ref-1.png',
+            }),
+          },
+        }),
+      );
+    });
+
+    const nodes = appendedNodes();
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].type).toBe('element');
+    expect(nodes[0].position).toEqual(FLOW_POSITION);
+    expect(nodes[0].data).toMatchObject({
+      elementId: 'element-1',
+      elementName: 'Aria',
+      elementCategory: 'model',
+      previewUrl: 'https://storage/ref-1.png',
+    });
+    expect(triggerSave).toHaveBeenCalledTimes(1);
+    // The element envelope must never reach the creative-asset path, which would
+    // build an image node out of the JSON.
+    expect(resolveCreativeAssetDrop).not.toHaveBeenCalled();
   });
 
   it('appends a catalog node at the flow position the drop landed on', async () => {

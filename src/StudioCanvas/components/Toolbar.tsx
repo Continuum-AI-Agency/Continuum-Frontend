@@ -1,5 +1,6 @@
-import { Play, RotateCw, Square } from 'lucide-react';
+import { Hash, Play, RotateCw, Square } from 'lucide-react';
 import { useState } from 'react';
+import { ElementsPanel } from '@/components/ai-studio/elements/ElementsPanel';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -9,6 +10,7 @@ import { executeWorkflow } from '../utils/executeWorkflow';
 
 export function Toolbar() {
   const [isRunning, setIsRunning] = useState(false);
+  const [elementsOpen, setElementsOpen] = useState(false);
   const { brandId } = useStudioStore();
   const executionControls = useWorkflowExecution();
   const { streamState, cancel } = executionControls;
@@ -32,6 +34,25 @@ export function Toolbar() {
 
   return (
     <div className="flex gap-2 items-center">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                aria-label="Elements"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setElementsOpen(true)}
+              >
+                <Hash className="w-4 h-4" />
+              </Button>
+            }
+          />
+          <TooltipContent>Elements — saved models, products and styles</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <ElementsPanel open={elementsOpen} onOpenChange={setElementsOpen} brandId={brandId} />
       {!isRunning ? (
         <div className="flex items-center gap-1">
           <Button data-tour-id="studio-run-flow" variant="default" size="sm" onClick={handleRun}>

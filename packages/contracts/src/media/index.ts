@@ -10,6 +10,7 @@ export * from './comments';
 export * from './creative-operations';
 export * from './custom-fields';
 export * from './deployments';
+export * from './element';
 export * from './expand';
 export * from './figma';
 export * from './hyperframe-mp4';

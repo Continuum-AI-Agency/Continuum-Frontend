@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { create } from 'zustand';
 import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
 import type { StudioNode } from '../types';
-import { resolveEdgeDataType } from '../utils/handleResolution';
+import { type EdgeSourceNode, resolveEdgeDataType } from '../utils/handleResolution';
 import {
   getAllowedSourceHandles,
   getAllowedTargetHandles,
@@ -122,8 +122,8 @@ const normalizeFrameConnection = (connection: Connection, nodes: StudioNode[]): 
   return connection;
 };
 
-const getEdgeStyle = (sourceHandle: string | null) => {
-  const dataType = resolveEdgeDataType(sourceHandle);
+const getEdgeStyle = (sourceHandle: string | null, sourceNode?: EdgeSourceNode) => {
+  const dataType = resolveEdgeDataType(sourceHandle, sourceNode);
 
   return {
     ['--edge-color' as keyof CSSProperties]: `var(--edge-${dataType})`,
@@ -368,7 +368,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }
 
     const edgeType = get().defaultEdgeType;
-    const style = getEdgeStyle(normalized.sourceHandle);
+    // The source node, not just its handle: an action and a router both name their
+    // output `out`, so the handle id alone cannot say what colour the edge is.
+    const sourceNode = get().nodes.find((node) => node.id === normalized.source);
+    const style = getEdgeStyle(normalized.sourceHandle, sourceNode);
 
     const newEdge = {
       ...normalized,
@@ -377,7 +380,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       className: 'studio-edge studio-edge--connected',
       style,
       data: {
-        dataType: resolveEdgeDataType(normalized.sourceHandle),
+        dataType: resolveEdgeDataType(normalized.sourceHandle, sourceNode),
         pathType: edgeType,
       },
     };

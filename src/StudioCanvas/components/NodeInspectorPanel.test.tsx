@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type React from 'react';
 
@@ -16,7 +17,23 @@ mock.module('@/components/ai-elements/panel', () => ({
 
 const show = mock(() => {});
 mock.module('@/components/ui/ToastProvider', () => ({
+  TOAST_VARIANTS: ['success', 'info', 'warning', 'error'] as const,
+  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+  ToastError: class ToastError extends Error {},
+  coerceToastOptions: (_error: unknown, fallback: unknown) => fallback,
   useToastContext: () => ({ show }),
+  useToast: () => ({ show }),
+  throwToastError: (options: { title: string }) => {
+    throw new Error(options.title);
+  },
+}));
+
+const createWorkflow = mock(async () => ({}));
+mock.module('@/lib/ai-studio/workflowActions', () => ({
+  createAiStudioWorkflowAction: createWorkflow,
+  listAiStudioWorkflowsAction: mock(async () => []),
+  updateAiStudioWorkflowAction: mock(async () => ({})),
+  deleteAiStudioWorkflowAction: mock(async () => {}),
 }));
 
 // Brand data: static, so the REAL GroundingPopover renders instead of a stub — the
@@ -279,6 +296,38 @@ describe('NodeInspectorPanel', () => {
     render(<NodeInspectorPanel />);
 
     expect(screen.queryByRole('button', { name: /Run selection/ })).toBeNull();
+  });
+
+  it('offers Save as technique at any selection size', () => {
+    seed({ id: 'v1', type: 'videoGen', data: {} });
+    render(<NodeInspectorPanel />);
+    expect(screen.getByRole('button', { name: /Save as technique/ })).toBeTruthy();
+    cleanup();
+
+    seed({ id: 'v1', type: 'videoGen', data: {} }, { id: 'i1', type: 'nanoGen', data: {} });
+    render(<NodeInspectorPanel />);
+    expect(screen.getByRole('button', { name: /Save as technique/ })).toBeTruthy();
+  });
+
+  it('keeps the save dialog unmounted until it is asked for', () => {
+    seed({ id: 'i1', type: 'nanoGen', data: {} });
+    // The dialog invalidates the techniques query on save, so it needs a client
+    // once it mounts. The app root provides one; the panel alone does not.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NodeInspectorPanel />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByTestId('save-technique-dialog')).toBeNull();
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: /Save as technique/ }));
+    });
+
+    expect(screen.getByTestId('save-technique-dialog')).toBeTruthy();
+    expect(screen.getByText('Save selection as technique')).toBeTruthy();
   });
 
   it('closing the panel clears the selection', () => {

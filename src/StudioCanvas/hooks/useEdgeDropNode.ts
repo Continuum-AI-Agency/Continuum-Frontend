@@ -1,6 +1,6 @@
 'use client';
 
-import { createNodeData } from '@continuum/contracts';
+import { createNodeData, studioNodeDefinition } from '@continuum/contracts';
 import {
   type Edge,
   type Node,
@@ -138,30 +138,29 @@ export interface SourceDropCandidate {
   label: string;
 }
 
+// Labels come from STUDIO_NODE_REGISTRY, not from a copy here: the edge-drop picker and
+// the Add Node palette must not be able to call the same node two different things.
+const candidate = (nodeType: NodeType): SourceDropCandidate => ({
+  nodeType,
+  label: studioNodeDefinition(nodeType).label,
+});
+
 // What a drag off an OUTPUT handle onto empty canvas may become, keyed by that
 // output's data type. Audio/document have exactly one real consumer (Text
 // Block) — no picker for those, auto-create matches the pre-existing
 // behavior. Text/image/video have 2-3 real candidates, so the user picks
 // instead of one being silently force-created.
 export const SOURCE_DROP_CANDIDATES: Record<EdgeDataType, SourceDropCandidate[]> = {
-  text: [
-    { nodeType: 'nanoGen', label: 'Image Generation' },
-    { nodeType: 'videoGen', label: 'Video Generation' },
-    { nodeType: 'extendVideo', label: 'Extend Video' },
-  ],
-  image: [
-    { nodeType: 'nanoGen', label: 'Image Generation' },
-    { nodeType: 'videoGen', label: 'Video Generation' },
-    { nodeType: 'string', label: 'Text Block' },
-  ],
+  text: [candidate('nanoGen'), candidate('videoGen'), candidate('extendVideo')],
+  image: [candidate('nanoGen'), candidate('videoGen'), candidate('string')],
   video: [
-    { nodeType: 'extendVideo', label: 'Extend Video' },
-    { nodeType: 'frameExtract', label: 'Continuity Frame' },
-    { nodeType: 'videoDecode', label: 'Video Decoder' },
-    { nodeType: 'string', label: 'Text Block' },
+    candidate('extendVideo'),
+    candidate('frameExtract'),
+    candidate('videoDecode'),
+    candidate('string'),
   ],
-  audio: [{ nodeType: 'string', label: 'Text Block' }],
-  document: [{ nodeType: 'string', label: 'Text Block' }],
+  audio: [candidate('string')],
+  document: [candidate('string')],
 };
 
 export interface PendingSourceDrop {
@@ -195,6 +194,7 @@ export function useEdgeDropNode() {
       const newNodeId = uuidv4();
       const { data, style } = getDefaultNodeData(nodeType);
       const canonicalNodeType = nodeType === 'veoDirector' ? 'videoGen' : nodeType;
+      const sourceNode = getNodes().find((node) => node.id === sourceNodeId);
 
       const newNode: Node = {
         id: newNodeId,
@@ -217,7 +217,7 @@ export function useEdgeDropNode() {
         type: 'dataType',
         className: 'studio-edge studio-edge--connected',
         data: {
-          dataType: resolveEdgeDataType(sourceHandleId),
+          dataType: resolveEdgeDataType(sourceHandleId, sourceNode),
           pathType: defaultEdgeType,
         },
       };
@@ -225,7 +225,7 @@ export function useEdgeDropNode() {
       setNodes((nds) => nds.concat(newNode));
       setEdges((eds) => eds.concat(newEdge));
     },
-    [setNodes, setEdges, defaultEdgeType],
+    [setNodes, setEdges, defaultEdgeType, getNodes],
   );
 
   const onConnectStart = useCallback<OnConnectStart>((_, params) => {
@@ -309,7 +309,10 @@ export function useEdgeDropNode() {
             type: 'dataType',
             className: 'studio-edge studio-edge--connected',
             data: {
-              dataType: resolveEdgeDataType(resolvedSourceHandle),
+              dataType: resolveEdgeDataType(resolvedSourceHandle, {
+                type: canonicalNodeType,
+                data,
+              }),
               pathType: defaultEdgeType,
             },
           };
@@ -319,7 +322,10 @@ export function useEdgeDropNode() {
         } else {
           // Output-side drops: auto-create only when there is exactly one
           // real consumer (audio/document); otherwise show a picker.
-          const dataType = resolveEdgeDataType(startParams.handleId);
+          const dataType = resolveEdgeDataType(
+            startParams.handleId,
+            getNodes().find((node) => node.id === startParams.nodeId),
+          );
           const candidates = SOURCE_DROP_CANDIDATES[dataType];
 
           if (candidates.length === 1) {

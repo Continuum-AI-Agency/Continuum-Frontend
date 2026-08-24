@@ -26,6 +26,15 @@ export interface DesignSystemResponse {
   version: number | null;
   updated_at: string | null;
   design_system: DesignSystemSnapshot | null;
+  /**
+   * Id of the active system.
+   *
+   * An exemplar's `path` is relative to `${brand_id}/design-systems/${design_system_id}/`
+   * inside `brand-docs` (the Backend spells the same prefix in
+   * `brand-knowledge/design-system/store.ts` `exemplarPrefix`). Without the id the browser
+   * can list a brand's exemplars but cannot fetch one.
+   */
+  design_system_id: string | null;
 }
 
 export function fetchDesignSystem(brandId: string): Promise<DesignSystemResponse> {

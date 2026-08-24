@@ -85,10 +85,19 @@ function ContextMenuLabel({
   );
 }
 
+// Base UI's Menu.Item has no `onSelect` — activation is `onClick`. React still ACCEPTS
+// the prop, because a `<div>` has a DOM text-selection event of that name, so an
+// `onSelect` handler typechecked, rendered, and then never fired: Load Workflow, Import
+// from Instagram, Save selection as starter and Enforce brand book were all inert in
+// production. Radix, which every one of these ~60 call sites was written against, fired
+// onSelect on activation. Translating here heals all of them at once; patching call
+// sites would leave the next Radix-shaped one silently dead.
 function ContextMenuItem({
   className,
   inset,
   variant = 'default',
+  onClick,
+  onSelect,
   ...props
 }: ContextMenuPrimitive.Item.Props & {
   inset?: boolean;
@@ -99,6 +108,10 @@ function ContextMenuItem({
       data-slot="context-menu-item"
       data-inset={inset}
       data-variant={variant}
+      onClick={(event) => {
+        onClick?.(event);
+        onSelect?.(event);
+      }}
       className={cn(
         "group/context-menu-item relative flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-inset:pl-7 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 focus:*:[svg]:text-accent-foreground data-[variant=destructive]:*:[svg]:text-destructive",
         className,
@@ -152,6 +165,8 @@ function ContextMenuCheckboxItem({
   children,
   checked,
   inset,
+  onClick,
+  onSelect,
   ...props
 }: ContextMenuPrimitive.CheckboxItem.Props & {
   inset?: boolean;
@@ -160,6 +175,10 @@ function ContextMenuCheckboxItem({
     <ContextMenuPrimitive.CheckboxItem
       data-slot="context-menu-checkbox-item"
       data-inset={inset}
+      onClick={(event) => {
+        onClick?.(event);
+        onSelect?.(event);
+      }}
       className={cn(
         "relative flex cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
@@ -185,6 +204,8 @@ function ContextMenuRadioItem({
   className,
   children,
   inset,
+  onClick,
+  onSelect,
   ...props
 }: ContextMenuPrimitive.RadioItem.Props & {
   inset?: boolean;
@@ -193,6 +214,10 @@ function ContextMenuRadioItem({
     <ContextMenuPrimitive.RadioItem
       data-slot="context-menu-radio-item"
       data-inset={inset}
+      onClick={(event) => {
+        onClick?.(event);
+        onSelect?.(event);
+      }}
       className={cn(
         "relative flex cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,

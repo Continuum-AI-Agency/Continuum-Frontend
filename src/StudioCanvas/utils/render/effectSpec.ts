@@ -98,6 +98,27 @@ export interface ClipEffectSpec {
   /** Playback rate, 1 = normal. >1 faster, <1 slower. Video only. */
   speed?: number;
   text?: TextOverlay[];
+  /**
+   * Knock a background colour out to transparency.
+   *
+   * Field names and ranges are byte-identical to `chromaKeyConfig` in the contracts
+   * action registry, so an `action` node's stored `data.config` IS this object — a
+   * mapper between the two would be a third place for the tolerance scale to drift.
+   *
+   * Declared here and NOT in `adjustments`: CSS `filter` has no keying primitive, so
+   * this cannot ride `filterString` and cannot be shown in the DOM preview. Ask
+   * `unpreviewableEffects` rather than letting the preview quietly disagree with the
+   * export — this file's whole premise is that the two match.
+   */
+  chromaKey?: { color: string; tolerance: number; softness: number };
+  /**
+   * Wash the frame toward one colour, by amount. Matches the registry's `tintConfig`.
+   *
+   * Also not an `adjustment`, and for the same reason: there is no CSS `tint()`. It is
+   * a composite step at draw time, applied to the source so it respects a chroma key
+   * rather than repainting the knocked-out pixels.
+   */
+  tint?: { color: string; amount: number };
 }
 
 export interface TransformKeyframe {
@@ -362,6 +383,30 @@ export function hasVisualEffects(spec: ClipEffectSpec | undefined): boolean {
       (spec.blendMode && spec.blendMode !== 'normal') ||
       spec.kenBurns ||
       (spec.keyframes && spec.keyframes.length >= 2) ||
-      spec.text?.length,
+      spec.text?.length ||
+      // Both must be listed here or `drawClipFrame` takes its `drawLetterboxed` fast
+      // path and the effect silently never runs. A tint at amount 0 is a no-op, the
+      // same convention as opacity 1; a chroma key is not — at tolerance 0 it still
+      // keys exact matches.
+      spec.chromaKey ||
+      (spec.tint && spec.tint.amount > 0),
   );
+}
+
+/**
+ * The effects the CSS preview physically cannot show, so a surface can say so.
+ *
+ * Keying and tinting have no `filter` primitive. The honest options were to fake them
+ * with a `sepia()`/`hue-rotate()` chain that is wrong in a different way, or to name
+ * the gap. A preview that silently omits an effect is how "it looked fine while I was
+ * scrubbing" becomes a surprise in the export.
+ */
+export function unpreviewableEffects(
+  spec: ClipEffectSpec | undefined,
+): readonly ('chromaKey' | 'tint')[] {
+  if (!spec) return [];
+  const missing: ('chromaKey' | 'tint')[] = [];
+  if (spec.chromaKey) missing.push('chromaKey');
+  if (spec.tint && spec.tint.amount > 0) missing.push('tint');
+  return missing;
 }

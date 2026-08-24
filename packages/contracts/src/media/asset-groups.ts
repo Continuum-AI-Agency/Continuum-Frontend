@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-export const assetGroupKindSchema = z.enum(['carousel']);
+// Mirrors the `media.asset_groups.kind` CHECK exactly. When one widens the other must,
+// or contracts start refusing a row the database happily stores. 'element' arrived with
+// migration 20260824100000_asset_groups_element_kind.sql.
+export const assetGroupKindSchema = z.enum(['carousel', 'element']);
 export type AssetGroupKind = z.infer<typeof assetGroupKindSchema>;
 
 export const assetGroupMemberSchema = z

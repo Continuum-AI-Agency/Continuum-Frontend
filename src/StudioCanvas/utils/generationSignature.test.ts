@@ -1,3 +1,8 @@
+import {
+  NANO_GEN_SIGNATURE_FIELDS,
+  STUDIO_NODE_TYPES,
+  VIDEO_GENERATOR_SIGNATURE_FIELDS,
+} from '@continuum/contracts';
 import { describe, expect, it } from 'bun:test';
 import type { Edge } from '@xyflow/react';
 import type { StudioNode } from '../types';
@@ -226,5 +231,55 @@ describe('nodeIsStale', () => {
       data: { prompt: 'now different', generationSignature: 'sig1:stale' },
     };
     expect(nodeIsStale(node, [], lookup(node))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sig2 recipe pin
+// ---------------------------------------------------------------------------
+//
+// The signature is `field=value` joined IN LIST ORDER. Change the order or the
+// membership and the string matches nothing stored on any existing node, so every
+// nanoGen on every saved canvas reads as stale and regenerates on the next Run — bug
+// #221, at real generation cost across every brand at once.
+//
+// sig2 is now DERIVED from the contracts registry rather than transcribed here, so this
+// is the assertion that keeps the derivation honest. It replaces the regex scrape in
+// `packages/contracts/src/ai-studio/node-registry.test.ts`, which read this file's
+// source looking for a literal `nanoGen: [ … ]` array — a literal that no longer
+// exists, so that check now warn-skips and must be retired.
+describe('sig2 recipes are the registry recipes', () => {
+  it('gives nanoGen the registry recipe, in order', () => {
+    const node = nano('n', {});
+    const signature = computeGenerationSignature(node, [], lookup(node));
+    const own = signature.slice('sig2:nanoGen|'.length, signature.indexOf('|refs('));
+    expect(own.split('|').map((pair) => pair.split('=')[0])).toEqual([
+      ...NANO_GEN_SIGNATURE_FIELDS,
+    ]);
+  });
+
+  it('gives every video generator the shared registry recipe, in order', () => {
+    for (const type of ['videoGen', 'veoDirector', 'veoFast'] as const) {
+      const node: StudioNode = { id: 'v', position: { x: 0, y: 0 }, type, data: {} };
+      const signature = computeGenerationSignature(node, [], lookup(node));
+      const own = signature.slice(`sig2:${type}|`.length, signature.indexOf('|refs('));
+      expect(own.split('|').map((pair) => pair.split('=')[0])).toEqual([
+        ...VIDEO_GENERATOR_SIGNATURE_FIELDS,
+      ]);
+    }
+  });
+
+  it('tracks exactly the four types the registry gives signatureFields', () => {
+    // The guard against quietly signature-tracking a Canvas V3 type: staleness for an
+    // action or a batch is a different question (see nodeHasUsableOutput in the
+    // executor), and answering it here by accident would reuse a stale action output.
+    const tracked = STUDIO_NODE_TYPES.filter((type) => isSignatureTracked(type));
+    expect([...tracked].sort()).toEqual(['nanoGen', 'veoDirector', 'veoFast', 'videoGen']);
+  });
+
+  it('leaves the Canvas V3 types untracked', () => {
+    for (const type of ['action', 'router', 'batch', 'export', 'layerEditor'] as const) {
+      expect(isSignatureTracked(type), type).toBe(false);
+    }
   });
 });

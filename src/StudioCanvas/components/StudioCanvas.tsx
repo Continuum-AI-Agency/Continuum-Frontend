@@ -52,6 +52,7 @@ import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
 import { isValidConnection } from '../utils/isValidConnection';
 import { layoutInRow } from '../utils/layoutImportedNodes';
 import type { VideoGeneratorModel } from '../utils/videoModel';
+import { AddNodeCommandPalette } from './AddNodeCommandPalette';
 import type { StudioCanvasNodeType } from './addNodeCatalog';
 import { CanvasContextMenuContent } from './CanvasContextMenuContent';
 import { CanvasFloatingPanel } from './CanvasFloatingPanel';
@@ -158,6 +159,11 @@ function Flow({
   const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
   const [isLibraryBrowserOpen, setIsLibraryBrowserOpen] = useState(false);
   const [isSaveStarterOpen, setIsSaveStarterOpen] = useState(false);
+  // Where the Add Node palette is anchored, and the position the node lands at. Pinned in
+  // state rather than read from lastMousePositionRef at add time: the palette is portalled
+  // outside the canvas wrapper, so the mouse crosses live canvas on the way to the search
+  // box and would otherwise drag the drop point with it.
+  const [addNodePaletteAt, setAddNodePaletteAt] = useState<{ x: number; y: number } | null>(null);
   // Team chat open/closed lifted here so the composer can reserve the chat panel's
   // footprint and the two overlays never fight for the same bottom-right region.
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -277,6 +283,19 @@ function Flow({
       triggerSave();
     },
     [nodes, screenToFlowPosition, setNodes, takeSnapshot, triggerSave],
+  );
+
+  const openAddNodePalette = useCallback(() => {
+    setAddNodePaletteAt(contextMenuAnchorRef.current ?? lastMousePositionRef.current);
+  }, []);
+
+  const addNodeFromPalette = useCallback(
+    (type: StudioCanvasNodeType, options?: { model?: VideoGeneratorModel }) => {
+      if (addNodePaletteAt) lastMousePositionRef.current = addNodePaletteAt;
+      setAddNodePaletteAt(null);
+      addNodeAtPointer(type, options);
+    },
+    [addNodeAtPointer, addNodePaletteAt],
   );
 
   const handleCanvasContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
@@ -515,7 +534,7 @@ function Flow({
         </ContextMenuTrigger>
 
         <CanvasContextMenuContent
-          addNodeAtPointer={addNodeAtPointer}
+          openAddNodePalette={openAddNodePalette}
           openLoadWorkflow={() => setIsLoadWorkflowOpen(true)}
           openInstagram={() => setIsInstagramBrowserOpen(true)}
           openSaveStarter={openSaveStarter}
@@ -529,6 +548,13 @@ function Flow({
           fitView={fitView}
         />
       </ContextMenu>
+      {addNodePaletteAt && (
+        <AddNodeCommandPalette
+          screenPosition={addNodePaletteAt}
+          onAdd={addNodeFromPalette}
+          onDismiss={() => setAddNodePaletteAt(null)}
+        />
+      )}
       {/* Overlaid on the canvas rather than mounted as a React Flow Panel: the hero
           state centres itself on an empty canvas, which the Panel grid cannot express. */}
       <CanvasComposer

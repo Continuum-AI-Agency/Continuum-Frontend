@@ -1,3 +1,4 @@
+import type { ActionId } from '@continuum/contracts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
 import type {
@@ -55,6 +56,17 @@ export type RunTimelineInWorkerOptions = {
   workerFactory?: () => Worker;
 };
 
+export type RunActionInWorkerOptions = {
+  actionId: ActionId;
+  inputs: { handle: string; blob: Blob }[];
+  config: Record<string, unknown>;
+  videoBitrate?: number;
+  audioBitrate?: number;
+  signal?: AbortSignal;
+  onProgress?: (progress: WorkerSpliceProgress) => void;
+  workerFactory?: () => Worker;
+};
+
 export type WorkerSpliceResult = {
   blob: Blob;
   objectUrl: string;
@@ -84,7 +96,7 @@ function createDefaultWorker(): Worker {
 function runWorkerJob(
   startMessage: Extract<
     SpliceWorkerInbound,
-    { kind: 'start' | 'start_single_source' | 'start_timeline' }
+    { kind: 'start' | 'start_single_source' | 'start_timeline' | 'start_action' }
   >,
   options: WorkerJobOptions,
 ): Promise<WorkerSpliceResult> {
@@ -222,6 +234,24 @@ export function runSingleSourceSpliceInWorker(
       videoBitrate,
       audioBitrate,
     },
+    options,
+  );
+}
+
+/**
+ * Run one catalog action that has to re-encode video, in the splicer worker.
+ *
+ * The lifecycle — spawn, progress, abort, terminate — is the same `runWorkerJob` the
+ * other three entry points use. Only the start frame differs; which engine runs is the
+ * worker's own registry lookup on `actionId`.
+ */
+export function runActionInWorker(options: RunActionInWorkerOptions): Promise<WorkerSpliceResult> {
+  const { actionId, inputs, config, videoBitrate, audioBitrate } = options;
+  if (inputs.length < 1) {
+    return Promise.reject(new Error(`${actionId} needs at least one input`));
+  }
+  return runWorkerJob(
+    { kind: 'start_action', actionId, inputs, config, videoBitrate, audioBitrate },
     options,
   );
 }

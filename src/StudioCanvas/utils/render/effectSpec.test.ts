@@ -9,6 +9,7 @@ import {
   resolveTextOverlays,
   resolveTransformAt,
   speedFor,
+  unpreviewableEffects,
 } from './effectSpec';
 
 describe('filterString', () => {
@@ -175,5 +176,51 @@ describe('resolveTransformAt — keyframes', () => {
       ],
     };
     expect(resolveTransformAt(spec, 0.5).scale).toBeCloseTo(2, 5);
+  });
+});
+
+describe('hasVisualEffects — chroma key and tint', () => {
+  it('is true for a chroma key, and for a tint with a non-zero amount', () => {
+    // Both MUST be listed in hasVisualEffects or drawClipFrame takes its
+    // drawLetterboxed fast path and the effect silently never renders.
+    expect(hasVisualEffects({ chromaKey: { color: '#00ff00', tolerance: 0.3, softness: 0.1 } })).toBe(
+      true,
+    );
+    expect(hasVisualEffects({ tint: { color: '#ff0000', amount: 0.25 } })).toBe(true);
+  });
+
+  it('treats a zero-amount tint as a no-op, the same as opacity 1', () => {
+    expect(hasVisualEffects({ tint: { color: '#ff0000', amount: 0 } })).toBe(false);
+  });
+
+  it('still counts a zero-tolerance key — it keys exact matches', () => {
+    expect(hasVisualEffects({ chromaKey: { color: '#00ff00', tolerance: 0, softness: 0 } })).toBe(
+      true,
+    );
+  });
+});
+
+describe('unpreviewableEffects', () => {
+  it('names what the CSS preview cannot show, rather than omitting it silently', () => {
+    expect(unpreviewableEffects(undefined)).toEqual([]);
+    expect(unpreviewableEffects({ adjustments: { brightness: 1.2 } })).toEqual([]);
+    expect(unpreviewableEffects({ tint: { color: '#ff0000', amount: 0 } })).toEqual([]);
+    expect(unpreviewableEffects({ tint: { color: '#ff0000', amount: 0.3 } })).toEqual(['tint']);
+    expect(
+      unpreviewableEffects({
+        chromaKey: { color: '#00ff00', tolerance: 0.3, softness: 0.1 },
+        tint: { color: '#ff0000', amount: 0.3 },
+      }),
+    ).toEqual(['chromaKey', 'tint']);
+  });
+
+  it('leaves clipEffectsToCss free of non-CSS keys', () => {
+    // The result is spread into a style object; a stray diagnostic key would leak
+    // into the DOM. The gap is reported by the function above instead.
+    const css = clipEffectsToCss(
+      { chromaKey: { color: '#00ff00', tolerance: 0.3, softness: 0.1 } },
+      0,
+    );
+    expect(Object.keys(css).sort()).toEqual(['filter', 'mixBlendMode', 'opacity', 'transform']);
   });
 });

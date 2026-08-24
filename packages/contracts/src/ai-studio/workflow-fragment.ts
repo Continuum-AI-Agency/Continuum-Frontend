@@ -5,7 +5,7 @@ import {
   type NodeSpec,
   nodeSpecSchema,
 } from './workflow-builder';
-import { studioNodeTypeEnum } from './workflow-graph';
+import { studioNodeTypeEnum, studioPortDataTypeSchema } from './workflow-graph';
 
 const fragmentIdSchema = z
   .string()
@@ -49,6 +49,69 @@ export const workflowFragmentSchema = z
   })
   .strict();
 export type WorkflowFragment = z.infer<typeof workflowFragmentSchema>;
+
+// ---------------------------------------------------------------------------
+// Techniques — a saved canvas selection, re-appliable as a subgraph
+// ---------------------------------------------------------------------------
+//
+// A Technique is a `canvas_workflows` row (per brand) or a `workflow_library`
+// row with visibility='global' (a premade) whose metadata carries the block
+// below. Zero new tables: the nodes and edges live in their normal columns, so
+// the apply path is the same one a plain saved workflow already travels.
+//
+// The port shape EXTENDS the agent fragment's port rather than widening it. The
+// agent path's `workflowFragmentPortSchema` is `.strict()` and hand-duplicated as
+// an LLM `Output.object` schema in the Backend's fragmentWorkers, so a new field
+// there is a change to what a model is asked to emit. A Technique needs none of
+// that — it needs the same id/nodeRef discipline plus the handle it actually
+// sits on.
+
+export const canvasTechniquePortSchema = workflowFragmentPortSchema
+  .extend({
+    /** The real React Flow handle this port sits on, e.g. 'ref-image'. */
+    handleId: z.string().min(1).max(120).optional(),
+    dataType: studioPortDataTypeSchema.optional(),
+    /** Human label, from the same PORT_LABELS table the canvas renders. */
+    label: z.string().min(1).max(120).optional(),
+    /**
+     * Which inference rule produced this port:
+     *   'edge'     — an edge crosses the selection boundary here
+     *   'open'     — a required input handle nothing is wired into
+     *   'terminal' — a media producer inside the selection with no outgoing edge
+     * Kept so a reader can tell a declared contract from a derived one.
+     */
+    origin: z.enum(['edge', 'open', 'terminal']).optional(),
+  })
+  .strict();
+export type CanvasTechniquePort = z.infer<typeof canvasTechniquePortSchema>;
+
+export const canvasTechniqueMetadataSchema = z
+  .object({
+    version: z.literal(1),
+    kind: workflowFragmentKindSchema,
+    // Same cap as workflowFragmentSchema: a fragment with more than 12 ports on a
+    // side is not a reusable piece, it is a canvas.
+    inputPorts: z.array(canvasTechniquePortSchema).max(12),
+    outputPorts: z.array(canvasTechniquePortSchema).max(12),
+  })
+  .strict();
+export type CanvasTechniqueMetadata = z.infer<typeof canvasTechniqueMetadataSchema>;
+
+/** The metadata key, mirroring STARTER_METADATA_FLAG on the Frontend. */
+export const TECHNIQUE_METADATA_FLAG = 'technique';
+
+/**
+ * Reads the technique block off a workflow row's metadata bag. Returns undefined
+ * for every row that is not a Technique — which is most of them — so callers can
+ * use it as both the predicate and the parse.
+ */
+export function parseTechniqueMetadata(
+  metadata?: Record<string, unknown> | null,
+): CanvasTechniqueMetadata | undefined {
+  if (!metadata) return undefined;
+  const parsed = canvasTechniqueMetadataSchema.safeParse(metadata[TECHNIQUE_METADATA_FLAG]);
+  return parsed.success ? parsed.data : undefined;
+}
 
 const workflowFragmentInputRequestSchema = z
   .object({

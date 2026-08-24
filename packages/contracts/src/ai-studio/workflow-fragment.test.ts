@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  canvasTechniqueMetadataSchema,
   joinWorkflowFragments,
   parallelWorkflowPlanSchema,
+  parseTechniqueMetadata,
+  TECHNIQUE_METADATA_FLAG,
   type WorkflowFragment,
+  workflowFragmentPortSchema,
 } from './workflow-fragment';
 
 const plan = parallelWorkflowPlanSchema.parse({
@@ -220,5 +224,66 @@ describe('joinWorkflowFragments', () => {
     expect(joined.ok).toBe(false);
     expect(joined.errors.join('\n')).toContain('shots');
     expect(joined.errors.join('\n')).toContain('character-image');
+  });
+});
+
+describe('canvas technique metadata', () => {
+  const port = { id: 'in-1', nodeRef: 'node-a', handleId: 'ref-image', dataType: 'image' as const };
+
+  it('accepts a technique block with typed, origin-tagged ports', () => {
+    const parsed = canvasTechniqueMetadataSchema.parse({
+      version: 1,
+      kind: 'generation',
+      inputPorts: [{ ...port, label: 'Reference image', origin: 'edge' }],
+      outputPorts: [
+        { id: 'out-1', nodeRef: 'node-b', handleId: 'image', dataType: 'image', origin: 'terminal' },
+      ],
+    });
+
+    expect(parsed.inputPorts[0]?.origin).toBe('edge');
+    expect(parsed.outputPorts[0]?.dataType).toBe('image');
+  });
+
+  it('keeps the fragment port caps and rejects an unknown field', () => {
+    const overflowing = {
+      version: 1,
+      kind: 'reference',
+      inputPorts: Array.from({ length: 13 }, (_, index) => ({
+        id: `in-${index + 1}`,
+        nodeRef: 'node-a',
+      })),
+      outputPorts: [],
+    };
+    expect(canvasTechniqueMetadataSchema.safeParse(overflowing).success).toBe(false);
+
+    const stray = {
+      version: 1,
+      kind: 'reference',
+      inputPorts: [{ ...port, mystery: true }],
+      outputPorts: [],
+    };
+    expect(canvasTechniqueMetadataSchema.safeParse(stray).success).toBe(false);
+  });
+
+  it('reads the block off a metadata bag and ignores every other row', () => {
+    const technique = { version: 1, kind: 'assembly', inputPorts: [], outputPorts: [] };
+
+    expect(parseTechniqueMetadata({ [TECHNIQUE_METADATA_FLAG]: technique })?.kind).toBe('assembly');
+    expect(parseTechniqueMetadata({ starter: true })).toBeUndefined();
+    expect(parseTechniqueMetadata(null)).toBeUndefined();
+    expect(parseTechniqueMetadata(undefined)).toBeUndefined();
+    // A malformed block is not a Technique — never a throw at a read boundary.
+    expect(parseTechniqueMetadata({ [TECHNIQUE_METADATA_FLAG]: { version: 2 } })).toBeUndefined();
+  });
+
+  it('leaves the agent fragment port schema unwidened', () => {
+    // The Backend hand-duplicates this schema as an LLM Output.object; a field
+    // added here silently changes what a model is asked to emit.
+    const withHandle = workflowFragmentPortSchema.safeParse({
+      id: 'p',
+      nodeRef: 'n',
+      handleId: 'ref-image',
+    });
+    expect(withHandle.success).toBe(false);
   });
 });

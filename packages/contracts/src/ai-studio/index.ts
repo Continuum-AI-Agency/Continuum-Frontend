@@ -10,6 +10,7 @@ export * from './canvas-media-signing';
 export * from './canvas-publishing';
 export * from './canvas-render';
 export * from './contact-sheet';
+export * from './design-grounding';
 export * from './editor-project-reducer';
 export * from './editor-project-v2';
 export * from './format-workflows';

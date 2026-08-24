@@ -15,8 +15,15 @@
 // ADDITIVE for this wave: the node context menus keep their config copies. Slimming
 // them is a separate change against files this shell does not own.
 
-import { ListChecks, type LucideIcon, Play, ShieldCheck, SlidersHorizontal } from 'lucide-react';
-import { useMemo } from 'react';
+import {
+  Blocks,
+  ListChecks,
+  type LucideIcon,
+  Play,
+  ShieldCheck,
+  SlidersHorizontal,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNodeConfigPatch } from '../hooks/useNodeConfigPatch';
 import { useStudioStore } from '../stores/useStudioStore';
@@ -34,6 +41,7 @@ import { GroundingSection } from './inspector/GroundingSection';
 import { ImageGenSection } from './inspector/ImageGenSection';
 import { OmniGenSection } from './inspector/OmniGenSection';
 import { VideoGenSection } from './inspector/VideoGenSection';
+import { SaveTechniqueDialog } from './SaveTechniqueDialog';
 
 /** Only the types with a hand-written section; everything else is humanized. */
 const TYPE_TITLES: Record<string, string> = {
@@ -49,9 +57,7 @@ const TYPE_TITLES: Record<string, string> = {
 const GROUNDED_TYPES = new Set(['nanoGen', 'videoGen', 'veoDirector', 'veoFast', 'omniGen']);
 
 const humanizeType = (type: string): string =>
-  type
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/^./, (character) => character.toUpperCase());
+  type.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, (character) => character.toUpperCase());
 
 function nodeTitle(node: StudioNode): string {
   const label = (node.data as { label?: unknown }).label;
@@ -118,6 +124,9 @@ export function NodeInspectorPanel({
   const setNodes = useStudioStore((state) => state.setNodes);
   const brandId = useStudioStore((state) => state.brandId);
   const patch = useNodeConfigPatch();
+  // The dialog lives here rather than in the canvas shell: the panel already
+  // holds the selection and the brand, so nothing has to be threaded down.
+  const [isSaveTechniqueOpen, setIsSaveTechniqueOpen] = useState(false);
 
   const selected = useMemo(() => nodes.filter((node) => node.selected), [nodes]);
 
@@ -148,6 +157,16 @@ export function NodeInspectorPanel({
       bodyClassName="nowheel max-h-[calc(100vh-12rem)] overflow-y-auto overscroll-contain"
     >
       <div className="flex flex-col gap-4 p-3" data-testid="node-inspector">
+        {/* First, not last: the panel body scrolls, and an action at its bottom
+            lands under the minimap and the composer where nothing can click it.
+            Offered at any selection size — one configured generator with open
+            inputs is as legitimate a technique as a whole branch. */}
+        <BulkAction
+          icon={Blocks}
+          label="Save as technique"
+          onClick={() => setIsSaveTechniqueOpen(true)}
+        />
+
         {multiple ? (
           <>
             <p className="text-xs text-muted-foreground">
@@ -179,10 +198,7 @@ export function NodeInspectorPanel({
           </>
         ) : (
           <>
-            <ConfigSection
-              node={node}
-              onPatch={(next) => patch(node.id, node.type ?? '', next)}
-            />
+            <ConfigSection node={node} onPatch={(next) => patch(node.id, node.type ?? '', next)} />
             {GROUNDED_TYPES.has(node.type ?? '') ? (
               <div className="-mx-1 border-t border-border/70 pt-1">
                 <GroundingSection node={node} brandId={brandId} />
@@ -191,6 +207,17 @@ export function NodeInspectorPanel({
           </>
         )}
       </div>
+
+      {/* Mounted only while open: the port inference is a full pass over the
+          selection, and the panel re-renders on every selection change. */}
+      {isSaveTechniqueOpen ? (
+        <SaveTechniqueDialog
+          open
+          onOpenChange={setIsSaveTechniqueOpen}
+          brandProfileId={brandId ?? undefined}
+          nodes={selected}
+        />
+      ) : null}
     </CanvasFloatingPanel>
   );
 }

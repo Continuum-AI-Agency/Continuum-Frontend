@@ -48,6 +48,23 @@ export type NodeOutput =
       sizeBytes?: number;
       assetId?: string;
       assetVersionId?: string;
+    }
+  // A fan-out result: N outputs of ONE modality, in item order.
+  //
+  // Distinct from `images`, which is a single generation's variations of the same
+  // prompt and is addressed by the edge's `sourceHandle` (`image-2`). A collection is
+  // a batch: every downstream runnable node loops over it, and the loop propagates
+  // for free because a chained consumer emits a collection of its own.
+  //
+  // `itemType` is the ITEM modality, deliberately not a port data type — collection-ness
+  // is the shape of an output, and widening `StudioPortDataType` would make every
+  // existing compatibility rule ambiguous (Canvas V3 design B).
+  | {
+      type: 'collection';
+      itemType: 'text' | 'image' | 'video';
+      items: NodeOutput[];
+      /** Item labels, when the source batch named them — a matrix view reads these. */
+      labels?: string[];
     };
 
 export interface WorkflowExecutionContext {

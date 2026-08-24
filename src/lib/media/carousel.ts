@@ -1,4 +1,4 @@
-import { CAROUSEL_SLIDE_TAG, type MediaAsset } from '@continuum/contracts';
+import { HIDDEN_LIBRARY_TAGS_FILTER, type MediaAsset } from '@continuum/contracts';
 import type { MediaAssetRow } from './schema';
 import type { SignablePath } from './signed-urls';
 
@@ -7,11 +7,12 @@ import type { SignablePath } from './signed-urls';
 // signed `carousel` field the Library grid pages through — and provides the tag
 // filter that hides the non-cover slide rows from the flat grid.
 
-// PostgREST array "not contains" value: excludes rows whose tags include the
-// carousel-slide marker, so a saved carousel occupies exactly one grid slot (its
-// cover). Individual slide rows stay reachable via search — this only shapes the
-// human library list.
-export const EXCLUDE_CAROUSEL_SLIDES_FILTER = `{${CAROUSEL_SLIDE_TAG}}`;
+// PostgREST array "not contains" value: excludes rows carrying a hidden system tag,
+// so a saved carousel occupies exactly one grid slot (its cover) and generated Element
+// references stay out of the grid. Those rows remain reachable via search — this only
+// shapes the human library list. The tag list is shared (contracts) so the four
+// surfaces that hide rows cannot drift apart.
+export const EXCLUDE_CAROUSEL_SLIDES_FILTER = HIDDEN_LIBRARY_TAGS_FILTER;
 
 interface StoredSlideRef {
   slideIndex: number;

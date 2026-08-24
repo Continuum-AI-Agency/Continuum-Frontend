@@ -29,12 +29,30 @@ export interface BrandDesignSectionRow {
 
 export type BrandDesignSectionsState = {
   readonly sections: readonly BrandDesignSectionRow[];
+  /**
+   * The whole system, for the callers that need more than the row list.
+   *
+   * The grounding popover only wants "which sections can I toggle". A `designRef` node
+   * needs the tokens, the fonts and the section's exemplars to build its specimen and its
+   * token summary — and it is looking at the same system, on the same canvas, that every
+   * chip beside it already read. Handing back what was already fetched costs nothing;
+   * a second hook fetching the same row would cost a round trip per node.
+   */
+  readonly snapshot: DesignSystemSnapshot | null;
+  /** Id of the active system — the storage prefix its exemplar paths are relative to. */
+  readonly designSystemId: string | null;
   readonly isLoading: boolean;
   /** Set when the READ failed, which must not look like "this brand has no system". */
   readonly error: string | null;
 };
 
-const EMPTY: BrandDesignSectionsState = { sections: [], isLoading: false, error: null };
+const EMPTY: BrandDesignSectionsState = {
+  sections: [],
+  snapshot: null,
+  designSystemId: null,
+  isLoading: false,
+  error: null,
+};
 
 /**
  * Only the sections the brand left enabled.
@@ -74,6 +92,8 @@ export function useBrandDesignSections(brandId?: string): BrandDesignSectionsSta
         if (cancelled) return;
         setState({
           sections: response.design_system ? designSectionRows(response.design_system) : [],
+          snapshot: response.design_system,
+          designSystemId: response.design_system_id ?? null,
           isLoading: false,
           error: null,
         });

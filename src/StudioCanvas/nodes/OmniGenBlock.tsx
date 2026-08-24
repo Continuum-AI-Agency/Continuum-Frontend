@@ -360,6 +360,8 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                   24px chip put exactly half of it outside the node (Airtable #229). */}
               <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
                 <GroundingChip
+                  nodeId={id}
+                  nodeType="omniGen"
                   brandId={brandId}
                   skillIds={data.skillIds}
                   brandBookPieces={data.brandBookPieces}

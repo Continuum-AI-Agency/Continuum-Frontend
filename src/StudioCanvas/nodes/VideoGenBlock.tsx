@@ -20,7 +20,7 @@ import {
 } from '@xyflow/react';
 import { ChevronDown, Clock, Copy, Download, Play, Trash2, Video } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useState } from 'react';
+import { Fragment, useCallback, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
 import { Button } from '@/components/ui/button';
@@ -414,6 +414,8 @@ export function VideoGenBlock({
               <div className="absolute left-2 top-2 z-10 flex items-center gap-1.5">
                 <div data-testid="studio-grounding-chip">
                   <GroundingChip
+                    nodeId={id}
+                    nodeType={type}
                     brandId={brandId}
                     skillIds={data.skillIds}
                     brandBookPieces={data.brandBookPieces}
@@ -762,24 +764,26 @@ export function VideoGenBlock({
         />
         <ContextMenuContent className="w-56">
           <ContextMenuLabel>Video Generator</ContextMenuLabel>
+          {/* Provider is a HEADING here, not another hover level. Six models behind
+              Model → Google → Veo 3.1 was three hover-throughs to change one setting
+              (#260), and it left this picker shaped differently from the image node's,
+              which has always been flat. */}
           <ContextMenuSub>
             <ContextMenuSubTrigger>Model</ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-44">
+            <ContextMenuSubContent className="w-52">
               {VIDEO_GENERATOR_MODEL_GROUPS.map((group) => (
-                <ContextMenuSub key={group.provider}>
-                  <ContextMenuSubTrigger>{group.label}</ContextMenuSubTrigger>
-                  <ContextMenuSubContent className="w-44">
-                    {group.models.map((option) => (
-                      <ContextMenuCheckboxItem
-                        key={option}
-                        checked={model === option}
-                        onClick={() => handleModelChange(option)}
-                      >
-                        {VIDEO_GENERATOR_MODEL_LABELS[option]}
-                      </ContextMenuCheckboxItem>
-                    ))}
-                  </ContextMenuSubContent>
-                </ContextMenuSub>
+                <Fragment key={group.provider}>
+                  <ContextMenuLabel>{group.label}</ContextMenuLabel>
+                  {group.models.map((option) => (
+                    <ContextMenuCheckboxItem
+                      key={option}
+                      checked={model === option}
+                      onClick={() => handleModelChange(option)}
+                    >
+                      {VIDEO_GENERATOR_MODEL_LABELS[option]}
+                    </ContextMenuCheckboxItem>
+                  ))}
+                </Fragment>
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
