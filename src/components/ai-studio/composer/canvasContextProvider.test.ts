@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import type { Skill } from '@continuum/contracts';
+import type { ElementRecord, Skill } from '@continuum/contracts';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
 import {
   type CanvasSignalCatalog,
@@ -28,6 +28,32 @@ const skill = (overrides: Partial<Skill> = {}): Skill => ({
 });
 
 const noSignals: CanvasSignalCatalog = { trends: [], events: [], questions: [] };
+
+const element = (overrides: Partial<ElementRecord> = {}): ElementRecord => ({
+  id: 'element-1',
+  brandId: 'brand-1',
+  name: 'Nova',
+  slug: 'nova',
+  category: 'model',
+  guidelines: null,
+  rightsNote: 'own employee, consent on file',
+  members: [{ assetId: '00000000-0000-4000-8000-000000000001', position: 0 }],
+  referenceHistory: [],
+  defaultReferenceAssetId: null,
+  createdAt: '2026-08-01T00:00:00Z',
+  updatedAt: '2026-08-01T00:00:00Z',
+  ...overrides,
+});
+
+const providerWithElements = (elements: ElementRecord[]) =>
+  createCanvasComposerMentionProvider({
+    brandId: 'brand-1',
+    skills: [],
+    elements,
+    fetchAssets: async () => [],
+    fetchFolders: async () => [],
+    fetchSignals: async () => noSignals,
+  });
 
 const signalCatalog = (): CanvasSignalCatalog => ({
   trends: [
@@ -211,5 +237,74 @@ describe('canvas composer context provider', () => {
     });
     const suggestions = await provider.getSuggestions({ query: 'hero' });
     expect(suggestions.map((item) => item.key)).toEqual(['image']);
+  });
+});
+
+describe('canvas composer context provider — Elements', () => {
+  it('advertises Elements at the root, between Skills and the Media library', async () => {
+    const provider = providerWithElements([element()]);
+    const root = await provider.getSuggestions({ query: '' });
+    expect(root.map((item) => item.label)).toEqual([
+      'Skills',
+      'Elements',
+      'Media library',
+      'Signals',
+    ]);
+  });
+
+  it('hides the Elements folder for a brand that has none — an empty drill is a dead end', async () => {
+    const root = await providerWithElements([]).getSuggestions({ query: '' });
+    expect(root.map((item) => item.label)).toEqual(['Skills', 'Media library', 'Signals']);
+  });
+
+  it('drills Elements into category folders, in the canonical order', async () => {
+    const provider = providerWithElements([
+      element({ id: 'p', name: 'Aero Bottle', category: 'product' }),
+      element({ id: 'm', name: 'Nova', category: 'model' }),
+      element({ id: 'm2', name: 'Rae', category: 'model' }),
+    ]);
+    const root = await provider.getSuggestions({ query: '' });
+    const categories = await provider.getChildSuggestions?.(
+      root.find((item) => item.label === 'Elements')!,
+      '',
+    );
+    expect(categories?.map((item) => item.label)).toEqual(['Model', 'Product']);
+    expect(categories?.map((item) => item.childrenLabel)).toEqual(['2 elements', '1 element']);
+
+    const models = await provider.getChildSuggestions?.(categories![0], '');
+    expect(models?.map((item) => item.label)).toEqual(['Nova', 'Rae']);
+    expect(models?.[0]?.reference?.metadata?.elementId).toBe('m');
+  });
+
+  it('filters a category folder by the typed query', async () => {
+    const provider = providerWithElements([
+      element({ id: 'm', name: 'Nova' }),
+      element({ id: 'm2', name: 'Rae' }),
+    ]);
+    const root = await provider.getSuggestions({ query: '' });
+    const categories = await provider.getChildSuggestions?.(
+      root.find((item) => item.label === 'Elements')!,
+      '',
+    );
+    const models = await provider.getChildSuggestions?.(categories![0], 'rae');
+    expect(models?.map((item) => item.label)).toEqual(['Rae']);
+  });
+
+  it('matches Elements by name and by category in free-text search', async () => {
+    const provider = providerWithElements([
+      element({ id: 'm', name: 'Nova' }),
+      element({ id: 'p', name: 'Aero Bottle', category: 'product' }),
+    ]);
+    expect((await provider.getSuggestions({ query: 'nova' })).map((item) => item.label)).toEqual([
+      'Nova',
+    ]);
+    expect((await provider.getSuggestions({ query: 'product' })).map((item) => item.label)).toEqual(
+      ['Aero Bottle'],
+    );
+  });
+
+  it('leaves an Element with nothing to emit out of the menu entirely', async () => {
+    const provider = providerWithElements([element({ members: [] })]);
+    expect(await provider.getSuggestions({ query: 'nova' })).toEqual([]);
   });
 });

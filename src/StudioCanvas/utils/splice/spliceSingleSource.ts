@@ -1,7 +1,7 @@
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { appendRange, loadMediabunny, throwIfAborted } from './appendRange';
 import { computeCappedDimensions } from './cappedDimensions';
-import { buildCaptionCues, type CaptionWord } from './captionCues';
+import { buildCaptionCues, type CaptionCue, type CaptionWord } from './captionCues';
 import type { SpliceProgress, SpliceResult } from './spliceClips';
 
 // Single-source variant of the splice engine: open ONE input and concatenate N
@@ -38,6 +38,10 @@ export type SpliceSingleSourceOptions = {
   // Source-time transcript words for this clip. When present, word-synced captions
   // are re-mapped onto the cut timeline and burned into each frame.
   captionWords?: CaptionWord[];
+  // Cues already grouped and already on the OUTPUT timeline. Wins over captionWords.
+  // The subtitles action needs this: its preset chooses the words-per-line and the cue
+  // duration, and re-deriving cues here would silently discard that choice.
+  captionCues?: CaptionCue[];
   // Brand-derived caption colors/font. Falls back to the renderer default.
   captionStyle?: CaptionStyle;
   videoBitrate?: number;
@@ -98,12 +102,14 @@ export async function spliceSingleSource(
     // append loop builds (cumulative range durations), so caption timing matches the
     // cut frame-for-frame. Built from `clamped` so clamping stays consistent.
     const cues =
-      options.captionWords && options.captionWords.length > 0
-        ? buildCaptionCues(
-            options.captionWords,
-            clamped.map((r) => ({ startSec: r.startSec, endSec: r.endSec })),
-          )
-        : null;
+      options.captionCues && options.captionCues.length > 0
+        ? options.captionCues
+        : options.captionWords && options.captionWords.length > 0
+          ? buildCaptionCues(
+              options.captionWords,
+              clamped.map((r) => ({ startSec: r.startSec, endSec: r.endSec })),
+            )
+          : null;
 
     const offscreen = new OffscreenCanvas(targetWidth, targetHeight);
     const ctx = offscreen.getContext('2d');

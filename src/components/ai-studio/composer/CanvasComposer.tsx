@@ -1,5 +1,6 @@
 'use client';
-import { MessageCircle, Play, Trash2, TriangleAlert, Wand2, X } from 'lucide-react';
+import type { AgentMentionReference } from '@continuum/contracts';
+import { Gem, MessageCircle, Play, Trash2, TriangleAlert, Wand2, X } from 'lucide-react';
 
 import { useCallback, useMemo, useState } from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
@@ -22,9 +23,11 @@ import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
+import { ELEMENT_CATEGORY_LABEL, type ElementRecord, useElements } from '@/lib/ai-studio/elements';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import { createCanvasComposerMentionProvider } from './canvasContextProvider';
+import { expandElementMentions, readElementMention } from './elementMentions';
 import { StarterPickerButton } from './StarterPickerButton';
 import {
   type CanvasComposerState,
@@ -41,6 +44,11 @@ import {
 //
 // It shows what the agent is doing but never renders the graph — committed patches
 // appear on the canvas immediately, then Realtime confirms the durable state.
+
+// `useElements` hands back a fresh `[]` until its query resolves. Swapping in one
+// stable empty array keeps the mention provider (and its one-read signals cache)
+// from being rebuilt on every render while the Elements load.
+const NO_ELEMENTS: ElementRecord[] = [];
 
 const EXAMPLES = [
   'A hero image of our product on wet concrete, then animate it into a 6s clip',
@@ -90,12 +98,18 @@ export function CanvasComposer({
     onRun();
   }, [dismiss, onRun]);
   const { all: brandSkills } = useBrandSkills(brandProfileId);
+  const { elements } = useElements(brandProfileId);
+  const elementCatalog = elements.length > 0 ? elements : NO_ELEMENTS;
   const mentionProvider = useMemo(
     () =>
       brandProfileId
-        ? createCanvasComposerMentionProvider({ brandId: brandProfileId, skills: brandSkills })
+        ? createCanvasComposerMentionProvider({
+            brandId: brandProfileId,
+            skills: brandSkills,
+            elements: elementCatalog,
+          })
         : undefined,
-    [brandProfileId, brandSkills],
+    [brandProfileId, brandSkills, elementCatalog],
   );
 
   // A run started before this mount (navigation away and back) lives only in the
@@ -125,18 +139,23 @@ export function CanvasComposer({
           submittedAttachments,
           'canvas',
         );
+        // An Element mention arrives holding ONE ref; a fallback Element still owes
+        // the rest of its members, and every Element owes the model a line saying
+        // what its image is.
+        const grounded = expandElementMentions(resolvedReferences);
         void submit(value, selectedNodeIds, {
           remember: expanded,
           attachments: attachmentContext.attachments,
-          references: resolvedReferences,
+          references: grounded.references,
           thinking,
+          ...(grounded.grounding ? { grounding: grounded.grounding } : {}),
         });
       }}
       ariaLabel="Describe the workflow you want on the canvas"
       placeholder={
         selectedNodeIds.length > 0
           ? `Change the ${selectedNodeIds.length} selected node${selectedNodeIds.length > 1 ? 's' : ''}…`
-          : 'Describe a workflow; type @ for skills or Library media'
+          : 'Describe a workflow; type @ for skills, Elements or Library media'
       }
       actions={
         <>
@@ -241,7 +260,12 @@ export function CanvasComposer({
           </div>
         ) : (
           <>
-            <ComposerProgress state={state} onDismiss={dismiss} onRun={runAndRetireCard} />
+            <ComposerProgress
+              state={state}
+              references={turns.at(-1)?.references}
+              onDismiss={dismiss}
+              onRun={runAndRetireCard}
+            />
             {inputRow}
           </>
         )}
@@ -286,6 +310,7 @@ function TurnMessages({
         <p className="text-sm">
           <MentionifiedText text={turn.prompt} references={turn.references} />
         </p>
+        <ElementGroundingChips references={turn.references} />
         <ChatMediaGrid
           items={mediaFromPersistedAttachments(turn.id, turn.attachments)}
           lightboxTitle="Attachment"
@@ -364,12 +389,48 @@ function TurnMessages({
   );
 }
 
+/**
+ * Which Elements ground this turn.
+ *
+ * This chip is the only place a fallback Element admits that it is spending several
+ * reference slots, or that the person ceiling left members behind — silent
+ * truncation is how a user concludes the product is random
+ * (docs/research/element-reference-generation.md §9.2).
+ */
+function ElementGroundingChips({ references }: { references?: AgentMentionReference[] }) {
+  const elements = (references ?? []).map(readElementMention).filter((element) => element !== null);
+  if (elements.length === 0) return null;
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5" data-testid="composer-elements">
+      <Gem className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="sr-only">Elements grounding this generation</span>
+      {elements.map((element) => (
+        <Badge key={element.elementId} variant="secondary" className="gap-1 font-normal">
+          {element.name}
+          <span className="text-muted-foreground">
+            {[
+              ELEMENT_CATEGORY_LABEL[element.category],
+              element.mode === 'fallback' ? `${element.assetIds.length} images` : null,
+              element.droppedCount > 0 ? `${element.droppedCount} dropped` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
 function ComposerProgress({
   state,
+  references,
   onDismiss,
   onRun,
 }: {
   state: CanvasComposerState;
+  references?: AgentMentionReference[];
   onDismiss: () => void;
   onRun: () => void;
 }) {
@@ -398,6 +459,8 @@ function ComposerProgress({
           {state.status === 'done' && state.summary ? (
             <p className="text-foreground">{state.summary}</p>
           ) : null}
+
+          <ElementGroundingChips references={references} />
 
           {state.graph ? (
             <p className="mt-1 text-xs text-muted-foreground">

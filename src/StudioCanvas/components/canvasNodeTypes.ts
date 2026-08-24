@@ -8,6 +8,7 @@ import { DesignRefNode } from '../nodes/DesignRefNode';
 import { DocumentNode } from '../nodes/DocumentNode';
 import { ElementNode } from '../nodes/ElementNode';
 import { ExtendVideoBlock } from '../nodes/ExtendVideoBlock';
+import { ExportNode } from '../nodes/export/ExportNode';
 import { FrameExtractBlock } from '../nodes/FrameExtractBlock';
 import { HyperframesAgentBlock } from '../nodes/HyperframesAgentBlock';
 import { ImageGenBlock } from '../nodes/ImageGenBlock';
@@ -36,10 +37,9 @@ import {
 // narrow to it unchanged.
 //
 // This set is the IMPLEMENTED subset — a type is here only once it has a component. The
-// registry declares 27; `batch`, `export`, `layerEditor`, `element` and `designRef` have
-// their vocabulary but not their runtime, and registering a type with no implementation
-// is worse than leaving it out: React Flow renders nothing and the node looks broken
-// rather than absent.
+// registry declares 27; `batch` and `layerEditor` have their vocabulary but not their
+// runtime, and registering a type with no implementation is worse than leaving it out:
+// React Flow renders nothing and the node looks broken rather than absent.
 export const NODE_TYPES = new Set<StudioNodeType>([
   'nanoGen',
   'videoGen',
@@ -63,6 +63,9 @@ export const NODE_TYPES = new Set<StudioNodeType>([
   'frameExtract',
   'action',
   'router',
+  // Wave 3: terminal writer. `nodeTypes` below mounts it; the palette line in
+  // addNodeCatalog.ts graduates it.
+  'export',
   // Registered by the elements and design-reference shells in this same wave — their
   // components exist, so the declaration has to follow or the drift guard (rightly)
   // fails: a component in `nodeTypes` with no entry here is the exact half-landing
@@ -213,6 +216,7 @@ export const nodeTypes = {
   action: ActionNode,
   designRef: DesignRefNode,
   element: ElementNode,
+  export: ExportNode,
   router: RouterNode,
 };
 

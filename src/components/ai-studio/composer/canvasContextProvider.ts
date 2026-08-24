@@ -1,4 +1,10 @@
-import type { EventSignal, QuestionSignal, Skill, TrendSignal } from '@continuum/contracts';
+import type {
+  ElementRecord,
+  EventSignal,
+  QuestionSignal,
+  Skill,
+  TrendSignal,
+} from '@continuum/contracts';
 import { currentWeekStartDateUtc } from '@continuum/contracts';
 import {
   type FetchMediaMentionAssetsInput,
@@ -7,7 +13,14 @@ import {
   parseMediaFolderKey,
 } from '@/lib/agent/media-mentions';
 import type { AgentMentionProvider, AgentMentionSuggestion } from '@/lib/agent-references';
+import { ELEMENT_CATEGORY_LABEL } from '@/lib/ai-studio/elements';
 import { fetchBrandInsightsWeek } from '@/lib/api/brandInsights.client';
+import {
+  ELEMENTS_ROOT_KEY,
+  elementCategoryFolderKey,
+  elementSuggestionsByCategory,
+  parseElementCategoryFolderKey,
+} from './elementMentions';
 
 const SKILLS_ROOT_KEY = 'canvas-context:skills';
 const BRAND_SKILLS_KEY = 'canvas-context:brand-skills';
@@ -176,12 +189,15 @@ const isCanvasMedia = (suggestion: AgentMentionSuggestion): boolean => {
 export function createCanvasComposerMentionProvider({
   brandId,
   skills,
+  elements = [],
   fetchAssets = fetchMediaMentionAssets,
   fetchFolders = fetchMediaLibraryFolders,
   fetchSignals = fetchCanvasSignals,
 }: {
   brandId: string;
   skills: Skill[];
+  /** The brand's Elements. Already loaded by the composer — no fetch of its own. */
+  elements?: readonly ElementRecord[];
   fetchAssets?: FetchAssets;
   fetchFolders?: FetchFolders;
   fetchSignals?: FetchSignals;
@@ -189,6 +205,20 @@ export function createCanvasComposerMentionProvider({
   const skillSuggestions = skills.filter(isComposableSkill).map(skillToCanvasMentionSuggestion);
   const brandSkills = skillSuggestions.filter((item) => item.group === 'Brand skills');
   const librarySkills = skillSuggestions.filter((item) => item.group === 'Skill library');
+
+  // Elements are grouped by category (PRD feature 9) — and this menu's only grouping
+  // affordance is the folder drill, so a category IS a folder. Empty categories are
+  // not offered: a folder that opens on nothing is a dead end.
+  const elementsByCategory = elementSuggestionsByCategory(elements);
+  const elementSuggestions = [...elementsByCategory.values()].flat();
+  const elementCategoryFolders = [...elementsByCategory.entries()].map(([category, bucket]) =>
+    folder(
+      elementCategoryFolderKey(category),
+      ELEMENT_CATEGORY_LABEL[category],
+      'media_asset',
+      `${bucket.length} element${bucket.length === 1 ? '' : 's'}`,
+    ),
+  );
 
   // One read per provider instance: opening Signals, drilling into Trends and
   // then back into Questions must not re-fetch the week three times.
@@ -203,6 +233,9 @@ export function createCanvasComposerMentionProvider({
       if (!query.trim()) {
         return [
           folder(SKILLS_ROOT_KEY, 'Skills', 'skill', 'Brand skills & library'),
+          ...(elementSuggestions.length > 0
+            ? [folder(ELEMENTS_ROOT_KEY, 'Elements', 'media_asset', 'Saved subjects by category')]
+            : []),
           folder(MEDIA_ROOT_KEY, 'Media library', 'media_asset', 'Images & videos'),
           folder(SIGNALS_ROOT_KEY, 'Signals', 'trend', 'Trends, events, questions'),
         ];
@@ -213,6 +246,7 @@ export function createCanvasComposerMentionProvider({
       ]);
       return [
         ...skillSuggestions.filter((item) => matches(item, query)),
+        ...elementSuggestions.filter((item) => matches(item, query)),
         ...media.filter(isCanvasMedia),
         ...[...catalog.trends, ...catalog.events, ...catalog.questions].filter((item) =>
           matches(item, query),
@@ -230,6 +264,13 @@ export function createCanvasComposerMentionProvider({
         return brandSkills.filter((item) => matches(item, query));
       if (parent.key === SKILL_LIBRARY_KEY) {
         return librarySkills.filter((item) => matches(item, query));
+      }
+      if (parent.key === ELEMENTS_ROOT_KEY) return elementCategoryFolders;
+      const elementCategory = parseElementCategoryFolderKey(parent.key);
+      if (elementCategory) {
+        return (elementsByCategory.get(elementCategory) ?? []).filter((item) =>
+          matches(item, query),
+        );
       }
       if (parent.key === SIGNALS_ROOT_KEY) {
         return [

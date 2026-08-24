@@ -2,11 +2,12 @@ import { useCallback, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { resolveCaptionPreset } from '@/lib/clips/captionPresets';
 import { DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
 import { uploadCaptionAudio } from '@/lib/clips/clipClientCut';
 import type { TimelineInputSource, TimelineItem } from '../../types';
 import { extractTimelineAudioWav } from '../../utils/clip/extractTimelineAudioWav';
-import { groupWordsIntoCues } from '../../utils/splice/captionCues';
+import { applyEmphasisIndices, groupWordsIntoCues } from '../../utils/splice/captionCues';
 import type { TimelineEditorAdapter } from './adapter';
 
 // Auto-captions extract the output-time timeline audio, upload the WAV through the
@@ -82,7 +83,15 @@ export function useTimelineCaptions(adapter: TimelineEditorAdapter): UseTimeline
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ brandId: adapter.brandId, audioBucket, audioStoragePath }),
+        // Emphasis rides along with the transcription rather than costing a second round
+        // trip. The backend selector is fail-open, so an unreachable model costs the
+        // louder words and nothing else — this path can never block on Vertex.
+        body: JSON.stringify({
+          brandId: adapter.brandId,
+          audioBucket,
+          audioStoragePath,
+          emphasize: true,
+        }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -90,8 +99,9 @@ export function useTimelineCaptions(adapter: TimelineEditorAdapter): UseTimeline
       }
       const payload = (await res.json()) as {
         words?: { text: string; startSec: number; endSec: number }[];
+        emphasisIndices?: number[];
       };
-      const words = payload.words ?? [];
+      const words = applyEmphasisIndices(payload.words ?? [], payload.emphasisIndices);
       if (words.length === 0) {
         show({
           title: 'No speech detected',
@@ -103,7 +113,12 @@ export function useTimelineCaptions(adapter: TimelineEditorAdapter): UseTimeline
 
       patchDocument((document) => ({
         ...document,
-        captionCues: groupWordsIntoCues(words),
+        // Group at the ACTIVE preset's line length. Using the engine default here would
+        // quietly flatten every preset onto the same 6-word lines.
+        captionCues: groupWordsIntoCues(
+          words,
+          resolveCaptionPreset(document.captionStyle?.presetId).grouping,
+        ),
         captionWords: undefined,
         captionsEnabled: true,
         captionStyle: document.captionStyle ?? DEFAULT_CAPTION_STYLE,

@@ -2322,18 +2322,18 @@ describe('Canvas V3 runtime branches', () => {
     // Unreachable from the palette, but the MCP agent write path can create one. A
     // silent skip would report success for work that never happened; the generator
     // fallthrough would blame a missing prompt on a node that has none.
+    // (`export` graduated out of this list at the Wave-3 gate; layerEditor is the
+    // remaining not-yet-built runnable.)
     useStudioStore
       .getState()
-      .setNodes([
-        { id: 'exp', position: { x: 0, y: 0 }, type: 'export', data: { format: null } },
-      ]);
+      .setNodes([{ id: 'lay', position: { x: 0, y: 0 }, type: 'layerEditor', data: {} }]);
     useStudioStore.getState().setEdges([]);
 
-    await executeWorkflow(controls() as never, { targetNodeId: 'exp' });
+    await executeWorkflow(controls() as never, { targetNodeId: 'lay' });
 
-    const exported = useStudioStore.getState().nodes.find((n) => n.id === 'exp');
-    expect(String(exported?.data.error)).toContain('later release');
-    expect(String(exported?.data.error)).not.toContain('prompt');
+    const layered = useStudioStore.getState().nodes.find((n) => n.id === 'lay');
+    expect(String(layered?.data.error)).toContain('later release');
+    expect(String(layered?.data.error)).not.toContain('prompt');
   });
 });
 
@@ -2352,7 +2352,10 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
       controls: {
         executeGeneration,
         executeVideoExtension: mock(async () => ({ success: true })),
-        executeEnrichment: mock(async () => ({ success: true, output: { type: 'text', value: '' } })),
+        executeEnrichment: mock(async () => ({
+          success: true,
+          output: { type: 'text', value: '' },
+        })),
         registerController: () => new AbortController(),
         releaseController: () => {},
         show: () => {},
@@ -2407,7 +2410,9 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
     await executeWorkflow(c as never, {});
 
     expect(executeGeneration).toHaveBeenCalledTimes(1);
-    expect(useStudioStore.getState().nodes.find((n) => n.id === 'bench-gen')?.data.error).toBeFalsy();
+    expect(
+      useStudioStore.getState().nodes.find((n) => n.id === 'bench-gen')?.data.error,
+    ).toBeFalsy();
     expect(
       useStudioStore.getState().nodes.find((n) => n.id === 'bench-image')?.data.error,
     ).toBeFalsy();

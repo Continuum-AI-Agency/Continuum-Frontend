@@ -14,7 +14,11 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
 import { resolveCanvasDropBase64 } from '../utils/resolveCanvasDropBase64';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import { resolveSidebarDropTarget } from '../utils/resolveSidebarDropTarget';
+import {
+  resolveBurnInDropTarget,
+  resolveSidebarDropTarget,
+} from '../utils/resolveSidebarDropTarget';
+import { buildBurnInOverlay } from './useEdgeDropNode';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -186,8 +190,50 @@ export function useCanvasDnD() {
         };
         setNodes(nodes.concat(newNode));
         setEdges(edges.concat(newEdge));
-      } else {
-        setNodes(nodes.concat(newNode));
+        triggerSave();
+        return;
+      }
+
+      setNodes(nodes.concat(newNode));
+
+      // An image dropped ON a clip has no compatible handle to land on, so it would
+      // otherwise sit next to the clip doing nothing — the drop the user most obviously
+      // meant is the one with no effect. OFFER the burn-in rather than performing it:
+      // creating an action node unasked is worse than a toast the user can ignore.
+      const burnIn = resolveBurnInDropTarget(event.clientX, event.clientY, assetNodeType, nodes);
+      if (burnIn) {
+        show({
+          title: 'Burn this image into the clip?',
+          description: 'Adds a Burn In action wired to both, with a timed window you can set.',
+          variant: 'info',
+          action: {
+            label: 'Burn in as overlay',
+            onClick: () => {
+              // FRESH state, never the arrays captured at drop time. The toast sits on
+              // screen for seconds, and another drop, a finishing generation or a
+              // realtime sync can rewrite the canvas in that window — committing the
+              // captured arrays would silently discard whatever arrived meanwhile.
+              const store = useStudioStore.getState();
+              // The image may also be gone by now (the user deleted it, or a realtime
+              // sync did). Wiring an edge to a node that no longer exists is worse than
+              // doing nothing.
+              if (!store.nodes.some((node) => node.id === newNode.id)) return;
+
+              store.takeSnapshot();
+              const overlay = buildBurnInOverlay({
+                videoNodeId: burnIn.videoNodeId,
+                videoHandleId: burnIn.videoHandleId,
+                imageNodeId: newNode.id,
+                imageHandleId: assetNodeType,
+                position,
+                pathType: defaultEdgeType,
+              });
+              store.setNodes([...store.nodes, overlay.node as StudioNode]);
+              store.setEdges([...store.edges, ...overlay.edges]);
+              store.triggerSave();
+            },
+          },
+        });
       }
 
       triggerSave();

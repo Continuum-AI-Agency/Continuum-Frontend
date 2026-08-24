@@ -21,6 +21,7 @@ import { streamCanvasComposer } from '@/lib/ai-studio/composer/streamCanvasCompo
 import { http } from '@/lib/api/http';
 import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
 import type { StudioNode } from '@/StudioCanvas/types';
+import { appendElementGrounding } from './elementMentions';
 
 // The composer's transcript and optimistic graph projection. Durable mutations
 // land server-side first; composer.patch mirrors each committed graph immediately
@@ -283,6 +284,12 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
         references?: AgentMentionReference[];
         thinking?: boolean;
         editorContext?: CanvasEditorContext;
+        /**
+         * Prose that must reach the model but never the transcript — today the
+         * `<elements>` block naming what each mentioned Element's images are. The
+         * turn keeps what the user typed; only the wire carries the grounding.
+         */
+        grounding?: string;
       },
     ) => {
       if (!brandProfileId || !roomId || !prompt.trim()) return;
@@ -316,7 +323,7 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
             brandProfileId,
             roomId,
             idempotencyKey,
-            prompt: prompt.trim(),
+            prompt: appendElementGrounding(prompt.trim(), options?.grounding ?? ''),
             ...(options?.thinking ? { thinking: true } : {}),
             ...(selectedNodeIds?.length ? { selectedNodeIds } : {}),
             ...(references.length ? { references } : {}),

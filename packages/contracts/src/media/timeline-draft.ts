@@ -65,6 +65,10 @@ export const timelineDraftCaptionWordSchema = z
     text: z.string(),
     startSec: z.number(),
     endSec: z.number(),
+    // The word carries visual emphasis. This schema is `.strict()`, so without the key a
+    // draft holding an emphasised word is rejected outright rather than degraded — which
+    // is why it lands in the same change as the renderer that reads it.
+    emphasis: z.boolean().optional(),
   })
   .strict();
 export type TimelineDraftCaptionWord = z.infer<typeof timelineDraftCaptionWordSchema>;

@@ -23,6 +23,9 @@ import {
   configFieldsFor,
   parseActionConfig,
 } from '../../utils/actions/actionConfig';
+import { isOverlayActionId } from '../../utils/actions/overlayOp';
+import { OverlayConfig } from './OverlayConfig';
+import { SubtitlesConfig } from './SubtitlesConfig';
 
 /** Clears a `nullable` field back to null. `null` means "no window"/"auto" and is NOT
  *  0 or the empty string — five registry fields default to it (`video.subtitles`'s
@@ -167,27 +170,41 @@ export function ActionConfigPopover({
       />
       <PopoverContent
         align="end"
-        className="nodrag nowheel max-h-80 w-64 overflow-y-auto"
+        className={
+          actionId === 'video.subtitles'
+            ? 'nodrag nowheel max-h-[70vh] w-[420px] overflow-y-auto'
+            : isOverlayActionId(actionId)
+              ? 'nodrag nowheel max-h-96 w-72 overflow-y-auto'
+              : 'nodrag nowheel max-h-80 w-64 overflow-y-auto'
+        }
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex flex-col gap-3">
-          {fields.map((field) => {
-            const controlId = `action-config-${nodeId}-${field.key}`;
-            return (
-              <div key={field.key} className="flex flex-col gap-1">
-                <Label htmlFor={controlId} className="text-xs">
-                  {field.label}
-                </Label>
-                <ConfigControl
-                  field={field}
-                  value={current[field.key]}
-                  controlId={controlId}
-                  onChange={(next) => write(field.key, next)}
-                />
-              </div>
-            );
-          })}
-        </div>
+        {/* Body swap only — no early return before useNodeConfigPatch(), because
+            switching a mounted node's op must not change the hook count. */}
+        {actionId === 'video.subtitles' ? (
+          <SubtitlesConfig nodeId={nodeId} config={current} onWrite={write} />
+        ) : isOverlayActionId(actionId) ? (
+          <OverlayConfig nodeId={nodeId} actionId={actionId} config={config} />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {fields.map((field) => {
+              const controlId = `action-config-${nodeId}-${field.key}`;
+              return (
+                <div key={field.key} className="flex flex-col gap-1">
+                  <Label htmlFor={controlId} className="text-xs">
+                    {field.label}
+                  </Label>
+                  <ConfigControl
+                    field={field}
+                    value={current[field.key]}
+                    controlId={controlId}
+                    onChange={(next) => write(field.key, next)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

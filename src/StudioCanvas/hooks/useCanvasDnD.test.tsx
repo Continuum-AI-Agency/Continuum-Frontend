@@ -43,9 +43,14 @@ let creativeAssetDropResult: CreativeAssetDropResult = {
   mimeType: 'image/png',
 };
 let sidebarDropTarget: SidebarDropTarget = null;
+type BurnInDropOffer = ReturnType<
+  typeof import('../utils/resolveSidebarDropTarget').resolveBurnInDropTarget
+>;
+let burnInDropTarget: BurnInDropOffer = null;
 
 const resolveCreativeAssetDrop = mock(async () => creativeAssetDropResult);
 const resolveSidebarDropTarget = mock(() => sidebarDropTarget);
+const resolveBurnInDropTarget = mock(() => burnInDropTarget);
 
 // bun's mock.module MERGES into an already-loaded module and REPLACES one that
 // has never been loaded, and it is process-wide for the whole run. Both matter
@@ -70,7 +75,10 @@ mock.module('../stores/useStudioStore', () => ({
   useStudioStore: useStudioStoreMock,
 }));
 mock.module('../utils/resolveCreativeAssetDrop', () => ({ resolveCreativeAssetDrop }));
-mock.module('../utils/resolveSidebarDropTarget', () => ({ resolveSidebarDropTarget }));
+mock.module('../utils/resolveSidebarDropTarget', () => ({
+  resolveSidebarDropTarget,
+  resolveBurnInDropTarget,
+}));
 
 const { useCanvasDnD } = await import('./useCanvasDnD');
 
@@ -109,6 +117,7 @@ describe('useCanvasDnD', () => {
       mimeType: 'image/png',
     };
     sidebarDropTarget = null;
+    burnInDropTarget = null;
     preventDefault.mockClear();
     show.mockClear();
     takeSnapshot.mockClear();
@@ -118,6 +127,7 @@ describe('useCanvasDnD', () => {
     screenToFlowPosition.mockClear();
     resolveCreativeAssetDrop.mockClear();
     resolveSidebarDropTarget.mockClear();
+    resolveBurnInDropTarget.mockClear();
   });
 
   afterEach(cleanup);
@@ -324,5 +334,91 @@ describe('useCanvasDnD', () => {
     expect(setNodes).not.toHaveBeenCalled();
     expect(setEdges).not.toHaveBeenCalled();
     expect(triggerSave).not.toHaveBeenCalled();
+  });
+});
+
+describe('useCanvasDnD burn-in offer', () => {
+  const CLIP: StudioNode = {
+    id: 'clip-1',
+    type: 'video',
+    position: { x: 0, y: 0 },
+    data: {},
+  } as StudioNode;
+
+  const dropOnClip = async () => {
+    burnInDropTarget = { videoNodeId: 'clip-1', videoHandleId: 'video' };
+    const { result } = renderHook(() => useCanvasDnD());
+    await act(async () => {
+      await result.current.onDrop(buildDragEvent({ data: { 'text/plain': 'asset-payload' } }));
+    });
+    const accept = show.mock.calls.at(-1)?.[0]?.action;
+    if (!accept) throw new Error('the burn-in offer was never shown');
+    const appended = setNodes.mock.calls.at(-1)?.[0] as StudioNode[];
+    return { imageNode: appended.at(-1) as StudioNode, accept };
+  };
+
+  // A sibling describe, so the suite-level beforeEach above does not reach it — the
+  // state it resets is reset here too, or a leftover sidebarDropTarget from the last
+  // test sends this drop down the connect path and no offer is ever shown.
+  beforeEach(() => {
+    store.nodes = [CLIP];
+    store.edges = [];
+    sidebarDropTarget = null;
+    burnInDropTarget = null;
+    creativeAssetDropResult = {
+      status: 'success',
+      nodeType: 'image',
+      dataUrl: 'data:image/png;base64,AAA',
+      mimeType: 'image/png',
+    };
+    show.mockClear();
+    setNodes.mockClear();
+    setEdges.mockClear();
+    takeSnapshot.mockClear();
+    triggerSave.mockClear();
+  });
+
+  afterEach(cleanup);
+
+  it('reads FRESH canvas state when the offer is accepted, not the arrays from drop time', async () => {
+    const { imageNode, accept } = await dropOnClip();
+
+    // Everything the drop captured is now stale: another node arrived and an edge with
+    // it. Committing the captured arrays would silently delete both.
+    const arrivedLater: StudioNode = {
+      id: 'arrived-later',
+      type: 'nanoGen',
+      position: { x: 900, y: 900 },
+      data: {},
+    } as StudioNode;
+    const edgeArrivedLater = { id: 'e-later', source: 'a', target: 'b' };
+    store.nodes = [CLIP, imageNode, arrivedLater];
+    store.edges = [edgeArrivedLater];
+    setNodes.mockClear();
+    setEdges.mockClear();
+
+    act(() => accept.onClick());
+
+    const written = setNodes.mock.calls.at(-1)?.[0] as StudioNode[];
+    const writtenEdges = setEdges.mock.calls.at(-1)?.[0] as { id: string }[];
+    expect(written.map((node) => node.id)).toContain('arrived-later');
+    expect(written.filter((node) => node.id === imageNode.id)).toHaveLength(1);
+    expect(written.some((node) => node.type === 'action')).toBe(true);
+    expect(writtenEdges.map((edge) => edge.id)).toContain('e-later');
+    expect(writtenEdges).toHaveLength(3);
+  });
+
+  it('does nothing when the dropped image is gone by the time the offer is accepted', async () => {
+    const { accept } = await dropOnClip();
+    store.nodes = [CLIP];
+    setNodes.mockClear();
+    setEdges.mockClear();
+    takeSnapshot.mockClear();
+
+    act(() => accept.onClick());
+
+    expect(setNodes).not.toHaveBeenCalled();
+    expect(setEdges).not.toHaveBeenCalled();
+    expect(takeSnapshot).not.toHaveBeenCalled();
   });
 });

@@ -195,7 +195,7 @@ describe('Canvas V3 registration', () => {
     // their own shells land.
     expect(NODE_TYPES.has('action')).toBe(true);
     expect(NODE_TYPES.has('router')).toBe(true);
-    for (const notYet of ['batch', 'export', 'layerEditor'] as const) {
+    for (const notYet of ['batch', 'layerEditor'] as const) {
       expect(NODE_TYPES.has(notYet), notYet).toBe(false);
     }
   });

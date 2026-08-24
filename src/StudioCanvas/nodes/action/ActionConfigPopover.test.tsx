@@ -38,9 +38,57 @@ mock.module('@/components/ui/select', () => ({
   ),
 }));
 
+// Same checkbox stand-in as SubtitlesConfig.test.tsx. Bun registers every file's
+// mock.module before any test runs, so when the action tests run together this mock is
+// active no matter which file registered last — matching it keeps this file's switch
+// assertions identical standalone and in a combined run.
+mock.module('@/components/ui/switch', () => ({
+  Switch: ({
+    id,
+    checked,
+    onCheckedChange,
+  }: {
+    id?: string;
+    checked?: boolean;
+    onCheckedChange?: (checked: boolean) => void;
+  }) => (
+    <input
+      id={id}
+      type="checkbox"
+      checked={checked}
+      onChange={(event) => onCheckedChange?.(event.target.checked)}
+    />
+  ),
+}));
+
 const patch = mock();
 mock.module('../../hooks/useNodeConfigPatch', () => ({
   useNodeConfigPatch: () => patch,
+}));
+
+// video.overlay / video.watermark route to the bespoke OverlayConfig panel, which reads
+// the canvas store, the brand book and the asset signer. Those boundaries are stubbed
+// the same way OverlayConfig.test.tsx stubs them — this file only asserts the popover
+// ROUTES to the panel, not the panel's own behavior.
+mock.module('../../stores/useStudioStore', () => ({
+  useStudioStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      nodes: [{ id: 'node-1', type: 'action', position: { x: 500, y: 300 }, data: {} }],
+      edges: [],
+      setNodes: mock(),
+      setEdges: mock(),
+      defaultEdgeType: 'bezier',
+      brandId: 'brand-1',
+    }),
+}));
+mock.module('@/lib/brands/useBrandBook.client', () => ({
+  useBrandBook: () => ({ brandTokens: null, brandBook: null, isLoading: false, isError: false }),
+}));
+mock.module('@/lib/creative-assets/storageClient', () => ({
+  createSignedAssetUrl: mock(async () => 'https://signed.test/logo.png'),
+}));
+mock.module('@/lib/creative-assets/config', () => ({
+  getCreativeAssetsBucket: () => 'brand-profile-assets',
 }));
 
 import type { ActionId } from '@continuum/contracts';
@@ -69,11 +117,12 @@ describe('ActionConfigPopover', () => {
     expect((numbers[0] as HTMLInputElement).value).toBe('90');
   });
 
-  it('renders text.findReplace as two text inputs and one boolean', () => {
+  it('renders text.findReplace as two text inputs and three booleans', () => {
     const { container } = renderPopover('text.findReplace');
 
     expect(container.querySelectorAll('input[type="text"]').length).toBe(2);
-    expect(container.querySelectorAll('[role="switch"]').length).toBe(1);
+    // find/replace plus the caseSensitive, regex and wholeWord flags.
+    expect(container.querySelectorAll('input[type="checkbox"]').length).toBe(3);
   });
 
   it('renders an enum field as a select over the schema options', () => {
@@ -82,7 +131,22 @@ describe('ActionConfigPopover', () => {
     const options = Array.from(getByTestId('config-select').querySelectorAll('option')).map(
       (option) => option.getAttribute('value'),
     );
-    expect(options).toEqual(['none', 'noir', 'vivid', 'faded', 'warm', 'cool', 'mono']);
+    expect(options).toEqual([
+      'none',
+      'noir',
+      'vivid',
+      'faded',
+      'fade',
+      'warm',
+      'cool',
+      'mono',
+      'grayscale',
+      'sepia',
+      'duotone',
+      'clarendon',
+      'moon',
+      'nashville',
+    ]);
   });
 
   it('patches the whole merged config when a value changes', () => {
@@ -101,7 +165,8 @@ describe('ActionConfigPopover', () => {
   it('flips a boolean through the switch', () => {
     const { container } = renderPopover('text.findReplace');
 
-    fireEvent.click(container.querySelector('[role="switch"]') as HTMLElement);
+    // The first flag in schema order is caseSensitive.
+    fireEvent.click(container.querySelector('input[type="checkbox"]') as HTMLElement);
 
     expect(patch).toHaveBeenCalledWith('node-1', 'action', {
       config: { ...parseActionConfig('text.findReplace', {}), caseSensitive: true },
@@ -109,27 +174,43 @@ describe('ActionConfigPopover', () => {
   });
 
   it('sets a nullable field back to null rather than to zero', () => {
-    // `startSec: null` on video.overlay means "no window", which 0 ("start at zero")
-    // would silently change into a real value.
-    const { getByLabelText } = renderPopover('video.overlay', { startSec: 2 });
+    // `maxParts: null` on text.split means "no cap", which 0 would silently change
+    // into a real value.
+    const { getByLabelText } = renderPopover('text.split', { maxParts: 2 });
 
-    fireEvent.click(getByLabelText('Clear Start Seconds'));
+    fireEvent.click(getByLabelText('Clear Max Parts'));
 
     expect(patch).toHaveBeenCalledWith('node-1', 'action', {
-      config: { ...parseActionConfig('video.overlay', { startSec: 2 }), startSec: null },
+      config: { ...parseActionConfig('text.split', { maxParts: 2 }), maxParts: null },
     });
   });
 
   it('clears a nullable number when its input is emptied', () => {
-    const { container } = renderPopover('video.overlay', { startSec: 2 });
-    const startSec = Array.from(
+    const { container } = renderPopover('text.split', { maxParts: 2 });
+    const maxParts = Array.from(
       container.querySelectorAll<HTMLInputElement>('input[type="number"]'),
     ).find((input) => input.value === '2');
 
-    fireEvent.change(startSec as HTMLInputElement, { target: { value: '' } });
+    fireEvent.change(maxParts as HTMLInputElement, { target: { value: '' } });
 
     expect(patch).toHaveBeenCalledWith('node-1', 'action', {
-      config: { ...parseActionConfig('video.overlay', { startSec: 2 }), startSec: null },
+      config: { ...parseActionConfig('text.split', { maxParts: 2 }), maxParts: null },
     });
+  });
+
+  it('routes video.subtitles to the SubtitlesConfig panel', () => {
+    const { getByRole } = renderPopover('video.subtitles');
+
+    // The preset gallery is SubtitlesConfig's own UI — the generic renderer would
+    // have drawn a select for `preset`, never a labelled chip.
+    expect(getByRole('button', { name: /^Pop —/ })).toBeDefined();
+  });
+
+  it('routes video.overlay to the OverlayConfig panel', () => {
+    const { getByLabelText } = renderPopover('video.overlay');
+
+    // The 3x3 position picker exists only in OverlayConfig; the generic renderer
+    // would have drawn a plain enum select.
+    expect(getByLabelText('Bottom left')).toBeDefined();
   });
 });

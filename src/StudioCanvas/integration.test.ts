@@ -14,6 +14,11 @@ describe('StudioCanvas Integration', () => {
       nodes: [],
       edges: [],
       defaultEdgeType: 'bezier',
+      // The runtime refuses to generate with no brand selected ("No brand selected",
+      // executeWorkflow's brand gate). The store default is undefined, so a fixture
+      // without this dies at the first generator and every downstream node reports
+      // "Upstream dependency failed" — which is what this test's old red actually was.
+      brandId: 'bench-brand',
     });
 
     if (!originalUpdateNodeData) {

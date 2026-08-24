@@ -10,6 +10,7 @@ describe('buildAudioBedPlanItems', () => {
         input: fakeInput,
         sourceStartSec: 1.25,
         sourceEndSec: 6,
+        speed: 1,
         outputStartSec: 3.5,
         gain: 0.65,
         fadeInSec: 0.4,

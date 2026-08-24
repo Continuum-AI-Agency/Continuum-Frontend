@@ -58,6 +58,7 @@ export const STUDIO_CANVAS_NODE_TYPES = [
   'frameExtract',
   'action',
   'router',
+  'export',
   'element',
   'designRef',
 ] as const satisfies readonly StudioNodeType[];

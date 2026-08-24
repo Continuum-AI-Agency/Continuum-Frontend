@@ -17,8 +17,8 @@ describe('ACTION_DEFS', () => {
   // A count, not a floor: silently trimming the catalog is exactly the drift this
   // registry exists to stop, and a shrinking list should have to be edited on purpose.
   it('declares the whole catalog up front', () => {
-    expect(ACTION_IDS).toHaveLength(31);
-    expect(ACTION_IDS.filter((id) => id.startsWith('image.'))).toHaveLength(9);
+    expect(ACTION_IDS).toHaveLength(32);
+    expect(ACTION_IDS.filter((id) => id.startsWith('image.'))).toHaveLength(10);
     expect(ACTION_IDS.filter((id) => id.startsWith('video.'))).toHaveLength(19);
     expect(ACTION_IDS.filter((id) => id.startsWith('text.'))).toHaveLength(3);
   });
@@ -71,7 +71,12 @@ describe('ACTION_DEFS', () => {
 
   it('marks the ops whose runtime emits several items', () => {
     const collections = ACTION_IDS.filter((id) => ACTION_DEFS[id].outputsCollection);
-    expect([...collections].sort()).toEqual(['text.split', 'video.extractFrames', 'video.split']);
+    expect([...collections].sort()).toEqual([
+      'image.duplicate',
+      'text.split',
+      'video.extractFrames',
+      'video.split',
+    ]);
   });
 });
 

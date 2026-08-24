@@ -1,11 +1,11 @@
 // The registry's job is to route, refuse, and shape the engine's input. Those three
 // are pure and are what is asserted here.
 //
-// NOT covered: the mediabunny encode inside `videoSpeed` itself. Reaching it means
-// mocking `composeTimeline`, and `mock.module` in bun is process-wide — it would leak
-// into every other file in the same run. The encode is exercised by the real worker,
-// and `studio:actions:smoke:e2e:bench` drives the sync (`image.rotate`) half of the
-// dispatcher end to end. A worker-op bench lands with Wave 3's video action shell.
+// NOT covered: the mediabunny encode inside any engine. Reaching it means mocking
+// `composeTimeline`, and `mock.module` in bun is process-wide — it would leak into
+// every other file in the same run. The encodes are proven end to end by
+// `studio:actions:video:e2e:bench`, which grades reverse, boomerang, speed, split,
+// long exposure and greenscreen on DECODED PIXELS of a frame-numbered fixture.
 
 import { describe, expect, it } from 'bun:test';
 import { ACTION_DEFS, ACTION_IDS, type ActionId } from '@continuum/contracts';
@@ -14,6 +14,7 @@ import {
   ACTION_ENGINES,
   type ActionEngineArgs,
   actionEngine,
+  renderSplitParts,
   requireInput,
   speedTimelineItem,
 } from './actionEngines';
@@ -24,6 +25,45 @@ const argsWith = (inputs: { handle: string; blob: Blob }[]): ActionEngineArgs =>
   inputs,
   config: {},
 });
+
+/** Every video op this shell shipped an engine for. */
+const WAVE_3_VIDEO_ENGINES: ActionId[] = [
+  'video.grade',
+  'video.filter',
+  'video.effect',
+  'video.blur',
+  'video.speed',
+  'video.kenBurns',
+  'video.stitch',
+  'video.split',
+  'video.crop',
+  'video.pad',
+  'video.greenscreen',
+  'video.reverse',
+  'video.boomerang',
+];
+
+/**
+ * Engine ids `runAction.ts`'s `WORKER_OPS_WITH_ENGINES` has not been given yet.
+ *
+ * Self-emptying ratchet: wiring an id makes the test below fail until its entry is
+ * deleted. The Wave-3 wiring landed, so the list is empty — its goal state.
+ */
+const PENDING_RUN_ACTION_WIRING: ActionId[] = [];
+
+/**
+ * Worker ops implemented WITHOUT an entry in `ACTION_ENGINES`. `video.overlay` and
+ * `video.watermark` build their plan on the main thread and post `start_timeline`;
+ * `video.subtitles` orchestrates an authenticated transcribe round trip and then posts
+ * `start_single_source`. All three have a runner and an enabled Run button but no
+ * engine here. Named rather than loosened, so a FOURTH op arriving this way has to
+ * say so.
+ */
+const IMPLEMENTED_OUTSIDE_THE_ENGINE_TABLE: ActionId[] = [
+  'video.overlay',
+  'video.watermark',
+  'video.subtitles',
+];
 
 describe('ACTION_ENGINES', () => {
   it('registers only ops the catalog marks as worker execution', () => {
@@ -38,14 +78,32 @@ describe('ACTION_ENGINES', () => {
     }
   });
 
-  it('ships video.speed as this wave’s one proof op', () => {
-    expect(Object.keys(ACTION_ENGINES)).toEqual(['video.speed']);
+  it('ships the wave-3 video catalog', () => {
+    expect(Object.keys(ACTION_ENGINES).sort()).toEqual([...WAVE_3_VIDEO_ENGINES].sort());
+  });
+
+  it('leaves exactly the three worker ops that belong to another shell', () => {
+    // Named, not counted: an engine that quietly went missing would still pass a count.
+    const missing = ACTION_IDS.filter(
+      (id) => ACTION_DEFS[id].execution === 'worker' && !(id in ACTION_ENGINES),
+    );
+    expect(missing.sort()).toEqual(
+      [
+        // The subtitles shell.
+        'video.subtitles',
+        // The burn-in shell.
+        'video.overlay',
+        'video.watermark',
+      ].sort(),
+    );
   });
 });
 
 describe('actionEngine', () => {
-  it('returns the engine for a registered worker op', () => {
-    expect(typeof actionEngine('video.speed')).toBe('function');
+  it('returns the engine for every registered worker op', () => {
+    for (const id of WAVE_3_VIDEO_ENGINES) {
+      expect(typeof actionEngine(id), id).toBe('function');
+    }
   });
 
   it('refuses a sync op by name rather than running it in the worker', () => {
@@ -53,8 +111,12 @@ describe('actionEngine', () => {
     expect(() => actionEngine('image.rotate')).toThrow(/runs in the page/);
   });
 
+  it('refuses long exposure to the worker — it is a sync op that emits a still', () => {
+    expect(() => actionEngine('video.longExposure')).toThrow(/runs in the page/);
+  });
+
   it('refuses a declared-but-unimplemented worker op by its label', () => {
-    expect(() => actionEngine('video.reverse')).toThrow(/not implemented yet/);
+    expect(() => actionEngine('video.subtitles')).toThrow(/not implemented yet/);
   });
 });
 
@@ -93,14 +155,40 @@ describe('speedTimelineItem', () => {
   });
 });
 
+describe('renderSplitParts', () => {
+  it('is exported for the worker’s outputsCollection branch', () => {
+    expect(typeof renderSplitParts).toBe('function');
+  });
+
+  it('refuses before it decodes anything when nothing is wired', async () => {
+    await expect(renderSplitParts(argsWith([]))).rejects.toThrow(/"in" input/);
+  });
+});
+
 describe('the engine table and the node UI agree', () => {
   it('registers an engine for exactly the worker ops the UI enables', () => {
     // `isImplementedAction` keeps its own copy of this list so the node UI does not
     // import mediabunny. This is the assertion that stops the two from drifting — and
     // a drift here means a Run button that is enabled on an op with no engine.
     const enabled = ACTION_IDS.filter(
-      (id) => ACTION_DEFS[id].execution === 'worker' && isImplementedAction(id),
+      (id) =>
+        ACTION_DEFS[id].execution === 'worker' &&
+        isImplementedAction(id) &&
+        !IMPLEMENTED_OUTSIDE_THE_ENGINE_TABLE.includes(id),
     );
-    expect([...enabled].sort()).toEqual(Object.keys(ACTION_ENGINES).sort());
+    expect([...enabled, ...PENDING_RUN_ACTION_WIRING].sort()).toEqual(
+      Object.keys(ACTION_ENGINES).sort(),
+    );
+  });
+
+  it('holds nothing in the pending list that runAction has already been given', () => {
+    // Self-emptying by design: wiring an id makes this fail until its entry is deleted.
+    expect(PENDING_RUN_ACTION_WIRING.filter(isImplementedAction)).toEqual([]);
+  });
+
+  it('never lists an op in the pending list that has no engine', () => {
+    for (const id of PENDING_RUN_ACTION_WIRING) {
+      expect(ACTION_ENGINES[id], `${id} engine`).toBeDefined();
+    }
   });
 });

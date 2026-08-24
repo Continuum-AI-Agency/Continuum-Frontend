@@ -65,27 +65,35 @@ describe('configFieldsFor across the whole registry', () => {
 });
 
 describe('configFieldsFor per op', () => {
-  it('reads image.rotate as one bounded number', () => {
-    expect(configFieldsFor('image.rotate')).toEqual([
-      {
-        key: 'degrees',
-        label: 'Degrees',
-        kind: 'number',
-        min: -360,
-        max: 360,
-        step: 1,
-        nullable: false,
-        defaultValue: 90,
-      },
+  it('reads image.rotate as a bounded angle plus expand and background', () => {
+    const fields = configFieldsFor('image.rotate');
+    expect(fields.map((field) => [field.key, field.kind])).toEqual([
+      ['degrees', 'number'],
+      ['expand', 'boolean'],
+      ['background', 'string'],
     ]);
+    expect(fields[0]).toEqual({
+      key: 'degrees',
+      label: 'Degrees',
+      kind: 'number',
+      min: -360,
+      max: 360,
+      step: 1,
+      nullable: false,
+      defaultValue: 90,
+    });
+    expect(fields[2]?.nullable).toBe(true);
+    expect(fields[2]?.defaultValue).toBeNull();
   });
 
-  it('reads text.findReplace as two strings and a boolean', () => {
+  it('reads text.findReplace as two strings and three booleans', () => {
     const fields = configFieldsFor('text.findReplace');
     expect(fields.map((field) => [field.key, field.kind])).toEqual([
       ['find', 'string'],
       ['replace', 'string'],
       ['caseSensitive', 'boolean'],
+      ['regex', 'boolean'],
+      ['wholeWord', 'boolean'],
     ]);
     expect(fields[2]?.label).toBe('Case Sensitive');
     expect(fields[2]?.defaultValue).toBe(false);
@@ -133,7 +141,11 @@ describe('configFieldsFor per op', () => {
 
 describe('parseActionConfig', () => {
   it('keeps a valid stored override and fills the rest from the schema', () => {
-    expect(parseActionConfig('image.rotate', { degrees: 45 })).toEqual({ degrees: 45 });
+    expect(parseActionConfig('image.rotate', { degrees: 45 })).toEqual({
+      degrees: 45,
+      expand: true,
+      background: null,
+    });
     expect(parseActionConfig('video.subtitles', { emphasize: false })).toEqual({
       preset: 'pop',
       emphasize: false,
@@ -141,19 +153,22 @@ describe('parseActionConfig', () => {
     });
   });
 
+  const ROTATE_DEFAULTS = { degrees: 90, expand: true, background: null };
+
   it('falls back to defaults rather than throwing on a value that no longer validates', () => {
-    expect(parseActionConfig('image.rotate', { degrees: 9000 })).toEqual({ degrees: 90 });
-    expect(parseActionConfig('image.rotate', { degrees: 'sideways' })).toEqual({ degrees: 90 });
+    expect(parseActionConfig('image.rotate', { degrees: 9000 })).toEqual(ROTATE_DEFAULTS);
+    expect(parseActionConfig('image.rotate', { degrees: 'sideways' })).toEqual(ROTATE_DEFAULTS);
   });
 
   it('treats a missing or non-object stored config as untouched defaults', () => {
     for (const raw of [undefined, null, 'garbage', 42, []]) {
-      expect(parseActionConfig('image.rotate', raw)).toEqual({ degrees: 90 });
+      expect(parseActionConfig('image.rotate', raw)).toEqual(ROTATE_DEFAULTS);
     }
   });
 
   it('drops keys the schema does not declare', () => {
     expect(parseActionConfig('image.rotate', { degrees: 45, leftover: true })).toEqual({
+      ...ROTATE_DEFAULTS,
       degrees: 45,
     });
   });

@@ -1,4 +1,5 @@
 import type { ActionId } from '@continuum/contracts';
+import type { CaptionFontPayload } from '@/lib/clips/captionFonts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
 import type {
@@ -31,7 +32,9 @@ export type RunSingleSourceSpliceInWorkerOptions = {
   ranges: SingleSourceWorkerRange[];
   maxShortEdgePx?: number;
   captionWords?: CaptionWord[];
+  captionCues?: CaptionCue[];
   captionStyle?: CaptionStyle;
+  captionFonts?: CaptionFontPayload[];
   videoBitrate?: number;
   audioBitrate?: number;
   signal?: AbortSignal;
@@ -51,6 +54,7 @@ export type RunTimelineInWorkerOptions = {
   captionCues?: CaptionCue[];
   captionWords?: CaptionWord[];
   captionStyle?: CaptionStyle;
+  captionFonts?: CaptionFontPayload[];
   signal?: AbortSignal;
   onProgress?: (progress: WorkerSpliceProgress) => void;
   workerFactory?: () => Worker;
@@ -73,6 +77,9 @@ export type WorkerSpliceResult = {
   width: number;
   height: number;
   durationSec: number;
+  // Set only by `outputsCollection` ops (today: video.split); the top-level fields
+  // carry the first part. The caller decides which parts become object URLs.
+  parts?: { blob: Blob; width: number; height: number; durationSec: number }[];
 };
 
 type WorkerJobOptions = {
@@ -152,6 +159,7 @@ function runWorkerJob(
               width: message.width,
               height: message.height,
               durationSec: message.durationSec,
+              ...(message.parts ? { parts: message.parts } : {}),
             });
           });
           return;
@@ -218,8 +226,17 @@ export function runSpliceInWorker(options: RunSpliceInWorkerOptions): Promise<Wo
 export function runSingleSourceSpliceInWorker(
   options: RunSingleSourceSpliceInWorkerOptions,
 ): Promise<WorkerSpliceResult> {
-  const { blob, ranges, maxShortEdgePx, captionWords, captionStyle, videoBitrate, audioBitrate } =
-    options;
+  const {
+    blob,
+    ranges,
+    maxShortEdgePx,
+    captionWords,
+    captionCues,
+    captionStyle,
+    captionFonts,
+    videoBitrate,
+    audioBitrate,
+  } = options;
   if (ranges.length < 1) {
     return Promise.reject(new Error('Single-source splice requires at least one range'));
   }
@@ -230,7 +247,9 @@ export function runSingleSourceSpliceInWorker(
       ranges,
       maxShortEdgePx,
       captionWords,
+      captionCues,
       captionStyle,
+      captionFonts,
       videoBitrate,
       audioBitrate,
     },
@@ -271,6 +290,7 @@ export function runTimelineInWorker(
     captionCues,
     captionWords,
     captionStyle,
+    captionFonts,
   } = options;
   if (items.length < 1) {
     return Promise.reject(new Error('Timeline requires at least one item'));
@@ -289,6 +309,7 @@ export function runTimelineInWorker(
       captionCues,
       captionWords,
       captionStyle,
+      captionFonts,
     },
     options,
   );

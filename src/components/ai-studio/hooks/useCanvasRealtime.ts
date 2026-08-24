@@ -138,6 +138,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   );
   const syncLatestCanvasSessionRef = useRef<(() => Promise<void>) | null>(null);
   const refillMediaRef = useRef<((nodes: StudioNode[]) => Promise<void>) | null>(null);
+  const saveCanvasToDatabaseRef = useRef<(() => Promise<void>) | null>(null);
   // Durable pointers (bucket\npath) already re-signed this mount — guards against
   // re-signing the same media on every catch-up.
   const resignedPathsRef = useRef<Set<string>>(new Set());
@@ -413,6 +414,18 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       useStudioStore.getState().resetForRoomSwitch();
     }
 
+    // A save requested before the room finished loading parks in pendingSaveRef, but
+    // the effect that drains it is edge-triggered on isLoading. A bootstrap that
+    // completes without an isLoading edge — the previous room's post-load timer has
+    // already flipped it false — strands that save forever, so the first write into a
+    // room with no canvas_sessions row is silently lost. Drain here instead: the
+    // bootstrap completing IS the condition, and every branch below passes through it.
+    const flushPendingSave = () => {
+      if (!pendingSaveRef.current || saveInFlightRef.current) return;
+      pendingSaveRef.current = false;
+      void saveCanvasToDatabaseRef.current?.();
+    };
+
     const loadInitialState = async () => {
       setIsLoading(true);
       hasLoadedInitialDataRef.current = false;
@@ -431,6 +444,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         console.error('[Canvas Sync] Load failed', formatDbError(error));
         hasLoadedInitialDataRef.current = true;
         setIsLoading(false);
+        flushPendingSave();
         return;
       }
 
@@ -495,6 +509,8 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         store.setNodes([]);
         store.setEdges([]);
       }
+
+      flushPendingSave();
     };
 
     loadInitialState();
@@ -789,6 +805,13 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       }
     }
   }, [brandProfileId, roomId, supabase, status, user?.id]);
+
+  useEffect(() => {
+    saveCanvasToDatabaseRef.current = saveCanvasToDatabase;
+    return () => {
+      saveCanvasToDatabaseRef.current = null;
+    };
+  }, [saveCanvasToDatabase]);
 
   const saveTrigger = useStudioStore((state) => state.saveTrigger);
   useEffect(() => {

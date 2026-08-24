@@ -386,3 +386,68 @@ export function useEdgeDropNode() {
     dismissSourceDropPick,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Burn in an image dropped onto a video node
+// ---------------------------------------------------------------------------
+
+export interface BurnInOverlayGraph {
+  node: Node;
+  edges: Edge[];
+}
+
+/**
+ * The action node + two edges an accepted "Burn in as overlay" offer produces.
+ *
+ * Pure so the graph it writes is testable: this is the one place that decides an image
+ * dropped on a clip becomes `video.overlay` wired base→`in` and image→`overlay-in`, and
+ * a wrong handle here is an edge the canvas draws but the executor refuses.
+ *
+ * The action node is placed to the RIGHT of the clip, where the eye already expects the
+ * output of a chain, rather than under the pointer — the pointer is over the clip, which
+ * is exactly where a new node must not land.
+ */
+export function buildBurnInOverlay(args: {
+  videoNodeId: string;
+  videoHandleId: string;
+  imageNodeId: string;
+  imageHandleId?: string;
+  position: XYPosition;
+  pathType?: string;
+}): BurnInOverlayGraph {
+  const actionNodeId = uuidv4();
+  const { data, style } = createNodeData('action', {
+    actionId: 'video.overlay',
+    label: 'Burn In',
+  });
+  const imageHandleId = args.imageHandleId ?? 'image';
+  const edge = (
+    source: string,
+    sourceHandle: string,
+    targetHandle: string,
+    dataType: EdgeDataType,
+  ): Edge => ({
+    id: `e-${source}-${actionNodeId}-${targetHandle}`,
+    source,
+    sourceHandle,
+    target: actionNodeId,
+    targetHandle,
+    type: 'dataType',
+    className: 'studio-edge studio-edge--connected',
+    data: { dataType, pathType: args.pathType },
+  });
+
+  return {
+    node: {
+      id: actionNodeId,
+      type: 'action',
+      position: { x: args.position.x + 260, y: args.position.y },
+      data,
+      style,
+    },
+    edges: [
+      edge(args.videoNodeId, args.videoHandleId, 'in', 'video'),
+      edge(args.imageNodeId, imageHandleId, 'overlay-in', 'image'),
+    ],
+  };
+}

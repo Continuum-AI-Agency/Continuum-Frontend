@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { Edge } from '@xyflow/react';
 import type { StudioNode } from '../types';
-import { resolveSidebarDropTarget } from './resolveSidebarDropTarget';
+import { resolveBurnInDropTarget, resolveSidebarDropTarget } from './resolveSidebarDropTarget';
 
 // Fake DOM elements shaped just enough to exercise the hit-test decision
 // logic — real document.elementsFromPoint isn't meaningfully testable under
@@ -80,5 +80,67 @@ describe('resolveSidebarDropTarget', () => {
   it('returns null on an empty hit list (drop over the bare pane)', () => {
     const result = resolveSidebarDropTarget(0, 0, 'image', [nanoGenNode], [], () => []);
     expect(result).toBeNull();
+  });
+});
+
+describe('resolveBurnInDropTarget', () => {
+  const videoNode: StudioNode = {
+    id: 'clip-1',
+    type: 'video',
+    position: { x: 0, y: 0 },
+    data: {},
+  };
+  const imageNode: StudioNode = {
+    id: 'still-1',
+    type: 'image',
+    position: { x: 0, y: 0 },
+    data: {},
+  };
+
+  it('offers a burn-in when an image lands on a node that emits video', () => {
+    const hits = [fakeNode('clip-1')];
+    expect(resolveBurnInDropTarget(0, 0, 'image', [videoNode], () => hits)).toEqual({
+      videoNodeId: 'clip-1',
+      videoHandleId: 'video',
+    });
+  });
+
+  it('offers nothing for a non-image asset', () => {
+    const hits = [fakeNode('clip-1')];
+    for (const kind of ['video', 'audio', 'document'] as const) {
+      expect(resolveBurnInDropTarget(0, 0, kind, [videoNode], () => hits)).toBeNull();
+    }
+  });
+
+  it('offers nothing over a node that emits no video', () => {
+    const hits = [fakeNode('still-1')];
+    expect(resolveBurnInDropTarget(0, 0, 'image', [imageNode], () => hits)).toBeNull();
+  });
+
+  it('offers a burn-in over an action node whose op emits video', () => {
+    // The reason "emits video" is asked of the handle resolver rather than the node
+    // TYPE: an action node's output modality is its op's, and it changes with config.
+    const speedNode: StudioNode = {
+      id: 'act-1',
+      type: 'action',
+      position: { x: 0, y: 0 },
+      data: { actionId: 'video.speed', config: {} },
+    } as StudioNode;
+    const textNode: StudioNode = {
+      ...speedNode,
+      id: 'act-2',
+      data: { actionId: 'text.concat', config: {} },
+    } as StudioNode;
+    expect(resolveBurnInDropTarget(0, 0, 'image', [speedNode], () => [fakeNode('act-1')])).toEqual({
+      videoNodeId: 'act-1',
+      videoHandleId: 'out',
+    });
+    expect(
+      resolveBurnInDropTarget(0, 0, 'image', [textNode], () => [fakeNode('act-2')]),
+    ).toBeNull();
+  });
+
+  it('offers nothing over the bare pane', () => {
+    expect(resolveBurnInDropTarget(0, 0, 'image', [videoNode], () => [])).toBeNull();
   });
 });

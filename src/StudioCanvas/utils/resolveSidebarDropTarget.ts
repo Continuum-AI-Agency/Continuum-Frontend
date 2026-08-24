@@ -1,8 +1,8 @@
 import type { StudioNodeType } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import type { StudioNode } from '../types';
-import { getTargetHandleCandidatesForNodeType } from './handleResolution';
-import { isValidConnection } from './isValidConnection';
+import { getTargetHandleCandidatesForNodeType, resolveEdgeDataType } from './handleResolution';
+import { getAllowedSourceHandles, isValidConnection } from './isValidConnection';
 
 export interface SidebarDropTarget {
   nodeId: string;
@@ -12,6 +12,14 @@ export interface SidebarDropTarget {
 export type AssetNodeType = 'image' | 'video' | 'audio' | 'document';
 
 const SYNTHETIC_SOURCE_ID = '__sidebar-drop__';
+
+/** The hit-test both resolvers default to. `elementsFromPoint` is absent outside a real
+ *  browser (SSR, happy-dom), and an empty hit list is the correct answer there — the
+ *  same answer a drop over the bare pane gives. */
+const defaultElementsAtPoint = (x: number, y: number): Element[] =>
+  typeof document !== 'undefined' && typeof document.elementsFromPoint === 'function'
+    ? document.elementsFromPoint(x, y)
+    : [];
 
 // Where a Library sidebar asset drag should attach, hit-tested against the
 // real rendered DOM rather than hand-maintained per-node pixel offsets: every
@@ -28,8 +36,7 @@ export function resolveSidebarDropTarget(
   assetNodeType: AssetNodeType,
   nodes: StudioNode[],
   edges: Edge[],
-  getElementsAtPoint: (x: number, y: number) => Element[] = (x, y) =>
-    document.elementsFromPoint(x, y),
+  getElementsAtPoint: (x: number, y: number) => Element[] = defaultElementsAtPoint,
 ): SidebarDropTarget | null {
   const hits = getElementsAtPoint(clientX, clientY);
   const syntheticSource = { id: SYNTHETIC_SOURCE_ID, type: assetNodeType, data: {} };
@@ -76,4 +83,53 @@ export function resolveSidebarDropTarget(
   }
 
   return null;
+}
+
+/** A drop that no handle accepted, but which the canvas can still offer to wire. */
+export interface BurnInDropOffer {
+  /** The node whose video output the image would be burned into. */
+  videoNodeId: string;
+  /** The handle that video comes out of — the burn-in's base input edge starts here. */
+  videoHandleId: string;
+}
+
+/**
+ * An IMAGE dropped on the body of a node that emits VIDEO.
+ *
+ * No video-producing node has an image input, so `resolveSidebarDropTarget` correctly
+ * returns null for this and the asset lands unconnected next to the clip — the drop the
+ * user most obviously meant is the one that does nothing. This names it instead: the
+ * caller offers "Burn in as overlay" and, if taken, builds the wired action node.
+ *
+ * Deliberately a SECOND function rather than a third outcome on the first one: the
+ * connect path is a hit-test for a compatible handle, this is a hit-test for the
+ * absence of one, and widening the shared return type would have every existing caller
+ * branching on a case it does not handle.
+ *
+ * "Emits video" is asked of `getAllowedSourceHandles` + `resolveEdgeDataType`, the same
+ * pair the connection validator uses — so an action node set to a video op counts, and a
+ * node whose output modality changes with its config cannot get stale here.
+ */
+export function resolveBurnInDropTarget(
+  clientX: number,
+  clientY: number,
+  assetNodeType: AssetNodeType,
+  nodes: StudioNode[],
+  getElementsAtPoint: (x: number, y: number) => Element[] = defaultElementsAtPoint,
+): BurnInDropOffer | null {
+  if (assetNodeType !== 'image') return null;
+
+  const hits = getElementsAtPoint(clientX, clientY);
+  const nodeElement = hits.find((el) => el.classList.contains('react-flow__node'));
+  if (!(nodeElement instanceof HTMLElement)) return null;
+
+  const nodeId = nodeElement.dataset.id;
+  const node = nodes.find((candidate) => candidate.id === nodeId);
+  if (!nodeId || !node?.type) return null;
+
+  const graphNode = { id: nodeId, type: node.type, data: node.data as Record<string, unknown> };
+  const videoHandleId = getAllowedSourceHandles(graphNode).find(
+    (handle) => resolveEdgeDataType(handle, graphNode) === 'video',
+  );
+  return videoHandleId ? { videoNodeId: nodeId, videoHandleId } : null;
 }

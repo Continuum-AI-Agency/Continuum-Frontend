@@ -1,4 +1,5 @@
 import type { ActionId } from '@continuum/contracts';
+import type { CaptionFontPayload } from '@/lib/clips/captionFonts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../utils/render/effectSpec';
 import type { ClipTransition } from '../utils/render/transitions';
@@ -64,6 +65,11 @@ export type TimelineAudioWorkerItem = {
   fadeOutSec?: number;
 };
 
+// WOFF2 bytes ride WITH the job rather than being fetched worker-side: a worker has no
+// document.fonts to inherit, and a caption drawn before its face is registered silently
+// renders in Helvetica. They cross by structured clone, deliberately NOT in a transfer
+// list — a transfer detaches the buffer on the main thread, and the page's own cache has
+// to survive its document.fonts registration plus every repeat render.
 export type SpliceWorkerInbound =
   | {
       kind: 'start';
@@ -77,7 +83,13 @@ export type SpliceWorkerInbound =
       ranges: SingleSourceWorkerRange[];
       maxShortEdgePx?: number;
       captionWords?: CaptionWord[];
+      // Already grouped and already on the OUTPUT timeline. Wins over captionWords, the
+      // same way start_timeline's cues do. Without this a preset's `grouping` cannot reach
+      // the render at all: the worker would re-group the raw words at the engine default
+      // of 6 words / 3.5s and every preset would come out with the same line lengths.
+      captionCues?: CaptionCue[];
       captionStyle?: CaptionStyle;
+      captionFonts?: CaptionFontPayload[];
       videoBitrate?: number;
       audioBitrate?: number;
     }
@@ -95,6 +107,7 @@ export type SpliceWorkerInbound =
       captionCues?: CaptionCue[];
       captionWords?: CaptionWord[];
       captionStyle?: CaptionStyle;
+      captionFonts?: CaptionFontPayload[];
     }
   | {
       // ONE inbound op for the whole action catalog. A per-op message kind would put
@@ -128,5 +141,8 @@ export type SpliceWorkerOutbound =
       width: number;
       height: number;
       durationSec: number;
+      // Set only by `outputsCollection` ops (today: video.split). The top-level fields
+      // stay the FIRST part so every single-result consumer keeps working unchanged.
+      parts?: { blob: Blob; width: number; height: number; durationSec: number }[];
     }
   | { kind: 'error'; message: string };

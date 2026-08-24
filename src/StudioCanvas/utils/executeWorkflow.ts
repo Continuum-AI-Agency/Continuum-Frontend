@@ -49,6 +49,12 @@ import {
 } from './buildNodePayload';
 import { compositeImages } from './compositeImages';
 import { buildDataUrl, parseDataUrl } from './dataUrl';
+import {
+  exportKindForSources,
+  exportSourcesFromOutputs,
+  resolveExportFormat,
+  runExport,
+} from './export/runExport';
 import { extractVideoFrame } from './extractVideoFrame';
 import { computeGenerationSignature, isSignatureTracked, nodeIsStale } from './generationSignature';
 import { hasHydratableMediaReference, rehydrateWorkflowMediaNodes } from './rehydrateWorkflowMedia';
@@ -87,7 +93,6 @@ const isRunAllNodeType = (nodeType: string | undefined): nodeType is string =>
 // and falling through to the generator branch would kill the run with "Missing required
 // inputs or prompt" — a message about a prompt, on a node that has none.
 const UNIMPLEMENTED_RUNNABLE_TYPES: Partial<Record<StudioNodeType, string>> = {
-  export: 'Export lands in a later release — nothing was written',
   layerEditor: 'The Layer Editor lands in a later release',
 };
 
@@ -548,39 +553,46 @@ const resolveActionInputsFor = async (
   const inputs: ResolvedActionInput[] = [];
 
   for (const port of def.inputs) {
-    const edge = incoming.find((candidate) => candidate.targetHandle === port.handle);
-    if (!edge) throw new Error(`Nothing is connected to this action's "${port.handle}" input`);
+    // EVERY edge wired to the port, in wiring order, capped at the port's declared max.
+    // A `find` here silently starved multi-input ports — `text.concat` joined one
+    // string forever and `video.stitch` had nothing to stitch, however many edges the
+    // user wired.
+    const wired = incoming.filter((candidate) => candidate.targetHandle === port.handle);
+    if (wired.length === 0)
+      throw new Error(`Nothing is connected to this action's "${port.handle}" input`);
 
-    if (port.modality === 'text') {
-      const text = resolveTextInput(edge, resolvedOutputs, nodeById, edges);
-      if (text === undefined) throw new Error(`The text feeding "${port.handle}" is not ready`);
-      inputs.push({ handle: port.handle, text });
-      continue;
-    }
+    for (const edge of wired.slice(0, port.max)) {
+      if (port.modality === 'text') {
+        const text = resolveTextInput(edge, resolvedOutputs, nodeById, edges);
+        if (text === undefined) throw new Error(`The text feeding "${port.handle}" is not ready`);
+        inputs.push({ handle: port.handle, text });
+        continue;
+      }
 
-    const output = resolvedOutputs.get(edge.source);
-    if (output) {
-      const resolved = actionInputFromOutput(output, port.handle);
+      const output = resolvedOutputs.get(edge.source);
+      if (output) {
+        const resolved = actionInputFromOutput(output, port.handle);
+        inputs.push(
+          port.modality === 'video'
+            ? { handle: port.handle, blob: await fetchBlob(resolved.imageUrl, port.handle) }
+            : resolved,
+        );
+        continue;
+      }
+
+      // No run output yet: read the reference node's own durable fields. This is how a
+      // plain image/video node feeds an action without ever having "run".
+      const sourceData = (nodeById.get(edge.source)?.data ?? {}) as Record<string, unknown>;
+      const url = [sourceData.image, sourceData.video, sourceData.sourceUrl].find(
+        (value): value is string => typeof value === 'string' && value.length > 0,
+      );
+      if (!url) throw new Error(`The input on "${port.handle}" is not ready`);
       inputs.push(
         port.modality === 'video'
-          ? { handle: port.handle, blob: await fetchBlob(resolved.imageUrl, port.handle) }
-          : resolved,
+          ? { handle: port.handle, blob: await fetchBlob(url, port.handle) }
+          : { handle: port.handle, imageUrl: url },
       );
-      continue;
     }
-
-    // No run output yet: read the reference node's own durable fields. This is how a
-    // plain image/video node feeds an action without ever having "run".
-    const sourceData = (nodeById.get(edge.source)?.data ?? {}) as Record<string, unknown>;
-    const url = [sourceData.image, sourceData.video, sourceData.sourceUrl].find(
-      (value): value is string => typeof value === 'string' && value.length > 0,
-    );
-    if (!url) throw new Error(`The input on "${port.handle}" is not ready`);
-    inputs.push(
-      port.modality === 'video'
-        ? { handle: port.handle, blob: await fetchBlob(url, port.handle) }
-        : { handle: port.handle, imageUrl: url },
-    );
   }
 
   return inputs;
@@ -850,6 +862,14 @@ const getNodeReadiness = (
     return incomingEdges.some((edge) => resolvedOutputs.has(edge.source))
       ? { ready: true }
       : { ready: false, reason: 'Add items, or connect something to collect' };
+  }
+
+  if (node.type === 'export') {
+    // Terminal, and its input is a POOL — one resolved edge is enough to have
+    // something to write.
+    return incomingEdges.some((edge) => resolvedOutputs.has(edge.source))
+      ? { ready: true }
+      : { ready: false, reason: 'Connect something to export' };
   }
 
   // Ready on purpose: they execute, and executing is how they announce that their
@@ -2294,6 +2314,37 @@ export async function executeWorkflow(
         if (!(node.data as Record<string, unknown>).lockedType) {
           const locked = routerLockedType(node, edges, nodes);
           if (locked) useStudioStore.getState().updateNodeData(nodeId, { lockedType: locked });
+        }
+        updateNodeStatus(nodeId, 'completed');
+        return true;
+      }
+
+      if (node.type === 'export') {
+        // The whole node: read the resolved inputs, encode, hand the user a file.
+        // Reading `resolvedOutputs` (not node data) is what makes a run reuse ONE
+        // upstream execution across every export hanging off it — and it is the only
+        // path that can see a `batch` collection, whose items are never persisted.
+        const upstream = getIncomingEdges(edges, nodeId)
+          .map((edge) => resolvedOutputs.get(edge.source))
+          .filter((output): output is NodeOutput => output !== undefined);
+        const sources = exportSourcesFromOutputs(upstream);
+        const format = resolveExportFormat(
+          (node.data as Record<string, unknown>).format,
+          exportKindForSources(sources),
+        );
+        if (!format) {
+          updateNodeStatus(nodeId, 'failed', 'Nothing is connected to export');
+          return false;
+        }
+        try {
+          await runExport({ sources, format });
+        } catch (error) {
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            error instanceof Error ? error.message : 'Export failed',
+          );
+          return false;
         }
         updateNodeStatus(nodeId, 'completed');
         return true;

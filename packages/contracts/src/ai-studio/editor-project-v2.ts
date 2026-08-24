@@ -333,6 +333,7 @@ export const editorCaptionWordSchema = z
     endSec: secondsSchema,
     confidence: unitIntervalSchema.optional(),
     speakerId: editorIdSchema.optional(),
+    emphasis: z.boolean().optional(),
   })
   .strict()
   .refine((word) => word.endSec >= word.startSec, {

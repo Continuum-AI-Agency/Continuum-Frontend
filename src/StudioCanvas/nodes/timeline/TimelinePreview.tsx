@@ -4,7 +4,10 @@ import { Pause, Play, Video } from 'lucide-react';
 import type React from 'react';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { type CaptionStyle, resolveCaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { captionAnchorSec, captionWordTransform } from '@/lib/clips/captionAnimation';
+import { ensureCaptionFonts } from '@/lib/clips/captionFonts';
+import { captionFontFamiliesFor, resolveStyleWithPreset } from '@/lib/clips/captionPresets';
+import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
 import type { CaptionCue } from '../../utils/splice/captionCues';
 import type { OverlayPreviewLayer } from './overlayPreview';
@@ -15,6 +18,95 @@ function formatTime(sec: number): string {
   const minutes = Math.floor(safe / 60);
   const seconds = Math.floor(safe % 60);
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+/** `#rrggbb` plus an alpha, without pulling in a colour library for one job. */
+function withAlpha(color: string, alpha: number): string {
+  if (alpha >= 1) return color;
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
+}
+
+/**
+ * The line-level style: everything the canvas sets once per cue.
+ *
+ * `-webkit-text-stroke` is the DOM's real equivalent of `strokeText`, and it is centred on
+ * the glyph edge exactly as the canvas stroke is — so the visible weight is half the value
+ * in both places and the two surfaces agree. `paintOrder: stroke fill` is what stops the
+ * stroke eating the glyph, matching the renderer's stroke-then-fill order.
+ */
+function captionBlockStyle(style: CaptionStyle): React.CSSProperties {
+  const outlineWidthFrac = style.outlineWidthFrac ?? 0.18;
+  const strokes = outlineWidthFrac > 0;
+  return {
+    fontSize: `${(style.fontSizeFrac ?? 0.055) * 100}cqh`,
+    fontFamily: style.fontFamily ? `"${style.fontFamily}", sans-serif` : undefined,
+    fontWeight: style.fontWeight ?? 700,
+    lineHeight: style.lineHeightFactor ?? 1.25,
+    color: style.textColor,
+    textTransform: style.uppercase ? 'uppercase' : undefined,
+    ...(strokes
+      ? {
+          WebkitTextStrokeWidth: `${outlineWidthFrac}em`,
+          WebkitTextStrokeColor: style.outlineColor,
+          paintOrder: 'stroke fill',
+        }
+      : {}),
+    ...(style.shadow
+      ? {
+          textShadow: `0 ${style.shadow.offsetYFrac}em ${style.shadow.blurFrac}em ${style.shadow.color}`,
+        }
+      : {}),
+    ...(style.backgroundColor && (style.backgroundMode ?? 'line') === 'line'
+      ? {
+          backgroundColor: withAlpha(style.backgroundColor, style.backgroundOpacity ?? 0.8),
+          borderRadius: `${style.backgroundRadiusFrac ?? 0}em`,
+          padding: '0.18em 0.35em',
+          boxDecorationBreak: 'clone' as const,
+          WebkitBoxDecorationBreak: 'clone' as const,
+        }
+      : {}),
+  };
+}
+
+/** The per-word style: the active/emphasis fill, the word pill, and the entry transform. */
+function captionWordStyle(
+  style: CaptionStyle,
+  word: { emphasis?: boolean },
+  state: { active: boolean; transform: { scale: number; dy: number; alpha: number } },
+): React.CSSProperties {
+  const activeWordMode = style.activeWordMode ?? 'fill';
+  const emphasised = word.emphasis === true;
+  const color =
+    state.active && activeWordMode !== 'none'
+      ? style.highlightColor
+      : emphasised && style.emphasis?.color
+        ? style.emphasis.color
+        : undefined;
+
+  const boxColor =
+    state.active && activeWordMode === 'box'
+      ? (style.activeBoxColor ?? style.highlightColor)
+      : style.backgroundMode === 'word'
+        ? style.backgroundColor
+        : undefined;
+
+  const scale = state.transform.scale * (emphasised ? (style.emphasis?.scale ?? 1) : 1);
+  return {
+    color,
+    ...(emphasised && style.emphasis?.weight ? { fontWeight: style.emphasis.weight } : {}),
+    ...(boxColor
+      ? {
+          backgroundColor: withAlpha(boxColor, style.backgroundOpacity ?? 0.8),
+          borderRadius: `${style.backgroundRadiusFrac ?? 0}em`,
+          padding: '0.18em 0.35em',
+          boxDecorationBreak: 'clone' as const,
+          WebkitBoxDecorationBreak: 'clone' as const,
+        }
+      : {}),
+    display: 'inline-block',
+    opacity: state.transform.alpha,
+    transform: `translateY(${state.transform.dy}em) scale(${scale})`,
+  };
 }
 
 // Presentational sequence preview. The <video> layer is driven imperatively by
@@ -66,15 +158,28 @@ export function TimelinePreview({
   captionStyle?: CaptionStyle;
   onCaptionPositionChange?: (position: { xFrac: number; yFrac: number }) => void;
 }) {
+  // The SAME resolver the burn-in uses (drawCaptions.ts). The preview used to build its own
+  // approximation — hardcoded bold + uppercase, a text-shadow standing in for the stroke, no
+  // background at all — which read as "close enough" with one style and becomes a lie the
+  // moment a preset gallery is offering six.
   const resolvedCaptionStyle = caption
-    ? resolveCaptionStyle(captionStyle, caption.style)
+    ? resolveStyleWithPreset(captionStyle, caption.style)
     : undefined;
+  const captionFamily = resolvedCaptionStyle?.fontFamily;
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     video.muted = mediaMuted ?? false;
     video.volume = Math.max(0, Math.min(1, mediaVolume ?? 1));
   }, [mediaMuted, mediaVolume, videoRef]);
+
+  // Register the same face the worker will burn in. Without this the preview falls back to
+  // the system stack and the gallery shows a typeface the export will not use.
+  useEffect(() => {
+    const families = captionFontFamiliesFor([{ fontFamily: captionFamily } as CaptionStyle]);
+    if (families.length === 0) return;
+    void ensureCaptionFonts(families);
+  }, [captionFamily]);
 
   return (
     <div className="flex h-full flex-col gap-2">
@@ -180,23 +285,28 @@ export function TimelinePreview({
             }}
           >
             <span
-              className="max-w-[90%] text-center font-bold uppercase leading-tight"
-              style={{
-                fontSize: `${resolvedCaptionStyle!.fontSizeFrac! * 100}cqh`,
-                color: resolvedCaptionStyle!.textColor,
-                fontFamily: resolvedCaptionStyle!.fontFamily,
-                textShadow: `0 0 0.18em ${resolvedCaptionStyle!.outlineColor}`,
-              }}
+              className="max-w-[90%] text-center"
+              style={captionBlockStyle(resolvedCaptionStyle!)}
             >
               {caption.words.map((word, index) => {
+                const style = resolvedCaptionStyle!;
                 const active = playheadSec >= word.startSec && playheadSec < word.endSec;
+                const anchorSec = captionAnchorSec(
+                  style.animation,
+                  caption.startSec,
+                  word.startSec,
+                );
+                // Same pure function, same numbers as the burn-in. `1em` stands in for the
+                // canvas font px, which is what makes the fractional amplitudes carry over.
+                const transform = captionWordTransform(style.animation, playheadSec - anchorSec, 1);
+                if (!transform.visible) return null;
                 return (
                   <span
                     key={`${caption.id}:${word.startSec}:${index}`}
-                    style={{ color: active ? resolvedCaptionStyle!.highlightColor : undefined }}
+                    style={captionWordStyle(style, word, { active, transform })}
                   >
                     {index > 0 ? ' ' : ''}
-                    {word.text}
+                    {style.uppercase ? word.text.toLocaleUpperCase() : word.text}
                   </span>
                 );
               })}

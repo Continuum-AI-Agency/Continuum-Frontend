@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'bun:test';
-import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 import {
   NANO_GEN_SIGNATURE_FIELDS,
@@ -131,28 +129,10 @@ describe('derived sets', () => {
 // every nanoGen on every saved canvas reads as stale and regenerates on the next Run —
 // that is bug #221, and it costs real generation credits across every brand at once.
 //
-// So this is pinned twice: once against a literal transcribed from the Frontend, and
-// once against the Frontend source itself.
-
-const FRONTEND_SIGNATURE_SOURCE = fileURLToPath(
-  new URL(
-    '../../../../Continuum-Frontend/src/StudioCanvas/utils/generationSignature.ts',
-    import.meta.url,
-  ),
-);
-
-/** The live `OWN_FIELDS_BY_TYPE.nanoGen` literal, read out of the Frontend source.
- *  `SIG1_OWN_FIELDS_BY_TYPE` also has a nanoGen key, so the search starts at the
- *  current-version map and takes the first match after it. */
-function frontendNanoGenFields(): string[] | null {
-  if (!existsSync(FRONTEND_SIGNATURE_SOURCE)) return null;
-  const source = readFileSync(FRONTEND_SIGNATURE_SOURCE, 'utf8');
-  const mapStart = source.indexOf('const OWN_FIELDS_BY_TYPE');
-  if (mapStart === -1) return null;
-  const match = /nanoGen:\s*\[([^\]]*)\]/.exec(source.slice(mapStart));
-  if (!match) return null;
-  return [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]);
-}
+// So this is pinned against the literal transcribed below. The Frontend's
+// OWN_FIELDS_BY_TYPE is now DERIVED from this registry (sig2), and its resolver
+// tests assert that derivation — a source-scrape cross-check here would only ever
+// re-find the frozen sig1 literal, which is why the old one was retired.
 
 describe('generation signature recipes', () => {
   it('pins the nanoGen recipe to the transcribed Frontend literal, in order', () => {
@@ -172,21 +152,6 @@ describe('generation signature recipes', () => {
       'brandBookPieces',
     ]);
     expect(studioNodeDefinition('nanoGen').signatureFields).toEqual(NANO_GEN_SIGNATURE_FIELDS);
-  });
-
-  // The transcription above can be faithfully wrong the day somebody edits the Frontend.
-  // In the monorepo this reads the real file; in the standalone Frontend repo (where
-  // contracts is a vendored copy and the app source is not at that path) it says so out
-  // loud rather than passing on an unread file.
-  it('matches the live Frontend OWN_FIELDS_BY_TYPE.nanoGen', () => {
-    const live = frontendNanoGenFields();
-    if (live === null) {
-      console.warn(
-        `[node-registry.test] SKIPPED live signature cross-check — ${FRONTEND_SIGNATURE_SOURCE} is not reachable from this checkout. The transcribed pin above still ran.`,
-      );
-      return;
-    }
-    expect(live).toEqual([...NANO_GEN_SIGNATURE_FIELDS]);
   });
 
   it('gives every video generator the same recipe, and only the tracked types one', () => {

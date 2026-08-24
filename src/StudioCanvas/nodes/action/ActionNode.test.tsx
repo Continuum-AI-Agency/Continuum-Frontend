@@ -1,8 +1,9 @@
 // The generic node has to be right for ops it has never heard of, so every assertion
 // here is read from the registry rather than hard-coded alongside it.
 
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import {
+  ACTION_IDS,
   type ActionId,
   getAllowedSourceHandles,
   getAllowedTargetHandles,
@@ -13,6 +14,7 @@ import { ReactFlowProvider } from '@xyflow/react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { ActionNodeData } from '../../types';
+import * as runActionModule from '../../utils/actions/runAction';
 import { ActionNode } from './ActionNode';
 
 const updateNode = mock();
@@ -98,11 +100,25 @@ describe('ActionNode', () => {
   });
 
   it('disables Run for an op that has no runner, and names it', () => {
-    // `image.blur` is declared in the catalog with no entry in runAction's SYNC_OPS.
-    const { getByRole, getByText } = renderNode(nodeData({ actionId: 'image.blur' }));
+    // Every catalog op has a runner as of Wave 3, so the unimplemented state has to be
+    // forced. A spy on the live export is scoped and restorable, where mock.module
+    // would leak the stub process-wide into sibling test files.
+    const spy = spyOn(runActionModule, 'isImplementedAction').mockReturnValue(false);
+    try {
+      const { getByRole, getByText } = renderNode(nodeData({ actionId: 'image.blur' }));
 
-    expect((getByRole('button', { name: /run/i }) as HTMLButtonElement).disabled).toBe(true);
-    expect(getByText(/^Blur is not available yet/)).toBeDefined();
+      expect((getByRole('button', { name: /run/i }) as HTMLButtonElement).disabled).toBe(true);
+      expect(getByText(/^Blur is not available yet/)).toBeDefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('has a runner for every catalog op, so no real id renders the disabled state', () => {
+    // The Wave-3 landing implemented the whole catalog; a real id regressing to
+    // unimplemented should fail loudly here rather than silently greying a node.
+    const unimplemented = ACTION_IDS.filter((id) => !runActionModule.isImplementedAction(id));
+    expect(unimplemented).toEqual([]);
   });
 
   it('leaves Run enabled for an op that has a runner', () => {

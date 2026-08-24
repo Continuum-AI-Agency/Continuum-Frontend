@@ -53,6 +53,7 @@ export const ACTION_IDS = [
   'image.blur',
   'image.rotate',
   'image.flip',
+  'image.duplicate',
   'image.chromaKey',
   'image.crop',
   'image.pad',
@@ -99,10 +100,28 @@ const gradeConfig = z.object({
   grayscale: z.number().min(0).max(1).default(0),
   invert: z.number().min(0).max(1).default(0),
   opacity: z.number().min(0).max(1).default(1),
+  warmth: z.number().min(-1).max(1).default(0),
 });
 
 const filterConfig = z.object({
-  preset: z.enum(['none', 'noir', 'vivid', 'faded', 'warm', 'cool', 'mono']).default('none'),
+  preset: z
+    .enum([
+      'none',
+      'noir',
+      'vivid',
+      'faded',
+      'fade',
+      'warm',
+      'cool',
+      'mono',
+      'grayscale',
+      'sepia',
+      'duotone',
+      'clarendon',
+      'moon',
+      'nashville',
+    ])
+    .default('none'),
   intensity: z.number().min(0).max(1).default(1),
 });
 
@@ -112,15 +131,40 @@ const tintConfig = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/)
     .default('#ffffff'),
   amount: z.number().min(0).max(1).default(0.25),
+  blend: z.enum(['multiply', 'screen', 'overlay', 'soft-light']).default('multiply'),
 });
 
-const blurConfig = z.object({ radiusPx: z.number().min(0).max(200).default(8) });
-
-const chromaKeyConfig = z.object({
+// Shared with video.blur, whose engine reads radiusPx only — the kind-specific
+// fields are inert there until the video engine wires them.
+const blurConfig = z.object({
+  kind: z
+    .enum(['gaussian', 'box', 'motion', 'radial', 'bilateral', 'bokeh', 'tiltShift', 'targetColor'])
+    .default('gaussian'),
+  radiusPx: z.number().min(0).max(200).default(8),
+  angleDeg: z.number().min(-180).max(180).default(0),
+  centerX: z.number().min(0).max(1).default(0.5),
+  centerY: z.number().min(0).max(1).default(0.5),
+  focusY: z.number().min(0).max(1).default(0.5),
+  focusHeight: z.number().min(0).max(1).default(0.25),
+  edgeThreshold: z.number().min(0).max(1).default(0.12),
   color: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
     .default('#00ff00'),
+  tolerance: z.number().min(0).max(1).default(0.3),
+  softness: z.number().min(0).max(1).default(0.1),
+});
+
+const chromaKeyConfig = z.object({
+  mode: z.enum(['remove', 'isolate', 'replace']).default('remove'),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .default('#00ff00'),
+  replacement: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .default('#ffffff'),
   tolerance: z.number().min(0).max(1).default(0.3),
   softness: z.number().min(0).max(1).default(0.1),
 });
@@ -217,7 +261,15 @@ export const ACTION_DEFS = {
     execution: 'sync',
     inputs: singleImageIn,
     output: 'image',
-    config: z.object({ degrees: z.number().min(-360).max(360).default(90) }),
+    config: z.object({
+      degrees: z.number().min(-360).max(360).default(90),
+      expand: z.boolean().default(true),
+      background: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/)
+        .nullable()
+        .default(null),
+    }),
   },
   'image.flip': {
     id: 'image.flip',
@@ -265,6 +317,18 @@ export const ACTION_DEFS = {
     inputs: singleImageIn,
     output: 'image',
     config: padConfig,
+  },
+  'image.duplicate': {
+    id: 'image.duplicate',
+    family: 'image',
+    label: 'Duplicate',
+    description: 'Emits N copies of its input, as a collection the batch fan-out loops over.',
+    group: 'Transform',
+    execution: 'sync',
+    inputs: singleImageIn,
+    output: 'image',
+    outputsCollection: true,
+    config: z.object({ copies: z.number().int().min(1).max(100).default(2) }),
   },
 
   // ── video: re-encoding ops go through the splicer worker ───────────────────
@@ -449,7 +513,7 @@ export const ACTION_DEFS = {
     inputs: singleVideoIn,
     output: 'image',
     config: z.object({
-      mode: z.enum(['average', 'lighten']).default('average'),
+      mode: z.enum(['average', 'lighten', 'darken']).default('average'),
       sampleFps: z.number().min(1).max(60).default(12),
     }),
   },
@@ -493,9 +557,11 @@ export const ACTION_DEFS = {
     output: 'image',
     outputsCollection: true,
     config: z.object({
-      mode: z.enum(['evenly', 'interval', 'sceneChange']).default('evenly'),
+      mode: z.enum(['single', 'evenly', 'interval', 'sceneChange']).default('evenly'),
       count: z.number().int().min(1).max(60).default(6),
       intervalSec: z.number().min(0.1).max(60).default(1),
+      atSec: z.number().min(0).default(0),
+      threshold: z.number().min(0).max(1).default(0.12),
     }),
   },
   'video.frameGrid': {
@@ -510,6 +576,12 @@ export const ACTION_DEFS = {
     config: z.object({
       columns: z.number().int().min(1).max(8).default(3),
       rows: z.number().int().min(1).max(8).default(3),
+      cellWidth: z.number().int().min(64).max(1024).default(480),
+      gap: z.number().int().min(0).max(64).default(8),
+      background: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/)
+        .default('#000000'),
     }),
   },
 
@@ -525,9 +597,14 @@ export const ACTION_DEFS = {
     output: 'text',
     outputsCollection: true,
     config: z.object({
-      mode: z.enum(['newline', 'comma', 'custom']).default('newline'),
+      mode: z
+        .enum(['newline', 'comma', 'custom', 'regex', 'paragraph', 'lineCount', 'charCount'])
+        .default('newline'),
       separator: z.string().default(''),
       trim: z.boolean().default(true),
+      skipEmpty: z.boolean().default(true),
+      size: z.number().int().min(1).max(10_000).default(1),
+      maxParts: z.number().int().min(1).max(100).nullable().default(null),
     }),
   },
   'text.findReplace': {
@@ -543,6 +620,8 @@ export const ACTION_DEFS = {
       find: z.string().default(''),
       replace: z.string().default(''),
       caseSensitive: z.boolean().default(false),
+      regex: z.boolean().default(false),
+      wholeWord: z.boolean().default(false),
     }),
   },
   'text.concat': {
@@ -554,7 +633,13 @@ export const ACTION_DEFS = {
     execution: 'sync',
     inputs: [{ handle: 'in', modality: 'text', max: 10 }],
     output: 'text',
-    config: z.object({ separator: z.string().default('\n') }),
+    config: z.object({
+      separator: z.string().default('\n'),
+      prefix: z.string().default(''),
+      suffix: z.string().default(''),
+      trim: z.boolean().default(false),
+      skipEmpty: z.boolean().default(true),
+    }),
   },
 } satisfies Record<ActionId, ActionDef>;
 

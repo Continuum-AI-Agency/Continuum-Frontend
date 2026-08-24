@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { runSingleSourceSpliceInWorker, runSpliceInWorker } from './spliceWorkerClient';
+import {
+  runActionInWorker,
+  runSingleSourceSpliceInWorker,
+  runSpliceInWorker,
+} from './spliceWorkerClient';
 import type {
   SpliceWorkerInbound,
   SpliceWorkerOutbound,
@@ -209,6 +213,52 @@ describe('runSpliceInWorker', () => {
       }),
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(factoryCalled).toBe(false);
+  });
+});
+
+describe('runActionInWorker', () => {
+  it('passes a collection result frame’s parts through to the caller', async () => {
+    const worker = new FakeWorker();
+    const promise = runActionInWorker({
+      actionId: 'video.split',
+      inputs: [{ handle: 'in', blob: fakeBlob }],
+      config: {},
+      workerFactory: () => worker as unknown as Worker,
+    });
+
+    const parts = [
+      { blob: new Blob([new Uint8Array([1])]), width: 640, height: 360, durationSec: 2 },
+      { blob: new Blob([new Uint8Array([2])]), width: 640, height: 360, durationSec: 3 },
+    ];
+    worker.emit({
+      kind: 'result',
+      blob: parts[0].blob,
+      width: 640,
+      height: 360,
+      durationSec: 2,
+      parts,
+    });
+
+    const result = await promise;
+    expect(result.parts).toEqual(parts);
+    expect(result.blob).toBe(parts[0].blob);
+    URL.revokeObjectURL(result.objectUrl);
+  });
+
+  it('leaves parts undefined on a single-blob result frame', async () => {
+    const worker = new FakeWorker();
+    const promise = runActionInWorker({
+      actionId: 'video.reverse',
+      inputs: [{ handle: 'in', blob: fakeBlob }],
+      config: {},
+      workerFactory: () => worker as unknown as Worker,
+    });
+
+    worker.emit({ kind: 'result', blob: fakeBlob, width: 640, height: 360, durationSec: 3 });
+
+    const result = await promise;
+    expect(result.parts).toBeUndefined();
+    URL.revokeObjectURL(result.objectUrl);
   });
 });
 

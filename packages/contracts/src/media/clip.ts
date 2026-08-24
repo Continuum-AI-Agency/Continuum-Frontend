@@ -217,11 +217,30 @@ export const captionTranscribeRequestSchema = z
     brandId: z.string().min(1),
     audioBucket: z.string().min(1),
     audioStoragePath: z.string().min(1),
+    /** Ask the backend to pick which words carry visual emphasis. Off by default: it costs
+     *  one model call, and every caller that just wants a transcript should not pay it. */
+    emphasize: z.boolean().optional(),
   })
   .strict();
 export type CaptionTranscribeRequest = z.infer<typeof captionTranscribeRequestSchema>;
 
-export const captionTranscribeResponseSchema = timestampedTranscriptSchema;
+/**
+ * The transcript, plus the emphasis pass when it was asked for.
+ *
+ * EXTENDED rather than widened at the source on purpose: `timestampedTranscriptSchema` is
+ * also the `clip-transcribe` edge function's return contract, and it is `.strict()`. Adding
+ * these keys there would change what that function is allowed to emit; adding them here
+ * describes what the ROUTE returns after it has done its own work.
+ *
+ * Emphasis travels as INDICES into `words`, never as the words themselves: a transcript
+ * repeats tokens ("you need to SHOW UP, and you need to SHOW them why"), so a by-string
+ * match is wrong roughly half the time on any duplicate.
+ */
+export const captionTranscribeResponseSchema = timestampedTranscriptSchema.extend({
+  emphasisIndices: z.array(z.number().int().nonnegative()).max(512).optional(),
+  /** Which layer answered. 'heuristic' means the model was unreachable and we fell back. */
+  emphasisSource: z.enum(['llm', 'heuristic']).optional(),
+});
 export type CaptionTranscribeResponse = z.infer<typeof captionTranscribeResponseSchema>;
 export type RegisterClipRequest = z.infer<typeof registerClipRequestSchema>;
 export type RegisterClipResponse = z.infer<typeof registerClipResponseSchema>;

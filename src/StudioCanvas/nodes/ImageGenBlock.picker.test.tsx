@@ -82,7 +82,9 @@ describe('ImageGenBlock model picker', () => {
     await openModelPicker(nodeData());
 
     expect(modelItem('FLUX.2 Max').textContent).toContain('Needs fal credits');
-    expect(modelItem('GPT Image 2').textContent).toContain('Needs fal credits');
+    // GPT Image 2 is an Azure model (contracts image-size.ts pins its note to 'Azure');
+    // only the flux tier carries the fal note. Asserting fal copy here was the bug.
+    expect(modelItem('GPT Image 2').textContent).toContain('Azure');
   });
 
   it('states the size ceiling of a one-size model up front, not at the 400', async () => {

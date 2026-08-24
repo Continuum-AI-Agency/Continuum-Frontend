@@ -104,6 +104,7 @@ export const timelineCaptionWordSchema = z
     text: z.string().max(500),
     startSec: z.number().nonnegative(),
     endSec: z.number().nonnegative(),
+    emphasis: z.boolean().optional(),
   })
   .strict()
   .refine((word) => word.endSec >= word.startSec, {

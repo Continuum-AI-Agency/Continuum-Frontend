@@ -1,14 +1,41 @@
 // Maps a brand's palette/typography to the burned-in caption style. Pure (no DOM,
 // no server imports) so it runs in the library RSC, in components, and in the
-// splice worker, and unit-tests cleanly. Colors are drop-in; the brand font family
-// is best-effort (the worker can only render it if the device resolves the family).
+// splice worker, and unit-tests cleanly.
+//
+// Every field below the original block is optional and additive, and every absent value
+// resolves to exactly what the renderer did before presets existed — which is what makes
+// the `classic` preset a byte-for-byte golden for the whole refactor.
+//
+// Two axes that look alike and must stay apart:
+//   ACTIVE   — the word being spoken RIGHT NOW. `highlightColor` + `activeWordMode`,
+//              live only while t is inside [word.startSec, word.endSec).
+//   EMPHASIS — the word is SEMANTICALLY important. `emphasis.*` + `word.emphasis`,
+//              for the word's whole life.
+// `highlightColor` keeps its existing meaning; do not repurpose it for emphasis. The loud
+// presets set `activeWordMode: 'none'` precisely so the two signals never fight.
+
+import type { CaptionAnimation } from './captionAnimation';
+
+/** Louder treatment for words the selector marked semantically important. */
+export type CaptionEmphasis = {
+  /** Fill for emphasised words. Falls back to highlightColor. */
+  color?: string;
+  /** Steady-state multiplier applied ON TOP of any entry animation. */
+  scale?: number;
+  /** 100..900. Needs a VARIABLE face registered with a weight range, or it is a no-op. */
+  weight?: number;
+};
+
+/** Drop shadow under both the stroke and the fill. Fractions of the resolved font px. */
+export type CaptionShadow = { color: string; blurFrac: number; offsetYFrac: number };
 
 export type CaptionStyle = {
   textColor: string;
   highlightColor: string;
   outlineColor: string;
-  // Brand display family, best-effort. Prepended to the renderer's system stack;
-  // silently falls back when the family isn't available to the OffscreenCanvas.
+  // Display family. Only renders when a matching face is registered on this thread's
+  // FontFaceSet — see captionFonts.ts. An unregistered family falls back to the system
+  // stack, which is why the UI reports brand-font availability instead of guessing.
   fontFamily?: string;
   fontWeight?: number;
   fontSizeFrac?: number;
@@ -16,6 +43,25 @@ export type CaptionStyle = {
   position?: CaptionPosition;
   backgroundColor?: string;
   backgroundOpacity?: number;
+
+  /** Provenance only. Resolution is BY VALUE: the persisted style blob is the truth, so a
+   *  later preset-table edit never silently re-renders an existing project. */
+  presetId?: string;
+  /** Canvas has no text-transform; applied at draw time, BEFORE measuring. */
+  uppercase?: boolean;
+  /** Overrides the renderer's 1.25 line-height constant. */
+  lineHeightFactor?: number;
+  /** 'line' is the historical per-line fillRect. 'word' is one pill per word. */
+  backgroundMode?: 'none' | 'line' | 'word';
+  /** roundRect radius as a fraction of the font px. 0 keeps the square fillRect. */
+  backgroundRadiusFrac?: number;
+  /** 'fill' is the historical highlightColor swap. */
+  activeWordMode?: 'fill' | 'box' | 'none';
+  /** Pill colour behind the spoken word; only read when activeWordMode is 'box'. */
+  activeBoxColor?: string;
+  shadow?: CaptionShadow;
+  animation?: CaptionAnimation;
+  emphasis?: CaptionEmphasis;
 };
 
 export type CaptionPosition = { xFrac: number; yFrac: number };
