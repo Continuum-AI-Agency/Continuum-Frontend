@@ -1,6 +1,10 @@
 'use client';
 
-import type { ApiRenderVariable, PinnedRenderAsset } from '@continuum/contracts';
+import {
+  API_RENDER_MEDIA_LIST_MAX,
+  type ApiRenderVariable,
+  type PinnedRenderAsset,
+} from '@continuum/contracts';
 import { Handle, Position } from '@xyflow/react';
 import { Lock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -103,7 +107,9 @@ export function RenderVariableFields({
                   style={{ top: '50%' }}
                 />
                 <span className="text-2xs">
-                  Connect a version-pinned {variable.kind} Library node
+                  {variable.multiple
+                    ? `Connect up to ${API_RENDER_MEDIA_LIST_MAX} version-pinned ${variable.kind} Library nodes — they render in the order you wire them`
+                    : `Connect a version-pinned ${variable.kind} Library node`}
                 </span>
               </>
             ) : variable.kind === 'boolean' ? (

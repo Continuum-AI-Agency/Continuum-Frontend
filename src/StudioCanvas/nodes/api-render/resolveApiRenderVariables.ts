@@ -1,4 +1,9 @@
-import { type ApiRenderInputValue, variationIndexFromHandle } from '@continuum/contracts';
+import {
+  API_RENDER_MEDIA_LIST_MAX,
+  type ApiRenderInputValue,
+  type PinnedRenderAsset,
+  variationIndexFromHandle,
+} from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import type { ApiRenderNodeData, GeneratedImageVariation, StudioNode } from '../../types';
 
@@ -33,14 +38,26 @@ export function resolveApiRenderVariables(args: {
     // and refuse Prepare for a slot the caller is forbidden to fill.
     if (definition.reserved) continue;
     if (definition.kind === 'image' || definition.kind === 'video') {
-      const edge = args.edges.find(
-        (candidate) =>
-          candidate.target === args.nodeId &&
-          candidate.targetHandle === `variable-${definition.key}`,
-      );
-      const source = edge ? byId.get(edge.source) : undefined;
-      const pin = source ? pinFromNode(source, edge?.sourceHandle) : null;
-      if (pin) variables[definition.key] = pin;
+      // Edge order is the order the user wired them; a `multiple` port is a list the
+      // renderer LOOPS over, so position is meaning, not incidental.
+      const pins = args.edges
+        .filter(
+          (candidate) =>
+            candidate.target === args.nodeId &&
+            candidate.targetHandle === `variable-${definition.key}`,
+        )
+        .map((edge) => {
+          const source = byId.get(edge.source);
+          return source ? pinFromNode(source, edge.sourceHandle) : null;
+        });
+      // One guard for both ways a wired slot lies: a member with no durable Library
+      // identity, and more members than the wire contract accepts. Dropping either
+      // would render a shorter list than the canvas shows — succeeding, wrongly.
+      const max = definition.multiple ? API_RENDER_MEDIA_LIST_MAX : 1;
+      if (pins.some((pin) => pin === null) || pins.length > max)
+        errors.push(`${definition.label} needs a version-pinned Library asset`);
+      else if (pins.length > 0)
+        variables[definition.key] = definition.multiple ? (pins as PinnedRenderAsset[]) : pins[0]!;
       else if (definition.required)
         errors.push(`${definition.label} needs a version-pinned Library asset`);
       continue;

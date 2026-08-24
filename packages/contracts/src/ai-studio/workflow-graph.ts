@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { actionDef, actionInputPort, actionOutputModality, isActionId } from './action-registry';
+import { API_RENDER_MEDIA_LIST_MAX } from './api-renders';
 import { batchItemType, MAX_BATCH_ITEMS } from './batch-node';
 import {
   coerceImageSize,
@@ -745,28 +746,41 @@ const publisherTargetHandles = (node: GraphNodeLike): string[] => {
  */
 const apiRenderConnectableVariables = (
   node: GraphNodeLike,
-): Array<{ key: string; kind: 'image' | 'video' }> => {
+): Array<{ key: string; kind: 'image' | 'video'; multiple: boolean }> => {
   const variables = (node.data as { variableDefinitions?: unknown })?.variableDefinitions;
   if (!Array.isArray(variables)) return [];
   return variables.flatMap((variable) => {
     if (!variable || typeof variable !== 'object') return [];
-    const value = variable as { key?: unknown; kind?: unknown; reserved?: unknown };
+    const value = variable as {
+      key?: unknown;
+      kind?: unknown;
+      reserved?: unknown;
+      multiple?: unknown;
+    };
     if (value.reserved === true) return [];
     if (!['image', 'video'].includes(String(value.kind)) || typeof value.key !== 'string')
       return [];
-    return [{ key: value.key, kind: value.kind as 'image' | 'video' }];
+    return [
+      {
+        key: value.key,
+        kind: value.kind as 'image' | 'video',
+        multiple: value.multiple === true,
+      },
+    ];
   });
 };
 
 const apiRenderTargetHandles = (node: GraphNodeLike): string[] =>
   apiRenderConnectableVariables(node).map((variable) => `variable-${variable.key}`);
 
+const apiRenderVariableForHandle = (node: GraphNodeLike, handle: string) =>
+  apiRenderConnectableVariables(node).find((variable) => `variable-${variable.key}` === handle) ??
+  null;
+
 const apiRenderVariableKindForHandle = (
   node: GraphNodeLike,
   handle: string,
-): 'image' | 'video' | null =>
-  apiRenderConnectableVariables(node).find((variable) => `variable-${variable.key}` === handle)
-    ?.kind ?? null;
+): 'image' | 'video' | null => apiRenderVariableForHandle(node, handle)?.kind ?? null;
 
 const isImageReferenceHandle = (handleId?: string | null): boolean =>
   typeof handleId === 'string' && IMAGE_REFERENCE_HANDLE_SET.has(handleId);
@@ -945,7 +959,12 @@ export function getTargetHandleConnectionLimit(
   // One draft per publish. Fanning several drafts into one publish node would make
   // "Post now" mean N irreversible posts behind a single confirmation.
   if (node.type === 'organicPublish' && targetHandle === DRAFT_INPUT_HANDLE) return 1;
-  if (node.type === 'apiRender' && apiRenderTargetHandles(node).includes(targetHandle)) return 1;
+  // A `multiple` variable is a graph-runner `media_list` port; its cap is the wire
+  // contract's own array bound, so the canvas cannot accept an edge preflight refuses.
+  if (node.type === 'apiRender') {
+    const variable = apiRenderVariableForHandle(node, targetHandle);
+    if (variable) return variable.multiple ? API_RENDER_MEDIA_LIST_MAX : 1;
+  }
   if (node.type === 'omniGen' && isImageReferenceHandle(targetHandle)) return 3;
   // The op's own port declares its cap: one clip for a speed change, twenty for a stitch.
   if (node.type === 'action') {

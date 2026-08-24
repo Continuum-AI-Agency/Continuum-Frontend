@@ -28,7 +28,12 @@
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import type { ApiRenderInputSet, ApiRenderJob, ApiRenderVariable } from '@continuum/contracts';
+import {
+  API_RENDER_MEDIA_LIST_MAX,
+  type ApiRenderInputSet,
+  type ApiRenderJob,
+  type ApiRenderVariable,
+} from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
@@ -280,12 +285,16 @@ function Harness({ initial }: { initial: Record<string, unknown> }) {
   );
 }
 
-function renderNode(data: Record<string, unknown> = {}, brandId = BRAND_ID) {
+function renderNode(
+  data: Record<string, unknown> = {},
+  brandId = BRAND_ID,
+  graph: { nodes?: unknown[]; edges?: unknown[] } = {},
+) {
   nodeData = { variables: {}, status: 'idle', ...data };
   useStudioStore.setState({
     brandId,
-    nodes: [],
-    edges: [],
+    nodes: graph.nodes ?? [],
+    edges: graph.edges ?? [],
     updateNode: (() => undefined) as never,
     triggerSave: (() => undefined) as never,
     duplicateNode: (() => undefined) as never,
@@ -493,6 +502,89 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
     expect(field.parentElement?.querySelector('input')).toBeTruthy();
     expect(field.parentElement?.querySelector('select')).toBeNull();
     expect(screen.queryByRole('radiogroup')).toBeNull();
+  });
+});
+
+describe('ApiRenderBlock — a multiple media variable', () => {
+  const gallery = variable({
+    key: 'gallery',
+    label: 'Gallery',
+    kind: 'image',
+    required: true,
+    multiple: true,
+  });
+  const pin = (index: number) => ({
+    assetId: `0000000${index}-0000-4000-8000-00000000000${index}`,
+    versionId: `0000000${index}-0000-4000-9000-00000000000${index}`,
+  });
+  const libraryNode = (index: number) => ({
+    id: `image-${index}`,
+    type: 'image',
+    data: { assetId: pin(index).assetId, assetVersionId: pin(index).versionId },
+  });
+  const galleryEdge = (index: number) => ({
+    id: `edge-${index}`,
+    source: `image-${index}`,
+    sourceHandle: 'image',
+    target: 'render1',
+    targetHandle: 'variable-gallery',
+  });
+  const WIRED = [3, 1, 4, 2, 5];
+
+  test('sends five wired Library images as five pins, in the order they were wired', async () => {
+    currentVariables = [gallery];
+    renderNode(
+      { templateKey: '166', contractHash: 'hash', variableDefinitions: [gallery] },
+      BRAND_ID,
+      { nodes: WIRED.map(libraryNode), edges: WIRED.map(galleryEdge) },
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+    await waitFor(() => expect(calls.preflight.length).toBe(1));
+
+    const sent = (calls.preflight[0]?.variables as Record<string, unknown>).gallery;
+    // Edge order, not node order and not sorted — a media_list port is looped over in
+    // the order it arrives, so position is meaning.
+    expect(sent).toEqual(WIRED.map(pin));
+  });
+
+  test('refuses to prepare when one of the five has no Library identity', async () => {
+    // Sending four would render successfully and WRONGLY — a shorter list than the
+    // canvas shows. Refusing is the only honest answer.
+    currentVariables = [gallery];
+    renderNode(
+      { templateKey: '166', contractHash: 'hash', variableDefinitions: [gallery] },
+      BRAND_ID,
+      {
+        nodes: [
+          ...[1, 2, 4, 5].map(libraryNode),
+          { id: 'image-3', type: 'image', data: { image: 'data:image/png;base64,preview' } },
+        ],
+        edges: [1, 2, 3, 4, 5].map(galleryEdge),
+      },
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+    expect(await screen.findByText('Gallery needs a version-pinned Library asset')).toBeTruthy();
+    expect(calls.preflight.length).toBe(0);
+  });
+
+  test('says one-or-more on a list port and exactly-one on a single port', async () => {
+    renderNode({
+      templateKey: '166',
+      contractHash: 'hash',
+      variableDefinitions: [
+        gallery,
+        variable({ key: 'hero_image', label: 'Hero image', kind: 'image' }),
+      ],
+    });
+
+    expect(
+      await screen.findByText(`Connect up to ${API_RENDER_MEDIA_LIST_MAX} version-pinned image`, {
+        exact: false,
+      }),
+    ).toBeTruthy();
+    expect(await screen.findByText('Connect a version-pinned image Library node')).toBeTruthy();
   });
 });
 

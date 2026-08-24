@@ -126,12 +126,19 @@ export const pinnedRenderAssetSchema = z
   .strict();
 export type PinnedRenderAsset = z.infer<typeof pinnedRenderAssetSchema>;
 
+/**
+ * How many pins one `multiple` media variable may carry. Named rather than inlined
+ * because the canvas enforces the same number as a handle connection limit — two
+ * copies of it would let the graph accept an edge the wire contract then refuses.
+ */
+export const API_RENDER_MEDIA_LIST_MAX = 20;
+
 export const apiRenderInputValueSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
   pinnedRenderAssetSchema,
-  z.array(pinnedRenderAssetSchema).min(1).max(20),
+  z.array(pinnedRenderAssetSchema).min(1).max(API_RENDER_MEDIA_LIST_MAX),
 ]);
 export type ApiRenderInputValue = z.infer<typeof apiRenderInputValueSchema>;
 
