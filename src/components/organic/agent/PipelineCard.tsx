@@ -5,6 +5,7 @@ import {
   resolveOrganicAgentLabel,
   resolveOrganicGenerationDisplay,
 } from '@continuum/contracts';
+import { type ConceptStatus, resolveConceptStatus } from './conceptStatus';
 import {
   AlertCircle,
   Check,
@@ -43,28 +44,6 @@ import type {
 // resolver the generations widget uses, instead of a divergent local map.
 const stageLabel = (stage: PipelineStage): string =>
   resolveOrganicGenerationDisplay({ status: 'running', stage }).label;
-
-const STATUS: Record<
-  PipelineCardState['status'],
-  { label: string; tone: 'running' | 'done' | 'failed' | 'neutral' }
-> = {
-  running: { label: 'Enriching', tone: 'running' },
-  completed: { label: 'Ready', tone: 'done' },
-  failed: { label: 'Failed', tone: 'failed' },
-  cancelled: { label: 'Cancelled', tone: 'neutral' },
-};
-
-// A completed pipeline may have stopped at the copy or blueprint checkpoint. The
-// green done tone is reserved for settled media (generated or user-supplied);
-// mid-ladder outcomes keep the amber working tone so the badge never overstates
-// readiness beside its truthful outcome label.
-function resolveOutcomeTone(card: PipelineCardState): 'running' | 'done' | 'failed' | 'neutral' {
-  if (card.status !== 'completed') return STATUS[card.status].tone;
-  const mediaStatus = card.checkpoint?.mediaStatus;
-  if (mediaStatus === 'ready' || mediaStatus === 'user_supplied') return 'done';
-  if (card.checkpoint?.blueprintReady || card.checkpoint?.textReady) return 'running';
-  return STATUS.completed.tone;
-}
 
 const IMAGE_OUTLINE = 'outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10';
 
@@ -268,15 +247,22 @@ type PipelineCardProps = {
 };
 
 export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineCardProps) {
-  const status = STATUS[card.status];
   const quality = qualityPercent(card.quality?.overallScore);
-  const isRunning = card.status === 'running';
+  // ONE status presentation with the plan row: the resolver owns the vocabulary,
+  // conceptStatus adds the `kind` that separates real progress from a run we have
+  // lost sight of, and media failure from a job that died with nothing to show.
+  const state: ConceptStatus = resolveConceptStatus({
+    status: card.status,
+    stage: card.currentStage ?? null,
+    checkpoint: card.checkpoint ?? null,
+  });
 
-  // While running, surface WHO is working + WHAT stage ("Copywriter · Writing copy"),
-  // matching the generations widget; terminal states keep the outcome label.
+  // While a named stage is genuinely advancing, surface WHO is working + WHAT stage
+  // ("Copywriter · Writing copy"), matching the generations widget. A blind run has
+  // nobody to name, so it must not borrow that confident shape.
   const activeNode = card.stages.find((node) => node.status === 'active');
   const liveLabel =
-    isRunning && activeNode
+    state.advancing && activeNode
       ? [resolveOrganicAgentLabel(activeNode.agentName), stageLabel(activeNode.stage)]
           .filter(Boolean)
           .join(' · ')
@@ -329,16 +315,6 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
     onEnrichDraft && draftId && card.checkpoint?.textReady && !mediaSettled && !showGenerateMedia,
   );
   const [mediaActionSent, setMediaActionSent] = useState(false);
-  const outcomeLabel =
-    card.status !== 'completed'
-      ? status.label
-      : mediaStatus === 'ready' || mediaStatus === 'user_supplied'
-        ? 'Fully fleshed out'
-        : card.checkpoint?.blueprintReady
-          ? 'Preview ready'
-          : card.checkpoint?.textReady
-            ? 'Copy ready'
-            : status.label;
 
   const reconciledRef = useRef(false);
   useEffect(() => {
@@ -356,8 +332,8 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
           {card.platform && <PlatformTag platform={card.platform} />}
           <MetaRow items={[card.preview?.format ?? undefined]} />
         </div>
-        <StatusLabel tone={resolveOutcomeTone(card)}>
-          {liveLabel ?? outcomeLabel}
+        <StatusLabel title={state.diagnostic ?? undefined} tone={state.tone}>
+          {liveLabel ?? state.label}
           {quality != null ? ` · ${quality}%` : ''}
         </StatusLabel>
       </div>
@@ -372,12 +348,19 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
         </div>
       )}
 
-      {isRunning && (
+      {/* Healthy progress animates. A run with no stage frames keeps the bar's space
+          but shows an EMPTY track — no invented percentage, no pulse. */}
+      {state.advancing ? (
         <Progress
           value={Math.max(5, Math.min(100, card.pct ?? 10))}
           className="h-1 bg-muted/70 [&_[data-slot=progress-indicator]]:bg-brand-primary [&_[data-slot=progress-indicator]]:transition-transform [&_[data-slot=progress-indicator]]:duration-500"
         />
-      )}
+      ) : state.kind === 'blind' ? (
+        <div
+          className="h-1 rounded-full bg-muted-foreground/15"
+          title={state.diagnostic ?? undefined}
+        />
+      ) : null}
 
       <PreviewImages images={previewImages} format={card.preview?.format} />
 
@@ -387,7 +370,14 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
         </p>
       )}
 
-      {card.status === 'failed' && card.error?.message && (
+      {state.kind === 'media_failed' && (
+        <p className="flex items-start gap-1.5 text-sm text-destructive/85 text-pretty">
+          <ImageOff aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>The copy is saved — only the media failed to render.</span>
+        </p>
+      )}
+
+      {(state.kind === 'failed' || state.kind === 'media_failed') && card.error?.message && (
         <p className="line-clamp-2 text-sm text-destructive/80">{card.error.message}</p>
       )}
 
@@ -397,9 +387,11 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
             <button
               type="button"
               title={
-                card.checkpoint?.blueprintReady
-                  ? 'Rebuild the blueprint to refresh its preview approval'
-                  : 'Sketch a low-cost blueprint before final media'
+                state.kind === 'media_failed'
+                  ? 'Re-sketch the blueprint and try the media again'
+                  : card.checkpoint?.blueprintReady
+                    ? 'Rebuild the blueprint to refresh its preview approval'
+                    : 'Sketch a low-cost blueprint before final media'
               }
               disabled={mediaActionSent}
               onClick={() => {
@@ -411,9 +403,11 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
               <PencilRuler className="h-3 w-3" />
               {mediaActionSent
                 ? 'Enriching…'
-                : card.checkpoint?.blueprintReady
-                  ? 'Rebuild preview'
-                  : 'Enrich'}
+                : state.kind === 'media_failed'
+                  ? 'Try media again'
+                  : card.checkpoint?.blueprintReady
+                    ? 'Rebuild preview'
+                    : 'Enrich'}
             </button>
           )}
           {showGenerateMedia && (

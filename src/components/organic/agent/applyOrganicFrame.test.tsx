@@ -120,7 +120,17 @@ describe('card terminality · live path', () => {
     const { unmount } = render(
       <PipelineCard card={cardFor(running)} onEnrichDraft={() => {}} onGenerateMedia={() => {}} />,
     );
-    expect(screen.getByText(/Enriching/)).toBeTruthy();
+    // A running card with no stage frames must not borrow the confident progress
+    // wording. It reads as a blind hold, and the diagnostic stays a `title` for
+    // whoever is debugging rather than copy a marketer has to parse.
+    const blind = screen.getByText('Running · no updates yet');
+    // The diagnostic's WORDING belongs to the contracts lifecycle resolver, not to
+    // this surface. Assert that one is attached and stays out of the visible copy —
+    // never its exact sentence, or every rewording upstream breaks a Frontend
+    // presentation test. That already happened once this wave.
+    const diagnostic = blind.getAttribute('title') ?? '';
+    expect(diagnostic.length).toBeGreaterThan(0);
+    expect(screen.queryByText(diagnostic)).toBeNull();
     unmount();
 
     const settled = reduceFrames([completedJobFrame()], running);
@@ -153,7 +163,8 @@ describe('card terminality · live path', () => {
         onGenerate={() => {}}
       />,
     );
-    expect(screen.getAllByText(/Working \(no stage data\)/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Running · no updates yet').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Working \(no stage data\)/)).toBeNull();
     unmount();
 
     const settled = reduceFrames([completedJobFrame()], running);
@@ -165,7 +176,7 @@ describe('card terminality · live path', () => {
         onGenerate={() => {}}
       />,
     );
-    expect(screen.queryAllByText(/Working/)).toHaveLength(0);
+    expect(screen.queryAllByText(/Working|no updates yet/)).toHaveLength(0);
     expect(screen.getAllByText(/Copy ready/).length).toBeGreaterThan(0);
   });
 });

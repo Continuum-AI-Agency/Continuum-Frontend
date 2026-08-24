@@ -200,9 +200,11 @@ describe('PipelineCard awaiting-media-choice invariant', () => {
   });
 });
 
-// The status badge must only turn green once media actually settled. A completed
-// run that stopped at copy or blueprint is still mid-ladder, so it keeps the
-// amber working tone alongside its truthful outcome label.
+// The status badge must only turn green once media actually settled. A completed run
+// that stopped at copy or blueprint is mid-ladder and keeps the amber tone alongside
+// its truthful outcome label — but as the `waiting` tone, not `running`: the work has
+// STOPPED and the next move is the user's, so the dot must not pulse as if a job were
+// still in flight.
 describe('PipelineCard outcome tone', () => {
   afterEach(() => cleanup());
 
@@ -210,6 +212,7 @@ describe('PipelineCard outcome tone', () => {
   // which disambiguates it from checkpoint step labels with the same text.
   const statusBadge = (label: string) =>
     screen.getAllByText(label).find((el) => el.className.includes('tabular-nums'));
+  const badgeDot = (label: string) => statusBadge(label)?.querySelector('span');
 
   it('stays green for a completed card whose media is ready', () => {
     render(
@@ -253,6 +256,20 @@ describe('PipelineCard outcome tone', () => {
     expect(badge).toBeTruthy();
     expect(badge?.className).toContain('text-amber-600');
     expect(badge?.className).not.toContain('text-emerald-600');
+  });
+
+  it('does not pulse a card that has stopped and is waiting on the user', () => {
+    render(<PipelineCard card={card({ textReady: true, blueprintReady: true })} />);
+    expect(badgeDot('Preview ready')?.className).not.toContain('animate-pulse');
+  });
+
+  it('does pulse a card whose media is genuinely rendering', () => {
+    render(
+      <PipelineCard
+        card={card({ textReady: true, blueprintReady: true, mediaStatus: 'generating' })}
+      />,
+    );
+    expect(badgeDot('Fleshing out')?.className).toContain('animate-pulse');
   });
 
   it('leaves the failed tone untouched', () => {
