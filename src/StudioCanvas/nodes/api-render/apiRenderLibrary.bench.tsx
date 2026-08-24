@@ -8,9 +8,16 @@
  * was usually the last to know about it.
  *
  * Asserted here, against the REAL component:
- *   1. while a job is in flight the node re-reads on its own, with no interaction;
+ *   1. while a job is in flight the node re-reads on its own, with no interaction —
+ *      and it reads the PER-JOB route (the backend's live relay, which pulls fleet
+ *      status and runs ingest/delivery reconciliation), not the stored-row list;
  *   2. a finished output is actually displayed, and says whether it reached the
- *      brand's media library yet.
+ *      brand's media library yet;
+ *   3. a job is badged as a watermarked test render — the state rides the contract,
+ *      the UI never assumes it;
+ *   4. the campaign picker stays usable after a campaign is chosen: the campaign
+ *      list is still there and the ad-set list loads beside it (the old single
+ *      shared list vanished on first choice).
  *
  * UN-EXERCISED HOPS, STATED EXPLICITLY — this bench does NOT cover:
  *   · a real browser, the real canvas, or a reload. `apiRendersApi` is mocked here.
@@ -39,6 +46,7 @@ const job = (overrides: Partial<ApiRenderJob> = {}): ApiRenderJob => ({
   contractHash: 'hash',
   taskUid: 'T140po1ho9r14okam',
   status: 'rendering',
+  test: true,
   outputs: [],
   delivery: [],
   error: null,
@@ -60,6 +68,7 @@ const finishedOutput = (assetId: string | null) => ({
 });
 
 let listJobsCalls = 0;
+let getJobCalls = 0;
 let currentJobs: ApiRenderJob[] = [];
 
 mock.module('./apiRendersApi', () => ({
@@ -72,18 +81,46 @@ mock.module('./apiRendersApi', () => ({
     getContract: async () => ({ template: {}, variables: [] }),
     preflight: async () => ({}),
     createJob: async () => ({}),
-    getJob: async () => currentJobs[0],
+    getJob: async (_brandId: string, jobId: string) => {
+      getJobCalls += 1;
+      return currentJobs.find((item) => item.id === jobId) ?? currentJobs[0];
+    },
   },
 }));
 
+const paidTarget = (overrides: Record<string, unknown>) => ({
+  level: 'campaign',
+  status: 'ACTIVE',
+  campaignId: null,
+  campaignName: null,
+  adsetId: null,
+  adsetName: null,
+  creativeId: null,
+  format: null,
+  previewUrl: null,
+  ...overrides,
+});
+
 mock.module('../publish/publishingApi', () => ({
-  publishingApi: { searchPaid: async () => ({ items: [] }) },
+  publishingApi: {
+    searchPaid: async (input: { level: string }) => ({
+      adAccountId: 'act_1',
+      nextCursor: null,
+      items:
+        input.level === 'campaign'
+          ? [
+              paidTarget({ id: 'c1', name: 'Campaign One' }),
+              paidTarget({ id: 'c2', name: 'Campaign Two' }),
+            ]
+          : [paidTarget({ id: 'a1', name: 'Adset One', level: 'adset', campaignId: 'c1' })],
+    }),
+  },
 }));
 
 const { ApiRenderBlock } = await import('../ApiRenderBlock');
 const { useStudioStore } = await import('../../stores/useStudioStore');
 
-function renderNode() {
+function renderNode(data: Record<string, unknown> = { variables: {}, status: 'idle' }) {
   useStudioStore.setState({ brandId: BRAND_ID });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -93,7 +130,7 @@ function renderNode() {
           <ApiRenderBlock
             id="render1"
             type="apiRender"
-            data={{ variables: {}, status: 'idle' } as never}
+            data={data as never}
             selected={false}
             zIndex={0}
             isConnectable
@@ -113,20 +150,22 @@ function renderNode() {
 afterEach(() => {
   cleanup();
   listJobsCalls = 0;
+  getJobCalls = 0;
   currentJobs = [];
 });
 
 describe('ApiRenderBlock', () => {
-  test('re-reads on its own while a render is in flight', async () => {
+  test('re-reads the per-job live relay on its own while a render is in flight', async () => {
     currentJobs = [job({ status: 'rendering' })];
     renderNode();
 
     await waitFor(() => expect(listJobsCalls).toBeGreaterThan(0));
-    const afterMount = listJobsCalls;
+    expect(getJobCalls).toBe(0);
 
-    // No click, no refresh press. If the poll were absent this never advances and
-    // the canvas keeps showing 'rendering' for a render that finished minutes ago.
-    await waitFor(() => expect(listJobsCalls).toBeGreaterThan(afterMount), { timeout: 9_000 });
+    // No click, no refresh press — and the poll must hit getJob, the route whose
+    // backend side pulls fleet status and reconciles ingest/delivery. Polling the
+    // list would freeze the canvas whenever the fleet callback failed to arrive.
+    await waitFor(() => expect(getJobCalls).toBeGreaterThan(0), { timeout: 9_000 });
   }, 15_000);
 
   test('stops re-reading once nothing is in flight', async () => {
@@ -134,9 +173,8 @@ describe('ApiRenderBlock', () => {
     renderNode();
 
     await waitFor(() => expect(listJobsCalls).toBeGreaterThan(0));
-    const settled = listJobsCalls;
     await new Promise((resolve) => setTimeout(resolve, 300));
-    expect(listJobsCalls).toBe(settled);
+    expect(getJobCalls).toBe(0);
   });
 
   test('shows the finished render and reports it reached the library', async () => {
@@ -160,5 +198,32 @@ describe('ApiRenderBlock', () => {
     // The render succeeded; only its library copy has not landed. Claiming 'Saved'
     // here would tell the user something false about where their asset is.
     expect(await screen.findByText('Saving to Library…')).toBeTruthy();
+  });
+
+  test('badges a job as a watermarked test render, from the contract not an assumption', async () => {
+    currentJobs = [job({ status: 'finished', outputs: [finishedOutput('a-1')] })];
+    renderNode();
+
+    expect(await screen.findByText('Test · watermarked')).toBeTruthy();
+  });
+
+  test('the campaign list survives choosing a campaign, and the ad-set list loads beside it', async () => {
+    // The old single shared targets array refetched at ad-set level on first choice,
+    // which emptied the campaign list — re-picking meant blindly clearing the value.
+    renderNode({
+      variables: {},
+      status: 'idle',
+      delivery: {
+        action: 'create',
+        adStatus: 'PAUSED',
+        adAccountId: 'act_1',
+        campaignId: 'c1',
+        campaignName: 'Campaign One',
+      },
+    });
+
+    const otherCampaign = await screen.findByRole('option', { name: 'Campaign Two' });
+    expect(otherCampaign).toBeTruthy();
+    expect(await screen.findByRole('option', { name: 'Adset One' })).toBeTruthy();
   });
 });

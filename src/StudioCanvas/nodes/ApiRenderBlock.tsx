@@ -32,7 +32,7 @@ import {
 } from '@xyflow/react';
 import { Copy, RefreshCw, Trash2 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,9 @@ import type { ApiRenderNodeData, StudioNode } from '../types';
 import { apiRendersApi } from './api-render/apiRendersApi';
 import { resolveApiRenderVariables } from './api-render/resolveApiRenderVariables';
 import { publishingApi } from './publish/publishingApi';
+
+const isInFlight = (job: ApiRenderJob) =>
+  job.status === 'submitting' || job.status === 'queued' || job.status === 'rendering';
 
 const statusLabel = (job: ApiRenderJob) => {
   const receipt = job.delivery[0];
@@ -70,7 +73,12 @@ export function ApiRenderBlock({
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   const { show } = useToast();
   const [templates, setTemplates] = useState<ApiRenderTemplateSummary[]>([]);
-  const [targets, setTargets] = useState<PaidCanvasTarget[]>([]);
+  // Campaigns and ad sets are SEPARATE lists. One shared array meant choosing a
+  // campaign refetched it at ad-set level, so the campaign list vanished and the
+  // picker could never be re-opened without clearing the selection.
+  const [campaignOptions, setCampaignOptions] = useState<PaidCanvasTarget[]>([]);
+  const [adsetOptions, setAdsetOptions] = useState<PaidCanvasTarget[]>([]);
+  const [campaignQuery, setCampaignQuery] = useState('');
   const [jobs, setJobs] = useState<ApiRenderJob[]>([]);
   const [prepared, setPrepared] = useState<ApiRenderPreflightResponse | null>(null);
   const [busy, setBusy] = useState(false);
@@ -100,18 +108,35 @@ export function ApiRenderBlock({
   // A render takes minutes and finishes long after the click. Without this the node
   // only ever updated when someone pressed refresh, so a finished render — and the
   // library asset behind it — stayed invisible on screen that was already showing it.
-  const inFlight = jobs.some(
-    (job) => job.status === 'submitting' || job.status === 'queued' || job.status === 'rendering',
-  );
+  //
+  // The poll reads the PER-JOB route, not the list: GET /jobs/:jobId is the live
+  // relay — the backend pulls fleet status and runs library ingest and delivery
+  // reconciliation on each read — while GET /jobs only returns stored rows. List
+  // polling therefore froze whenever the fleet's callback failed to arrive; this
+  // advances the render either way.
+  const inFlight = jobs.some(isInFlight);
+  const jobsRef = useRef<ApiRenderJob[]>(jobs);
+  useEffect(() => {
+    jobsRef.current = jobs;
+  }, [jobs]);
+  const refreshInFlightJobs = useCallback(async () => {
+    if (!brandId) return;
+    // Three at a time keeps a burst of confirms from turning the poll into a
+    // fan-out; the rest advance on later ticks or the fleet callback.
+    const active = jobsRef.current.filter(isInFlight).slice(0, 3);
+    if (active.length === 0) return;
+    const fresh = await Promise.all(active.map((job) => apiRendersApi.getJob(brandId, job.id)));
+    setJobs((current) => current.map((item) => fresh.find((f) => f.id === item.id) ?? item));
+  }, [brandId]);
   useEffect(() => {
     if (!inFlight) return;
     const timer = setInterval(() => {
-      void refreshJobs().catch(() => {
+      void refreshInFlightJobs().catch(() => {
         // A dropped poll is not a render failure; the next tick retries.
       });
     }, 5_000);
     return () => clearInterval(timer);
-  }, [inFlight, refreshJobs]);
+  }, [inFlight, refreshInFlightJobs]);
 
   useEffect(() => {
     if (!brandId) return;
@@ -144,21 +169,22 @@ export function ApiRenderBlock({
     patchData({ latestOutputs: latestJob.outputs, status: 'finished' });
   }, [latestJob, data.latestOutputs, patchData]);
 
-  const paidLevel = data.delivery?.campaignId ? 'adset' : 'campaign';
+  // Debounced server-side search: the Graph list is capped at 50 per request, so
+  // without a query an account past 50 campaigns could never reach the rest.
   useEffect(() => {
     if (!brandId) return;
     let cancelled = false;
-    void publishingApi
-      .searchPaid({
-        brandId,
-        adAccountId: data.delivery?.adAccountId,
-        level: paidLevel,
-        parentId: paidLevel === 'adset' ? data.delivery?.campaignId : undefined,
-        limit: 50,
-      })
-      .then((response) => {
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await publishingApi.searchPaid({
+          brandId,
+          adAccountId: data.delivery?.adAccountId,
+          level: 'campaign',
+          query: campaignQuery || undefined,
+          limit: 50,
+        });
         if (cancelled) return;
-        setTargets(response.items);
+        setCampaignOptions(response.items);
         if (response.adAccountId !== data.delivery?.adAccountId) {
           patchData({
             delivery: {
@@ -169,6 +195,35 @@ export function ApiRenderBlock({
             },
           });
         }
+      } catch (cause) {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : 'Meta discovery failed');
+        }
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [brandId, campaignQuery, data.delivery, patchData]);
+
+  const chosenCampaignId = data.delivery?.campaignId;
+  useEffect(() => {
+    if (!brandId || !chosenCampaignId) {
+      setAdsetOptions([]);
+      return;
+    }
+    let cancelled = false;
+    void publishingApi
+      .searchPaid({
+        brandId,
+        adAccountId: data.delivery?.adAccountId,
+        level: 'adset',
+        parentId: chosenCampaignId,
+        limit: 50,
+      })
+      .then((response) => {
+        if (!cancelled) setAdsetOptions(response.items);
       })
       .catch(
         (cause) =>
@@ -177,7 +232,7 @@ export function ApiRenderBlock({
     return () => {
       cancelled = true;
     };
-  }, [brandId, data.delivery, paidLevel, patchData]);
+  }, [brandId, chosenCampaignId, data.delivery?.adAccountId]);
 
   const selectTemplate = useCallback(
     async (templateKey: string) => {
@@ -361,13 +416,22 @@ export function ApiRenderBlock({
             </label>
           ))}
 
+          <Input
+            className="nodrag h-7 text-xs"
+            aria-label="Search campaigns"
+            placeholder="Search campaigns…"
+            value={campaignQuery}
+            onChange={(event) => setCampaignQuery(event.target.value)}
+          />
           <div className="grid grid-cols-2 gap-2">
             <select
               aria-label="Meta campaign"
               className="nodrag h-8 rounded-md border border-border bg-background px-2"
               value={data.delivery?.campaignId ?? ''}
               onChange={(event) => {
-                const target = targets.find((item) => item.id === event.target.value);
+                const target = campaignOptions.find((item) => item.id === event.target.value);
+                // Changing campaign always clears the ad set — an ad set from the
+                // previous campaign is never a valid target for the new one.
                 patchData({
                   delivery: {
                     action: 'create',
@@ -380,15 +444,17 @@ export function ApiRenderBlock({
               }}
             >
               <option value="">Campaign…</option>
-              {!data.delivery?.campaignId &&
-                targets.map((target) => (
-                  <option key={target.id} value={target.id}>
-                    {target.name}
-                  </option>
-                ))}
-              {data.delivery?.campaignId ? (
+              {data.delivery?.campaignId &&
+              !campaignOptions.some((item) => item.id === data.delivery?.campaignId) ? (
+                // The chosen campaign stays selectable even when the current search
+                // filters it out — otherwise the select shows an empty value.
                 <option value={data.delivery.campaignId}>{data.delivery.campaignName}</option>
               ) : null}
+              {campaignOptions.map((target) => (
+                <option key={target.id} value={target.id}>
+                  {target.name}
+                </option>
+              ))}
             </select>
             <select
               aria-label="Meta ad set"
@@ -396,19 +462,18 @@ export function ApiRenderBlock({
               value={data.delivery?.adsetId ?? ''}
               disabled={!data.delivery?.campaignId}
               onChange={(event) => {
-                const target = targets.find((item) => item.id === event.target.value);
+                const target = adsetOptions.find((item) => item.id === event.target.value);
                 patchData({
                   delivery: { ...data.delivery!, adsetId: target?.id, adsetName: target?.name },
                 });
               }}
             >
               <option value="">Ad set…</option>
-              {data.delivery?.campaignId &&
-                targets.map((target) => (
-                  <option key={target.id} value={target.id}>
-                    {target.name}
-                  </option>
-                ))}
+              {adsetOptions.map((target) => (
+                <option key={target.id} value={target.id}>
+                  {target.name}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -426,6 +491,7 @@ export function ApiRenderBlock({
               <p>
                 {prepared.target.campaignName} → {prepared.target.adsetName}
               </p>
+              {prepared.test ? <p className="font-medium">Test render — watermarked</p> : null}
               <p className="font-mono">
                 {prepared.confirmationHash.slice(0, 12)}… · expires{' '}
                 {new Date(prepared.expiresAt).toLocaleTimeString()}
@@ -494,7 +560,14 @@ export function ApiRenderBlock({
                     );
                   }}
                 >
-                  <span className="block truncate font-medium">{job.templateName}</span>
+                  <span className="flex items-center gap-1">
+                    <span className="truncate font-medium">{job.templateName}</span>
+                    {job.test ? (
+                      <span className="shrink-0 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 text-2xs">
+                        Test · watermarked
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="block truncate text-muted-foreground">{statusLabel(job)}</span>
                 </button>
                 {job.outputs[0] ? (
