@@ -26,6 +26,12 @@ export function resolveApiRenderVariables(args: {
   const errors: string[] = [];
   const byId = new Map(args.nodes.map((node) => [node.id, node]));
   for (const definition of args.data.variableDefinitions ?? []) {
+    // The server fills a reserved variable (today: `watermark_logo`, the brand's own
+    // mark, content-addressed and pinned during preflight) and REFUSES a caller-supplied
+    // value. Skipping it is not cosmetic: a reserved variable is `required` too, so
+    // keying off `required` alone would raise "needs a version-pinned Library asset"
+    // and refuse Prepare for a slot the caller is forbidden to fill.
+    if (definition.reserved) continue;
     if (definition.kind === 'image' || definition.kind === 'video') {
       const edge = args.edges.find(
         (candidate) =>

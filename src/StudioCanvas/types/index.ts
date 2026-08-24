@@ -514,12 +514,33 @@ export interface ApiRenderNodeData extends BaseNodeData {
   status: 'idle' | 'prepared' | 'submitting' | 'queued' | 'rendering' | 'finished' | 'failed';
   latestJobId?: string;
   /**
-   * The latest job's finished outputs, kept on the node so a render survives a
-   * remount. Jobs themselves live in component state and are re-fetched; these
-   * exist so the canvas still shows what it produced before that returns.
-   * Safe to persist in the graph: URLs and library ids, no brand claim.
+   * Meta delivery is OPT-IN. A render that lands in the brand's library and nowhere
+   * else is the common case, and the backend has always allowed it (`delivery` is
+   * optional at preflight). Absent means off, so no saved node needs a migration.
    */
-  latestOutputs?: ApiRenderOutput[];
+  deliveryEnabled?: boolean;
+  /** The saved input set currently driving this node, if any. */
+  inputSetId?: string | null;
+  /** The sets selected for a multi-set batch. */
+  batchInputSetIds?: string[];
+  /**
+   * Every job this node has launched. The ONLY durable handle a batch will ever get:
+   * `media.ad_render_jobs` has no batch column and `POST /batches` returns its job
+   * list exactly once, so a remount without this loses the batch entirely.
+   */
+  jobIds?: string[];
+  /**
+   * The latest job's finished outputs, kept on the node so a render survives a
+   * remount before the job fetch lands.
+   *
+   * The URL is deliberately NOT persisted. Both the fleet URL and the library-signed
+   * one the backend now prefers expire, so a saved copy renders a broken preview on
+   * every later open. Only the durable descriptor is kept; the displayable URL always
+   * comes from the live job DTO.
+   */
+  latestOutputs?: Array<
+    Pick<ApiRenderOutput, 'id' | 'kind' | 'fileName' | 'assetId' | 'versionId'>
+  >;
 }
 
 // One clip in an Omni node's variation micro-library. The first is the

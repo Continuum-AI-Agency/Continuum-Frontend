@@ -18,6 +18,22 @@ export const apiRenderVariableKeySchema = z
     message: 'Physical renderer field names are private',
   });
 
+/**
+ * The one variable key both sides agree on without negotiating it. A template that
+ * declares it is asking for the BRAND's mark, so Continuum fills it and the caller
+ * may not.
+ *
+ * Reserved rather than merely defaulted: a caller-supplied value would render some
+ * other brand's logo under this brand's binding, and silently overriding one would
+ * render something the caller never asked for. Refuse — the same discipline as
+ * `brand_id` vs `delivery.brand_id`, which agree or fail rather than taking a
+ * precedence rule.
+ *
+ * The handshake is the template field's TITLE: template-forge names it so that
+ * `publicVariableKey()` normalises to exactly this string.
+ */
+export const WATERMARK_LOGO_VARIABLE_KEY = 'watermark_logo';
+
 export const apiRenderVariableKindSchema = z.enum([
   'text',
   'number',
@@ -38,6 +54,12 @@ export const apiRenderVariableSchema = z
     accept: z.array(z.string().min(1)).default([]),
     options: z.array(z.string()).default([]),
     description: z.string().nullable().default(null),
+    // The server fills this one: do not send it, and do not render an input for it.
+    // Distinct from `required`, which says a value must reach the renderer — a
+    // reserved variable is both required AND caller-forbidden, so a client that keys
+    // off `required` alone will either refuse to render or offer the wrong control.
+    // Defaulted so a server too old to emit it stays contract-valid.
+    reserved: z.boolean().default(false),
   })
   .strict();
 export type ApiRenderVariable = z.infer<typeof apiRenderVariableSchema>;
@@ -267,6 +289,11 @@ export const apiRenderJobSchema = z
     contractHash: z.string().min(1),
     taskUid: z.string().nullable(),
     status: z.enum(['submitting', 'queued', 'rendering', 'finished', 'failed']),
+    // True means the fleet watermarks the output — every render Continuum submits
+    // today. Carried on the wire so the UI states the fact instead of assuming it,
+    // and so a future unwatermarked production mode cannot ship invisibly. Defaulted
+    // because a server too old to emit it is one that only produced test renders.
+    test: z.boolean().default(true),
     outputs: z.array(apiRenderOutputSchema),
     delivery: z.array(apiRenderDeliveryReceiptSchema),
     error: z.string().nullable(),
@@ -316,6 +343,13 @@ export const apiRenderPreflightResponseSchema = z
     target: resolvedRenderTargetSchema.nullable(),
     inputKeys: z.array(z.string()),
     effects: z.literal('none'),
+    // Mirrors the `test` flag frozen into the signed trigger — see apiRenderJobSchema.
+    test: z.boolean().default(true),
+    // The exact brand-logo pin frozen into the signed confirmation, when this
+    // template declares `watermark_logo`. Echoed so the UI and a bench can SEE what
+    // was locked rather than infer it from `inputKeys` — a key name proves a slot was
+    // filled, not which asset filled it. Null when the template has no such slot.
+    watermarkLogo: pinnedRenderAssetSchema.nullable().default(null),
   })
   .strict();
 export type ApiRenderPreflightResponse = z.infer<typeof apiRenderPreflightResponseSchema>;
@@ -332,9 +366,7 @@ export const apiRenderBatchPreflightResponseSchema = z
     effects: z.literal('none'),
   })
   .strict();
-export type ApiRenderBatchPreflightResponse = z.infer<
-  typeof apiRenderBatchPreflightResponseSchema
->;
+export type ApiRenderBatchPreflightResponse = z.infer<typeof apiRenderBatchPreflightResponseSchema>;
 
 export const apiRenderBatchSchema = z
   .object({ batchId: z.string().uuid(), jobs: z.array(apiRenderJobSchema) })

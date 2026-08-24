@@ -7,6 +7,10 @@ const RENDER_DISCOVERY_MESSAGES: Record<string, string> = {
     'This brand is not connected to a render workspace yet. Ask your Continuum contact to set one up.',
   render_binding_lookup_failed: 'Could not read this brand’s render workspace. Try again shortly.',
   render_api_not_configured: 'Rendering is not configured for this environment yet.',
+  render_input_set_name_taken: 'A set with that name already exists for this template.',
+  render_contract_changed:
+    'This template changed since that set was saved. Re-pick the template and save the set again.',
+  render_reserved_variable: 'That variable is filled by Continuum and cannot be sent.',
 };
 
 export function describeRenderDiscoveryFailure(message: string): string {
@@ -17,47 +21,48 @@ export function describeRenderDiscoveryFailure(message: string): string {
 }
 
 import type {
-  ApiRenderJob,
+  ApiRenderBatchPreflightResponse,
+  ApiRenderInputSet,
+  ApiRenderPreflightRequest,
   ApiRenderPreflightResponse,
   ApiRenderTemplateSummary,
   ApiRenderWorkspaceStatus,
   PaidCanvasTarget,
 } from '@continuum/contracts';
-import {
-  Handle,
-  type NodeProps,
-  NodeResizer,
-  Position,
-  type Node as ReactFlowNode,
-} from '@xyflow/react';
+import { type NodeProps, NodeResizer, type Node as ReactFlowNode } from '@xyflow/react';
 import { Copy, RefreshCw, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+
 import { useToast } from '@/components/ui/ToastProvider';
 import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { ApiRenderNodeData, StudioNode } from '../types';
 import { apiRendersApi } from './api-render/apiRendersApi';
+import { RenderJobCard } from './api-render/RenderJobCard';
+import { RenderVariableFields } from './api-render/RenderVariableFields';
 import { resolveApiRenderVariables } from './api-render/resolveApiRenderVariables';
+import { useApiRenderJobs } from './api-render/useApiRenderJobs';
 import { publishingApi } from './publish/publishingApi';
 
-const isInFlight = (job: ApiRenderJob) =>
-  job.status === 'submitting' || job.status === 'queued' || job.status === 'rendering';
-
-const statusLabel = (job: ApiRenderJob) => {
-  const receipt = job.delivery[0];
-  if (receipt?.status === 'published') return `Published · Meta ad ${receipt.adId ?? 'created'}`;
-  if (receipt?.status === 'error' || receipt?.status === 'dropped') {
-    return `Delivery ${receipt.status} · ${receipt.reason ?? 'See render log'}`;
-  }
-  if (job.status === 'finished')
-    return receipt ? 'Render finished · delivery pending' : 'Render finished';
-  return job.status;
-};
+/**
+ * Whether the render fleet will honour THIS brand's workspace.
+ *
+ * The backend already filters templates twice — the fleet is asked in the brand's bound
+ * environment, and the result is intersected fail-closed with the brand's membership
+ * allowlist. But whether the fleet honours the environment at all is PROBED: when the env
+ * plane is undeployed the fleet does not reject the request, it answers from the shared
+ * workspace instead, which looks like success. `renderEligible` is that verdict.
+ *
+ * So the node gates rather than filters: it never adds to or subtracts from the server's
+ * list, it refuses to OFFER a list the server says is not this brand's.
+ */
+const canOfferTemplates = (workspace: ApiRenderWorkspaceStatus | null) =>
+  workspace?.renderEligible === true;
 
 export function ApiRenderBlock({
   id,
@@ -79,14 +84,22 @@ export function ApiRenderBlock({
   const [campaignOptions, setCampaignOptions] = useState<PaidCanvasTarget[]>([]);
   const [adsetOptions, setAdsetOptions] = useState<PaidCanvasTarget[]>([]);
   const [campaignQuery, setCampaignQuery] = useState('');
-  const [jobs, setJobs] = useState<ApiRenderJob[]>([]);
   const [prepared, setPrepared] = useState<ApiRenderPreflightResponse | null>(null);
+  const [batchPrepared, setBatchPrepared] = useState<ApiRenderBatchPreflightResponse | null>(null);
+  const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
+  const [setName, setSetName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   // Separate from `error`: a workspace that the render fleet does not honour is
   // not a failed request, it is a working request with the wrong destination.
   // Showing it as an error would be wrong, and showing nothing is worse.
   const [workspace, setWorkspace] = useState<ApiRenderWorkspaceStatus | null>(null);
+
+  const deliveryEnabled = data.deliveryEnabled === true;
+  const trackedIds = data.jobIds ?? (data.latestJobId ? [data.latestJobId] : []);
+  const { jobs, setJobs, error, setError, refreshJobs, refreshOne } = useApiRenderJobs({
+    brandId,
+    trackedIds,
+  });
 
   const patchData = useCallback(
     (patch: Partial<ApiRenderNodeData>) => {
@@ -99,54 +112,41 @@ export function ApiRenderBlock({
     [id, updateNode],
   );
 
-  const refreshJobs = useCallback(async () => {
-    if (!brandId) return;
-    const response = await apiRendersApi.listJobs(brandId, 8);
-    setJobs(response.items);
-  }, [brandId]);
-
-  // A render takes minutes and finishes long after the click. Without this the node
-  // only ever updated when someone pressed refresh, so a finished render — and the
-  // library asset behind it — stayed invisible on screen that was already showing it.
-  //
-  // The poll reads the PER-JOB route, not the list: GET /jobs/:jobId is the live
-  // relay — the backend pulls fleet status and runs library ingest and delivery
-  // reconciliation on each read — while GET /jobs only returns stored rows. List
-  // polling therefore froze whenever the fleet's callback failed to arrive; this
-  // advances the render either way.
-  const inFlight = jobs.some(isInFlight);
-  const jobsRef = useRef<ApiRenderJob[]>(jobs);
+  // A brand switch invalidates everything on this node: the template list, the contract,
+  // and above all `prepared` — a confirmation token signed for the PREVIOUS brand, still
+  // one click from being submitted. Refetching alone left all of it on screen.
+  const lastBrandId = useRef<string | null>(brandId);
   useEffect(() => {
-    jobsRef.current = jobs;
-  }, [jobs]);
-  const refreshInFlightJobs = useCallback(async () => {
-    if (!brandId) return;
-    // Three at a time keeps a burst of confirms from turning the poll into a
-    // fan-out; the rest advance on later ticks or the fleet callback.
-    const active = jobsRef.current.filter(isInFlight).slice(0, 3);
-    if (active.length === 0) return;
-    const fresh = await Promise.all(active.map((job) => apiRendersApi.getJob(brandId, job.id)));
-    setJobs((current) => current.map((item) => fresh.find((f) => f.id === item.id) ?? item));
-  }, [brandId]);
-  useEffect(() => {
-    if (!inFlight) return;
-    const timer = setInterval(() => {
-      void refreshInFlightJobs().catch(() => {
-        // A dropped poll is not a render failure; the next tick retries.
-      });
-    }, 5_000);
-    return () => clearInterval(timer);
-  }, [inFlight, refreshInFlightJobs]);
+    if (lastBrandId.current === brandId) return;
+    lastBrandId.current = brandId;
+    setTemplates([]);
+    setJobs([]);
+    setInputSets([]);
+    setPrepared(null);
+    setBatchPrepared(null);
+    setWorkspace(null);
+    setError(null);
+    patchData({
+      templateKey: null,
+      templateName: null,
+      contractHash: null,
+      variableDefinitions: [],
+      variables: {},
+      inputSetId: null,
+      batchInputSetIds: [],
+      status: 'idle',
+    });
+  }, [brandId, patchData, setError, setJobs]);
 
   useEffect(() => {
     if (!brandId) return;
     let cancelled = false;
-    void Promise.all([apiRendersApi.listTemplates(brandId), apiRendersApi.listJobs(brandId, 8)])
-      .then(([templateResponse, jobResponse]) => {
+    void apiRendersApi
+      .listTemplates(brandId)
+      .then((response) => {
         if (cancelled) return;
-        setTemplates(templateResponse.items);
-        setJobs(jobResponse.items);
-        setWorkspace(templateResponse.workspace ?? null);
+        setTemplates(response.items);
+        setWorkspace(response.workspace ?? null);
       })
       .catch(
         (cause) =>
@@ -160,19 +160,63 @@ export function ApiRenderBlock({
     return () => {
       cancelled = true;
     };
+  }, [brandId, setError]);
+
+  // Jobs have exactly ONE loader. Two effects both calling the list raced, and the loser
+  // overwrote the tracked-id recovery that makes a batch survive a reload — nothing
+  // server-side remembers a batch, so that recovery is the whole handle.
+  // `refreshJobs` re-identifies whenever the tracked list changes; a ref keeps this a
+  // brand-scoped load instead of a refetch on every confirm.
+  const loadJobs = useRef(refreshJobs);
+  useEffect(() => {
+    loadJobs.current = refreshJobs;
+  });
+  useEffect(() => {
+    if (!brandId) return;
+    void loadJobs.current().catch(() => {
+      // Template discovery above already surfaces an unreachable backend.
+    });
   }, [brandId]);
 
   const latestJob = data.latestJobId ? jobs.find((job) => job.id === data.latestJobId) : undefined;
   useEffect(() => {
     if (!latestJob || latestJob.status !== 'finished' || latestJob.outputs.length === 0) return;
-    if (JSON.stringify(data.latestOutputs ?? []) === JSON.stringify(latestJob.outputs)) return;
-    patchData({ latestOutputs: latestJob.outputs, status: 'finished' });
+    // The URL is dropped on purpose: both the fleet link and the library-signed one the
+    // backend now prefers expire, so persisting either renders a broken preview later.
+    const durable = latestJob.outputs.map((output) => ({
+      id: output.id,
+      kind: output.kind,
+      fileName: output.fileName,
+      assetId: output.assetId,
+      versionId: output.versionId,
+    }));
+    if (JSON.stringify(data.latestOutputs ?? []) === JSON.stringify(durable)) return;
+    patchData({ latestOutputs: durable, status: 'finished' });
   }, [latestJob, data.latestOutputs, patchData]);
 
-  // Debounced server-side search: the Graph list is capped at 50 per request, so
-  // without a query an account past 50 campaigns could never reach the rest.
+  // Saved sets are brand AND template scoped — a set authored against one template's
+  // contract means nothing against another.
   useEffect(() => {
-    if (!brandId) return;
+    if (!brandId || !data.templateKey) {
+      setInputSets([]);
+      return;
+    }
+    let cancelled = false;
+    void apiRendersApi
+      .listInputSets(brandId, data.templateKey)
+      .then((response) => !cancelled && setInputSets(response.items))
+      .catch(() => {
+        // A missing set list must not block rendering; the picker just stays empty.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, data.templateKey]);
+
+  // Meta discovery runs ONLY when delivery is switched on. It used to run on every mount,
+  // so every library-only render paid for a Graph campaign search it never used.
+  useEffect(() => {
+    if (!brandId || !deliveryEnabled) return;
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       try {
@@ -205,11 +249,11 @@ export function ApiRenderBlock({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [brandId, campaignQuery, data.delivery, patchData]);
+  }, [brandId, campaignQuery, data.delivery, deliveryEnabled, patchData, setError]);
 
   const chosenCampaignId = data.delivery?.campaignId;
   useEffect(() => {
-    if (!brandId || !chosenCampaignId) {
+    if (!brandId || !deliveryEnabled || !chosenCampaignId) {
       setAdsetOptions([]);
       return;
     }
@@ -232,7 +276,7 @@ export function ApiRenderBlock({
     return () => {
       cancelled = true;
     };
-  }, [brandId, chosenCampaignId, data.delivery?.adAccountId]);
+  }, [brandId, chosenCampaignId, data.delivery?.adAccountId, deliveryEnabled, setError]);
 
   const selectTemplate = useCallback(
     async (templateKey: string) => {
@@ -240,6 +284,7 @@ export function ApiRenderBlock({
       setBusy(true);
       setError(null);
       setPrepared(null);
+      setBatchPrepared(null);
       try {
         const contract = await apiRendersApi.getContract(brandId, templateKey);
         patchData({
@@ -248,6 +293,8 @@ export function ApiRenderBlock({
           contractHash: contract.template.contractHash,
           variableDefinitions: contract.variables,
           variables: {},
+          inputSetId: null,
+          batchInputSetIds: [],
           status: 'idle',
         });
       } catch (cause) {
@@ -256,44 +303,65 @@ export function ApiRenderBlock({
         setBusy(false);
       }
     },
-    [brandId, patchData],
+    [brandId, patchData, setError],
   );
+
+  // Delivery is the caller's choice, and the contract says variables come from exactly one
+  // place — inline values OR a saved set, never both.
+  const deliveryBlock = useCallback(() => {
+    if (!deliveryEnabled) return undefined;
+    const target = data.delivery;
+    if (!target?.adAccountId || !target.campaignId || !target.adsetId) return null;
+    return {
+      action: 'create' as const,
+      adAccountId: target.adAccountId,
+      campaignId: target.campaignId,
+      adsetId: target.adsetId,
+      adStatus: 'PAUSED' as const,
+    };
+  }, [data.delivery, deliveryEnabled]);
 
   const prepare = useCallback(async () => {
     if (!brandId || !data.templateKey || !data.contractHash) return;
-    if (!data.delivery?.adAccountId || !data.delivery.campaignId || !data.delivery.adsetId) {
-      setError('Choose a campaign and ad set before preparing the render.');
+    const delivery = deliveryBlock();
+    if (delivery === null) {
+      setError('Choose a campaign and ad set, or switch Meta delivery off.');
       return;
     }
-    const resolved = resolveApiRenderVariables({ nodeId: id, data, nodes, edges });
-    if (resolved.errors.length > 0) {
-      setError(resolved.errors.join(' · '));
-      return;
+    // Variables come from exactly one place — inline values OR a saved set. The contract
+    // refuses both and refuses neither, so the request is built in one branch or the other
+    // rather than merged.
+    const base = {
+      brandId,
+      templateKey: data.templateKey,
+      contractHash: data.contractHash,
+      ...(delivery ? { delivery } : {}),
+    };
+    let request: ApiRenderPreflightRequest;
+    if (data.inputSetId) {
+      request = { ...base, inputSetId: data.inputSetId };
+    } else {
+      const resolved = resolveApiRenderVariables({ nodeId: id, data, nodes, edges });
+      if (resolved.errors.length > 0) {
+        setError(resolved.errors.join(' · '));
+        return;
+      }
+      request = { ...base, variables: resolved.variables };
     }
     setBusy(true);
     setError(null);
     try {
-      const response = await apiRendersApi.preflight({
-        brandId,
-        templateKey: data.templateKey,
-        contractHash: data.contractHash,
-        variables: resolved.variables,
-        delivery: {
-          action: 'create',
-          adAccountId: data.delivery.adAccountId,
-          campaignId: data.delivery.campaignId,
-          adsetId: data.delivery.adsetId,
-          adStatus: 'PAUSED',
-        },
-      });
+      const response = await apiRendersApi.preflight(request);
       setPrepared(response);
       patchData({ status: 'prepared' });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Preflight failed');
+      setError(
+        cause instanceof Error ? describeRenderDiscoveryFailure(cause.message) : 'Preflight failed',
+      );
     } finally {
       setBusy(false);
     }
-  }, [brandId, data, edges, id, nodes, patchData]);
+  }, [brandId, data, deliveryBlock, edges, id, nodes, patchData, setError]);
 
   const confirm = useCallback(async () => {
     if (!prepared) return;
@@ -303,12 +371,17 @@ export function ApiRenderBlock({
     try {
       const job = await apiRendersApi.createJob({ confirmationToken: prepared.confirmationToken });
       setPrepared(null);
-      patchData({ latestJobId: job.id, status: job.status });
+      patchData({
+        latestJobId: job.id,
+        jobIds: [...new Set([...(data.jobIds ?? []), job.id])],
+        status: job.status,
+      });
       await refreshJobs();
       show({
         title: 'Render queued',
-        description:
-          'The delivery remains PAUSED in Meta. Track render and publication receipts below.',
+        description: deliveryEnabled
+          ? 'The delivery remains PAUSED in Meta. Track render and publication receipts below.'
+          : 'Rendering to this brand’s library. No Meta ad is created.',
         variant: 'success',
       });
     } catch (cause) {
@@ -318,7 +391,121 @@ export function ApiRenderBlock({
     } finally {
       setBusy(false);
     }
-  }, [patchData, prepared, refreshJobs, show]);
+  }, [data.jobIds, deliveryEnabled, patchData, prepared, refreshJobs, setError, show]);
+
+  const saveInputSet = useCallback(async () => {
+    if (!brandId || !data.templateKey || !data.contractHash || !setName.trim()) return;
+    const resolved = resolveApiRenderVariables({ nodeId: id, data, nodes, edges });
+    if (resolved.errors.length > 0) {
+      setError(resolved.errors.join(' · '));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      // The RESOLVED variables are what gets stored — pins included, the reserved key
+      // excluded — so replaying a set reproduces the render rather than a half of it.
+      const created = await apiRendersApi.createInputSet({
+        brandId,
+        templateKey: data.templateKey,
+        contractHash: data.contractHash,
+        name: setName.trim(),
+        variables: resolved.variables,
+      });
+      setInputSets((current) => [created, ...current]);
+      setSetName('');
+      patchData({ inputSetId: created.id });
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? describeRenderDiscoveryFailure(cause.message) : 'Save failed',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [brandId, data, edges, id, nodes, patchData, setError, setName]);
+
+  const deleteInputSet = useCallback(async () => {
+    if (!brandId || !data.inputSetId) return;
+    const doomed = data.inputSetId;
+    setBusy(true);
+    try {
+      await apiRendersApi.deleteInputSet(brandId, doomed);
+      setInputSets((current) => current.filter((item) => item.id !== doomed));
+      patchData({
+        inputSetId: null,
+        batchInputSetIds: (data.batchInputSetIds ?? []).filter((item) => item !== doomed),
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Delete failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [brandId, data.batchInputSetIds, data.inputSetId, patchData, setError]);
+
+  const batchIds = data.batchInputSetIds ?? [];
+  const prepareBatch = useCallback(async () => {
+    if (!brandId || !data.templateKey || !data.contractHash || batchIds.length === 0) return;
+    const delivery = deliveryBlock();
+    if (delivery === null) {
+      setError('Choose a campaign and ad set, or switch Meta delivery off.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await apiRendersApi.batchPreflight({
+        brandId,
+        templateKey: data.templateKey,
+        contractHash: data.contractHash,
+        ...(delivery ? { delivery } : {}),
+        records: batchIds.map((inputSetId) => ({
+          label: inputSets.find((item) => item.id === inputSetId)?.name ?? inputSetId,
+          inputSetId,
+        })),
+      });
+      setBatchPrepared(response);
+      setPrepared(null);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? describeRenderDiscoveryFailure(cause.message)
+          : 'Batch preflight failed',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [batchIds, brandId, data.contractHash, data.templateKey, deliveryBlock, inputSets, setError]);
+
+  const confirmBatch = useCallback(async () => {
+    if (!batchPrepared) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const batch = await apiRendersApi.createBatch({
+        confirmationToken: batchPrepared.confirmationToken,
+      });
+      setBatchPrepared(null);
+      // This response is the ONLY handle these jobs will ever have: no batch id is
+      // persisted server-side and `GET /jobs` cannot filter by one. Losing it loses them.
+      patchData({
+        jobIds: [...new Set([...(data.jobIds ?? []), ...batch.jobs.map((job) => job.id)])],
+        latestJobId: batch.jobs[0]?.id ?? data.latestJobId,
+        status: 'submitting',
+      });
+      await refreshJobs();
+      show({
+        title: `${batch.jobs.length} renders queued`,
+        description: 'Tracked on this node. Each advances on its own.',
+        variant: 'success',
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Batch submission failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [batchPrepared, data.jobIds, data.latestJobId, patchData, refreshJobs, setError, show]);
+
+  const templatesOffered = canOfferTemplates(workspace);
 
   return (
     <div
@@ -338,19 +525,19 @@ export function ApiRenderBlock({
           <div className="flex items-center justify-between">
             <span className="font-medium">API Render</span>
             <span className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
-              Render → Meta
+              {deliveryEnabled ? 'Render → Meta' : 'Render → Library'}
             </span>
           </div>
           <p className="rounded bg-muted/60 px-2 py-1 text-2xs text-muted-foreground">
-            Manual handoff. Prepare has no effects; Confirm queues a watermarked render and a PAUSED
-            ad.
+            Manual handoff. Prepare has no effects; Confirm queues a watermarked render
+            {deliveryEnabled ? ' and a PAUSED ad.' : ' into this brand’s library.'}
           </p>
 
           <select
             aria-label="Render template"
-            className="nodrag h-8 rounded-md border border-border bg-background px-2"
+            className="nodrag h-8 rounded-md border border-border bg-background px-2 disabled:opacity-60"
             value={data.templateKey ?? ''}
-            disabled={busy}
+            disabled={busy || !templatesOffered}
             onChange={(event) => void selectTemplate(event.target.value)}
           >
             <option value="">Choose template…</option>
@@ -361,140 +548,213 @@ export function ApiRenderBlock({
             ))}
           </select>
 
-          {(data.variableDefinitions ?? []).map((variable) => (
-            // biome-ignore lint/a11y/noLabelWithoutControl: wraps its own input a few lines below
-            <label
-              key={variable.key}
-              className="relative flex flex-col gap-1 rounded border border-border/70 p-2"
-            >
-              <span className="text-2xs text-muted-foreground">
-                {variable.label}
-                {variable.required ? ' *' : ''}
-              </span>
-              {['image', 'video'].includes(variable.kind) ? (
-                <>
-                  <Handle
-                    type="target"
-                    id={`variable-${variable.key}`}
-                    position={Position.Left}
-                    className="!h-3 !w-3 !bg-brand-primary"
-                    style={{ top: '50%' }}
-                  />
-                  <span className="text-2xs">
-                    Connect a version-pinned {variable.kind} Library node
-                  </span>
-                </>
-              ) : variable.kind === 'boolean' ? (
-                <input
-                  className="nodrag"
-                  type="checkbox"
-                  checked={Boolean(data.variables?.[variable.key])}
-                  onChange={(event) =>
-                    patchData({
-                      variables: { ...data.variables, [variable.key]: event.target.checked },
-                    })
-                  }
-                />
-              ) : (
+          <RenderVariableFields
+            definitions={data.variableDefinitions ?? []}
+            values={data.variables}
+            watermarkLogo={prepared?.watermarkLogo ?? null}
+            prepared={prepared !== null}
+            onChange={(key, value) =>
+              patchData({ variables: { ...data.variables, [key]: value }, inputSetId: null })
+            }
+          />
+
+          {data.templateKey ? (
+            <div className="flex flex-col gap-1 rounded border border-border/70 p-2">
+              <span className="text-2xs text-muted-foreground">Saved input sets</span>
+              <select
+                aria-label="Saved input set"
+                className="nodrag h-8 rounded-md border border-border bg-background px-2"
+                value={data.inputSetId ?? ''}
+                onChange={(event) => patchData({ inputSetId: event.target.value || null })}
+              >
+                <option value="">Use the values above…</option>
+                {inputSets.map((set) => (
+                  <option key={set.id} value={set.id}>
+                    {set.name}
+                  </option>
+                ))}
+              </select>
+              <div className="flex gap-1">
                 <Input
                   className="nodrag h-7 text-xs"
-                  type={variable.kind === 'number' ? 'number' : 'text'}
-                  value={String(data.variables?.[variable.key] ?? '')}
-                  onChange={(event) =>
-                    patchData({
-                      variables: {
-                        ...data.variables,
-                        [variable.key]:
-                          variable.kind === 'number'
-                            ? Number(event.target.value)
-                            : event.target.value,
-                      },
-                    })
-                  }
+                  aria-label="New input set name"
+                  placeholder="Name this set…"
+                  value={setName}
+                  onChange={(event) => setSetName(event.target.value)}
                 />
-              )}
-            </label>
-          ))}
-
-          <Input
-            className="nodrag h-7 text-xs"
-            aria-label="Search campaigns"
-            placeholder="Search campaigns…"
-            value={campaignQuery}
-            onChange={(event) => setCampaignQuery(event.target.value)}
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <select
-              aria-label="Meta campaign"
-              className="nodrag h-8 rounded-md border border-border bg-background px-2"
-              value={data.delivery?.campaignId ?? ''}
-              onChange={(event) => {
-                const target = campaignOptions.find((item) => item.id === event.target.value);
-                // Changing campaign always clears the ad set — an ad set from the
-                // previous campaign is never a valid target for the new one.
-                patchData({
-                  delivery: {
-                    action: 'create',
-                    adStatus: 'PAUSED',
-                    adAccountId: data.delivery?.adAccountId,
-                    campaignId: target?.id,
-                    campaignName: target?.name,
-                  },
-                });
-              }}
-            >
-              <option value="">Campaign…</option>
-              {data.delivery?.campaignId &&
-              !campaignOptions.some((item) => item.id === data.delivery?.campaignId) ? (
-                // The chosen campaign stays selectable even when the current search
-                // filters it out — otherwise the select shows an empty value.
-                <option value={data.delivery.campaignId}>{data.delivery.campaignName}</option>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="nodrag"
+                  disabled={busy || !setName.trim()}
+                  onClick={() => void saveInputSet()}
+                >
+                  Save as…
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="nodrag"
+                  disabled={busy || !data.inputSetId}
+                  onClick={() => void deleteInputSet()}
+                >
+                  Delete
+                </Button>
+              </div>
+              {inputSets.length > 0 ? (
+                <>
+                  <span className="mt-1 text-2xs text-muted-foreground">
+                    Batch — render several sets at once
+                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    {inputSets.map((set) => (
+                      // biome-ignore lint/a11y/noLabelWithoutControl: wraps its own checkbox
+                      <label key={set.id} className="flex items-center gap-1 text-2xs">
+                        <input
+                          className="nodrag"
+                          type="checkbox"
+                          checked={batchIds.includes(set.id)}
+                          onChange={(event) =>
+                            patchData({
+                              batchInputSetIds: event.target.checked
+                                ? [...batchIds, set.id]
+                                : batchIds.filter((item) => item !== set.id),
+                            })
+                          }
+                        />
+                        {set.name}
+                      </label>
+                    ))}
+                  </div>
+                </>
               ) : null}
-              {campaignOptions.map((target) => (
-                <option key={target.id} value={target.id}>
-                  {target.name}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Meta ad set"
-              className="nodrag h-8 rounded-md border border-border bg-background px-2"
-              value={data.delivery?.adsetId ?? ''}
-              disabled={!data.delivery?.campaignId}
-              onChange={(event) => {
-                const target = adsetOptions.find((item) => item.id === event.target.value);
-                patchData({
-                  delivery: { ...data.delivery!, adsetId: target?.id, adsetName: target?.name },
-                });
-              }}
-            >
-              <option value="">Ad set…</option>
-              {adsetOptions.map((target) => (
-                <option key={target.id} value={target.id}>
-                  {target.name}
-                </option>
-              ))}
-            </select>
-          </div>
+            </div>
+          ) : null}
+
+          {/* biome-ignore lint/a11y/noLabelWithoutControl: wraps the Switch below */}
+          <label className="flex items-center justify-between rounded border border-border/70 p-2">
+            <span className="text-2xs">
+              Also create a PAUSED Meta ad
+              <span className="block text-muted-foreground">
+                Off: the render lands in this brand’s library and nowhere else.
+              </span>
+            </span>
+            {/*
+              A native checkbox, matching the boolean-variable control a few rows up.
+              shadcn's `Switch` is Base UI, whose root does not flip under happy-dom, so a
+              Switch here would be a control the node's own bench cannot drive — an
+              untestable toggle on the one setting that decides whether this render
+              touches Meta. Same semantics, same keyboard behaviour, one fewer thing to
+              mock.
+            */}
+            <input
+              aria-label="Also create a PAUSED Meta ad"
+              className="nodrag"
+              type="checkbox"
+              checked={deliveryEnabled}
+              onChange={(event) => patchData({ deliveryEnabled: event.target.checked })}
+            />
+          </label>
+
+          {deliveryEnabled ? (
+            <>
+              <Input
+                className="nodrag h-7 text-xs"
+                aria-label="Search campaigns"
+                placeholder="Search campaigns…"
+                value={campaignQuery}
+                onChange={(event) => setCampaignQuery(event.target.value)}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  aria-label="Meta campaign"
+                  className="nodrag h-8 rounded-md border border-border bg-background px-2"
+                  value={data.delivery?.campaignId ?? ''}
+                  onChange={(event) => {
+                    const target = campaignOptions.find((item) => item.id === event.target.value);
+                    // Changing campaign always clears the ad set — an ad set from the
+                    // previous campaign is never a valid target for the new one.
+                    patchData({
+                      delivery: {
+                        action: 'create',
+                        adStatus: 'PAUSED',
+                        adAccountId: data.delivery?.adAccountId,
+                        campaignId: target?.id,
+                        campaignName: target?.name,
+                      },
+                    });
+                  }}
+                >
+                  <option value="">Campaign…</option>
+                  {data.delivery?.campaignId &&
+                  !campaignOptions.some((item) => item.id === data.delivery?.campaignId) ? (
+                    // The chosen campaign stays selectable even when the current search
+                    // filters it out — otherwise the select shows an empty value.
+                    <option value={data.delivery.campaignId}>{data.delivery.campaignName}</option>
+                  ) : null}
+                  {campaignOptions.map((target) => (
+                    <option key={target.id} value={target.id}>
+                      {target.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Meta ad set"
+                  className="nodrag h-8 rounded-md border border-border bg-background px-2"
+                  value={data.delivery?.adsetId ?? ''}
+                  disabled={!data.delivery?.campaignId}
+                  onChange={(event) => {
+                    const target = adsetOptions.find((item) => item.id === event.target.value);
+                    patchData({
+                      delivery: { ...data.delivery!, adsetId: target?.id, adsetName: target?.name },
+                    });
+                  }}
+                >
+                  <option value="">Ad set…</option>
+                  {adsetOptions.map((target) => (
+                    <option key={target.id} value={target.id}>
+                      {target.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          ) : null}
 
           {error ? (
             <p className="rounded bg-destructive/10 px-2 py-1 text-2xs text-destructive">{error}</p>
           ) : null}
-          {workspace && !workspace.renderEligible ? (
+          {workspace && !templatesOffered ? (
             <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-2xs">
               {workspace.detail}
             </p>
           ) : null}
-          {prepared?.target ? (
+          {prepared ? (
             <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-2xs">
               <p>{prepared.template.name}</p>
               <p>
-                {prepared.target.campaignName} → {prepared.target.adsetName}
+                {prepared.target
+                  ? `${prepared.target.campaignName} → ${prepared.target.adsetName}`
+                  : 'Library only — no Meta delivery'}
               </p>
               {prepared.test ? <p className="font-medium">Test render — watermarked</p> : null}
               <p className="font-mono">
                 {prepared.confirmationHash.slice(0, 12)}… · expires{' '}
                 {new Date(prepared.expiresAt).toLocaleTimeString()}
+              </p>
+            </div>
+          ) : null}
+          {batchPrepared ? (
+            <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-2xs">
+              <p className="font-medium">{batchPrepared.records.length} renders prepared</p>
+              {batchPrepared.records.map((record) => (
+                <p key={record.label} className="truncate text-muted-foreground">
+                  {record.label} · {record.inputKeys.length} inputs
+                </p>
+              ))}
+              <p className="font-mono">
+                {batchPrepared.confirmationHash.slice(0, 12)}… · expires{' '}
+                {new Date(batchPrepared.expiresAt).toLocaleTimeString()}
               </p>
             </div>
           ) : null}
@@ -504,17 +764,17 @@ export function ApiRenderBlock({
               className="nodrag flex-1"
               variant="outline"
               disabled={busy || !data.templateKey}
-              onClick={() => void prepare()}
+              onClick={() => void (batchIds.length > 0 ? prepareBatch() : prepare())}
             >
-              Prepare
+              {batchIds.length > 0 ? `Prepare ${batchIds.length} renders` : 'Prepare'}
             </Button>
             <Button
               size="sm"
               className="nodrag flex-1"
-              disabled={busy || !prepared}
-              onClick={() => void confirm()}
+              disabled={busy || (!prepared && !batchPrepared)}
+              onClick={() => void (batchPrepared ? confirmBatch() : confirm())}
             >
-              Confirm render
+              {batchPrepared ? 'Confirm batch' : 'Confirm render'}
             </Button>
           </div>
 
@@ -531,81 +791,19 @@ export function ApiRenderBlock({
           </div>
           <div className="space-y-1">
             {jobs.length === 0 ? (
-              // On remount the job list is empty until the fetch lands. Showing the
-              // last render from the saved node data means the canvas is never blank
-              // about work it already did.
+              // On remount the job list is empty until the fetch lands. The saved
+              // descriptor names what this node produced; it deliberately carries no URL,
+              // so this is text and not a link that would already have expired.
               data.latestOutputs?.[0] ? (
-                <a
-                  className="nodrag block text-2xs text-brand-primary underline-offset-2 hover:underline"
-                  href={data.latestOutputs[0].url}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <p className="text-2xs text-muted-foreground">
                   Last render · {data.latestOutputs[0].fileName}
-                </a>
+                </p>
               ) : (
                 <p className="text-2xs text-muted-foreground">No renders for this brand yet.</p>
               )
             ) : null}
             {jobs.map((job) => (
-              <div key={job.id} className="rounded border border-border/60 p-2 text-2xs">
-                <button
-                  type="button"
-                  className="nodrag block w-full text-left hover:text-brand-primary"
-                  onClick={async () => {
-                    if (!brandId) return;
-                    const fresh = await apiRendersApi.getJob(brandId, job.id);
-                    setJobs((current) =>
-                      current.map((item) => (item.id === fresh.id ? fresh : item)),
-                    );
-                  }}
-                >
-                  <span className="flex items-center gap-1">
-                    <span className="truncate font-medium">{job.templateName}</span>
-                    {job.test ? (
-                      <span className="shrink-0 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 text-2xs">
-                        Test · watermarked
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="block truncate text-muted-foreground">{statusLabel(job)}</span>
-                </button>
-                {job.outputs[0] ? (
-                  <div className="mt-1 space-y-1">
-                    {job.outputs[0].kind === 'video' ? (
-                      // biome-ignore lint/a11y/useMediaCaption: a rendered ad has no caption track
-                      <video
-                        className="nodrag w-full rounded border border-border/60"
-                        src={job.outputs[0].url}
-                        controls
-                        preload="metadata"
-                      />
-                    ) : (
-                      <img
-                        className="nodrag w-full rounded border border-border/60"
-                        src={job.outputs[0].url}
-                        alt={`${job.templateName} render`}
-                        loading="lazy"
-                      />
-                    )}
-                    <div className="flex items-center justify-between gap-2">
-                      <a
-                        className="nodrag text-brand-primary underline-offset-2 hover:underline"
-                        href={job.outputs[0].url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open {job.outputs[0].fileName}
-                      </a>
-                      <span className="text-muted-foreground">
-                        {job.outputs[0].assetId
-                          ? `Saved to Library${job.outputs.length > 1 ? ` · ${job.outputs.length} outputs` : ''}`
-                          : 'Saving to Library…'}
-                      </span>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+              <RenderJobCard key={job.id} job={job} onRefresh={() => void refreshOne(job.id)} />
             ))}
           </div>
         </NodeContent>
