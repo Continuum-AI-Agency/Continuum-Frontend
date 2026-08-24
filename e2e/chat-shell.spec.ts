@@ -26,7 +26,9 @@ const OWNER_ID = '00000000-0000-0000-0000-0000000000a1';
 // The fixture brand seeded by supabase/baseline/fixtures.sql. The panel loads history for the
 // user's ACTIVE brand, so the bench pins the active brand to this one and restores whatever was
 // there before — otherwise a brand left active by another bench decides what this one renders.
-const brandId = '00000000-0000-0000-0000-0000000000b1';
+// Must be a REAL v4-shaped uuid: fixtures moved off the old ...b1 id because z.uuid() rejects a
+// version-0 nibble, which crashed the /organic planner before the Agent tab existed.
+const brandId = '00000000-0000-4000-8000-0000000000b2';
 
 let previousActiveBrandId: string | null = null;
 
@@ -47,14 +49,20 @@ const SEEDED_TURNS = 26; // 52 messages: one page of 40 + 12 older ones behind t
 const BENCH_SESSION_PREFIX = 'bench-chat-shell-';
 const SESSION_ID = `${BENCH_SESSION_PREFIX}${Date.now()}`;
 
-// Persisted attachment URLs for the media-primitive assertion. They only have to be shaped like
-// real media — the assertion is on WHICH element the transcript renders for each, not on bytes.
-const BENCH_IMAGE_URL = 'http://127.0.0.1:54321/storage/v1/object/sign/media-library/bench.png';
-const BENCH_VIDEO_URL = 'http://127.0.0.1:54321/storage/v1/object/sign/media-library/bench.mp4';
+// Persisted attachment URLs for the media-primitive assertion. They must serve REAL bytes:
+// ChatMedia preloads video metadata, so a URL that errors degrades to the fallback tile before
+// the assertion runs — the <video> under test only exists while its URL actually resolves.
+// beforeAll uploads the fixtures below into local Supabase Storage and mints real signed URLs.
+let BENCH_IMAGE_URL = '';
+let BENCH_VIDEO_URL = '';
 
 // A 1x1 red PNG — a real image, so the signed URL must serve real image bytes back.
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+// A real 0.2s 16x16 H.264 MP4 (ffmpeg lavfi), so <video preload="metadata"> succeeds.
+const MP4_BASE64 =
+  'AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAN1bW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAAMgAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAp90cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAAMgAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAADIAAAEAAABAAAAAAIXbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAAyAAAACgBVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABwm1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAYJzdGJsAAAAvnN0c2QAAAAAAAAAAQAAAK5hdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAABAAEABIAAAASAAAAAAAAAABFUxhdmM2Mi4yOC4xMDIgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAANGF2Y0MBZAAK/+EAF2dkAAqs2V7ARAAAAwAEAAADAMg8SJZYAQAGaOvjyyLA/fj4AAAAABBwYXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAAHcQAAAAAAAAABhzdHRzAAAAAAAAAAEAAAAFAAACAAAAABRzdHNzAAAAAAAAAAEAAAABAAAAOGN0dHMAAAAAAAAABQAAAAEAAAQAAAAAAQAACgAAAAABAAAEAAAAAAEAAAAAAAAAAQAAAgAAAAAcc3RzYwAAAAAAAAABAAAAAQAAAAUAAAABAAAAKHN0c3oAAAAAAAAAAAAAAAUAAALKAAAADAAAAAwAAAAMAAAADAAAABRzdGNvAAAAAAAAAAEAAAOlAAAAYnVkdGEAAABabWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAbWRpcmFwcGwAAAAAAAAAAAAAAAAtaWxzdAAAACWpdG9vAAAAHWRhdGEAAAABAAAAAExhdmY2Mi4xMi4xMDIAAAAIZnJlZQAAAwJtZGF0AAACrgYF//+q3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE2NSByMzIyMiBiMzU2MDVhIC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAyNSAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTEgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0zIGJfcHlyYW1pZD0yIGJfYWRhcHQ9MSBiX2JpYXM9MCBkaXJlY3Q9MSB3ZWlnaHRiPTEgb3Blbl9nb3A9MCB3ZWlnaHRwPTIga2V5aW50PTI1MCBrZXlpbnRfbWluPTI1IHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAAAFGWIhAAz//7fMvgUzcWJzsyAXJ6XAAAACEGaJGxCv/7AAAAACEGeQniF/8GBAAAACAGeYXRCv8SAAAAACAGeY2pCv8SB';
 
 function admin(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -210,6 +218,28 @@ test.describe('chat shell — Organic agent', () => {
     page = await context.newPage();
 
     const supabase = admin();
+
+    // Real bytes behind the persisted attachment URLs (see BENCH_IMAGE_URL note).
+    for (const [name, base64, contentType] of [
+      ['bench.png', PNG_BASE64, 'image/png'],
+      ['bench.mp4', MP4_BASE64, 'video/mp4'],
+    ] as const) {
+      const { error } = await supabase.storage
+        .from('media-library')
+        .upload(name, Buffer.from(base64, 'base64'), { contentType, upsert: true });
+      if (error) throw new Error(`[chat:e2e:bench] upload ${name} failed: ${error.message}`);
+    }
+    const signFixture = async (name: string) => {
+      const { data, error } = await supabase.storage
+        .from('media-library')
+        .createSignedUrl(name, 60 * 60);
+      if (error || !data?.signedUrl) {
+        throw new Error(`[chat:e2e:bench] sign ${name} failed: ${error?.message}`);
+      }
+      return data.signedUrl;
+    };
+    BENCH_IMAGE_URL = await signFixture('bench.png');
+    BENCH_VIDEO_URL = await signFixture('bench.mp4');
 
     const { data: pref } = await supabase
       .schema('brand_profiles')
@@ -437,11 +467,18 @@ test.describe('chat shell — Organic agent', () => {
     // The chip must settle to ready — i.e. the upload actually completed and a URL was minted.
     // Submit is deliberately blocked while an upload is in flight.
     await expect(page.getByText('Uploading…')).toHaveCount(0, { timeout: 30_000 });
-    await expect(page.getByText('bench-shot.png')).toBeVisible();
+    // exact: the chip also renders an sr-only "Remove bench-shot.png" button.
+    await expect(page.getByText('bench-shot.png', { exact: true })).toBeVisible();
 
     const editor = page.getByRole('textbox', { name: 'Message the organic agent' });
     await editor.click();
     await editor.pressSequentially('what is in this image?');
+    // Submit is deliberately blocked while ANY upload is in flight — including the
+    // async poster pass that continues after the "Uploading…" label clears. The
+    // enabled Send button is the real submit gate; Enter before it is swallowed.
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled({
+      timeout: 30_000,
+    });
     await page.keyboard.press('Enter');
 
     const request = await chatRequest;
@@ -455,7 +492,11 @@ test.describe('chat shell — Organic agent', () => {
 
     // The URL is not just present, it RESOLVES: the object exists in the bucket and serves the
     // image bytes back. A signed URL that 403s would pass a shape-only check and fail in the field.
-    const fetched = await page.request.get(image.url);
+    // Local-stack artifact: `supabase functions serve` mints URLs on the Docker-internal gateway
+    // host (kong:8000); the same gateway is exposed to this machine at 127.0.0.1:54321.
+    const fetched = await page.request.get(
+      image.url.replace('http://kong:8000', 'http://127.0.0.1:54321'),
+    );
     expect(fetched.status()).toBe(200);
     expect(fetched.headers()['content-type'] ?? '').toContain('image');
     expect((await fetched.body()).length).toBeGreaterThan(0);

@@ -7,6 +7,7 @@ import {
   pipelineStageEnum,
   planItemSchema,
   proposedPlanSchema,
+  resolveOrganicGenerationDisplay,
 } from './organic';
 
 describe('organic pipeline frames', () => {
@@ -440,5 +441,42 @@ describe('response retry frames (chat retry R1)', () => {
         data: { message: 'boom', transient: 'yes' },
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('response.cancelled frame', () => {
+  it('accepts the exact shape the Backend emits on user cancellation', () => {
+    const parsed = organicStreamFrameSchema.safeParse({
+      type: 'response.cancelled',
+      data: { message: 'Run cancelled' },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts a bare response.cancelled frame (data optional)', () => {
+    expect(organicStreamFrameSchema.safeParse({ type: 'response.cancelled' }).success).toBe(true);
+  });
+});
+
+describe('generation display labels never disguise a gap as progress', () => {
+  it('reports a failed mediaStage as an error, not as Working', () => {
+    const display = resolveOrganicGenerationDisplay({ status: 'running', mediaStage: 'failed' });
+    expect(display.tone).toBe('error');
+    expect(display.label).toBe('Media failed');
+  });
+
+  it('marks a running row with no stage data distinctly from staged progress', () => {
+    const display = resolveOrganicGenerationDisplay({ status: 'running' });
+    expect(display.label).toBe('Working (no stage data)');
+    expect(display.tone).toBe('active');
+  });
+
+  it('keeps staged running labels unchanged', () => {
+    expect(resolveOrganicGenerationDisplay({ status: 'running', stage: 'assets' }).label).toBe(
+      'Generating media',
+    );
+    expect(
+      resolveOrganicGenerationDisplay({ status: 'running', mediaStage: 'realizing' }).label,
+    ).toBe('Generating media');
   });
 });

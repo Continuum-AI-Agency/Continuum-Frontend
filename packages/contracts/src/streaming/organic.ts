@@ -115,12 +115,11 @@ const RUNNING_STAGE_LABELS: Record<PipelineStage, string> = {
   merge: 'Finalizing',
 };
 
-const RUNNING_MEDIA_STAGE_LABELS: Record<OrganicMediaStage, string> = {
+const RUNNING_MEDIA_STAGE_LABELS: Record<Exclude<OrganicMediaStage, 'failed'>, string> = {
   text_only: 'Writing copy',
   storyboard_ready: 'Designing',
   realizing: 'Generating media',
   realized: 'Finalizing',
-  failed: 'Working',
 };
 
 /**
@@ -128,6 +127,10 @@ const RUNNING_MEDIA_STAGE_LABELS: Record<OrganicMediaStage, string> = {
  * terminal/neutral labels; for a running job the pipeline `stage` (preferred) then
  * `mediaStage` refine what it is doing right now. Every surface calls this — never
  * hand-roll a status string.
+ *
+ * A bare "Working" is deliberately impossible: a running row with no stage data is
+ * a missing pipeline.stage frame, and a mediaStage of `failed` is a failure — both
+ * used to render as generic "Working" and disguised the gap as healthy progress.
  */
 export function resolveOrganicGenerationDisplay(input: {
   status: OrganicGenerationStatus;
@@ -144,16 +147,19 @@ export function resolveOrganicGenerationDisplay(input: {
     case 'cancelled':
       return { label: 'Cancelled', tone: 'neutral' };
     case 'running': {
+      if (input.mediaStage === 'failed') {
+        return { label: 'Media failed', tone: 'error' };
+      }
       if (input.stage && RUNNING_STAGE_LABELS[input.stage]) {
         return { label: RUNNING_STAGE_LABELS[input.stage], tone: 'active' };
       }
       if (input.mediaStage && RUNNING_MEDIA_STAGE_LABELS[input.mediaStage]) {
         return { label: RUNNING_MEDIA_STAGE_LABELS[input.mediaStage], tone: 'active' };
       }
-      return { label: 'Working', tone: 'active' };
+      return { label: 'Working (no stage data)', tone: 'active' };
     }
     default:
-      return { label: 'Working', tone: 'active' };
+      return { label: 'Working (unknown status)', tone: 'active' };
   }
 }
 
@@ -506,6 +512,19 @@ const responseOutputTextDoneSchema = z.object({
 const responseDoneSchema = z.object({
   type: z.literal('response.done'),
   data: z.record(z.string(), z.unknown()).optional(),
+});
+
+// The user stopped the run: it ended, but it did not fail. The Backend emits this
+// (agents/agent.ts) and the FE parser terminal-maps it; it was missing from this
+// union, so every user cancellation logged a schema warning.
+const responseCancelledSchema = z.object({
+  type: z.literal('response.cancelled'),
+  data: z
+    .object({
+      message: z.string().optional(),
+    })
+    .loose()
+    .optional(),
 });
 
 const responseErrorSchema = z.object({
@@ -914,6 +933,7 @@ export const organicStreamFrameSchema = z.discriminatedUnion('type', [
   responseOutputTextDeltaSchema,
   responseOutputTextDoneSchema,
   responseDoneSchema,
+  responseCancelledSchema,
   responseErrorSchema,
   responseRetryingSchema,
   responseSourceSchema,

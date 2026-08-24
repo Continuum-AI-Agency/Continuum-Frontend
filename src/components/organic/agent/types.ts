@@ -1,8 +1,8 @@
 import type {
   AeoSnapshotCard,
   AgentAttachment,
-  AgentDocumentAttachment,
   AgentDelegatedFrameData,
+  AgentDocumentAttachment,
   BulkContentPlan,
   MediaSearchResultsFrame,
   OrganicPostCardData,
@@ -129,6 +129,9 @@ export type AgentJobState = {
   // AI SDK tool-call id of the agent tool that dispatched this job (e.g.
   // generatePosts), so the chat can group this job's card under the tool call.
   toolCallId?: string | null;
+  // Plan item this job executes, so a terminal job frame can settle the plan
+  // card even when no pipeline card ever arrived for the job.
+  planItemId?: string;
 };
 
 // Canonical ordering comes straight from the contract enum — no FE duplicate.

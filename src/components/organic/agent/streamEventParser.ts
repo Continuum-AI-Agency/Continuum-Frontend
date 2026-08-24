@@ -208,11 +208,16 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
   const brandId = readNonEmptyString(payload.brandId);
   if (!jobId || !brandId) return null;
 
-  // Dispatching tool-call id (when the backend threaded one) so the chat can
-  // group this job's updates under the tool call. Conditionally spread so a
-  // frame without it never clobbers a value merged from an earlier frame.
+  // Dispatching tool-call id and plan-item id (when the backend threaded them) so
+  // the chat can group this job's updates under the tool call and settle the plan
+  // card on a terminal frame. Conditionally spread so a frame without them never
+  // clobbers a value merged from an earlier frame.
   const toolCallId = readNonEmptyString(payload.toolCallId);
-  const withToolCallId = toolCallId ? { toolCallId } : {};
+  const planItemId = readNonEmptyString(payload.planItemId);
+  const withToolCallId = {
+    ...(toolCallId ? { toolCallId } : {}),
+    ...(planItemId ? { planItemId } : {}),
+  };
 
   switch (type) {
     case 'job.enqueued':
@@ -789,6 +794,26 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
       const { toolCallId, toolName, result, ok, reason } = normalizeToolResultEvent(frame);
       return { kind: 'toolResult', toolCallId, toolName, result, ok, reason: reason ?? undefined };
     }
+    // A tool that threw, or had its output denied, still ENDED. Surface it on the
+    // tool call as a failed result — dropping these frames left an errored tool
+    // with no visible chat state at all.
+    case 'tool.error':
+    case 'tool.output_denied': {
+      const payload = getEventPayload(frame);
+      const toolCallId = readNonEmptyString(payload.toolCallId);
+      if (!toolCallId) return { kind: 'invalid', type };
+      return {
+        kind: 'toolResult',
+        toolCallId,
+        toolName: readNonEmptyString(payload.toolName) ?? 'unknown',
+        result: null,
+        ok: false,
+        reason:
+          type === 'tool.output_denied'
+            ? 'Output denied'
+            : friendlyStreamError(readNonEmptyString(payload.error) ?? 'Tool failed'),
+      };
+    }
     case 'ui.trend_chart':
       return {
         kind: 'uiCard',
@@ -851,6 +876,32 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
       const job = parseJobUpdate(type, frame);
       return job ? { kind: 'jobUpdate', job } : { kind: 'invalid', type };
     }
+    // Identity frame for a just-enqueued post (jobId + draftId + planItemId).
+    // Seeds the job as queued so the row is visible the moment it exists. The
+    // payload carries no brandId — the reducer merge tolerates the partial.
+    case 'ui.post_enqueued': {
+      const payload = getEventPayload(frame);
+      const jobId = readNonEmptyString(payload.jobId);
+      if (!jobId) return { kind: 'invalid', type };
+      const planItemId = readNonEmptyString(payload.planItemId);
+      return {
+        kind: 'jobUpdate',
+        job: {
+          jobId,
+          status: 'queued',
+          platform: readNonEmptyString(payload.platform) ?? undefined,
+          scheduledAt: readNonEmptyString(payload.scheduledAt) ?? undefined,
+          trendId:
+            payload.trendId === null
+              ? null
+              : typeof payload.trendId === 'string'
+                ? payload.trendId
+                : undefined,
+          draftId: readNonEmptyString(payload.draftId) ?? undefined,
+          ...(planItemId ? { planItemId } : {}),
+        },
+      };
+    }
     case 'pipeline.stage': {
       const event = parsePipelineStage(frame);
       return event ? { kind: 'pipelineStage', event } : { kind: 'invalid', type };
@@ -901,7 +952,26 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
         },
       };
     }
+    // Declared contract frames this surface deliberately does not render yet.
+    // Listed so the default arm only fires for genuinely unknown types.
+    case 'response.lane':
+    case 'agent.chat_started':
+    case 'ui.brand_book':
+    case 'ui.readiness_scorecard':
+    case 'ui.brand_book_proposal':
+    case 'ui.brand_book_applied':
+      return { kind: 'ignored', type };
     default:
+      warnUnhandledFrameType(type);
       return { kind: 'ignored', type };
   }
+}
+
+// Once per type per session: a frame the switch above has no arm for used to be
+// dropped with no trace, which is how terminal frames went missing invisibly.
+const warnedUnhandledFrameTypes = new Set<string>();
+function warnUnhandledFrameType(type: string): void {
+  if (warnedUnhandledFrameTypes.has(type)) return;
+  warnedUnhandledFrameTypes.add(type);
+  console.warn('[organic-stream] frame type has no handler and was dropped:', type);
 }

@@ -88,6 +88,7 @@ export type PanelAction =
       reason?: string;
     }
   | { type: 'STREAM_COMPLETE' }
+  | { type: 'STREAM_STALLED' }
   | { type: 'STREAM_ERROR'; error: string; code?: string; transient?: boolean }
   | { type: 'STREAM_RETRYING'; attempt: number; reason?: string }
   | { type: 'AUTO_RETRY_ABANDON' }
@@ -315,6 +316,41 @@ function reconcileJobFromPipeline(
   const existing = jobs[jobId];
   if (!existing || TERMINAL_JOB_STATUSES.has(existing.status)) return jobs;
   return { ...jobs, [jobId]: { ...existing, ...patch } };
+}
+
+// The inverse direction: fold a job update (live frame, durable summary, or a
+// restored terminal frame) into the pipeline-card and plan-item slices the cards
+// actually render. This seam's absence let job.completed land in state.jobs while
+// ConceptCard/PipelineCard — which read pipeline and planItemStatus — spun forever.
+// Card rules mirror SYNC_GENERATION_SUMMARIES: a running card takes any update, a
+// settled card only takes a terminal one, and a card is only CREATED when the job
+// carries a toolCallId (cards without one have no place to render). The plan item
+// is settled only by a terminal job status.
+function reconcilePipelineFromJob(
+  pipeline: Record<string, PipelineCardState>,
+  planItemStatus: Record<string, PlanItemStatus>,
+  job: DurableJobLike,
+): {
+  pipeline: Record<string, PipelineCardState>;
+  planItemStatus: Record<string, PlanItemStatus>;
+} {
+  const existingCard = pipeline[job.jobId];
+  const incomingTerminal = typeof job.status === 'string' && TERMINAL_JOB_STATUSES.has(job.status);
+  const canWriteCard = existingCard
+    ? incomingTerminal || existingCard.status === 'running'
+    : Boolean(job.toolCallId);
+  const nextPipeline = canWriteCard
+    ? {
+        ...pipeline,
+        [job.jobId]: applyPipelineCard(existingCard, pipelineCardFromDurableJob(job)),
+      }
+    : pipeline;
+  const planItemId = job.planItemId ?? existingCard?.planItemId;
+  const nextPlanItemStatus =
+    incomingTerminal && planItemId && planItemStatus[planItemId] !== job.status
+      ? { ...planItemStatus, [planItemId]: job.status as PlanItemStatus }
+      : planItemStatus;
+  return { pipeline: nextPipeline, planItemStatus: nextPlanItemStatus };
 }
 
 /**
@@ -619,10 +655,20 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       if (action.job.status === 'cancelled') {
         const jobs = { ...state.jobs };
         const pipeline = { ...state.pipeline };
+        const cancelledPlanItemId =
+          action.job.planItemId ?? state.pipeline[action.job.jobId]?.planItemId;
         delete jobs[action.job.jobId];
         delete pipeline[action.job.jobId];
-        return { ...state, jobs, pipeline, pendingJobCancellations };
+        const planItemStatus = cancelledPlanItemId
+          ? { ...state.planItemStatus, [cancelledPlanItemId]: 'cancelled' as const }
+          : state.planItemStatus;
+        return { ...state, jobs, pipeline, planItemStatus, pendingJobCancellations };
       }
+      const { pipeline, planItemStatus } = reconcilePipelineFromJob(
+        state.pipeline,
+        state.planItemStatus,
+        action.job,
+      );
       return {
         ...state,
         jobs: {
@@ -632,8 +678,55 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
             ...action.job,
           } as AgentJobState,
         },
+        pipeline,
+        planItemStatus,
         pendingJobCancellations,
       };
+    }
+
+    // Terminal state of last resort: the stream idle watchdog fired after minutes of
+    // total silence. Nothing else will move these cards — settle every non-terminal
+    // job, running card, and executing plan item as failed. A later terminal summary
+    // (Realtime or the recovery poll) still overrides via the incoming-terminal guards.
+    case 'STREAM_STALLED': {
+      const stallError = {
+        message:
+          'Timed out waiting for progress. If the job is still running, this will update when it reports back.',
+      };
+      let changed = false;
+      const jobs: Record<string, AgentJobState> = {};
+      for (const [id, job] of Object.entries(state.jobs)) {
+        if (TERMINAL_JOB_STATUSES.has(job.status)) {
+          jobs[id] = job;
+          continue;
+        }
+        jobs[id] = { ...job, status: 'failed', error: stallError };
+        changed = true;
+      }
+      const pipeline: Record<string, PipelineCardState> = {};
+      for (const [id, card] of Object.entries(state.pipeline)) {
+        if (card.status !== 'running') {
+          pipeline[id] = card;
+          continue;
+        }
+        pipeline[id] = applyPipelineCard(card, {
+          jobId: id,
+          status: 'failed',
+          error: stallError,
+        });
+        changed = true;
+      }
+      const planItemStatus: Record<string, PlanItemStatus> = {};
+      for (const [id, status] of Object.entries(state.planItemStatus)) {
+        if (status !== 'executing') {
+          planItemStatus[id] = status;
+          continue;
+        }
+        planItemStatus[id] = 'failed';
+        changed = true;
+      }
+      if (!changed) return state;
+      return { ...state, jobs, pipeline, planItemStatus };
     }
 
     case 'JOB_CANCEL_START': {
@@ -864,6 +957,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
     case 'SYNC_GENERATION_SUMMARIES': {
       let jobs = state.jobs;
       let pipeline = state.pipeline;
+      let planItemStatus = state.planItemStatus;
       for (const summary of action.summaries) {
         if (!summary || typeof summary.jobId !== 'string') continue;
         const existingJob = state.jobs[summary.jobId];
@@ -889,15 +983,18 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
             },
           };
         }
-        if (existingCard && existingCard.status !== 'running' && !incomingTerminal) continue;
-        if (!existingCard && !summary.toolCallId) continue;
-        pipeline = {
-          ...pipeline,
-          [summary.jobId]: applyPipelineCard(existingCard, pipelineCardFromDurableJob(summary)),
-        };
+        const reconciled = reconcilePipelineFromJob(pipeline, planItemStatus, summary);
+        pipeline = reconciled.pipeline;
+        planItemStatus = reconciled.planItemStatus;
       }
-      if (jobs === state.jobs && pipeline === state.pipeline) return state;
-      return { ...state, jobs, pipeline };
+      if (
+        jobs === state.jobs &&
+        pipeline === state.pipeline &&
+        planItemStatus === state.planItemStatus
+      ) {
+        return state;
+      }
+      return { ...state, jobs, pipeline, planItemStatus };
     }
 
     default:

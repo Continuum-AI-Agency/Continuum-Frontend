@@ -487,6 +487,9 @@ export function OrganicAgentPanel({
   const applyRestoredCards = useCallback((restored: RestoredSession) => {
     restored.pipelineCards.forEach((card) => dispatch({ type: 'PIPELINE_CARD', card }));
     restored.bulkRuns.forEach((run) => dispatch({ type: 'BULK_RUN_START', run }));
+    // After the cards, so persisted terminal job frames reconcile onto the freshly
+    // seeded cards — a reload used to discard them and leave finished cards spinning.
+    restored.jobUpdates.forEach((job) => dispatch({ type: 'JOB_UPDATE', job }));
   }, []);
 
   // The session id is an ARGUMENT, not a closure read: this lands after an await, and reading
@@ -561,7 +564,19 @@ export function OrganicAgentPanel({
   // (React Query cache shared with the ticker; Realtime invalidation + a polling
   // refetch while jobs run keep it fresh). The reducer ignores summaries for jobs
   // this session doesn't know.
-  const { summaries: generationSummaries } = useGenerationSummaries(brandId);
+  // Keep the recovery poll alive while THIS client still shows in-flight work — the
+  // server-side running count alone turns the poll off exactly when a card is stale
+  // against an already-terminal row, which is the stuck state the poll exists to fix.
+  const hasLocalInflight = useMemo(
+    () =>
+      Object.values(state.pipeline).some((card) => card.status === 'running') ||
+      Object.values(state.jobs).some(
+        (job) => job.status === 'queued' || job.status === 'running',
+      ) ||
+      Object.values(state.planItemStatus).some((status) => status === 'executing'),
+    [state.pipeline, state.jobs, state.planItemStatus],
+  );
+  const { summaries: generationSummaries } = useGenerationSummaries(brandId, hasLocalInflight);
   useEffect(() => {
     if (generationSummaries.length === 0) return;
     dispatch({ type: 'SYNC_GENERATION_SUMMARIES', summaries: generationSummaries });

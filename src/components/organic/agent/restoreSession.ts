@@ -5,7 +5,13 @@ import {
   parseOrganicStreamEvent,
   postListCardFromToolResult,
 } from './streamEventParser';
-import type { ConversationMessage, PipelineCardState, ToolCallEvent, UiCard } from './types';
+import type {
+  AgentJobState,
+  ConversationMessage,
+  PipelineCardState,
+  ToolCallEvent,
+  UiCard,
+} from './types';
 import type { BulkRunRef } from './useOrganicAgentReducer';
 
 export type RestoredSession = {
@@ -13,7 +19,12 @@ export type RestoredSession = {
   pipelineCards: Array<Partial<PipelineCardState> & { jobId: string }>;
   bulkRuns: BulkRunRef[];
   planStatuses: ParsedPlanStatus[];
+  // Terminal job.* frames (last one per job) so a reload replays terminality onto
+  // the cards — discarding them left reloaded cards spinning against finished jobs.
+  jobUpdates: Array<Partial<AgentJobState> & { jobId: string }>;
 };
+
+const TERMINAL_JOB_STATUSES = new Set(['completed', 'failed', 'cancelled']);
 
 /**
  * Rebuild reducer state from persisted messages. Embedded frames are replayed
@@ -26,6 +37,7 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
   const pipelineCards: RestoredSession['pipelineCards'] = [];
   const bulkRuns: BulkRunRef[] = [];
   const planStatuses: ParsedPlanStatus[] = [];
+  const terminalJobUpdatesById = new Map<string, Partial<AgentJobState> & { jobId: string }>();
   // Storyboard frames arrive from the (separate) blueprint job, usually after the
   // live stream closed, so on reload they're merged into the restored card by draftId.
   const blueprintsByDraftId = new Map<string, { previews: string[]; previewRevision: string }>();
@@ -89,6 +101,11 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
         case 'mediaSearchResults':
           mediaSearchResults.push(parsed.frame);
           break;
+        case 'jobUpdate':
+          if (parsed.job.status && TERMINAL_JOB_STATUSES.has(parsed.job.status)) {
+            terminalJobUpdatesById.set(parsed.job.jobId, parsed.job);
+          }
+          break;
         default:
           break;
       }
@@ -136,5 +153,11 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
     }
   }
 
-  return { messages, pipelineCards, bulkRuns, planStatuses };
+  return {
+    messages,
+    pipelineCards,
+    bulkRuns,
+    planStatuses,
+    jobUpdates: Array.from(terminalJobUpdatesById.values()),
+  };
 }

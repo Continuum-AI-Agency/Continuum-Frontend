@@ -57,8 +57,13 @@ async function fetchGenerationSummaries(brandId: string): Promise<GenerationSumm
  * the numbers in component state). Realtime invalidation
  * (useGenerationJobsRealtime) keeps it fresh; a slow background poll while jobs
  * are in flight is a safety net for any missed Realtime event.
+ *
+ * `localInflight`: the poll must also run while the CALLER still renders
+ * in-flight work. Gating on the server's running count alone switched the safety
+ * net off in exactly the stuck state it exists to fix — a local card stale
+ * against a row the server already reports as terminal (running: 0).
  */
-export function useGenerationSummaries(brandId?: string | null) {
+export function useGenerationSummaries(brandId?: string | null, localInflight = false) {
   const query = useQuery({
     queryKey: generationSummariesQueryKey(brandId),
     queryFn: () =>
@@ -70,7 +75,8 @@ export function useGenerationSummaries(brandId?: string | null) {
           } satisfies GenerationSummariesResponse),
     enabled: Boolean(brandId),
     staleTime: 5_000,
-    refetchInterval: (q) => ((q.state.data?.window.running ?? 0) > 0 ? 15_000 : false),
+    refetchInterval: (q) =>
+      (q.state.data?.window.running ?? 0) > 0 || localInflight ? 15_000 : false,
   });
 
   const summaries: OrganicGenerationSummary[] = query.data?.summaries ?? [];

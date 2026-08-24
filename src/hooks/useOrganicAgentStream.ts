@@ -204,6 +204,11 @@ export function useOrganicAgentStream(
         if (record) {
           store.upsertRun({ ...record.run, status: resolveIdleRunStatus(receivedAnyFrame) });
         }
+        // Settling the composer and the run record is not enough: in-flight cards, jobs,
+        // and plan items live in the panel reducer and had NO terminal state of last
+        // resort — a silent stream left them spinning forever. Later terminal summaries
+        // (Realtime / recovery poll) still override this settlement.
+        dispatch({ type: 'STREAM_STALLED' });
         controller.abort();
         // Abort alone is not enough to unblock the read loop: the pending `reader.read()`
         // resolves only if the body stream is torn down, so cancel it explicitly rather
