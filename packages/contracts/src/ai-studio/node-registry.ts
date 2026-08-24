@@ -381,11 +381,16 @@ export const STUDIO_NODE_REGISTRY = {
   },
   apiRender: {
     label: 'API Render',
-    description: 'Discover a template, prepare variables, and hand off a PAUSED Meta delivery',
+    description:
+      'Discover a template, prepare variables, and render into the brand library — Meta delivery optional',
     category: 'action',
     provider: 'continuum',
+    // Library-first is not a preference, it is the contract: `delivery` is optional on
+    // the preflight request and a request without it never touches Meta. The older copy
+    // read as though a live campaign and ad set were required, and this string is
+    // rendered VERBATIM into the Studio agent prompt.
     purpose:
-      'terminal sink — prepares a version-pinned API template render and PAUSED Meta delivery for explicit confirmation',
+      'terminal sink — prepares a version-pinned API template render into the brand media library; an OPTIONAL Meta delivery block hands off a PAUSED ad for explicit confirmation',
     runnable: false,
     producesMedia: false,
     sink: 'render',

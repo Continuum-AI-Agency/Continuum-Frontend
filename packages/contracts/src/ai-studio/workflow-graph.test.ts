@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
+import { WATERMARK_LOGO_VARIABLE_KEY } from './api-renders';
 import {
   coerceNodeConfig,
   createNodeData,
@@ -726,6 +727,36 @@ describe('isValidConnection — type matrix', () => {
         },
         edges,
         nodes,
+      ),
+    ).toBe(false);
+  });
+
+  // A `reserved` variable is the server's to fill: the Canvas deliberately renders no
+  // handle for one and the Backend refuses a caller-supplied value with
+  // `render_reserved_variable`. If the graph rules still call the edge legal, a saved or
+  // agent-authored workflow can carry one that `resolveApiRenderVariables` silently drops —
+  // wired on screen, empty at render.
+  it('never advertises or accepts a target handle for a reserved API-render variable', () => {
+    const render = node('render1', 'apiRender', {
+      variableDefinitions: [
+        { key: 'hero_image', label: 'Hero', kind: 'image', reserved: false },
+        { key: WATERMARK_LOGO_VARIABLE_KEY, label: 'Brand logo', kind: 'image', reserved: true },
+      ],
+    });
+    const reservedHandle = `variable-${WATERMARK_LOGO_VARIABLE_KEY}`;
+
+    expect(getAllowedTargetHandles(render)).toEqual(['variable-hero_image']);
+    expect(getTargetHandleConnectionLimit(render, reservedHandle, [])).toBeUndefined();
+    expect(
+      isValidConnection(
+        {
+          source: 'image1',
+          sourceHandle: 'image',
+          target: 'render1',
+          targetHandle: reservedHandle,
+        },
+        [],
+        [render, node('image1', 'image', { image: '' })],
       ),
     ).toBe(false);
   });

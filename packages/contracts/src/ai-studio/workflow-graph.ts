@@ -733,30 +733,40 @@ const publisherTargetHandles = (node: GraphNodeLike): string[] => {
   return publisherSlots(node).map((slot) => `${PUBLISH_ASSET_INPUT_PREFIX}${slot.id}`);
 };
 
-const apiRenderTargetHandles = (node: GraphNodeLike): string[] => {
+/**
+ * The template's media variables a caller may actually WIRE.
+ *
+ * `reserved` is excluded, and that exclusion belongs HERE rather than at each call site:
+ * the Backend fills a reserved variable itself and refuses a caller-supplied value with
+ * `render_reserved_variable`, and the Canvas deliberately renders no handle for one. A
+ * graph rule that still calls the edge legal lets a saved or agent-authored workflow
+ * carry an edge `resolveApiRenderVariables` silently drops — wired on screen, empty at
+ * render.
+ */
+const apiRenderConnectableVariables = (
+  node: GraphNodeLike,
+): Array<{ key: string; kind: 'image' | 'video' }> => {
   const variables = (node.data as { variableDefinitions?: unknown })?.variableDefinitions;
   if (!Array.isArray(variables)) return [];
   return variables.flatMap((variable) => {
     if (!variable || typeof variable !== 'object') return [];
-    const value = variable as { key?: unknown; kind?: unknown };
+    const value = variable as { key?: unknown; kind?: unknown; reserved?: unknown };
+    if (value.reserved === true) return [];
     if (!['image', 'video'].includes(String(value.kind)) || typeof value.key !== 'string')
       return [];
-    return [`variable-${value.key}`];
+    return [{ key: value.key, kind: value.kind as 'image' | 'video' }];
   });
 };
+
+const apiRenderTargetHandles = (node: GraphNodeLike): string[] =>
+  apiRenderConnectableVariables(node).map((variable) => `variable-${variable.key}`);
 
 const apiRenderVariableKindForHandle = (
   node: GraphNodeLike,
   handle: string,
-): 'image' | 'video' | null => {
-  const variables = (node.data as { variableDefinitions?: unknown })?.variableDefinitions;
-  if (!Array.isArray(variables)) return null;
-  const match = variables.find((variable) => {
-    if (!variable || typeof variable !== 'object') return false;
-    return `variable-${String((variable as { key?: unknown }).key ?? '')}` === handle;
-  }) as { kind?: unknown } | undefined;
-  return match?.kind === 'image' || match?.kind === 'video' ? match.kind : null;
-};
+): 'image' | 'video' | null =>
+  apiRenderConnectableVariables(node).find((variable) => `variable-${variable.key}` === handle)
+    ?.kind ?? null;
 
 const isImageReferenceHandle = (handleId?: string | null): boolean =>
   typeof handleId === 'string' && IMAGE_REFERENCE_HANDLE_SET.has(handleId);
