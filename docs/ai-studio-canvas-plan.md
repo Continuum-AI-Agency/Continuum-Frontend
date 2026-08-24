@@ -1,3 +1,8 @@
+> **SUPERSEDED (2026-08-24).** This document describes the legacy AI Studio canvas
+> (src/components/ai-studio/canvas/, GraphExecutor), deleted in Canvas V3 Wave 1.
+> The live canvas is src/StudioCanvas/; current architecture:
+> monorepo docs/ai-studio/canvas-v3.md. Kept for history only.
+
 # AI Studio Canvas Replacement Plan
 
 ## Summary

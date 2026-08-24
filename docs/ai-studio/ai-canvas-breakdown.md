@@ -1,3 +1,8 @@
+> **SUPERSEDED (2026-08-24).** This document describes the legacy AI Studio canvas
+> (src/components/ai-studio/canvas/, GraphExecutor), deleted in Canvas V3 Wave 1.
+> The live canvas is src/StudioCanvas/; current architecture:
+> monorepo docs/ai-studio/canvas-v3.md. Kept for history only.
+
 # AI Studio Canvas: Product & User Documentation Breakdown
 
 The **AI Canvas** (`@src/components/ai-studio/canvas/`) is a visual orchestration engine for complex AI workflows. It enables a "modular creation" mindset where users chain specialized AI blocks to generate, refine, and iterate on high-fidelity content.
