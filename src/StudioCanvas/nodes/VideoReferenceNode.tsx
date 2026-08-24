@@ -18,7 +18,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
 import {
@@ -44,12 +44,15 @@ import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
+import { useSnapToVideoAspect } from '../hooks/useSnapToVideoAspect';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { VideoNodeData } from '../types';
-import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { stageAndUploadReferenceFile, uploadReferenceFile } from '../utils/uploadReferenceFile';
 import { referenceStatusBadge } from './referenceStatusBadge';
+
+// Mirrors the sizing this node has always used for a dropped clip.
+const VIDEO_REFERENCE_NODE_BOUNDS = { minWidth: 160, minHeight: 160, fallbackWidth: 192 };
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -60,7 +63,6 @@ export function VideoReferenceNode({
   selected,
 }: NodeProps<ReactFlowNode<VideoNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
-  const updateNode = useStudioStore((state) => state.updateNode);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
@@ -78,76 +80,15 @@ export function VideoReferenceNode({
     (edge) => edge.source === id && edge.sourceHandle === 'video',
   ).length;
 
-  const snapNodeToAspectRatio = useCallback(
-    (value: string) => {
-      updateNode(id, (node) => {
-        const nextDimensions = snapNodeDimensionsToAspectRatio({
-          aspectRatio: value,
-          currentWidth: node.style?.width ?? node.width ?? node.measured?.width,
-          currentHeight: node.style?.height ?? node.height ?? node.measured?.height,
-          minWidth: 160,
-          minHeight: 160,
-          fallbackWidth: 192,
-        });
-
-        return {
-          ...node,
-          data: {
-            ...(node.data as VideoNodeData),
-            aspectRatio: value,
-          },
-          style: {
-            ...(node.style ?? {}),
-            width: nextDimensions.width,
-            height: nextDimensions.height,
-          },
-        };
-      });
-    },
-    [id, updateNode],
-  );
-
-  const detectAspectRatioFromVideo = useCallback(
-    (src: string) =>
-      new Promise<string | null>((resolve) => {
-        if (typeof document === 'undefined') {
-          resolve(null);
-          return;
-        }
-
-        const videoElement = document.createElement('video');
-        videoElement.preload = 'metadata';
-        videoElement.muted = true;
-        videoElement.onloadedmetadata = () => {
-          const { videoWidth, videoHeight } = videoElement;
-          if (videoWidth > 0 && videoHeight > 0) {
-            resolve(simplifyAspectRatio(videoWidth, videoHeight));
-            return;
-          }
-          resolve(null);
-        };
-        videoElement.onerror = () => resolve(null);
-        videoElement.src = src;
-      }),
-    [],
-  );
-
-  useEffect(() => {
-    if (!preview) return;
-
-    let cancelled = false;
-    void detectAspectRatioFromVideo(preview).then((detectedAspectRatio) => {
-      if (!detectedAspectRatio || cancelled || data.aspectRatio === detectedAspectRatio) {
-        return;
-      }
-      snapNodeToAspectRatio(detectedAspectRatio);
-      triggerSave();
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [data.aspectRatio, detectAspectRatioFromVideo, preview, snapNodeToAspectRatio, triggerSave]);
+  // Detection and snapping are shared with the generator nodes (the four of them
+  // never re-snapped at all until this hook existed). A reference node has no
+  // pending request to protect, so the detected ratio is persisted on the node.
+  useSnapToVideoAspect({
+    nodeId: id,
+    src: preview,
+    bounds: VIDEO_REFERENCE_NODE_BOUNDS,
+    writeAspectRatio: true,
+  });
 
   // Upload the local file to durable storage and swap to its signed URL. The
   // base64 preview remains the emergency fallback if the upload fails.
@@ -414,6 +355,8 @@ export function VideoReferenceNode({
                           className="h-full w-full object-contain"
                           muted
                           loop
+                          preload="metadata"
+                          playsInline
                           onMouseEnter={(e) => e.currentTarget.play()}
                           onMouseLeave={(e) => e.currentTarget.pause()}
                         />

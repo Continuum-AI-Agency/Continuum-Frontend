@@ -20,7 +20,9 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/ToastProvider';
 import { GroundingChip } from '../components/GroundingChip';
+import { NodeVideoPreview } from '../components/NodeVideoPreview';
 import { useCanvasRuntime } from '../contexts/CanvasRuntimeContext';
+import { useSnapToVideoAspect } from '../hooks/useSnapToVideoAspect';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { HyperframesAgentNodeData } from '../types';
 import { toggleBrandPiece, toggleSkillId } from '../utils/brandEnforcement';
@@ -47,6 +49,9 @@ const labelForStatus = (status: HyperframesAgentNodeData['status']): string => {
   }
 };
 
+// Mirrors the NodeResizer minimums below.
+const HYPERFRAMES_NODE_BOUNDS = { minWidth: 360, minHeight: 360, fallbackWidth: 360 };
+
 export function HyperframesAgentBlock({
   id,
   data,
@@ -59,6 +64,10 @@ export function HyperframesAgentBlock({
   const [starting, setStarting] = useState(false);
   const running = starting || Boolean(data.isExecuting);
   const video = data.generatedVideoUrl;
+
+  // Box re-snaps to the composition the agent actually rendered. `data.aspectRatio`
+  // is the request the next run sends and is left alone.
+  useSnapToVideoAspect({ nodeId: id, src: video, bounds: HYPERFRAMES_NODE_BOUNDS });
 
   const start = useCallback(async () => {
     if (!runtime || running) return;
@@ -200,8 +209,7 @@ export function HyperframesAgentBlock({
 
           <div className="relative flex min-h-28 flex-1 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-black/90">
             {video ? (
-              // biome-ignore lint/a11y/useMediaCaption: generated creative has no authored caption track
-              <video src={video} controls className="h-full w-full object-contain" />
+              <NodeVideoPreview src={video} className="bg-transparent" />
             ) : running ? (
               <div className="flex w-3/4 flex-col items-center gap-3 text-center">
                 <Film className="h-6 w-6 animate-pulse text-violet-400" />

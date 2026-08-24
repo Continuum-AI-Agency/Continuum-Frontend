@@ -98,4 +98,19 @@ describe('renderDesignSystemBlock', () => {
       '',
     );
   });
+
+  it('compiles one requested section without leaking another section’s tokens or rules', () => {
+    const typography = renderDesignSystemBlock(snapshot(), ['typography']);
+    expect(typography.renderedSections).toEqual(['typography']);
+    expect(typography.block).toContain('Typefaces: Poppins.');
+    expect(typography.block).not.toContain('Palette');
+    expect(typography.block).not.toContain('#FFAA1C');
+    expect(typography.block).not.toContain('Radios pequeños');
+
+    const palette = renderDesignSystemBlock(snapshot(), ['palette']);
+    expect(palette.renderedSections).toEqual(['palette']);
+    expect(palette.block).toContain('#FFAA1C');
+    expect(palette.block).not.toContain('Typefaces:');
+    expect(palette.block).not.toContain('Titulares siempre');
+  });
 });

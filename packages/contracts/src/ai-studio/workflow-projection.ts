@@ -25,6 +25,22 @@ export const MAX_PROJECTED_WIRING = 120;
 
 export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   string: ['value'],
+  note: ['content'],
+  // Only the op. `config` is per-op and its schemas land with the runtime that reads
+  // them (action-registry.ts); until then an agent picking an op it cannot configure is
+  // better than an agent writing a config blob nothing validates.
+  action: ['actionId'],
+  // Items arrive by attach_media or by wiring, never as a blob an agent writes.
+  batch: ['combine'],
+  designRef: ['section', 'mode'],
+  export: ['format'],
+  // A router's lock is derived from its wiring, not chosen.
+  router: [],
+  // Layer documents are authored in the editor dialog; there is no useful field an agent
+  // can set from a prompt.
+  layerEditor: [],
+  // An agent cannot pick an element id it has no way to list. Widen when it can.
+  element: [],
   videoDecode: ['value'],
   frameExtract: ['selector', 'timestampSec', 'outputWidth', 'quality'],
   nanoGen: ['model', 'positivePrompt', 'aspectRatio', 'imageSize'],

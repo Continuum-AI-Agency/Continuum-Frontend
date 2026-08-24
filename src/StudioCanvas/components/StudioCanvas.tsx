@@ -10,710 +10,61 @@ import {
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
-import {
-  createNodeData,
-  type GraphIssue,
-  type UnfurlMediaItem,
-  validateWorkflowGraph,
-} from '@continuum/contracts';
-import {
-  AtSign,
-  FolderOpen,
-  Keyboard,
-  Plus,
-  ScanLine,
-  ShieldCheck,
-  Sparkles,
-  Trash2,
-  ZoomIn,
-  ZoomOut,
-} from 'lucide-react';
+import { type UnfurlMediaItem, validateWorkflowGraph } from '@continuum/contracts';
+import { AtSign, FolderOpen } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Connection as ConnectionLine } from '@/components/ai-elements/connection';
 import { Controls } from '@/components/ai-elements/controls';
-import { Edge as AiElementsEdge } from '@/components/ai-elements/edge';
 import { Panel } from '@/components/ai-elements/panel';
 import { CanvasMediaLoader } from '@/components/ai-studio/CanvasMediaLoader';
-import { CanvasRoomsTabs } from '@/components/ai-studio/CanvasRoomsTabs';
-import { CanvasSyncStatus } from '@/components/ai-studio/CanvasSyncStatus';
 import { AIStudioChat } from '@/components/ai-studio/chat/AIStudioChat';
 import { CanvasComposer } from '@/components/ai-studio/composer/CanvasComposer';
 import { useCanvasRealtime } from '@/components/ai-studio/hooks/useCanvasRealtime';
 import { useCanvasRooms } from '@/components/ai-studio/hooks/useCanvasRooms';
 import { useCanvasRunRequests } from '@/components/ai-studio/hooks/useCanvasRunRequests';
-import { WorkflowLibrary } from '@/components/ai-studio/WorkflowLibrary';
 import { StudioMediaLibraryPanel } from '@/components/creative-assets/StudioMediaLibraryPanel';
-import { ActiveUsersStack } from '@/components/presence/ActiveUsersStack';
 import { Cursor } from '@/components/realtime/cursor';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  ContextMenu,
-  ContextMenuCheckboxItem,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
-  ContextMenuShortcut,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Progress } from '@/components/ui/progress';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useToast } from '@/components/ui/ToastProvider';
 import { canvasRoomHref } from '@/lib/ai-studio/canvasRoomLocation';
 import { inlineRemoteImage } from '@/lib/ai-studio/inlineRemoteImage';
-import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
-import { STUDIO_ASSET_DROP_EFFECT } from '@/lib/creative-assets/studioAssetDrop';
-import {
-  buildPendingApplyStorageKey,
-  type PlannerAiStudioApplyRequest,
-  type PlannerAiStudioHandoff,
-  plannerAiStudioApplyResponseSchema,
-  resolveWorkflowConceptSpec,
-  type WorkflowConceptSpec,
-} from '@/lib/organic/ai-studio-bridge';
+import type { PlannerAiStudioHandoff } from '@/lib/organic/ai-studio-bridge';
 import { CanvasRuntimeProvider } from '../contexts/CanvasRuntimeContext';
+import { useApplyBackToPlanner } from '../hooks/useApplyBackToPlanner';
+import { useCanvasDnD } from '../hooks/useCanvasDnD';
+import { useCanvasKeyboardShortcuts } from '../hooks/useCanvasKeyboardShortcuts';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
+import { usePlannerSeedHydration } from '../hooks/usePlannerSeedHydration';
 import { useTimelineRenderContinuations } from '../hooks/useTimelineRenderContinuations';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
-import { ApiRenderBlock } from '../nodes/ApiRenderBlock';
-import { AudioNode } from '../nodes/AudioNode';
-import { DocumentNode } from '../nodes/DocumentNode';
-import { ExtendVideoBlock } from '../nodes/ExtendVideoBlock';
-import { FrameExtractBlock } from '../nodes/FrameExtractBlock';
-import { HyperframesAgentBlock } from '../nodes/HyperframesAgentBlock';
-import { ImageGenBlock } from '../nodes/ImageGenBlock';
-import { ImageNode } from '../nodes/ImageNode';
-import { NoteNode } from '../nodes/NoteNode';
-import { OmniGenBlock } from '../nodes/OmniGenBlock';
-import { OrganicPublishBlock } from '../nodes/OrganicPublishBlock';
-import { PlannerDraftBlock } from '../nodes/PlannerDraftBlock';
-import { PaidPublisherBlock } from '../nodes/PublishingBlock';
-import { StringNode } from '../nodes/StringNode';
-import { TimelineEditorBlock } from '../nodes/TimelineEditorBlock';
-import { VideoDecoderBlock } from '../nodes/VideoDecoderBlock';
-import { VideoGenBlock } from '../nodes/VideoGenBlock';
-import { VideoReferenceNode } from '../nodes/VideoReferenceNode';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
-import {
-  IMAGE_GENERATOR_NODE_BOUNDS,
-  snapNodeDimensionsToAspectRatio,
-} from '../utils/aspectRatioSizing';
 import { DEFAULT_BRAND_BOOK_PIECES } from '../utils/brandEnforcement';
 import { buildReferenceNodes } from '../utils/buildReferenceNodes';
+import { computeReadyNodeIds, computeStyledEdges } from '../utils/edgeStyling';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
-import { computeGenerationSignature } from '../utils/generationSignature';
 import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
 import { isValidConnection } from '../utils/isValidConnection';
 import { layoutInRow } from '../utils/layoutImportedNodes';
-import { resolveCanvasDropBase64 } from '../utils/resolveCanvasDropBase64';
-import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import { resolveSidebarDropTarget } from '../utils/resolveSidebarDropTarget';
-import {
-  DEFAULT_VIDEO_GENERATOR_MODEL,
-  getVideoGeneratorReferenceMode,
-  type VideoGeneratorModel,
-} from '../utils/videoModel';
-import { ADD_NODE_GROUPS, type StudioCanvasNodeType } from './addNodeCatalog';
+import type { VideoGeneratorModel } from '../utils/videoModel';
+import type { StudioCanvasNodeType } from './addNodeCatalog';
+import { CanvasContextMenuContent } from './CanvasContextMenuContent';
 import { CanvasFloatingPanel } from './CanvasFloatingPanel';
+import { CanvasShortcutsPanel } from './CanvasShortcutsPanel';
+import { CanvasValidationPanel } from './CanvasValidationPanel';
+import { createNodeConfig, edgeTypes, nodeTypes } from './canvasNodeTypes';
 import { InstagramMediaBrowser } from './InstagramMediaBrowser';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
+import { NodeInspectorPanel } from './NodeInspectorPanel';
 import { SaveStarterDialog } from './SaveStarterDialog';
-import { SaveWorkflowDialog } from './SaveWorkflowDialog';
 import { SourceDropNodePicker } from './SourceDropNodePicker';
-import { Toolbar } from './Toolbar';
-
-const RF_DRAG_MIME = 'application/reactflow-node-data';
-const TEXT_MIME = 'text/plain';
-
-const NODE_TYPES = new Set<StudioCanvasNodeType>([
-  'nanoGen',
-  'videoGen',
-  'veoDirector',
-  'veoFast',
-  'omniGen',
-  'extendVideo',
-  'hyperframesAgent',
-  'timelineEditor',
-  'plannerDraft',
-  'organicPublish',
-  'paidPublisher',
-  'apiRender',
-  'string',
-  'note',
-  'image',
-  'audio',
-  'document',
-  'video',
-  'videoDecode',
-  'frameExtract',
-]);
-
-const isStudioCanvasNodeType = (value: string): value is StudioCanvasNodeType =>
-  NODE_TYPES.has(value as StudioCanvasNodeType);
-
-const createNodeConfig = (
-  type: StudioCanvasNodeType,
-  options?: { model?: VideoGeneratorModel },
-): { data: Record<string, unknown>; style?: Record<string, number> } => {
-  // One factory for the node defaults (@continuum/contracts) — the canvas, the
-  // edge-drop menu and the agent write path must create the SAME node. It also sizes
-  // the node to its aspect ratio, so a 1:1 generation is not born in a 16:9 box.
-  if (type === 'nanoGen') {
-    return createNodeData('nanoGen');
-  }
-
-  if (type === 'videoGen' || type === 'veoDirector' || type === 'veoFast') {
-    const model =
-      options?.model ??
-      (type === 'veoDirector'
-        ? 'veo-3.1'
-        : type === 'veoFast'
-          ? 'veo-3.1-fast'
-          : DEFAULT_VIDEO_GENERATOR_MODEL);
-    return createNodeData(type, {
-      model,
-      referenceMode: getVideoGeneratorReferenceMode(model),
-    });
-  }
-
-  if (type === 'extendVideo') {
-    return {
-      data: { prompt: '' },
-      style: { width: 360, height: 200 },
-    };
-  }
-
-  if (type === 'timelineEditor') {
-    return {
-      data: {
-        items: [],
-        outputFormat: 'mp4',
-        videoCodec: 'avc',
-        audioCodec: 'aac',
-        committed: false,
-      },
-      style: { width: 320, height: 260 },
-    };
-  }
-
-  if (type === 'hyperframesAgent') {
-    return createNodeData('hyperframesAgent');
-  }
-
-  if (type === 'string') {
-    return { data: { value: '' } };
-  }
-
-  if (
-    type === 'plannerDraft' ||
-    type === 'organicPublish' ||
-    type === 'paidPublisher' ||
-    type === 'apiRender'
-  ) {
-    return createNodeData(type);
-  }
-
-  if (type === 'note') {
-    return {
-      data: { content: '' },
-      style: { width: 260, height: 160 },
-    };
-  }
-
-  if (type === 'videoDecode') {
-    return { data: { value: '' }, style: { width: 360, height: 320 } };
-  }
-
-  if (type === 'frameExtract') {
-    return createNodeData('frameExtract');
-  }
-
-  if (type === 'omniGen') {
-    return createNodeData('omniGen');
-  }
-
-  if (type === 'image') {
-    return {
-      data: { image: undefined, aspectRatio: '1:1' },
-      style: { width: 192, height: 192 },
-    };
-  }
-
-  if (type === 'audio') {
-    return {
-      data: { audio: undefined },
-      style: { width: 192, height: 100 },
-    };
-  }
-
-  if (type === 'document') {
-    return {
-      data: { documents: [] },
-      style: { width: 200, height: 200 },
-    };
-  }
-
-  return {
-    data: { video: undefined },
-    style: { width: 192, height: 192 },
-  };
-};
-
-const nodeTypes = {
-  nanoGen: ImageGenBlock,
-  videoGen: VideoGenBlock,
-  veoDirector: VideoGenBlock,
-  veoFast: VideoGenBlock,
-  omniGen: OmniGenBlock,
-  extendVideo: ExtendVideoBlock,
-  hyperframesAgent: HyperframesAgentBlock,
-  timelineEditor: TimelineEditorBlock,
-  plannerDraft: PlannerDraftBlock,
-  organicPublish: OrganicPublishBlock,
-  paidPublisher: PaidPublisherBlock,
-  apiRender: ApiRenderBlock,
-  string: StringNode,
-  note: NoteNode,
-  image: ImageNode,
-  audio: AudioNode,
-  document: DocumentNode,
-  video: VideoReferenceNode,
-  videoDecode: VideoDecoderBlock,
-  frameExtract: FrameExtractBlock,
-};
-
-const edgeTypes = {
-  button: AiElementsEdge.DataType,
-  dataType: AiElementsEdge.DataType,
-};
-
-type SeedNodeBuild = {
-  nodes: StudioNode[];
-  edges: Edge[];
-};
-
-type ApplyAssetCandidate = {
-  nodeId: string;
-  role: string;
-  kind: 'image' | 'video';
-  source: string;
-};
-
-function resolveSeedMediaDataUrl(seed: PlannerAiStudioHandoff): string | null {
-  const assetUrl =
-    typeof seed.mediaSuggestion?.assetUrl === 'string' ? seed.mediaSuggestion.assetUrl.trim() : '';
-  if (assetUrl.length > 0) return assetUrl;
-
-  const assetBase64 =
-    typeof seed.mediaSuggestion?.assetBase64 === 'string'
-      ? seed.mediaSuggestion.assetBase64.trim()
-      : '';
-  if (!assetBase64) return null;
-
-  return assetBase64.startsWith('data:image/')
-    ? assetBase64
-    : `data:image/png;base64,${assetBase64}`;
-}
-
-// Builds the data for a planner/Library seed image reference node. When the seed
-// is a remote URL (a short-TTL signed URL), it is carried as `sourceUrl` so the
-// node can be inlined to base64 (inlineReferenceImageNodes) and re-hydrated after a
-// save strips the inline data. Without this a Library-sourced seed is dropped at
-// generation, while an upload (inline base64) is not.
-function buildSeedImageNodeData(seedImage: string): Record<string, unknown> {
-  const isRemoteUrl = /^https?:\/\//i.test(seedImage.trim());
-  return {
-    image: seedImage,
-    fileName: 'planner-seed-image.png',
-    ...(isRemoteUrl ? { sourceUrl: seedImage.trim() } : {}),
-  };
-}
-
-// Pulls the durable bucket + object path out of a Supabase storage URL (signed,
-// public, or authenticated). The path segment after `/storage/v1/object/<mode>/`
-// is `<bucket>/<path...>`, independent of the expiring `?token`. Returns null for
-// any non-storage URL (e.g. a third-party CDN), which simply skips durable coords.
-function parseSupabaseStorageRef(url: string): { bucket: string; storagePath: string } | null {
-  try {
-    const { pathname } = new URL(url);
-    const marker = '/storage/v1/object/';
-    const markerIndex = pathname.indexOf(marker);
-    if (markerIndex === -1) return null;
-    let rest = pathname.slice(markerIndex + marker.length);
-    for (const mode of ['sign/', 'public/', 'authenticated/']) {
-      if (rest.startsWith(mode)) {
-        rest = rest.slice(mode.length);
-        break;
-      }
-    }
-    const firstSlash = rest.indexOf('/');
-    if (firstSlash <= 0) return null;
-    const bucket = decodeURIComponent(rest.slice(0, firstSlash));
-    const storagePath = decodeURIComponent(rest.slice(firstSlash + 1));
-    if (!bucket || !storagePath) return null;
-    return { bucket, storagePath };
-  } catch {
-    return null;
-  }
-}
-
-// Presents the already-produced creative AS the generator node's own output, so
-// "Open in AI Studio" opens the flow that made the post — prompt node + the image
-// it produced — rather than parking the image as a side reference. A remote signed
-// URL is mirrored onto both fields the way the node's own expiry-resign does, and
-// its durable storage coords are persisted so the resign machinery can refresh the
-// thumbnail once the seeded signed URL expires (otherwise it stays broken forever).
-function buildSeedGeneratedImageData(seedImage: string): Record<string, unknown> {
-  const trimmed = seedImage.trim();
-  const isRemoteUrl = /^https?:\/\//i.test(trimmed);
-  if (!isRemoteUrl) return { generatedImage: seedImage };
-
-  const storageRef = parseSupabaseStorageRef(trimmed);
-  return {
-    generatedImage: seedImage,
-    generatedImageUrl: seedImage,
-    ...(storageRef
-      ? {
-          generatedImageStoragePath: storageRef.storagePath,
-          generatedImageBucket: storageRef.bucket,
-        }
-      : {}),
-  };
-}
-
-function buildSeedPrompt(seed: PlannerAiStudioHandoff): string {
-  const workflowSpec = resolveWorkflowConceptSpec({
-    platform: seed.platform,
-    postType: seed.postType,
-    workflowConcept: seed.workflowConcept,
-  });
-  const promptSections = [
-    seed.title ? `Title: ${seed.title}` : '',
-    seed.summary ? `Summary: ${seed.summary}` : '',
-    seed.captionPreview ? `Draft caption:\n${seed.captionPreview}` : '',
-    seed.creativeDirectionPrompt ? `Creative direction:\n${seed.creativeDirectionPrompt}` : '',
-    seed.thumbnailPrompt ? `Thumbnail direction:\n${seed.thumbnailPrompt}` : '',
-  ].filter(Boolean);
-
-  if (workflowSpec.outputKind === 'video') {
-    promptSections.push(
-      'Goal: Generate a short-form social reel concept with clear motion direction.',
-    );
-  } else if (workflowSpec.outputMode === 'ordered') {
-    promptSections.push(
-      'Goal: Generate distinct but coherent slide visuals for the full carousel.',
-    );
-  } else {
-    promptSections.push(
-      'Goal: Generate a clean social thumbnail concept with clear hierarchy and one focal subject.',
-    );
-  }
-
-  return promptSections.join('\n\n');
-}
-
-// Instagram publishes at most 10 slides per carousel, so a draft that claims more
-// still seeds 10 generators.
-const CAROUSEL_MAX_SLIDES = 10;
-
-// One text node per slide, each carrying the shared brief VERBATIM plus that
-// slide's own direction. A wired prompt REPLACES a generator's positivePrompt, so
-// N generators fed by one shared text node render N identical images — the slide
-// marker alone is what keeps the seeded prompts distinct when the draft carries no
-// per-slide copy at all.
-function buildCarouselSlidePrompt(
-  seed: PlannerAiStudioHandoff,
-  index: number,
-  count: number,
-): string {
-  const direction = seed.slides?.find((slide) => slide.index === index)?.prompt.trim();
-  return [
-    `Slide ${index + 1} of ${count}`,
-    direction ? `Slide direction:\n${direction}` : '',
-    buildSeedPrompt(seed),
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-}
-
-function sortNodesByCanvasPosition(nodes: StudioNode[]): StudioNode[] {
-  return [...nodes].sort((left, right) => {
-    const xDiff = (left.position?.x ?? 0) - (right.position?.x ?? 0);
-    if (Math.abs(xDiff) > 16) return xDiff;
-    return (left.position?.y ?? 0) - (right.position?.y ?? 0);
-  });
-}
-
-function collectApplyAssetCandidates(nodes: StudioNode[]): ApplyAssetCandidate[] {
-  const sorted = sortNodesByCanvasPosition(nodes);
-  const imageCandidates: ApplyAssetCandidate[] = [];
-  const videoCandidates: ApplyAssetCandidate[] = [];
-
-  sorted.forEach((node) => {
-    if (node.type === 'nanoGen') {
-      const nodeData = node.data as { generatedImage?: unknown; generatedImageUrl?: unknown };
-      const generatedImage =
-        typeof nodeData.generatedImage === 'string' ? (nodeData.generatedImage ?? '').trim() : '';
-      const generatedImageUrl =
-        typeof nodeData.generatedImageUrl === 'string'
-          ? (nodeData.generatedImageUrl ?? '').trim()
-          : '';
-      const source = generatedImage || generatedImageUrl;
-      if (!source) return;
-      imageCandidates.push({
-        nodeId: node.id,
-        role: `image_${imageCandidates.length + 1}`,
-        kind: 'image',
-        source,
-      });
-      return;
-    }
-
-    if (node.type === 'videoGen' || node.type === 'extendVideo') {
-      const nodeData = node.data as { generatedVideo?: unknown; generatedVideoUrl?: unknown };
-      const generatedVideo =
-        typeof nodeData.generatedVideo === 'string' ? (nodeData.generatedVideo ?? '').trim() : '';
-      const generatedVideoUrl =
-        typeof nodeData.generatedVideoUrl === 'string'
-          ? (nodeData.generatedVideoUrl ?? '').trim()
-          : '';
-      const source = generatedVideo || generatedVideoUrl;
-      if (!source) return;
-      videoCandidates.push({
-        nodeId: node.id,
-        role: `video_${videoCandidates.length + 1}`,
-        kind: 'video',
-        source,
-      });
-    }
-  });
-
-  return [...imageCandidates, ...videoCandidates];
-}
-
-// The planner seed draws bigger generator nodes than the canvas default so a handoff
-// reads at a glance, but the SHAPE still comes from the one sizing helper — a seed that
-// hardcodes both dimensions is how a 9:16 post ends up in a landscape box (#230).
-function seedGeneratorStyle(aspectRatio: string, edge: number): { width: number; height: number } {
-  return snapNodeDimensionsToAspectRatio({
-    aspectRatio,
-    currentWidth: edge,
-    currentHeight: edge,
-    minWidth: IMAGE_GENERATOR_NODE_BOUNDS.minWidth,
-    minHeight: IMAGE_GENERATOR_NODE_BOUNDS.minHeight,
-    fallbackWidth: edge,
-  });
-}
-
-export function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
-  const workflowSpec = resolveWorkflowConceptSpec({
-    platform: seed.platform,
-    postType: seed.postType,
-    workflowConcept: seed.workflowConcept,
-  });
-  const promptValue = buildSeedPrompt(seed);
-  const seedImage = resolveSeedMediaDataUrl(seed);
-  const textNodeId = `organic-seed-text-${seed.draftId}`;
-  const textNode: StudioNode = {
-    id: textNodeId,
-    type: 'string',
-    position: { x: 120, y: 160 },
-    data: { value: promptValue },
-    style: { width: 420, height: 240 },
-  } as StudioNode;
-
-  if (workflowSpec.outputKind === 'video') {
-    const videoNodeId = `organic-seed-reel-${seed.draftId}`;
-    // A Reel is vertical. This seed used to be stamped with the 16:9 default box, so the
-    // very first thing a planner handoff showed for a 9:16 post was a landscape node.
-    const seedAspectRatio = seed.postType === 'reel' ? '9:16' : '16:9';
-    const nodes: StudioNode[] = [
-      textNode,
-      {
-        id: videoNodeId,
-        type: 'videoGen',
-        position: { x: 620, y: 160 },
-        // The mode is left to createNodeData so it tracks whatever defaultModel is,
-        // rather than pinning 'frames' and going stale if that model changes.
-        ...createNodeData('videoGen', {
-          model: workflowSpec.defaultModel,
-          aspectRatio: seedAspectRatio,
-        }),
-      } as StudioNode,
-    ];
-
-    const edges: Edge[] = [
-      {
-        id: `e-${textNodeId}-${videoNodeId}-prompt`,
-        source: textNodeId,
-        sourceHandle: 'text',
-        target: videoNodeId,
-        targetHandle: 'prompt-in',
-        type: 'dataType',
-        data: { dataType: 'text', pathType: 'bezier' },
-      },
-    ];
-
-    if (seedImage) {
-      const imageRefId = `organic-seed-image-ref-${seed.draftId}`;
-      nodes.push({
-        id: imageRefId,
-        type: 'image',
-        position: { x: 620, y: 500 },
-        data: buildSeedImageNodeData(seedImage),
-        style: { width: 196, height: 196 },
-      } as StudioNode);
-      edges.push({
-        id: `e-${imageRefId}-${videoNodeId}-first`,
-        source: imageRefId,
-        sourceHandle: 'image',
-        target: videoNodeId,
-        targetHandle: 'first-frame',
-        type: 'dataType',
-        data: { dataType: 'image', pathType: 'bezier' },
-      });
-    }
-
-    return { nodes, edges };
-  }
-
-  if (workflowSpec.outputMode === 'ordered') {
-    const count = Math.max(1, Math.min(seed.authoritativeCount ?? 1, CAROUSEL_MAX_SLIDES));
-    const nodes: StudioNode[] = [];
-    const edges: Edge[] = [];
-    let seedNodeId: string | null = null;
-
-    if (seedImage) {
-      seedNodeId = `organic-seed-image-ref-${seed.draftId}`;
-      nodes.push({
-        id: seedNodeId,
-        type: 'image',
-        position: { x: 120, y: -260 },
-        data: buildSeedImageNodeData(seedImage),
-        style: { width: 180, height: 180 },
-      } as StudioNode);
-    }
-
-    // Two prompt/generator pairs per row so a slide's copy sits next to the slide
-    // it drives, instead of every generator hanging off one anonymous text block.
-    for (let index = 0; index < count; index += 1) {
-      const row = Math.floor(index / 2);
-      const col = index % 2;
-      const x = 120 + col * 880;
-      const y = 120 + row * 420;
-      const slideTextNodeId = `organic-seed-text-${seed.draftId}-${index + 1}`;
-      const nodeId = `organic-seed-carousel-${seed.draftId}-${index + 1}`;
-
-      nodes.push({
-        id: slideTextNodeId,
-        type: 'string',
-        position: { x, y },
-        data: { value: buildCarouselSlidePrompt(seed, index, count) },
-        style: { width: 380, height: 300 },
-      } as StudioNode);
-
-      nodes.push({
-        id: nodeId,
-        type: 'nanoGen',
-        position: { x: x + 440, y },
-        data: {
-          model: workflowSpec.defaultModel,
-          positivePrompt: '',
-          aspectRatio: '1:1',
-          imageSize: '512px',
-          maxReferenceImages: workflowSpec.maxReferenceImages,
-        },
-        style: seedGeneratorStyle('1:1', 340),
-      } as StudioNode);
-
-      edges.push({
-        id: `e-${slideTextNodeId}-${nodeId}-prompt`,
-        source: slideTextNodeId,
-        sourceHandle: 'text',
-        target: nodeId,
-        targetHandle: 'prompt',
-        type: 'dataType',
-        data: { dataType: 'text', pathType: 'bezier' },
-      });
-
-      if (seedNodeId) {
-        edges.push({
-          id: `e-${seedNodeId}-${nodeId}-ref`,
-          source: seedNodeId,
-          sourceHandle: 'image',
-          target: nodeId,
-          targetHandle: 'ref-image',
-          type: 'dataType',
-          data: { dataType: 'image', pathType: 'bezier' },
-        });
-      }
-    }
-
-    return { nodes, edges };
-  }
-
-  const imageGenNodeId = `organic-seed-image-${seed.draftId}`;
-  const imageGenNode: StudioNode = {
-    id: imageGenNodeId,
-    type: 'nanoGen',
-    position: { x: 620, y: 190 },
-    data: {
-      model: workflowSpec.defaultModel,
-      positivePrompt: '',
-      aspectRatio: '1:1',
-      imageSize: '1K',
-      maxReferenceImages: workflowSpec.maxReferenceImages,
-      // Seed the produced creative as this node's output so the flow opens showing
-      // the posted image, editable in place. See buildSeedGeneratedImageData.
-      ...(seedImage ? buildSeedGeneratedImageData(seedImage) : {}),
-    },
-    style: seedGeneratorStyle('1:1', 420),
-  } as StudioNode;
-  const nodes: StudioNode[] = [textNode, imageGenNode];
-  const edges: Edge[] = [
-    {
-      id: `e-${textNodeId}-${imageGenNodeId}-prompt`,
-      source: textNodeId,
-      sourceHandle: 'text',
-      target: imageGenNodeId,
-      targetHandle: 'prompt',
-      type: 'dataType',
-      data: { dataType: 'text', pathType: 'bezier' },
-    },
-  ];
-
-  // Store a signature matching the seeded output + its prompt wiring. Without it a
-  // node with output but no signature reads as "not stale" and a Run would reuse
-  // the seeded image; with it, editing the prompt drifts the signature so Run
-  // regenerates — which is exactly the "change the image we gave you" the user wants.
-  if (seedImage) {
-    const nodeById = new Map(nodes.map((node): [string, StudioNode] => [node.id, node]));
-    (imageGenNode.data as Record<string, unknown>).generationSignature = computeGenerationSignature(
-      imageGenNode,
-      edges,
-      nodeById,
-    );
-  }
-
-  return { nodes, edges };
-}
+import { StudioCanvasHeader } from './StudioCanvasHeader';
 
 function Flow({
   brandProfileId,
@@ -737,8 +88,6 @@ function Flow({
     setNodes,
     setEdges,
     takeSnapshot,
-    undo,
-    redo,
     interactionMode,
     setInteractionMode,
     keyboardScope,
@@ -746,10 +95,6 @@ function Flow({
     setBrandId,
     setActiveRoomId,
     updateNodeData,
-    copySelectedNodes,
-    cutSelectedNodes,
-    pasteNodes,
-    defaultEdgeType,
   } = useStudioStore();
 
   const { remoteCursors, updateCursor, isLoading } = realtime;
@@ -763,7 +108,7 @@ function Flow({
   const lastMousePositionRef = useRef({ x: 240, y: 180 });
   const contextMenuAnchorRef = useRef<{ x: number; y: number } | null>(null);
 
-  const { screenToFlowPosition, deleteElements, fitView, zoomIn, zoomOut } = useReactFlow();
+  const { screenToFlowPosition, fitView, zoomIn, zoomOut } = useReactFlow();
 
   useEffect(() => {
     if (brandProfileId) {
@@ -817,7 +162,6 @@ function Flow({
   // footprint and the two overlays never fight for the same bottom-right region.
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [starterSelectionNodes, setStarterSelectionNodes] = useState<StudioNode[]>([]);
-  const hydratedPlannerSeedRef = useRef<string | null>(null);
 
   const openSaveStarter = useCallback(() => {
     setStarterSelectionNodes(nodes.filter((node) => node.selected));
@@ -952,394 +296,18 @@ function Flow({
     triggerSave();
   }, [setEdges, setNodes, takeSnapshot, triggerSave]);
 
-  useEffect(() => {
-    if (isLoading) return;
-    if (!organicPlannerSeed) return;
-    if (nodes.length > 0 || edges.length > 0) return;
+  usePlannerSeedHydration({ organicPlannerSeed, activeRoomId, isLoading });
 
-    const roomScope = activeRoomId ?? 'default-room';
-    const hydrationKey = `${roomScope}:${organicPlannerSeed.draftId}`;
-    if (hydratedPlannerSeedRef.current === hydrationKey) return;
-    const starter = buildStarterFlow(organicPlannerSeed);
+  useCanvasKeyboardShortcuts();
 
-    takeSnapshot();
-    setNodes(starter.nodes);
-    setEdges(starter.edges);
-    triggerSave();
-    hydratedPlannerSeedRef.current = hydrationKey;
+  const readyNodeIds = useMemo(() => computeReadyNodeIds(nodes, edges), [edges, nodes]);
 
-    // Load the Library/planner seed image into the node as inline base64 (like an
-    // upload), so it reaches the generation model and survives a save+reload via
-    // re-hydration. Mirrors the unfurl drop path; runs in the background with a
-    // per-node processing/ready status.
-    void inlineReferenceImageNodes(starter.nodes, {
-      inline: inlineRemoteImage,
-      updateNodeData,
-    });
-  }, [
-    activeRoomId,
-    edges.length,
-    isLoading,
-    nodes.length,
-    organicPlannerSeed,
-    setEdges,
-    setNodes,
-    takeSnapshot,
-    triggerSave,
-    updateNodeData,
-  ]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // A full-screen editor (e.g. the Video Editor dialog) owns the keyboard
-      // while open. Standing down here keeps Delete/Backspace, copy/paste, and
-      // undo from acting on the canvas node behind the editor.
-      if (keyboardScope === 'modal') {
-        return;
-      }
-      const target = event.target as HTMLElement | null;
-      if (target) {
-        const tagName = target.tagName;
-        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || target.isContentEditable) {
-          return;
-        }
-      }
-
-      if ((event.metaKey || event.ctrlKey) && event.key === 'z') {
-        if (event.shiftKey) {
-          redo();
-        } else {
-          undo();
-        }
-        event.preventDefault();
-        return;
-      }
-
-      if ((event.metaKey || event.ctrlKey) && event.key === 'y') {
-        redo();
-        event.preventDefault();
-        return;
-      }
-
-      if ((event.metaKey || event.ctrlKey) && event.key === 'c') {
-        copySelectedNodes();
-        event.preventDefault();
-        return;
-      }
-
-      if ((event.metaKey || event.ctrlKey) && event.key === 'x') {
-        cutSelectedNodes();
-        event.preventDefault();
-        return;
-      }
-
-      if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
-        pasteNodes();
-        event.preventDefault();
-        return;
-      }
-
-      if (event.key.toLowerCase() === 'h') {
-        setInteractionMode('pan');
-        return;
-      }
-
-      if (event.key.toLowerCase() === 'v') {
-        setInteractionMode('select');
-        return;
-      }
-
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        const selectedNodes = nodes.filter((node) => node.selected);
-        const selectedEdges = edges.filter((edge) => edge.selected);
-
-        if (selectedNodes.length > 0 || selectedEdges.length > 0) {
-          takeSnapshot();
-          deleteElements({ nodes: selectedNodes, edges: selectedEdges });
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    copySelectedNodes,
-    cutSelectedNodes,
-    deleteElements,
-    edges,
-    keyboardScope,
-    nodes,
-    pasteNodes,
-    redo,
-    setInteractionMode,
-    takeSnapshot,
-    undo,
-  ]);
-
-  const readyNodeIds = useMemo(() => {
-    const isGeneratorReady = (node: StudioNode) => {
-      if (node.type === 'nanoGen') {
-        const hasPromptEdge = edges.some(
-          (edge) => edge.target === node.id && edge.targetHandle === 'prompt',
-        );
-        const promptValue =
-          typeof (node.data as { positivePrompt?: string }).positivePrompt === 'string'
-            ? (node.data as { positivePrompt?: string }).positivePrompt?.trim()
-            : '';
-        return hasPromptEdge || !!promptValue;
-      }
-
-      if (node.type === 'videoGen' || node.type === 'veoDirector' || node.type === 'veoFast') {
-        const hasPromptEdge = edges.some(
-          (edge) => edge.target === node.id && edge.targetHandle === 'prompt-in',
-        );
-        const promptValue =
-          typeof (node.data as { prompt?: string }).prompt === 'string'
-            ? (node.data as { prompt?: string }).prompt?.trim()
-            : '';
-        return hasPromptEdge || !!promptValue;
-      }
-
-      return false;
-    };
-
-    return new Set(nodes.filter(isGeneratorReady).map((node) => node.id));
-  }, [edges, nodes]);
-
-  const styledEdges = useMemo(() => {
-    const nodeTypeById = new Map(nodes.map((node) => [node.id, node.type]));
-
-    const resolveDataType = (edge: Edge) => {
-      const dataType = (edge.data as { dataType?: string } | undefined)?.dataType;
-      if (
-        dataType === 'image' ||
-        dataType === 'video' ||
-        dataType === 'audio' ||
-        dataType === 'document' ||
-        dataType === 'text'
-      ) {
-        return dataType;
-      }
-      if (edge.sourceHandle === 'image') return 'image';
-      if (edge.sourceHandle === 'video') return 'video';
-      if (edge.sourceHandle === 'audio') return 'audio';
-      if (edge.sourceHandle === 'document') return 'document';
-      return 'text';
-    };
-
-    const resolvePathType = (edge: Edge) => {
-      const dataPathType = (edge.data as { pathType?: string } | undefined)?.pathType;
-      if (
-        dataPathType === 'bezier' ||
-        dataPathType === 'straight' ||
-        dataPathType === 'step' ||
-        dataPathType === 'smoothstep'
-      ) {
-        return dataPathType;
-      }
-      if (
-        edge.type === 'bezier' ||
-        edge.type === 'straight' ||
-        edge.type === 'step' ||
-        edge.type === 'smoothstep'
-      ) {
-        return edge.type;
-      }
-      return 'bezier';
-    };
-
-    return edges.map((edge) => {
-      const dataType = resolveDataType(edge);
-      const targetType = nodeTypeById.get(edge.target);
-      const isTargetGenerator =
-        targetType === 'nanoGen' ||
-        targetType === 'videoGen' ||
-        targetType === 'veoDirector' ||
-        targetType === 'veoFast';
-      const isActive = isTargetGenerator && readyNodeIds.has(edge.target);
-      const isDotted = isTargetGenerator && !readyNodeIds.has(edge.target);
-      const pathType = resolvePathType(edge);
-      const className = [
-        edge.className,
-        'studio-edge',
-        isActive ? 'studio-edge--active' : '',
-        isDotted ? 'studio-edge--inactive' : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
-
-      return {
-        ...edge,
-        type: 'dataType',
-        animated: false,
-        className,
-        style: {
-          ...edge.style,
-          ['--edge-color' as keyof React.CSSProperties]: `var(--edge-${dataType})`,
-        },
-        data: {
-          ...(edge.data as Record<string, unknown> | undefined),
-          dataType,
-          isActive,
-          isDotted,
-          pathType,
-        },
-      };
-    });
-  }, [edges, nodes, readyNodeIds]);
-
-  const onDragOver = useCallback((event: React.DragEvent) => {
-    event.preventDefault();
-    // Must match the drag source's effectAllowed (STUDIO_ASSET_DROP_EFFECT); a
-    // mismatched dropEffect makes the browser drop the drop and never fire onDrop.
-    event.dataTransfer.dropEffect = STUDIO_ASSET_DROP_EFFECT;
-  }, []);
-
-  const onNodeDragStart = useCallback(() => {
-    takeSnapshot();
-  }, [takeSnapshot]);
-
-  const onNodeDragStop = useCallback(() => {
-    triggerSave();
-  }, [triggerSave]);
-
-  const onDrop = useCallback(
-    async (event: React.DragEvent) => {
-      event.preventDefault();
-      takeSnapshot();
-
-      const droppedType = event.dataTransfer.getData('application/reactflow');
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
-      if (isStudioCanvasNodeType(droppedType)) {
-        const canonicalType: StudioCanvasNodeType =
-          droppedType === 'veoDirector' || droppedType === 'veoFast' ? 'videoGen' : droppedType;
-        const { data, style } = createNodeConfig(canonicalType);
-        const newNode: StudioNode = {
-          id: uuidv4(),
-          type: canonicalType,
-          position,
-          data: data as StudioNode['data'],
-          style,
-        } as StudioNode;
-
-        setNodes(nodes.concat(newNode));
-        triggerSave();
-        return;
-      }
-
-      const rawPayload =
-        event.dataTransfer.getData(CREATIVE_ASSET_DRAG_TYPE) ||
-        event.dataTransfer.getData(RF_DRAG_MIME) ||
-        event.dataTransfer.getData(TEXT_MIME);
-
-      if (!rawPayload) {
-        return;
-      }
-
-      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveCanvasDropBase64);
-      if (resolved.status === 'error') {
-        show({
-          title: resolved.title,
-          description: resolved.description,
-          variant: resolved.variant ?? 'error',
-        });
-        return;
-      }
-
-      const assetNodeType = resolved.nodeType;
-      let assetData = {};
-      let style = { width: 192, height: 192 };
-
-      // assetId is only set when the drop came from the Library. It is what lets a
-      // generation fed by this node be credited back to the asset that fed it.
-      if (assetNodeType === 'image') {
-        assetData = {
-          image: resolved.dataUrl,
-          fileName: resolved.fileName,
-          assetId: resolved.assetId,
-          sourcePath: resolved.sourcePath,
-          bucket: resolved.bucket,
-          sourceUrl: resolved.sourceUrl,
-        };
-      } else if (assetNodeType === 'video') {
-        assetData = {
-          video: resolved.dataUrl,
-          fileName: resolved.fileName,
-          assetId: resolved.assetId,
-          sourcePath: resolved.sourcePath,
-          bucket: resolved.bucket,
-          sourceUrl: resolved.sourceUrl,
-        };
-      } else if (assetNodeType === 'audio') {
-        assetData = { audio: resolved.dataUrl, fileName: resolved.fileName };
-        style = { width: 192, height: 100 };
-      } else if (assetNodeType === 'document') {
-        assetData = {
-          documents: [
-            {
-              name: resolved.fileName || 'Document',
-              content: resolved.dataUrl,
-              type: resolved.mimeType === 'application/pdf' ? 'pdf' : 'txt',
-            },
-          ],
-        };
-        style = { width: 200, height: 200 };
-      }
-
-      const newNode: StudioNode = {
-        id: uuidv4(),
-        type: assetNodeType,
-        position,
-        data: assetData as StudioNode['data'],
-        style,
-      } as StudioNode;
-
-      const dropTarget = resolveSidebarDropTarget(
-        event.clientX,
-        event.clientY,
-        assetNodeType,
-        nodes,
-        edges,
-      );
-
-      if (dropTarget) {
-        const newEdge: Edge = {
-          id: `e-${newNode.id}-${dropTarget.nodeId}-${Date.now()}`,
-          source: newNode.id,
-          sourceHandle: assetNodeType,
-          target: dropTarget.nodeId,
-          targetHandle: dropTarget.handleId,
-          type: 'dataType',
-          className: 'studio-edge studio-edge--connected',
-          data: {
-            dataType: assetNodeType,
-            pathType: defaultEdgeType,
-          },
-        };
-        setNodes(nodes.concat(newNode));
-        setEdges(edges.concat(newEdge));
-      } else {
-        setNodes(nodes.concat(newNode));
-      }
-
-      triggerSave();
-    },
-    [
-      nodes,
-      edges,
-      screenToFlowPosition,
-      setNodes,
-      setEdges,
-      show,
-      takeSnapshot,
-      triggerSave,
-      defaultEdgeType,
-    ],
+  const styledEdges = useMemo(
+    () => computeStyledEdges(edges, nodes, readyNodeIds),
+    [edges, nodes, readyNodeIds],
   );
+
+  const { onDragOver, onDrop, onNodeDragStart, onNodeDragStop } = useCanvasDnD();
 
   const isValidConnectionCallback = useCallback(
     (connection: ReactFlowConnection | Edge) => {
@@ -1499,59 +467,15 @@ function Flow({
               />
             )}
 
-            {validationIssues.length > 0 ? (
-              <Panel position="top-right" className="border-none bg-transparent p-0 shadow-none">
-                <Popover>
-                  <PopoverTrigger
-                    render={
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 gap-2 bg-background/95 text-xs"
-                        aria-label={`${validationIssues.length} workflow validation issue${validationIssues.length === 1 ? '' : 's'}`}
-                      >
-                        <ShieldCheck className="size-3.5" aria-hidden />
-                        {validationIssues.length} to review
-                      </Button>
-                    }
-                  />
-                  <PopoverContent align="end" className="w-80 p-2">
-                    <p className="px-2 py-1 text-xs font-medium">Workflow checks</p>
-                    <div className="flex max-h-64 flex-col overflow-y-auto">
-                      {validationIssues.map((issue: GraphIssue, index) => (
-                        <button
-                          key={`${issue.code}:${issue.nodeId ?? issue.edgeId ?? index}`}
-                          type="button"
-                          className="rounded-md px-2 py-2 text-left text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          onClick={() => {
-                            if (!issue.nodeId) return;
-                            setNodes(
-                              nodes.map((node) => ({
-                                ...node,
-                                selected: node.id === issue.nodeId,
-                              })),
-                            );
-                            void fitView({
-                              nodes: [{ id: issue.nodeId }],
-                              duration: 250,
-                              padding: 0.5,
-                            });
-                          }}
-                        >
-                          <span className="block font-medium">
-                            {issue.phase === 'run' ? 'Before running' : 'Connection'}
-                          </span>
-                          <span className="mt-0.5 block text-muted-foreground">
-                            {issue.message}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </Panel>
-            ) : null}
+            <CanvasValidationPanel
+              issues={validationIssues}
+              onFocusIssue={(nodeId) => {
+                setNodes(nodes.map((node) => ({ ...node, selected: node.id === nodeId })));
+                void fitView({ nodes: [{ id: nodeId }], duration: 250, padding: 0.5 });
+              }}
+            />
+
+            <NodeInspectorPanel onEnforceBrandBook={enforceBrandBookOnSelection} />
 
             <Controls fitViewOptions={STUDIO_FIT_VIEW_OPTIONS} />
             <MiniMap className="!border !bg-background/95" />
@@ -1586,162 +510,24 @@ function Flow({
               />
             </Panel>
 
-            <Panel position="bottom-center" className="border-none bg-transparent p-0 shadow-none">
-              <Popover>
-                <PopoverTrigger
-                  render={
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8 gap-2 bg-background/90 px-2.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
-                      aria-label="Show canvas keyboard shortcuts"
-                    >
-                      <Keyboard className="h-3.5 w-3.5" />
-                      Shortcuts
-                    </Button>
-                  }
-                />
-                <PopoverContent align="center" side="top" className="w-64 p-3">
-                  <p className="mb-2 text-xs font-medium text-foreground">Canvas shortcuts</p>
-                  <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-xs">
-                    {[
-                      ['Copy selected nodes', '⌘ C'],
-                      ['Paste nodes', '⌘ V'],
-                      ['Cut selected nodes', '⌘ X'],
-                      ['Delete selected nodes', 'Delete'],
-                      ['Pan mode', 'H'],
-                      ['Select mode', 'V'],
-                      ['Fit view', 'Shift F'],
-                    ].map(([label, shortcut]) => (
-                      <div key={label} className="contents">
-                        <dt className="text-muted-foreground">{label}</dt>
-                        <dd>
-                          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-2xs text-foreground">
-                            {shortcut}
-                          </kbd>
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </PopoverContent>
-              </Popover>
-            </Panel>
+            <CanvasShortcutsPanel />
           </Canvas>
         </ContextMenuTrigger>
 
-        <ContextMenuContent className="w-[clamp(14rem,18vw,18rem)]">
-          <ContextMenuLabel>Canvas Actions</ContextMenuLabel>
-          <ContextMenuSub>
-            <ContextMenuSubTrigger inset>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Node
-            </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-72">
-              {ADD_NODE_GROUPS.map((section) => (
-                <ContextMenuSub key={section.group}>
-                  <ContextMenuSubTrigger inset>{section.label}</ContextMenuSubTrigger>
-                  <ContextMenuSubContent className="w-72">
-                    {section.rows.map((row) => (
-                      <ContextMenuItem
-                        key={row.model ? `${row.type}-${row.model}` : row.type}
-                        onClick={() =>
-                          row.model
-                            ? addNodeAtPointer(row.type, { model: row.model })
-                            : addNodeAtPointer(row.type)
-                        }
-                      >
-                        <div className="flex min-w-0 flex-col">
-                          <span>{row.label}</span>
-                          {row.desc ? (
-                            <span className="text-xs text-muted-foreground">{row.desc}</span>
-                          ) : null}
-                        </div>
-                        <ContextMenuShortcut>{row.tag}</ContextMenuShortcut>
-                      </ContextMenuItem>
-                    ))}
-                  </ContextMenuSubContent>
-                </ContextMenuSub>
-              ))}
-            </ContextMenuSubContent>
-          </ContextMenuSub>
-
-          <ContextMenuItem inset onSelect={() => setIsLoadWorkflowOpen(true)}>
-            <FolderOpen className="mr-2 h-4 w-4" />
-            Load Workflow
-          </ContextMenuItem>
-
-          <ContextMenuItem inset onSelect={() => setIsInstagramBrowserOpen(true)}>
-            <AtSign className="mr-2 h-4 w-4" />
-            Import from Instagram
-          </ContextMenuItem>
-
-          <ContextMenuItem
-            inset
-            disabled={!nodes.some((node) => node.selected)}
-            onSelect={openSaveStarter}
-          >
-            <Sparkles className="mr-2 h-4 w-4" />
-            Save selection as starter
-          </ContextMenuItem>
-
-          <ContextMenuItem
-            inset
-            disabled={!nodes.some((node) => node.selected)}
-            onSelect={enforceBrandBookOnSelection}
-          >
-            <ShieldCheck className="mr-2 h-4 w-4" />
-            Enforce brand book on selection
-          </ContextMenuItem>
-
-          <ContextMenuSub>
-            <ContextMenuSubTrigger inset>
-              <ScanLine className="mr-2 h-4 w-4" />
-              View and Interaction
-            </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-64">
-              <ContextMenuCheckboxItem
-                checked={interactionMode === 'pan'}
-                onClick={() => setInteractionMode('pan')}
-              >
-                Pan Mode
-                <ContextMenuShortcut>H</ContextMenuShortcut>
-              </ContextMenuCheckboxItem>
-              <ContextMenuCheckboxItem
-                checked={interactionMode === 'select'}
-                onClick={() => setInteractionMode('select')}
-              >
-                Select Mode
-                <ContextMenuShortcut>V</ContextMenuShortcut>
-              </ContextMenuCheckboxItem>
-              <ContextMenuSeparator />
-              <ContextMenuItem onClick={() => zoomIn({ duration: 250 })}>
-                <ZoomIn className="mr-2 h-4 w-4" />
-                Zoom In
-              </ContextMenuItem>
-              <ContextMenuItem onClick={() => zoomOut({ duration: 250 })}>
-                <ZoomOut className="mr-2 h-4 w-4" />
-                Zoom Out
-              </ContextMenuItem>
-              <ContextMenuItem
-                onClick={() => fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 350 })}
-              >
-                Fit View
-                <ContextMenuShortcut>Shift+F</ContextMenuShortcut>
-              </ContextMenuItem>
-            </ContextMenuSubContent>
-          </ContextMenuSub>
-
-          <ContextMenuSeparator />
-
-          <ContextMenuItem
-            className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-            onClick={clearCanvas}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Clear Canvas
-          </ContextMenuItem>
-        </ContextMenuContent>
+        <CanvasContextMenuContent
+          addNodeAtPointer={addNodeAtPointer}
+          openLoadWorkflow={() => setIsLoadWorkflowOpen(true)}
+          openInstagram={() => setIsInstagramBrowserOpen(true)}
+          openSaveStarter={openSaveStarter}
+          enforceBrandBookOnSelection={enforceBrandBookOnSelection}
+          clearCanvas={clearCanvas}
+          hasSelection={nodes.some((node) => node.selected)}
+          interactionMode={interactionMode}
+          setInteractionMode={setInteractionMode}
+          zoomIn={zoomIn}
+          zoomOut={zoomOut}
+          fitView={fitView}
+        />
       </ContextMenu>
       {/* Overlaid on the canvas rather than mounted as a React Flow Panel: the hero
           state centres itself on an empty canvas, which the Panel grid cannot express. */}
@@ -1787,12 +573,8 @@ export function StudioCanvas({
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentSearch = searchParams.toString();
-  const { show } = useToast();
-  const nodes = useStudioStore((state) => state.nodes);
   const { rooms, isLoading: roomsLoading } = useCanvasRooms(brandProfileId || '');
   const [activeRoomId, setActiveRoomId] = useState<string | undefined>(initialRoomId);
-  const [isApplyingBack, setIsApplyingBack] = useState(false);
-  const [selectedLinkedinNodeId, setSelectedLinkedinNodeId] = useState<string | null>(null);
   const selectRoom = useCallback(
     (roomId: string | undefined) => {
       if (roomId !== activeRoomId) {
@@ -1803,99 +585,7 @@ export function StudioCanvas({
     },
     [activeRoomId, currentSearch, router],
   );
-  const workflowSpec = useMemo<WorkflowConceptSpec | null>(
-    () =>
-      organicPlannerSeed
-        ? resolveWorkflowConceptSpec({
-            platform: organicPlannerSeed.platform,
-            postType: organicPlannerSeed.postType,
-            workflowConcept: organicPlannerSeed.workflowConcept,
-          })
-        : null,
-    [organicPlannerSeed],
-  );
-
-  const applyCandidates = useMemo(() => collectApplyAssetCandidates(nodes), [nodes]);
-  const linkedinImageCandidates = useMemo(
-    () => applyCandidates.filter((candidate) => candidate.kind === 'image'),
-    [applyCandidates],
-  );
-  const requiresExplicitSelection = Boolean(
-    workflowSpec?.requiresExplicitPickOnMultiOutput && linkedinImageCandidates.length > 1,
-  );
-  const applyReadiness = useMemo(() => {
-    if (!organicPlannerSeed || !workflowSpec) return null;
-
-    const imageCount = applyCandidates.filter((candidate) => candidate.kind === 'image').length;
-    const videoCount = applyCandidates.filter((candidate) => candidate.kind === 'video').length;
-
-    if (workflowSpec.outputKind === 'video') {
-      const total = 1;
-      const completed = Math.min(videoCount, total);
-      return {
-        ready: completed >= total,
-        completed,
-        total,
-        label: `${completed}/${total} video ready`,
-        detail:
-          completed >= total
-            ? 'Ready to apply this reel back to Planner.'
-            : 'Generate one video output to enable apply-back.',
-      };
-    }
-
-    if (workflowSpec.outputMode === 'ordered') {
-      const total = Math.max(1, organicPlannerSeed.authoritativeCount ?? 1);
-      const completed = Math.min(imageCount, total);
-      return {
-        ready: completed >= total,
-        completed,
-        total,
-        label: `${completed}/${total} slides ready`,
-        detail:
-          completed >= total
-            ? 'Ordered carousel outputs are ready to apply.'
-            : 'Generate all required carousel slides before applying.',
-      };
-    }
-
-    const total = 1;
-    const completed = Math.min(imageCount, total);
-    const missingSelection =
-      workflowSpec.requiresExplicitPickOnMultiOutput && imageCount > 1 && !selectedLinkedinNodeId;
-    return {
-      ready: completed >= total && !missingSelection,
-      completed,
-      total,
-      label: `${completed}/${total} image ready`,
-      detail: missingSelection
-        ? 'Select one image output before applying.'
-        : completed >= total
-          ? 'Ready to apply this draft back to Planner.'
-          : 'Generate one image output to enable apply-back.',
-    };
-  }, [applyCandidates, organicPlannerSeed, selectedLinkedinNodeId, workflowSpec]);
-  const workflowSummaryLabel = useMemo(() => {
-    if (!workflowSpec) return null;
-    if (workflowSpec.outputKind === 'video') return 'Reel workflow';
-    if (workflowSpec.outputMode === 'ordered') return 'Carousel workflow';
-    if (workflowSpec.requiresExplicitPickOnMultiOutput) return 'LinkedIn post workflow';
-    return 'Single-image workflow';
-  }, [workflowSpec]);
-
-  useEffect(() => {
-    if (!requiresExplicitSelection) {
-      setSelectedLinkedinNodeId(null);
-      return;
-    }
-    if (
-      selectedLinkedinNodeId &&
-      linkedinImageCandidates.some((candidate) => candidate.nodeId === selectedLinkedinNodeId)
-    ) {
-      return;
-    }
-    setSelectedLinkedinNodeId(linkedinImageCandidates[0]?.nodeId ?? null);
-  }, [linkedinImageCandidates, requiresExplicitSelection, selectedLinkedinNodeId]);
+  const plannerApply = useApplyBackToPlanner({ brandProfileId, organicPlannerSeed });
 
   // On an in-app brand switch (no full navigation, so the server-resolved
   // initialRoomId is stale) drop the previous brand's room so the fallback below
@@ -1928,309 +618,18 @@ export function StudioCanvas({
         : null,
     [activeRoomId, brandProfileId, realtime.saveCanvasToDatabase],
   );
-  const handleReturnToPlanner = useCallback(() => {
-    if (!organicPlannerSeed) return;
-
-    const params = new URLSearchParams({
-      tab: 'planner',
-      draftId: organicPlannerSeed.draftId,
-      weekStartId: organicPlannerSeed.weekStartId,
-      from: 'ai-studio',
-    });
-    router.push(`/organic?${params.toString()}`);
-  }, [organicPlannerSeed, router]);
-
-  const resolveCandidateSource = useCallback(async (source: string) => {
-    if (source.startsWith('data:')) {
-      return { sourceDataUrl: source };
-    }
-    if (source.startsWith('http://') || source.startsWith('https://')) {
-      return { sourceUrl: source };
-    }
-    if (source.startsWith('blob:')) {
-      const response = await fetch(source);
-      if (!response.ok) {
-        throw new Error('Unable to read local asset blob for apply.');
-      }
-      const blob = await response.blob();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = typeof reader.result === 'string' ? reader.result : '';
-          if (!result) {
-            reject(new Error('Unable to convert blob output to data URL.'));
-            return;
-          }
-          resolve(result);
-        };
-        reader.onerror = () => reject(new Error('Unable to convert blob output to data URL.'));
-        reader.readAsDataURL(blob);
-      });
-      return { sourceDataUrl: dataUrl };
-    }
-    return { sourceBase64: source };
-  }, []);
-
-  const handleApplyBackToPlanner = useCallback(async () => {
-    if (!organicPlannerSeed || !brandProfileId) {
-      show({
-        title: 'Apply unavailable',
-        description: 'Missing Planner context for this canvas session.',
-        variant: 'warning',
-      });
-      return;
-    }
-
-    setIsApplyingBack(true);
-    try {
-      if (!workflowSpec) {
-        throw new Error('Workflow concept is missing for this Planner draft.');
-      }
-      const imageCandidates = applyCandidates.filter((candidate) => candidate.kind === 'image');
-      const videoCandidates = applyCandidates.filter((candidate) => candidate.kind === 'video');
-
-      let selectedCandidates: ApplyAssetCandidate[] = [];
-      if (workflowSpec.outputKind === 'video') {
-        const firstVideo = videoCandidates[0];
-        if (!firstVideo) {
-          throw new Error('Generate at least one video output before applying back.');
-        }
-        selectedCandidates = [firstVideo];
-      } else if (workflowSpec.outputMode === 'ordered') {
-        const requiredCount = Math.max(1, organicPlannerSeed.authoritativeCount ?? 1);
-        if (imageCandidates.length < requiredCount) {
-          throw new Error(
-            `Carousel requires ${requiredCount} generated images, but only ${imageCandidates.length} found.`,
-          );
-        }
-        selectedCandidates = imageCandidates.slice(0, requiredCount);
-      } else if (workflowSpec.requiresExplicitPickOnMultiOutput) {
-        if (imageCandidates.length === 0) {
-          throw new Error('Generate at least one image output before applying back.');
-        }
-        if (imageCandidates.length > 1 && !selectedLinkedinNodeId) {
-          throw new Error('Select one image output before applying.');
-        }
-        selectedCandidates =
-          imageCandidates.length > 1
-            ? imageCandidates.filter((candidate) => candidate.nodeId === selectedLinkedinNodeId)
-            : [imageCandidates[0]];
-      } else {
-        const firstImage = imageCandidates[0];
-        if (!firstImage) {
-          throw new Error('Generate at least one image output before applying back.');
-        }
-        selectedCandidates = [firstImage];
-      }
-
-      const assets = await Promise.all(
-        selectedCandidates.map(async (candidate, index) => {
-          const source = await resolveCandidateSource(candidate.source);
-          return {
-            role: workflowSpec.outputMode === 'ordered' ? `slide_${index + 1}` : candidate.role,
-            kind: candidate.kind,
-            slideIndex: workflowSpec.outputMode === 'ordered' ? index : undefined,
-            ...source,
-          };
-        }),
-      );
-
-      const requestPayload: PlannerAiStudioApplyRequest = {
-        schemaVersion: 'planner_ai_apply_v1',
-        draftId: organicPlannerSeed.draftId,
-        brandProfileId,
-        postType: organicPlannerSeed.postType,
-        platform: organicPlannerSeed.platform,
-        overwrite: true,
-        contentPatch: {
-          title: organicPlannerSeed.title,
-          summary: organicPlannerSeed.summary,
-          captionPreview: organicPlannerSeed.captionPreview,
-          creativeDirectionPrompt: organicPlannerSeed.creativeDirectionPrompt,
-          thumbnailPrompt: organicPlannerSeed.thumbnailPrompt,
-        },
-        assets,
-        selection: {
-          required: requiresExplicitSelection,
-          selectedAssetRole:
-            requiresExplicitSelection && selectedCandidates[0]
-              ? selectedCandidates[0].role
-              : undefined,
-        },
-      };
-
-      const response = await fetch('/api/organic/ai-studio/apply', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestPayload),
-      });
-
-      const responseJson = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          responseJson && typeof responseJson.error === 'string'
-            ? responseJson.error
-            : 'Failed to apply output to Planner.';
-        throw new Error(message);
-      }
-
-      const parsed = plannerAiStudioApplyResponseSchema.safeParse(responseJson);
-      if (!parsed.success) {
-        throw new Error('Apply response payload is invalid.');
-      }
-
-      window.localStorage.setItem(
-        buildPendingApplyStorageKey(organicPlannerSeed.draftId),
-        JSON.stringify(parsed.data),
-      );
-
-      show({
-        title: 'Applied to Planner',
-        description: 'Returning to Organic Planner.',
-        variant: 'success',
-      });
-
-      const params = new URLSearchParams({
-        tab: 'planner',
-        draftId: organicPlannerSeed.draftId,
-        weekStartId: organicPlannerSeed.weekStartId,
-        from: 'ai-studio',
-      });
-      router.push(`/organic?${params.toString()}`);
-    } catch (error) {
-      show({
-        title: 'Apply failed',
-        description: error instanceof Error ? error.message : 'Unable to apply output to Planner.',
-        variant: 'error',
-      });
-    } finally {
-      setIsApplyingBack(false);
-    }
-  }, [
-    applyCandidates,
-    brandProfileId,
-    organicPlannerSeed,
-    requiresExplicitSelection,
-    resolveCandidateSource,
-    router,
-    selectedLinkedinNodeId,
-    show,
-    workflowSpec,
-  ]);
-
   return (
     <ReactFlowProvider>
       <div className="flex h-full min-h-0 w-full flex-col bg-background">
         {!embedded && (
-          // One fixed-height row held ~11 children that could neither wrap nor shrink, so
-          // opening the Studio from the planner drew the readiness pill and the
-          // Back/Apply buttons ON TOP of the workspace tabs (Airtable #224). The row
-          // wraps now, each group keeps its own line, and the tabs scroll inside their
-          // own box instead of painting outside the group that holds them.
-          <div
-            className="relative z-[100] flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b bg-background px-4 py-2"
-            data-testid="studio-canvas-header"
-          >
-            <div className="flex min-w-0 flex-1 items-center gap-4 overflow-x-auto">
-              <div className="flex shrink-0 items-center gap-2 text-lg font-bold">
-                <span className="bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
-                  Continuum
-                </span>
-                <span className="font-normal text-muted-foreground">Studio</span>
-              </div>
-              <div className="hidden h-4 w-px bg-border opacity-20 sm:block" />
-              <div
-                data-tour-id="studio-multiplayer"
-                className="flex min-w-0 shrink items-center gap-4"
-              >
-                <div className="flex h-10 items-center rounded-lg border border-primary/20 bg-primary/10 px-2 shadow-[0_0_15px_rgba(90,72,249,0.1)]">
-                  <CanvasSyncStatus
-                    status={realtime.status}
-                    dbStatus={realtime.dbStatus}
-                    isSaving={realtime.isSaving}
-                    isCollaborative={realtime.isCollaborative}
-                    roomsLoading={roomsLoading}
-                    hasRoom={Boolean(activeRoomId)}
-                  />
-                  <div className="mx-1 h-4 w-px bg-primary/20" />
-                  <ActiveUsersStack
-                    onlineUsers={realtime.onlineUsers}
-                    status={realtime.status as never}
-                  />
-                </div>
-                <div className="hidden h-4 w-px bg-border opacity-20 sm:block" />
-                <CanvasRoomsTabs
-                  brandProfileId={brandProfileId || ''}
-                  activeRoomId={activeRoomId}
-                  onRoomChange={selectRoom}
-                />
-              </div>
-            </div>
-
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-              {organicPlannerSeed ? (
-                <>
-                  {applyReadiness && workflowSummaryLabel ? (
-                    <div className="hidden w-72 max-w-full items-center gap-3 rounded-md border border-border/70 bg-background/70 px-3 py-2 lg:flex">
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <Badge variant="outline" className="h-5 px-2 text-2xs">
-                            {workflowSummaryLabel}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {applyReadiness.label}
-                          </span>
-                        </div>
-                        <Progress
-                          value={(applyReadiness.completed / applyReadiness.total) * 100}
-                          className="h-1.5"
-                        />
-                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                          {applyReadiness.detail}
-                        </p>
-                      </div>
-                    </div>
-                  ) : null}
-                  {requiresExplicitSelection ? (
-                    <Select
-                      value={selectedLinkedinNodeId ?? undefined}
-                      onValueChange={(value) => setSelectedLinkedinNodeId(value)}
-                    >
-                      <SelectTrigger className="h-9 w-[15rem]">
-                        <SelectValue placeholder="Pick one output to apply" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {linkedinImageCandidates.map((candidate, index) => (
-                          <SelectItem key={candidate.nodeId} value={candidate.nodeId}>
-                            {`Output ${index + 1}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : null}
-                  <Button type="button" size="sm" variant="outline" onClick={handleReturnToPlanner}>
-                    Back to Planner
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => {
-                      void handleApplyBackToPlanner();
-                    }}
-                    disabled={isApplyingBack || !applyReadiness?.ready}
-                  >
-                    {isApplyingBack ? 'Applying...' : 'Apply Back to Planner'}
-                  </Button>
-                </>
-              ) : null}
-              <LoadWorkflowDialog brandProfileId={brandProfileId} />
-              <SaveWorkflowDialog brandProfileId={brandProfileId} roomId={activeRoomId} />
-              <WorkflowLibrary />
-              <Toolbar />
-            </div>
-          </div>
+          <StudioCanvasHeader
+            brandProfileId={brandProfileId}
+            activeRoomId={activeRoomId}
+            onRoomChange={selectRoom}
+            roomsLoading={roomsLoading}
+            realtime={realtime}
+            apply={plannerApply}
+          />
         )}
 
         <main className="relative flex-1 min-h-0 overflow-hidden bg-slate-50 dark:bg-slate-950">

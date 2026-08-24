@@ -210,7 +210,9 @@ export function shapeUserSuppliedMedia(
   }
   const primary = list[0];
   const publishableKinds = list.flatMap((item) => (item.kind === 'file' ? [] : [item.kind]));
-  const format = options?.format ?? publishFormatForAssetKinds(publishableKinds);
+  const format =
+    options?.format ??
+    publishFormatForAssetKinds(publishableKinds);
 
   // VIDEO / REEL — a single user video fills the reel slot.
   if (format === 'REEL' && primary.kind === 'video') {

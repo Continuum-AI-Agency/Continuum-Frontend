@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { actionDef, actionInputPort, actionOutputModality, isActionId } from './action-registry';
+import { batchItemType, MAX_BATCH_ITEMS } from './batch-node';
 import {
   coerceImageSize,
   DEFAULT_IMAGE_GENERATOR_MODEL,
@@ -9,6 +11,7 @@ import {
   type GeneratorNodeBounds,
   generatorNodeStyle,
   IMAGE_GENERATOR_NODE_BOUNDS,
+  LAYER_EDITOR_NODE_BOUNDS,
   OMNI_GENERATOR_NODE_BOUNDS,
   VIDEO_GENERATOR_NODE_BOUNDS,
 } from './node-sizing';
@@ -39,6 +42,20 @@ export const STUDIO_NODE_TYPES = [
   'document',
   'videoDecode',
   'frameExtract',
+  // Canvas-only until now: `note` lived in StudioCanvas.tsx alone, so any canvas
+  // carrying one failed validateWorkflowGraph and no agent could add one. Contracts
+  // entry closes that drift; the node still wires to nothing and never runs.
+  'note',
+  // Canvas V3 runtime vocabulary. `action` / `batch` / `router` / `export` /
+  // `layerEditor` execute; `element` / `designRef` emit references and gain their
+  // runtimes in later waves.
+  'action',
+  'batch',
+  'router',
+  'export',
+  'layerEditor',
+  'element',
+  'designRef',
 ] as const;
 
 export type StudioNodeType = (typeof STUDIO_NODE_TYPES)[number];
@@ -497,19 +514,33 @@ const FRAME_HANDLE_SET = new Set<string>(VIDEO_FRAME_HANDLES);
 
 const isVideoGeneratorNode = (node: GraphNodeLike): boolean => isVideoGeneratorNodeType(node.type);
 
-const isVideoProducingSource = (node: GraphNodeLike): boolean =>
+// Nineteen node types emit exactly what they ARE — a `nanoGen` makes an image, a
+// `veoFast` makes a video — so a literal list answers "what comes out of this". The
+// Canvas V3 types do not: an `action` emits whatever its op emits, a `router` forwards
+// whatever it locked onto, a `batch` carries an item kind, and a `designRef` emits a
+// section specimen on one handle and a token summary on the other.
+//
+// `sourceModality` (below, hoisted) answers for those; the `sourceHandle` argument is
+// OPTIONAL so every existing caller and every existing type behaves exactly as before.
+const isVideoProducingSource = (node: GraphNodeLike, sourceHandle?: string | null): boolean =>
   node.type === 'video' ||
   node.type === 'extendVideo' ||
   node.type === 'timelineEditor' ||
   node.type === 'hyperframesAgent' ||
   node.type === 'omniGen' ||
-  isVideoGeneratorNodeType(node.type);
+  isVideoGeneratorNodeType(node.type) ||
+  sourceModality(node, sourceHandle) === 'video';
 
-const isImageProducingSource = (node: GraphNodeLike): boolean =>
-  node.type === 'image' || node.type === 'nanoGen' || node.type === 'frameExtract';
+const isImageProducingSource = (node: GraphNodeLike, sourceHandle?: string | null): boolean =>
+  node.type === 'image' ||
+  node.type === 'nanoGen' ||
+  node.type === 'frameExtract' ||
+  sourceModality(node, sourceHandle) === 'image';
 
-const isTextProducingSource = (node: GraphNodeLike): boolean =>
-  node.type === 'string' || node.type === 'videoDecode';
+const isTextProducingSource = (node: GraphNodeLike, sourceHandle?: string | null): boolean =>
+  node.type === 'string' ||
+  node.type === 'videoDecode' ||
+  sourceModality(node, sourceHandle) === 'text';
 
 // Timeline Editor (timelineEditor) input pool: a single multi-connection target
 // handle `media-in` that accepts many video-producing sources, images, and
@@ -558,6 +589,118 @@ export const DRAFT_INPUT_HANDLE = 'draft-in';
 
 /** A caption/copy input, so a draft's text can come from an upstream node. */
 export const PLANNER_DRAFT_TEXT_INPUT_HANDLE = 'text-in';
+
+// ---------------------------------------------------------------------------
+// Canvas V3 handle vocabulary
+// ---------------------------------------------------------------------------
+//
+// Reuse before invent: `export` takes the timeline pool's `media-in` and `layerEditor`
+// takes the hyperframes/publish `image-in`. Both are already labelled, already carry the
+// right port data type, and `image-in` is already in IMAGE_MEDIA_HANDLES so `attach_media`
+// works on a layer editor for free. Every consumer of those ids is scoped by
+// `node.type === …`, so sharing the string costs nothing and a fourth spelling of "the
+// media input" would cost a lookup table.
+
+/** `action` — one input, one output. WHICH modality each carries comes from the op. */
+export const ACTION_INPUT_HANDLE = 'in';
+export const ACTION_OUTPUT_HANDLE = 'out';
+
+/** `router` — same two handles. Many edges may leave `out`; that IS the fan-out. */
+export const ROUTER_INPUT_HANDLE = 'in';
+export const ROUTER_OUTPUT_HANDLE = 'out';
+
+/** `batch` — many items in, one collection out. */
+export const BATCH_ITEMS_INPUT_HANDLE = 'items';
+export const BATCH_COLLECTION_OUTPUT_HANDLE = 'collection';
+
+/** `export` — terminal. Deliberately the same id as the timeline media pool. */
+export const EXPORT_MEDIA_INPUT_HANDLE = 'media-in';
+export const EXPORT_MEDIA_POOL_LIMIT = 20;
+
+/** `layerEditor` — stills in, one composed still out. Same id as the image inputs above. */
+export const LAYER_EDITOR_IMAGE_INPUT_HANDLE = 'image-in';
+export const LAYER_EDITOR_IMAGE_OUTPUT_HANDLE = 'image';
+export const LAYER_EDITOR_LAYER_LIMIT = 20;
+
+/** `element` — a saved reference, image out only. */
+export const ELEMENT_IMAGE_OUTPUT_HANDLE = 'image';
+
+/** `designRef` — the section specimen, and the same section as text. */
+export const DESIGN_REF_IMAGE_OUTPUT_HANDLE = 'image';
+export const DESIGN_REF_TEXT_OUTPUT_HANDLE = 'text';
+
+/** What a node emits. Narrower than `StudioPortDataType` on purpose: no Canvas V3 type
+ *  moves audio or documents, and collection-ness is a runtime output SHAPE, never a
+ *  port type. */
+export type StudioEmittedModality = 'text' | 'image' | 'video';
+
+const declaredModality = (value: unknown): StudioEmittedModality | undefined =>
+  value === 'text' || value === 'image' || value === 'video' ? value : undefined;
+
+/**
+ * The modality a node emits on `sourceHandle`, for the types whose output their TYPE
+ * does not settle. `undefined` means "contracts cannot know yet" — an unconfigured
+ * action, an unlocked router, an empty batch — and every caller treats that as
+ * "not a legal source", which is what stops a half-built node from wiring anywhere.
+ *
+ * Declared as a `function` so the predicates above, which are defined earlier in the
+ * file, can call it.
+ */
+function sourceModality(
+  node: GraphNodeLike,
+  sourceHandle?: string | null,
+): StudioEmittedModality | undefined {
+  switch (node.type) {
+    case 'action':
+      return actionOutputModality(node.data?.actionId);
+    case 'router':
+      // Reads the STAMPED lock only. The canvas writes it on the first connection using
+      // `routerLockedType` below — deriving it here would need the edge list, which the
+      // producer predicates deliberately do not carry.
+      return declaredModality(node.data?.lockedType);
+    case 'batch':
+      return batchItemType(node.data);
+    case 'element':
+    case 'layerEditor':
+      return 'image';
+    case 'designRef':
+      // Two outputs, two modalities. With no handle named there is nothing to tell them
+      // apart, so we refuse rather than guess — guessing 'image' is how a token summary
+      // ends up wired into a reference-image port.
+      if (sourceHandle === DESIGN_REF_TEXT_OUTPUT_HANDLE) return 'text';
+      if (sourceHandle === DESIGN_REF_IMAGE_OUTPUT_HANDLE) return 'image';
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * The modality a router should be pinned to: its stamped `data.lockedType` when it has
+ * one, otherwise whatever is already wired into it.
+ *
+ * The canvas calls this on connect and writes the answer to `data.lockedType`. Keeping
+ * the DERIVATION here means the rule lives with the rest of the graph rules, and the
+ * Frontend only has to store the result.
+ */
+export function routerLockedType(
+  node: GraphNodeLike,
+  edges: GraphEdgeLike[] = [],
+  nodes: GraphNodeLike[] = [],
+): StudioEmittedModality | undefined {
+  const declared = declaredModality(node.data?.lockedType);
+  if (declared) return declared;
+
+  const incoming = edges.find((edge) => edge.target === node.id);
+  if (!incoming) return undefined;
+  const source = nodes.find((candidate) => candidate.id === incoming.source);
+  if (!source) return undefined;
+  const handle = incoming.sourceHandle;
+  if (isTextProducingSource(source, handle)) return 'text';
+  if (isImageProducingSource(source, handle)) return 'image';
+  if (isVideoProducingSource(source, handle)) return 'video';
+  return undefined;
+}
 
 type PublisherFormat = 'image' | 'carousel' | 'video';
 
@@ -668,6 +811,25 @@ export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
       return ['video'];
     case 'plannerDraft':
       return [DRAFT_OUTPUT_HANDLE];
+    case 'action':
+      // The op decides the modality, but the handle is the same one either way — a node
+      // that changes its op keeps its edges' geometry and only revalidates them.
+      return actionDef(node.data?.actionId) ? [ACTION_OUTPUT_HANDLE] : [];
+    case 'router':
+      // ONE source handle. The fan-out is many edges leaving it, not many handles.
+      return [ROUTER_OUTPUT_HANDLE];
+    case 'batch':
+      return [BATCH_COLLECTION_OUTPUT_HANDLE];
+    case 'layerEditor':
+      return [LAYER_EDITOR_IMAGE_OUTPUT_HANDLE];
+    case 'element':
+      return [ELEMENT_IMAGE_OUTPUT_HANDLE];
+    case 'designRef':
+      return [DESIGN_REF_IMAGE_OUTPUT_HANDLE, DESIGN_REF_TEXT_OUTPUT_HANDLE];
+    // `export` is terminal and `note` is an annotation — neither produces anything.
+    case 'export':
+    case 'note':
+      return [];
     default:
       return isVideoGeneratorNode(node) ? ['video'] : [];
   }
@@ -699,6 +861,21 @@ export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
       return ['video'];
     case 'frameExtract':
       return ['video'];
+    case 'action':
+      return actionDef(node.data?.actionId)?.inputs.map((port) => port.handle) ?? [];
+    case 'router':
+      return [ROUTER_INPUT_HANDLE];
+    case 'batch':
+      return [BATCH_ITEMS_INPUT_HANDLE];
+    case 'export':
+      return [EXPORT_MEDIA_INPUT_HANDLE];
+    case 'layerEditor':
+      return [LAYER_EDITOR_IMAGE_INPUT_HANDLE];
+    // Sources and annotations: `element` and `designRef` emit a saved reference, `note`
+    // is for the human reading the canvas.
+    case 'element':
+    case 'designRef':
+    case 'note':
     case 'image':
     case 'video':
     case 'audio':
@@ -752,6 +929,16 @@ export function getTargetHandleConnectionLimit(
   if (node.type === 'organicPublish' && targetHandle === DRAFT_INPUT_HANDLE) return 1;
   if (node.type === 'apiRender' && apiRenderTargetHandles(node).includes(targetHandle)) return 1;
   if (node.type === 'omniGen' && isImageReferenceHandle(targetHandle)) return 3;
+  // The op's own port declares its cap: one clip for a speed change, twenty for a stitch.
+  if (node.type === 'action') {
+    return actionInputPort(node.data?.actionId, targetHandle)?.max;
+  }
+  if (node.type === 'router' && targetHandle === ROUTER_INPUT_HANDLE) return 1;
+  if (node.type === 'batch' && targetHandle === BATCH_ITEMS_INPUT_HANDLE) return MAX_BATCH_ITEMS;
+  if (node.type === 'export' && targetHandle === EXPORT_MEDIA_INPUT_HANDLE)
+    return EXPORT_MEDIA_POOL_LIMIT;
+  if (node.type === 'layerEditor' && targetHandle === LAYER_EDITOR_IMAGE_INPUT_HANDLE)
+    return LAYER_EDITOR_LAYER_LIMIT;
 
   if (!isVideoGeneratorNode(node)) return undefined;
 
@@ -790,11 +977,12 @@ function isConnectionCompatible(
   const sourceNode = nodeById.get(connection.source);
   const targetNode = nodeById.get(connection.target);
   const targetHandle = connection.targetHandle ?? '';
+  const sourceHandle = connection.sourceHandle ?? null;
 
   if (!sourceNode || !targetNode) return false;
 
   if (
-    isTextProducingSource(sourceNode) &&
+    isTextProducingSource(sourceNode, sourceHandle) &&
     ['prompt', 'prompt-in', 'negative'].includes(targetHandle)
   ) {
     return !hasExistingTargetConnection(edges, connection.target, targetHandle);
@@ -803,7 +991,7 @@ function isConnectionCompatible(
   if (targetNode.type === 'string') {
     const handle = targetHandle;
     if (!canAcceptSingleTextInput(edges, connection.target, handle)) return false;
-    if (handle === 'image' && isImageProducingSource(sourceNode)) return true;
+    if (handle === 'image' && isImageProducingSource(sourceNode, sourceHandle)) return true;
     if (handle === 'audio' && sourceNode.type === 'audio') return true;
     if (handle === 'video' && sourceNode.type === 'video') return true;
     if (handle === 'document' && sourceNode.type === 'document') return true;
@@ -812,32 +1000,33 @@ function isConnectionCompatible(
 
   if (targetNode.type === 'nanoGen') {
     if (isImageReferenceHandle(targetHandle)) {
-      if (!isImageProducingSource(sourceNode)) return false;
+      if (!isImageProducingSource(sourceNode, sourceHandle)) return false;
     } else if (targetHandle === 'prompt' || targetHandle === 'negative') {
-      if (!isTextProducingSource(sourceNode)) return false;
+      if (!isTextProducingSource(sourceNode, sourceHandle)) return false;
     } else {
       return false;
     }
   } else if (targetNode.type === 'extendVideo') {
     if (targetHandle === 'video') {
-      if (!isVideoProducingSource(sourceNode)) return false;
+      if (!isVideoProducingSource(sourceNode, sourceHandle)) return false;
     } else if (targetHandle === 'prompt') {
-      if (!isTextProducingSource(sourceNode)) return false;
+      if (!isTextProducingSource(sourceNode, sourceHandle)) return false;
     } else {
       return false;
     }
   } else if (targetNode.type === 'timelineEditor') {
     if (!isTimelineMediaHandle(targetHandle)) return false;
-    const isImageSource = isImageProducingSource(sourceNode);
+    const isImageSource = isImageProducingSource(sourceNode, sourceHandle);
     const isAudioSource = sourceNode.type === 'audio';
-    if (!isVideoProducingSource(sourceNode) && !isImageSource && !isAudioSource) return false;
+    if (!isVideoProducingSource(sourceNode, sourceHandle) && !isImageSource && !isAudioSource)
+      return false;
   } else if (targetNode.type === 'hyperframesAgent') {
     if (targetHandle === HYPERFRAMES_PROMPT_INPUT_HANDLE) {
-      if (!isTextProducingSource(sourceNode)) return false;
+      if (!isTextProducingSource(sourceNode, sourceHandle)) return false;
     } else if (targetHandle === HYPERFRAMES_IMAGE_INPUT_HANDLE) {
-      if (!isImageProducingSource(sourceNode)) return false;
+      if (!isImageProducingSource(sourceNode, sourceHandle)) return false;
     } else if (targetHandle === HYPERFRAMES_VIDEO_INPUT_HANDLE) {
-      if (!isVideoProducingSource(sourceNode)) return false;
+      if (!isVideoProducingSource(sourceNode, sourceHandle)) return false;
     } else if (targetHandle === HYPERFRAMES_AUDIO_INPUT_HANDLE) {
       if (sourceNode.type !== 'audio') return false;
     } else {
@@ -845,18 +1034,18 @@ function isConnectionCompatible(
     }
   } else if (targetNode.type === 'videoDecode') {
     if (targetHandle !== 'video') return false;
-    if (!isVideoProducingSource(sourceNode)) return false;
+    if (!isVideoProducingSource(sourceNode, sourceHandle)) return false;
   } else if (targetNode.type === 'frameExtract') {
     if (targetHandle !== 'video') return false;
-    if (!isVideoProducingSource(sourceNode)) return false;
+    if (!isVideoProducingSource(sourceNode, sourceHandle)) return false;
   } else if (targetNode.type === 'plannerDraft' || targetNode.type === 'paidPublisher') {
     if (targetHandle === PLANNER_DRAFT_TEXT_INPUT_HANDLE) {
-      return targetNode.type === 'plannerDraft' && isTextProducingSource(sourceNode);
+      return targetNode.type === 'plannerDraft' && isTextProducingSource(sourceNode, sourceHandle);
     }
     const format = publisherFormat(targetNode);
     if (!publisherTargetHandles(targetNode).includes(targetHandle)) return false;
-    const isImageSource = isImageProducingSource(sourceNode);
-    const isVideoSource = isVideoProducingSource(sourceNode);
+    const isImageSource = isImageProducingSource(sourceNode, sourceHandle);
+    const isVideoSource = isVideoProducingSource(sourceNode, sourceHandle);
     if (format === 'image' && !isImageSource) return false;
     if (format === 'video' && !isVideoSource) return false;
     if (format === 'carousel' && !isImageSource && !isVideoSource) return false;
@@ -868,22 +1057,73 @@ function isConnectionCompatible(
     if (sourceNode.type !== 'plannerDraft') return false;
   } else if (targetNode.type === 'apiRender') {
     const kind = apiRenderVariableKindForHandle(targetNode, targetHandle);
-    if (kind === 'image' && !isImageProducingSource(sourceNode)) return false;
-    if (kind === 'video' && !isVideoProducingSource(sourceNode)) return false;
+    if (kind === 'image' && !isImageProducingSource(sourceNode, sourceHandle)) return false;
+    if (kind === 'video' && !isVideoProducingSource(sourceNode, sourceHandle)) return false;
     if (!kind) return false;
+  } else if (targetNode.type === 'action') {
+    // An action with no op chosen accepts nothing: until `actionId` is set there is no
+    // answer to "what does this port take", and guessing one is how a clip ends up wired
+    // into a find-and-replace. The palette only ever creates action nodes with an op.
+    const port = actionInputPort(targetNode.data?.actionId, targetHandle);
+    if (!port) return false;
+    if (port.modality === 'text' && !isTextProducingSource(sourceNode, sourceHandle)) return false;
+    if (port.modality === 'image' && !isImageProducingSource(sourceNode, sourceHandle))
+      return false;
+    if (port.modality === 'video' && !isVideoProducingSource(sourceNode, sourceHandle))
+      return false;
+  } else if (targetNode.type === 'router') {
+    if (targetHandle !== ROUTER_INPUT_HANDLE) return false;
+    const incoming = isTextProducingSource(sourceNode, sourceHandle)
+      ? 'text'
+      : isImageProducingSource(sourceNode, sourceHandle)
+        ? 'image'
+        : isVideoProducingSource(sourceNode, sourceHandle)
+          ? 'video'
+          : undefined;
+    if (!incoming) return false;
+    // A router that has already been locked keeps its modality: it is a pass-through, so
+    // changing what it carries would silently invalidate everything downstream of it.
+    const locked = declaredModality(targetNode.data?.lockedType);
+    if (locked && locked !== incoming) return false;
+  } else if (targetNode.type === 'batch') {
+    if (targetHandle !== BATCH_ITEMS_INPUT_HANDLE) return false;
+    const incoming = isTextProducingSource(sourceNode, sourceHandle)
+      ? 'text'
+      : isImageProducingSource(sourceNode, sourceHandle)
+        ? 'image'
+        : isVideoProducingSource(sourceNode, sourceHandle)
+          ? 'video'
+          : undefined;
+    if (!incoming) return false;
+    // One kind per batch. Mixing images and videos would make "run this for every item"
+    // mean two different things at the consuming node.
+    const locked = batchItemType(targetNode.data);
+    if (locked && locked !== incoming) return false;
+  } else if (targetNode.type === 'export') {
+    if (targetHandle !== EXPORT_MEDIA_INPUT_HANDLE) return false;
+    // Media only — there is no file to hand a user for a string.
+    if (
+      !isImageProducingSource(sourceNode, sourceHandle) &&
+      !isVideoProducingSource(sourceNode, sourceHandle)
+    ) {
+      return false;
+    }
+  } else if (targetNode.type === 'layerEditor') {
+    if (targetHandle !== LAYER_EDITOR_IMAGE_INPUT_HANDLE) return false;
+    if (!isImageProducingSource(sourceNode, sourceHandle)) return false;
   } else if (targetNode.type === 'omniGen') {
     if (targetHandle === 'prompt' || targetHandle === 'prompt-in') {
-      if (!isTextProducingSource(sourceNode)) return false;
+      if (!isTextProducingSource(sourceNode, sourceHandle)) return false;
     } else if (isImageReferenceHandle(targetHandle)) {
-      if (!isImageProducingSource(sourceNode)) return false;
+      if (!isImageProducingSource(sourceNode, sourceHandle)) return false;
     } else {
       return false;
     }
   } else if (isVideoGeneratorNode(targetNode)) {
     const model = resolveVideoGeneratorModel(targetNode);
-    if (isTextProducingSource(sourceNode)) {
+    if (isTextProducingSource(sourceNode, sourceHandle)) {
       if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle)) return false;
-    } else if (isImageProducingSource(sourceNode)) {
+    } else if (isImageProducingSource(sourceNode, sourceHandle)) {
       // The node's own allowed set already encodes the model AND the selected
       // reference mode, so it is the single authority here.
       if (!isFrameHandle(targetHandle) && !isImageReferenceHandle(targetHandle)) return false;
@@ -897,9 +1137,9 @@ function isConnectionCompatible(
     } else {
       return false;
     }
-  } else if (isTextProducingSource(sourceNode)) {
+  } else if (isTextProducingSource(sourceNode, sourceHandle)) {
     if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle)) return false;
-  } else if (isImageProducingSource(sourceNode)) {
+  } else if (isImageProducingSource(sourceNode, sourceHandle)) {
     if (!isImageReferenceHandle(targetHandle)) return false;
     if (targetNode.type === 'image' || targetNode.type === 'video') return false;
   } else if (
@@ -945,13 +1185,35 @@ const PORT_LABELS: Record<string, string> = {
   audio: 'Audio',
   document: 'Document',
   'media-in': 'Media',
+  in: 'Input',
+  out: 'Output',
+  items: 'Items',
+  collection: 'Collection',
+  'overlay-in': 'Overlay',
+  'background-in': 'Background',
 };
 
 const portName = (handle: string): string =>
   PORT_LABELS[handle] ??
   handle.replace(/[-_]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 
-const portDataType = (handle: string): StudioPortDataType => {
+// `node` is optional so the existing handle-only callers are unchanged; it is what lets
+// an `action` / `router` / `batch` port report the modality it actually carries instead of
+// falling through to 'text'.
+const portDataType = (handle: string, node?: GraphNodeLike): StudioPortDataType => {
+  if (node) {
+    const emitted = sourceModality(node, handle);
+    if (emitted) return emitted;
+    if (node.type === 'action') {
+      const port = actionInputPort(node.data?.actionId, handle);
+      if (port) return port.modality;
+    }
+    // A batch takes text, images or videos on one handle. 'media' is the existing value
+    // for "more than one kind"; StudioPortDataType is deliberately NOT widened, because
+    // collection-ness is a runtime output shape rather than a port type.
+    if (node.type === 'batch' && handle === BATCH_ITEMS_INPUT_HANDLE) return 'media';
+    if (node.type === 'router') return 'media';
+  }
   const mediaKind = mediaKindForHandle(handle);
   if (mediaKind) return mediaKind;
   if (handle === TIMELINE_MEDIA_INPUT_HANDLE || handle.startsWith('clip-')) return 'media';
@@ -969,6 +1231,13 @@ const isRequiredInputPort = (node: GraphNodeLike, handle: string): boolean => {
     return publisherTargetHandles(node).includes(handle);
   }
   if (node.type === 'organicPublish') return handle === DRAFT_INPUT_HANDLE;
+  // Every Canvas V3 runtime node is a transform: with nothing wired in there is nothing
+  // for it to do, so its input is required rather than optional.
+  if (node.type === 'action') return actionInputPort(node.data?.actionId, handle) !== undefined;
+  if (node.type === 'router') return handle === ROUTER_INPUT_HANDLE;
+  if (node.type === 'batch') return handle === BATCH_ITEMS_INPUT_HANDLE;
+  if (node.type === 'export') return handle === EXPORT_MEDIA_INPUT_HANDLE;
+  if (node.type === 'layerEditor') return handle === LAYER_EDITOR_IMAGE_INPUT_HANDLE;
   return false;
 };
 
@@ -997,7 +1266,7 @@ export function getStudioPortMetadata(
       id: handle,
       name: portName(handle),
       direction,
-      dataType: portDataType(handle),
+      dataType: portDataType(handle, node),
       required: direction === 'input' && isRequiredInputPort(node, handle),
       connectionCount,
       ...(maxConnections === undefined ? {} : { maxConnections }),
@@ -1348,6 +1617,36 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
       return { data: { documents: [] }, style: { width: 200, height: 200 } };
     case 'video':
       return { data: {}, style: { width: 192, height: 192 } };
+    case 'note':
+      // Byte-for-byte the shape StudioCanvas.createNodeConfig has always built, so a note
+      // created by an agent and a note created by the canvas menu are the same node.
+      return { data: { content: '' }, style: { width: 260, height: 160 } };
+    case 'action':
+      // No op until one is chosen. An action with a null actionId exposes no handles and
+      // accepts no connections — deliberately inert rather than defaulting to some op the
+      // user never picked.
+      return { data: { actionId: null, config: {} }, style: { width: 300, height: 220 } };
+    case 'batch':
+      return {
+        data: { items: [], itemType: null, combine: 'zip' },
+        style: { width: 300, height: 320 },
+      };
+    case 'router':
+      return { data: { lockedType: null }, style: { width: 200, height: 120 } };
+    case 'export':
+      // Format stays null until there is an input: the legal formats for a still and for a
+      // clip do not overlap, so a seeded default would be wrong half the time.
+      return { data: { format: null }, style: { width: 280, height: 200 } };
+    case 'layerEditor':
+      // Style is derived from the aspect ratio by createNodeData (nodeStyleFor), the same
+      // as the generator families — a 9:16 layer doc is born portrait.
+      return {
+        data: { layers: [], frameWidth: 2048, frameHeight: 2048, aspectRatio: '1:1' },
+      };
+    case 'element':
+      return { data: { elementId: null }, style: { width: 240, height: 240 } };
+    case 'designRef':
+      return { data: { section: null, mode: 'both' }, style: { width: 240, height: 200 } };
   }
 }
 
@@ -1499,12 +1798,33 @@ function coerceVideoGeneratorConfig(
   return { data: next, changes };
 }
 
+/**
+ * An `actionId` is not a cosmetic field: it decides which handles the node HAS and what
+ * they accept, so an invented one produces a node with no ports that silently drops
+ * every edge somebody wires to it. Unknown ids are dropped at write time.
+ *
+ * `config` is deliberately NOT validated here yet, and is not on the agent field
+ * whitelist — the per-op schemas in `action-registry.ts` land with the runtime that
+ * reads them.
+ */
+function coerceActionConfig(patch: Record<string, unknown>): NodeConfigCoercion {
+  if (!('actionId' in patch)) return { data: patch, changes: [] };
+  if (patch.actionId === null || patch.actionId === undefined || isActionId(patch.actionId)) {
+    return { data: patch, changes: [] };
+  }
+  return {
+    data: { ...patch, actionId: null },
+    changes: [`"${String(patch.actionId)}" is not an action in the catalog — cleared it`],
+  };
+}
+
 export function coerceNodeConfig(
   type: StudioNodeType,
   patch: Record<string, unknown>,
   current: Record<string, unknown> = {},
 ): NodeConfigCoercion {
   if (isVideoGeneratorNodeType(type)) return coerceVideoGeneratorConfig(type, patch, current);
+  if (type === 'action') return coerceActionConfig(patch);
   if (type !== 'nanoGen') return { data: patch, changes: [] };
 
   const changes: string[] = [];
@@ -1554,6 +1874,10 @@ const GENERATOR_NODE_BOUNDS_BY_TYPE: Partial<Record<StudioNodeType, GeneratorNod
   veoDirector: VIDEO_GENERATOR_NODE_BOUNDS,
   veoFast: VIDEO_GENERATOR_NODE_BOUNDS,
   omniGen: OMNI_GENERATOR_NODE_BOUNDS,
+  // A layer document has a real frame ratio, so its node box carries it like a
+  // generator's does. The other Canvas V3 types have no ratio and keep the fixed style
+  // baseNodeData gives them.
+  layerEditor: LAYER_EDITOR_NODE_BOUNDS,
 };
 
 /**

@@ -1,6 +1,4 @@
-import type { BrandBookPieceKind,
-  DesignSection,
-} from '@continuum/contracts';
+import type { BrandBookPieceKind, DesignSection } from '@continuum/contracts';
 import {
   Handle,
   type HandleProps,
@@ -41,11 +39,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
 import { cn } from '@/lib/utils';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
-import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
 import { GroundingChip } from '../components/GroundingChip';
+import { NodeVideoPreview } from '../components/NodeVideoPreview';
 import { useNodeSelection } from '../contexts/PresenceContext';
+import { useSnapToVideoAspect } from '../hooks/useSnapToVideoAspect';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { OmniGenNodeData, OmniVariation } from '../types';
@@ -53,9 +53,7 @@ import {
   OMNI_GENERATOR_NODE_BOUNDS,
   snapNodeDimensionsToAspectRatio,
 } from '../utils/aspectRatioSizing';
-import { toggleBrandPiece, toggleSkillId,
-  toggleDesignSection,
-} from '../utils/brandEnforcement';
+import { toggleBrandPiece, toggleDesignSection, toggleSkillId } from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
 
@@ -117,6 +115,10 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
   const previewVideo = activeVariation?.videoUrl ?? data.generatedVideo ?? data.generatedVideoUrl;
   const previewPending = data.isExecuting || activeVariation?.status === 'pending';
   const canEdit = Boolean(activeVariation && activeVariation.status === 'done');
+
+  // Re-snap the box to whatever the model actually returned — the requested
+  // `data.aspectRatio` stays untouched, it is what the next run will ask for.
+  useSnapToVideoAspect({ nodeId: id, src: previewVideo, bounds: OMNI_GENERATOR_NODE_BOUNDS });
 
   const handleAspectRatioChange = useCallback(
     (value: string) => {
@@ -416,13 +418,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                           <GenerationPulseLoader />
                         </div>
                       ) : previewVideo ? (
-                        <div className="relative flex h-full w-full items-center justify-center bg-black/85">
-                          {/* biome-ignore lint/a11y/useMediaCaption: generated preview clip has no caption track */}
-                          <video
-                            src={previewVideo as string}
-                            controls
-                            className="h-full w-full object-contain"
-                          />
+                        <NodeVideoPreview src={previewVideo as string}>
                           <Button
                             variant="secondary"
                             size="icon"
@@ -437,7 +433,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                           >
                             <Download className="h-4 w-4" />
                           </Button>
-                        </div>
+                        </NodeVideoPreview>
                       ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-secondary">
                           <Empty>
@@ -506,6 +502,8 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                                 <video
                                   src={variation.videoUrl}
                                   muted
+                                  preload="metadata"
+                                  playsInline
                                   className="h-full w-full object-cover"
                                 />
                               ) : (

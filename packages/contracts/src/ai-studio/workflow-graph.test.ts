@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  coerceNodeConfig,
   createNodeData,
   DRAFT_INPUT_HANDLE,
   DRAFT_OUTPUT_HANDLE,
@@ -79,7 +80,20 @@ describe('node type enum + schema', () => {
     expect(STUDIO_NODE_TYPES).not.toContain('videoEditor');
     expect(STUDIO_NODE_TYPES).toContain('omniGen');
     expect(STUDIO_NODE_TYPES).toContain('organicPublish');
-    expect(STUDIO_NODE_TYPES).toHaveLength(19);
+    // `note` was canvas-only until Canvas V3 — a canvas carrying one failed validation.
+    expect(STUDIO_NODE_TYPES).toContain('note');
+    for (const type of [
+      'action',
+      'batch',
+      'router',
+      'export',
+      'layerEditor',
+      'element',
+      'designRef',
+    ]) {
+      expect(STUDIO_NODE_TYPES).toContain(type);
+    }
+    expect(STUDIO_NODE_TYPES).toHaveLength(27);
   });
 
   it('rejects an unknown node type', () => {
@@ -1038,5 +1052,223 @@ describe('createNodeData defaults', () => {
     expect(createNodeData('nanoGen', { positivePrompt: 'a cat' }).data.positivePrompt).toBe(
       'a cat',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Canvas V3 node vocabulary
+// ---------------------------------------------------------------------------
+
+describe('Canvas V3 node defaults', () => {
+  // The canvas has built this exact shape in StudioCanvas.createNodeConfig since notes
+  // existed. A note an agent adds and a note the menu adds must be the same node, or a
+  // reload renders one of them at the wrong size.
+  it('creates a note identical to the shape the canvas menu builds', () => {
+    expect(createNodeData('note')).toEqual({
+      data: { content: '' },
+      style: { width: 260, height: 160 },
+    });
+  });
+
+  it('gives every new node type an explicit box to be born in', () => {
+    for (const type of [
+      'note',
+      'action',
+      'batch',
+      'router',
+      'export',
+      'layerEditor',
+      'element',
+      'designRef',
+    ] as const) {
+      const created = createNodeData(type);
+      expect(created.style?.width, `${type} width`).toBeGreaterThan(0);
+      expect(created.style?.height, `${type} height`).toBeGreaterThan(0);
+    }
+  });
+
+  it('sizes a layer document to its frame ratio, like a generator', () => {
+    const portrait = createNodeData('layerEditor', { aspectRatio: '9:16' });
+    expect(portrait.style?.height).toBeGreaterThan(portrait.style?.width ?? 0);
+  });
+
+  it('clears an action id that is not in the catalog', () => {
+    const legal = coerceNodeConfig('action', { actionId: 'image.rotate' });
+    expect(legal.data.actionId).toBe('image.rotate');
+    expect(legal.changes).toEqual([]);
+
+    const invented = coerceNodeConfig('action', { actionId: 'image.deepfry' });
+    expect(invented.data.actionId).toBeNull();
+    expect(invented.changes).toHaveLength(1);
+  });
+
+  it('leaves an action patch that does not mention the op alone', () => {
+    const patch = coerceNodeConfig('action', { config: { degrees: 90 } });
+    expect(patch.data).toEqual({ config: { degrees: 90 } });
+    expect(patch.changes).toEqual([]);
+  });
+});
+
+describe('Canvas V3 handles', () => {
+  it('gives an action the handles its op declares, and none before one is chosen', () => {
+    expect(getAllowedTargetHandles(node('a', 'action'))).toEqual([]);
+    expect(getAllowedSourceHandles(node('a', 'action'))).toEqual([]);
+
+    const rotate = node('a', 'action', { actionId: 'image.rotate' });
+    expect(getAllowedTargetHandles(rotate)).toEqual(['in']);
+    expect(getAllowedSourceHandles(rotate)).toEqual(['out']);
+
+    // A multi-input op exposes every port its definition names.
+    const overlay = node('a', 'action', { actionId: 'video.overlay' });
+    expect(getAllowedTargetHandles(overlay)).toEqual(['in', 'overlay-in']);
+  });
+
+  it('gives the runtime types their handles, and the annotation none', () => {
+    expect(getAllowedTargetHandles(node('r', 'router'))).toEqual(['in']);
+    expect(getAllowedSourceHandles(node('r', 'router'))).toEqual(['out']);
+    expect(getAllowedTargetHandles(node('b', 'batch'))).toEqual(['items']);
+    expect(getAllowedSourceHandles(node('b', 'batch'))).toEqual(['collection']);
+    expect(getAllowedTargetHandles(node('x', 'export'))).toEqual(['media-in']);
+    expect(getAllowedSourceHandles(node('x', 'export'))).toEqual([]);
+    expect(getAllowedTargetHandles(node('l', 'layerEditor'))).toEqual(['image-in']);
+    expect(getAllowedSourceHandles(node('l', 'layerEditor'))).toEqual(['image']);
+    expect(getAllowedSourceHandles(node('e', 'element'))).toEqual(['image']);
+    expect(getAllowedSourceHandles(node('d', 'designRef'))).toEqual(['image', 'text']);
+    expect(getAllowedTargetHandles(node('n', 'note'))).toEqual([]);
+    expect(getAllowedSourceHandles(node('n', 'note'))).toEqual([]);
+  });
+
+  it('takes each connection limit from the op or the node kind', () => {
+    expect(
+      getTargetHandleConnectionLimit(node('a', 'action', { actionId: 'video.speed' }), 'in', []),
+    ).toBe(1);
+    expect(
+      getTargetHandleConnectionLimit(node('a', 'action', { actionId: 'video.stitch' }), 'in', []),
+    ).toBe(20);
+    expect(getTargetHandleConnectionLimit(node('r', 'router'), 'in', [])).toBe(1);
+    expect(getTargetHandleConnectionLimit(node('b', 'batch'), 'items', [])).toBe(100);
+  });
+
+  it('reports the modality a data-driven port actually carries', () => {
+    const [input] = getStudioPortMetadata(
+      node('a', 'action', { actionId: 'video.speed' }),
+      'input',
+    );
+    expect(input.dataType).toBe('video');
+    expect(input.required).toBe(true);
+
+    const [output] = getStudioPortMetadata(
+      node('a', 'action', { actionId: 'video.longExposure' }),
+      'output',
+    );
+    // longExposure eats a clip and emits a still — the port says so rather than
+    // defaulting to 'text' the way an unmapped handle used to.
+    expect(output.dataType).toBe('image');
+  });
+});
+
+describe('Canvas V3 connection rules', () => {
+  const connect = (
+    nodes: ReturnType<typeof node>[],
+    source: string,
+    sourceHandle: string,
+    target: string,
+    targetHandle: string,
+    edges: Parameters<typeof isValidConnection>[1] = [],
+  ) => isValidConnection({ source, sourceHandle, target, targetHandle }, edges, nodes);
+
+  it('matches an action port to the modality its op declares', () => {
+    const nodes = [
+      node('img', 'nanoGen'),
+      node('rotate', 'action', { actionId: 'image.rotate' }),
+      node('speed', 'action', { actionId: 'video.speed' }),
+    ];
+    expect(connect(nodes, 'img', 'image', 'rotate', 'in')).toBe(true);
+    // Same node type, different op: an image cannot feed a video speed change.
+    expect(connect(nodes, 'img', 'image', 'speed', 'in')).toBe(false);
+  });
+
+  it('lets an action feed the generators that already accept its modality', () => {
+    const nodes = [
+      node('src', 'nanoGen'),
+      node('rotate', 'action', { actionId: 'image.rotate' }),
+      node('gen', 'nanoGen'),
+    ];
+    expect(connect(nodes, 'rotate', 'out', 'gen', 'ref-images')).toBe(true);
+  });
+
+  it('refuses an action that has not been given an op', () => {
+    const nodes = [node('img', 'nanoGen'), node('a', 'action')];
+    expect(connect(nodes, 'img', 'image', 'a', 'in')).toBe(false);
+  });
+
+  // The whole reason the producer predicates learned about source handles: a designRef
+  // emits a specimen IMAGE on one handle and a token SUMMARY on the other, and wiring the
+  // summary into a reference-image port would send prose where pixels belong.
+  it('tells a designRef specimen apart from a designRef token summary', () => {
+    const nodes = [node('d', 'designRef', { section: 'palette' }), node('gen', 'nanoGen')];
+    expect(connect(nodes, 'd', 'image', 'gen', 'ref-images')).toBe(true);
+    expect(connect(nodes, 'd', 'text', 'gen', 'ref-images')).toBe(false);
+    expect(connect(nodes, 'd', 'text', 'gen', 'prompt')).toBe(true);
+    expect(connect(nodes, 'd', 'image', 'gen', 'prompt')).toBe(false);
+  });
+
+  it('lets an element stand in for a reference image', () => {
+    const nodes = [node('e', 'element', { elementId: 'el-1' }), node('gen', 'nanoGen')];
+    expect(connect(nodes, 'e', 'image', 'gen', 'ref-images')).toBe(true);
+  });
+
+  it('locks a batch to one item kind', () => {
+    const open = [node('img', 'nanoGen'), node('b', 'batch')];
+    expect(connect(open, 'img', 'image', 'b', 'items')).toBe(true);
+
+    const locked = [node('vid', 'video'), node('b', 'batch', { itemType: 'image' })];
+    expect(connect(locked, 'vid', 'video', 'b', 'items')).toBe(false);
+
+    // The lock also comes from what is already in the list, not only from an explicit field.
+    const byItems = [
+      node('vid', 'video'),
+      node('b', 'batch', { items: [{ id: '1', kind: 'text', value: 'a' }] }),
+    ];
+    expect(connect(byItems, 'vid', 'video', 'b', 'items')).toBe(false);
+  });
+
+  it('passes a router through, and keeps it on the modality it locked', () => {
+    const nodes = [
+      node('img', 'nanoGen'),
+      node('r', 'router', { lockedType: 'image' }),
+      node('gen', 'nanoGen'),
+      node('editor', 'timelineEditor'),
+    ];
+    expect(connect(nodes, 'img', 'image', 'r', 'in')).toBe(true);
+    expect(connect(nodes, 'r', 'out', 'gen', 'ref-images')).toBe(true);
+
+    const wrong = [node('vid', 'video'), node('r', 'router', { lockedType: 'image' })];
+    expect(connect(wrong, 'vid', 'video', 'r', 'in')).toBe(false);
+  });
+
+  it('takes media into an export and nothing out of it', () => {
+    const nodes = [
+      node('img', 'nanoGen'),
+      node('txt', 'string', { value: 'hi' }),
+      node('x', 'export'),
+      node('gen', 'nanoGen'),
+    ];
+    expect(connect(nodes, 'img', 'image', 'x', 'media-in')).toBe(true);
+    expect(connect(nodes, 'txt', 'text', 'x', 'media-in')).toBe(false);
+    expect(getAllowedSourceHandles(node('x', 'export'))).toEqual([]);
+    expect(connect(nodes, 'x', 'media-in', 'gen', 'ref-images')).toBe(false);
+  });
+
+  it('stacks stills in a layer editor and refuses clips', () => {
+    const nodes = [node('img', 'nanoGen'), node('vid', 'video'), node('l', 'layerEditor')];
+    expect(connect(nodes, 'img', 'image', 'l', 'image-in')).toBe(true);
+    expect(connect(nodes, 'vid', 'video', 'l', 'image-in')).toBe(false);
+  });
+
+  it('wires a note to nothing at all', () => {
+    const nodes = [node('n', 'note', { content: 'why' }), node('gen', 'nanoGen')];
+    expect(connect(nodes, 'n', 'text', 'gen', 'prompt')).toBe(false);
+    expect(connect(nodes, 'gen', 'image', 'n', 'in')).toBe(false);
   });
 });

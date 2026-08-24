@@ -61,6 +61,18 @@ export const OMNI_GENERATOR_NODE_BOUNDS: GeneratorNodeBounds = {
   area: { width: 512, height: 360 },
 };
 
+/**
+ * layerEditor. A layer document has a real frame ratio (2048x2048 by default), so the
+ * node box carries it exactly the way a generator's does — a 9:16 document is born
+ * portrait rather than in a square that crops the preview.
+ */
+export const LAYER_EDITOR_NODE_BOUNDS: GeneratorNodeBounds = {
+  minWidth: 280,
+  minHeight: 280,
+  fallbackWidth: 380,
+  area: { width: 380, height: 380 },
+};
+
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;

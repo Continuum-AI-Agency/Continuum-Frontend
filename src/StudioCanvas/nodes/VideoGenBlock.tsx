@@ -46,11 +46,13 @@ import {
 } from '@/components/ui/empty';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
 import { cn } from '@/lib/utils';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
-import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
 import { GroundingChip } from '../components/GroundingChip';
+import { NodeVideoPreview } from '../components/NodeVideoPreview';
 import { useNodeSelection } from '../contexts/PresenceContext';
+import { useSnapToVideoAspect } from '../hooks/useSnapToVideoAspect';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { VideoGenNodeData } from '../types';
@@ -58,9 +60,7 @@ import {
   snapNodeDimensionsToAspectRatio,
   VIDEO_GENERATOR_NODE_BOUNDS,
 } from '../utils/aspectRatioSizing';
-import { toggleBrandPiece, toggleSkillId,
-  toggleDesignSection,
-} from '../utils/brandEnforcement';
+import { toggleBrandPiece, toggleDesignSection, toggleSkillId } from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import {
@@ -371,6 +371,11 @@ export function VideoGenBlock({
 
   const displayVideo = (data.generatedVideo as string | Blob | undefined) ?? data.generatedVideoUrl;
 
+  // The model can hand back a ratio other than the one requested (and legacy nodes
+  // were all born 16:9), so the box re-snaps to what actually came back. Box only —
+  // `data.aspectRatio` is the request and a generationSignature field.
+  useSnapToVideoAspect({ nodeId: id, src: displayVideo, bounds: VIDEO_GENERATOR_NODE_BOUNDS });
+
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
       data: displayVideo as string | Blob | undefined,
@@ -511,13 +516,7 @@ export function VideoGenBlock({
                         <GenerationPulseLoader />
                       </div>
                     ) : displayVideo ? (
-                      <div className="relative w-full h-full flex items-center justify-center bg-black/85">
-                        {/* biome-ignore lint/a11y/useMediaCaption: generated preview clip has no caption track */}
-                        <video
-                          src={displayVideo as string}
-                          controls
-                          className="w-full h-full object-contain"
-                        />
+                      <NodeVideoPreview src={displayVideo as string}>
                         <Button
                           variant="secondary"
                           size="icon"
@@ -532,7 +531,7 @@ export function VideoGenBlock({
                         >
                           <Download className="h-4 w-4" />
                         </Button>
-                      </div>
+                      </NodeVideoPreview>
                     ) : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
                         <Empty>

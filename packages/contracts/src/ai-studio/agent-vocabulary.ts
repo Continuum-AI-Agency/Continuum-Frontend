@@ -4,6 +4,7 @@ import {
   imageSizesForModel,
   supportsImageSize,
 } from './image-size';
+import { STUDIO_NODE_REGISTRY } from './node-registry';
 import {
   CLIP_TRANSITION_TYPES,
   createNodeData,
@@ -22,40 +23,16 @@ import { AGENT_FIELD_WHITELIST } from './workflow-projection';
 
 // The node catalog an agent is shown, RENDERED FROM the canvas rules rather than
 // written alongside them. A hand-maintained prompt copy of the node vocabulary is
-// a guaranteed drift: adding a node type already means touching seven places, and
+// a guaranteed drift: adding a node type already means touching several places, and
 // a stale prompt fails silently (the model emits a type the builder rejects).
 //
-// `NODE_PURPOSE` is typed Record<StudioNodeType, string>, so a new node type does
-// not compile until someone says what it is for.
+// The purpose sentences used to live here as their own `Record<StudioNodeType, string>`.
+// They are now read straight off `STUDIO_NODE_REGISTRY`, which is the single description
+// of every node type — so the sentence an agent is told and the sentence the palette
+// shows cannot disagree, and the registry's `satisfies Record<StudioNodeType, …>` is what
+// keeps a new node type from compiling until somebody says what it is for.
 
-const NODE_PURPOSE: Record<StudioNodeType, string> = {
-  string: 'a text / prompt box — the usual way to feed wording into a generator',
-  nanoGen: 'image generator',
-  videoGen: 'video generator (model-selectable)',
-  veoDirector: 'video generator pinned to Veo 3.1 (highest quality, slowest)',
-  veoFast: 'video generator pinned to Veo 3.1 Fast (first/last frame driven)',
-  omniGen: 'Gemini Omni video generator, conversational variations',
-  extendVideo: 'extends an existing video by a few more seconds',
-  timelineEditor:
-    'Video Editor — the real timeline. Wire clips into its `media-in` pool, then place them as timeline items',
-  hyperframesAgent:
-    'agentic HTML-to-video composer — accepts a prompt plus image, video, and audio references, then renders a video',
-  plannerDraft:
-    'organic Planner draft — finds an existing draft or creates a new one, and attaches image, carousel, or video creative plus a caption and a schedule to it. Outputs the saved draft on `draft` for a downstream organicPublish',
-  organicPublish:
-    'terminal sink — posts a saved Planner draft to its social account, now or on its schedule. Takes only a `plannerDraft` on `draft-in`; it never publishes a loose canvas asset',
-  paidPublisher:
-    'terminal sink — replaces image, carousel, or video creative on an existing Meta ad',
-  apiRender:
-    'terminal sink — prepares a version-pinned API template render and PAUSED Meta delivery for explicit confirmation',
-  image: 'a reference image already in the brand library or uploaded',
-  video: 'a reference video already in the brand library or uploaded',
-  audio: 'a reference audio file',
-  document: 'a reference document (pdf / txt) whose text can be read',
-  videoDecode: 'decodes a video into a text description of its frames',
-  frameExtract:
-    'extracts an exact first, last, or timestamped frame from a video in the browser for shot continuity',
-};
+const nodePurpose = (type: StudioNodeType): string => STUDIO_NODE_REGISTRY[type].purpose;
 
 const formatHandle = (type: StudioNodeType, handle: string): string => {
   const node = { id: '_', type, data: createNodeData(type).data };
@@ -89,7 +66,7 @@ function describeNode(type: StudioNodeType): string {
   const outputs = getAllowedSourceHandles(node);
   const config = AGENT_FIELD_WHITELIST[type] ?? [];
 
-  const parts = [`- ${type} — ${NODE_PURPOSE[type]}`];
+  const parts = [`- ${type} — ${nodePurpose(type)}`];
   parts.push(
     `    in: ${inputs.length ? inputs.map((h) => formatHandle(type, h)).join(', ') : '(none — it is a source)'}`,
   );
@@ -178,7 +155,12 @@ export function describeNodeVocabulary(): string {
     '- Text flows from `string` / `videoDecode`. Images flow from `image` / `nanoGen` / `frameExtract`.',
     '  Video flows from `video`, any video generator, `extendVideo`, `timelineEditor`, `omniGen`.',
     '- A prompt handle takes exactly ONE text input. Reference-image handles take many.',
-    '- `image` / `video` / `audio` / `document` are SOURCES: they take no inputs. To use a',
-    '  library asset, add the node and `attach_media` its storage coordinates to it.',
+    '- `image` / `video` / `audio` / `document` / `element` / `designRef` are SOURCES: they',
+    '  take no inputs. To use a library asset, add the node and `attach_media` its storage',
+    '  coordinates to it.',
+    '- An `action` takes its shape from `data.actionId` — set the op FIRST, then wire; an',
+    '  action with no op has no handles at all. A `router` passes one input to many',
+    '  consumers unchanged. A `batch` holds a list and repeats everything downstream of it',
+    '  once per item. `export` and `note` never produce an output.',
   ].join('\n');
 }

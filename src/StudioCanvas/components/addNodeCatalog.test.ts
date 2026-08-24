@@ -35,9 +35,11 @@ const TYPES_OFFERED_BEFORE_THE_REGROUPING: readonly StudioCanvasNodeType[] = [
   'paidPublisher',
 ];
 
-// The canvas annotation node is canvas-only: it is never validated, run, or written by
-// an agent, so contracts has no entry for it.
-const NODE_TYPES_OUTSIDE_CONTRACTS: readonly StudioCanvasNodeType[] = ['note'];
+// Every type this catalog offers is now a contracts type. `note` used to be the one
+// exception — canvas-only, so a graph carrying one failed validateWorkflowGraph — and
+// Canvas V3 moved it into STUDIO_NODE_TYPES. Kept as a list rather than deleted: if a
+// canvas-only node type is ever added again, this is where it gets declared.
+const NODE_TYPES_OUTSIDE_CONTRACTS: readonly StudioCanvasNodeType[] = [];
 
 const allRows: readonly AddNodeRow[] = ADD_NODE_GROUPS.flatMap((section) => section.rows);
 

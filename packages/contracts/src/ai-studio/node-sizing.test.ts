@@ -5,6 +5,7 @@ import {
   generatorNodeStyle,
   getAspectRatioValue,
   IMAGE_GENERATOR_NODE_BOUNDS,
+  LAYER_EDITOR_NODE_BOUNDS,
   OMNI_GENERATOR_NODE_BOUNDS,
   simplifyAspectRatio,
   snapNodeDimensionsToAspectRatio,
@@ -136,6 +137,48 @@ describe('snapNodeDimensionsToAspectRatio — area-preserving and idempotent', (
       const style = generatorNodeStyle(ratio, IMAGE_GENERATOR_NODE_BOUNDS);
       const readBack = simplifyAspectRatio(style.width, style.height);
       expect(getAspectRatioValue(readBack)).toBeCloseTo(getAspectRatioValue(ratio), 2);
+    }
+  });
+});
+
+describe('LAYER_EDITOR_NODE_BOUNDS', () => {
+  const RATIOS = ['16:9', '9:16', '1:1', '4:5', '21:9'];
+
+  it('carries the frame ratio the layer document is set to', () => {
+    for (const ratio of RATIOS) {
+      const style = generatorNodeStyle(ratio, LAYER_EDITOR_NODE_BOUNDS);
+      expect(getAspectRatioValue(simplifyAspectRatio(style.width, style.height))).toBeCloseTo(
+        getAspectRatioValue(ratio),
+        2,
+      );
+    }
+  });
+
+  // Same invariant the generator envelopes stand on: an aspect-locked NodeResizer re-snaps
+  // on every drag, so a box that moved a pixel per pass would walk across the canvas.
+  it('is a fixed point under re-snapping', () => {
+    for (const ratio of RATIOS) {
+      for (const width of [1, 200, 380, 900]) {
+        for (const height of [1, 200, 380, 900]) {
+          const options = {
+            aspectRatio: ratio,
+            minWidth: LAYER_EDITOR_NODE_BOUNDS.minWidth,
+            minHeight: LAYER_EDITOR_NODE_BOUNDS.minHeight,
+            fallbackWidth: LAYER_EDITOR_NODE_BOUNDS.fallbackWidth,
+          };
+          const once = snapNodeDimensionsToAspectRatio({
+            ...options,
+            currentWidth: width,
+            currentHeight: height,
+          });
+          const twice = snapNodeDimensionsToAspectRatio({
+            ...options,
+            currentWidth: once.width,
+            currentHeight: once.height,
+          });
+          expect(twice, `${ratio} ${width}x${height}`).toEqual(once);
+        }
+      }
     }
   });
 });

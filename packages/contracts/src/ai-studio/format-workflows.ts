@@ -122,10 +122,16 @@ export function compileCarouselSetWorkflow(input: CarouselSetRecipe): CompiledFo
   nodes.push({
     ref: publisherRef,
     type: 'plannerDraft',
-    // One slot per slide. A publisher's only legal target handles are derived from
+    // One slot per slide. A draft's only legal target handles are derived from
     // assetSlots, and each holds exactly one edge, so inheriting the two-slot default
     // left every slide past the second with nowhere to land — the canvas reported
     // "no compatible handle from nanoGen to organicPublisher" and dropped the edge.
+    //
+    // The type itself was the SECOND half of that bug: contracts split the old
+    // `organicPublisher` into `plannerDraft` (stage the creative) + `organicPublish`
+    // (post the saved draft), and this compiler was never moved over. buildWorkflowGraph
+    // has been rejecting every carousel-set and before/after workflow as an unknown node
+    // type and dropping all of its edges ever since.
     data: {
       format: 'carousel',
       assetSlots: recipe.slides.map((slide, order) => ({ id: slide.id, order })),

@@ -10,7 +10,6 @@ import type React from 'react';
 import { useCallback, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -25,12 +24,18 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
+import { NodeVideoPreview } from '../components/NodeVideoPreview';
 import { useNodeSelection } from '../contexts/PresenceContext';
+import { useSnapToVideoAspect } from '../hooks/useSnapToVideoAspect';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { ExtendVideoNodeData } from '../types';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
+
+// Mirrors the NodeResizer minimums below: a snap under them would produce a style
+// the node cannot actually render at, which is the ratio-lying bug this guards.
+const EXTEND_VIDEO_NODE_BOUNDS = { minWidth: 260, minHeight: 160, fallbackWidth: 400 };
 
 export function ExtendVideoBlock({
   id,
@@ -52,6 +57,11 @@ export function ExtendVideoBlock({
 
   const displayVideo = (data.generatedVideo as string | Blob | undefined) ?? data.generatedVideoUrl;
 
+  // An extension inherits the source clip's shape, and the source is whatever was
+  // wired in — so the node has no requested ratio to size itself from and must
+  // learn it from the clip it produced. Bounds mirror the NodeResizer minimums.
+  useSnapToVideoAspect({ nodeId: id, src: displayVideo, bounds: EXTEND_VIDEO_NODE_BOUNDS });
+
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
       data: displayVideo as string | Blob | undefined,
@@ -69,7 +79,7 @@ export function ExtendVideoBlock({
   }, [displayVideo, id, show]);
 
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
-  const generatorDescription = 'Extend Video • 16:9';
+  const generatorDescription = 'Extend Video';
 
   return (
     <TooltipProvider>
@@ -115,20 +125,20 @@ export function ExtendVideoBlock({
                 selected={selected}
                 className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
               >
+                {/* The node's own box carries the ratio (useSnapToVideoAspect) and the
+                    video fills it with object-contain. A Radix AspectRatio used to sit
+                    here: it sized itself from the WIDTH, ignored h-full, and the
+                    overflow-hidden card clipped the overflow into what read as extreme
+                    zoom (Airtable #232) — and it hardcoded 16:9 for a node whose output
+                    is whatever shape the source clip was. */}
                 <NodeContent className="relative flex-1 p-0 flex items-center justify-center overflow-hidden bg-muted/30 text-xs text-secondary group/preview">
-                  <AspectRatio ratio={16 / 9} className="h-full w-full overflow-hidden bg-muted">
+                  <div className="relative h-full w-full overflow-hidden bg-muted">
                     {data.isExecuting ? (
                       <div className="absolute inset-0 flex items-center justify-center bg-muted p-4">
                         <GenerationPulseLoader />
                       </div>
                     ) : displayVideo ? (
-                      <div className="relative h-full w-full bg-black/85">
-                        {/* biome-ignore lint/a11y/useMediaCaption: user-generated canvas output; no caption track exists */}
-                        <video
-                          src={displayVideo as string}
-                          controls
-                          className="h-full w-full object-contain"
-                        />
+                      <NodeVideoPreview src={displayVideo as string}>
                         <Button
                           variant="secondary"
                           size="icon"
@@ -143,14 +153,14 @@ export function ExtendVideoBlock({
                         >
                           <Download className="h-4 w-4" />
                         </Button>
-                      </div>
+                      </NodeVideoPreview>
                     ) : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                         <Video className="h-8 w-8 opacity-20" />
                         <span className="text-2xs opacity-50">Ready to extend video</span>
                       </div>
                     )}
-                  </AspectRatio>
+                  </div>
                 </NodeContent>
               </CanvasNode>
 

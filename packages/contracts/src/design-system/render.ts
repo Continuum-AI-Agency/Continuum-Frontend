@@ -139,7 +139,7 @@ export function renderDesignSystemBlock(
 
   const preamble =
     tier === 'strict'
-      ? 'authoritative design system — the generation MUST comply; deviations are rejected'
+      ? 'authoritative design system — hard rules are mandatory'
       : 'the brand design system — follow it unless the brief explicitly overrides';
 
   return {

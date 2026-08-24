@@ -313,6 +313,13 @@ export const planItemSchema = z.object({
     .describe(
       'Pre-resolved creative brief for this item. When present, the content job skips the strategist stage.',
     ),
+  // Per-item job payload the proposer resolved before the human saw the plan
+  // (trendIds, conversation language, a ugc spec, @-mentioned creatives). It has
+  // to live ON the item, not in the proposer's closure: the plan is now proposed
+  // in one turn and enqueued in another, so anything a closure held would be gone
+  // by the time the user approves. Loose by design — this is a payload passthrough,
+  // and the job schema is the thing that narrows it.
+  payloadExtras: z.record(z.string(), z.unknown()).nullish(),
 });
 export type PlanItem = z.infer<typeof planItemSchema>;
 
