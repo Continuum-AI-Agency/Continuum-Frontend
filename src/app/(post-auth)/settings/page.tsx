@@ -220,8 +220,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       <>
         {createBrandHeader(defaultBrandName)}
         <SettingsSection
-          title="Brand Intelligence"
-          description="A living, evidence-backed view of your Brand DNA, competitive position, and visibility."
+          title="Brand Kit intelligence"
+          description="Review the Brand DNA and design-system sources Continuum applies, plus the evidence-derived context that guides them."
         >
           <BrandIntelligenceWorkspace
             brandId={activeBrandId}
@@ -241,9 +241,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               />
             </div>
           ) : null}
-          {/* Sits with the Brand Book because it is the same mental model — the brand's
-              own account of itself — and because a brand that uploaded a design system
-              expects to find it next to the book it outranks. */}
+          {/* The approved Brand Book and Design System are the source layer; derived
+              intelligence can guide them but does not silently rewrite them. */}
           {activeBrandId ? (
             <div className="mt-6 border-t border-white/10 pt-6">
               <DesignSystemSection brandId={activeBrandId} />

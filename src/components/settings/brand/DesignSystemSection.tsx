@@ -120,6 +120,7 @@ function ConflictBar({
 }
 
 const TIERS = ['strict', 'guided', 'loose'] as const;
+const TIER_LABELS = { strict: 'Lock', guided: 'Guide', loose: 'Explore' } as const;
 
 /**
  * The rigor control.
@@ -146,10 +147,10 @@ function RigorControl({
     <div className="rounded-lg border border-border p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-primary">How strictly should this be applied?</p>
+          <p className="text-sm font-medium text-primary">How should Continuum apply this?</p>
           <p className="mt-0.5 text-xs text-secondary">
-            We read this as <span className="font-medium">{snapshot.rigor.tier}</span> from{' '}
-            {evidence.tokenCount} tokens
+            We recommend <span className="font-medium">{TIER_LABELS[snapshot.rigor.tier]}</span>{' '}
+            from {evidence.tokenCount} tokens
             {evidence.hasAdherenceConfig ? ', an adherence config' : ''}
             {evidence.imperativeRuleCount > 0
               ? `, and ${evidence.imperativeRuleCount} explicit rules`
@@ -177,7 +178,7 @@ function RigorControl({
                 }
               }}
             >
-              {tier}
+              {TIER_LABELS[tier]}
             </Button>
           ))}
         </div>

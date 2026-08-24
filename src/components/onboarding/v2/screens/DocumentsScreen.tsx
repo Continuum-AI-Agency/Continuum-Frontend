@@ -55,9 +55,8 @@ export function DocumentsScreen({
           </p>
         </div>
 
-        {/* Above the document list on purpose: a design system outranks every other
-            document a brand can give us, and burying it under a generic uploader is
-            how the most valuable input on the page gets missed. */}
+        {/* Kept above the generic document list so approved visual rules are clearly
+            distinguished from supporting brand evidence. */}
         {brandId ? (
           <DesignSystemCard
             brandId={brandId}

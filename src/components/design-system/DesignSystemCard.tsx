@@ -28,16 +28,16 @@ const STEP_LABELS: Record<string, string> = {
 
 const TIER_COPY: Record<string, { label: string; hint: string }> = {
   strict: {
-    label: 'Strict',
-    hint: 'Generations must comply. Violations are rejected.',
+    label: 'Lock',
+    hint: 'Hard rules gate supported renderers; image models receive prompt constraints.',
   },
   guided: {
-    label: 'Guided',
-    hint: 'Shapes every generation. A brief can override it.',
+    label: 'Guide',
+    hint: 'Applies by default. An explicit brief can override it.',
   },
   loose: {
-    label: 'Loose',
-    hint: 'Used as direction rather than as a rule.',
+    label: 'Explore',
+    hint: 'Keeps visual identity anchors while allowing stylistic variation.',
   },
 };
 
@@ -107,8 +107,8 @@ export function DesignSystemCard({
           <h3 className="text-base font-semibold text-primary">Design system</h3>
           <p className="mt-1 max-w-prose text-sm text-secondary">
             {variant === 'onboarding'
-              ? 'If your brand has an approved design system, add it now. It is the strongest signal we have about how your work should look, and everything we generate afterwards follows it.'
-              : 'Your approved visual system. Everything Continuum generates follows the tokens and rules below.'}
+              ? 'Add your approved visual system. Continuum extracts its tokens and rules for review, then applies the sections you enable alongside your Brand DNA.'
+              : 'Your approved visual rules and tokens. Human edits survive re-imports; Canvas and headless receipts show which sections were applied.'}
           </p>
         </div>
         {snapshot ? <RigorBadge snapshot={snapshot} /> : null}
@@ -134,7 +134,7 @@ export function DesignSystemCard({
         </div>
       ) : null}
 
-      {snapshot ? <SystemSummary snapshot={snapshot} /> : null}
+      {snapshot ? <SystemSummary snapshot={snapshot} version={state.version} /> : null}
 
       {!busy ? (
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -212,7 +212,13 @@ function ProgressRow({ label, percent }: { label: string; percent: number }) {
  * a success tick. The unresolved-conflict line is deliberately prominent — it is the
  * one thing here that asks for a decision.
  */
-function SystemSummary({ snapshot }: { snapshot: DesignSystemSnapshot }) {
+function SystemSummary({
+  snapshot,
+  version,
+}: {
+  snapshot: DesignSystemSnapshot;
+  version: number | null;
+}) {
   const swatches = snapshot.tokens
     .filter((token) => token.kind === 'color' && token.resolvedValue?.startsWith('#'))
     .slice(0, 10);
@@ -223,7 +229,8 @@ function SystemSummary({ snapshot }: { snapshot: DesignSystemSnapshot }) {
       <div className="flex items-center gap-2 text-sm text-primary">
         <CheckCircle2 className="size-4 text-emerald-500" aria-hidden />
         <span>
-          {snapshot.tokens.length} tokens · {snapshot.sections.length} sections
+          Version {version ?? '—'} · {snapshot.tokens.length} tokens · {snapshot.sections.length}{' '}
+          sections
           {snapshot.fonts.length > 0
             ? ` · ${snapshot.fonts.map((font) => font.family).join(', ')}`
             : ''}
@@ -241,6 +248,12 @@ function SystemSummary({ snapshot }: { snapshot: DesignSystemSnapshot }) {
             />
           ))}
         </div>
+      ) : null}
+
+      {snapshot.sourceKind === 'document' ? (
+        <p className="text-xs text-secondary">
+          Document imports may infer visual rules. Review low-confidence sections before using Lock.
+        </p>
       ) : null}
 
       {unresolved.length > 0 ? (

@@ -738,7 +738,7 @@ function useBottomBar({
   if (screen === 1) {
     return {
       hint: designSystemBusy
-        ? 'Reading your design system — everything after this is built from it.'
+        ? 'Reading your design system — you can review what we understood in Brand Kit settings.'
         : "Add brand assets — or skip and we'll infer from your website.",
       actions: (
         <>

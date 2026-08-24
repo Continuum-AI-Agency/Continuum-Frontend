@@ -204,13 +204,13 @@ export function BrandIntelligenceWorkspace({
             <div className="flex items-center gap-2">
               <Radar className="size-4 text-indigo-300" />
               <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-200">
-                Brand Intelligence
+                Brand Kit intelligence
               </span>
             </div>
             <h2 className="text-2xl font-semibold tracking-tight">{brandName}</h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Authoritative Brand DNA, competitor context, and visibility evidence in one living
-              profile. Derived findings ground the platform without rewriting your brand source.
+              Your Brand DNA and approved design system are the source; competitor context and
+              visibility evidence add guidance without rewriting them.
             </p>
           </div>
           <div className="flex items-center gap-2">
