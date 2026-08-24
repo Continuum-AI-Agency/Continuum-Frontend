@@ -129,7 +129,13 @@ export function applyOrganicFrame(
       dispatch({ type: 'PLAN_STATUS', event: parsed.event });
       break;
     case 'toolApproval':
-      if (mode === 'control') break;
+      // Deliberately NOT dropped in control mode, unlike the presentational frames
+      // around it. A control turn is a button click (plan approve/reject), and the
+      // agent can reach a gated tool inside one — the copy→creative gate lives in
+      // the `executing` mode a plan approval puts the session into. Dropping the
+      // request there does not hide noise, it strands a backend turn that is
+      // blocked on an answer the user is never shown. TOOL_APPROVAL_ADD dedupes on
+      // approvalId, so a frame seen twice still renders one card.
       dispatch({ type: 'TOOL_APPROVAL_ADD', approval: parsed.approval });
       break;
     case 'bulkRun':

@@ -3,10 +3,9 @@
 import {
   type OrganicGenerationStatus,
   type OrganicGenerationSummary,
-  type OrganicGenerationTone,
-  type OrganicMediaStage,
+  type OrganicStatusTone,
   resolveOrganicAgentLabel,
-  resolveOrganicGenerationDisplay,
+  resolveOrganicLifecycle,
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, ChevronDown, Loader2, X, XCircle } from 'lucide-react';
@@ -42,28 +41,22 @@ const STATUS_RANK: Record<OrganicGenerationStatus, number> = {
 const isActive = (status: OrganicGenerationStatus): boolean =>
   status === 'running' || status === 'queued';
 
-// Canonical generation tone -> label text color. Mirrors the card-kit palette so
-// the same label reads the same everywhere it appears.
-const TONE_TEXT: Record<OrganicGenerationTone, string> = {
+// The canonical tone -> this widget's text color. One entry per semantic tone, so
+// "will post" and "already posted" are different colors here for the same reason
+// they are different colors on the planner card.
+const TONE_TEXT: Record<OrganicStatusTone, string> = {
+  neutral: 'text-muted-foreground',
   pending: 'text-muted-foreground',
   active: 'text-amber-600 dark:text-amber-400',
-  success: 'text-emerald-600 dark:text-emerald-400',
+  ready: 'text-foreground/80',
+  scheduled: 'text-teal-600 dark:text-teal-400',
+  live: 'text-emerald-600 dark:text-emerald-400',
   error: 'text-destructive',
-  neutral: 'text-muted-foreground',
 };
 
 function capitalize(value: string): string {
   return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
 }
-
-// Media-enrichment dimension for a COMPLETED row: Stage 1 finished but the
-// draft is still being enriched (blueprint/512px sketch/final pixels), so
-// "Ready" alone would overstate where the post actually is.
-const ENRICHMENT_SUFFIX: Partial<Record<OrganicMediaStage, string>> = {
-  text_only: 'Enriching…',
-  storyboard_ready: 'Sketch ready',
-  realizing: 'Rendering…',
-};
 
 // dayId is a YYYY-MM-DD slot (parsed as local midnight for a stable label).
 function formatDay(dayId: string | null | undefined): string | null {
@@ -114,7 +107,7 @@ function GenerationRow({
   onViewDraftAction?: (draftId: string) => void;
   onCancel: (jobId: string) => void;
 }) {
-  const display = resolveOrganicGenerationDisplay({
+  const display = resolveOrganicLifecycle({
     status: summary.status,
     stage: summary.stage,
     mediaStage: summary.mediaStage,
@@ -129,26 +122,25 @@ function GenerationRow({
   // just the status label.
   const agentLabel = active ? resolveOrganicAgentLabel(summary.agentName) : null;
   const pctText = active && typeof summary.pct === 'number' ? `${Math.round(summary.pct)}%` : null;
-  // A completed row still enriching (text_only / storyboard_ready / realizing)
-  // shows the media dimension so "Ready" never overstates the draft's state.
-  const enrichmentText =
-    summary.status === 'completed' && summary.mediaStage
-      ? (ENRICHMENT_SUFFIX[summary.mediaStage] ?? null)
-      : null;
   // Failed rows carry the real reason (the backend folds enrichment failures
   // into summary.error too); rendered on its own clamped line, not truncated
   // into the state line — the message is what the user needs to act on.
   const failureMessage = summary.status === 'failed' ? (summary.error?.message ?? null) : null;
-  const stateLine = [agentLabel, display.label, pctText, enrichmentText]
-    .filter(Boolean)
-    .join(' · ');
+  // The resolver already folds the media dimension into the label (a completed job
+  // stopped at its blueprint reads "Preview ready", not "Draft ready"), so this row
+  // no longer appends a second, differently-worded suffix of its own.
+  const stateLine = [agentLabel, display.label, pctText].filter(Boolean).join(' · ');
 
   return (
     <div className="flex items-center gap-2 border-b border-border/40 px-2 py-1.5 last:border-b-0">
       <StatusIcon status={summary.status} />
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-xs font-medium text-foreground">{title}</span>
+        {/* Both of these clamp. A clamped string with no `title` is unrecoverable —
+            the ticker read "Sketch re…" with no way to see the rest. */}
+        <span className="truncate text-xs font-medium text-foreground" title={title}>
+          {title}
+        </span>
         <div className="flex items-center gap-1.5">
           {summary.platform && (
             <Badge variant="secondary" className="h-4 px-1 text-2xs capitalize">
@@ -156,7 +148,10 @@ function GenerationRow({
             </Badge>
           )}
           {day && <span className="text-2xs text-muted-foreground/70">{day}</span>}
-          <span className={cn('truncate text-2xs font-medium', TONE_TEXT[display.tone])}>
+          <span
+            className={cn('truncate text-2xs font-medium', TONE_TEXT[display.tone])}
+            title={display.diagnostic ? `${stateLine} — ${display.diagnostic}` : stateLine}
+          >
             {stateLine}
           </span>
         </div>

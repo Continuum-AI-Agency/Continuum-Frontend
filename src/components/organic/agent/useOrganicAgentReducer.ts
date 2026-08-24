@@ -260,6 +260,12 @@ function checkpointFromDurableState(
         mediaStatus: 'ready',
         awaitingMediaChoice: false,
       };
+    // The Backend really stamps media_stage='failed' (jobs/poller.ts on dead-letter,
+    // jobs/worker.ts on a realize failure). Falling through to `default` dropped it and
+    // the row hydrated as a plain "copy ready" — a media failure disguised as success.
+    // The copy IS saved, so textReady stays true and only the media reads as failed.
+    case 'failed':
+      return { textReady: true, mediaStatus: 'failed', awaitingMediaChoice: false };
     default:
       return status === 'completed' ? { textReady: true } : undefined;
   }

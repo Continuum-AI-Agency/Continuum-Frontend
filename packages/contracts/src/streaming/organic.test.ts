@@ -7,7 +7,12 @@ import {
   pipelineStageEnum,
   planItemSchema,
   proposedPlanSchema,
+  ORGANIC_DRAFT_STATUS_PHASE,
+  ORGANIC_JOB_STATUS_PHASE,
+  ORGANIC_PHASE_PRESENTATION,
+  organicLifecyclePhaseEnum,
   resolveOrganicGenerationDisplay,
+  resolveOrganicLifecycle,
 } from './organic';
 
 describe('organic pipeline frames', () => {
@@ -458,17 +463,63 @@ describe('response.cancelled frame', () => {
   });
 });
 
+describe('one lifecycle vocabulary', () => {
+  it('does not let a finished generation claim it was posted', () => {
+    // The bug users hit: chat said "Ready", planner said "Draft", same row.
+    expect(ORGANIC_JOB_STATUS_PHASE.completed).toBe('draft_ready');
+    expect(ORGANIC_DRAFT_STATUS_PHASE.published).toBe('published');
+    expect(ORGANIC_JOB_STATUS_PHASE.completed).not.toBe(ORGANIC_DRAFT_STATUS_PHASE.published);
+    expect(resolveOrganicLifecycle({ status: 'completed' }).label).toBe('Draft ready');
+    expect(resolveOrganicLifecycle({ draftStatus: 'published' }).label).toBe('Published');
+  });
+
+  it('lands all three input vocabularies on the same phase for the same state', () => {
+    const fromJob = resolveOrganicLifecycle({ status: 'running', stage: 'assets' });
+    const fromPlanItem = resolveOrganicLifecycle({ planItemStatus: 'executing', stage: 'assets' });
+    const fromDraft = resolveOrganicLifecycle({ draftStatus: 'streaming', stage: 'assets' });
+    expect(fromJob.phase).toBe('working');
+    expect(fromPlanItem.phase).toBe('working');
+    expect(fromDraft.phase).toBe('working');
+    expect(new Set([fromJob.label, fromPlanItem.label, fromDraft.label]).size).toBe(1);
+  });
+
+  it('gives the planner and the chat words for each other’s states', () => {
+    // The chat had no word for a seeded slot or a scheduled post; the planner none
+    // for queued or cancelled. One table now answers all four.
+    for (const phase of ['seeded', 'scheduled', 'queued', 'cancelled'] as const) {
+      expect(ORGANIC_PHASE_PRESENTATION[phase].label.length).toBeGreaterThan(0);
+      expect(ORGANIC_PHASE_PRESENTATION[phase].pill.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('gives every phase exactly one tone', () => {
+    for (const phase of organicLifecyclePhaseEnum.options) {
+      expect(ORGANIC_PHASE_PRESENTATION[phase].tone).toBeDefined();
+    }
+  });
+});
+
 describe('generation display labels never disguise a gap as progress', () => {
   it('reports a failed mediaStage as an error, not as Working', () => {
-    const display = resolveOrganicGenerationDisplay({ status: 'running', mediaStage: 'failed' });
-    expect(display.tone).toBe('error');
-    expect(display.label).toBe('Media failed');
+    const resolved = resolveOrganicLifecycle({ status: 'running', mediaStage: 'failed' });
+    expect(resolved.phase).toBe('media_failed');
+    expect(resolved.tone).toBe('error');
+    expect(resolved.advancing).toBe(false);
+    expect(resolveOrganicGenerationDisplay({ status: 'running', mediaStage: 'failed' }).tone).toBe(
+      'error',
+    );
   });
 
   it('marks a running row with no stage data distinctly from staged progress', () => {
-    const display = resolveOrganicGenerationDisplay({ status: 'running' });
-    expect(display.label).toBe('Working (no stage data)');
-    expect(display.tone).toBe('active');
+    const blind = resolveOrganicLifecycle({ status: 'running' });
+    expect(blind.phase).toBe('blind');
+    // Not `active`, and not advancing: nothing here has reported progress.
+    expect(blind.tone).toBe('neutral');
+    expect(blind.advancing).toBe(false);
+    expect(blind.diagnostic).toContain('pipeline.stage');
+    // And it must never read as the bare word the fix replaced.
+    expect(blind.label).not.toBe('Working');
+    expect(blind.label).not.toBe(resolveOrganicLifecycle({ status: 'running', stage: 'assets' }).label);
   });
 
   it('keeps staged running labels unchanged', () => {
@@ -478,5 +529,17 @@ describe('generation display labels never disguise a gap as progress', () => {
     expect(
       resolveOrganicGenerationDisplay({ status: 'running', mediaStage: 'realizing' }).label,
     ).toBe('Generating media');
+  });
+
+  it('says how far the media ladder got instead of a bare "Draft ready"', () => {
+    expect(resolveOrganicLifecycle({ status: 'completed', mediaStage: 'text_only' }).label).toBe(
+      'Copy ready',
+    );
+    expect(
+      resolveOrganicLifecycle({ status: 'completed', mediaStage: 'storyboard_ready' }).label,
+    ).toBe('Preview ready');
+    expect(resolveOrganicLifecycle({ status: 'completed', mediaStage: 'realized' }).label).toBe(
+      'Fully fleshed out',
+    );
   });
 });

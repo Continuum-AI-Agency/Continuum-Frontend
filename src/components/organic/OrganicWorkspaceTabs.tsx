@@ -4,8 +4,11 @@ import { useSearchParams } from 'next/navigation';
 import React, { startTransition } from 'react';
 import { GenerationsPopover } from '@/components/organic/agent/GenerationsPopover';
 import { useGenerationJobsRealtime } from '@/components/organic/hooks/useGenerationJobsRealtime';
+import {
+  OpenPlannerDraftProvider,
+  useWorkspaceOpenPlannerDraft,
+} from '@/components/organic/openPlannerDraft';
 import { writePlannerUrlState } from '@/lib/organic/plannerUrlState';
-import { useCalendarStore } from '@/lib/organic/store';
 import { prefetchMetricsDashboard } from '@/lib/prefetch/organic-metrics-cache';
 import { cn } from '@/lib/utils';
 
@@ -46,7 +49,6 @@ export function OrganicWorkspaceTabs({
   brandId,
 }: Props) {
   const searchParams = useSearchParams();
-  const setSelectedDraftId = useCalendarStore((s) => s.setSelectedDraftId);
   const tabParam = searchParams.get('tab');
   const initialView: 'planner' | 'metrics' | 'agent' =
     tabParam === 'metrics' ? 'metrics' : tabParam === 'agent' ? 'agent' : 'planner';
@@ -106,6 +108,12 @@ export function OrganicWorkspaceTabs({
     startTransition(apply);
   }, []);
 
+  // "Open this draft" is ONE behaviour (see openPlannerDraft): select it, show the
+  // planner, record the deep link. Every surface under this provider — the ticker
+  // here, the agent panel in `agentSlot` — gets that exact behaviour.
+  const showPlanner = React.useCallback(() => handleValueChange('planner'), [handleValueChange]);
+  const openPlannerDraft = useWorkspaceOpenPlannerDraft(showPlanner);
+
   // Active brand for the shell-wide ticker. Realtime on organic.post_generation_jobs
   // keeps the live generation summaries fresh on every tab (the ticker lives here,
   // outside the tab panels, so its counts survive tab switches).
@@ -113,90 +121,86 @@ export function OrganicWorkspaceTabs({
   useGenerationJobsRealtime(tickerBrandId);
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
-      <div className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--card-pad)] py-[var(--app-shell-pad-block)]">
-        <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
+    <OpenPlannerDraftProvider value={openPlannerDraft}>
+      <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
+        <div className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--card-pad)] py-[var(--app-shell-pad-block)]">
+          <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
 
-        <div className="flex shrink-0 items-center gap-2">
-          {/* Shell-wide live generations: visible on every tab once any post is generating. */}
-          <GenerationsPopover
-            brandId={tickerBrandId}
-            onViewDraftAction={(draftId) => {
-              setSelectedDraftId(draftId);
-              handleValueChange('planner');
-            }}
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Shell-wide live generations: visible on every tab once any post is generating. */}
+            <GenerationsPopover brandId={tickerBrandId} onViewDraftAction={openPlannerDraft} />
 
-          <nav
-            className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5"
-            aria-label="Organic workspace"
-          >
-            {(
-              ['planner', 'metrics', ...(agentSlot !== undefined ? ['agent'] : [])] as Array<
-                'planner' | 'metrics' | 'agent'
-              >
-            ).map((view) => {
-              const isActive = activeView === view;
-
-              return (
-                <button
-                  key={view}
-                  type="button"
-                  data-tour-id={
-                    view === 'metrics'
-                      ? 'organic-metrics-tab'
-                      : view === 'agent'
-                        ? 'organic-agent-tab'
-                        : undefined
-                  }
-                  onClick={() => handleValueChange(view)}
-                  className={cn(
-                    'h-7 rounded-md px-3 text-xs font-medium transition-colors sm:h-8 sm:px-3.5 sm:text-sm',
-                    isActive
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                  aria-pressed={isActive}
-                >
-                  {WORKSPACE_LABELS[view]}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
-
-      <ViewTransition>
-        {/* Inline padding lives on each slot, not here: the metrics tab is a
-            full-bleed pane and must not pay the shell gutter a second time. */}
-        <div className="min-h-0 overflow-hidden py-[var(--app-shell-pad-block)]">
-          {/* Always render planner — it's the default tab */}
-          <div
-            className="h-full w-full min-h-0 overflow-hidden px-[var(--card-pad)]"
-            hidden={activeView !== 'planner'}
-          >
-            {plannerSlot}
-          </div>
-          {/* Defer metrics mount until first viewed, then keep alive to avoid re-fetch */}
-          {metricsEverShown && (
-            <div
-              className="h-full w-full min-h-0 overflow-hidden"
-              hidden={activeView !== 'metrics'}
+            <nav
+              className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5"
+              aria-label="Organic workspace"
             >
-              {metricsSlot}
-            </div>
-          )}
-          {/* Defer agent mount until first viewed, then keep alive */}
-          {agentSlot !== undefined && agentEverShown && (
+              {(
+                ['planner', 'metrics', ...(agentSlot !== undefined ? ['agent'] : [])] as Array<
+                  'planner' | 'metrics' | 'agent'
+                >
+              ).map((view) => {
+                const isActive = activeView === view;
+
+                return (
+                  <button
+                    key={view}
+                    type="button"
+                    data-tour-id={
+                      view === 'metrics'
+                        ? 'organic-metrics-tab'
+                        : view === 'agent'
+                          ? 'organic-agent-tab'
+                          : undefined
+                    }
+                    onClick={() => handleValueChange(view)}
+                    className={cn(
+                      'h-7 rounded-md px-3 text-xs font-medium transition-colors sm:h-8 sm:px-3.5 sm:text-sm',
+                      isActive
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                    aria-pressed={isActive}
+                  >
+                    {WORKSPACE_LABELS[view]}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
+
+        <ViewTransition>
+          {/* Inline padding lives on each slot, not here: the metrics tab is a
+            full-bleed pane and must not pay the shell gutter a second time. */}
+          <div className="min-h-0 overflow-hidden py-[var(--app-shell-pad-block)]">
+            {/* Always render planner — it's the default tab */}
             <div
               className="h-full w-full min-h-0 overflow-hidden px-[var(--card-pad)]"
-              hidden={activeView !== 'agent'}
+              hidden={activeView !== 'planner'}
             >
-              {agentSlot}
+              {plannerSlot}
             </div>
-          )}
-        </div>
-      </ViewTransition>
-    </div>
+            {/* Defer metrics mount until first viewed, then keep alive to avoid re-fetch */}
+            {metricsEverShown && (
+              <div
+                className="h-full w-full min-h-0 overflow-hidden"
+                hidden={activeView !== 'metrics'}
+              >
+                {metricsSlot}
+              </div>
+            )}
+            {/* Defer agent mount until first viewed, then keep alive */}
+            {agentSlot !== undefined && agentEverShown && (
+              <div
+                className="h-full w-full min-h-0 overflow-hidden px-[var(--card-pad)]"
+                hidden={activeView !== 'agent'}
+              >
+                {agentSlot}
+              </div>
+            )}
+          </div>
+        </ViewTransition>
+      </div>
+    </OpenPlannerDraftProvider>
   );
 }

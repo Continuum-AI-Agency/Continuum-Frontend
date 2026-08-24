@@ -170,7 +170,10 @@ export type PipelineCardStatus = 'running' | 'completed' | 'failed' | 'cancelled
 export type CheckpointState = {
   textReady?: boolean;
   blueprintReady?: boolean;
-  mediaStatus?: 'pending' | 'generating' | 'ready' | 'user_supplied' | 'skipped';
+  // Mirrors organicMediaStageSchema's outcomes, `failed` included: the Backend really
+  // stamps media_stage='failed' (jobs/poller.ts, jobs/worker.ts), and a checkpoint that
+  // cannot represent it forces a media failure to hydrate as plain "copy ready".
+  mediaStatus?: 'pending' | 'generating' | 'ready' | 'user_supplied' | 'skipped' | 'failed';
   awaitingMediaChoice?: boolean;
   previewRevision?: string;
 };

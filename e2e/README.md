@@ -12,7 +12,8 @@ e2e/
 ├── smoke.spec.ts        ← unauthenticated shell check (needs only a dev server)
 ├── chat-shell.spec.ts   ← chat shell bench (`bun run chat:e2e:bench`) — see below
 └── support/
-    └── auth.ts          ← Supabase auth-mint → Playwright storageState helpers
+    ├── auth.ts          ← Supabase auth-mint → Playwright storageState helpers
+    └── localBackend.ts  ← spawn a Fastify Backend on the LOCAL stack (see below)
 ```
 
 - `playwright.config.ts` (project root) — `testDir: ./e2e`, single `chromium`
@@ -58,6 +59,77 @@ already reachable).
    Provide these in the shell that runs `bun run test:e2e`, or in
    `Continuum-Frontend/.env` (the dev server reads it; export them for the
    Playwright process too if you run specs against a remote target).
+
+## The local-stack lane (`support/localBackend.ts`)
+
+A spec that renders brand data drives **three** processes: the browser, the Next app,
+and the Fastify Backend. All three must agree on ONE Supabase project or the bench
+proves nothing — and three separate things used to stop that happening. Every one of
+them failed silently, which is why the lane read as "the app is broken" rather than
+"the harness is misconfigured":
+
+1. **`bun run dev:be` resolves to PRODUCTION Supabase.** Point the app at the local
+   stack and the Backend at prod and the fixture brand exists on only one side: every
+   read comes back empty and the planner renders an empty grid with no error anywhere.
+   `--supabase=local` is the only correct target, so a local-stack bench spawns its
+   own Backend with `startLocalBackend()` and never reuses :4000.
+2. **CORS.** `Continuum-Backend/App/cors.ts` allowlists `localhost:3000/3001/3002/3110/5173/8080`
+   and **no `127.0.0.1` origin at all**. A bench serving the app on its own port has
+   every browser-side Backend call blocked, and a blocked preflight looks exactly like
+   "no data". `startLocalBackend` passes the bench's own origin as `ALLOWED_ORIGINS`.
+3. **A foreign dev server on the bench's port.** `playwright.config.ts` sets
+   `reuseExistingServer: true`, so if anything already listens on `PORT` Playwright
+   adopts it — including a dev server pointed at PRODUCTION Supabase, which rejects the
+   locally-minted session and bounces every spec to `/login?redirectTo=…`. Give each
+   bench a port nobody else uses (3109, 3111, …), and check `lsof -nP -iTCP:<port>`
+   before believing an auth failure.
+4. **Ad-hoc `NEXT_DIST_DIR`s that git does not ignore.** Tailwind v4 auto source
+   detection scans anything not gitignored, and a Turbopack `.sst` cache is binary — it
+   yields garbage class candidates (`var(--app-$\x00-h)`) that fail CSS parsing and
+   **500 every route in the app**. `.gitignore` covers `/.next-*/`; keep any new dist
+   dir under that prefix.
+
+So a local-stack bench script sets its own ports and dist dir, and the spec owns the
+Backend:
+
+```jsonc
+"planner:status:e2e:bench": "set -a; . ./.env.local; set +a; \
+  PLANNER_STATUS_BENCH_BACKEND_PORT=4409 NEXT_PUBLIC_API_URL=http://127.0.0.1:4409 \
+  API_URL=http://127.0.0.1:4409 PORT=3109 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3109 \
+  NEXT_DIST_DIR=.next/planner-status-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json \
+  playwright test e2e/organic-planner-status.spec.ts --workers=1"
+```
+
+```ts
+let backend: LocalBackend | null = null;
+test.beforeAll(async () => {
+  backend = await startLocalBackend({ port: 4409, browserOrigin: 'http://127.0.0.1:3109' });
+});
+test.afterAll(async () => { await backend?.stop(); });
+```
+
+Set **both** `API_URL` and `NEXT_PUBLIC_API_URL`: `API_URL` wins server-side.
+
+Prerequisites are then just the stack:
+
+```bash
+bun run supabase:start && bun run supabase:hydrate && bun run supabase:env:local
+```
+
+`supabase:hydrate` seeds `supabase/baseline/fixtures.sql`, which carries everything
+`/organic` needs to MOUNT — including a completed `brand_trends.generations` row.
+Without it the trends read returns `generation_id: null`, the insights mapper throws,
+and the planner shows its error boundary instead of the workspace tabs, so every
+organic spec times out waiting for a tab that never appears.
+
+**Day-of-week fragility.** Anchor seeded rows to the week the planner will OPEN on
+(`startOfWeek(new Date())` from `primitives/calendar-utils`), never to `today + N`.
+`today + N` spans two weeks late in the week and the grid legitimately shows fewer
+cards than the spec expects.
+
+**Machine load.** The local GoTrue shares a machine with Turbopack; a cold compile can
+starve its dial to Postgres, and the SDK surfaces that as a 5xx with an EMPTY message.
+`support/auth.ts` retries those transient classes; a 4xx still fails on the first try.
 
 ## Auth helpers (`support/auth.ts`)
 

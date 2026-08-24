@@ -39,6 +39,12 @@ type ContentInput = {
   topic?: string;
   description?: string;
   objective?: string;
+  /**
+   * Batch gates (buildDraftBlueprint) approve a SET of drafts, not one post. Without
+   * this the card fell through to rendering the bare tool name — "Approve" over a
+   * label, which is not informed consent for a step that spends on rendering media.
+   */
+  draftIds?: unknown;
 };
 
 function parseContentInput(input: unknown): ContentInput {
@@ -89,6 +95,7 @@ export function ToolApprovalCard({
   );
   const caption = content.finalCaption;
   const angle = content.angle ?? content.topic ?? content.description;
+  const batchSize = Array.isArray(content.draftIds) ? content.draftIds.length : 0;
 
   return (
     <ContextMenu>
@@ -123,7 +130,12 @@ export function ToolApprovalCard({
                         {angle}
                       </p>
                     )}
-                    {!platform && !angle && !caption && (
+                    {batchSize > 0 && (
+                      <p className="text-sm leading-relaxed text-foreground/80">
+                        {`Generate the creative for ${batchSize} draft${batchSize === 1 ? '' : 's'}.`}
+                      </p>
+                    )}
+                    {!platform && !angle && !caption && batchSize === 0 && (
                       <p className="text-xs text-muted-foreground">{approval.toolName}</p>
                     )}
                   </CardContent>

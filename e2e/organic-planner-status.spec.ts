@@ -1,7 +1,9 @@
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { formatDayId, startOfWeek } from '../src/components/organic/primitives/calendar-utils';
 import { createDefaultOnboardingState } from '../src/lib/onboarding/state';
 import { mintSessionWithPassword } from './support/auth';
+import { type LocalBackend, startLocalBackend } from './support/localBackend';
 
 // Planner status + agent-chat speaker bench (WP-D: bugs #182 and #177).
 //
@@ -12,8 +14,11 @@ import { mintSessionWithPassword } from './support/auth';
 //
 // Prerequisites (see e2e/README.md):
 //   bun run supabase:start && bun run supabase:hydrate && bun run supabase:env:local
-//   bun run dev:be                    # Backend on :4000 — the planner reads its drafts from it
 //   Run with: bun run planner:status:e2e:bench
+//
+// The bench OWNS its Backend (see support/localBackend.ts) — do not start one yourself. A
+// hand-started `bun run dev:be` points at PRODUCTION Supabase, so the app would read the local
+// fixture brand while the Backend read prod, and every draft would come back empty.
 //
 // What it proves:
 //   #182  each status renders its own readable word (Draft / Scheduled / Published / Failed) —
@@ -43,6 +48,25 @@ const SCREENSHOT_DIR =
   process.env.PLANNER_BENCH_SCREENSHOT_DIR ?? 'e2e/__screenshots__/organic-planner-status';
 
 let previousActiveBrandId: string | null = null;
+let backend: LocalBackend | null = null;
+
+// One Backend for the whole file: a file-scope hook runs once per worker, and this bench is
+// pinned to --workers=1.
+// biome-ignore lint/correctness/noEmptyPattern: Playwright hook signature
+test.beforeAll(async ({}, testInfo) => {
+  testInfo.setTimeout(180_000);
+  const port = Number(process.env.PLANNER_STATUS_BENCH_BACKEND_PORT ?? 4409);
+  backend = await startLocalBackend({
+    port,
+    browserOrigin: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3109',
+    label: 'planner:status:e2e:bench',
+  });
+});
+
+test.afterAll(async () => {
+  await backend?.stop();
+  backend = null;
+});
 
 function admin(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -55,12 +79,14 @@ function admin(): SupabaseClient {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-function dayIdOffsetFromToday(offsetDays: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + offsetDays);
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
+// Day N of the week the planner will actually open on, NOT today + N. `today + N` spans two
+// weeks whenever the bench runs late in the week (on a Sunday it put three of the four drafts
+// in the NEXT week), so the grid legitimately showed one card and the bench read as a product
+// bug. Anchored to the planner's own `startOfWeek`, the four cards always land in one view.
+function weekDayId(dayIndex: number): string {
+  const date = startOfWeek(new Date());
+  date.setDate(date.getDate() + dayIndex);
+  return formatDayId(date);
 }
 
 // One draft per status the planner can show, all on Instagram. The copy is deliberately long: the
@@ -98,7 +124,7 @@ const SEEDED_DRAFTS = [
 
 function draftRows() {
   return SEEDED_DRAFTS.map((seed, index) => {
-    const dayId = dayIdOffsetFromToday(index);
+    const dayId = weekDayId(index);
     const clientKey = `${BENCH_CLIENT_KEY_PREFIX}${seed.status}`;
     const contentJson =
       seed.status === 'draft'
@@ -401,7 +427,10 @@ test.describe('organic planner status + agent chat speakers', () => {
 
   test('#177 a question and its answer are told apart at a glance', async () => {
     await page.goto('/organic?tab=agent', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Agent', exact: true }).click({ timeout: 60_000 });
+    // 90s, matching every other wait in this file: on a cold dev server the agent
+    // panel's lazy chunk compiles on first request, and 60s was the one budget in
+    // the file too small for that.
+    await page.getByRole('button', { name: 'Agent', exact: true }).click({ timeout: 90_000 });
 
     await expect(page.locator('[data-slot="message-scroller-viewport"]')).toBeVisible({
       timeout: 90_000,
@@ -548,7 +577,7 @@ test.describe('organic planner R2 media render proof', () => {
       throw new Error(`[planner:status:e2e:bench] fixture upload failed: ${uploadError.message}`);
     }
 
-    const dayId = dayIdOffsetFromToday(1);
+    const dayId = weekDayId(1);
     const clientKey = `${R2_CLIENT_KEY_PREFIX}${Date.now()}`;
     const deadSignedUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/sign/${R2_BUCKET}/${storagePath}?token=bench-expired-token`;
 

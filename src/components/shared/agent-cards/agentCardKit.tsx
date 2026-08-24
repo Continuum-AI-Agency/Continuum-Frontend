@@ -119,11 +119,15 @@ export function AgentCardSummary({ children }: { children: React.ReactNode }) {
   );
 }
 
-type StatusTone = 'neutral' | 'running' | 'done' | 'failed';
+// `waiting` is the state the first four tones could not say: work has STOPPED and the
+// ball is in the user's court. Green would overstate readiness; the pulsing `running`
+// amber claims a job is still moving when nothing is. Same amber, solid dot.
+type StatusTone = 'neutral' | 'running' | 'waiting' | 'done' | 'failed';
 
 const STATUS_TEXT: Record<StatusTone, string> = {
   neutral: 'text-muted-foreground',
   running: 'text-amber-600 dark:text-amber-400',
+  waiting: 'text-amber-600 dark:text-amber-400',
   done: 'text-emerald-600 dark:text-emerald-400',
   failed: 'text-destructive',
 };
@@ -131,20 +135,25 @@ const STATUS_TEXT: Record<StatusTone, string> = {
 const STATUS_DOT: Record<StatusTone, string> = {
   neutral: 'bg-muted-foreground/40',
   running: 'bg-amber-500',
+  waiting: 'bg-amber-500',
   done: 'bg-emerald-500',
   failed: 'bg-destructive',
 };
 
 export function StatusLabel({
   tone = 'neutral',
+  title,
   children,
 }: {
   tone?: StatusTone;
+  /** Engineer-facing diagnostic. Never render a diagnostic as the visible label. */
+  title?: string;
   children: React.ReactNode;
 }) {
   return (
     <Badge
       variant="outline"
+      title={title}
       className={cn(
         'h-auto shrink-0 gap-1.5 rounded-md border-transparent bg-transparent px-0 py-0 text-xs font-medium tabular-nums shadow-none hover:bg-transparent',
         STATUS_TEXT[tone],

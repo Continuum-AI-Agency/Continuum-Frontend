@@ -2,6 +2,7 @@ import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createDefaultOnboardingState } from '../src/lib/onboarding/state';
 import { mintSessionForEmail } from './support/auth';
+import { type LocalBackend, startLocalBackend } from './support/localBackend';
 
 // Chat shell end-to-end bench (Organic agent surface).
 //
@@ -12,8 +13,11 @@ import { mintSessionForEmail } from './support/auth';
 //
 // Prerequisites (see e2e/README.md):
 //   bun run supabase:start && bun run supabase:hydrate && bun run supabase:env:local
-//   bun run dev:be                     # Backend on :4000 — the panel reads history from it
 //   Run with: bun run chat:e2e:bench
+//
+// The bench OWNS its Backend (see support/localBackend.ts) — do not start one yourself. A
+// hand-started `bun run dev:be` points at PRODUCTION Supabase, so the panel would read history
+// for a brand that only exists locally and render an empty transcript.
 //
 // Un-exercised hop, stated explicitly: this bench does not run a live agent turn. It asserts that
 // the composer sends a populated `images` array carrying a reachable signed URL — the exact link
@@ -31,6 +35,23 @@ const OWNER_ID = '00000000-0000-0000-0000-0000000000a1';
 const brandId = '00000000-0000-4000-8000-0000000000b2';
 
 let previousActiveBrandId: string | null = null;
+let backend: LocalBackend | null = null;
+
+// One Backend for the whole file; this bench is pinned to --workers=1.
+// biome-ignore lint/correctness/noEmptyPattern: Playwright hook signature
+test.beforeAll(async ({}, testInfo) => {
+  testInfo.setTimeout(180_000);
+  backend = await startLocalBackend({
+    port: Number(process.env.CHAT_SHELL_BENCH_BACKEND_PORT ?? 4410),
+    browserOrigin: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3111',
+    label: 'chat:e2e:bench',
+  });
+});
+
+test.afterAll(async () => {
+  await backend?.stop();
+  backend = null;
+});
 
 async function setActiveBrand(supabase: SupabaseClient, activeBrandId: string): Promise<void> {
   await supabase

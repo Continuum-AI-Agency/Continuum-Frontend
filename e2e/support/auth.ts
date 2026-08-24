@@ -174,6 +174,37 @@ export async function mintSessionForEmail(email: string): Promise<PlaywrightStor
   return buildStorageState(rawSessionJson);
 }
 
+// The local GoTrue container shares a machine with Turbopack. A cold Next compile pegs the
+// CPU hard enough that GoTrue's own dial to Postgres times out, and the SDK surfaces that as a
+// 5xx with an EMPTY message ("password sign-in failed: {}") — which reads as a broken fixture
+// rather than as machine load, and kills a whole 4-test bench in beforeAll. Retry the transient
+// classes only: a real credential/permission error (4xx) still fails on the first try.
+const TRANSIENT_RETRIES = 4;
+const TRANSIENT_BACKOFF_MS = 1_500;
+
+function isTransientAuthError(error: { status?: number; message?: string } | null): boolean {
+  if (!error) return false;
+  if (typeof error.status === 'number') return error.status >= 500 || error.status === 0;
+  // A GoTrue timeout arrives with no status and no message at all.
+  return !error.message || /fetch failed|timeout|network/i.test(error.message);
+}
+
+async function retryTransient<T extends { error: { status?: number; message?: string } | null }>(
+  attempt: () => Promise<T>,
+  label: string,
+): Promise<T> {
+  let last: T | null = null;
+  for (let tryIndex = 0; tryIndex < TRANSIENT_RETRIES; tryIndex += 1) {
+    last = await attempt();
+    if (!last.error || !isTransientAuthError(last.error)) return last;
+    console.warn(
+      `[e2e/auth] ${label} hit a transient error (attempt ${tryIndex + 1}/${TRANSIENT_RETRIES}) — retrying.`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, TRANSIENT_BACKOFF_MS * (tryIndex + 1)));
+  }
+  return last as T;
+}
+
 /**
  * Signs in a deterministic local fixture through GoTrue's real password flow.
  * Prefer this for local-stack benches: it avoids one-time magic-link state while
@@ -196,9 +227,14 @@ export async function mintSessionWithPassword(
     },
   });
 
-  const { data, error } = await anon.auth.signInWithPassword({ email, password });
+  const { data, error } = await retryTransient(
+    () => anon.auth.signInWithPassword({ email, password }),
+    `password sign-in for ${email}`,
+  );
   if (error) {
-    throw new Error(`[e2e/auth] password sign-in failed for ${email}: ${error.message}`);
+    throw new Error(
+      `[e2e/auth] password sign-in failed for ${email}: ${error.message || error.status || error}`,
+    );
   }
 
   const persisted = sessionStorage.read(SUPABASE_AUTH_COOKIE_NAME);
@@ -234,10 +270,10 @@ export async function mintAccessTokenForEmail(email: string): Promise<string> {
   const anon = createClient(url, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
-  const { data, error } = await anon.auth.verifyOtp({
-    token_hash: hashedToken,
-    type: 'magiclink',
-  });
+  const { data, error } = await retryTransient(
+    () => anon.auth.verifyOtp({ token_hash: hashedToken, type: 'magiclink' }),
+    `verifyOtp for ${email}`,
+  );
   if (error || !data.session?.access_token) {
     throw new Error(`[e2e/auth] verifyOtp failed for ${email}: ${error?.message ?? 'no session'}`);
   }

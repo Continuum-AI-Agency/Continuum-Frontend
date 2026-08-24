@@ -93,12 +93,190 @@ export const pipelineStageEnum = z.enum([
 
 export type PipelineStage = z.infer<typeof pipelineStageEnum>;
 
-// --- Canonical generation display + summary --------------------------------
-// One resolver maps (status, stage, mediaStage) -> a human label + tone for EVERY
-// surface, so the agent inline card, the generations ticker, and the calendar card
-// stop describing the same job three different ways.
+// --- ONE lifecycle vocabulary ----------------------------------------------
+// Three vocabularies used to describe one object and none mapped onto another:
+//
+//   job / chat        queued | running | completed | failed | cancelled
+//   plan item         pending | executing | completed | failed | cancelled
+//   planner draft     draft | placeholder | streaming | scheduled | published | failed
+//
+// The collision that reached users: `completed` is NOT `published`. The chat said
+// "Ready" while the planner said "Draft" for the same row, so "Ready" read as "done
+// and posted" — it is neither. The chat had no word at all for a seeded slot or a
+// scheduled post; the planner had none for queued or cancelled. Four different
+// in-progress labels and three tone tables were live at once.
+//
+// So: ONE phase vocabulary below, ONE explicit map per input vocabulary onto it,
+// ONE label table, ONE tone table. A surface picks `label` (prose) or `pill` (dense
+// badge) — never a word of its own.
 
+export const organicLifecyclePhaseEnum = z.enum([
+  'concept', // planned, never dispatched
+  'seeded', // a calendar slot exists; nothing generated yet
+  'queued', // accepted, not started
+  'working', // generating — refined by pipeline stage
+  'blind', // running, but no stage frame has ever arrived (NOT healthy progress)
+  'draft_ready', // content exists and is NOT approved. Where `completed` lands.
+  'scheduled', // approved; will post at its time
+  'published', // live on the platform
+  'media_failed', // copy survived, the media job did not
+  'failed',
+  'cancelled',
+]);
+export type OrganicLifecyclePhase = z.infer<typeof organicLifecyclePhaseEnum>;
+
+/** The one tone table. Every surface maps THESE to its own colors, never a status. */
+export type OrganicStatusTone =
+  | 'neutral'
+  | 'pending'
+  | 'active'
+  | 'ready'
+  | 'scheduled'
+  | 'live'
+  | 'error';
+
+export type OrganicPhasePresentation = {
+  /** Prose — chat, cards, anywhere there is room for a sentence's worth of word. */
+  label: string;
+  /** Dense badge/pill. Same meaning, fewer characters. Never a different claim. */
+  pill: string;
+  /** What the phase means, in words: the tooltip / accessible name. */
+  hint: string;
+  tone: OrganicStatusTone;
+};
+
+export const ORGANIC_PHASE_PRESENTATION: Record<OrganicLifecyclePhase, OrganicPhasePresentation> = {
+  concept: {
+    label: 'Concept',
+    pill: 'Concept',
+    hint: 'A planned idea — nothing has been generated yet',
+    tone: 'neutral',
+  },
+  seeded: {
+    label: 'Seeded',
+    pill: 'Seeded',
+    hint: 'Slot created — awaiting generation',
+    tone: 'pending',
+  },
+  queued: {
+    label: 'Queued',
+    pill: 'Queued',
+    hint: 'Waiting for a generation slot',
+    tone: 'pending',
+  },
+  working: {
+    label: 'Generating',
+    pill: 'Generating',
+    hint: 'Generating right now',
+    tone: 'active',
+  },
+  // Deliberately blunt, and deliberately NOT `active`: a running row that has never
+  // sent a stage frame is a job we have lost sight of, and an amber pulse would sell
+  // that as progress.
+  blind: {
+    label: 'Running · no updates yet',
+    pill: 'Working',
+    hint: 'Running, but the pipeline has sent no stage update',
+    tone: 'neutral',
+  },
+  // The fix for "Ready" reading as "posted": a finished generation is a DRAFT.
+  draft_ready: {
+    label: 'Draft ready',
+    pill: 'Draft',
+    hint: 'Written — not yet approved for posting',
+    tone: 'ready',
+  },
+  scheduled: {
+    label: 'Scheduled',
+    pill: 'Scheduled',
+    hint: 'Approved — will post at the scheduled time',
+    tone: 'scheduled',
+  },
+  published: {
+    label: 'Published',
+    pill: 'Published',
+    hint: 'Published — live on the platform',
+    tone: 'live',
+  },
+  media_failed: {
+    label: 'Media didn’t render',
+    pill: 'Media failed',
+    hint: 'Copy is saved; the media job failed',
+    tone: 'error',
+  },
+  failed: {
+    label: 'Failed',
+    pill: 'Failed',
+    hint: 'Failed — generation or publish did not complete',
+    tone: 'error',
+  },
+  cancelled: {
+    label: 'Cancelled',
+    pill: 'Cancelled',
+    hint: 'Stopped before it finished',
+    tone: 'neutral',
+  },
+};
+
+/** Planner draft lifecycle — the `organic.organic_calendar_drafts.status` column. */
+export const organicDraftStatusEnum = z.enum([
+  'draft',
+  'placeholder',
+  'streaming',
+  'scheduled',
+  'published',
+  'failed',
+]);
+export type OrganicDraftStatus = z.infer<typeof organicDraftStatusEnum>;
+
+// The three maps. Written out rather than inferred so a reader can check the claim
+// `completed !== published` by looking, and so adding a member to any input
+// vocabulary fails the build until someone decides what it means.
+export const ORGANIC_JOB_STATUS_PHASE: Record<OrganicGenerationStatus, OrganicLifecyclePhase> = {
+  queued: 'queued',
+  running: 'working',
+  completed: 'draft_ready',
+  failed: 'failed',
+  cancelled: 'cancelled',
+};
+
+// `PlanItemStatus` is declared further down this file with the plan schemas — used
+// here as a type only, so there is exactly one plan-item vocabulary, not two.
+export const ORGANIC_PLAN_ITEM_STATUS_PHASE: Record<PlanItemStatus, OrganicLifecyclePhase> = {
+  pending: 'concept',
+  executing: 'working',
+  completed: 'draft_ready',
+  failed: 'failed',
+  cancelled: 'cancelled',
+};
+
+export const ORGANIC_DRAFT_STATUS_PHASE: Record<OrganicDraftStatus, OrganicLifecyclePhase> = {
+  draft: 'draft_ready',
+  placeholder: 'seeded',
+  streaming: 'working',
+  scheduled: 'scheduled',
+  published: 'published',
+  failed: 'failed',
+};
+
+// --- Canonical generation display + summary --------------------------------
+
+/**
+ * Legacy tone view. `resolveOrganicGenerationDisplay` predates the phase table and
+ * several surfaces still switch on these five; they are a coarsening of
+ * `OrganicStatusTone`, never a second opinion.
+ */
 export type OrganicGenerationTone = 'pending' | 'active' | 'success' | 'error' | 'neutral';
+
+const LEGACY_TONE: Record<OrganicStatusTone, OrganicGenerationTone> = {
+  neutral: 'neutral',
+  pending: 'pending',
+  active: 'active',
+  ready: 'success',
+  scheduled: 'success',
+  live: 'success',
+  error: 'error',
+};
 
 export type OrganicGenerationDisplay = {
   label: string;
@@ -115,52 +293,130 @@ const RUNNING_STAGE_LABELS: Record<PipelineStage, string> = {
   merge: 'Finalizing',
 };
 
-const RUNNING_MEDIA_STAGE_LABELS: Record<Exclude<OrganicMediaStage, 'failed'>, string> = {
-  text_only: 'Writing copy',
-  storyboard_ready: 'Designing',
-  realizing: 'Generating media',
-  realized: 'Finalizing',
+/**
+ * A media stage IS a pipeline position — it is just the only signal some rows carry.
+ * Collapsing it onto the stage enum is what lets one label table serve both, instead
+ * of the two near-identical tables that drifted ("Generating media" vs "Rendering…").
+ */
+const MEDIA_STAGE_AS_PIPELINE_STAGE: Record<Exclude<OrganicMediaStage, 'failed'>, PipelineStage> = {
+  text_only: 'draft',
+  storyboard_ready: 'blueprint',
+  realizing: 'assets',
+  realized: 'merge',
 };
 
 /**
- * SINGLE source of truth for a generation's human label + tone. Status decides the
- * terminal/neutral labels; for a running job the pipeline `stage` (preferred) then
- * `mediaStage` refine what it is doing right now. Every surface calls this — never
- * hand-roll a status string.
+ * How far the media ladder got, as a noun. One table for BOTH the concept card's
+ * checkpoint ladder and the generations ticker's enrichment suffix — which used to
+ * describe the same four states with two different sets of words.
+ */
+export const ORGANIC_MEDIA_STAGE_LABELS: Record<OrganicMediaStage, string> = {
+  text_only: 'Copy ready',
+  storyboard_ready: 'Preview ready',
+  realizing: 'Fleshing out',
+  realized: 'Fully fleshed out',
+  failed: 'Media didn’t render',
+};
+
+export type OrganicLifecycleDisplay = OrganicPhasePresentation & {
+  phase: OrganicLifecyclePhase;
+  /** Engineer-facing detail for `title=`. Null when the label already says it all. */
+  diagnostic: string | null;
+  /** Work is genuinely advancing — the only case that earns an animated bar. */
+  advancing: boolean;
+};
+
+/**
+ * THE resolver. Every organic surface reads a phase from here and renders its own
+ * pixels; none of them invents a word or a tone.
  *
- * A bare "Working" is deliberately impossible: a running row with no stage data is
- * a missing pipeline.stage frame, and a mediaStage of `failed` is a failure — both
- * used to render as generic "Working" and disguised the gap as healthy progress.
+ * `status` is a job status; pass `planItemStatus` instead for a plan row, or
+ * `draftStatus` for a planner card. Whichever arrives, it lands on one phase.
+ * For a running job the pipeline `stage` (preferred) then `mediaStage` refine the
+ * label — and a running row with NEITHER is `blind`, not healthy progress.
+ */
+export function resolveOrganicLifecycle(input: {
+  status?: OrganicGenerationStatus | null;
+  planItemStatus?: PlanItemStatus | null;
+  draftStatus?: OrganicDraftStatus | null;
+  stage?: PipelineStage | null;
+  mediaStage?: OrganicMediaStage | null;
+}): OrganicLifecycleDisplay {
+  const phase = resolveOrganicPhase(input);
+  const base = ORGANIC_PHASE_PRESENTATION[phase];
+
+  if (phase === 'working') {
+    const stage =
+      input.stage ??
+      (input.mediaStage && input.mediaStage !== 'failed'
+        ? MEDIA_STAGE_AS_PIPELINE_STAGE[input.mediaStage]
+        : null);
+    if (!stage) {
+      const blind = ORGANIC_PHASE_PRESENTATION.blind;
+      return {
+        ...blind,
+        phase: 'blind',
+        diagnostic: 'No pipeline.stage frame has arrived for this run.',
+        advancing: false,
+      };
+    }
+    return {
+      ...base,
+      label: RUNNING_STAGE_LABELS[stage],
+      phase,
+      diagnostic: null,
+      advancing: true,
+    };
+  }
+
+  // A finished job whose media never caught up: say how far it got rather than
+  // letting "Draft ready" imply the pixels exist.
+  if (phase === 'draft_ready' && input.mediaStage && input.mediaStage !== 'failed') {
+    return {
+      ...base,
+      label: ORGANIC_MEDIA_STAGE_LABELS[input.mediaStage],
+      phase,
+      diagnostic: null,
+      advancing: input.mediaStage === 'realizing',
+    };
+  }
+
+  return {
+    ...base,
+    phase,
+    diagnostic: phase === 'media_failed' ? 'Copy is saved; the media job failed.' : null,
+    advancing: false,
+  };
+}
+
+/** The mapping alone, for callers that only need the phase. */
+export function resolveOrganicPhase(input: {
+  status?: OrganicGenerationStatus | null;
+  planItemStatus?: PlanItemStatus | null;
+  draftStatus?: OrganicDraftStatus | null;
+  mediaStage?: OrganicMediaStage | null;
+}): OrganicLifecyclePhase {
+  // A media failure outranks the row's own status: it is the one thing that is true
+  // whether the job "completed" or "failed", and it is what the user has to act on.
+  if (input.mediaStage === 'failed') return 'media_failed';
+  if (input.draftStatus) return ORGANIC_DRAFT_STATUS_PHASE[input.draftStatus];
+  if (input.status) return ORGANIC_JOB_STATUS_PHASE[input.status];
+  if (input.planItemStatus) return ORGANIC_PLAN_ITEM_STATUS_PHASE[input.planItemStatus];
+  return 'blind';
+}
+
+/**
+ * Compact `{label, tone}` view of the resolver above, kept for the surfaces that
+ * already speak the legacy tone union. New code should call `resolveOrganicLifecycle`
+ * and read `phase` / `pill` / `hint` / `diagnostic` — this one throws all of that away.
  */
 export function resolveOrganicGenerationDisplay(input: {
   status: OrganicGenerationStatus;
   stage?: PipelineStage | null;
   mediaStage?: OrganicMediaStage | null;
 }): OrganicGenerationDisplay {
-  switch (input.status) {
-    case 'queued':
-      return { label: 'Queued', tone: 'pending' };
-    case 'completed':
-      return { label: 'Ready', tone: 'success' };
-    case 'failed':
-      return { label: 'Failed', tone: 'error' };
-    case 'cancelled':
-      return { label: 'Cancelled', tone: 'neutral' };
-    case 'running': {
-      if (input.mediaStage === 'failed') {
-        return { label: 'Media failed', tone: 'error' };
-      }
-      if (input.stage && RUNNING_STAGE_LABELS[input.stage]) {
-        return { label: RUNNING_STAGE_LABELS[input.stage], tone: 'active' };
-      }
-      if (input.mediaStage && RUNNING_MEDIA_STAGE_LABELS[input.mediaStage]) {
-        return { label: RUNNING_MEDIA_STAGE_LABELS[input.mediaStage], tone: 'active' };
-      }
-      return { label: 'Working (no stage data)', tone: 'active' };
-    }
-    default:
-      return { label: 'Working (unknown status)', tone: 'active' };
-  }
+  const resolved = resolveOrganicLifecycle(input);
+  return { label: resolved.label, tone: LEGACY_TONE[resolved.tone] };
 }
 
 // Clean, front-end-readable role label for the agent currently working a stage.
@@ -484,6 +740,16 @@ export const organicPlanStatusDataSchema = z
     status: planItemStatusSchema,
     draftId: z.string().optional(),
     error: z.object({ code: z.string().optional(), message: z.string() }).optional(),
+    /**
+     * Why a TERMINAL status stopped: the item is parked on a human, not finished.
+     *
+     * `organic_agent_runs.status` is CHECK-constrained to
+     * queued|running|completed|failed|cancelled, and a run parked on a person
+     * still has to reach a terminal — a non-terminal run is the forever-spinner
+     * this contract exists to prevent, and nothing will emit on it again. So the
+     * run says `completed` and this says WHY it stopped. Absent = genuinely done.
+     */
+    awaiting: z.literal('creative_approval').optional(),
   })
   .loose();
 export type OrganicPlanStatusData = z.infer<typeof organicPlanStatusDataSchema>;

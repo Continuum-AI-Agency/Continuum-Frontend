@@ -1,5 +1,10 @@
 'use client';
 
+import {
+  ORGANIC_DRAFT_STATUS_PHASE,
+  ORGANIC_PHASE_PRESENTATION,
+  type OrganicStatusTone,
+} from '@continuum/contracts';
 import { cva } from 'class-variance-authority';
 import type { OrganicDraftStatus } from './types';
 
@@ -11,16 +16,43 @@ import type { OrganicDraftStatus } from './types';
 //   PLATFORM — where the post will go. One brand color per platform, surfaced as
 //              the card's left accent rail and the platform badge.
 //
-// Everything status-shaped in the planner reads DRAFT_STATUS_PRESENTATION below —
-// it is the single source of truth. Scheduled and published used to be two shades
-// of the same emerald in three uncoordinated tables, which made "will post" and
-// "already posted" indistinguishable at a glance.
+// The WORDS and the TONE are not the planner's to choose: they come from
+// `ORGANIC_PHASE_PRESENTATION` in the contracts, the one table the chat, the plan
+// row and this card all read. What lives here is the planner's own RENDERING of a
+// tone — badge variant, status strip, frame treatment — because a dense calendar
+// chip needs a different treatment from a chat line, not a different word.
 
 /** Frame treatment a status gets on the month chip / list row. */
 export type DraftStatusFrame = 'dashed' | 'solid' | 'filled' | 'pulse' | 'danger';
 
 /** Pill tone — a `ui/badge` variant, so every hue resolves through a semantic token. */
 export type DraftStatusTone = 'muted' | 'violet' | 'warning' | 'teal' | 'success' | 'outline';
+
+/**
+ * The planner's rendering of the canonical tone. This is the ONLY place a semantic
+ * tone becomes a badge variant here — it is why "will post" and "already posted"
+ * cannot drift back into two shades of the same emerald.
+ */
+const TONE_BADGE: Record<OrganicStatusTone, DraftStatusTone> = {
+  neutral: 'muted',
+  pending: 'violet',
+  active: 'warning',
+  ready: 'muted',
+  scheduled: 'teal',
+  live: 'success',
+  error: 'outline',
+};
+
+/** Solid fill of the same hue, for the card's top status strip. */
+const TONE_STRIP: Record<OrganicStatusTone, string> = {
+  neutral: 'bg-muted-foreground/40',
+  pending: 'bg-primary/60',
+  active: 'bg-warning',
+  ready: 'bg-muted-foreground/40',
+  scheduled: 'bg-secondary',
+  live: 'bg-success',
+  error: 'bg-destructive',
+};
 
 export type DraftStatusPresentation = {
   label: string;
@@ -34,53 +66,45 @@ export type DraftStatusPresentation = {
   frame: DraftStatusFrame;
 };
 
-// `satisfies` rather than a plain annotation: it still rejects a missing status (so a new
-// member of the union cannot ship unstyled) AND rejects a key that is not a status, which
-// an annotation silently allows.
+// Only the FRAME is the planner's own call — it is a treatment, not a word. Label,
+// hint and tone are read from the contracts table below, so a status cannot say one
+// thing here and another in the chat.
+const STATUS_FRAME = {
+  draft: 'dashed',
+  placeholder: 'dashed',
+  streaming: 'pulse',
+  scheduled: 'solid',
+  published: 'filled',
+  failed: 'danger',
+} as const satisfies Record<OrganicDraftStatus, DraftStatusFrame>;
+
+// `failed` is the one tone the Badge set carries only as a solid destructive fill,
+// which shouted louder than the state deserves on a dense grid.
+const PILL_CLASS_OVERRIDE: Partial<Record<OrganicDraftStatus, string>> = {
+  failed: 'border-destructive/30 bg-destructive/10 text-destructive',
+};
+
+function presentationFor(status: OrganicDraftStatus): DraftStatusPresentation {
+  const phase = ORGANIC_PHASE_PRESENTATION[ORGANIC_DRAFT_STATUS_PHASE[status]];
+  return {
+    // The dense form: the calendar chip has room for one word, and it must be the
+    // same claim the chat's longer `label` makes.
+    label: phase.pill,
+    hint: phase.hint,
+    tone: TONE_BADGE[phase.tone],
+    ...(PILL_CLASS_OVERRIDE[status] ? { pillClassName: PILL_CLASS_OVERRIDE[status] } : {}),
+    strip: TONE_STRIP[phase.tone],
+    frame: STATUS_FRAME[status],
+  };
+}
+
 export const DRAFT_STATUS_PRESENTATION = {
-  draft: {
-    label: 'Draft',
-    hint: 'Draft — not yet approved for posting',
-    tone: 'muted',
-    strip: 'bg-muted-foreground/40',
-    frame: 'dashed',
-  },
-  placeholder: {
-    label: 'Seeded',
-    hint: 'Seeded — awaiting generation',
-    tone: 'violet',
-    strip: 'bg-primary/60',
-    frame: 'dashed',
-  },
-  streaming: {
-    label: 'Generating',
-    hint: 'Generating…',
-    tone: 'warning',
-    strip: 'bg-warning',
-    frame: 'pulse',
-  },
-  scheduled: {
-    label: 'Scheduled',
-    hint: 'Approved — will post at the scheduled time',
-    tone: 'teal',
-    strip: 'bg-secondary',
-    frame: 'solid',
-  },
-  published: {
-    label: 'Published',
-    hint: 'Published — live on the platform',
-    tone: 'success',
-    strip: 'bg-success',
-    frame: 'filled',
-  },
-  failed: {
-    label: 'Failed',
-    hint: 'Failed — generation or publish did not complete',
-    tone: 'outline',
-    pillClassName: 'border-destructive/30 bg-destructive/10 text-destructive',
-    strip: 'bg-destructive',
-    frame: 'danger',
-  },
+  draft: presentationFor('draft'),
+  placeholder: presentationFor('placeholder'),
+  streaming: presentationFor('streaming'),
+  scheduled: presentationFor('scheduled'),
+  published: presentationFor('published'),
+  failed: presentationFor('failed'),
 } satisfies Record<OrganicDraftStatus, DraftStatusPresentation>;
 
 export function draftStatusPresentation(status: OrganicDraftStatus): DraftStatusPresentation {
