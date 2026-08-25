@@ -796,3 +796,55 @@ describe('rendered image-reference handle survives normalization', () => {
     expect(edges[0].targetHandle).toBe(rendered);
   });
 });
+
+// ---------------------------------------------------------------------------
+// apiRender variable handles — the vocabulary is an async template contract, so
+// at hydration the allowed set is UNKNOWN, not empty. These pin both halves: the
+// edge survives while the contract is unknowable, and faces the set once it isn't.
+// ---------------------------------------------------------------------------
+describe('normalizeEdges apiRender dynamic variable handles', () => {
+  beforeEach(() => {
+    useStudioStore.setState({ nodes: [], edges: [] });
+  });
+
+  const hydrate = (apiRenderData: Record<string, unknown>, edges: Edge[]): Edge[] => {
+    useStudioStore.getState().setNodes([
+      { id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' },
+      { id: 'api1', position: { x: 0, y: 0 }, data: apiRenderData, type: 'apiRender' },
+    ] as StudioNode[]);
+    useStudioStore.getState().setEdges(edges);
+    return useStudioStore.getState().edges;
+  };
+
+  const wire = (targetHandle: string): Edge => ({
+    id: `e-${targetHandle}`,
+    source: 'img1',
+    sourceHandle: 'image',
+    target: 'api1',
+    targetHandle,
+    type: 'dataType',
+  });
+
+  it('keeps a saved variable-* edge while the template contract is not loaded yet', () => {
+    // Exactly what a saved room hands hydration: no contract, no templateKey.
+    const edges = hydrate({ label: 'API Render', variables: {} }, [wire('variable-image')]);
+
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('variable-image');
+  });
+
+  it('drops a variable-* edge once the contract is loaded and does not name it', () => {
+    const edges = hydrate(
+      {
+        label: 'API Render',
+        templateKey: '166',
+        variables: {},
+        variableDefinitions: [{ key: 'hero_image', kind: 'image' }],
+      },
+      [wire('variable-image'), wire('variable-hero_image')],
+    );
+
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('variable-hero_image');
+  });
+});

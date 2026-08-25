@@ -211,7 +211,19 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
     // to ride this escape hatch too; it is now remapped above to the contract
     // vocabulary, so it must face the allowed set like every other handle.
     const isDynamicHandle = targetHandle.startsWith('clip-');
-    const isValidTarget = allowedTargets.includes(targetHandle) || isDynamicHandle;
+    // An apiRender node's handle vocabulary IS its template contract, and the contract is
+    // fetched AFTER the node mounts. At hydration variableDefinitions is not there yet, so
+    // getAllowedTargetHandles honestly returns [] — 'unknown', not 'none' — and the saved
+    // variable-* edge was dropped before the node could ever prove it legal, then autosaved
+    // away. Hold such an edge only while the set is genuinely unknowable: once
+    // variableDefinitions is an array (even the empty one a brand switch leaves behind) the
+    // contract HAS spoken, and the handle faces the allowed set like every other.
+    const hasUnknowableApiRenderContract =
+      targetNode.type === 'apiRender' &&
+      targetHandle.startsWith('variable-') &&
+      !Array.isArray((targetNode.data as { variableDefinitions?: unknown })?.variableDefinitions);
+    const isValidTarget =
+      allowedTargets.includes(targetHandle) || isDynamicHandle || hasUnknowableApiRenderContract;
 
     if (!isValidTarget) {
       console.warn(
