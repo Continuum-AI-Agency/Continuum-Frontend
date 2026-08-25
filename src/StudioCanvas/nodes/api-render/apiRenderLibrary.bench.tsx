@@ -19,7 +19,9 @@
  *      them, each re-read from the per-job relay and previewed from its own Library copy;
  *   8. progress advances on its own from the REAL five-value status, with no percentage;
  *   9. EVERY output is previewed, lazily, from the live DTO — never from persisted data;
- *  10. no control is invented for a parameter whose value set never crossed the boundary.
+ *  10. no control is invented for a parameter whose value set never crossed the boundary;
+ *  11. a finished image output becomes an ordinary canvas reference node pinned to its EXACT
+ *      Library version — one per output, idempotent, and carrying no URL-only identity.
  *
  * UN-EXERCISED HOPS, STATED EXPLICITLY — this bench does NOT cover:
  *   · a real browser, the real canvas, or a reload. `apiRendersApi` is mocked here.
@@ -931,5 +933,94 @@ describe('ApiRenderBlock — durable tracking, progress and outputs', () => {
     renderNode();
 
     expect(await screen.findByText('Test · watermarked')).toBeTruthy();
+  });
+});
+
+describe('ApiRenderBlock — a finished output as a canvas reference', () => {
+  // A render node only produces a reference if it is itself on the canvas — the new node
+  // is positioned next to it, so the store has to hold both.
+  const canvasNode = { id: 'render1', type: 'apiRender', position: { x: 120, y: 40 }, data: {} };
+
+  const finishedOutput = (index: number) => ({
+    ...output(`out-${index}`, variationAsset(index).assetId, variationUrl(index)),
+    versionId: variationAsset(index).versionId,
+  });
+
+  const referenceNodes = () =>
+    useStudioStore.getState().nodes.filter((node) => node.type === 'image');
+
+  test('each output adds its own node, pinned to its own exact version', async () => {
+    currentJobs = [job({ status: 'finished', outputs: [finishedOutput(0), finishedOutput(1)] })];
+    renderNode({}, BRAND_ID, { nodes: [canvasNode] });
+
+    const buttons = await screen.findAllByRole('button', { name: 'Use as reference' });
+    expect(buttons.length).toBe(2);
+    for (const button of buttons) act(() => fireEvent.click(button));
+
+    await waitFor(() => expect(referenceNodes().length).toBe(2));
+    const [first, second] = referenceNodes().map((node) => node.data as Record<string, unknown>);
+
+    // Each output's OWN pair. A shared asset id here would prove nothing about "each".
+    expect(first.assetId).toBe(variationAsset(0).assetId);
+    expect(first.assetVersionId).toBe(variationAsset(0).versionId);
+    expect(second.assetId).toBe(variationAsset(1).assetId);
+    expect(second.assetVersionId).toBe(variationAsset(1).versionId);
+
+    // The preview is the live DTO url and it expires — the durable pair above is what the
+    // canvas re-sign path uses on the next load, so nothing is frozen into originalImage.
+    expect(first.image).toBe(variationUrl(0));
+    expect(first.sourceUrl).toBe(variationUrl(0));
+    expect(first.referenceStatus).toBe('ready');
+    expect(first).not.toHaveProperty('originalImage');
+    expect(first.fileName).toBe('out-0.png');
+  });
+
+  test('the node it adds is a plain image node, so the reference handle is already there', async () => {
+    currentJobs = [job({ status: 'finished', outputs: [finishedOutput(0)] })];
+    renderNode({}, BRAND_ID, { nodes: [canvasNode] });
+
+    const button = await screen.findByRole('button', { name: 'Use as reference' });
+    act(() => fireEvent.click(button));
+
+    await waitFor(() => expect(referenceNodes().length).toBe(1));
+    // `image` is what resolveApiRenderVariables and every generator read; ApiRenderBlock
+    // adds no source handle of its own, because ImageNode already owns that wire.
+    expect(referenceNodes()[0].type).toBe('image');
+  });
+
+  test('clicking the same output twice does not add a second copy', async () => {
+    currentJobs = [job({ status: 'finished', outputs: [finishedOutput(0)] })];
+    renderNode({}, BRAND_ID, { nodes: [canvasNode] });
+
+    const button = await screen.findByRole('button', { name: 'Use as reference' });
+    act(() => fireEvent.click(button));
+    await waitFor(() => expect(referenceNodes().length).toBe(1));
+
+    act(() => fireEvent.click(button));
+    await waitFor(() => expect(screen.getByText('Already on the canvas')).toBeTruthy());
+    expect(referenceNodes().length).toBe(1);
+  });
+
+  test('offers nothing for an output that has no Library identity yet', async () => {
+    // Ingest has not landed, so there is no version to pin to. A button here would add a
+    // node whose only handle on its bytes is a link that expires.
+    currentJobs = [job({ status: 'finished', outputs: [output('out1', null)] })];
+    renderNode({}, BRAND_ID, { nodes: [canvasNode] });
+
+    expect(await screen.findByText('Saving to Library…')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Use as reference' })).toBeNull();
+  });
+
+  test('offers nothing for a video output', async () => {
+    currentJobs = [
+      job({
+        status: 'finished',
+        outputs: [{ ...finishedOutput(0), kind: 'video' as const, fileName: 'out-0.mp4' }],
+      }),
+    ];
+    renderNode({}, BRAND_ID, { nodes: [canvasNode] });
+
+    expect(await screen.findByText('Saved to Library')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Use as reference' })).toBeNull();
   });
 });

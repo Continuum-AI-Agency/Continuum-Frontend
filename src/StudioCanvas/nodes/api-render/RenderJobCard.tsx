@@ -1,7 +1,8 @@
 'use client';
 
-import type { ApiRenderJob } from '@continuum/contracts';
+import type { ApiRenderJob, ApiRenderOutput } from '@continuum/contracts';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 /**
  * The real render lifecycle, in the server's own words. There is deliberately no
@@ -68,8 +69,21 @@ function StatusSteps({ job }: { job: ApiRenderJob }) {
  * fleet's expiring link to the durable copy — no client-side signing, and no saved URL to
  * go stale. `loading="lazy"` / `preload="none"` keep the bytes unfetched until a preview is
  * actually on screen, which matters on a canvas holding several finished renders.
+ *
+ * "Use as reference" is offered ONLY on an image output that already has both its Library
+ * ids. The node it creates is version-pinned, and an output whose ingest has not landed
+ * has nothing to pin to — a button that sometimes produced an unusable node would be
+ * worse than no button. Videos are left alone: nothing downstream consumes one yet.
  */
-export function RenderJobCard({ job, onRefresh }: { job: ApiRenderJob; onRefresh: () => void }) {
+export function RenderJobCard({
+  job,
+  onRefresh,
+  onUseAsReference,
+}: {
+  job: ApiRenderJob;
+  onRefresh: () => void;
+  onUseAsReference?: (output: ApiRenderOutput) => void;
+}) {
   const delivery = deliveryLabel(job);
   return (
     <div className="rounded border border-border/60 p-2 text-2xs">
@@ -116,8 +130,20 @@ export function RenderJobCard({ job, onRefresh }: { job: ApiRenderJob; onRefresh
             >
               Open {output.fileName}
             </a>
-            <span className="shrink-0 text-muted-foreground">
-              {output.assetId ? 'Saved to Library' : 'Saving to Library…'}
+            <span className="flex shrink-0 items-center gap-2">
+              {onUseAsReference && output.kind === 'image' && output.assetId && output.versionId ? (
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="nodrag"
+                  onClick={() => onUseAsReference(output)}
+                >
+                  Use as reference
+                </Button>
+              ) : null}
+              <span className="text-muted-foreground">
+                {output.assetId ? 'Saved to Library' : 'Saving to Library…'}
+              </span>
             </span>
           </div>
         </div>

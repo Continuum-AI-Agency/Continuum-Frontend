@@ -23,6 +23,7 @@ export function describeRenderDiscoveryFailure(message: string): string {
 import type {
   ApiRenderBatchPreflightResponse,
   ApiRenderInputSet,
+  ApiRenderOutput,
   ApiRenderPreflightRequest,
   ApiRenderPreflightResponse,
   ApiRenderTemplateSummary,
@@ -42,6 +43,7 @@ import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { ApiRenderNodeData, StudioNode } from '../types';
+import { resolveCollisions } from '../utils/nodeCollisions';
 import { apiRendersApi } from './api-render/apiRendersApi';
 import { RenderJobCard } from './api-render/RenderJobCard';
 import { RenderVariableFields } from './api-render/RenderVariableFields';
@@ -196,6 +198,57 @@ export function ApiRenderBlock({
     if (JSON.stringify(data.latestOutputs ?? []) === JSON.stringify(durable)) return;
     patchData({ latestOutputs: durable, status: 'finished' });
   }, [latestJob, data.latestOutputs, patchData]);
+
+  /**
+   * Put a finished image output on the canvas as an ordinary reference node.
+   *
+   * The node is a plain `image` node, which is what makes this small: `ImageNode` already
+   * owns the source handle and `resolveApiRenderVariables` already reads `assetId` /
+   * `assetVersionId` off one, so the output is immediately wireable as the version-pinned
+   * input to the next render. This node adds no handle of its own — a second owner of the
+   * same wire is how a handle alias silently stops painting an edge.
+   *
+   * The React Flow id IS the version, so clicking twice is idempotent and two outputs of
+   * the same job (different versions) add independently. `image`/`sourceUrl` come from the
+   * live DTO and expire; the durable pair is what survives, and the canvas re-sign path on
+   * room load mints a fresh URL from exactly that version.
+   */
+  const addOutputReference = useCallback(
+    (output: ApiRenderOutput) => {
+      if (output.kind !== 'image' || !output.assetId || !output.versionId) return;
+      const store = useStudioStore.getState();
+      const nodeId = `api-render-ref-${output.versionId}`;
+      if (store.nodes.some((node) => node.id === nodeId)) {
+        show({ title: 'Already on the canvas', description: output.fileName, variant: 'info' });
+        return;
+      }
+      const sourceNode = store.getNodeById(id);
+      if (!sourceNode) return;
+      store.takeSnapshot();
+      const derivedNode: StudioNode = {
+        id: nodeId,
+        type: 'image',
+        position: {
+          x: sourceNode.position.x + (sourceNode.measured?.width ?? sourceNode.width ?? 260) + 40,
+          y: sourceNode.position.y,
+        },
+        style: { width: 260, height: 260 },
+        data: {
+          label: output.fileName,
+          image: output.url,
+          fileName: output.fileName,
+          assetId: output.assetId,
+          assetVersionId: output.versionId,
+          sourceUrl: output.url,
+          referenceStatus: 'ready',
+        },
+      };
+      store.setNodes(resolveCollisions([...store.nodes, derivedNode]) as StudioNode[]);
+      store.triggerSave();
+      show({ title: 'Added as reference', description: output.fileName, variant: 'success' });
+    },
+    [id, show],
+  );
 
   // Saved sets are brand AND template scoped — a set authored against one template's
   // contract means nothing against another.
@@ -806,7 +859,12 @@ export function ApiRenderBlock({
               )
             ) : null}
             {jobs.map((job) => (
-              <RenderJobCard key={job.id} job={job} onRefresh={() => void refreshOne(job.id)} />
+              <RenderJobCard
+                key={job.id}
+                job={job}
+                onRefresh={() => void refreshOne(job.id)}
+                onUseAsReference={addOutputReference}
+              />
             ))}
           </div>
         </NodeContent>
