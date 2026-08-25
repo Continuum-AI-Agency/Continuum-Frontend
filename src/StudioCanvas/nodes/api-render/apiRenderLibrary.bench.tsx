@@ -11,9 +11,12 @@
  *      browser, no required-error, and the exact frozen pin is echoed after preflight;
  *   5. saved input sets round-trip, and rendering from one sends `inputSetId` INSTEAD of
  *      `variables` (the contract refuses both);
- *   6. a multi-set batch confirms and its job ids are persisted — the 202 is the only
- *      handle they will ever have, because no batch id is stored server-side;
- *   7. tracked ids survive a remount the recent-jobs list does not cover;
+ *   6. one of five saved sets and all five take the SAME route — exactly the checked
+ *      records, in the order they were checked, one confirm for the lot — and every job id
+ *      the 202 returns is persisted, because that response is the only handle these renders
+ *      will ever have: no batch id is stored server-side;
+ *   7. tracked ids survive a remount the recent-jobs list does not cover — all five of
+ *      them, each re-read from the per-job relay and previewed from its own Library copy;
  *   8. progress advances on its own from the REAL five-value status, with no percentage;
  *   9. EVERY output is previewed, lazily, from the live DTO — never from persisted data;
  *  10. no control is invented for a parameter whose value set never crossed the boundary.
@@ -23,6 +26,9 @@
  *   · the backend, the render fleet, the library ingest, or the signed Library URL the
  *     backend now prefers. That whole chain is proven live by `render:library:e2e:bench`.
  *   · any live render or Meta publication. Nothing here fires one.
+ *   · the poll's three-per-tick window. Five in-flight renders advance head-first by
+ *     design (`useApiRenderJobs` caps the fan-out so a batch confirm cannot turn the poll
+ *     into one); proving the tail drains needs real timers and several 5s ticks.
  *
  * Runs under `bun test` for the happy-dom preload in bunfig.toml.
  */
@@ -100,6 +106,41 @@ const inputSet = (id: string, name: string): ApiRenderInputSet => ({
 
 const SET_A = '44444444-4444-4444-8444-444444444444';
 const SET_B = '55555555-5555-4555-8555-555555555555';
+const SET_C = '77777777-7777-4777-8777-777777777777';
+const SET_D = '88888888-8888-4888-8888-888888888888';
+const SET_E = '99999999-9999-4999-8999-999999999999';
+
+/** Five saved sets is the shape the node is actually sold on: one template, five variations. */
+const FIVE_SETS: ApiRenderInputSet[] = [
+  inputSet(SET_A, 'Set A'),
+  inputSet(SET_B, 'Set B'),
+  inputSet(SET_C, 'Set C'),
+  inputSet(SET_D, 'Set D'),
+  inputSet(SET_E, 'Set E'),
+];
+
+const variationId = (index: number) => `job-${index}`;
+const VARIATION_IDS = [0, 1, 2, 3, 4].map(variationId);
+
+// A finished variation, with the Library-signed URL the backend swaps in once ingest lands
+// and its OWN durable coordinates — a shared assetId would prove nothing about "each".
+const variationUrl = (index: number) =>
+  `https://supabase.example.com/signed/variation-${index}.png?token=t${index}`;
+const variationAsset = (index: number) => ({
+  assetId: `aaaaaaa${index}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
+  versionId: `bbbbbbb${index}-bbbb-4bbb-8bbb-bbbbbbbbbbbb`,
+});
+const variation = (index: number): ApiRenderJob =>
+  job({
+    id: variationId(index),
+    status: 'finished',
+    outputs: [
+      {
+        ...output(`out-${index}`, variationAsset(index).assetId, variationUrl(index)),
+        versionId: variationAsset(index).versionId,
+      },
+    ],
+  });
 
 interface Calls {
   listJobs: number;
@@ -114,6 +155,14 @@ interface Calls {
 }
 let calls: Calls;
 let currentJobs: ApiRenderJob[] = [];
+/** The jobs `POST /batches` hands back — the count is the thing under test, so it is a variable. */
+let currentBatchJobs: ApiRenderJob[] = [];
+/**
+ * Which of `currentJobs` the recent-jobs list admits to having. `null` is "all of them";
+ * `[]` is the batch that has already fallen off `GET /jobs?limit=8`, which is the only
+ * state in which the tracked-id recovery is doing any work at all.
+ */
+let listedJobIds: string[] | null = null;
 let currentTemplates: { items: unknown[]; workspace?: unknown };
 let currentVariables: ApiRenderVariable[] = [];
 let currentSets: ApiRenderInputSet[] = [];
@@ -133,6 +182,11 @@ const reset = () => {
     register: 0,
   };
   currentJobs = [];
+  currentBatchJobs = [
+    job({ id: 'job-a', status: 'queued' }),
+    job({ id: 'job-b', status: 'queued' }),
+  ];
+  listedJobIds = null;
   currentVariables = [];
   currentSets = [];
   watermarkPin = null;
@@ -154,7 +208,11 @@ mock.module('./apiRendersApi', () => ({
     },
     listJobs: async () => {
       calls.listJobs += 1;
-      return { items: currentJobs, nextCursor: null };
+      const admitted = listedJobIds;
+      return {
+        items: admitted === null ? currentJobs : currentJobs.filter((j) => admitted.includes(j.id)),
+        nextCursor: null,
+      };
     },
     getContract: async () => ({
       template: { name: 'Demo template', contractHash: 'hash' },
@@ -196,19 +254,19 @@ mock.module('./apiRendersApi', () => ({
         expiresAt: new Date(0).toISOString(),
         template: { name: 'Demo template' },
         target: null,
-        records: [
-          { label: 'Set A', inputKeys: ['headline'] },
-          { label: 'Set B', inputKeys: ['headline'] },
-        ],
+        // Echo what was actually asked for. A constant record list here would make the
+        // count and the labels on screen independent of the sets the user checked —
+        // which is the one thing these tests exist to hold the node to.
+        records: (input.records as { label: string }[]).map((record) => ({
+          label: record.label,
+          inputKeys: ['headline'],
+        })),
         effects: 'none',
       };
     },
     createBatch: async () => {
       calls.createBatch += 1;
-      return {
-        batchId: '66666666-6666-4666-8666-666666666666',
-        jobs: [job({ id: 'job-a', status: 'queued' }), job({ id: 'job-b', status: 'queued' })],
-      };
+      return { batchId: '66666666-6666-4666-8666-666666666666', jobs: currentBatchJobs };
     },
   },
 }));
@@ -660,6 +718,80 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
     // list is the only handle these two renders will ever have.
     await waitFor(() => expect(nodeData.jobIds).toEqual(['job-a', 'job-b']));
   });
+
+  test('checks exactly one of five saved sets and preflights only that record', async () => {
+    currentSets = FIVE_SETS;
+    renderNode({ templateKey: '166', contractHash: 'hash', variableDefinitions: [] });
+
+    fireEvent.click(await screen.findByLabelText('Set C'));
+    await waitFor(() => expect(nodeData.batchInputSetIds).toEqual([SET_C]));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare 1 render' }));
+    await waitFor(() => expect(calls.batchPreflight.length).toBe(1));
+
+    // One of five is still a batch of one — the single-render route is never touched, so
+    // there is one confirmation token whether the user picked one set or all five.
+    expect(calls.preflight.length).toBe(0);
+    // Not a count: the id and the label of the set that was actually checked, and nothing
+    // from the four that were not.
+    expect(calls.batchPreflight[0]?.records).toEqual([{ label: 'Set C', inputSetId: SET_C }]);
+    expect(await screen.findByText('1 render prepared')).toBeTruthy();
+    expect(screen.getByText('Set C · 1 inputs')).toBeTruthy();
+    expect(screen.queryByText('Set A · 1 inputs')).toBeNull();
+
+    // The other half of "exactly one": the selection must swap, not accumulate.
+    fireEvent.click(screen.getByLabelText('Set D'));
+    fireEvent.click(screen.getByLabelText('Set C'));
+    await waitFor(() => expect(nodeData.batchInputSetIds).toEqual([SET_D]));
+  });
+
+  test('checks all five and confirms them as five jobs, persisting every returned id', async () => {
+    currentSets = FIVE_SETS;
+    // Scrambled on purpose: the records follow CLICK order, the same rule the media-list
+    // port follows, so this proves the order is carried rather than re-sorted.
+    const clicks = [
+      { label: 'Set C', inputSetId: SET_C },
+      { label: 'Set A', inputSetId: SET_A },
+      { label: 'Set E', inputSetId: SET_E },
+      { label: 'Set B', inputSetId: SET_B },
+      { label: 'Set D', inputSetId: SET_D },
+    ];
+    currentBatchJobs = VARIATION_IDS.map((id) => job({ id, status: 'queued' }));
+    // What `GET /jobs?limit=8` really returns the moment after the five are created.
+    currentJobs = currentBatchJobs;
+    renderNode({
+      templateKey: '166',
+      contractHash: 'hash',
+      variableDefinitions: [],
+      // A render this node already tracked. Confirming five must ADD to it, not replace it.
+      jobIds: ['job-old'],
+    });
+
+    for (const { label } of clicks) {
+      fireEvent.click(await screen.findByLabelText(label));
+    }
+    await waitFor(() =>
+      expect(nodeData.batchInputSetIds).toEqual(clicks.map((click) => click.inputSetId)),
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare 5 renders' }));
+    await waitFor(() => expect(calls.batchPreflight.length).toBe(1));
+    expect(calls.batchPreflight[0]?.records).toEqual(clicks);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm batch' }));
+    // ONE confirmation request from the browser for all five, not five `createJob` calls
+    // the client could drop partway through its own loop.
+    //
+    // That is a claim about the CLIENT and nothing more. The server is not atomic:
+    // `service.createBatch` loops `createJob` over the batch token's five sub-tokens
+    // sequentially with no transaction, so a fleet outage on record three leaves the
+    // first two queued. All-or-nothing is what `batchPreflight` gives — it validates
+    // every record before minting anything — and it covers validation, not submission.
+    await waitFor(() => expect(calls.createBatch).toBe(1));
+
+    await waitFor(() => expect(nodeData.jobIds).toEqual(['job-old', ...VARIATION_IDS]));
+    expect(nodeData.latestJobId).toBe(VARIATION_IDS[0]);
+  });
 });
 
 describe('ApiRenderBlock — durable tracking, progress and outputs', () => {
@@ -671,6 +803,40 @@ describe('ApiRenderBlock — durable tracking, progress and outputs', () => {
 
     await waitFor(() => expect(calls.getJob).toContain('job-a'));
     expect(calls.getJob).toContain('job-b');
+  });
+
+  test('recovers all five tracked variations the list drops, each previewed from its Library copy', async () => {
+    // The five finished renders exist, and `GET /jobs` admits to none of them — a batch of
+    // five falls off the recent list the moment anything else renders for this brand. The
+    // tracked ids plus the per-job relay are the entire handle.
+    currentJobs = [0, 1, 2, 3, 4].map(variation);
+    listedJobIds = [];
+    renderNode({ jobIds: VARIATION_IDS, latestJobId: VARIATION_IDS[0] });
+
+    await waitFor(() => expect(calls.getJob.length).toBeGreaterThanOrEqual(5));
+    for (const id of VARIATION_IDS) expect(calls.getJob).toContain(id);
+
+    // Each variation shows ITS OWN signed Library URL, in tracked order — not one preview
+    // repeated, and not the fleet's expiring link.
+    await waitFor(() => expect(screen.getAllByRole('img').length).toBe(5));
+    expect(screen.getAllByRole('img').map((image) => image.getAttribute('src'))).toEqual(
+      [0, 1, 2, 3, 4].map(variationUrl),
+    );
+    expect(screen.getAllByText('Saved to Library').length).toBe(5);
+
+    // And the coordinates the node persists are the durable pair, with no URL of either
+    // kind — both expire, so a saved one is a broken preview on the next open.
+    await waitFor(() => expect(nodeData.latestOutputs).toBeTruthy());
+    expect(nodeData.latestOutputs).toEqual([
+      {
+        id: 'out-0',
+        kind: 'image',
+        fileName: 'out-0.png',
+        assetId: variationAsset(0).assetId,
+        versionId: variationAsset(0).versionId,
+      },
+    ]);
+    expect(JSON.stringify(nodeData.latestOutputs)).not.toContain('http');
   });
 
   test('re-reads the per-job live relay on its own while a render is in flight', async () => {

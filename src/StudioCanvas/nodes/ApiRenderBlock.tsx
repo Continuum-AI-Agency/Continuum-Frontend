@@ -64,6 +64,9 @@ import { publishingApi } from './publish/publishingApi';
 const canOfferTemplates = (workspace: ApiRenderWorkspaceStatus | null) =>
   workspace?.renderEligible === true;
 
+/** Selecting one of several saved sets still takes the batch route, so the count is 1 as often as it is 5. */
+const renderCount = (count: number) => `${count} render${count === 1 ? '' : 's'}`;
+
 export function ApiRenderBlock({
   id,
   data,
@@ -494,7 +497,7 @@ export function ApiRenderBlock({
       });
       await refreshJobs();
       show({
-        title: `${batch.jobs.length} renders queued`,
+        title: `${renderCount(batch.jobs.length)} queued`,
         description: 'Tracked on this node. Each advances on its own.',
         variant: 'success',
       });
@@ -746,7 +749,7 @@ export function ApiRenderBlock({
           ) : null}
           {batchPrepared ? (
             <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-2xs">
-              <p className="font-medium">{batchPrepared.records.length} renders prepared</p>
+              <p className="font-medium">{renderCount(batchPrepared.records.length)} prepared</p>
               {batchPrepared.records.map((record) => (
                 <p key={record.label} className="truncate text-muted-foreground">
                   {record.label} · {record.inputKeys.length} inputs
@@ -766,7 +769,7 @@ export function ApiRenderBlock({
               disabled={busy || !data.templateKey}
               onClick={() => void (batchIds.length > 0 ? prepareBatch() : prepare())}
             >
-              {batchIds.length > 0 ? `Prepare ${batchIds.length} renders` : 'Prepare'}
+              {batchIds.length > 0 ? `Prepare ${renderCount(batchIds.length)}` : 'Prepare'}
             </Button>
             <Button
               size="sm"
