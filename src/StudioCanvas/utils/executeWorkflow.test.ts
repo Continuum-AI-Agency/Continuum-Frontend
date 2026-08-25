@@ -2318,22 +2318,28 @@ describe('Canvas V3 runtime branches', () => {
     expect(String(action?.data.error)).toContain('operation');
   });
 
-  it('says a not-yet-built node type is not built, by name', async () => {
-    // Unreachable from the palette, but the MCP agent write path can create one. A
-    // silent skip would report success for work that never happened; the generator
-    // fallthrough would blame a missing prompt on a node that has none.
-    // (`export` graduated out of this list at the Wave-3 gate; layerEditor is the
-    // remaining not-yet-built runnable.)
-    useStudioStore
-      .getState()
-      .setNodes([{ id: 'lay', position: { x: 0, y: 0 }, type: 'layerEditor', data: {} }]);
+  it('parks a layerEditor with no images on its own named reason, never the prompt fallthrough', async () => {
+    // Every declared runnable now has a runtime (the not-yet-built refusal list is
+    // empty as of the Wave-4 gate). What this pins instead: the Layer Editor's
+    // readiness gate speaks for itself — a bare node parks on "connect an image",
+    // not on the generator branch's "Missing required prompt" about a prompt the
+    // node does not have.
+    useStudioStore.getState().setNodes([
+      {
+        id: 'lay',
+        position: { x: 0, y: 0 },
+        type: 'layerEditor',
+        data: { frame: { width: 2048, height: 2048 }, layers: [] },
+      },
+    ]);
     useStudioStore.getState().setEdges([]);
 
     await executeWorkflow(controls() as never, { targetNodeId: 'lay' });
 
     const layered = useStudioStore.getState().nodes.find((n) => n.id === 'lay');
-    expect(String(layered?.data.error)).toContain('later release');
-    expect(String(layered?.data.error)).not.toContain('prompt');
+    const message = String(layered?.data.error ?? layered?.data.statusMessage ?? '');
+    expect(message).toContain('image');
+    expect(message).not.toContain('prompt');
   });
 });
 

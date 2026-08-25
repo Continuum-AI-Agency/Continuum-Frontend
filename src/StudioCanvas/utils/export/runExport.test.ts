@@ -1,17 +1,25 @@
-// Graph reading and format selection for the Export node. The encoding half runs in a
-// real browser (`studio:router-export:e2e:bench`); everything here is pure.
+// Graph reading and format selection for the Export node. The pure half runs as-is; the
+// `runExport` encode path runs against mocked per-kind encoders (real codecs live in
+// `studio:router-export:e2e:bench`) with the REAL zip, verified by unzipping the bytes.
 
-import { describe, expect, it } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { EXPORT_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
+import * as transcode from '@/lib/export/transcode';
 import type { NodeOutput } from '../../types/execution';
 import {
+  exportFormatForSource,
   exportKindForSources,
   exportSourceFromNodeData,
   exportSourcesFromGraph,
   exportSourcesFromOutputs,
   resolveExportFormat,
+  runExport,
 } from './runExport';
+
+// Captured before mock.module patches the namespace, so afterAll can restore the real
+// module for any later test file in this process (mock.module is process-wide).
+const realTranscode = { ...transcode };
 
 const edge = (id: string, source: string, target: string): Edge => ({
   id,
@@ -173,6 +181,118 @@ describe('exportKindForSources', () => {
         { kind: 'video', ref: 'y' },
       ]),
     ).toBe('video');
+  });
+});
+
+describe('exportFormatForSource', () => {
+  it('keeps the picked format for sources of its own kind', () => {
+    expect(exportFormatForSource({ kind: 'video', ref: 'x' }, 'mp4-h264')).toBe('mp4-h264');
+    expect(exportFormatForSource({ kind: 'video', ref: 'x' }, 'gif')).toBe('gif');
+    expect(exportFormatForSource({ kind: 'image', ref: 'x' }, 'webp')).toBe('webp');
+  });
+
+  it('sends a still in a video pool to the image default, never the clip encoder', () => {
+    expect(exportFormatForSource({ kind: 'image', ref: 'x' }, 'mp4-h264')).toBe('png');
+    expect(exportFormatForSource({ kind: 'image', ref: 'x' }, 'gif')).toBe('png');
+  });
+
+  it('sends a clip in an image pool to the video default', () => {
+    expect(exportFormatForSource({ kind: 'video', ref: 'x' }, 'png')).toBe('mp4-h264');
+  });
+});
+
+describe('runExport (mocked encoders, real zip)', () => {
+  const imageCalls: string[] = [];
+  const videoCalls: string[] = [];
+
+  beforeAll(() => {
+    mock.module('@/lib/export/transcode', () => ({
+      ...realTranscode,
+      transcodeImage: async (_source: Blob, format: transcode.ExportFormatId) => {
+        imageCalls.push(format);
+        return { blob: new Blob([`image:${format}`]) };
+      },
+      transcodeVideo: async (_source: Blob, format: transcode.ExportFormatId) => {
+        videoCalls.push(format);
+        return { blob: new Blob([`video:${format}`]), fellBackToH264: false };
+      },
+      encodeGif: async () => {
+        videoCalls.push('gif');
+        return { blob: new Blob(['video:gif']) };
+      },
+    }));
+  });
+
+  afterAll(() => {
+    mock.module('@/lib/export/transcode', () => realTranscode);
+  });
+
+  beforeEach(() => {
+    imageCalls.length = 0;
+    videoCalls.length = 0;
+  });
+
+  const unzipNames = async (blob: Blob): Promise<Record<string, string>> => {
+    const entries = realTranscode.unzipToEntries(new Uint8Array(await blob.arrayBuffer()));
+    return Object.fromEntries(
+      Object.entries(entries).map(([name, bytes]) => [name, new TextDecoder().decode(bytes)]),
+    );
+  };
+
+  it('bundles a mixed image+video pool into one ZIP, each source by its own kind — D-03', async () => {
+    const result = await runExport({
+      sources: [
+        { kind: 'image', ref: new Blob(['still-bytes']) },
+        { kind: 'video', ref: new Blob(['clip-bytes']) },
+      ],
+      format: 'mp4-h264',
+      download: false,
+    });
+
+    expect(result.zipped).toBe(true);
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0].name).toBe('canvas-export.zip');
+    // The image went through the image encoder at its kind's default; the clip kept
+    // the picked format. Nothing was pushed through the wrong encoder.
+    expect(imageCalls).toEqual(['png']);
+    expect(videoCalls).toEqual(['mp4-h264']);
+    expect(await unzipNames(result.files[0].blob)).toEqual({
+      'canvas-export-1.png': 'image:png',
+      'canvas-export-2.mp4': 'video:mp4-h264',
+    });
+  });
+
+  it('bundles a homogeneous two-image pool into one ZIP in the picked format', async () => {
+    const result = await runExport({
+      sources: [
+        { kind: 'image', ref: new Blob(['a']) },
+        { kind: 'image', ref: new Blob(['b']) },
+      ],
+      format: 'webp',
+      download: false,
+    });
+
+    expect(result.zipped).toBe(true);
+    expect(imageCalls).toEqual(['webp', 'webp']);
+    expect(videoCalls).toEqual([]);
+    expect(await unzipNames(result.files[0].blob)).toEqual({
+      'canvas-export-1.webp': 'image:webp',
+      'canvas-export-2.webp': 'image:webp',
+    });
+  });
+
+  it('leaves the single-source path exactly as before — one file, picked format, no ZIP', async () => {
+    const result = await runExport({
+      sources: [{ kind: 'image', ref: new Blob(['solo']) }],
+      format: 'png',
+      download: false,
+    });
+
+    expect(result.zipped).toBe(false);
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0].name).toBe('canvas-export.png');
+    expect(imageCalls).toEqual(['png']);
+    expect(await result.files[0].blob.text()).toBe('image:png');
   });
 });
 

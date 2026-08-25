@@ -9,7 +9,11 @@ import {
   type StudioRenderTaskResult,
   useStudioRenderQueue,
 } from '@/lib/studio-render/StudioRenderProvider';
-import { resolveExportPreset } from '../../utils/render/exportPresets';
+import {
+  resolveExportPreset,
+  resolveExportQuality,
+  videoBitrateFor,
+} from '../../utils/render/exportPresets';
 import { checkSpliceSupport, type WebCodecsSupport } from '../../utils/splice/webcodecsSupport';
 import { runTimelineInWorker } from '../../workers/spliceWorkerClient';
 import type {
@@ -148,6 +152,7 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
         return false;
       }
       const exportPreset = resolveExportPreset(snapshot.document.exportPresetId);
+      const exportQuality = resolveExportQuality(snapshot.document.exportPresetId);
       const captionsOn =
         Boolean(snapshot.document.captionsEnabled) &&
         ((snapshot.document.captionCues?.length ?? 0) > 0 ||
@@ -169,7 +174,7 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
             items,
             overlays,
             audioTracks,
-            videoBitrate: exportPreset.videoBitrate,
+            videoBitrate: videoBitrateFor(exportPreset, exportQuality),
             targetWidth: exportPreset.width ?? undefined,
             targetHeight: exportPreset.height ?? undefined,
             captionCues: captionsOn ? snapshot.document.captionCues : undefined,
@@ -231,6 +236,7 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
       const overlayTracks = resolveOverlayTracks(document);
       const audioTracks = document.audioTracks ?? [];
       const exportPreset = resolveExportPreset(document.exportPresetId);
+      const exportQuality = resolveExportQuality(document.exportPresetId);
       const controller = new AbortController();
       setLocalIsRendering(true);
       setLocalProgress(0);
@@ -248,7 +254,7 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
           items,
           overlays,
           audioTracks: resolvedAudioTracks,
-          videoBitrate: exportPreset.videoBitrate,
+          videoBitrate: videoBitrateFor(exportPreset, exportQuality),
           targetWidth: exportPreset.width ?? undefined,
           targetHeight: exportPreset.height ?? undefined,
           captionCues: captionsOn ? document.captionCues : undefined,

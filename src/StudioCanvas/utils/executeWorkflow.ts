@@ -10,6 +10,7 @@ import {
   batchItemType,
   combineBatches,
   isActionId,
+  LAYER_EDITOR_IMAGE_INPUT_HANDLE,
   MAX_BATCH_ITEMS,
   type RegisterCanvasAssetResponse,
   routerLockedType,
@@ -32,6 +33,7 @@ import type {
   GeneratedImageVariation,
   HyperframesAgentNodeData,
   ImageNodeData,
+  LayerEditorNodeData,
   StudioNode,
   TimelineEditorNodeData,
   TimelineItem,
@@ -39,6 +41,11 @@ import type {
 import type { ImageOutputItem, NodeOutput } from '../types/execution';
 import { type ResolvedActionInput, runAction } from './actions/runAction';
 import { fanOut } from './batch/fanout';
+import {
+  batchGenerationPlan,
+  collectionSourcesFor,
+  runGenerationFanOut,
+} from './batch/generationFanout';
 import {
   buildEnrichPayload,
   buildExtendVideoPayload,
@@ -92,9 +99,7 @@ const isRunAllNodeType = (nodeType: string | undefined): nodeType is string =>
 // are unreachable from the palette, but the MCP agent write path can still create one,
 // and falling through to the generator branch would kill the run with "Missing required
 // inputs or prompt" — a message about a prompt, on a node that has none.
-const UNIMPLEMENTED_RUNNABLE_TYPES: Partial<Record<StudioNodeType, string>> = {
-  layerEditor: 'The Layer Editor lands in a later release',
-};
+const UNIMPLEMENTED_RUNNABLE_TYPES: Partial<Record<StudioNodeType, string>> = {};
 
 // Publisher sinks are structurally valid but NOT runnable: a run walks upstream
 // and never executes them. They are terminal DELIVERY HANDOFFS — the generated
@@ -426,6 +431,18 @@ const unresolvedReferenceReason = (
     ? `The reference on "${handle}" could not be loaded — its signed URL was never refreshed. Check that the canvas can reach the backend.`
     : undefined;
 
+/**
+ * A collection satisfies a reference port.
+ *
+ * The generation fan-out unwraps it to ONE item per run, so judging it with
+ * `resolveImageInput` — which only knows single images — parks the whole graph in
+ * preflight with "Missing connected input for ref-images" and nothing ever generates.
+ * The action branch of `getNodeReadiness` already had to learn this; a batch wired into
+ * a GENERATOR hit the identical trap one function over.
+ */
+const feedsCollection = (edge: Edge, resolvedOutputs: Map<string, NodeOutput>): boolean =>
+  resolvedOutputs.get(edge.source)?.type === 'collection';
+
 const findMissingOptionalInput = (
   node: StudioNode,
   incomingEdges: Edge[],
@@ -438,6 +455,7 @@ const findMissingOptionalInput = (
       ['ref-image', 'ref-images'].includes(edge.targetHandle ?? ''),
     );
     for (const edge of refEdges) {
+      if (feedsCollection(edge, resolvedOutputs)) continue;
       if (!resolveImageInput(edge, resolvedOutputs, nodeById)) {
         const handle = edge.targetHandle ?? 'ref-images';
         return {
@@ -454,6 +472,7 @@ const findMissingOptionalInput = (
     const videoModel = resolveVideoGeneratorModel(node);
     for (const edge of incomingEdges) {
       const handle = edge.targetHandle ?? '';
+      if (feedsCollection(edge, resolvedOutputs)) continue;
       if (handle === 'negative') {
         if (!resolveTextInput(edge, resolvedOutputs, nodeById, allEdges)) {
           return { label: handle, blockedNodeId: edge.source };
@@ -870,6 +889,24 @@ const getNodeReadiness = (
     return incomingEdges.some((edge) => resolvedOutputs.has(edge.source))
       ? { ready: true }
       : { ready: false, reason: 'Connect something to export' };
+  }
+
+  if (node.type === 'layerEditor') {
+    const data = node.data as LayerEditorNodeData;
+    const pool = incomingEdges.filter(
+      (edge) => (edge.targetHandle ?? '') === LAYER_EDITOR_IMAGE_INPUT_HANDLE,
+    );
+    if (pool.length === 0) {
+      return { ready: false, reason: 'Connect at least one image to the Layer Editor' };
+    }
+    // Manual break-point, exactly like the Video Editor: a person presses Compose.
+    if (!(data.generatedImageUrl ?? data.generatedImage)) {
+      return {
+        ready: false,
+        reason: 'Awaiting manual edit — open the Layer Editor and compose',
+      };
+    }
+    return { ready: true };
   }
 
   // Ready on purpose: they execute, and executing is how they announce that their
@@ -1492,7 +1529,7 @@ export async function executeWorkflow(
     // Reuse a node's existing output (feed it to downstream consumers) when the
     // node is not slated to regenerate and already holds usable content.
     if (!mustRegenerate.has(node.id) && nodeHasUsableOutput(node)) {
-      if (node.type === 'nanoGen' || node.type === 'frameExtract') {
+      if (node.type === 'nanoGen' || node.type === 'frameExtract' || node.type === 'layerEditor') {
         const genImage = (node.data as any).generatedImage as string | undefined;
         const genImageUrl = (node.data as any).generatedImageUrl as string | undefined;
         const durableImageUrl = isHttpUrl(genImage) ? genImage : genImageUrl;
@@ -2449,6 +2486,27 @@ export async function executeWorkflow(
         return true;
       }
 
+      if (node.type === 'layerEditor') {
+        const data = node.data as LayerEditorNodeData;
+        const composed = data.generatedImageUrl ?? data.generatedImage;
+        if (composed) {
+          setNodeOutput(nodeId, {
+            type: 'image',
+            base64: '',
+            mimeType: 'image/png',
+            url: composed,
+            storagePath: data.generatedImageStoragePath,
+            storageBucket: data.generatedImageBucket,
+            assetId: data.renderOutputAssetId,
+            assetVersionId: data.renderOutputAssetVersionId,
+          });
+          updateNodeStatus(nodeId, 'completed');
+          return true;
+        }
+        updateNodeStatus(nodeId, 'awaiting');
+        return false;
+      }
+
       const unimplemented = UNIMPLEMENTED_RUNNABLE_TYPES[node.type as StudioNodeType];
       if (unimplemented) {
         // A named refusal, not a silent skip. Neither type is reachable from the
@@ -2456,6 +2514,71 @@ export async function executeWorkflow(
         // ignored it would report success for work that never happened.
         updateNodeStatus(nodeId, 'failed', unimplemented);
         return false;
+      }
+
+      // ── Batch fan-out, for GENERATORS ───────────────────────────────────────
+      // Wave 2 wrapped fan-out around the ACTION branch only. A generator never looked
+      // at a collection, and `imageRefFromOutput` matches only `image`/`images` — so a
+      // batch wired into `nanoGen` resolved to no reference image at all and generated
+      // the same picture N times. One run per item, pooled 3, and this node emits a
+      // collection of its own so the loop keeps propagating downstream.
+      //
+      // Sits ABOVE the payload fallthrough for the same reason the four V3 branches do:
+      // anything that reaches it without a payload dies on "Missing required inputs".
+      const batchSources = collectionSourcesFor(nodeId, edges, resolvedOutputs, nodeById);
+      const isVideoGenerator = isVideoGeneratorNodeType(node.type);
+      if (batchSources && (node.type === 'nanoGen' || isVideoGenerator)) {
+        const plan = batchGenerationPlan(batchSources);
+        if (!plan) {
+          updateNodeStatus(nodeId, 'failed', 'This batch has no items to run');
+          return false;
+        }
+        if (plan.truncated) {
+          controls.show?.({
+            title: 'Batch truncated',
+            description: `Only the first ${MAX_BATCH_ITEMS} items will run.`,
+            variant: 'info',
+          });
+        }
+
+        const fanned = await runGenerationFanOut(node, plan, resolvedOutputs, {
+          // The GENERATOR's modality, never the batch's `itemType`: a batch of text
+          // prompts fanned through nanoGen produces images.
+          outputItemType: isVideoGenerator ? 'video' : 'image',
+          buildPayload: (target, perItem) => {
+            const built = isVideoGenerator
+              ? buildVeoPayload(target, perItem, nodes, edges, brandId)
+              : buildNanoGenPayload(target, perItem, nodes, edges, brandId);
+            return built ? toBackendPayload(built) : null;
+          },
+          executeGeneration: (executionId, itemPayload) =>
+            executeGeneration(executionId, itemPayload),
+          // Progress is written as it lands so the matrix fills in during the run and
+          // survives a reload — the axis headers and result urls only, never base64.
+          onProgress: (record) => {
+            // `updateNodeData` alone only moves the store — every other write site in
+            // this file pairs it with `triggerSave`, and without it a finished batch
+            // exists in the tab and nowhere else.
+            useStudioStore.getState().updateNodeData(nodeId, { batchRun: record });
+            useStudioStore.getState().triggerSave();
+          },
+        });
+
+        if (!fanned) {
+          updateNodeStatus(nodeId, 'failed', 'This batch produced nothing for any item');
+          return false;
+        }
+        if (fanned.record.failed > 0) {
+          controls.show?.({
+            title: `${fanned.record.failed} of ${plan.pairs.length} items failed`,
+            description: 'The rest of the batch finished.',
+            variant: 'info',
+          });
+        }
+        setNodeOutput(nodeId, fanned.output);
+        updateNodeStatus(nodeId, 'completed');
+        useStudioStore.getState().triggerSave();
+        return true;
       }
 
       let payload = null;

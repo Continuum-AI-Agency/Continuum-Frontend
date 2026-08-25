@@ -17,6 +17,7 @@
 
 import {
   Blocks,
+  Combine,
   ListChecks,
   type LucideIcon,
   Play,
@@ -26,7 +27,9 @@ import {
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNodeConfigPatch } from '../hooks/useNodeConfigPatch';
+import { useModuleFoldStore } from '../stores/useModuleFoldStore';
 import { useStudioStore } from '../stores/useStudioStore';
+import { moduleIdForNode } from '../utils/moduleFold';
 import type {
   ExtendVideoNodeData,
   NanoGenNodeData,
@@ -124,6 +127,7 @@ export function NodeInspectorPanel({
   const setNodes = useStudioStore((state) => state.setNodes);
   const brandId = useStudioStore((state) => state.brandId);
   const patch = useNodeConfigPatch();
+  const collapseModule = useModuleFoldStore((state) => state.collapseModule);
   // The dialog lives here rather than in the canvas shell: the panel already
   // holds the selection and the brand, so nothing has to be threaded down.
   const [isSaveTechniqueOpen, setIsSaveTechniqueOpen] = useState(false);
@@ -137,6 +141,24 @@ export function NodeInspectorPanel({
 
   const multiple = selected.length > 1;
   const node = selected[0];
+
+  // The counterpart to expanding, which lives on the collapsed card itself. Offered
+  // whenever the whole selection sits inside ONE applied technique; membership is the
+  // `module:<uuid>:` id namespace useApplyWorkflow already stamps, not a second record.
+  const selectedModuleIds = new Set(
+    selected.map((entry) => moduleIdForNode(entry.id)).filter(Boolean),
+  );
+  const collapsibleModuleId = selectedModuleIds.size === 1 ? [...selectedModuleIds][0] : undefined;
+  const collapsibleMemberCount = collapsibleModuleId
+    ? nodes.filter((entry) => moduleIdForNode(entry.id) === collapsibleModuleId).length
+    : 0;
+  const collapseSelectedModule = () => {
+    if (!collapsibleModuleId) return;
+    collapseModule(collapsibleModuleId);
+    // The members stop rendering, so a selection pointing at them would leave this
+    // panel open over nodes nobody can see.
+    deselectAll();
+  };
 
   return (
     <CanvasFloatingPanel
@@ -166,6 +188,14 @@ export function NodeInspectorPanel({
           label="Save as technique"
           onClick={() => setIsSaveTechniqueOpen(true)}
         />
+
+        {collapsibleModuleId ? (
+          <BulkAction
+            icon={Combine}
+            label={`Collapse technique (${collapsibleMemberCount} nodes)`}
+            onClick={collapseSelectedModule}
+          />
+        ) : null}
 
         {multiple ? (
           <>

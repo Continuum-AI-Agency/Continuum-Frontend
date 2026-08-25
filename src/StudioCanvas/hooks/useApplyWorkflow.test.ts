@@ -51,6 +51,7 @@ mock.module('../utils/rehydrateWorkflowMedia', () => ({
   rehydrateWorkflowMediaNodes: async (nodes: unknown[]) => nodes,
 }));
 
+const { useModuleFoldStore } = await import('../stores/useModuleFoldStore');
 const { useApplyWorkflow } = await import('./useApplyWorkflow');
 
 describe('useApplyWorkflow', () => {
@@ -64,7 +65,10 @@ describe('useApplyWorkflow', () => {
     triggerSave.mockClear();
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    useModuleFoldStore.getState().reset();
+  });
 
   it('persists an applied saved workflow into the active workspace', async () => {
     const { result } = renderHook(() => useApplyWorkflow());
@@ -169,5 +173,63 @@ describe('useApplyWorkflow', () => {
     expect(moved?.position.y).toBeGreaterThan(200);
 
     store.nodes = [] as never;
+  });
+
+  it('keeps the membership record mergeGraphs builds instead of dropping it', async () => {
+    // Before this, useApplyWorkflow computed metadata.workflowModule and then read only
+    // merged.nodes/merged.edges — the record reached nobody, so nothing downstream could
+    // ever tell which nodes came from which technique.
+    const { result } = renderHook(() => useApplyWorkflow());
+
+    await act(async () => {
+      await result.current({
+        id: 'technique-1',
+        brandProfileId: 'brand-1',
+        name: 'Palette smash-up',
+        nodes: [
+          { id: 'a', type: 'string', position: { x: 0, y: 0 }, data: {} },
+          { id: 'b', type: 'nanoGen', position: { x: 240, y: 0 }, data: {} },
+        ],
+        edges: [],
+        createdAt: '2026-08-24T00:00:00.000Z',
+      });
+    });
+
+    expect(useModuleFoldStore.getState().modules['module:test-uuid']).toEqual({
+      id: 'module:test-uuid',
+      label: 'Palette smash-up',
+      nodeIds: ['module:test-uuid:a', 'module:test-uuid:b'],
+    });
+  });
+
+  it('applies expanded by default and collapsed only when asked', async () => {
+    // The default is load-bearing: studio:workflow:e2e:bench counts `module:`-prefixed
+    // nodes in the DOM and in canvas_sessions after an apply, and a collapsed default
+    // would drop both counts to one.
+    const { result } = renderHook(() => useApplyWorkflow());
+    const workflow = {
+      id: 'technique-1',
+      brandProfileId: 'brand-1',
+      name: 'Palette smash-up',
+      nodes: [{ id: 'a', type: 'string', position: { x: 0, y: 0 }, data: {} }],
+      edges: [],
+      createdAt: '2026-08-24T00:00:00.000Z',
+    };
+
+    await act(async () => {
+      await result.current(workflow);
+    });
+    expect(useModuleFoldStore.getState().collapsedModuleIds).toEqual([]);
+
+    await act(async () => {
+      await result.current(workflow, { collapsed: true });
+    });
+    expect(useModuleFoldStore.getState().collapsedModuleIds).toEqual(['module:test-uuid']);
+
+    // Collapsing is presentation only — the graph handed to the store is the whole
+    // subgraph either way, so the runtime cannot tell the two applies apart.
+    const expanded = setNodes.mock.calls[0][0] as Array<{ id: string }>;
+    const collapsed = setNodes.mock.calls[1][0] as Array<{ id: string }>;
+    expect(collapsed.map((node) => node.id)).toEqual(expanded.map((node) => node.id));
   });
 });

@@ -95,7 +95,7 @@ describe('canvas composer context provider', () => {
     expect(JSON.stringify(suggestion)).not.toContain('Use hard light.');
   });
 
-  it('advertises Skills, Media library and Signals at the root', async () => {
+  it('advertises Skills and the Media library at the root', async () => {
     const provider = createCanvasComposerMentionProvider({
       brandId: 'brand-1',
       skills: [skill()],
@@ -104,10 +104,13 @@ describe('canvas composer context provider', () => {
       fetchSignals: async () => noSignals,
     });
     const suggestions = await provider.getSuggestions({ query: '' });
-    expect(suggestions.map((item) => item.label)).toEqual(['Skills', 'Media library', 'Signals']);
+    expect(suggestions.map((item) => item.label)).toEqual(['Skills', 'Media library']);
   });
 
-  it('drills Signals into Trends, Events and Questions', async () => {
+  // D-05: composerContext.ts (backend) throws for trend/event/question references,
+  // killing the whole run. Until the resolver lands, no signal suggestion may be
+  // offered — not as a root folder and not through free-text search.
+  it('withholds every Signals suggestion while the backend resolver is missing', async () => {
     const provider = createCanvasComposerMentionProvider({
       brandId: 'brand-1',
       skills: [],
@@ -116,73 +119,8 @@ describe('canvas composer context provider', () => {
       fetchSignals: async () => signalCatalog(),
     });
     const root = await provider.getSuggestions({ query: '' });
-    const signals = root.find((item) => item.label === 'Signals');
-    const folders = await provider.getChildSuggestions?.(signals!, '');
-    expect(folders?.map((item) => item.label)).toEqual(['Trends', 'Events', 'Questions']);
-
-    const [trends, events, questions] = await Promise.all(
-      folders!.map((folder) => provider.getChildSuggestions?.(folder, '')),
-    );
-    expect(trends?.[0]?.reference).toEqual({
-      id: 'trend-1',
-      type: 'trend',
-      label: 'Quiet luxury interiors',
-      source: 'canvas',
-      metadata: { source: undefined, relevanceToBrand: undefined },
-    });
-    expect(events?.[0]?.reference?.type).toBe('event');
-    expect(questions?.[0]?.reference?.type).toBe('question');
-  });
-
-  it('reads this week’s signals once no matter how many folders are opened', async () => {
-    let reads = 0;
-    const provider = createCanvasComposerMentionProvider({
-      brandId: 'brand-1',
-      skills: [],
-      fetchAssets: async () => [],
-      fetchFolders: async () => [],
-      fetchSignals: async () => {
-        reads += 1;
-        return signalCatalog();
-      },
-    });
-    const root = await provider.getSuggestions({ query: '' });
-    const folders = await provider.getChildSuggestions?.(
-      root.find((item) => item.label === 'Signals')!,
-      '',
-    );
-    for (const folder of folders ?? []) await provider.getChildSuggestions?.(folder, '');
-    expect(reads).toBe(1);
-  });
-
-  it('keeps the mention menu alive when the signals read fails', async () => {
-    const provider = createCanvasComposerMentionProvider({
-      brandId: 'brand-1',
-      skills: [],
-      fetchAssets: async () => [],
-      fetchFolders: async () => [],
-      fetchSignals: async () => {
-        throw new Error('trends unreachable');
-      },
-    });
-    const root = await provider.getSuggestions({ query: '' });
-    const folders = await provider.getChildSuggestions?.(
-      root.find((item) => item.label === 'Signals')!,
-      '',
-    );
-    expect(await provider.getChildSuggestions?.(folders![0], '')).toEqual([]);
-  });
-
-  it('matches signals in free-text search alongside skills and media', async () => {
-    const provider = createCanvasComposerMentionProvider({
-      brandId: 'brand-1',
-      skills: [],
-      fetchAssets: async () => [],
-      fetchFolders: async () => [],
-      fetchSignals: async () => signalCatalog(),
-    });
-    const results = await provider.getSuggestions({ query: 'quiet' });
-    expect(results.map((item) => item.reference?.id)).toEqual(['trend-1']);
+    expect(root.find((item) => item.label === 'Signals')).toBeUndefined();
+    expect(await provider.getSuggestions({ query: 'quiet' })).toEqual([]);
   });
 
   it('filters archived, analytic, and copy-only skills', async () => {
@@ -244,17 +182,12 @@ describe('canvas composer context provider — Elements', () => {
   it('advertises Elements at the root, between Skills and the Media library', async () => {
     const provider = providerWithElements([element()]);
     const root = await provider.getSuggestions({ query: '' });
-    expect(root.map((item) => item.label)).toEqual([
-      'Skills',
-      'Elements',
-      'Media library',
-      'Signals',
-    ]);
+    expect(root.map((item) => item.label)).toEqual(['Skills', 'Elements', 'Media library']);
   });
 
   it('hides the Elements folder for a brand that has none — an empty drill is a dead end', async () => {
     const root = await providerWithElements([]).getSuggestions({ query: '' });
-    expect(root.map((item) => item.label)).toEqual(['Skills', 'Media library', 'Signals']);
+    expect(root.map((item) => item.label)).toEqual(['Skills', 'Media library']);
   });
 
   it('drills Elements into category folders, in the canonical order', async () => {

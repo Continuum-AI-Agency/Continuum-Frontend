@@ -228,14 +228,33 @@ describe('effectPresetEffects', () => {
     ).toBeCloseTo(1.25, 6);
   });
 
-  it('refuses the presets that need a new spec primitive, BY NAME', () => {
-    // A silent passthrough on "VHS" is a node that claims an effect and emits the
-    // input — the one outcome worse than an error.
+  it('the spec-work refusal list is empty — every preset has its primitive', () => {
+    // The seam stays: a future spec-less preset must name itself in
+    // EFFECT_PRESETS_NEEDING_SPEC_WORK and this loop makes its refusal real again.
+    expect(EFFECT_PRESETS_NEEDING_SPEC_WORK).toHaveLength(0);
     for (const preset of EFFECT_PRESETS_NEEDING_SPEC_WORK) {
       expect(() => effectPresetEffects({ preset, intensity: 1 })).toThrow(
         /needs a new draw primitive/,
       );
     }
+  });
+
+  it('maps the five per-pixel presets onto their frameDraw primitives', () => {
+    expect(effectPresetEffects({ preset: 'vignette', intensity: 0.8 })).toEqual({
+      vignette: { amount: 0.8 },
+    });
+    expect(effectPresetEffects({ preset: 'pixelate', intensity: 1 })).toEqual({
+      pixelate: { blockPx: 32 },
+    });
+    expect(effectPresetEffects({ preset: 'filmGrain', intensity: 0.5 })).toEqual({
+      filmGrain: { amount: 0.5 },
+    });
+    expect(effectPresetEffects({ preset: 'chromaticAberration', intensity: 1 })).toEqual({
+      chromaticAberration: { amount: 1 },
+    });
+    const vhs = effectPresetEffects({ preset: 'vhs', intensity: 1 });
+    expect(vhs.vhs).toEqual({ amount: 1 });
+    expect(vhs.adjustments?.saturation).toBeCloseTo(1.25, 6);
   });
 
   it('refuses an unknown preset by listing the ones that work', () => {

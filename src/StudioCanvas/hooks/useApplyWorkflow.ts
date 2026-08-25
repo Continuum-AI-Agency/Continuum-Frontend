@@ -11,6 +11,7 @@ import { useReactFlow } from '@xyflow/react';
 import { useCallback } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { AiStudioWorkflow } from '@/lib/schemas/aiStudio';
+import { useModuleFoldStore } from '../stores/useModuleFoldStore';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
 import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
@@ -44,13 +45,21 @@ function placeModuleAt(
 
 export function useApplyWorkflow() {
   const { setNodes, setEdges, takeSnapshot, triggerSave, defaultEdgeType } = useStudioStore();
+  const { registerModule, collapseModule } = useModuleFoldStore();
   const { fitView } = useReactFlow();
   const { show } = useToast();
 
   return useCallback(
     async (
       workflow: AiStudioWorkflow,
-      options?: { toastTitle?: string; position?: { x: number; y: number } },
+      options?: {
+        toastTitle?: string;
+        position?: { x: number; y: number };
+        /** Land the module folded to a single card. Presentation only — the graph
+         *  written to the store is the same subgraph either way, so the runtime and
+         *  the autosave cannot tell the difference. */
+        collapsed?: boolean;
+      },
     ) => {
       const snapshot = normalizeWorkflowSnapshot(
         {
@@ -64,11 +73,22 @@ export function useApplyWorkflow() {
         undefined,
         useStudioStore.getState().brandId,
       );
+      const moduleId = `module:${crypto.randomUUID()}`;
       const namespaced = namespaceWorkflowSnapshot(
         { nodes: hydratedNodes, edges: snapshot.edges },
-        `module:${crypto.randomUUID()}`,
+        moduleId,
       );
       const moduleNodeIds = new Set(namespaced.nodes.map((node) => node.id));
+      // ONE membership record with one producer. It is handed to mergeGraphs as
+      // `metadata.workflowModule` (where the contract says it lives) and kept here for
+      // the fold — before this, mergeGraphs computed it and every caller dropped
+      // `merged.metadata` on the floor, so it reached nobody.
+      const workflowModule = {
+        version: 1 as const,
+        sourceWorkflowId: workflow.id,
+        label: workflow.name,
+        nodeIds: [...moduleNodeIds],
+      };
       const current = useStudioStore.getState();
       const merged = mergeGraphs(
         {
@@ -78,14 +98,7 @@ export function useApplyWorkflow() {
         {
           nodes: namespaced.nodes,
           edges: namespaced.edges,
-          metadata: {
-            workflowModule: {
-              version: 1,
-              sourceWorkflowId: workflow.id,
-              label: workflow.name,
-              nodeIds: namespaced.nodes.map((node) => node.id),
-            },
-          },
+          metadata: { workflowModule },
         } as WorkflowGraph,
       );
 
@@ -102,16 +115,34 @@ export function useApplyWorkflow() {
       setNodes(placed);
       setEdges(merged.edges as Edge[]);
       triggerSave();
+      registerModule({
+        id: moduleId,
+        label: workflowModule.label,
+        nodeIds: workflowModule.nodeIds,
+      });
+      if (options?.collapsed) collapseModule(moduleId);
       requestAnimationFrame(() => {
         fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 300 });
       });
 
       show({
         title: options?.toastTitle ?? 'Workflow module added',
-        description: `${workflow.name} was expanded into ${namespaced.nodes.length} editable nodes.`,
+        description: options?.collapsed
+          ? `${workflow.name} was added as one collapsed node over ${namespaced.nodes.length} editable nodes.`
+          : `${workflow.name} was expanded into ${namespaced.nodes.length} editable nodes.`,
         variant: 'success',
       });
     },
-    [defaultEdgeType, fitView, setEdges, setNodes, show, takeSnapshot, triggerSave],
+    [
+      collapseModule,
+      defaultEdgeType,
+      fitView,
+      registerModule,
+      setEdges,
+      setNodes,
+      show,
+      takeSnapshot,
+      triggerSave,
+    ],
   );
 }

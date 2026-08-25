@@ -142,8 +142,10 @@ export function exportSourcesFromGraph(
 /** The kind the picker should offer, given what is wired in. Null when nothing is. */
 export function exportKindForSources(sources: readonly ExportSource[]): ExportKind | null {
   if (sources.length === 0) return null;
-  // Mixed pools are legal (contracts only demands "media"); the clip formats are the
-  // superset that can still write every member, so one video makes the whole pool video.
+  // Mixed pools are legal (contracts only demands "media"). One video makes the whole
+  // pool video for the PICKER, but encoding stays per-source: a still in a video pool
+  // is written with its own kind's default format, never pushed through a clip encoder
+  // (see `exportFormatForSource`).
   return sources.some((source) => source.kind === 'video') ? 'video' : 'image';
 }
 
@@ -161,6 +163,21 @@ export function resolveExportFormat(
   if (!kind) return null;
   if (isExportFormatId(stored) && EXPORT_FORMATS[stored].kind === kind) return stored;
   return DEFAULT_EXPORT_FORMAT[kind];
+}
+
+/**
+ * The format ONE source of a multi-source pool is actually encoded with.
+ *
+ * The node's single picker can only name formats of the POOL kind (video as soon as one
+ * clip is wired), yet a mixed pool is legal. So the picked format applies to sources of
+ * its own kind, and every other source takes its kind's default — image bytes through a
+ * video encoder is not a conversion, it is "unsupported or unrecognizable format".
+ */
+export function exportFormatForSource(
+  source: ExportSource,
+  pooled: ExportFormatId,
+): ExportFormatId {
+  return EXPORT_FORMATS[pooled].kind === source.kind ? pooled : DEFAULT_EXPORT_FORMAT[source.kind];
 }
 
 // ── Writing the files ────────────────────────────────────────────────────────
@@ -212,16 +229,18 @@ export async function runExport(options: RunExportOptions): Promise<ExportRunRes
   if (sources.length === 0) throw new Error('Nothing is connected to export');
 
   const baseName = options.baseName?.trim() || 'canvas-export';
-  const extension = EXPORT_FORMATS[format].extension;
   const single = sources.length === 1;
 
   const encoded: ExportedFile[] = [];
   let fellBackToH264 = false;
   for (const [index, source] of sources.entries()) {
-    const result = await encodeOne(source, format);
+    // A single source uses the picked format as-is; a pool encodes each source by its
+    // own kind so a mixed image+video ZIP can exist at all (see exportFormatForSource).
+    const sourceFormat = single ? format : exportFormatForSource(source, format);
+    const result = await encodeOne(source, sourceFormat);
     fellBackToH264 = fellBackToH264 || result.fellBackToH264;
     encoded.push({
-      name: `${baseName}${single ? '' : `-${index + 1}`}.${extension}`,
+      name: `${baseName}${single ? '' : `-${index + 1}`}.${EXPORT_FORMATS[sourceFormat].extension}`,
       blob: result.blob,
     });
   }

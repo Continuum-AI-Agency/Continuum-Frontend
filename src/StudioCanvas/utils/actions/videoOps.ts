@@ -190,6 +190,11 @@ export const VIDEO_EFFECT_PRESETS = [
   'cameraShake',
   'zoomIn',
   'zoomOut',
+  'vignette',
+  'filmGrain',
+  'pixelate',
+  'chromaticAberration',
+  'vhs',
 ] as const;
 
 /**
@@ -200,13 +205,9 @@ export const VIDEO_EFFECT_PRESETS = [
  * refused BY NAME rather than silently rendering as a passthrough — a node that claims
  * "VHS" and emits the untouched clip is the failure mode this list prevents.
  */
-export const EFFECT_PRESETS_NEEDING_SPEC_WORK = [
-  'vignette',
-  'filmGrain',
-  'pixelate',
-  'chromaticAberration',
-  'vhs',
-] as const;
+/** Empty since Wave 4 — the five per-pixel presets landed as frameDraw primitives.
+ *  Kept as the seam a future spec-less preset must name itself in, never silently. */
+export const EFFECT_PRESETS_NEEDING_SPEC_WORK = [] as const;
 
 /** `video.effect` — the preset's spec, or a refusal that says which kind of gap it is. */
 export function effectPresetEffects(config: Record<string, unknown>): ClipEffectSpec {
@@ -226,6 +227,16 @@ export function effectPresetEffects(config: Record<string, unknown>): ClipEffect
   if (preset === 'cameraShake') return { keyframes: cameraShakeKeyframes(intensity) };
   if (preset === 'zoomIn') return kenBurnsEffects({ direction: 'in', amount: 0.25 * intensity });
   if (preset === 'zoomOut') return kenBurnsEffects({ direction: 'out', amount: 0.25 * intensity });
+  if (preset === 'vignette') return { vignette: { amount: intensity } };
+  if (preset === 'filmGrain') return { filmGrain: { amount: intensity } };
+  if (preset === 'pixelate') return { pixelate: { blockPx: Math.round(2 + 30 * intensity) } };
+  if (preset === 'chromaticAberration') return { chromaticAberration: { amount: intensity } };
+  if (preset === 'vhs') {
+    return {
+      vhs: { amount: intensity },
+      adjustments: scaleAdjustments({ saturation: 1.25, contrast: 1.1 }, intensity),
+    };
+  }
 
   if ((EFFECT_PRESETS_NEEDING_SPEC_WORK as readonly string[]).includes(preset)) {
     throw new Error(

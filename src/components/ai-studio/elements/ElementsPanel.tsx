@@ -99,6 +99,27 @@ export function ElementsPanel({ open, onOpenChange, brandId, uploadAsset }: Elem
               brandId={brandId}
               isGenerating={mutations.generateReference.isPending}
               isSaving={mutations.update.isPending}
+              // react-query already holds the in-flight variables and the last error;
+              // mirroring them into local state would be a second copy that can disagree.
+              // Both are matched against the variables they were raised FOR: the
+              // mutations are panel-wide, so an unmatched error would follow the user
+              // to the next Element and blame it for a failure it had no part in.
+              pendingDefaultAssetId={
+                mutations.setDefaultReference.isPending &&
+                mutations.setDefaultReference.variables?.elementId === selected.id
+                  ? (mutations.setDefaultReference.variables?.assetId ?? null)
+                  : null
+              }
+              generateError={
+                mutations.generateReference.variables === selected.id
+                  ? (mutations.generateReference.error as Error | null)
+                  : null
+              }
+              setDefaultError={
+                mutations.setDefaultReference.variables?.elementId === selected.id
+                  ? (mutations.setDefaultReference.error as Error | null)
+                  : null
+              }
               onBack={() => setView({ kind: 'list' })}
               onGenerateReference={() => mutations.generateReference.mutate(selected.id)}
               onSetDefaultReference={(assetId) =>

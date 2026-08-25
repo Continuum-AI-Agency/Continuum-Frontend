@@ -205,6 +205,36 @@ export function measureVideo(blob: Blob): Promise<MeasuredBase> {
   });
 }
 
+/** Demux the blob for its duration — the fallback when `<video>` metadata reads 0 or
+ *  Infinity (library-dropped clips whose `media.assets` row never recorded one, and
+ *  fragmented MP4s). Lazy import keeps mediabunny out of the bundle until needed. */
+async function probeBlobDurationSec(blob: Blob): Promise<number> {
+  const mb = await import('mediabunny');
+  const input = new mb.Input({ source: new mb.BlobSource(blob), formats: mb.ALL_FORMATS });
+  try {
+    const duration = await input.computeDuration();
+    return Number.isFinite(duration) && duration > 0 ? duration : 0;
+  } finally {
+    (input as unknown as { dispose?: () => void }).dispose?.();
+  }
+}
+
+/**
+ * Heal a base whose measured duration is missing/zero by probing the actual bytes.
+ *
+ * A base that still reads 0 after the probe is left alone so `buildOverlayPlan` can
+ * refuse it honestly — inventing a duration would encode a burn-in nobody can see.
+ * The probe is injectable so the healing decision is testable without WebCodecs.
+ */
+export async function ensureBaseDuration(
+  base: MeasuredBase,
+  probe: (blob: Blob) => Promise<number> = probeBlobDurationSec,
+): Promise<MeasuredBase> {
+  if (base.durationSec > 0) return base;
+  const probed = await probe(base.blob).catch(() => 0);
+  return probed > 0 ? { ...base, durationSec: probed } : base;
+}
+
 async function measureImage(source: string): Promise<MeasuredSource> {
   const response = await fetch(source);
   if (!response.ok) throw new Error(`Could not read the overlay image (${response.status})`);
@@ -234,7 +264,7 @@ export async function runOverlayAction(
   const overlayInputs = args.inputs.filter((input) => input.handle === 'overlay-in');
   if (overlayInputs.length === 0) throw new Error('Connect an image to burn in');
 
-  const base = await measureVideo(baseInput.blob);
+  const base = await ensureBaseDuration(await measureVideo(baseInput.blob));
   const overlays = await Promise.all(
     overlayInputs.map(async (input) => {
       // The executor resolves image ports to a URL and video ports to bytes; an

@@ -92,6 +92,11 @@ export type ComposeTimelineOptions = {
   audioTracks?: TimelineAudioRenderItem[];
   videoBitrate?: number;
   audioBitrate?: number;
+  // Export codec + container. The defaults ('avc' in mp4, aac audio) preserve prior
+  // behavior byte-for-byte when neither field is set. WebM cannot carry avc/hevc or
+  // aac, so 'webm' pairs with vp9 video and opus audio.
+  videoCodec?: 'avc' | 'hevc' | 'vp9';
+  container?: 'mp4' | 'webm';
   // Nominal encoded packet cadence. Mediabunny uses this to resample source
   // cadence (including VFR inputs) into the requested constant-rate track.
   frameRate?: number;
@@ -364,19 +369,19 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     }
 
     const output = new mb.Output({
-      format: new mb.Mp4OutputFormat(),
+      format: options.container === 'webm' ? new mb.WebMOutputFormat() : new mb.Mp4OutputFormat(),
       target: new mb.BufferTarget(),
     });
     cancelOutput = () => output.cancel();
     const videoSource = new mb.CanvasSource(offscreen, {
-      codec: 'avc',
+      codec: options.videoCodec ?? 'avc',
       bitrate: options.videoBitrate ?? DEFAULT_VIDEO_BITRATE,
     });
     output.addVideoTrack(videoSource, {
       ...(options.frameRate !== undefined ? { frameRate: options.frameRate } : {}),
     });
     const audioSource = new mb.AudioSampleSource({
-      codec: 'aac',
+      codec: options.container === 'webm' ? 'opus' : 'aac',
       bitrate: options.audioBitrate ?? DEFAULT_AUDIO_BITRATE,
       transform: { numberOfChannels: TARGET_CHANNEL_COUNT, sampleRate: TARGET_SAMPLE_RATE },
     });

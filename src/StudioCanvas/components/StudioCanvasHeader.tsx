@@ -107,7 +107,15 @@ export function StudioCanvasHeader({
                 onValueChange={(value) => apply.setSelectedLinkedinNodeId(value)}
               >
                 <SelectTrigger className="h-9 w-[15rem]">
-                  <SelectValue placeholder="Pick one output to apply" />
+                  <SelectValue
+                    placeholder="Pick one output to apply"
+                    items={Object.fromEntries(
+                      apply.linkedinImageCandidates.map((candidate, index) => [
+                        candidate.nodeId,
+                        `Output ${index + 1}`,
+                      ]),
+                    )}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {apply.linkedinImageCandidates.map((candidate, index) => (

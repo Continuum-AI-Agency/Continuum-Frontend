@@ -10,7 +10,7 @@ import {
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
-import { type UnfurlMediaItem, validateWorkflowGraph } from '@continuum/contracts';
+import { type ActionId, type UnfurlMediaItem, validateWorkflowGraph } from '@continuum/contracts';
 import { AtSign, FolderOpen } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
@@ -38,6 +38,7 @@ import { useApplyBackToPlanner } from '../hooks/useApplyBackToPlanner';
 import { useCanvasDnD } from '../hooks/useCanvasDnD';
 import { useCanvasKeyboardShortcuts } from '../hooks/useCanvasKeyboardShortcuts';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
+import { CANVAS_NODE_TYPES_WITH_FOLD, useFoldedGraph } from '../hooks/useFoldedGraph';
 import { usePlannerSeedHydration } from '../hooks/usePlannerSeedHydration';
 import { useTimelineRenderContinuations } from '../hooks/useTimelineRenderContinuations';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
@@ -263,7 +264,10 @@ function Flow({
   );
 
   const addNodeAtPointer = useCallback(
-    (type: StudioCanvasNodeType, options?: { model?: VideoGeneratorModel }) => {
+    (
+      type: StudioCanvasNodeType,
+      options?: { model?: VideoGeneratorModel; actionId?: ActionId },
+    ) => {
       takeSnapshot();
       const anchorPosition = contextMenuAnchorRef.current ?? lastMousePositionRef.current;
       const position = screenToFlowPosition(anchorPosition);
@@ -290,7 +294,10 @@ function Flow({
   }, []);
 
   const addNodeFromPalette = useCallback(
-    (type: StudioCanvasNodeType, options?: { model?: VideoGeneratorModel }) => {
+    (
+      type: StudioCanvasNodeType,
+      options?: { model?: VideoGeneratorModel; actionId?: ActionId },
+    ) => {
       if (addNodePaletteAt) lastMousePositionRef.current = addNodePaletteAt;
       setAddNodePaletteAt(null);
       addNodeAtPointer(type, options);
@@ -334,6 +341,15 @@ function Flow({
     },
     [edges, nodes],
   );
+
+  // Collapsed-technique fold: a pure display derivation between the store and the
+  // canvas. With nothing collapsed it returns the inputs by reference and every
+  // handler unwrapped, so an unfolded canvas is bit-for-bit unchanged.
+  const folded = useFoldedGraph(nodes, styledEdges, {
+    onNodesChange,
+    onConnect,
+    isValidConnection: isValidConnectionCallback,
+  });
   const validationIssues = useMemo(
     () => validateWorkflowGraph({ nodes, edges }).issues,
     [edges, nodes],
@@ -400,16 +416,16 @@ function Flow({
       <ContextMenu disabled={keyboardScope === 'modal'} onOpenChange={handleContextMenuOpenChange}>
         <ContextMenuTrigger className="block h-full w-full">
           <Canvas
-            nodes={nodes}
-            edges={styledEdges}
-            onNodesChange={onNodesChange}
+            nodes={folded.nodes}
+            edges={folded.edges}
+            onNodesChange={folded.onNodesChange}
             onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
+            onConnect={folded.onConnect}
             onReconnect={onReconnect}
             onReconnectStart={onReconnectStart}
             onReconnectEnd={onReconnectEnd}
             edgesReconnectable
-            nodeTypes={nodeTypes}
+            nodeTypes={CANVAS_NODE_TYPES_WITH_FOLD}
             edgeTypes={edgeTypes}
             onDragOver={onDragOver}
             onDrop={onDrop}
@@ -417,7 +433,7 @@ function Flow({
             onNodeDragStop={onNodeDragStop}
             onConnectStart={onConnectStart}
             onConnectEnd={onConnectEnd}
-            isValidConnection={isValidConnectionCallback}
+            isValidConnection={folded.isValidConnection}
             connectionLineComponent={ConnectionLine}
             // Default 20px is tight against our 12-16px handles, especially on
             // video-generator nodes stacking up to 6 target handles closely.

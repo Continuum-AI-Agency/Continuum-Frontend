@@ -86,6 +86,15 @@ import { referenceStatusBadge } from './referenceStatusBadge';
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 
+// One label map for both reference-type pickers — the toolbar Select trigger and the
+// right-click menu must say the same thing (D-06: the trigger painted the raw value).
+const REFERENCE_TYPE_LABELS: Readonly<Record<string, string>> = {
+  default: 'Default',
+  product: 'Product',
+  color: 'Color/Theme',
+  person: 'Person',
+};
+
 export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const updateNode = useStudioStore((state) => state.updateNode);
@@ -615,13 +624,14 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                     )}
                     <Select value={refType} onValueChange={handleRefTypeChange}>
                       <SelectTrigger className="h-6 w-[94px] text-2xs px-1.5 py-0 border border-border/60 bg-background/90 shadow-sm">
-                        <SelectValue placeholder="Type" />
+                        <SelectValue placeholder="Type" items={REFERENCE_TYPE_LABELS} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="default">Default</SelectItem>
-                        <SelectItem value="product">Product</SelectItem>
-                        <SelectItem value="color">Color/Theme</SelectItem>
-                        <SelectItem value="person">Person</SelectItem>
+                        {Object.entries(REFERENCE_TYPE_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -749,18 +759,13 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
           <ContextMenuSub>
             <ContextMenuSubTrigger>Reference Type</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-44">
-              {[
-                { value: 'default', label: 'Default' },
-                { value: 'product', label: 'Product' },
-                { value: 'color', label: 'Color/Theme' },
-                { value: 'person', label: 'Person' },
-              ].map((option) => (
+              {Object.entries(REFERENCE_TYPE_LABELS).map(([value, label]) => (
                 <ContextMenuCheckboxItem
-                  key={option.value}
-                  checked={refType === option.value}
-                  onClick={() => handleRefTypeChange(option.value)}
+                  key={value}
+                  checked={refType === value}
+                  onClick={() => handleRefTypeChange(value)}
                 >
-                  {option.label}
+                  {label}
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>

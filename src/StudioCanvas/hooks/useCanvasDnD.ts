@@ -141,6 +141,9 @@ export function useCanvasDnD() {
           sourcePath: resolved.sourcePath,
           bucket: resolved.bucket,
           sourceUrl: resolved.sourceUrl,
+          // Present only when the library row recorded one; duration-dependent ops
+          // fall back to probing the bytes when it is missing.
+          durationMs: resolved.durationMs,
         };
       } else if (assetNodeType === 'audio') {
         assetData = { audio: resolved.dataUrl, fileName: resolved.fileName };

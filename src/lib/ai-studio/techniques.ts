@@ -151,8 +151,10 @@ export function useTechniques(brandProfileId?: string): {
   return { items, isLoading: brand.isLoading || library.isLoading };
 }
 
-export function techniqueApplyOptions(position?: { x: number; y: number }) {
-  return { toastTitle: 'Technique added', position };
+export function techniqueApplyOptions(position?: { x: number; y: number }, collapsed?: boolean) {
+  // `collapsed` default stays undefined (= expanded): the workflow bench's technique
+  // rows count expanded module nodes, and every existing caller keeps its behavior.
+  return { toastTitle: 'Technique added', position, collapsed };
 }
 
 /**

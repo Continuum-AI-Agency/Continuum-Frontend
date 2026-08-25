@@ -10,6 +10,8 @@ import type {
   TimelineOverlayWorkerItem,
   TimelineWorkerItem,
   WorkerClipInput,
+  WorkerExportContainer,
+  WorkerExportVideoCodec,
 } from './spliceWorkerProtocol';
 
 export type WorkerSpliceProgress = {
@@ -48,6 +50,8 @@ export type RunTimelineInWorkerOptions = {
   audioTracks?: TimelineAudioWorkerItem[];
   videoBitrate?: number;
   audioBitrate?: number;
+  videoCodec?: WorkerExportVideoCodec;
+  container?: WorkerExportContainer;
   frameRate?: number;
   targetWidth?: number;
   targetHeight?: number;
@@ -275,6 +279,22 @@ export function runActionInWorker(options: RunActionInWorkerOptions): Promise<Wo
   );
 }
 
+// The export codec the timeline dialog picked, applied when a caller does not pass
+// `videoCodec`/`container` explicitly.
+// ponytail: module-level default because `useTimelineRender` — the one production
+// caller — is frozen this wave; replace with an explicit option threaded through that
+// hook when it unfreezes. Null (the initial state) means "encode as before": avc/mp4.
+let timelineExportCodecPreference: {
+  videoCodec: WorkerExportVideoCodec;
+  container: WorkerExportContainer;
+} | null = null;
+
+export function setTimelineExportCodecPreference(
+  next: { videoCodec: WorkerExportVideoCodec; container: WorkerExportContainer } | null,
+): void {
+  timelineExportCodecPreference = next;
+}
+
 export function runTimelineInWorker(
   options: RunTimelineInWorkerOptions,
 ): Promise<WorkerSpliceResult> {
@@ -284,6 +304,8 @@ export function runTimelineInWorker(
     audioTracks,
     videoBitrate,
     audioBitrate,
+    videoCodec,
+    container,
     frameRate,
     targetWidth,
     targetHeight,
@@ -303,6 +325,8 @@ export function runTimelineInWorker(
       audioTracks,
       videoBitrate,
       audioBitrate,
+      videoCodec: videoCodec ?? timelineExportCodecPreference?.videoCodec,
+      container: container ?? timelineExportCodecPreference?.container,
       frameRate,
       targetWidth,
       targetHeight,

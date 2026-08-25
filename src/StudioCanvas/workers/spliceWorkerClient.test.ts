@@ -1,12 +1,15 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 import {
   runActionInWorker,
   runSingleSourceSpliceInWorker,
   runSpliceInWorker,
+  runTimelineInWorker,
+  setTimelineExportCodecPreference,
 } from './spliceWorkerClient';
 import type {
   SpliceWorkerInbound,
   SpliceWorkerOutbound,
+  TimelineWorkerItem,
   WorkerClipInput,
 } from './spliceWorkerProtocol';
 
@@ -213,6 +216,78 @@ describe('runSpliceInWorker', () => {
       }),
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(factoryCalled).toBe(false);
+  });
+});
+
+describe('runTimelineInWorker export codec', () => {
+  const items: TimelineWorkerItem[] = [{ itemId: 'item-1', kind: 'video', blob: fakeBlob }];
+  const finish = async (worker: FakeWorker, promise: Promise<{ objectUrl: string }>) => {
+    worker.emit({ kind: 'result', blob: fakeBlob, width: 640, height: 360, durationSec: 2 });
+    URL.revokeObjectURL((await promise).objectUrl);
+  };
+
+  afterEach(() => setTimelineExportCodecPreference(null));
+
+  it('threads videoCodec and container into the start_timeline frame', async () => {
+    const worker = new FakeWorker();
+    const promise = runTimelineInWorker({
+      items,
+      videoCodec: 'vp9',
+      container: 'webm',
+      workerFactory: () => worker as unknown as Worker,
+    });
+
+    const message = worker.posted[0];
+    expect(message.kind).toBe('start_timeline');
+    if (message.kind === 'start_timeline') {
+      expect(message.videoCodec).toBe('vp9');
+      expect(message.container).toBe('webm');
+    }
+    await finish(worker, promise);
+  });
+
+  it('leaves both fields unset when nothing chose a codec (prior behavior)', async () => {
+    const worker = new FakeWorker();
+    const promise = runTimelineInWorker({
+      items,
+      workerFactory: () => worker as unknown as Worker,
+    });
+
+    const message = worker.posted[0];
+    if (message.kind === 'start_timeline') {
+      expect(message.videoCodec).toBeUndefined();
+      expect(message.container).toBeUndefined();
+    }
+    await finish(worker, promise);
+  });
+
+  it('fills unset fields from the dialog preference, and explicit options win', async () => {
+    setTimelineExportCodecPreference({ videoCodec: 'hevc', container: 'mp4' });
+
+    const preferred = new FakeWorker();
+    const preferredPromise = runTimelineInWorker({
+      items,
+      workerFactory: () => preferred as unknown as Worker,
+    });
+    const preferredMessage = preferred.posted[0];
+    if (preferredMessage.kind === 'start_timeline') {
+      expect(preferredMessage.videoCodec).toBe('hevc');
+      expect(preferredMessage.container).toBe('mp4');
+    }
+    await finish(preferred, preferredPromise);
+
+    const explicit = new FakeWorker();
+    const explicitPromise = runTimelineInWorker({
+      items,
+      videoCodec: 'avc',
+      container: 'mp4',
+      workerFactory: () => explicit as unknown as Worker,
+    });
+    const explicitMessage = explicit.posted[0];
+    if (explicitMessage.kind === 'start_timeline') {
+      expect(explicitMessage.videoCodec).toBe('avc');
+    }
+    await finish(explicit, explicitPromise);
   });
 });
 

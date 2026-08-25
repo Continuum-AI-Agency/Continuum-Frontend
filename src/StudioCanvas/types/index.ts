@@ -29,6 +29,7 @@ import type {
   OnNodesChange,
 } from '@xyflow/react';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import type { BatchRunRecord } from '../utils/batch/generationFanout';
 import type { BlendMode, ClipEffectSpec } from '../utils/render/effectSpec';
 import type { ClipTransition } from '../utils/render/transitions';
 import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
@@ -147,6 +148,16 @@ export interface NanoGenNodeData extends BaseNodeData {
   // the single-image case above; a variation that only held a data URL would skip
   // re-signing and the asset ledger the moment its signed URL expired.
   generatedImages?: GeneratedImageVariation[];
+  /**
+   * The result of a BATCH fan-out through this generator: one entry per pair, plus the
+   * two axes the matrix view hangs them under.
+   *
+   * Lives on the CONSUMING node rather than the batch, because it is this node's output —
+   * the batch only supplied the inputs. Deliberately holds urls and asset ids and never
+   * base64: a 100-item batch of inlined images would put megabytes into `canvas_sessions`
+   * on every autosave.
+   */
+  batchRun?: BatchRunRecord;
 }
 
 export interface GeneratedImageVariation {
@@ -240,6 +251,8 @@ export interface DocumentNodeData extends BaseNodeData {
 }
 
 export interface VideoGenNodeData extends BaseNodeData {
+  /** See `NanoGenNodeData.batchRun` — the fan-out branch runs for video generators too. */
+  batchRun?: BatchRunRecord;
   model:
     | 'veo-3.1'
     | 'veo-3.1-fast'
@@ -722,6 +735,12 @@ export interface LayerEditorNodeData extends BaseNodeData {
   layers: LayerEditorLayer[];
   generatedImage?: string;
   generatedImageUrl?: string;
+  // Durable coordinates persistLayerComposite writes — declared so the executor's
+  // output projection reads typed strings, not index-signature unknowns.
+  generatedImageStoragePath?: string;
+  generatedImageBucket?: string;
+  renderOutputAssetId?: string;
+  renderOutputAssetVersionId?: string;
 }
 
 export type StudioNodeData =

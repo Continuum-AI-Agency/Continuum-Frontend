@@ -24,6 +24,10 @@ export const batchItemSchema = z
     /** Media items carry a library asset id, a URL, or both. */
     assetId: z.string().optional(),
     url: z.string().optional(),
+    // Durable storage coordinates so a batch item's signed URL can be re-signed on
+    // canvas reopen (resignCanvasNodes) instead of dying at the TTL with a stale link.
+    storageBucket: z.string().optional(),
+    storagePath: z.string().optional(),
     label: z.string().optional(),
   })
   .refine((item) => (item.kind === 'text' ? typeof item.value === 'string' : true), {

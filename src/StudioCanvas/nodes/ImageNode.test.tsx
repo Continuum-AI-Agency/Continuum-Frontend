@@ -86,6 +86,21 @@ describe('ImageNode', () => {
     expect(screen.getByText('test.png')).toBeTruthy();
   });
 
+  // D-06: the trigger used to paint the raw stored value ("color") while the menu two
+  // inches away said "Color/Theme".
+  it('shows the reference-type label, not the raw value, in the picker trigger', () => {
+    const { container } = render(
+      <ToastProvider>
+        <ReactFlowProvider>
+          <ImageNode {...defaultProps} data={{ ...defaultProps.data, referenceType: 'color' }} />
+        </ReactFlowProvider>
+      </ToastProvider>,
+    );
+
+    const trigger = container.querySelector('[data-slot="select-value"]');
+    expect(trigger?.textContent).toBe('Color/Theme');
+  });
+
   it('should accept dropped image data URLs', async () => {
     const dataUrl = 'data:image/png;base64,drop_base64';
     const { container } = render(

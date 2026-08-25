@@ -1,9 +1,15 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { connection } from 'next/server';
 import { applySupabaseCookies, getSupabaseCookieOptions } from './cookies';
 import type { Database } from './types';
 
 export async function createSupabaseServerClient() {
+  // @supabase/auth-js reads Date.now() (token-expiry check in _recoverAndRefresh)
+  // during the RSC render; under cacheComponents that is a hard E1432 prerender
+  // error. connection() marks everything past this point dynamic so the auth
+  // client's session read never runs inside prerender scope.
+  await connection();
   const cookieStore = await cookies();
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

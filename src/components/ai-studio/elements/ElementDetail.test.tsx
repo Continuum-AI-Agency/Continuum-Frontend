@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { configure, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import React from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ElementRecord } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type React from 'react';
 import { ElementDetail } from './ElementDetail';
 
 // A signed-preview round trip through react-query does not settle inside
@@ -81,7 +81,7 @@ describe('ElementDetail', () => {
     expect(screen.getByText('This image is what gets sent to the model.')).toBeTruthy();
   });
 
-  it('reads the history strip off the reference ASSET list, newest last', async () => {
+  it('reads the history strip off the reference ASSET list, newest FIRST', async () => {
     renderDetail(
       buildElement({
         referenceHistory: ['ref-1', 'ref-2'],
@@ -92,8 +92,12 @@ describe('ElementDetail', () => {
     const strip = screen.getByTestId('element-history-strip');
     const thumbs = strip.querySelectorAll('button');
     expect(thumbs).toHaveLength(2);
-    expect(thumbs[1]?.getAttribute('aria-pressed')).toBe('true');
-    expect(thumbs[0]?.getAttribute('aria-pressed')).toBe('false');
+    // Newest first, but the version NUMBER stays the stored position, so an entry keeps
+    // its name when a newer one lands above it.
+    expect(thumbs[0]?.getAttribute('aria-label')).toBe('Reference 2 — current default');
+    expect(thumbs[1]?.getAttribute('aria-label')).toBe('Use reference 1 as default');
+    expect(thumbs[0]?.getAttribute('aria-pressed')).toBe('true');
+    expect(thumbs[1]?.getAttribute('aria-pressed')).toBe('false');
     // The big preview is the PINNED entry, not simply the newest.
     await waitFor(() => {
       expect(screen.getByAltText('Aria reference').getAttribute('src')).toBe(signedUrlFor('ref-2'));
@@ -111,6 +115,74 @@ describe('ElementDetail', () => {
     fireEvent.click(screen.getByLabelText('Use reference 1 as default'));
 
     expect(props.onSetDefaultReference).toHaveBeenCalledWith('ref-1');
+  });
+
+  it('will not re-pin the reference that is already the default', () => {
+    const props = renderDetail(
+      buildElement({
+        referenceHistory: ['ref-1', 'ref-2'],
+        defaultReferenceAssetId: 'ref-2',
+      }),
+    );
+
+    const current = screen.getByLabelText('Reference 2 — current default') as HTMLButtonElement;
+    expect(current.disabled).toBe(true);
+    fireEvent.click(current);
+    expect(props.onSetDefaultReference).not.toHaveBeenCalled();
+  });
+
+  it('does not claim a cleared default is what gets sent to the model', () => {
+    // `resolveElementRefs` emits the raw MEMBERS when nothing is pinned, so showing the
+    // newest history entry here would print a picture the model never sees directly
+    // above the words "this image is what gets sent".
+    renderDetail(
+      buildElement({ referenceHistory: ['ref-1', 'ref-2'], defaultReferenceAssetId: null }),
+    );
+
+    expect(screen.queryByAltText('Aria reference')).toBeNull();
+    expect(screen.getByText(/No reference pinned/)).toBeTruthy();
+    // The history itself is still there to pin from.
+    expect(screen.getByTestId('element-history-strip').querySelectorAll('button')).toHaveLength(2);
+  });
+
+  it('says a generation failed instead of just stopping the spinner', () => {
+    renderDetail(buildElement({ referenceHistory: ['ref-1'], defaultReferenceAssetId: 'ref-1' }), {
+      generateError: new Error('element_reference_generation_failed'),
+    });
+
+    expect(screen.getByRole('alert').textContent).toContain('element_reference_generation_failed');
+    // And says the failure cost nothing, which is true: append is non-destructive.
+    expect(screen.getByRole('alert').textContent).toContain('Nothing changed');
+  });
+
+  it('surfaces a set-default failure', () => {
+    renderDetail(
+      buildElement({ referenceHistory: ['ref-1', 'ref-2'], defaultReferenceAssetId: 'ref-2' }),
+      { setDefaultError: new Error('element_reference_not_in_history') },
+    );
+
+    expect(screen.getByRole('alert').textContent).toContain('element_reference_not_in_history');
+  });
+
+  it('counts real elapsed seconds while generating rather than inventing a bar', () => {
+    renderDetail(buildElement({ referenceHistory: ['ref-1'], defaultReferenceAssetId: 'ref-1' }), {
+      isGenerating: true,
+    });
+
+    expect(screen.getByRole('button', { name: /Generating reference… 0s/ })).toBeTruthy();
+    expect(screen.getByText('One paid image call, usually 15–20 seconds.')).toBeTruthy();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+
+  it('marks the entry being pinned as pending', () => {
+    renderDetail(
+      buildElement({ referenceHistory: ['ref-1', 'ref-2'], defaultReferenceAssetId: 'ref-2' }),
+      { pendingDefaultAssetId: 'ref-1' },
+    );
+
+    expect(
+      (screen.getByLabelText('Use reference 1 as default') as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it('regenerates from the members', () => {

@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'bun:test';
-import { buildOverlayPlan, isOverlayActionId, resolveOverlayWindow } from './overlayOp';
+import { describe, expect, it, mock } from 'bun:test';
+import {
+  buildOverlayPlan,
+  ensureBaseDuration,
+  isOverlayActionId,
+  resolveOverlayWindow,
+} from './overlayOp';
 
 // COVERAGE GAP, on purpose: `measureVideo` and `runOverlayAction` are NOT tested here.
 // Measurement needs a real `<video>` decoder and the encode needs WebCodecs, neither of
@@ -120,6 +125,41 @@ describe('buildOverlayPlan', () => {
     expect(watermark.overlays[0].startSec).toBe(0);
     expect(watermark.overlays[0].durationSec).toBe(4);
     expect(watermark.overlays[0].effects).toEqual(plan({}).overlays[0].effects);
+  });
+});
+
+describe('ensureBaseDuration', () => {
+  it('never probes a base that already measured a real duration', async () => {
+    const probe = mock(async () => 99);
+    expect(await ensureBaseDuration(base, probe)).toBe(base);
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('heals a 0.00s base from the probed bytes so the plan can build — D-04', async () => {
+    const healed = await ensureBaseDuration({ ...base, durationSec: 0 }, async () => 4);
+    const built = buildOverlayPlan({
+      actionId: 'video.overlay',
+      base: healed,
+      overlays: [logo],
+      config: {},
+    });
+    expect(built.window).toEqual({ startSec: 0, durationSec: 4 });
+    expect(built.overlays[0].durationSec).toBe(4);
+  });
+
+  it('keeps the honest refusal when the probe cannot read a duration either', async () => {
+    const healed = await ensureBaseDuration({ ...base, durationSec: 0 }, async () => 0);
+    expect(healed.durationSec).toBe(0);
+    expect(() =>
+      buildOverlayPlan({ actionId: 'video.overlay', base: healed, overlays: [logo], config: {} }),
+    ).toThrow(/falls outside this 0\.00s clip/);
+  });
+
+  it('treats a probe failure as no duration, not as a crash', async () => {
+    const healed = await ensureBaseDuration({ ...base, durationSec: 0 }, async () => {
+      throw new Error('unreadable bytes');
+    });
+    expect(healed.durationSec).toBe(0);
   });
 });
 

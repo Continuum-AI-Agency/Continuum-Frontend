@@ -9,6 +9,10 @@
 // generator (#260), and a searchable palette makes hovering moot anyway.
 
 import {
+  ACTION_DEFS,
+  ACTION_IDS,
+  type ActionId,
+  type ActionModality,
   DEFAULT_VIDEO_GENERATOR_MODEL,
   getVideoGeneratorProvider,
   STUDIO_NODE_CATEGORY_ORDER,
@@ -22,6 +26,15 @@ import {
   VIDEO_GENERATOR_PROVIDER_LABELS,
   type VideoGeneratorModel,
 } from '@continuum/contracts';
+
+// The implemented-op filter comes from the runner itself rather than a copy of its list:
+// an op with no runner would be a palette row whose Run button is born greyed out. The
+// static import is safe for the page bundle — `runAction.ts` reaches 28 modules and NONE
+// of them import mediabunny, because the two heavy paths (`subtitlesOp`, and
+// `actionEngines`/`composeTimeline` behind `WORKER_OPS_WITH_ENGINES`) are already kept
+// dynamic/duplicated for exactly this reason. Re-run the trace before adding a static
+// import to any of them.
+import { isImplementedAction } from '../utils/actions/runAction';
 
 /**
  * The node types this canvas can actually MOUNT — the keys of `nodeTypes` in
@@ -44,6 +57,7 @@ export const STUDIO_CANVAS_NODE_TYPES = [
   'extendVideo',
   'hyperframesAgent',
   'timelineEditor',
+  'layerEditor',
   'plannerDraft',
   'organicPublish',
   'paidPublisher',
@@ -59,6 +73,7 @@ export const STUDIO_CANVAS_NODE_TYPES = [
   'action',
   'router',
   'export',
+  'batch',
   'element',
   'designRef',
 ] as const satisfies readonly StudioNodeType[];
@@ -74,14 +89,15 @@ export type StudioCanvasNodeType = (typeof STUDIO_CANVAS_NODE_TYPES)[number];
 export const LEGACY_VIDEO_ALIAS_NODE_TYPES = ['veoDirector', 'veoFast'] as const;
 
 /**
- * Mountable, and NOT offered yet for a different reason: an `action` node is born with no
- * `actionId`, and contracts gives an op-less action no handles and refuses every
- * connection. Offering it would put a row in the palette that creates a node accepting
- * nothing. It belongs here as one row PER OP (the way `videoGen` is one row per model),
- * which needs `addNodeAtPointer`/`createNodeConfig` to carry an `actionId` the way they
- * already carry a `model`. Until then it is declared, not offered.
+ * Mountable types the palette holds back on purpose. EMPTY today, and kept as the one
+ * declared home for that state: `action` used to sit here because an op-less action node
+ * is born with no `actionId`, and contracts gives it no handles and refuses every
+ * connection. It graduated as one row PER OP (the way `videoGen` is one row per model) —
+ * see `actionOpRows` below — so there is nothing left to hold back. A type that mounts
+ * but must not be offered belongs here with the reason, never silently missing from
+ * `plainRows`; `addNodeCatalog.test.ts` proves every entry still mounts.
  */
-export const PENDING_PALETTE_NODE_TYPES = ['action'] as const;
+export const PENDING_PALETTE_NODE_TYPES = [] as const;
 
 /** A category is a menu group. */
 export type AddNodeGroup = StudioNodeCategory;
@@ -95,6 +111,24 @@ export type AddNodeRow = {
   /** Who runs it — the provider, shown at the end of the row. */
   tag: string;
   model?: VideoGeneratorModel;
+  /** Set on `action` rows: the op the created node is born configured for. */
+  actionId?: ActionId;
+  /**
+   * Set on `action` rows: what the op operates on. Contracts gives five pairs of ops the
+   * SAME label — Blur, Colour Grade, Filter, Crop to Ratio, Pad to Ratio all exist once
+   * for stills and once for clips — and two rows reading `Blur` with no way to tell them
+   * apart is the exact trap `LEGACY_VIDEO_ALIAS_NODE_TYPES` above warns about. The family
+   * rides on the row next to the provider tag rather than being folded into the label, so
+   * `Blur` stays the thing you type and the row still says which `Blur` it is.
+   */
+  family?: ActionModality;
+};
+
+/** What an op works on, for the row's tag. */
+export const ACTION_FAMILY_LABELS: Record<ActionModality, string> = {
+  image: 'Image',
+  video: 'Video',
+  text: 'Text',
 };
 
 export type AddNodeGroupSection = {
@@ -150,6 +184,41 @@ const videoModelRows = (): readonly PlacedRow[] =>
     })),
   );
 
+/**
+ * The action catalog's group order, taken from the order `ACTION_DEFS` first mentions each
+ * group rather than authored a second time here — the registry is where the reading order
+ * was decided, and a hand-kept copy is a list that drifts the next time an op lands.
+ */
+const ACTION_GROUP_ORDER: readonly string[] = [
+  ...new Set(ACTION_IDS.map((id) => ACTION_DEFS[id].group)),
+];
+
+/**
+ * One row per IMPLEMENTED op — the `videoGen`-per-model pattern. An `action` node with no
+ * op has no handles and accepts nothing, so the op is what makes the row addable at all:
+ * it rides on the row as `actionId` and `createNodeConfig` stamps it into the new node.
+ */
+const actionOpRows = (): readonly PlacedRow[] => {
+  const definition = studioNodeDefinition('action');
+  return ACTION_IDS.filter(isImplementedAction)
+    .map((id) => ACTION_DEFS[id])
+    .sort(
+      (a, b) =>
+        ACTION_GROUP_ORDER.indexOf(a.group) - ACTION_GROUP_ORDER.indexOf(b.group) ||
+        a.label.localeCompare(b.label),
+    )
+    .map((def) => ({
+      type: 'action' as const,
+      label: def.label,
+      desc: def.description,
+      tag: PROVIDER_LABELS[definition.provider],
+      actionId: def.id,
+      family: def.family,
+      category: definition.category,
+      provider: definition.provider,
+    }));
+};
+
 /** Registry key order, not the mountable-list order: the registry is where the reading
  *  order was authored (utilities before terminal handoffs), and the list below it is just
  *  a filter. */
@@ -157,7 +226,11 @@ const mountable = new Set<string>(STUDIO_CANVAS_NODE_TYPES);
 
 const plainRows = (): readonly PlacedRow[] =>
   (Object.keys(STUDIO_NODE_REGISTRY) as StudioNodeType[])
-    .filter((type) => mountable.has(type) && type !== 'videoGen' && isOffered(type))
+    // `videoGen` and `action` are expanded per model / per op above; a plain row for
+    // either would create a node the expansion already offers, or an op-less one.
+    .filter(
+      (type) => mountable.has(type) && type !== 'videoGen' && type !== 'action' && isOffered(type),
+    )
     .map((type) => {
       const definition = STUDIO_NODE_REGISTRY[type];
       return {
@@ -170,7 +243,9 @@ const plainRows = (): readonly PlacedRow[] =>
       };
     });
 
-const ALL_ROWS: readonly PlacedRow[] = [...videoModelRows(), ...plainRows()];
+// Op rows last inside their category: 32 of them at the top would bury the handoff nodes
+// (Planner Draft, Organic Publish, …) that share the Action group.
+const ALL_ROWS: readonly PlacedRow[] = [...videoModelRows(), ...plainRows(), ...actionOpRows()];
 
 const sectionFor = (category: AddNodeGroup): AddNodeGroupSection => ({
   group: category,
@@ -191,10 +266,25 @@ export const ADD_NODE_GROUP_ORDER: readonly AddNodeGroup[] = ADD_NODE_GROUPS.map
   (section) => section.group,
 );
 
-/** Everything cmdk should match a query against: name, blurb, provider, group. */
+/**
+ * Everything cmdk should match a query against: name, blurb, provider, group, and the op
+ * id. The id is not decoration — cmdk KEYS an item by its value, so two ops that contracts
+ * gave the same label AND the same blurb (`image.crop` / `video.crop`) would collapse into
+ * one row without it. It also makes "image.rotate" a query that works.
+ */
 export const addNodeSearchValue = (section: AddNodeGroupSection, row: AddNodeRow): string =>
-  [row.label, row.desc, row.tag, section.label, row.model].filter(Boolean).join(' ');
+  [
+    row.label,
+    row.desc,
+    row.tag,
+    section.label,
+    row.model,
+    row.actionId,
+    row.family && ACTION_FAMILY_LABELS[row.family],
+  ]
+    .filter(Boolean)
+    .join(' ');
 
-/** Stable per-row key — a videoGen row exists once per model. */
+/** Stable per-row key — a videoGen row exists once per model, an action once per op. */
 export const addNodeRowKey = (row: AddNodeRow): string =>
-  row.model ? `${row.type}-${row.model}` : row.type;
+  row.model ? `${row.type}-${row.model}` : row.actionId ? `${row.type}-${row.actionId}` : row.type;

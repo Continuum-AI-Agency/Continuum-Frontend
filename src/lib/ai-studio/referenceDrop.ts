@@ -17,6 +17,8 @@ export type ParsedReferenceDropPayload =
       sizeBytes?: number;
       assetId?: string;
       brandId?: string;
+      /** Library video rows that recorded a duration carry it through the drop. */
+      durationMs?: number;
     };
 
 type LegacyCreativeAssetPayload = { name: string; path: string; contentType?: string | null };
@@ -27,7 +29,7 @@ type ReactFlowAssetDropPayload = {
     path?: string;
     publicUrl?: string;
     mimeType?: string;
-    meta?: { size?: number; assetId?: string; brandId?: string };
+    meta?: { size?: number; assetId?: string; brandId?: string; durationMs?: number };
   };
 };
 
@@ -55,6 +57,7 @@ export function parseReferenceDropPayload(raw: string): ParsedReferenceDropPaylo
         sizeBytes: parsed.payload?.meta?.size,
         assetId: parsed.payload?.meta?.assetId,
         brandId: parsed.payload?.meta?.brandId,
+        durationMs: positiveFiniteOrUndefined(parsed.payload?.meta?.durationMs),
       };
     }
   }
@@ -99,6 +102,10 @@ export function estimateBase64DecodedBytes(base64: string): number {
 
 export function formatMiB(bytes: number): string {
   return `${(bytes / MEBIBYTE_BYTES).toFixed(1)} MiB`;
+}
+
+function positiveFiniteOrUndefined(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 function tryParseJson(raw: string): unknown | null {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   clipEffectsToCss,
+  cornerRadiusFracFor,
   FILTER_PRESETS,
   filterString,
   hasVisualEffects,
@@ -183,9 +184,9 @@ describe('hasVisualEffects — chroma key and tint', () => {
   it('is true for a chroma key, and for a tint with a non-zero amount', () => {
     // Both MUST be listed in hasVisualEffects or drawClipFrame takes its
     // drawLetterboxed fast path and the effect silently never renders.
-    expect(hasVisualEffects({ chromaKey: { color: '#00ff00', tolerance: 0.3, softness: 0.1 } })).toBe(
-      true,
-    );
+    expect(
+      hasVisualEffects({ chromaKey: { color: '#00ff00', tolerance: 0.3, softness: 0.1 } }),
+    ).toBe(true);
     expect(hasVisualEffects({ tint: { color: '#ff0000', amount: 0.25 } })).toBe(true);
   });
 
@@ -221,6 +222,82 @@ describe('unpreviewableEffects', () => {
       { chromaKey: { color: '#00ff00', tolerance: 0.3, softness: 0.1 } },
       0,
     );
-    expect(Object.keys(css).sort()).toEqual(['filter', 'mixBlendMode', 'opacity', 'transform']);
+    expect(Object.keys(css).sort()).toEqual([
+      'borderRadius',
+      'filter',
+      'mixBlendMode',
+      'opacity',
+      'transform',
+    ]);
+  });
+});
+
+describe('cornerRadiusFrac', () => {
+  it('clamps to the range a radius can occupy', () => {
+    expect(cornerRadiusFracFor(undefined)).toBe(0);
+    expect(cornerRadiusFracFor({})).toBe(0);
+    expect(cornerRadiusFracFor({ cornerRadiusFrac: -1 })).toBe(0);
+    expect(cornerRadiusFracFor({ cornerRadiusFrac: 0.25 })).toBe(0.25);
+    expect(cornerRadiusFracFor({ cornerRadiusFrac: 9 })).toBe(0.5);
+    expect(cornerRadiusFracFor({ cornerRadiusFrac: Number.NaN })).toBe(0);
+  });
+
+  it('emits the percentage border-radius that matches the export clip exactly', () => {
+    // A percentage radius is per-axis, which is the ellipse `drawEffectFrame` clips.
+    expect(clipEffectsToCss({ cornerRadiusFrac: 0.25 }, 0).borderRadius).toBe('25%');
+    expect(clipEffectsToCss({ cornerRadiusFrac: 0 }, 0).borderRadius).toBeUndefined();
+  });
+
+  it('is previewable, so it is NOT reported as a gap', () => {
+    expect(unpreviewableEffects({ cornerRadiusFrac: 0.25 })).toEqual([]);
+  });
+});
+
+describe('the five preset primitives', () => {
+  const specs = [
+    ['vignette', { vignette: { amount: 0.5 } }],
+    ['filmGrain', { filmGrain: { amount: 0.5 } }],
+    ['pixelate', { pixelate: { blockPx: 16 } }],
+    ['chromaticAberration', { chromaticAberration: { amount: 0.5 } }],
+    ['vhs', { vhs: { amount: 0.5 } }],
+  ] as const;
+
+  it('each counts as a visual effect, or drawClipFrame would skip the whole draw', () => {
+    for (const [name, spec] of specs) {
+      expect([name, hasVisualEffects(spec)]).toEqual([name, true]);
+      expect([name, hasVisualEffects({ ...spec, cornerRadiusFrac: 0.1 })]).toEqual([name, true]);
+    }
+    expect(hasVisualEffects({ cornerRadiusFrac: 0.1 })).toBe(true);
+  });
+
+  it('each is reported unpreviewable — no CSS filter can show them', () => {
+    for (const [name, spec] of specs) {
+      expect(unpreviewableEffects(spec)).toEqual([name]);
+    }
+  });
+
+  it('treats a zero amount as no effect, the same convention as tint', () => {
+    expect(hasVisualEffects({ vignette: { amount: 0 } })).toBe(false);
+    expect(hasVisualEffects({ filmGrain: { amount: 0 } })).toBe(false);
+    expect(hasVisualEffects({ chromaticAberration: { amount: 0 } })).toBe(false);
+    expect(hasVisualEffects({ vhs: { amount: 0 } })).toBe(false);
+    // A 1px "mosaic" is the source, so the floor is 2.
+    expect(hasVisualEffects({ pixelate: { blockPx: 1 } })).toBe(false);
+    expect(unpreviewableEffects({ vignette: { amount: 0 } })).toEqual([]);
+  });
+
+  it('reports every gap on a clip that stacks several', () => {
+    expect(
+      unpreviewableEffects({
+        chromaKey: { color: '#00ff00', tolerance: 0.3, softness: 0.1 },
+        vignette: { amount: 0.4 },
+        vhs: { amount: 0.2 },
+      }),
+    ).toEqual(['chromaKey', 'vignette', 'vhs']);
+  });
+
+  it('keeps them out of the CSS — the preview must not half-fake them', () => {
+    const css = clipEffectsToCss({ vhs: { amount: 1 }, pixelate: { blockPx: 32 } }, 0);
+    expect(css.filter).toBeUndefined();
   });
 });

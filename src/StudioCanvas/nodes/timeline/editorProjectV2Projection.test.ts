@@ -328,3 +328,113 @@ describe('projectTimelineDocumentToEditorProjectV2', () => {
     expect(first.warnings).toContain('Timeline source "logo-node" is absent from the media pool.');
   });
 });
+
+// The projection is one half of a pair: `clipEffectSpecFromEditorClip` in
+// `lib/client-render/executors/timelineEditor.ts` reads these instances back. Before
+// this wave neither half existed for chroma/tint/corners, so an effect the renderer
+// implements was dropped the moment a timeline became a durable project.
+describe('effect instances that used to be dropped', () => {
+  function withEffects(effects: Record<string, unknown>): TimelineDocument {
+    const document = timelineFixture();
+    return {
+      ...document,
+      items: [{ ...document.items[0], effects: effects as never }, document.items[1]],
+    };
+  }
+
+  function videoEffectsOf(document: TimelineDocument) {
+    const { project } = projectTimelineDocumentToEditorProjectV2({
+      document,
+      pool: canvasPool,
+      sourceScope: 'canvas',
+      projectId: 'canvas-room-1',
+    });
+    const track = project.tracks.find((candidate) => candidate.kind === 'video');
+    return track?.kind === 'video' ? track.clips[0].effects : [];
+  }
+
+  test('projects a chroma key with the parameters chromaKeyImageData consumes', () => {
+    const effects = videoEffectsOf(
+      withEffects({ chromaKey: { color: '#00ff00', tolerance: 0.4, softness: 0.15 } }),
+    );
+    const chroma = effects.find((effect) => effect.effectType === 'chroma_key');
+    expect(chroma).toBeDefined();
+    expect(chroma?.enabled).toBe(true);
+    expect(chroma?.parameters).toEqual({ color: '#00ff00', tolerance: 0.4, softness: 0.15 });
+  });
+
+  test('projects a tint and a corner radius as custom instances', () => {
+    const effects = videoEffectsOf(
+      withEffects({ tint: { color: '#ff0000', amount: 0.35 }, cornerRadiusFrac: 0.2 }),
+    );
+    const tint = effects.find((effect) => effect.effectId === 'tint');
+    expect(tint?.parameters).toEqual({ color: '#ff0000', amount: 0.35 });
+    const corner = effects.find((effect) => effect.effectId === 'corner_radius');
+    expect(corner?.parameters).toEqual({ radiusFrac: 0.2 });
+  });
+
+  test('clamps the projected corner radius the way the draw does', () => {
+    const effects = videoEffectsOf(withEffects({ cornerRadiusFrac: 4 }));
+    expect(effects.find((effect) => effect.effectId === 'corner_radius')?.parameters).toEqual({
+      radiusFrac: 0.5,
+    });
+  });
+
+  test('omits a tint at amount 0 and a zero corner radius', () => {
+    const effects = videoEffectsOf(
+      withEffects({ tint: { color: '#ff0000', amount: 0 }, cornerRadiusFrac: 0 }),
+    );
+    expect(effects.find((effect) => effect.effectId === 'tint')).toBeUndefined();
+    expect(effects.find((effect) => effect.effectId === 'corner_radius')).toBeUndefined();
+  });
+
+  test('still projects the colour look alongside a key, not instead of it', () => {
+    const effects = videoEffectsOf(
+      withEffects({
+        filterPreset: 'noir',
+        chromaKey: { color: '#0000ff', tolerance: 0.2, softness: 0 },
+      }),
+    );
+    expect(effects.map((effect) => effect.effectType).sort()).toEqual([
+      'chroma_key',
+      'color_adjustment',
+    ]);
+  });
+
+  test('emits nothing for a clip with no effects at all', () => {
+    const document = timelineFixture();
+    const bare: TimelineDocument = {
+      ...document,
+      items: [{ ...document.items[0], effects: undefined }, document.items[1]],
+    };
+    expect(videoEffectsOf(bare)).toEqual([]);
+  });
+});
+
+describe('the export quality ladder rides the preset id', () => {
+  test('scales videoBitrateKbps without a second document field', () => {
+    const document = timelineFixture();
+    const bitrateFor = (exportPresetId: string): number =>
+      projectTimelineDocumentToEditorProjectV2({
+        document: { ...document, exportPresetId },
+        pool: canvasPool,
+        sourceScope: 'canvas',
+        projectId: 'canvas-room-1',
+      }).project.exportSettings.videoBitrateKbps;
+
+    const standard = bitrateFor('vertical-1080');
+    expect(bitrateFor('vertical-1080@high')).toBeGreaterThan(standard);
+    expect(bitrateFor('vertical-1080@compact')).toBeLessThan(standard);
+  });
+
+  test('keeps the bare geometry id in exportSettings.presetId', () => {
+    const { project } = projectTimelineDocumentToEditorProjectV2({
+      document: { ...timelineFixture(), exportPresetId: 'square-1080@high' },
+      pool: canvasPool,
+      sourceScope: 'canvas',
+      projectId: 'canvas-room-1',
+    });
+    expect(project.exportSettings.presetId).toBe('square-1080');
+    expect(project.exportSettings.width).toBe(1080);
+  });
+});

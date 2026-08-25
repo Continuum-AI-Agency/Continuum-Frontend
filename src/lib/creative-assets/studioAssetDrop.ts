@@ -29,6 +29,10 @@ export type StudioAssetDropPayload = {
       brandId: string;
       title?: string;
       kind: MediaAsset['kind'];
+      /** Video only, and only when the media.assets row actually recorded one. The
+       *  dropped node keeps it so duration-dependent ops (burn-in windows, trims)
+       *  do not start from a 0.00s clip. */
+      durationMs?: number;
     };
   };
 };
@@ -47,6 +51,9 @@ export function buildStudioAssetDropPayload(asset: MediaAsset): StudioAssetDropP
         brandId: asset.brandId,
         title: asset.title ?? undefined,
         kind: asset.kind,
+        ...(typeof asset.durationMs === 'number' && asset.durationMs > 0
+          ? { durationMs: asset.durationMs }
+          : {}),
       },
     },
   };

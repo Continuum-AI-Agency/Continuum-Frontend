@@ -15,6 +15,7 @@ import {
   FILTER_PRESET_LABELS,
   type FilterPreset,
   type TextOverlay,
+  unpreviewableEffects,
 } from '../../utils/render/effectSpec';
 import type { ClipTransition, ClipTransitionType } from '../../utils/render/transitions';
 import type { ClipAudioPatch } from './useTimelineEditorModel';
@@ -148,6 +149,7 @@ export function ClipInspector({
   const trimEnd = item.trimEndSec ?? sourceDurationSec ?? trimStart + durationSec;
   const kenBurnsOn = Boolean(effects.kenBurns);
   const textOverlays = effects.text ?? [];
+  const unpreviewable = unpreviewableEffects(item.effects);
 
   const patchAdjustments = (patch: Partial<NonNullable<ClipEffectSpec['adjustments']>>) =>
     onSetEffects({ adjustments: { ...adjustments, ...patch } });
@@ -187,6 +189,17 @@ export function ClipInspector({
           </>
         ) : null}
       </div>
+
+      {unpreviewable.length > 0 ? (
+        <div
+          className="w-fit rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-2xs text-muted-foreground"
+          title={`No CSS preview for: ${unpreviewable.join(', ')}. The export renders them exactly.`}
+        >
+          {unpreviewable.length === 1
+            ? '1 effect renders but can’t be previewed'
+            : `${unpreviewable.length} effects render but can’t be previewed`}
+        </div>
+      ) : null}
 
       <Separator />
 

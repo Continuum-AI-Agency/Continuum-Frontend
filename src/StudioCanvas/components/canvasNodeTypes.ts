@@ -1,9 +1,15 @@
-import { createNodeData, isStudioNodeType, type StudioNodeType } from '@continuum/contracts';
+import {
+  type ActionId,
+  createNodeData,
+  isStudioNodeType,
+  type StudioNodeType,
+} from '@continuum/contracts';
 
 import { Edge as AiElementsEdge } from '@/components/ai-elements/edge';
 import { ApiRenderBlock } from '../nodes/ApiRenderBlock';
 import { AudioNode } from '../nodes/AudioNode';
 import { ActionNode } from '../nodes/action/ActionNode';
+import { BatchNode } from '../nodes/batch/BatchNode';
 import { DesignRefNode } from '../nodes/DesignRefNode';
 import { DocumentNode } from '../nodes/DocumentNode';
 import { ElementNode } from '../nodes/ElementNode';
@@ -13,6 +19,7 @@ import { FrameExtractBlock } from '../nodes/FrameExtractBlock';
 import { HyperframesAgentBlock } from '../nodes/HyperframesAgentBlock';
 import { ImageGenBlock } from '../nodes/ImageGenBlock';
 import { ImageNode } from '../nodes/ImageNode';
+import { LayerEditorBlock } from '../nodes/layerEditor/LayerEditorBlock';
 import { NoteNode } from '../nodes/NoteNode';
 import { OmniGenBlock } from '../nodes/OmniGenBlock';
 import { OrganicPublishBlock } from '../nodes/OrganicPublishBlock';
@@ -36,10 +43,9 @@ import {
 // owns. Everything the catalog can name is a member of this union, so existing callers
 // narrow to it unchanged.
 //
-// This set is the IMPLEMENTED subset — a type is here only once it has a component. The
-// registry declares 27; `batch` and `layerEditor` have their vocabulary but not their
-// runtime, and registering a type with no implementation is worse than leaving it out:
-// React Flow renders nothing and the node looks broken rather than absent.
+// This set is the IMPLEMENTED subset — a type joins only once it has a component:
+// registering a type with no implementation is worse than leaving it out, because React
+// Flow renders nothing and the node looks broken rather than absent.
 export const NODE_TYPES = new Set<StudioNodeType>([
   'nanoGen',
   'videoGen',
@@ -63,6 +69,9 @@ export const NODE_TYPES = new Set<StudioNodeType>([
   'frameExtract',
   'action',
   'router',
+  // Wave 4: the fan-out collector. `nodeTypes` below mounts it.
+  'batch',
+  'layerEditor',
   // Wave 3: terminal writer. `nodeTypes` below mounts it; the palette line in
   // addNodeCatalog.ts graduates it.
   'export',
@@ -79,7 +88,7 @@ export const isStudioCanvasNodeType = (value: string): value is StudioNodeType =
 
 export const createNodeConfig = (
   type: StudioNodeType,
-  options?: { model?: VideoGeneratorModel },
+  options?: { model?: VideoGeneratorModel; actionId?: ActionId },
 ): { data: Record<string, unknown>; style?: Record<string, number> } => {
   // One factory for the node defaults (@continuum/contracts) — the canvas, the
   // edge-drop menu and the agent write path must create the SAME node. It also sizes
@@ -154,10 +163,23 @@ export const createNodeConfig = (
     return createNodeData('frameExtract');
   }
 
-  // An action is born with NO op: contracts gives an `actionId: null` node no handles
-  // and refuses every connection, which is the honest state for "you have not chosen
-  // what this does yet". The palette always creates one with an op already set.
-  if (type === 'action' || type === 'router' || type === 'element' || type === 'designRef') {
+  // An action is born with NO op unless one is asked for: contracts gives an
+  // `actionId: null` node no handles and refuses every connection, which is the honest
+  // state for "you have not chosen what this does yet". Every palette row IS an op, so it
+  // passes one — and the node arrives with that op's handles. Its `config` stays `{}`:
+  // `parseActionConfig` merges the op's schema defaults over what is stored, so the
+  // defaults live in one place instead of being copied into every new node.
+  if (type === 'action') {
+    return createNodeData('action', options?.actionId ? { actionId: options.actionId } : {});
+  }
+
+  if (
+    type === 'router' ||
+    type === 'element' ||
+    type === 'designRef' ||
+    type === 'batch' ||
+    type === 'layerEditor'
+  ) {
     return createNodeData(type);
   }
 
@@ -218,6 +240,8 @@ export const nodeTypes = {
   element: ElementNode,
   export: ExportNode,
   router: RouterNode,
+  batch: BatchNode,
+  layerEditor: LayerEditorBlock,
 };
 
 export const edgeTypes = {

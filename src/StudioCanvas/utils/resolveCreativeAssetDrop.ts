@@ -24,6 +24,10 @@ export type CreativeAssetDropSuccess = {
   sourcePath?: string;
   bucket?: string;
   sourceUrl?: string;
+  // Library video rows that recorded a duration carry it here so the node keeps it —
+  // duration-dependent ops (burn-in windows, trims) then start from a real length
+  // instead of a 0.00s clip.
+  durationMs?: number;
 };
 
 export type CreativeAssetDropError = {
@@ -140,6 +144,7 @@ export async function resolveCreativeAssetDrop(
       sourcePath: parsed.kind === 'remote' ? parsed.path : undefined,
       bucket: parsed.kind === 'remote' ? parsed.bucket : undefined,
       sourceUrl: parsed.kind === 'remote' ? (sourceUrl ?? parsed.publicUrl) : undefined,
+      durationMs: parsed.kind === 'remote' ? parsed.durationMs : undefined,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to resolve asset';

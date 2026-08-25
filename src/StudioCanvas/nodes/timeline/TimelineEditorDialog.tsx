@@ -37,9 +37,23 @@ import { DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
 import { generateVideoEvidenceFrames } from '@/lib/library/videoPoster';
 import type { TimelineInputSource } from '../../types';
 import { clipEffectsToCss, resolveTextOverlays, speedFor } from '../../utils/render/effectSpec';
-import { DEFAULT_EXPORT_PRESET_ID, EXPORT_PRESETS } from '../../utils/render/exportPresets';
+import {
+  availableExportCodecs,
+  EXPORT_PRESETS,
+  EXPORT_QUALITIES,
+  type ExportCodecId,
+  type ExportQualityId,
+  formatExportSelection,
+  probeEncodableVideoCodecs,
+  type ResolvedExportCodec,
+  resolveExportCodec,
+  resolveExportPreset,
+  resolveExportQuality,
+} from '../../utils/render/exportPresets';
 import { headFadeFor, tailFadeFor, transitionOverlayAt } from '../../utils/render/transitions';
 import { findActiveCue, groupWordsIntoCues } from '../../utils/splice/captionCues';
+import { nleClipsFrom, toEdlCmx3600, toFcpxml } from '../../utils/timeline/nleExport';
+import { setTimelineExportCodecPreference } from '../../workers/spliceWorkerClient';
 import { AUDIO_DROP_ID, AudioTracks } from './AudioTracks';
 import type { TimelineEditorAdapter, TimelineRenderSinkKind } from './adapter';
 import {
@@ -71,6 +85,70 @@ import { useTimelineKeymap } from './useTimelineKeymap';
 import { useTimelineRender } from './useTimelineRender';
 
 const PX_PER_SEC = 80;
+
+const EXPORT_CODEC_LABELS: Record<ExportCodecId, string> = {
+  avc: 'H.264 · MP4',
+  hevc: 'HEVC · MP4',
+  vp9: 'VP9 · WebM',
+};
+
+// Codec picker for the export controls. Options come from the machine's real encoder
+// probe, so a codec the hardware refused is never offered; the resolved choice (with
+// its container, and any fallback) is reported upward for the render call. The probe
+// is a prop only as a test seam — mocking the module would leak process-wide.
+export function TimelineExportCodecSelect({
+  value,
+  onChange,
+  onResolvedChange,
+  disabled,
+  probe = probeEncodableVideoCodecs,
+}: {
+  value: ExportCodecId;
+  onChange: (next: ExportCodecId) => void;
+  onResolvedChange?: (resolved: ResolvedExportCodec) => void;
+  disabled?: boolean;
+  probe?: () => Promise<ReadonlySet<string>>;
+}) {
+  const [encodable, setEncodable] = useState<ReadonlySet<string>>(() => new Set(['avc']));
+  useEffect(() => {
+    let mounted = true;
+    probe().then((codecs) => {
+      if (mounted) setEncodable(codecs);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [probe]);
+
+  const resolved = useMemo(() => resolveExportCodec(value, encodable), [value, encodable]);
+  useEffect(() => {
+    onResolvedChange?.(resolved);
+  }, [onResolvedChange, resolved]);
+
+  return (
+    <label className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+      Codec
+      <select
+        className="nodrag h-8 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value as ExportCodecId)}
+      >
+        {availableExportCodecs(encodable).map((codec) => (
+          <option key={codec} value={codec}>
+            {EXPORT_CODEC_LABELS[codec]}
+          </option>
+        ))}
+      </select>
+      {resolved.fellBackFrom ? (
+        <span className="text-2xs">
+          {EXPORT_CODEC_LABELS[resolved.fellBackFrom]} unavailable — exporting{' '}
+          {EXPORT_CODEC_LABELS[resolved.codec]}
+        </span>
+      ) : null}
+    </label>
+  );
+}
 
 const blobToBase64 = (blob: Blob): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -515,12 +593,61 @@ export function TimelineEditorDialog({
     [model, patchDocument, playback.playheadSec, sourceDurations],
   );
 
-  const exportPresetId = document.exportPresetId ?? DEFAULT_EXPORT_PRESET_ID;
-  const setExportPreset = useCallback(
-    (id: string) => {
-      patchDocument((current) => ({ ...current, exportPresetId: id }));
+  // Geometry and quality share the one `exportPresetId` string the strict authoring
+  // contract already allows — see `formatExportSelection`.
+  const exportPreset = resolveExportPreset(document.exportPresetId);
+  const exportQuality = resolveExportQuality(document.exportPresetId);
+  // The codec choice is session-local (the strict authoring contract has no field for
+  // it); the resolved codec+container reach the render through the worker client's
+  // preference seam, which useTimelineRender's runTimelineInWorker call reads.
+  const [exportCodec, setExportCodec] = useState<ExportCodecId>('avc');
+  const handleResolvedCodec = useCallback((resolved: ResolvedExportCodec) => {
+    setTimelineExportCodecPreference({
+      videoCodec: resolved.codec,
+      container: resolved.container,
+    });
+  }, []);
+  const setExportSelection = useCallback(
+    (presetId: string, qualityId: ExportQualityId) => {
+      patchDocument((current) => ({
+        ...current,
+        exportPresetId: formatExportSelection(presetId, qualityId),
+      }));
     },
     [patchDocument],
+  );
+
+  // NLE interchange: built here, downloaded here, nothing sent anywhere. `sourceLabel`
+  // falls back to the item id so a clip whose pool entry has gone missing still names
+  // itself in the EDL instead of exporting an empty FROM CLIP NAME.
+  const downloadNle = useCallback(
+    (format: 'edl' | 'fcpxml') => {
+      const clips = nleClipsFrom(model.layout.clips, (sourceNodeId, index) =>
+        poolById.get(sourceNodeId)?.label?.trim()
+          ? `${poolById.get(sourceNodeId)?.label}`
+          : `clip-${index + 1}`,
+      );
+      if (clips.length === 0) return;
+      const title = 'Continuum Timeline';
+      const text =
+        format === 'edl'
+          ? toEdlCmx3600(clips, { title })
+          : toFcpxml(clips, {
+              title,
+              width: exportPreset.width ?? undefined,
+              height: exportPreset.height ?? undefined,
+            });
+      const blob = new Blob([text], {
+        type: format === 'edl' ? 'text/plain' : 'application/xml',
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      anchor.href = url;
+      anchor.download = format === 'edl' ? 'timeline.edl' : 'timeline.fcpxml';
+      anchor.click();
+      URL.revokeObjectURL(url);
+    },
+    [exportPreset.height, exportPreset.width, model.layout.clips, poolById],
   );
 
   const handleRender = useCallback(
@@ -690,14 +817,13 @@ export function TimelineEditorDialog({
                 Captions
               </label>
             ) : null}
-            {/* biome-ignore lint/a11y/noLabelWithoutControl: label wraps its select control */}
             <label className="flex items-center gap-1.5 text-2xs text-muted-foreground">
               Export
               <select
                 className="nodrag h-8 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground"
-                value={exportPresetId}
+                value={exportPreset.id}
                 disabled={isRendering}
-                onChange={(event) => setExportPreset(event.target.value)}
+                onChange={(event) => setExportSelection(event.target.value, exportQuality.id)}
               >
                 {EXPORT_PRESETS.map((preset) => (
                   <option key={preset.id} value={preset.id}>
@@ -706,6 +832,52 @@ export function TimelineEditorDialog({
                 ))}
               </select>
             </label>
+            <label className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+              Quality
+              <select
+                className="nodrag h-8 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground"
+                value={exportQuality.id}
+                disabled={isRendering}
+                onChange={(event) =>
+                  setExportSelection(exportPreset.id, event.target.value as ExportQualityId)
+                }
+                title={exportQuality.description}
+              >
+                {EXPORT_QUALITIES.map((quality) => (
+                  <option key={quality.id} value={quality.id}>
+                    {quality.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <TimelineExportCodecSelect
+              value={exportCodec}
+              onChange={setExportCodec}
+              onResolvedChange={handleResolvedCodec}
+              disabled={isRendering}
+            />
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-2xs"
+                onClick={() => downloadNle('edl')}
+                disabled={items.length === 0}
+                title="Download a CMX3600 EDL of this timeline (free, no render)"
+              >
+                EDL
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-2xs"
+                onClick={() => downloadNle('fcpxml')}
+                disabled={items.length === 0}
+                title="Download an FCPXML of this timeline (free, no render)"
+              >
+                FCPXML
+              </Button>
+            </div>
             <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
               Done
             </Button>

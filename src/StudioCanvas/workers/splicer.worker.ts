@@ -147,6 +147,8 @@ async function handleStartTimeline(
       audioTracks: input.audioTracks,
       videoBitrate: input.videoBitrate,
       audioBitrate: input.audioBitrate,
+      videoCodec: input.videoCodec,
+      container: input.container,
       frameRate: input.frameRate,
       targetWidth: input.targetWidth,
       targetHeight: input.targetHeight,

@@ -31,6 +31,13 @@ const SIGNALS_TRENDS_KEY = 'canvas-context:signals-trends';
 const SIGNALS_EVENTS_KEY = 'canvas-context:signals-events';
 const SIGNALS_QUESTIONS_KEY = 'canvas-context:signals-questions';
 
+// D-05 cheap fix: the backend Continuum-Backend/App/ai-studio/canvas/agent/
+// composerContext.ts throws for trend/event/question — a single picked signal kills
+// the whole run (its skills and media refs included) and paints the raw internal
+// error. Withhold every signal suggestion (root folder + free-text matches) —
+// re-enable when the resolver lands by flipping this flag (one revert).
+const SIGNALS_RESOLVER_LANDED = false;
+
 type FetchAssets = (input: FetchMediaMentionAssetsInput) => Promise<AgentMentionSuggestion[]>;
 type FetchFolders = (brandId: string, source?: 'canvas') => Promise<AgentMentionSuggestion[]>;
 
@@ -224,6 +231,7 @@ export function createCanvasComposerMentionProvider({
   // then back into Questions must not re-fetch the week three times.
   let signalsPromise: Promise<CanvasSignalCatalog> | null = null;
   const signals = (): Promise<CanvasSignalCatalog> => {
+    if (!SIGNALS_RESOLVER_LANDED) return Promise.resolve(EMPTY_SIGNALS);
     signalsPromise ??= fetchSignals(brandId).catch(() => EMPTY_SIGNALS);
     return signalsPromise;
   };
@@ -237,7 +245,9 @@ export function createCanvasComposerMentionProvider({
             ? [folder(ELEMENTS_ROOT_KEY, 'Elements', 'media_asset', 'Saved subjects by category')]
             : []),
           folder(MEDIA_ROOT_KEY, 'Media library', 'media_asset', 'Images & videos'),
-          folder(SIGNALS_ROOT_KEY, 'Signals', 'trend', 'Trends, events, questions'),
+          ...(SIGNALS_RESOLVER_LANDED
+            ? [folder(SIGNALS_ROOT_KEY, 'Signals', 'trend', 'Trends, events, questions')]
+            : []),
         ];
       }
       const [media, catalog] = await Promise.all([

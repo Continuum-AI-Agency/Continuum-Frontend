@@ -5,6 +5,14 @@ import type { ClipEffectSpec } from '../utils/render/effectSpec';
 import type { ClipTransition } from '../utils/render/transitions';
 import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
 
+// Encoder selection for timeline renders. Optional and additive: when absent the
+// worker encodes exactly as before (avc in mp4). Only `start_timeline` carries these —
+// the `start`/`start_single_source` engines (spliceClips/spliceSingleSource) still
+// hardcode avc and are outside this wave's edit fence, so advertising the fields there
+// would be a control that does nothing.
+export type WorkerExportVideoCodec = 'avc' | 'hevc' | 'vp9';
+export type WorkerExportContainer = 'mp4' | 'webm';
+
 export type WorkerClipInput = {
   slotId: string;
   blob: Blob;
@@ -100,6 +108,8 @@ export type SpliceWorkerInbound =
       audioTracks?: TimelineAudioWorkerItem[];
       videoBitrate?: number;
       audioBitrate?: number;
+      videoCodec?: WorkerExportVideoCodec;
+      container?: WorkerExportContainer;
       frameRate?: number;
       targetWidth?: number;
       targetHeight?: number;

@@ -86,6 +86,18 @@ describe('buildStudioAssetDropPayload', () => {
     });
   });
 
+  it('carries a recorded duration in meta, and omits it when the row has none', () => {
+    const withDuration = buildStudioAssetDropPayload({
+      ...baseAsset,
+      kind: 'video',
+      durationMs: 4210,
+    }).payload;
+    expect(withDuration.meta.durationMs).toBe(4210);
+    // baseAsset has durationMs: null — the upload path that never probed. The payload
+    // must not invent a 0.
+    expect('durationMs' in buildStudioAssetDropPayload(baseAsset).payload.meta).toBe(false);
+  });
+
   it('uses the reactflow node-data MIME contract', () => {
     expect(STUDIO_ASSET_DROP_MIME).toBe('application/reactflow-node-data');
     expect(buildStudioAssetDropPayload(baseAsset).type).toBe('asset_drop');

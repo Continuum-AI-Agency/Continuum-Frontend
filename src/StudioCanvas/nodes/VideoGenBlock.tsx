@@ -76,6 +76,7 @@ import {
   type VideoGeneratorModel,
   type VideoGeneratorReferenceMode,
 } from '../utils/videoModel';
+import { BatchMatrixButton } from './batch/BatchMatrixButton';
 
 const LimitedHandle = ({
   maxConnections,
@@ -472,6 +473,11 @@ export function VideoGenBlock({
                   </Tooltip>
                 ) : null}
               </div>
+              {data.batchRun ? (
+                <div className="absolute right-2 top-2 z-20 rounded border border-border/70 bg-background/90 shadow-sm backdrop-blur-sm">
+                  <BatchMatrixButton record={data.batchRun} />
+                </div>
+              ) : null}
               <NodeResizer
                 minWidth={VIDEO_GENERATOR_NODE_BOUNDS.minWidth}
                 minHeight={VIDEO_GENERATOR_NODE_BOUNDS.minHeight}

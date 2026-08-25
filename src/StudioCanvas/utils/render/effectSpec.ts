@@ -119,6 +119,37 @@ export interface ClipEffectSpec {
    * rather than repainting the knocked-out pixels.
    */
   tint?: { color: string; amount: number };
+  /**
+   * Corner radius as a fraction of the drawn frame's width AND height — i.e. the
+   * corners are ELLIPTICAL, not circular. 0..0.5.
+   *
+   * That is not a shortcut, it is the only definition the preview can honour. CSS
+   * `border-radius: N%` resolves per axis (horizontal radius = N% × width, vertical =
+   * N% × height), and canvas `roundRect` takes exactly that pair via a `DOMPointInit`.
+   * A circular `min(w, h)` radius has no percentage form, and `clipEffectsToCss` never
+   * sees the box size, so it could not emit one — the preview would disagree with the
+   * export, which is the one thing this file exists to prevent.
+   */
+  cornerRadiusFrac?: number;
+  /**
+   * Radial darkening toward the corners. 0 = none, 1 = corners fully black.
+   *
+   * The five fields below are the effect presets that have NO CSS `filter` equivalent
+   * (`vignette`, `filmGrain`, `pixelate`, `chromaticAberration`, `vhs`). Each is a
+   * per-pixel or resample step in `frameDraw.prepareSource`, declared here the same way
+   * `chromaKey` and `tint` are and reported by `unpreviewableEffects` for the same
+   * reason: the preview physically cannot show them, so it says so rather than faking
+   * them with a filter chain that is wrong in a different way.
+   */
+  vignette?: { amount: number };
+  /** Additive hashed noise, animated across the clip. 0..1. */
+  filmGrain?: { amount: number };
+  /** Mosaic block size in SOURCE pixels. >= 2. */
+  pixelate?: { blockPx: number };
+  /** Radial R/B channel split, the way a lens fringes toward its edge. 0..1. */
+  chromaticAberration?: { amount: number };
+  /** Horizontal chroma smear + scanlines + per-row tape noise. 0..1. */
+  vhs?: { amount: number };
 }
 
 export interface TransformKeyframe {
@@ -278,7 +309,15 @@ export type ClipEffectCss = {
   // A `BlendMode` value is a subset of CSS `mix-blend-mode`, so this is directly
   // assignable to React.CSSProperties.
   mixBlendMode?: BlendMode;
+  borderRadius?: string;
 };
+
+/** `cornerRadiusFrac` clamped to the 0..0.5 range a radius can actually occupy. */
+export function cornerRadiusFracFor(spec: ClipEffectSpec | undefined): number {
+  const value = spec?.cornerRadiusFrac;
+  if (value === undefined || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(0.5, value));
+}
 
 /** Resolve the clip's visual effects to CSS for the preview <video>/<img>. */
 export function clipEffectsToCss(spec: ClipEffectSpec | undefined, u: number): ClipEffectCss {
@@ -298,7 +337,17 @@ export function clipEffectsToCss(spec: ClipEffectSpec | undefined, u: number): C
 
   const opacity = opacityFor(spec);
   const mixBlendMode = spec.blendMode && spec.blendMode !== 'normal' ? spec.blendMode : undefined;
-  return { filter, transform, opacity: opacity === 1 ? undefined : opacity, mixBlendMode };
+  // A percentage border-radius is per-axis, which is exactly the ellipse
+  // `drawEffectFrame` clips with — the same geometry on both sides, not an approximation.
+  const radius = cornerRadiusFracFor(spec);
+  const borderRadius = radius > 0 ? `${radius * 100}%` : undefined;
+  return {
+    filter,
+    transform,
+    opacity: opacity === 1 ? undefined : opacity,
+    mixBlendMode,
+    borderRadius,
+  };
 }
 
 // ---- Export (canvas) consumers ---------------------------------------------
@@ -384,29 +433,55 @@ export function hasVisualEffects(spec: ClipEffectSpec | undefined): boolean {
       spec.kenBurns ||
       (spec.keyframes && spec.keyframes.length >= 2) ||
       spec.text?.length ||
-      // Both must be listed here or `drawClipFrame` takes its `drawLetterboxed` fast
-      // path and the effect silently never runs. A tint at amount 0 is a no-op, the
-      // same convention as opacity 1; a chroma key is not — at tolerance 0 it still
-      // keys exact matches.
+      // EVERY draw-time effect must be listed here or `drawClipFrame` takes its
+      // `drawLetterboxed` fast path and the effect silently never runs. A tint at
+      // amount 0 is a no-op, the same convention as opacity 1; a chroma key is not —
+      // at tolerance 0 it still keys exact matches.
       spec.chromaKey ||
-      (spec.tint && spec.tint.amount > 0),
+      (spec.tint && spec.tint.amount > 0) ||
+      cornerRadiusFracFor(spec) > 0 ||
+      (spec.vignette && spec.vignette.amount > 0) ||
+      (spec.filmGrain && spec.filmGrain.amount > 0) ||
+      (spec.pixelate && spec.pixelate.blockPx >= 2) ||
+      (spec.chromaticAberration && spec.chromaticAberration.amount > 0) ||
+      (spec.vhs && spec.vhs.amount > 0),
   );
 }
+
+/** An effect that renders in the export but cannot be shown in the CSS preview. */
+export type UnpreviewableEffect =
+  | 'chromaKey'
+  | 'tint'
+  | 'vignette'
+  | 'filmGrain'
+  | 'pixelate'
+  | 'chromaticAberration'
+  | 'vhs';
 
 /**
  * The effects the CSS preview physically cannot show, so a surface can say so.
  *
- * Keying and tinting have no `filter` primitive. The honest options were to fake them
- * with a `sepia()`/`hue-rotate()` chain that is wrong in a different way, or to name
- * the gap. A preview that silently omits an effect is how "it looked fine while I was
- * scrubbing" becomes a surprise in the export.
+ * None of these has a `filter` primitive. The honest options were to fake them with a
+ * `sepia()`/`hue-rotate()` chain that is wrong in a different way, or to name the gap.
+ * A preview that silently omits an effect is how "it looked fine while I was scrubbing"
+ * becomes a surprise in the export.
+ *
+ * `cornerRadiusFrac` is deliberately NOT here — it maps exactly onto CSS
+ * `border-radius`, so the preview shows it truthfully.
  */
 export function unpreviewableEffects(
   spec: ClipEffectSpec | undefined,
-): readonly ('chromaKey' | 'tint')[] {
+): readonly UnpreviewableEffect[] {
   if (!spec) return [];
-  const missing: ('chromaKey' | 'tint')[] = [];
+  const missing: UnpreviewableEffect[] = [];
   if (spec.chromaKey) missing.push('chromaKey');
   if (spec.tint && spec.tint.amount > 0) missing.push('tint');
+  if (spec.vignette && spec.vignette.amount > 0) missing.push('vignette');
+  if (spec.filmGrain && spec.filmGrain.amount > 0) missing.push('filmGrain');
+  if (spec.pixelate && spec.pixelate.blockPx >= 2) missing.push('pixelate');
+  if (spec.chromaticAberration && spec.chromaticAberration.amount > 0) {
+    missing.push('chromaticAberration');
+  }
+  if (spec.vhs && spec.vhs.amount > 0) missing.push('vhs');
   return missing;
 }

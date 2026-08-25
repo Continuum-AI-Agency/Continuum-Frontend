@@ -19,8 +19,12 @@ import {
 import { type CaptionStyleOverride, resolveCaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { TimelineInputSource, TimelineItem } from '@/StudioCanvas/types';
 import type { ClipEffectSpec } from '@/StudioCanvas/utils/render/effectSpec';
-import { speedFor } from '@/StudioCanvas/utils/render/effectSpec';
-import { resolveExportPreset } from '@/StudioCanvas/utils/render/exportPresets';
+import { cornerRadiusFracFor, speedFor } from '@/StudioCanvas/utils/render/effectSpec';
+import {
+  resolveExportPreset,
+  resolveExportQuality,
+  videoBitrateFor,
+} from '@/StudioCanvas/utils/render/exportPresets';
 import type { ClipTransition } from '@/StudioCanvas/utils/render/transitions';
 import { captionCueText, groupWordsIntoCues } from '@/StudioCanvas/utils/splice/captionCues';
 import type { TimelineDocument } from './adapter';
@@ -153,15 +157,30 @@ function transformKeyframes(
   return keyframes;
 }
 
+/**
+ * The clip's effect spec as V2 effect instances.
+ *
+ * This used to emit the colour look and nothing else, which meant `chromaKey`, `tint`
+ * and `cornerRadiusFrac` were dropped the moment a timeline was saved as a durable
+ * project — declared on the spec, rendered by `frameDraw`, and invisible to V2 in both
+ * directions. `clipEffectSpecFromEditorClip` in the render executor reads every one of
+ * these back; the two functions are a pair and must be changed together.
+ *
+ * `mix` is always 1. `chromaKeyImageData` is a distance-threshold keyer, not a blend,
+ * so a partial mix has no meaning it could honour — better to write the value the
+ * renderer actually implements than one it would silently ignore.
+ */
 function effectsFor(itemId: string, effects: ClipEffectSpec | undefined): EditorEffectInstance[] {
-  if (!effects?.adjustments && !effects?.filterPreset) return [];
-  const parameters: Record<string, string | number | boolean | number[] | string[]> = {};
-  if (effects.filterPreset) parameters.filterPreset = effects.filterPreset;
-  for (const [key, value] of Object.entries(effects.adjustments ?? {})) {
-    if (typeof value === 'number') parameters[key] = value;
-  }
-  return [
-    {
+  if (!effects) return [];
+  const instances: EditorEffectInstance[] = [];
+
+  if (effects.adjustments || effects.filterPreset) {
+    const parameters: Record<string, string | number | boolean | number[] | string[]> = {};
+    if (effects.filterPreset) parameters.filterPreset = effects.filterPreset;
+    for (const [key, value] of Object.entries(effects.adjustments ?? {})) {
+      if (typeof value === 'number') parameters[key] = value;
+    }
+    instances.push({
       id: `${itemId}:effect:look`,
       effectType: 'color_adjustment',
       effectId:
@@ -169,8 +188,53 @@ function effectsFor(itemId: string, effects: ClipEffectSpec | undefined): Editor
       enabled: true,
       mix: 1,
       parameters,
-    },
-  ];
+    });
+  }
+
+  if (effects.chromaKey) {
+    instances.push({
+      id: `${itemId}:effect:chroma`,
+      effectType: 'chroma_key',
+      effectId: 'chroma_key',
+      enabled: true,
+      mix: 1,
+      // Field names and ranges are `chromaKeyConfig`'s, so a stored instance can be
+      // handed straight back to `chromaKeyImageData` without a mapper in between.
+      parameters: {
+        color: effects.chromaKey.color,
+        tolerance: effects.chromaKey.tolerance,
+        softness: effects.chromaKey.softness,
+      },
+    });
+  }
+
+  if (effects.tint && effects.tint.amount > 0) {
+    instances.push({
+      id: `${itemId}:effect:tint`,
+      effectType: 'custom',
+      effectId: 'tint',
+      enabled: true,
+      mix: 1,
+      parameters: { color: effects.tint.color, amount: effects.tint.amount },
+    });
+  }
+
+  // `custom` because the frozen V2 clip schema has no geometry field for a corner
+  // radius. Without this a rounded clip loses its corners on the durable path, which
+  // is the same bug as the chroma gap above, one field over.
+  const cornerRadiusFrac = cornerRadiusFracFor(effects);
+  if (cornerRadiusFrac > 0) {
+    instances.push({
+      id: `${itemId}:effect:corner-radius`,
+      effectType: 'custom',
+      effectId: 'corner_radius',
+      enabled: true,
+      mix: 1,
+      parameters: { radiusFrac: cornerRadiusFrac },
+    });
+  }
+
+  return instances;
 }
 
 function clipSourceDuration(
@@ -381,6 +445,7 @@ function exportSettingsFor(
   input: EditorProjectV2ProjectionInput,
 ): EditorExportSettings {
   const preset = resolveExportPreset(document.exportPresetId);
+  const quality = resolveExportQuality(document.exportPresetId);
   const width = preset.width ?? input.sourceDimensions?.width ?? DEFAULT_WIDTH;
   const height = preset.height ?? input.sourceDimensions?.height ?? DEFAULT_HEIGHT;
   return {
@@ -389,8 +454,11 @@ function exportSettingsFor(
     height,
     frameRate: input.frameRate ?? DEFAULT_FRAME_RATE,
     format: 'mp4',
+    // h264 is not a choice here yet — `composeTimeline` hardcodes avc and the worker
+    // protocol carries no codec field. The quality ladder is real; the codec is not
+    // selectable until that wiring lands.
     videoCodec: 'h264',
-    videoBitrateKbps: Math.round(preset.videoBitrate / 1_000),
+    videoBitrateKbps: Math.round(videoBitrateFor(preset, quality) / 1_000),
     audioCodec: 'aac',
     audioBitrateKbps: 192,
     sampleRateHz: input.sampleRateHz ?? DEFAULT_SAMPLE_RATE_HZ,

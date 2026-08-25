@@ -191,7 +191,7 @@ export function SaveTechniqueDialog({ open, onOpenChange, brandProfileId, nodes 
               <Label htmlFor="technique-kind">Kind</Label>
               <Select value={kind} onValueChange={(next) => setKind(next as WorkflowFragmentKind)}>
                 <SelectTrigger id="technique-kind">
-                  <SelectValue />
+                  <SelectValue items={KIND_LABELS} />
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(KIND_LABELS).map(([value, label]) => (

@@ -189,15 +189,10 @@ describe('createNodeConfig — contracts-backed types', () => {
 
 describe('Canvas V3 registration', () => {
   it('registers action and router, and nothing without an implementation', () => {
-    // A registered type with no component renders as an empty box — worse than an
-    // absent one, because it looks like the node broke rather than like it is not
-    // built yet. batch/export/layerEditor/element/designRef stay contracts-only until
-    // their own shells land.
+    // Every Canvas V3 type has graduated — the drift guard above is what now keeps a
+    // registered type from shipping without a component.
     expect(NODE_TYPES.has('action')).toBe(true);
     expect(NODE_TYPES.has('router')).toBe(true);
-    for (const notYet of ['batch', 'layerEditor'] as const) {
-      expect(NODE_TYPES.has(notYet), notYet).toBe(false);
-    }
   });
 
   it('gives an action node no op until one is chosen', () => {
@@ -213,7 +208,7 @@ describe('Canvas V3 registration', () => {
   it('accepts every registered type and still rejects an unregistered contracts type', () => {
     expect(isStudioCanvasNodeType('action')).toBe(true);
     expect(isStudioCanvasNodeType('router')).toBe(true);
-    expect(isStudioCanvasNodeType('layerEditor')).toBe(false);
+    expect(isStudioCanvasNodeType('layerEditor')).toBe(true);
     // Landed alongside this shell by the elements / design-reference shells.
     expect(isStudioCanvasNodeType('element')).toBe(true);
     expect(isStudioCanvasNodeType('designRef')).toBe(true);

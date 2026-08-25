@@ -37,13 +37,30 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   );
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+// Base UI's Value falls back to `String(value)` when it has neither children nor an
+// `items` map on the Root, so a bare trigger paints the raw stored value ("mp4-h265"
+// instead of "MP4 (H.265)"). `items` maps value→label at render. Call sites that pass
+// nothing keep the old behavior, and explicit `children` (node or Base UI's function
+// form) still win over `items`.
+function SelectValue({
+  className,
+  items,
+  children,
+  placeholder,
+  ...props
+}: SelectPrimitive.Value.Props & { items?: Readonly<Record<string, string>> }) {
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn('flex flex-1 text-left', className)}
+      placeholder={placeholder}
       {...props}
-    />
+    >
+      {children ??
+        (items &&
+          ((value: unknown) =>
+            value == null ? placeholder : (items[String(value)] ?? String(value))))}
+    </SelectPrimitive.Value>
   );
 }
 

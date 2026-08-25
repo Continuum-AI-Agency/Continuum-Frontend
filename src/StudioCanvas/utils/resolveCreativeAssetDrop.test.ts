@@ -78,6 +78,47 @@ describe('resolveCreativeAssetDrop', () => {
     }
   });
 
+  it('carries a recorded video duration from the library row onto the node — D-04', async () => {
+    const payload = JSON.stringify({
+      type: 'asset_drop',
+      payload: {
+        bucket: 'media-library',
+        path: 'brand/clip.mp4',
+        publicUrl: 'https://cdn.example/clip.mp4',
+        mimeType: 'video/mp4',
+        meta: { assetId: 'asset-2', brandId: 'brand-1', durationMs: 4210 },
+      },
+    });
+
+    const result = await resolveCreativeAssetDrop(payload, resolver);
+
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      expect(result.nodeType).toBe('video');
+      expect(result.durationMs).toBe(4210);
+    }
+  });
+
+  it('leaves durationMs unset when the row never recorded one', async () => {
+    const payload = JSON.stringify({
+      type: 'asset_drop',
+      payload: {
+        bucket: 'media-library',
+        path: 'brand/clip.mp4',
+        publicUrl: 'https://cdn.example/clip.mp4',
+        mimeType: 'video/mp4',
+        meta: { assetId: 'asset-3', brandId: 'brand-1' },
+      },
+    });
+
+    const result = await resolveCreativeAssetDrop(payload, resolver);
+
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      expect(result.durationMs).toBeUndefined();
+    }
+  });
+
   it('returns document type for PDF', async () => {
     const payload = 'data:application/pdf;base64,abcd';
     const result = await resolveCreativeAssetDrop(payload, resolver);

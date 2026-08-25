@@ -2,8 +2,8 @@ import {
   type BrandBookPieceKind,
   type BrandDirectionPiece,
   coerceImageSize,
-  type DesignSection,
   DEFAULT_IMAGE_GENERATOR_MODEL,
+  type DesignSection,
   FIXED_IMAGE_PIXELS,
   getImageVariationHandleId,
   type ImageGeneratorModel,
@@ -52,10 +52,10 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
 import { useBrandDirectionPieces } from '@/lib/brands/useBrandDirectionPieces.client';
 import { cn } from '@/lib/utils';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
-import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
 import { GroundingChip } from '../components/GroundingChip';
 import { NodeStatus } from '../components/NodeStatus';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -66,13 +66,17 @@ import {
   IMAGE_GENERATOR_NODE_BOUNDS,
   snapNodeDimensionsToAspectRatio,
 } from '../utils/aspectRatioSizing';
-import { toggleBrandPiece, toggleDirectionPiece, toggleSkillId,
+import {
+  toggleBrandPiece,
   toggleDesignSection,
+  toggleDirectionPiece,
+  toggleSkillId,
 } from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { generationErrorCopy } from '../utils/generationErrorCopy';
 import { resignCanvasNodes } from '../utils/resignCanvasNodes';
+import { BatchMatrixButton } from './batch/BatchMatrixButton';
 
 // One or a full quadrant. Anything between would leave the 2x2 grid ragged and
 // buys nothing: the ceiling is IMAGE_VARIATION_LIMIT either way.
@@ -461,6 +465,11 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                 className="bg-background/90 shadow-sm backdrop-blur-sm"
               />
             </div>
+            {data.batchRun ? (
+              <div className="absolute right-2 top-2 z-20 rounded border border-border/70 bg-background/90 shadow-sm backdrop-blur-sm">
+                <BatchMatrixButton record={data.batchRun} />
+              </div>
+            ) : null}
             <NodeResizer
               minWidth={IMAGE_GENERATOR_NODE_BOUNDS.minWidth}
               minHeight={IMAGE_GENERATOR_NODE_BOUNDS.minHeight}

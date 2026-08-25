@@ -62,6 +62,10 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
     [edges, id],
   );
   const bulk = wiredCount > 1;
+  // A mixed pool encodes per source: the picked format covers its own kind, the rest
+  // fall back to their kind's default (runExport.exportFormatForSource). Say so.
+  const mixedPool =
+    format !== null && sources.some((source) => source.kind !== EXPORT_FORMATS[format].kind);
 
   const run = useCallback(async () => {
     setBusy(true);
@@ -154,7 +158,9 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
               <p className="min-h-8 text-2xs leading-tight text-muted-foreground">
                 {EXPORT_FORMATS[format].hint ??
                   (bulk
-                    ? `${wiredCount} inputs — saved as one ZIP.`
+                    ? mixedPool
+                      ? `${wiredCount} inputs — saved as one ZIP. The format applies to matching inputs; others keep their own default.`
+                      : `${wiredCount} inputs — saved as one ZIP.`
                     : 'Saved straight to your downloads.')}
               </p>
               <Button
