@@ -176,12 +176,21 @@ describe('AddNodeCommandPalette', () => {
         for (const sub of layout.subGroups) {
           const subPopup = openSubGroup(popup, section.group, sub.key);
           expect(labelsIn(subPopup)).toEqual(sub.rows.map((row) => row.label));
+          expect(subTriggerLabels(subPopup)).toEqual(
+            (sub.subGroups ?? []).map((opGroup) => opGroup.label),
+          );
+          for (const opGroup of sub.subGroups ?? []) {
+            const groupPopup = openSubGroup(subPopup, section.group, opGroup.key);
+            expect(labelsIn(groupPopup)).toEqual(opGroup.rows.map((row) => row.label));
+          }
         }
       }
 
-      // Opening each next sub-group closes its sibling, so re-open the one rotate lives in.
-      const imageOps = openSubGroup(openCategory('Action', 'action'), 'action', 'image');
-      const rotate = imageOps.querySelector(
+      // Opening each next sub-group closes its sibling, so re-open the chain rotate
+      // lives in: Action -> Image family -> Transform group.
+      const imageFamily = openSubGroup(openCategory('Action', 'action'), 'action', 'image');
+      const transform = openSubGroup(imageFamily, 'action', 'image:transform');
+      const rotate = transform.querySelector(
         '[data-slot="context-menu-item"][data-action-id="image.rotate"]',
       );
       expect(rotate?.getAttribute('data-action-family')).toBe('image');
@@ -216,26 +225,70 @@ describe('AddNodeCommandPalette', () => {
     RENDER_TIMEOUT_MS,
   );
 
-  // Ask 2 (scope addition): ~32 op rows made the Action submenu unusable, so the ops nest
-  // by family while the handoffs/utilities stay one hover deep above them.
+  // The Action category is fully nested: Tools / Implementation for the utilities, one
+  // submenu per op family, and a multi-group family nests once more by registry group.
   it(
-    'nests the op catalog by family under the direct utility rows, and an op still adds',
+    'nests the Action utilities under Tools and Implementation, and their rows still add',
+    () => {
+      const { onAdd } = renderPalette();
+
+      const popup = openCategory('Action', 'action');
+      expect(labelsIn(popup)).toEqual([]);
+      expect(subTriggerLabels(popup)).toEqual([
+        'Tools',
+        'Implementation',
+        'Image',
+        'Video',
+        'Text',
+      ]);
+
+      const tools = openSubGroup(popup, 'action', 'tools');
+      expect(labelsIn(tools)).toEqual(['Batch', 'Router', 'Export', 'Continuity Frame']);
+      fireEvent.click(tools.querySelectorAll('[data-slot="context-menu-item"]')[1] as HTMLElement);
+      expect(onAdd.mock.calls[0]).toEqual(['router', undefined]);
+
+      // The click closed the Add Node submenu; re-enter before the next descent.
+      fireEvent.keyDown(screen.getByText('Add Node'), { key: 'Enter' });
+      const implementation = openSubGroup(openCategory('Action', 'action'), 'action', 'implementation');
+      expect(labelsIn(implementation)).toEqual([
+        'Planner Draft',
+        'Post to Platform',
+        'Paid Ad',
+        'API Render',
+      ]);
+      fireEvent.click(
+        implementation.querySelector('[data-slot="context-menu-item"]') as HTMLElement,
+      );
+      expect(onAdd.mock.calls[1]).toEqual(['plannerDraft', undefined]);
+    },
+    RENDER_TIMEOUT_MS,
+  );
+
+  it(
+    'nests a multi-group family by op group, and a group-nested op still adds',
     () => {
       const { onAdd } = renderPalette();
       const layout = sectionLayout(sectionFor('action'));
+      const videoFamily = layout.subGroups.find((sub) => sub.key === 'video');
+      if (!videoFamily?.subGroups) throw new Error('video family is not group-nested');
 
       const popup = openCategory('Action', 'action');
-      expect(labelsIn(popup)).toEqual(layout.direct.map((row) => row.label));
-      expect(subTriggerLabels(popup)).toEqual(['Image', 'Video', 'Text']);
-
       const videoOps = openSubGroup(popup, 'action', 'video');
-      const videoFamily = layout.subGroups.find((sub) => sub.key === 'video');
-      expect(labelsIn(videoOps)).toEqual(videoFamily?.rows.map((row) => row.label) ?? []);
+      expect(labelsIn(videoOps)).toEqual([]);
+      expect(subTriggerLabels(videoOps)).toEqual(videoFamily.subGroups.map((g) => g.label));
 
-      const subtitles = videoOps.querySelector('[data-action-id="video.subtitles"]');
+      const overlay = openSubGroup(videoOps, 'action', 'video:overlay');
+      const subtitles = overlay.querySelector('[data-action-id="video.subtitles"]');
       expect(subtitles).not.toBeNull();
       fireEvent.click(subtitles as HTMLElement);
       expect(onAdd.mock.calls[0]).toEqual(['action', { actionId: 'video.subtitles' }]);
+
+      // Single-group Text family stays flat: its three ops render directly. The click
+      // above closed the Add Node submenu, so re-enter first.
+      fireEvent.keyDown(screen.getByText('Add Node'), { key: 'Enter' });
+      const text = openSubGroup(openCategory('Action', 'action'), 'action', 'text');
+      expect(subTriggerLabels(text)).toEqual([]);
+      expect(labelsIn(text)).toEqual(['Find & Replace', 'Join Text', 'Split Text']);
     },
     RENDER_TIMEOUT_MS,
   );
@@ -264,7 +317,13 @@ describe('AddNodeCommandPalette', () => {
         expect(entry.querySelector('svg'), entry.textContent ?? '').not.toBeNull();
       }
       const videoOps = openSubGroup(popup, 'action', 'video');
-      for (const row of videoOps.querySelectorAll('[data-slot="context-menu-item"]')) {
+      for (const el of videoOps.querySelectorAll(
+        '[data-slot="context-menu-item"], [data-slot="context-menu-sub-trigger"]',
+      )) {
+        expect(el.querySelector('svg'), el.textContent ?? '').not.toBeNull();
+      }
+      const timeOps = openSubGroup(videoOps, 'action', 'video:time');
+      for (const row of timeOps.querySelectorAll('[data-slot="context-menu-item"]')) {
         expect(row.querySelector('svg'), row.textContent ?? '').not.toBeNull();
       }
 

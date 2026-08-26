@@ -3,8 +3,9 @@
 // Add Node, as ONE submenu with two modes. Hover "Add Node" and the palette opens beside
 // it with a search box on top and the category submenus (Text / Image / Video / …) below,
 // each opening on hover the way the old nested tree did. A category that spans providers
-// nests one more level (Google › / Fal › / Continuum ›), and the op catalog nests by
-// family (Image › / Video › / Text ›) under its direct utility rows — `sectionLayout`
+// nests one more level (Google › / Fal › / Continuum ›); the Action category nests as
+// Tools › / Implementation › / one submenu per op family, and a multi-group family nests
+// once more by the op registry's group (Colour › / Transform › / …) — `sectionLayout`
 // decides, the palette just renders. Type, and it ALL gives way to cmdk's flat ranked
 // list. Empty the box and the categories come back.
 //
@@ -26,6 +27,8 @@ import {
   CalendarPlus,
   Camera,
   Clapperboard,
+  Clock,
+  Combine,
   Download,
   FastForward,
   FileImage,
@@ -38,8 +41,11 @@ import {
   Layers,
   Layers2,
   ListVideo,
+  Maximize2,
   Megaphone,
+  Palette,
   Plus,
+  Rocket,
   Send,
   Share2,
   Sparkles,
@@ -49,6 +55,7 @@ import {
   Video,
   Volume2,
   Wand2,
+  Wrench,
   Zap,
 } from 'lucide-react';
 import { type KeyboardEvent, useMemo, useState } from 'react';
@@ -78,6 +85,7 @@ import {
   type AddNodeGroup,
   type AddNodeGroupSection,
   type AddNodeRow,
+  type AddNodeOpGroup,
   type AddNodeSubGroup,
   addNodeRowKey,
   addNodeSearchValue,
@@ -140,7 +148,20 @@ const SUB_GROUP_ICONS: Record<AddNodeSubGroup['key'], IconComponent> = {
   google: GoogleIcon,
   fal: Flame,
   continuum: Sparkles,
+  tools: Wrench,
+  implementation: Rocket,
   ...FAMILY_ICONS,
+};
+
+/** The third level: op-registry groups, keyed by the label contracts gives them. */
+const OP_GROUP_ICONS: Record<string, IconComponent> = {
+  Colour: Palette,
+  Transform: Maximize2,
+  Time: Clock,
+  Assembly: Combine,
+  Overlay: Layers,
+  Frames: Film,
+  Text: Type,
 };
 
 /** An op row wears its family's glyph; every other row wears its node type's. */
@@ -252,6 +273,26 @@ export function AddNodeCommandPalette({
     </ContextMenuItem>
   );
 
+  const renderOpGroup = (category: string, opGroup: AddNodeOpGroup) => {
+    const GroupIcon = OP_GROUP_ICONS[opGroup.label] ?? Wand2;
+    return (
+      <ContextMenuSub key={opGroup.key}>
+        <ContextMenuSubTrigger inset data-subgroup={opGroup.key}>
+          <GroupIcon className="mr-2 h-4 w-4" />
+          {opGroup.label}
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent
+          className="nowheel w-72"
+          data-testid="add-node-subgroup"
+          data-category={category}
+          data-subgroup={opGroup.key}
+        >
+          {opGroup.rows.map(renderMenuRow)}
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+    );
+  };
+
   return (
     <ContextMenuSub
       onOpenChange={(open) => {
@@ -335,6 +376,9 @@ export function AddNodeCommandPalette({
                             data-subgroup={sub.key}
                           >
                             {sub.rows.map(renderMenuRow)}
+                            {(sub.subGroups ?? []).map((opGroup) =>
+                              renderOpGroup(section.group, opGroup),
+                            )}
                           </ContextMenuSubContent>
                         </ContextMenuSub>
                       );

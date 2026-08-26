@@ -115,6 +115,11 @@ export type AddNodeRow = {
   /** Set on `action` rows: the op the created node is born configured for. */
   actionId?: ActionId;
   /**
+   * Set on `action` rows: the op registry's menu grouping inside the family (`Colour`,
+   * `Transform`, …), read from `ACTION_DEFS` — the third hover level derives from it.
+   */
+  group?: string;
+  /**
    * Set on `action` rows: what the op operates on. Contracts gives five pairs of ops the
    * SAME label — Blur, Colour Grade, Filter, Crop to Ratio, Pad to Ratio all exist once
    * for stills and once for clips — and two rows reading `Blur` with no way to tell them
@@ -215,6 +220,7 @@ const actionOpRows = (): readonly PlacedRow[] => {
       tag: PROVIDER_LABELS[definition.provider],
       actionId: def.id,
       family: def.family,
+      group: def.group,
       category: definition.category,
       provider: definition.provider,
     }));
@@ -248,11 +254,50 @@ const plainRows = (): readonly PlacedRow[] =>
 // (Planner Draft, Organic Publish, …) that share the Action group.
 const ALL_ROWS: readonly PlacedRow[] = [...videoModelRows(), ...plainRows(), ...actionOpRows()];
 
-/** A nested hover submenu inside a category — a provider's rows, or an op family's. */
-export type AddNodeSubGroup = {
-  key: StudioNodeProvider | ActionModality;
+/** The Action category's utility split: builders vs. ship-it handoffs. */
+export type ActionUtilityGroup = 'tools' | 'implementation';
+
+/** The third hover level: one op-registry group (`Colour`, `Time`, …) inside a family.
+ *  Keyed `family:group` because families share group names (image Colour / video Colour). */
+export type AddNodeOpGroup = {
+  key: string;
   label: string;
   rows: readonly AddNodeRow[];
+};
+
+/** A nested hover submenu inside a category — a provider's, an op family's, or an
+ *  Action utility group's rows. */
+export type AddNodeSubGroup = {
+  key: StudioNodeProvider | ActionModality | ActionUtilityGroup;
+  label: string;
+  rows: readonly AddNodeRow[];
+  /** Present when a family spans more than one op-registry group: the ops nest once
+   *  more, per group, and `rows` is empty. A single-group family (Text) stays flat. */
+  subGroups?: readonly AddNodeOpGroup[];
+};
+
+const UTILITY_GROUP_ORDER: readonly ActionUtilityGroup[] = ['tools', 'implementation'];
+
+const UTILITY_GROUP_LABELS: Record<ActionUtilityGroup, string> = {
+  tools: 'Tools',
+  implementation: 'Implementation',
+};
+
+/**
+ * The Action utilities' split, an FE presentation decision: builders that shape media in
+ * the flow vs. handoffs that ship the result somewhere (API Render delivers into the
+ * brand library, so it files under implementation). A handoff type missing here fails
+ * the exactly-once catalog test rather than silently vanishing from the hover tree.
+ */
+const ACTION_UTILITY_GROUP: Partial<Record<StudioCanvasNodeType, ActionUtilityGroup>> = {
+  batch: 'tools',
+  router: 'tools',
+  export: 'tools',
+  frameExtract: 'tools',
+  plannerDraft: 'implementation',
+  organicPublish: 'implementation',
+  paidPublisher: 'implementation',
+  apiRender: 'implementation',
 };
 
 /**
@@ -277,13 +322,40 @@ type SectionEntry = { row: AddNodeRow; provider: StudioNodeProvider };
 const layoutFor = (entries: readonly SectionEntry[]): AddNodeSectionLayout => {
   const ops = entries.filter((entry) => entry.row.family !== undefined);
   if (ops.length > 0) {
-    return {
-      direct: entries.filter((entry) => entry.row.family === undefined).map((entry) => entry.row),
-      subGroups: FAMILY_ORDER.map((family) => ({
+    // A family spanning more than one registry group nests its ops once more, per group,
+    // in the registry's reading order. The registry's own "two hover levels, never
+    // three (#260)" ruling is explicitly superseded by the 2026-08 product request for
+    // per-group nesting; the single-group Text family stays flat.
+    const familySub = (family: ActionModality): AddNodeSubGroup => {
+      const rows = ops.filter((entry) => entry.row.family === family).map((entry) => entry.row);
+      const groups = ACTION_GROUP_ORDER.filter((group) => rows.some((row) => row.group === group));
+      if (groups.length <= 1) {
+        return { key: family, label: ACTION_FAMILY_LABELS[family], rows };
+      }
+      return {
         key: family,
         label: ACTION_FAMILY_LABELS[family],
-        rows: ops.filter((entry) => entry.row.family === family).map((entry) => entry.row),
-      })).filter((group) => group.rows.length > 0),
+        rows: [],
+        subGroups: groups.map((group) => ({
+          key: `${family}:${group.toLowerCase()}`,
+          label: group,
+          rows: rows.filter((row) => row.group === group),
+        })),
+      };
+    };
+    const utilities = entries.filter((entry) => entry.row.family === undefined);
+    return {
+      direct: [],
+      subGroups: [
+        ...UTILITY_GROUP_ORDER.map((group): AddNodeSubGroup => ({
+          key: group,
+          label: UTILITY_GROUP_LABELS[group],
+          rows: utilities
+            .filter((entry) => ACTION_UTILITY_GROUP[entry.row.type] === group)
+            .map((entry) => entry.row),
+        })),
+        ...FAMILY_ORDER.map(familySub),
+      ].filter((sub) => sub.rows.length > 0 || (sub.subGroups?.length ?? 0) > 0),
     };
   }
 

@@ -331,31 +331,90 @@ describe('sectionLayout', () => {
     }
   });
 
-  it('nests the op catalog by family under the direct utility rows', () => {
+  it('splits the Action utilities into Tools and Implementation, with no direct rows', () => {
+    const { layout } = layoutOf('action');
+
+    expect(layout.direct).toEqual([]);
+    expect(layout.subGroups.map((sub) => sub.key)).toEqual([
+      'tools',
+      'implementation',
+      'image',
+      'video',
+      'text',
+    ]);
+    expect(layout.subGroups.map((sub) => sub.label)).toEqual([
+      'Tools',
+      'Implementation',
+      'Image',
+      'Video',
+      'Text',
+    ]);
+
+    const typesOf = (key: string) =>
+      layout.subGroups.find((sub) => sub.key === key)?.rows.map((row) => row.type);
+    expect(typesOf('tools')).toEqual(['batch', 'router', 'export', 'frameExtract']);
+    expect(typesOf('implementation')).toEqual([
+      'plannerDraft',
+      'organicPublish',
+      'paidPublisher',
+      'apiRender',
+    ]);
+  });
+
+  it('nests each multi-group family by the op registry group, in registry order', () => {
     const { section, layout } = layoutOf('action');
+    const groupOrder = [...new Set(ACTION_IDS.map((id) => ACTION_DEFS[id].group))];
+    const familyRows = (family: string) => section.rows.filter((row) => row.family === family);
 
-    expect(layout.subGroups.map((sub) => sub.key)).toEqual(['image', 'video', 'text']);
-    expect(layout.subGroups.map((sub) => sub.label)).toEqual(['Image', 'Video', 'Text']);
+    for (const family of ['image', 'video'] as const) {
+      const sub = layout.subGroups.find((candidate) => candidate.key === family);
+      if (!sub) throw new Error(`no ${family} sub-group`);
 
-    // The handoffs and utilities stay one hover deep, above the family submenus.
-    expect(layout.direct).toEqual(section.rows.filter((row) => row.family === undefined));
-    expect(layout.direct.length).toBeGreaterThan(0);
-    expect(layout.direct.every((row) => row.actionId === undefined)).toBe(true);
+      // Multi-group family: every op sits one more level down, none directly.
+      expect(sub.rows, family).toEqual([]);
+      const groups = sub.subGroups ?? [];
+      expect(groups.length, family).toBeGreaterThan(1);
+      expect(groups.map((group) => group.label)).toEqual(
+        groupOrder.filter((group) => familyRows(family).some((row) => row.group === group)),
+      );
 
-    for (const sub of layout.subGroups) {
-      expect(sub.rows.length, sub.label).toBeGreaterThan(0);
-      expect(
-        sub.rows.every((row) => row.family === sub.key),
-        sub.label,
-      ).toBe(true);
-      expect(sub.rows, sub.label).toEqual(section.rows.filter((row) => row.family === sub.key));
+      for (const group of groups) {
+        expect(group.key, group.label).toBe(`${family}:${group.label.toLowerCase()}`);
+        expect(group.rows.length, group.label).toBeGreaterThan(0);
+        expect(group.rows, group.label).toEqual(
+          familyRows(family).filter((row) => row.group === group.label),
+        );
+      }
+    }
+
+    // Single-group family stays flat — the extra hover would nest one group under itself.
+    const text = layout.subGroups.find((candidate) => candidate.key === 'text');
+    expect(text?.subGroups).toBeUndefined();
+    expect(text?.rows).toEqual(familyRows('text'));
+  });
+
+  it('takes each action row group from the op registry, and only action rows have one', () => {
+    for (const row of ADD_NODE_GROUPS.flatMap((section) => section.rows)) {
+      if (row.actionId) {
+        expect(row.group, row.actionId).toBe(
+          ACTION_DEFS[row.actionId as (typeof ACTION_IDS)[number]].group,
+        );
+      } else {
+        expect(row.group, row.label).toBeUndefined();
+      }
     }
   });
 
-  it('places every section row exactly once across direct rows and sub-groups', () => {
+  it('places every section row exactly once across the whole nested layout', () => {
     for (const section of ADD_NODE_GROUPS) {
       const layout = sectionLayout(section);
-      const flattened = [...layout.direct, ...layout.subGroups.flatMap((sub) => sub.rows)];
+      const flattened = [
+        ...layout.direct,
+        ...layout.subGroups.flatMap((sub) => [
+          ...sub.rows,
+          ...(sub.subGroups ?? []).flatMap((group) => group.rows),
+        ]),
+      ];
 
       expect(flattened.length, section.group).toBe(section.rows.length);
       expect([...flattened.map(addNodeRowKey)].sort()).toEqual(
