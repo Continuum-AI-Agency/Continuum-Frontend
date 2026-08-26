@@ -8,7 +8,7 @@ mock.module('@/lib/api/http', () => ({
 
 import type { ElementRecord } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, configure, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
 import { useStudioStore } from '../stores/useStudioStore';
@@ -153,6 +153,57 @@ describe('ElementNode', () => {
       expect(screen.getByText('Element unavailable')).toBeTruthy();
     });
     expect(screen.queryByText(/sending/)).toBeNull();
+  });
+
+  it('onboards an unbound node when the brand has no Elements instead of crying deletion', async () => {
+    requestMock.mockResolvedValue({ elements: [] } as never);
+
+    renderNode({ elementId: null });
+
+    expect(await screen.findByText('No Elements yet')).toBeTruthy();
+    expect(
+      screen.getByText('Save a model, product or style once and reuse it across every generation.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Create an Element/ })).toBeTruthy();
+    expect(screen.queryByText('Element unavailable')).toBeNull();
+  });
+
+  it('opens the existing Elements creation flow from the empty state action', async () => {
+    requestMock.mockResolvedValue({ elements: [] } as never);
+
+    renderNode({ elementId: null });
+
+    fireEvent.click(await screen.findByRole('button', { name: /Create an Element/ }));
+
+    expect(await screen.findByTestId('element-create-form')).toBeTruthy();
+  });
+
+  it('lets an unbound node pick from the Elements the brand already has', async () => {
+    requestMock.mockResolvedValue({
+      elements: [buildElement(), buildElement({ id: 'element-2', name: 'Bottle' })],
+    } as never);
+    useStudioStore.setState({
+      nodes: [
+        { id: 'node-1', type: 'element', position: { x: 0, y: 0 }, data: { elementId: null } },
+      ] as never,
+      edges: [],
+      brandId: 'brand-1',
+    });
+
+    renderNode({ elementId: null });
+
+    expect(await screen.findByText('Choose an Element')).toBeTruthy();
+    expect(screen.queryByText('Element unavailable')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Aria/ }));
+
+    await waitFor(() => {
+      expect(useStudioStore.getState().nodes[0]?.data).toMatchObject({
+        elementId: 'element-1',
+        elementName: 'Aria',
+        elementCategory: 'product',
+      });
+    });
   });
 
   it('shows the category on a resolved Element', async () => {

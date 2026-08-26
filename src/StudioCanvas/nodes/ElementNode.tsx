@@ -16,10 +16,15 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { AlertTriangle, Copy, Layers, Trash2, Unlink } from 'lucide-react';
-import type React from 'react';
+import { AlertTriangle, Copy, Layers, Plus, Trash2, Unlink } from 'lucide-react';
+import React from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import {
+  ELEMENT_ONBOARDING_COPY,
+  ElementsPanel,
+} from '@/components/ai-studio/elements/ElementsPanel';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -31,6 +36,7 @@ import {
 } from '@/components/ui/context-menu';
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -40,6 +46,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   ELEMENT_CATEGORY_LABEL,
   type ElementCategory,
+  type ElementRecord,
   elementDefaultReferenceAssetId,
   elementNodeEmission,
   useElements,
@@ -69,6 +76,8 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const detachNodeConnections = useStudioStore((state) => state.detachNodeConnections);
   const getConnectedEdges = useStudioStore((state) => state.getConnectedEdges);
+  const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const triggerSave = useStudioStore((state) => state.triggerSave);
   const brandId = useStudioStore((state) => state.brandId);
   const edges = useEdges();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
@@ -85,9 +94,21 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
   const signedUrls = useSignedAssetUrls(brandId, previewAssetId ? [previewAssetId] : []);
   const preview = (previewAssetId ? signedUrls[previewAssetId] : undefined) ?? data.previewUrl;
 
-  // "Not found yet" and "not found ever" are different: the first is a pending query,
-  // the second is an Element somebody deleted out from under this node.
-  const unavailable = !element && !isLoading;
+  // Three distinct absences. "Never bound" is a node placed from the palette without an
+  // Element chosen — that user needs a way IN (pick one, or create the brand's first),
+  // not a deletion warning. "Not found yet" is a pending query. "Not found ever" is an
+  // Element somebody deleted out from under this node.
+  const unbound = !data.elementId;
+  const unavailable = Boolean(data.elementId) && !element && !isLoading;
+
+  const bindElement = (chosen: ElementRecord) => {
+    updateNodeData(id, {
+      elementId: chosen.id,
+      elementName: chosen.name,
+      elementCategory: chosen.category,
+    });
+    triggerSave();
+  };
   const name = element?.name ?? data.elementName ?? 'Element';
   const category = (element?.category ?? data.elementCategory) as ElementCategory | undefined;
   const categoryLabel = category ? (ELEMENT_CATEGORY_LABEL[category] ?? category) : undefined;
@@ -123,7 +144,9 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                 className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm"
               >
                 <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30">
-                  {unavailable ? (
+                  {unbound && !isLoading ? (
+                    <ElementNodeSetup brandId={brandId} elements={elements} onBind={bindElement} />
+                  ) : unavailable ? (
                     <Empty>
                       <EmptyHeader>
                         <EmptyMedia variant="icon">
@@ -188,9 +211,11 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                     </Badge>
                   ) : null}
 
-                  <div className="absolute bottom-0 left-0 right-0 truncate border-t border-subtle bg-surface/90 px-2 py-1 text-3xs text-secondary backdrop-blur">
-                    {name}
-                  </div>
+                  {unbound ? null : (
+                    <div className="absolute bottom-0 left-0 right-0 truncate border-t border-subtle bg-surface/90 px-2 py-1 text-3xs text-secondary backdrop-blur">
+                      {name}
+                    </div>
+                  )}
                 </NodeContent>
               </CanvasNode>
 
@@ -239,5 +264,84 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
         </ContextMenuContent>
       </ContextMenu>
     </TooltipProvider>
+  );
+}
+
+/**
+ * The way IN for a node that has no Element yet. A brand with Elements gets a one-click
+ * picker; a brand with none gets the onboarding sentence and the EXISTING creation flow —
+ * the same ElementsPanel the toolbar mounts, opened straight on its create form. Once an
+ * Element exists (created or picked), `onBind` stamps it and the node becomes the normal
+ * bound face.
+ */
+function ElementNodeSetup({
+  brandId,
+  elements,
+  onBind,
+}: {
+  brandId?: string;
+  elements: ElementRecord[];
+  onBind: (element: ElementRecord) => void;
+}) {
+  const [createOpen, setCreateOpen] = React.useState(false);
+
+  return (
+    <>
+      {elements.length > 0 ? (
+        <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto p-3">
+          <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+            Choose an Element
+          </p>
+          {elements.map((candidate) => (
+            <Button
+              key={candidate.id}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full shrink-0 justify-between gap-2"
+              onClick={() => onBind(candidate)}
+            >
+              <span className="truncate">{candidate.name}</span>
+              <span className="shrink-0 text-2xs text-muted-foreground">
+                {ELEMENT_CATEGORY_LABEL[candidate.category] ?? candidate.category}
+              </span>
+            </Button>
+          ))}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full shrink-0 justify-start"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Element
+          </Button>
+        </div>
+      ) : (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Layers />
+            </EmptyMedia>
+            <EmptyTitle>No Elements yet</EmptyTitle>
+            <EmptyDescription>{ELEMENT_ONBOARDING_COPY}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create an Element
+            </Button>
+          </EmptyContent>
+        </Empty>
+      )}
+
+      <ElementsPanel
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        brandId={brandId}
+        initialView="create"
+      />
+    </>
   );
 }

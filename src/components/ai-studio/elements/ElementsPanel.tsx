@@ -40,18 +40,36 @@ import { buildElementDragPayload, ELEMENT_DRAG_TYPE } from '@/lib/ai-studio/refe
 import { ElementCreateForm, type ElementMemberUploader } from './ElementCreateForm';
 import { ElementDetail } from './ElementDetail';
 
+/** One sentence, shared with the canvas node's empty state so onboarding says the same
+ *  thing wherever the user first meets Elements. */
+export const ELEMENT_ONBOARDING_COPY =
+  'Save a model, product or style once and reuse it across every generation.';
+
 export interface ElementsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   brandId?: string;
+  /** 'create' opens the panel straight on the creation form — the canvas node's
+   *  onboarding path. Default keeps the toolbar behavior (resume wherever you were). */
+  initialView?: 'list' | 'create';
   /** Injected in tests; the real seam is the library upload edge function. */
   uploadAsset?: ElementMemberUploader;
 }
 
 type PanelView = { kind: 'list' } | { kind: 'create' } | { kind: 'detail'; elementId: string };
 
-export function ElementsPanel({ open, onOpenChange, brandId, uploadAsset }: ElementsPanelProps) {
+export function ElementsPanel({
+  open,
+  onOpenChange,
+  brandId,
+  initialView,
+  uploadAsset,
+}: ElementsPanelProps) {
   const [view, setView] = React.useState<PanelView>({ kind: 'list' });
+
+  React.useEffect(() => {
+    if (open && initialView === 'create') setView({ kind: 'create' });
+  }, [open, initialView]);
   const { elements, isLoading, isError, error } = useElements(brandId);
   const mutations = useElementMutations(brandId);
 
@@ -191,9 +209,7 @@ function ElementList({
               <Layers />
             </EmptyMedia>
             <EmptyTitle>No Elements yet</EmptyTitle>
-            <EmptyDescription>
-              Save a model, product or style once and reuse it across every generation.
-            </EmptyDescription>
+            <EmptyDescription>{ELEMENT_ONBOARDING_COPY}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (

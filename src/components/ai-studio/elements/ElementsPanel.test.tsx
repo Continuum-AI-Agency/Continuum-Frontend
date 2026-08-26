@@ -6,10 +6,18 @@ mock.module('@/lib/api/http', () => ({
   http: { request: requestMock },
 }));
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { configure, act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import React from 'react';
 import type { ElementRecord } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  act,
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import type React from 'react';
 import { ELEMENT_DRAG_TYPE, parseElementDragPayload } from '@/lib/ai-studio/referenceDrop';
 import { ElementsPanel } from './ElementsPanel';
 
@@ -110,9 +118,7 @@ describe('ElementsPanel', () => {
 
   it('drags an Element out as an element-drop payload, not as an image', async () => {
     requestMock.mockResolvedValue({
-      elements: [
-        buildElement({ referenceHistory: ['ref-1'], defaultReferenceAssetId: 'ref-1' }),
-      ],
+      elements: [buildElement({ referenceHistory: ['ref-1'], defaultReferenceAssetId: 'ref-1' })],
     } as never);
 
     renderPanel();
@@ -136,6 +142,12 @@ describe('ElementsPanel', () => {
       category: 'product',
       previewUrl: signedUrlFor('ref-1'),
     });
+  });
+
+  it('opens straight on the create form when initialView asks for it', async () => {
+    renderPanel({ initialView: 'create' });
+
+    expect(await screen.findByTestId('element-create-form')).toBeTruthy();
   });
 
   it('opens the create form and comes back to the list on cancel', async () => {
