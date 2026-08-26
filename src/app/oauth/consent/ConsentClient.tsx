@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
@@ -17,10 +17,8 @@ type AuthorizationDetails = {
   scope: string;
 };
 
-export function ConsentContent() {
-  const searchParams = useSearchParams();
+export function ConsentContent({ authorizationId }: { authorizationId: string | null }) {
   const router = useRouter();
-  const authorizationId = searchParams.get('authorization_id');
 
   const [details, setDetails] = useState<AuthorizationDetails | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -160,7 +160,6 @@ Supported data types:
 - `document`
 
 Token source:
-- `src/components/ai-studio/canvas/canvas.css`
 - `src/app/globals.css`
 
 ## Canvas Interaction Model

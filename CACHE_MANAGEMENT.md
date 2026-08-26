@@ -13,10 +13,9 @@ The following cache directories are tracked and managed:
 | Location | Purpose | Environment |
 |----------|---------|-------------|
 | `.next/dev/cache/turbopack` | **Turbopack persistent compiler cache — by far the largest** | Dev |
-| `.next/build/cache` | Turbopack compiler cache for builds | Build |
+| `.next/cache/turbopack` | Turbopack compiler cache for builds — ~1.1 GB after one build | Build |
 | `.next/cache/fetch-cache` | Fetch API response cache | All |
 | `.next/cache/images` | Image optimization cache | All |
-| `.next/cache/webpack` | Webpack build cache | Build |
 | `node_modules/.cache` | Package manager and tool caches | All |
 
 > **The one that actually grows.** `.next/dev/cache/turbopack` is a `turbo-persistence` SST database that compaction does not always keep up with. It reached **39 GB across 3,020 `.sst` files** in this repo before anyone measured it, and every cache lookup and HMR write fanned out across all of them — which is what made dev feel slow. It is **not** under `.next/cache`, so any script scoped to `.next/cache/*` will report a clean bill of health while it grows unbounded. Next 16.3 (#97304) adds a TTL and retains fewer stale cache versions, which should keep it in check.

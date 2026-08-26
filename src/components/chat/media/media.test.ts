@@ -97,8 +97,8 @@ describe('mediaFromFetchedPost', () => {
 });
 
 describe('mediaFromPreviewUrls', () => {
-  it('reads a generated reel from the draft format', () => {
-    const [media] = mediaFromPreviewUrls('preview', ['https://cdn/gen'], 'reel');
+  it('reads a realized reel from the draft format when its signed URL says nothing', () => {
+    const [media] = mediaFromPreviewUrls('preview', ['https://cdn/gen'], 'reel', 'realized');
     expect(media.kind).toBe('video');
   });
 
@@ -109,6 +109,26 @@ describe('mediaFromPreviewUrls', () => {
       'reel',
     );
     expect(media.map((item) => item.kind)).toEqual(['image', 'image']);
+  });
+
+  // The regression that made a reel concept show a grey letter tile: a storyboard frame is a
+  // still, so putting it in a <video> because the DRAFT is a reel fails, finds no poster to
+  // degrade to, and lands on the fallback glyph. Stage decides, not format.
+  it('treats a storyboard frame as a still whatever the draft format claims', () => {
+    const [media] = mediaFromPreviewUrls('concept', ['https://cdn/frame'], 'reel');
+    expect(media.kind).toBe('image');
+  });
+
+  it('still reads a realized asset whose URL carries its own extension', () => {
+    const [media] = mediaFromPreviewUrls('preview', ['https://cdn/final.mp4'], null, 'realized');
+    expect(media.kind).toBe('video');
+  });
+
+  // A storyboard URL that IS a video is still a video — the stage suppresses the format's vote,
+  // never the URL's own evidence.
+  it('does not suppress a storyboard URL that says it is a video', () => {
+    const [media] = mediaFromPreviewUrls('concept', ['https://cdn/clip.mp4'], 'reel');
+    expect(media.kind).toBe('video');
   });
 });
 

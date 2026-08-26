@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
+import { ClientOnly } from '@/components/ui/ClientOnly';
 import { VersionBanner } from '@/components/version-banner';
 import { ThemeProvider } from '../components/theme-provider';
 
@@ -72,8 +73,14 @@ export default function RootLayout({
           <VersionBanner />
           <div className="relative z-10">{children}</div>
         </ThemeProvider>
-        <Analytics />
-        <SpeedInsights />
+        {/* Both call `useParams()`/`useSearchParams()` to report the parameterized route pattern.
+            Under Cache Components that reads URL data during prerender, so every dynamic route lost
+            its static shell to CLIENT_HOOK_DYNAMIC. A `<Suspense>` boundary here does not clear it
+            (measured). Neither reports anything before hydration anyway, so gate them on mount. */}
+        <ClientOnly>
+          <Analytics />
+          <SpeedInsights />
+        </ClientOnly>
       </body>
     </html>
   );

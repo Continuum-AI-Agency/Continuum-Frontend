@@ -336,20 +336,30 @@ export function mediaFromJainaMediaEntry(entry: {
 }
 
 /**
+ * How far up the media ladder these URLs are. A storyboard frame is a PNG whatever the
+ * draft's format says, so the format must NOT vote on its kind — a reel's storyboard
+ * still went into a <video>, failed, and degraded to the letter-glyph fallback, which is
+ * why a reel concept showed no artwork at all. Realized media is the opposite case: a
+ * finished reel IS an MP4 and its signed URL often carries no extension, so there the
+ * format is the only signal there is.
+ */
+export type PreviewMediaStage = 'storyboard' | 'realized';
+
+/**
  * Generation previews, storyboard frames and publishing assets: bare URLs plus the draft's format.
- * The format matters — a generated reel is an MP4, and rendering it as a still is why generated
- * video previews came out blank.
  */
 export function mediaFromPreviewUrls(
   idPrefix: string,
   urls: readonly string[],
   format?: string | null,
+  stage: PreviewMediaStage = 'storyboard',
 ): ChatMedia[] {
+  // A carousel's slides are stills even though the draft's format is "carousel"; only trust the
+  // format for a single realized asset, where the URL itself may say nothing.
+  const formatVotes = stage === 'realized' && urls.length === 1;
   return urls.map((url, index) => ({
     id: `${idPrefix}:${index}`,
     url,
-    // A carousel's slides are stills even though the draft's format is "carousel"; only trust the
-    // format when the URL itself does not already say what it is.
-    kind: resolveMediaKind({ url, format: urls.length > 1 ? undefined : format }),
+    kind: resolveMediaKind({ url, format: formatVotes ? format : undefined }),
   }));
 }

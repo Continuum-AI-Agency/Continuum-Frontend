@@ -189,7 +189,7 @@ export function ChatMediaThumb({
       )}
 
       {media.badge ? (
-        <span className="pointer-events-none absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+        <span className="pointer-events-none absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 font-medium text-3xs text-white">
           {media.badge}
         </span>
       ) : null}

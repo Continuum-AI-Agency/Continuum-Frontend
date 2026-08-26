@@ -70,9 +70,7 @@ describe('useChatAttachments', () => {
     });
     await waitFor(() => expect(result.current.files[0]?.status).toBe('ready'));
 
-    const [params] = uploadMediaAsset.mock.calls[0] as unknown as [
-      { brandId: string; file: File },
-    ];
+    const [params] = uploadMediaAsset.mock.calls[0] as unknown as [{ brandId: string; file: File }];
     expect(params.brandId).toBe('brand-1');
     expect(params.file.name).toBe('shot.png');
   });

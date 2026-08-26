@@ -9,7 +9,12 @@ import {
   useMessageScrollerVisibility,
 } from '@/components/ui/message-scroller';
 import { cn } from '@/lib/utils';
-import { anchorLabel, type TranscriptAnchor, type TranscriptAnchorKind } from './anchors';
+import {
+  anchorLabel,
+  nextNavigableAnchorId,
+  type TranscriptAnchor,
+  type TranscriptAnchorKind,
+} from './anchors';
 
 const TICK_SIZE: Record<TranscriptAnchorKind, string> = {
   user: 'h-px w-2',
@@ -35,6 +40,7 @@ export function ChatMinimap({ anchors, className }: ChatMinimapProps) {
   }, []);
 
   const visible = new Set(visibleMessageIds);
+  const nextResponseId = nextNavigableAnchorId(anchors, currentAnchorId);
 
   return (
     <div
@@ -90,6 +96,17 @@ export function ChatMinimap({ anchors, className }: ChatMinimapProps) {
       </nav>
 
       <div className="pointer-events-auto flex items-center gap-1.5">
+        {nextResponseId ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => scrollToMessage(nextResponseId)}
+            className="rounded-full shadow-sm"
+          >
+            Next response
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="secondary"

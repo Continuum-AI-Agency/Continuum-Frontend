@@ -1,6 +1,5 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 
 export function PopupStatus({ provider }: { provider: string }) {
@@ -21,11 +20,13 @@ export function PopupStatus({ provider }: { provider: string }) {
   );
 }
 
-export function MockOAuthPopupContent() {
-  const params = useSearchParams();
-  const provider = params.get('provider') ?? 'mock';
-  const context = params.get('context') ?? 'onboarding';
-
+export function MockOAuthPopupContent({
+  provider,
+  context,
+}: {
+  provider: string;
+  context: string;
+}) {
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
