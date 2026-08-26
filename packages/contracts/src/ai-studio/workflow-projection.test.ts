@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
+import { buildWorkflowGraph, validateWorkflowGraph } from './workflow-builder';
 import {
   AGENT_FIELD_WHITELIST,
   FREE_TEXT_CAP,
@@ -128,6 +129,126 @@ describe('projectGraphForAgent', () => {
   it('exposes a per-type field whitelist', () => {
     expect(AGENT_FIELD_WHITELIST.nanoGen).toContain('model');
     expect(AGENT_FIELD_WHITELIST.string).toEqual(['value']);
+  });
+
+  // An element node binds to a saved element by id, and the agent now gets those ids from
+  // the `list_elements` tool — so hiding the binding from the projection would leave it
+  // unable to read back what it just wired.
+  it('projects the element binding, and the name that makes it readable', () => {
+    const projected = projectGraphForAgent({
+      nodes: [
+        {
+          id: 'el',
+          type: 'element',
+          position: { x: 0, y: 0 },
+          data: {
+            elementId: '7f3c1c9e-0000-4000-8000-00000000abcd',
+            elementName: 'Nova, the founder',
+            elementCategory: 'model',
+            previewUrl: SIGNED_URL,
+          },
+        },
+      ],
+      edges: [],
+    });
+    expect(projected.nodes[0].config).toEqual({
+      elementId: '7f3c1c9e-0000-4000-8000-00000000abcd',
+      elementName: 'Nova, the founder',
+    });
+    // Preview URLs are exactly the noise the projection exists to strip.
+    expect(JSON.stringify(projected)).not.toContain('previewUrl');
+  });
+
+  it("projects an action node's op and the config the vocabulary told it to write", () => {
+    const projected = projectGraphForAgent({
+      nodes: [
+        {
+          id: 'act',
+          type: 'action',
+          position: { x: 0, y: 0 },
+          data: { actionId: 'video.speed', config: { rate: 0.5 }, isExecuting: false },
+        },
+      ],
+      edges: [],
+    });
+    expect(projected.nodes[0].config).toEqual({ actionId: 'video.speed', config: { rate: 0.5 } });
+  });
+
+  it('projects the batch lock, and its items compactly', () => {
+    const projected = projectGraphForAgent({
+      nodes: [
+        {
+          id: 'b',
+          type: 'batch',
+          position: { x: 0, y: 0 },
+          data: {
+            combine: 'zip',
+            itemType: 'text',
+            items: [
+              { id: 'i1', kind: 'text', value: 'a red sneaker', label: 'one' },
+              { id: 'i2', kind: 'text', value: 'a blue sneaker', storagePath: 'brand/x.png' },
+            ],
+          },
+        },
+      ],
+      edges: [],
+    });
+    expect(projected.nodes[0].config?.itemType).toBe('text');
+    expect(projected.nodes[0].config?.items).toEqual([
+      { id: 'i1', kind: 'text', label: 'one', value: 'a red sneaker' },
+      { id: 'i2', kind: 'text', value: 'a blue sneaker' },
+    ]);
+    expect(JSON.stringify(projected)).not.toContain('storagePath');
+  });
+
+  it('says so when the item cap engaged rather than serving a silent slice', () => {
+    const items = Array.from({ length: 45 }, (_, index) => ({
+      id: `i${index}`,
+      kind: 'image',
+      assetId: `asset-${index}`,
+    }));
+    const projected = projectGraphForAgent({
+      nodes: [{ id: 'b', type: 'batch', position: { x: 0, y: 0 }, data: { items } }],
+      edges: [],
+    });
+    const projectedItems = projected.nodes[0].config?.items as Record<string, unknown>[];
+    expect(projectedItems).toHaveLength(21);
+    expect(projectedItems.at(-1)).toEqual({ items_omitted: 25 });
+  });
+
+  // The whole reason `itemType` is on the whitelist: without it the batch has no output
+  // modality, so `connectNodes` finds no compatible handle and the edge is never built.
+  // Nothing derives this lock from the wiring the way a router's is derived.
+  it('lets a batch reach a generator once itemType is set, and not before', () => {
+    const wire = (data: Record<string, unknown>) =>
+      buildWorkflowGraph(
+        [
+          { ref: 'b', type: 'batch', data },
+          { ref: 'gen', type: 'nanoGen', data: { positivePrompt: 'a sneaker' } },
+        ],
+        [{ from_ref: 'b', to_ref: 'gen' }],
+      );
+
+    const unlocked = wire({});
+    expect(unlocked.errors).toEqual(['no compatible handle from batch to nanoGen']);
+    expect(unlocked.graph.edges).toHaveLength(0);
+
+    const locked = wire({ itemType: 'text' });
+    expect(locked.errors).toEqual([]);
+    expect(locked.graph.edges).toHaveLength(1);
+    expect(validateWorkflowGraph(locked.graph).ok).toBe(true);
+
+    // The same lock, arrived at the other way the contracts helper allows.
+    const byFirstItem = wire({ items: [{ id: 'i1', kind: 'text', value: 'a sneaker' }] });
+    expect(byFirstItem.graph.edges).toHaveLength(1);
+  });
+
+  // Widened deliberately and narrowly: a layer document is authored in a dialog and a
+  // router's lock is derived from its wiring, so neither has a field an agent can set.
+  it('keeps the node types with nothing agent-settable empty', () => {
+    expect(AGENT_FIELD_WHITELIST.layerEditor).toEqual([]);
+    expect(AGENT_FIELD_WHITELIST.router).toEqual([]);
+    expect(AGENT_FIELD_WHITELIST.element).toContain('elementId');
   });
 
   it('leaves small graphs untruncated', () => {

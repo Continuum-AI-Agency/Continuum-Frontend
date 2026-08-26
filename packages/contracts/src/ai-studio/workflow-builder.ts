@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { batchItemType } from './batch-node';
 import {
+  batchLockedType,
   coerceNodeConfig,
   createNodeData,
   type GraphEdgeLike,
@@ -108,7 +110,7 @@ function orderCandidates(candidates: string[], roleHint?: string): string[] {
 export function resolveConnection(
   sourceNode: GraphNodeLike,
   targetNode: GraphNodeLike,
-  opts: { roleHint?: string; edges?: GraphEdgeLike[] } = {},
+  opts: { roleHint?: string; edges?: GraphEdgeLike[]; nodes?: GraphNodeLike[] } = {},
 ): ResolveResult {
   const sourceHandles = getAllowedSourceHandles(sourceNode);
   if (sourceHandles.length === 0) {
@@ -117,12 +119,16 @@ export function resolveConnection(
   const sourceHandle = sourceHandles[0];
   const candidates = orderCandidates(getAllowedTargetHandles(targetNode), opts.roleHint);
   const edges = opts.edges ?? [];
+  // The pair alone was enough while every rule read only the two endpoints. A batch's
+  // modality lock can come from the node wired INTO it, which is a third node, so a
+  // caller that has the whole graph passes it; callers that do not are unchanged.
+  const nodes = opts.nodes ?? [sourceNode, targetNode];
 
   for (const targetHandle of candidates) {
     const valid = isValidConnection(
       { source: sourceNode.id, sourceHandle, target: targetNode.id, targetHandle },
       edges,
-      [sourceNode, targetNode],
+      nodes,
     );
     if (valid) return { ok: true, sourceHandle, targetHandle };
   }
@@ -131,6 +137,27 @@ export function resolveConnection(
     ok: false,
     reason: `no compatible handle from ${sourceNode.type ?? '?'} to ${targetNode.type ?? '?'}${opts.roleHint ? ` (role ${opts.roleHint})` : ''}`,
   };
+}
+
+/**
+ * Write each batch's derived lock onto the node, so the graph that is saved carries what
+ * the connection rules already resolve. This is the half of the router's arrangement the
+ * canvas does on connect — the canvas has a `BatchNode` effect for it, an agent-built
+ * graph has nobody, and `materializeBatch` reads `data`, not the edge list.
+ *
+ * Explicit wins, an unwired batch is left alone, and the array identity is preserved when
+ * nothing changed so callers that diff on reference are unaffected.
+ */
+function stampBatchLocks(nodes: WorkflowNode[], edges: GraphEdgeLike[]): WorkflowNode[] {
+  let changed = false;
+  const stamped = nodes.map((node) => {
+    if (node.type !== 'batch' || batchItemType(node.data)) return node;
+    const locked = batchLockedType(node, edges, nodes);
+    if (!locked) return node;
+    changed = true;
+    return { ...node, data: { ...node.data, itemType: locked } };
+  });
+  return changed ? stamped : nodes;
 }
 
 function makeEdge(
@@ -332,7 +359,7 @@ export function buildWorkflowGraph(
       errors.push(`connection references missing node: ${spec.from_ref} → ${spec.to_ref}`);
       continue;
     }
-    const resolved = resolveConnection(from, to, { roleHint: spec.role, edges });
+    const resolved = resolveConnection(from, to, { roleHint: spec.role, edges, nodes });
     if (!resolved.ok) {
       errors.push(resolved.reason);
       continue;
@@ -344,7 +371,7 @@ export function buildWorkflowGraph(
     if (nodeIsMissingPrompt(node, edges)) warnings.push(missingPromptMessage(node));
   }
 
-  const graph: WorkflowGraph = { nodes: autoLayout(nodes, edges), edges };
+  const graph: WorkflowGraph = { nodes: autoLayout(stampBatchLocks(nodes, edges), edges), edges };
   if (opts.metadata) graph.metadata = opts.metadata;
   return { graph, warnings, errors };
 }
@@ -632,7 +659,7 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
     }
   }
 
-  const graphOut: WorkflowGraph = { nodes, edges };
+  const graphOut: WorkflowGraph = { nodes: stampBatchLocks(nodes, edges), edges };
   if (graph.metadata) graphOut.metadata = graph.metadata;
   return { graph: graphOut, errors };
 }
@@ -648,7 +675,7 @@ function connectNodes(
   const to = nodes.find((n) => n.id === toId);
   if (!from || !to)
     return { ok: false, reason: `connect references missing node: ${fromId} → ${toId}` };
-  const resolved = resolveConnection(from, to, { roleHint: role, edges });
+  const resolved = resolveConnection(from, to, { roleHint: role, edges, nodes });
   if (!resolved.ok) return { ok: false, reason: resolved.reason };
   return {
     ok: true,

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { actionDef, actionInputPort, actionOutputModality, isActionId } from './action-registry';
 import { API_RENDER_MEDIA_LIST_MAX } from './api-renders';
-import { batchItemType, MAX_BATCH_ITEMS } from './batch-node';
+import { type BatchItemKind, batchItemType, MAX_BATCH_ITEMS } from './batch-node';
 import {
   coerceImageSize,
   DEFAULT_IMAGE_GENERATOR_MODEL,
@@ -711,6 +711,59 @@ export function routerLockedType(
   return undefined;
 }
 
+/**
+ * The kind a batch is locked to: its stamped `data.itemType` when it has one, then the
+ * first item already in it, and — exactly like `routerLockedType` — otherwise whatever is
+ * wired into its `items` handle.
+ *
+ * The wired fallback is what makes a batch buildable head-first. `BatchNode` fills
+ * `data.items` and `data.itemType` from its wired producers in an effect, but that effect
+ * only runs once the node is on screen. An agent building `string → batch → generator` in
+ * one call has no canvas, so without this the batch has no output modality, the
+ * batch→generator edge is refused, and the effect it was waiting for can never rescue an
+ * edge that was never created.
+ *
+ * Resolution only — nothing here writes. `stampBatchLocks` in the builder persists the
+ * answer, the same division of labour `routerLockedType` has with the canvas.
+ */
+export function batchLockedType(
+  node: GraphNodeLike,
+  edges: GraphEdgeLike[] = [],
+  nodes: GraphNodeLike[] = [],
+): BatchItemKind | undefined {
+  const declared = batchItemType(node.data);
+  if (declared) return declared;
+
+  for (const edge of edges) {
+    if (edge.target !== node.id) continue;
+    if ((edge.targetHandle ?? BATCH_ITEMS_INPUT_HANDLE) !== BATCH_ITEMS_INPUT_HANDLE) continue;
+    const source = nodes.find((candidate) => candidate.id === edge.source);
+    // A batch wired into a batch is the COMBINE PARTNER, never a source of items — the
+    // same rule `materializeBatch` and the node body already apply.
+    if (!source || source.type === 'batch') continue;
+    const handle = edge.sourceHandle;
+    if (isTextProducingSource(source, handle)) return 'text';
+    if (isImageProducingSource(source, handle)) return 'image';
+    if (isVideoProducingSource(source, handle)) return 'video';
+  }
+  return undefined;
+}
+
+/**
+ * A batch seen WITH its wired lock resolved. Only the connection rules have the edge list,
+ * so the derivation happens here and the producer predicates stay edge-free — the property
+ * the rest of this file is built on. Any other node is returned untouched.
+ */
+const withResolvedBatchLock = (
+  node: GraphNodeLike,
+  edges: GraphEdgeLike[],
+  nodes: GraphNodeLike[],
+): GraphNodeLike => {
+  if (node.type !== 'batch' || batchItemType(node.data)) return node;
+  const locked = batchLockedType(node, edges, nodes);
+  return locked ? { ...node, data: { ...node.data, itemType: locked } } : node;
+};
+
 type PublisherFormat = 'image' | 'carousel' | 'video';
 
 const publisherFormat = (node: GraphNodeLike): PublisherFormat => {
@@ -1037,12 +1090,15 @@ function isConnectionCompatible(
   nodes: GraphNodeLike[],
 ): boolean {
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
-  const sourceNode = nodeById.get(connection.source);
+  const rawSource = nodeById.get(connection.source);
   const targetNode = nodeById.get(connection.target);
   const targetHandle = connection.targetHandle ?? '';
   const sourceHandle = connection.sourceHandle ?? null;
 
-  if (!sourceNode || !targetNode) return false;
+  if (!rawSource || !targetNode) return false;
+  // A batch that has not been stamped yet still knows what it carries if something is
+  // wired into it. Resolved once, here, so every predicate below sees the same lock.
+  const sourceNode = withResolvedBatchLock(rawSource, edges, nodes);
 
   if (
     isTextProducingSource(sourceNode, sourceHandle) &&
@@ -1162,8 +1218,10 @@ function isConnectionCompatible(
           : undefined;
     if (!incoming) return false;
     // One kind per batch. Mixing images and videos would make "run this for every item"
-    // mean two different things at the consuming node.
-    const locked = batchItemType(targetNode.data);
+    // mean two different things at the consuming node. The lock counts whether it was
+    // stamped or is merely implied by what is already wired in — otherwise the SECOND
+    // item edge into an unstamped batch is accepted and the mix only surfaces at run time.
+    const locked = batchLockedType(targetNode, edges, nodes);
     if (locked && locked !== incoming) return false;
   } else if (targetNode.type === 'export') {
     if (targetHandle !== EXPORT_MEDIA_INPUT_HANDLE) return false;

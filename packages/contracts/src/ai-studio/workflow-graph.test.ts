@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import { WATERMARK_LOGO_VARIABLE_KEY } from './api-renders';
 import {
+  batchLockedType,
   coerceNodeConfig,
   createNodeData,
   DRAFT_INPUT_HANDLE,
@@ -1334,6 +1335,61 @@ describe('Canvas V3 connection rules', () => {
       node('b', 'batch', { items: [{ id: '1', kind: 'text', value: 'a' }] }),
     ];
     expect(connect(byItems, 'vid', 'video', 'b', 'items')).toBe(false);
+  });
+
+  // A batch with no explicit `itemType` and no items still knows what it carries once
+  // something is wired into it — the same derive-from-wiring the router lock has. Without
+  // it an agent-built `string → batch → generator` is refused at the second edge, because
+  // the `BatchNode` effect that would have stamped the lock never runs off-canvas.
+  it('derives a batch lock from what is wired into it', () => {
+    const wiredText = [
+      node('p', 'string', { value: 'one\ntwo' }),
+      node('b', 'batch'),
+      node('gen', 'nanoGen'),
+    ];
+    const textEdge = [{ id: 'e1', source: 'p', target: 'b', targetHandle: 'items' }];
+    expect(batchLockedType(wiredText[1], textEdge, wiredText)).toBe('text');
+    expect(connect(wiredText, 'b', 'collection', 'gen', 'prompt', textEdge)).toBe(true);
+
+    const wiredImage = [node('img', 'image'), node('b', 'batch'), node('gen', 'nanoGen')];
+    const imageEdge = [{ id: 'e1', source: 'img', target: 'b', targetHandle: 'items' }];
+    expect(batchLockedType(wiredImage[1], imageEdge, wiredImage)).toBe('image');
+    expect(connect(wiredImage, 'b', 'collection', 'gen', 'ref-images', imageEdge)).toBe(true);
+    // Image items are not prose: the derived lock is a real modality, not a pass.
+    expect(connect(wiredImage, 'b', 'collection', 'gen', 'prompt', imageEdge)).toBe(false);
+  });
+
+  it('lets an explicit itemType win over what happens to be wired in', () => {
+    const nodes = [
+      node('img', 'image'),
+      node('b', 'batch', { itemType: 'text' }),
+      node('gen', 'nanoGen'),
+    ];
+    const edges = [{ id: 'e1', source: 'img', target: 'b', targetHandle: 'items' }];
+    expect(batchLockedType(nodes[1], edges, nodes)).toBe('text');
+  });
+
+  it('leaves an unwired, undeclared batch with no modality at all', () => {
+    const nodes = [node('b', 'batch'), node('gen', 'nanoGen')];
+    expect(batchLockedType(nodes[0], [], nodes)).toBeUndefined();
+    expect(connect(nodes, 'b', 'collection', 'gen', 'prompt')).toBe(false);
+  });
+
+  it('reads a batch wired into a batch as the combine partner, never as an item source', () => {
+    const nodes = [
+      node('a', 'batch', { itemType: 'image' }),
+      node('b', 'batch'),
+      node('gen', 'nanoGen'),
+    ];
+    const edges = [{ id: 'e1', source: 'a', target: 'b', targetHandle: 'items' }];
+    expect(batchLockedType(nodes[1], edges, nodes)).toBeUndefined();
+  });
+
+  it('refuses a second item edge that would mix kinds in an unstamped batch', () => {
+    const nodes = [node('p', 'string', { value: 'one' }), node('img', 'image'), node('b', 'batch')];
+    const edges = [{ id: 'e1', source: 'p', target: 'b', targetHandle: 'items' }];
+    expect(connect(nodes, 'img', 'image', 'b', 'items', edges)).toBe(false);
+    expect(connect(nodes, 'p', 'text', 'b', 'items', [])).toBe(true);
   });
 
   it('passes a router through, and keeps it on the modality it locked', () => {

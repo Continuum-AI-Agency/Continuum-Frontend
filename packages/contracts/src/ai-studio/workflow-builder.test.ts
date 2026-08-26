@@ -639,3 +639,77 @@ describe('resolveConnection honours the selected reference mode', () => {
     }
   });
 });
+
+// The batch fan-out the toolloop scenario asks for, built in ONE call with no itemType.
+// It used to fail on the second edge: a batch with nothing declared and nothing in
+// `data.items` had no output modality, so `resolveConnection` found no compatible handle
+// and the edge was never created. The lock now derives from what is wired in — the same
+// rule the router has — and is stamped onto the node the builder returns.
+describe('a batch locks itself to what is wired into it', () => {
+  const fanout = (batchData: Record<string, unknown> = {}) =>
+    buildWorkflowGraph(
+      [
+        { ref: 'prompts', type: 'string', data: { value: 'a red sneaker\na blue sneaker' } },
+        { ref: 'batch', type: 'batch', data: batchData },
+        { ref: 'gen', type: 'nanoGen' },
+      ],
+      [
+        { from_ref: 'prompts', to_ref: 'batch' },
+        { from_ref: 'batch', to_ref: 'gen' },
+      ],
+    );
+
+  it('builds string → batch → nanoGen with no itemType at all', () => {
+    const { graph, errors } = fanout();
+    expect(errors).toEqual([]);
+    expect(graph.edges.map((edge) => `${edge.source}→${edge.target}.${edge.targetHandle}`)).toEqual(
+      ['prompts→batch.items', 'batch→gen.prompt'],
+    );
+    expect(validateWorkflowGraph(graph).ok).toBe(true);
+  });
+
+  it('stamps the derived lock onto the node, the way the canvas stamps a router', () => {
+    // `materializeBatch` and the node body read `data`, not the edge list, so a graph that
+    // only validated would still be a batch nobody downstream could interpret.
+    expect(fanout().graph.nodes.find((n) => n.id === 'batch')?.data.itemType).toBe('text');
+  });
+
+  it('derives an image lock from an image producer', () => {
+    const { graph, errors } = buildWorkflowGraph(
+      [
+        { ref: 'shot', type: 'image' },
+        { ref: 'batch', type: 'batch' },
+        { ref: 'gen', type: 'nanoGen' },
+      ],
+      [
+        { from_ref: 'shot', to_ref: 'batch' },
+        { from_ref: 'batch', to_ref: 'gen', role: 'ref-images' },
+      ],
+    );
+    expect(errors).toEqual([]);
+    expect(graph.nodes.find((n) => n.id === 'batch')?.data.itemType).toBe('image');
+  });
+
+  it('leaves an explicit itemType exactly as the caller set it', () => {
+    expect(
+      fanout({ itemType: 'text' }).graph.nodes.find((n) => n.id === 'batch')?.data.itemType,
+    ).toBe('text');
+    // Nothing wired, nothing declared: unchanged behaviour, no invented lock. The seeded
+    // `null` from createNodeData is left exactly as it was.
+    const bare = buildWorkflowGraph([{ ref: 'batch', type: 'batch' }], []);
+    expect(bare.graph.nodes[0]?.data.itemType).toBeNull();
+  });
+
+  it('locks through an applyOps connect as well as a build', () => {
+    const start = buildWorkflowGraph(
+      [
+        { ref: 'prompts', type: 'string', data: { value: 'one\ntwo' } },
+        { ref: 'batch', type: 'batch' },
+      ],
+      [],
+    ).graph;
+    const { graph, errors } = applyOps(start, [{ op: 'connect', from: 'prompts', to: 'batch' }]);
+    expect(errors).toEqual([]);
+    expect(graph.nodes.find((n) => n.id === 'batch')?.data.itemType).toBe('text');
+  });
+});

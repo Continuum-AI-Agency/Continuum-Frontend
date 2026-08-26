@@ -26,12 +26,20 @@ export const MAX_PROJECTED_WIRING = 120;
 export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   string: ['value'],
   note: ['content'],
-  // Only the op. `config` is per-op and its schemas land with the runtime that reads
-  // them (action-registry.ts); until then an agent picking an op it cannot configure is
-  // better than an agent writing a config blob nothing validates.
-  action: ['actionId'],
-  // Items arrive by attach_media or by wiring, never as a blob an agent writes.
-  batch: ['combine'],
+  // The op AND its config. Both halves are now real: `action-registry.ts` carries a Zod
+  // schema per op, `describeNodeVocabulary` renders each op's config keys, and
+  // `update_node` already accepts them. Projecting only `actionId` would hide from the
+  // agent the very field the vocabulary just told it to write.
+  action: ['actionId', 'config'],
+  // `itemType` is the modality LOCK, and it is load-bearing rather than cosmetic:
+  // `sourceModality('batch')` is `batchItemType(data)`, so a batch with neither an
+  // `itemType` nor a first item carrying a `kind` has NO output modality and every edge
+  // from it to a generator is refused ("no compatible handle") — unlike a router, whose
+  // lock the canvas stamps from its wiring, nothing derives this one. An agent that
+  // cannot see or set it cannot build a working batch at all.
+  // `items` is read-only here: `addBatchItems` is the one writer that enforces the lock
+  // and the 100 cap, and items arrive by attach_media or by wiring, never as a blob.
+  batch: ['combine', 'itemType', 'items'],
   designRef: ['section', 'mode'],
   export: ['format'],
   // A router's lock is derived from its wiring, not chosen.
@@ -39,8 +47,10 @@ export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   // Layer documents are authored in the editor dialog; there is no useful field an agent
   // can set from a prompt.
   layerEditor: [],
-  // An agent cannot pick an element id it has no way to list. Widen when it can.
-  element: [],
+  // `elementId` is the whole binding — the node resolves the saved element from it, and
+  // the agent gets ids from the `list_elements` tool. `elementName` is display-only
+  // (a label fallback), carried so a projection reads as a name and not a bare uuid.
+  element: ['elementId', 'elementName'],
   videoDecode: ['value'],
   frameExtract: ['selector', 'timestampSec', 'outputWidth', 'quality'],
   nanoGen: ['model', 'positivePrompt', 'aspectRatio', 'imageSize'],
@@ -242,6 +252,25 @@ function isEmpty(value: unknown): boolean {
 
 const MAX_PROJECTED_TIMELINE_ITEMS = 40;
 
+// A batch is capped at 100 items and each one can carry a signed URL and storage
+// coordinates. The agent needs to know WHAT is in the batch and HOW MANY — never the
+// bytes-level identity of every item.
+const MAX_PROJECTED_BATCH_ITEMS = 20;
+
+function projectBatchItem(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const item = value as Record<string, unknown>;
+  const projected: Record<string, unknown> = {};
+  // `url` / `storageBucket` / `storagePath` are deliberately absent: they are re-signed
+  // on canvas open and are exactly the noise this projection exists to strip.
+  for (const key of ['id', 'kind', 'label', 'value', 'assetId']) {
+    if (isEmpty(item[key])) continue;
+    projected[key] =
+      key === 'value' && typeof item[key] === 'string' ? capText(item[key]) : item[key];
+  }
+  return Object.keys(projected).length > 0 ? projected : undefined;
+}
+
 function projectTimelineItem(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const item = value as Record<string, unknown>;
@@ -294,6 +323,17 @@ function projectTimelineItem(value: unknown): Record<string, unknown> | undefine
 // large timelines. Full transcripts and the complete document stay behind
 // inspect_video_editor so ordinary Canvas composition remains token-lean.
 const CONFIG_TRANSFORMS: Record<string, (value: unknown) => unknown> = {
+  // The cap SAYS it engaged. A silently sliced list reads downstream as the whole batch,
+  // and "how many items" is the number that decides how much a run costs.
+  'batch.items': (value) => {
+    if (!Array.isArray(value)) return undefined;
+    const projected = value
+      .slice(0, MAX_PROJECTED_BATCH_ITEMS)
+      .map(projectBatchItem)
+      .filter((item): item is Record<string, unknown> => Boolean(item));
+    const omitted = value.length - projected.length;
+    return omitted > 0 ? [...projected, { items_omitted: omitted }] : projected;
+  },
   'timelineEditor.items': (value) => {
     if (!Array.isArray(value)) return undefined;
     return value

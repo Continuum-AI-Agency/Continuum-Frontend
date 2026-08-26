@@ -13,6 +13,7 @@ export * from './contact-sheet';
 export * from './design-grounding';
 export * from './editor-project-reducer';
 export * from './editor-project-v2';
+export * from './export-formats';
 export * from './format-workflows';
 export * from './generation-error';
 export * from './hyperframes-agent';

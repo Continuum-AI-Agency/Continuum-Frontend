@@ -21,19 +21,21 @@
  *     entire reason this program carries one new dependency.
  */
 
+import {
+  type ExportFormatId,
+  type ExportKind,
+  exportFormatsForKind,
+  IMAGE_EXPORT_FORMATS,
+  VIDEO_EXPORT_FORMATS,
+} from '@continuum/contracts';
 import { unzipSync, zipSync } from 'fflate';
 
-export type ExportKind = 'image' | 'video';
-
-export type ExportFormatId =
-  | 'png'
-  | 'jpg'
-  | 'webp'
-  | 'video-original'
-  | 'mp4-h264'
-  | 'mp4-h265'
-  | 'mov-h264'
-  | 'gif';
+// The ids and their modality come from contracts: the Studio agent's node vocabulary
+// renders them as the legal values of `export.format`, and a second copy here is how a
+// prompt starts advertising a format this file cannot write. The engines, MIME types,
+// extensions and picker copy stay local — they are browser concerns. Re-exported so every
+// existing caller keeps importing them from `@/lib/export/transcode`.
+export { type ExportFormatId, type ExportKind, IMAGE_EXPORT_FORMATS, VIDEO_EXPORT_FORMATS };
 
 export interface ExportFormatDef {
   label: string;
@@ -80,15 +82,6 @@ export const EXPORT_FORMATS: Readonly<Record<ExportFormatId, ExportFormatDef>> =
   },
 } as const;
 
-export const IMAGE_EXPORT_FORMATS: readonly ExportFormatId[] = ['png', 'jpg', 'webp'];
-export const VIDEO_EXPORT_FORMATS: readonly ExportFormatId[] = [
-  'video-original',
-  'mp4-h264',
-  'mp4-h265',
-  'mov-h264',
-  'gif',
-];
-
 export const DEFAULT_EXPORT_FORMAT: Readonly<Record<ExportKind, ExportFormatId>> = {
   image: 'png',
   video: 'mp4-h264',
@@ -97,8 +90,7 @@ export const DEFAULT_EXPORT_FORMAT: Readonly<Record<ExportKind, ExportFormatId>>
 export const isExportFormatId = (value: unknown): value is ExportFormatId =>
   typeof value === 'string' && value in EXPORT_FORMATS;
 
-export const formatsForKind = (kind: ExportKind): readonly ExportFormatId[] =>
-  kind === 'image' ? IMAGE_EXPORT_FORMATS : VIDEO_EXPORT_FORMATS;
+export const formatsForKind = exportFormatsForKind;
 
 /** JPEG/WEBP are lossy; PNG ignores the argument. High enough that a re-export is not a downgrade. */
 const STILL_QUALITY = 0.92;

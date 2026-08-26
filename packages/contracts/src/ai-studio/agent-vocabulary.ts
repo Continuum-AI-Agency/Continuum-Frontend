@@ -1,3 +1,8 @@
+import { DESIGN_SECTIONS } from '../design-system/sections';
+import { ACTION_DEFS, ACTION_IDS, type ActionDef, type ActionId } from './action-registry';
+import { BATCH_COMBINE_MODES, BATCH_ITEM_KINDS } from './batch-node';
+import { designRefModeSchema } from './design-grounding';
+import { IMAGE_EXPORT_FORMATS, VIDEO_EXPORT_FORMATS } from './export-formats';
 import {
   IMAGE_GENERATOR_MODELS,
   IMAGE_SIZES,
@@ -44,6 +49,12 @@ const formatHandle = (type: StudioNodeType, handle: string): string => {
 // now COERCED at write time (coerceNodeConfig), so an invented value no longer reaches
 // the generation endpoint — but the model still writes better nodes when it is told the
 // vocabulary up front, and a coerced node is not the node the user asked for.
+//
+// Keyed `type.field` FIRST, bare `field` second — the same two-level lookup
+// `CONFIG_TRANSFORMS` uses in workflow-projection.ts, and for the same reason: `format`
+// is a field on `export`, `plannerDraft` AND `paidPublisher`, and `mode` is a field on
+// both `designRef` and `plannerDraft`. A bare hint would print one node's legal values
+// on the other two. Every value is read off the schema or const that enforces it.
 const CONFIG_FIELD_HINTS: Record<string, string> = {
   imageSize: `${IMAGE_SIZES.join('|')} — MODEL-DEPENDENT, see below`,
   aspectRatio: '16:9, 9:16, 1:1, …',
@@ -53,11 +64,39 @@ const CONFIG_FIELD_HINTS: Record<string, string> = {
   items: 'READ-ONLY here — place clips with the set_timeline op, never update_node',
   referenceMode:
     'images|frames — Veo takes ONE or the other per request; it CHANGES the node handles',
+  'action.actionId': 'one of the ACTION OPS ids below',
+  'action.config': "that op's keys, from the ACTION OPS table",
+  'batch.combine': BATCH_COMBINE_MODES.join('|'),
+  // The lock, and the reason a batch that has one can be wired at all — see the rule line
+  // under WIRING RULES. Without it the node has no output modality and every edge from it
+  // to a generator is refused.
+  'batch.itemType': `${BATCH_ITEM_KINDS.join('|')} — SET THIS or nothing can be wired downstream`,
+  'batch.items': 'READ-ONLY here — items arrive by wiring producers into `items`',
+  'designRef.section': DESIGN_SECTIONS.join('|'),
+  'designRef.mode': designRefModeSchema.options.join('|'),
+  'export.format': `${IMAGE_EXPORT_FORMATS.join('|')} for a still, ${VIDEO_EXPORT_FORMATS.join('|')} for a clip — ids are case-exact`,
+  'element.elementId': 'a saved element id from the list_elements tool — never invent one',
 };
 
-const formatConfigField = (field: string): string => {
-  const hint = CONFIG_FIELD_HINTS[field];
+const formatConfigField = (type: StudioNodeType, field: string): string => {
+  const hint = CONFIG_FIELD_HINTS[`${type}.${field}`] ?? CONFIG_FIELD_HINTS[field];
   return hint ? `${field} (${hint})` : field;
+};
+
+// The two node types whose handles come from their own config rather than their type.
+// Probing `createNodeData(type)` reports the handles of an UNCONFIGURED node — none —
+// which reads as "this is a source" and is a lie. These sentences say where the shape
+// actually comes from. Prose, not a second copy of a vocabulary: the `action` ports are
+// rendered in full below, and an apiRender's come from a template the agent must read.
+const DERIVED_HANDLE_NOTES: Partial<Record<StudioNodeType, { in?: string; out?: string }>> = {
+  action: {
+    in: 'set by data.actionId — see ACTION OPS below',
+    out: 'out — present only once data.actionId is set',
+  },
+  // Only the `in` line: an apiRender genuinely IS a terminal sink, so its `out` is true.
+  apiRender: {
+    in: 'one handle per connectable variable in data.variableDefinitions — pick the template and read the node back, then wire',
+  },
 };
 
 function describeNode(type: StudioNodeType): string {
@@ -65,14 +104,91 @@ function describeNode(type: StudioNodeType): string {
   const inputs = getAllowedTargetHandles(node);
   const outputs = getAllowedSourceHandles(node);
   const config = AGENT_FIELD_WHITELIST[type] ?? [];
+  const derived = DERIVED_HANDLE_NOTES[type];
 
   const parts = [`- ${type} — ${nodePurpose(type)}`];
   parts.push(
-    `    in: ${inputs.length ? inputs.map((h) => formatHandle(type, h)).join(', ') : '(none — it is a source)'}`,
+    `    in: ${inputs.length ? inputs.map((h) => formatHandle(type, h)).join(', ') : (derived?.in ?? '(none — it is a source)')}`,
   );
-  parts.push(`    out: ${outputs.length ? outputs.join(', ') : '(none — it is a sink)'}`);
-  if (config.length) parts.push(`    config: ${config.map(formatConfigField).join(', ')}`);
+  parts.push(
+    `    out: ${outputs.length ? outputs.join(', ') : (derived?.out ?? '(none — it is a sink)')}`,
+  );
+  if (config.length)
+    parts.push(`    config: ${config.map((field) => formatConfigField(type, field)).join(', ')}`);
   return parts.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// The action catalog
+// ---------------------------------------------------------------------------
+
+// `ACTION_DEFS[id].config` is typed `z.ZodType`, so the object shape is not on the type.
+// Every op's config is a `z.object` today; a future one that is not degrades to "no keys"
+// rather than throwing inside a prompt builder.
+const configKeys = (id: ActionId): string[] => {
+  const shape = (ACTION_DEFS[id].config as { shape?: Record<string, unknown> }).shape;
+  return shape ? Object.keys(shape) : [];
+};
+
+/** Group reading order, taken from the order `ACTION_IDS` first mentions each group —
+ *  the same derivation the Frontend palette uses (`addNodeCatalog.ts`), rather than a
+ *  second authored copy of the order on this side. */
+const actionGroupOrder = (): string[] => [
+  ...new Set(ACTION_IDS.map((id) => ACTION_DEFS[id].group)),
+];
+
+const actionFamilyOrder = (): string[] => [
+  ...new Set(ACTION_IDS.map((id) => ACTION_DEFS[id].family)),
+];
+
+/**
+ * One line per op, with the ports PROBED rather than described: `createNodeData` runs the
+ * `actionId` through the same `coerceActionConfig` the builder uses, so the handles below
+ * are the handles the node will actually have. Rendering the op-less node instead — which
+ * is what the plain `action` row does — reports no handles at all and reads as a source.
+ */
+function describeActionOp(id: ActionId): string {
+  // Annotated, not inferred: `ACTION_DEFS` is a `satisfies` literal, so the union member
+  // for an op that never sets `outputsCollection` has no such property to read.
+  const def: ActionDef = ACTION_DEFS[id];
+  const node = { id: '_', type: 'action', data: createNodeData('action', { actionId: id }).data };
+  const inputs = getAllowedTargetHandles(node)
+    .map((handle) => {
+      const limit = getTargetHandleConnectionLimit(node, handle, []);
+      return limit === undefined ? handle : `${handle}(${limit})`;
+    })
+    .join(' ');
+  // The output handle is the same one for every op; what differs is the modality it
+  // carries, and that is only worth a char when it is NOT the family's own.
+  const outputs =
+    getAllowedSourceHandles(node)
+      .map((handle) => (def.output === def.family ? handle : `${handle}:${def.output}`))
+      .join(',') + (def.outputsCollection ? '*' : '');
+  const keys = configKeys(id);
+  const config = keys.length ? ` · ${keys.join(' ')}` : '';
+  return `  ${id} ${def.label} · ${inputs}→${outputs}${config}`;
+}
+
+function describeActionOps(): string {
+  const lines = [
+    'ACTION OPS — the only legal `data.actionId`; anything else is cleared to null, leaving an',
+    'inert node with no handles. Set the op FIRST, then wire. `in(n)` is an input handle and its',
+    'connection limit, `out` the single output (carrying the family modality unless written',
+    '`out:image`), `*` a COLLECTION output a downstream batch fans out over. After the last `·`',
+    "are that op's `data.config` keys — omit any you are unsure of: one out-of-range value drops",
+    'the WHOLE config back to defaults.',
+  ];
+  for (const family of actionFamilyOrder()) {
+    for (const group of actionGroupOrder()) {
+      const ids = ACTION_IDS.filter(
+        (id) => ACTION_DEFS[id].family === family && ACTION_DEFS[id].group === group,
+      );
+      if (!ids.length) continue;
+      lines.push(`${family} · ${group}`);
+      for (const id of ids) lines.push(describeActionOp(id));
+    }
+  }
+  return lines.join('\n');
 }
 
 function describeVideoModels(): string {
@@ -145,6 +261,8 @@ export function describeNodeVocabulary(): string {
     'NODE TYPES — every type the canvas accepts. Anything else is rejected.',
     STUDIO_NODE_TYPES.map(describeNode).join('\n'),
     '',
+    describeActionOps(),
+    '',
     describeVideoModels(),
     '',
     describeTimelinePlacement(),
@@ -158,9 +276,10 @@ export function describeNodeVocabulary(): string {
     '- `image` / `video` / `audio` / `document` / `element` / `designRef` are SOURCES: they',
     '  take no inputs. To use a library asset, add the node and `attach_media` its storage',
     '  coordinates to it.',
-    '- An `action` takes its shape from `data.actionId` — set the op FIRST, then wire; an',
-    '  action with no op has no handles at all. A `router` passes one input to many',
-    '  consumers unchanged. A `batch` holds a list and repeats everything downstream of it',
-    '  once per item. `export` and `note` never produce an output.',
+    '- An `action` takes its shape from `data.actionId` (ACTION OPS above). A `router` passes',
+    '  one input to many consumers unchanged. A `batch` holds a list and repeats everything',
+    '  downstream of it once per item — SET its `itemType` when you add it, because a batch',
+    '  with no itemType has no output modality and every edge from it is refused.',
+    '  `export` and `note` never produce an output.',
   ].join('\n');
 }
