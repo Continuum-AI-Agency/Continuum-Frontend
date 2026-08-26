@@ -76,6 +76,16 @@ const SESSION_ID = `${BENCH_SESSION_PREFIX}${Date.now()}`;
 // beforeAll uploads the fixtures below into local Supabase Storage and mints real signed URLs.
 let BENCH_IMAGE_URL = '';
 let BENCH_VIDEO_URL = '';
+let BENCH_SLIDE_URL = '';
+let BENCH_REEL_URL = '';
+
+// The plan card and its pipeline cards have to agree on identity or the previews land on no
+// row at all — ConceptPlan matches a pipeline card to a concept by planItemId.
+const PLAN_ID = crypto.randomUUID();
+const REEL_ITEM_ID = crypto.randomUUID();
+const CAROUSEL_ITEM_ID = crypto.randomUUID();
+const REEL_JOB_ID = crypto.randomUUID();
+const CAROUSEL_JOB_ID = crypto.randomUUID();
 
 // A 1x1 red PNG — a real image, so the signed URL must serve real image bytes back.
 const PNG_BASE64 =
@@ -101,12 +111,34 @@ function admin(): SupabaseClient {
 // A fully-valid ProposedPlan frame. The Frontend replays persisted frames through the SAME parser
 // the live stream uses, so a shape that fails the contract schema is silently dropped and no
 // milestone would be derived — the bench would then be asserting on a card that never existed.
+function planItem(itemId: string, format: 'reel' | 'carousel', angle: string) {
+  return {
+    itemId,
+    kind: 'create_post',
+    platform: 'instagram',
+    scheduledAt: new Date().toISOString(),
+    format,
+    trendId: null,
+    trendTitle: null,
+    angle,
+    objective: 'follow',
+    audienceSegment: 'Bench audience',
+    rationale: 'Seeded for the chat-shell bench.',
+    guidancePrompt: null,
+    draftId: null,
+    jobId: null,
+    dependsOn: [],
+    status: 'pending',
+    creativeBrief: null,
+  };
+}
+
 function planCardFrame() {
   const now = new Date().toISOString();
   return {
     type: 'ui.plan_card',
     data: {
-      planId: crypto.randomUUID(),
+      planId: PLAN_ID,
       sessionId: SESSION_ID,
       brandId,
       userId: OWNER_ID,
@@ -114,25 +146,8 @@ function planCardFrame() {
       title: 'Bench plan',
       summary: 'A seeded plan so the transcript has a real checkpoint to anchor on.',
       items: [
-        {
-          itemId: crypto.randomUUID(),
-          kind: 'create_post',
-          platform: 'instagram',
-          scheduledAt: now,
-          format: 'reel',
-          trendId: null,
-          trendTitle: null,
-          angle: 'Bench angle',
-          objective: 'follow',
-          audienceSegment: 'Bench audience',
-          rationale: 'Seeded for the chat-shell bench.',
-          guidancePrompt: null,
-          draftId: null,
-          jobId: null,
-          dependsOn: [],
-          status: 'pending',
-          creativeBrief: null,
-        },
+        planItem(REEL_ITEM_ID, 'reel', 'Bench reel angle'),
+        planItem(CAROUSEL_ITEM_ID, 'carousel', 'Bench carousel angle'),
       ],
       evidence: [],
       estimatedDurationSeconds: 60,
@@ -140,6 +155,46 @@ function planCardFrame() {
       createdAt: now,
     },
   };
+}
+
+/**
+ * The previews the concept rows actually render. A reel whose media is REALIZED is an MP4 and
+ * must reach a <video>; a carousel mid-pipeline is N storyboard stills and must reach N slides.
+ * Before this, both took the same path — one still, one <img> — and the reel's storyboard PNG
+ * went into a <video>, failed, and left the row showing a grey letter tile.
+ */
+function pipelineCardFrames() {
+  return [
+    {
+      type: 'ui.pipeline_card',
+      data: {
+        jobId: REEL_JOB_ID,
+        brandId,
+        planId: PLAN_ID,
+        planItemId: REEL_ITEM_ID,
+        platform: 'instagram',
+        status: 'completed',
+        preview: { format: 'reel', images: [BENCH_REEL_URL] },
+        checkpoint: { textReady: true, blueprintReady: true, mediaStatus: 'ready' },
+      },
+    },
+    {
+      type: 'ui.pipeline_card',
+      data: {
+        jobId: CAROUSEL_JOB_ID,
+        brandId,
+        planId: PLAN_ID,
+        planItemId: CAROUSEL_ITEM_ID,
+        platform: 'instagram',
+        status: 'running',
+        preview: {
+          format: 'carousel',
+          images: [BENCH_SLIDE_URL, `${BENCH_SLIDE_URL}&slide=2`, `${BENCH_SLIDE_URL}&slide=3`],
+        },
+        checkpoint: { textReady: true, blueprintReady: true, mediaStatus: 'pending' },
+      },
+    },
+  ];
 }
 
 async function purgeBenchSessions(supabase: SupabaseClient): Promise<void> {
@@ -197,7 +252,7 @@ function seedRows() {
       role: 'assistant',
       content: `BENCH-ASSISTANT-${turn}`,
       metadata: null,
-      ui_cards: isLast ? [planCardFrame()] : [],
+      ui_cards: isLast ? [planCardFrame(), ...pipelineCardFrames()] : [],
       created_at: at(1),
     });
   }
@@ -244,6 +299,8 @@ test.describe('chat shell — Organic agent', () => {
     for (const [name, base64, contentType] of [
       ['bench.png', PNG_BASE64, 'image/png'],
       ['bench.mp4', MP4_BASE64, 'video/mp4'],
+      ['bench-slide.png', PNG_BASE64, 'image/png'],
+      ['bench-reel.mp4', MP4_BASE64, 'video/mp4'],
     ] as const) {
       const { error } = await supabase.storage
         .from('media-library')
@@ -261,6 +318,8 @@ test.describe('chat shell — Organic agent', () => {
     };
     BENCH_IMAGE_URL = await signFixture('bench.png');
     BENCH_VIDEO_URL = await signFixture('bench.mp4');
+    BENCH_SLIDE_URL = await signFixture('bench-slide.png');
+    BENCH_REEL_URL = await signFixture('bench-reel.mp4');
 
     const { data: pref } = await supabase
       .schema('brand_profiles')
@@ -461,6 +520,37 @@ test.describe('chat shell — Organic agent', () => {
     // The image alongside it still renders as an image — the primitive branches, it does not
     // simply turn everything into a video.
     await expect(page.locator(`img[src*="bench.png"]`)).toHaveCount(1);
+  });
+
+  test('a reel concept plays as video and a carousel concept shows all of its slides', async () => {
+    await openAgentPanel(page);
+    await expect(
+      page.getByText(`BENCH-ASSISTANT-${SEEDED_TURNS - 1}`, { exact: true }),
+    ).toBeVisible({ timeout: 60_000 });
+
+    const rows = page.locator('[data-slot="concept-row"]');
+    const reelRow = rows.filter({ hasText: 'Bench reel angle' });
+    const carouselRow = rows.filter({ hasText: 'Bench carousel angle' });
+    await expect(reelRow).toHaveCount(1);
+    await expect(carouselRow).toHaveCount(1);
+
+    // Realized reel media is an MP4 and reaches a real <video>. The regression it replaces:
+    // the row put the draft's format ahead of the asset, so a storyboard PNG went into a
+    // <video>, failed to decode, and the concept showed a grey letter tile instead of art.
+    await expect(reelRow.locator('video[src*="bench-reel.mp4"]')).toHaveCount(1);
+    await expect(reelRow.locator('img[src*="bench-reel.mp4"]')).toHaveCount(0);
+
+    // The carousel's face carries the cover plus the slide count. Every frame the pipeline
+    // produced is accounted for; before this the row rendered images[0] and dropped the rest,
+    // so a carousel and a single post were indistinguishable.
+    await expect(carouselRow.getByText('3', { exact: true })).toBeVisible();
+    await expect(carouselRow.locator('img[src*="bench-slide.png"]')).toHaveCount(1);
+
+    // ...and the strip itself is one hover away, at a size where paging is usable.
+    await carouselRow.locator('[data-slot="hover-card-trigger"]').first().hover();
+    const preview = page.locator('[data-slot="hover-card-content"]');
+    await expect(preview).toBeVisible({ timeout: 10_000 });
+    await expect(preview.locator('img[src*="bench-slide.png"]')).toHaveCount(3);
   });
 
   test('an attached image really uploads and is sent to the agent as a reachable signed URL', async () => {

@@ -1,7 +1,7 @@
 // Browser API + React Query hook for the live generation ticker. Calls the
 // agents-ts backend directly (http.request attaches base URL + bearer) per the
 // FE API-layer rule — no Next.js proxy route. The post_generation_jobs rows
-// returned here are THE single source of truth for the GenerationsPopover counts
+// returned here are THE single source of truth for the in-flight feed's counts
 // and rows, replacing the ephemeral useCalendarStore.generations projection.
 
 'use client';

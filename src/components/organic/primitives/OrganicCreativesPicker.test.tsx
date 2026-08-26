@@ -6,6 +6,7 @@ import type { MediaAsset } from '@continuum/contracts';
 // all DOM queries work correctly in this environment.
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { OrganicCreativesPicker } from './OrganicCreativesPicker';
+
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
 

@@ -474,8 +474,12 @@ describe('dayOverDayComparisonFromTrends', () => {
   });
 
   it('needs at least two numeric points and a mapped key', () => {
-    expect(dayOverDayComparisonFromTrends([{ date: '2026-07-25', views: 10 }], 'views')).toBeUndefined();
-    expect(dayOverDayComparisonFromTrends([{ date: '2026-07-25', views: 10 }], undefined)).toBeUndefined();
+    expect(
+      dayOverDayComparisonFromTrends([{ date: '2026-07-25', views: 10 }], 'views'),
+    ).toBeUndefined();
+    expect(
+      dayOverDayComparisonFromTrends([{ date: '2026-07-25', views: 10 }], undefined),
+    ).toBeUndefined();
   });
 });
 

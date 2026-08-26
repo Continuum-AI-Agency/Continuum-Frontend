@@ -2,7 +2,6 @@
 
 import { useSearchParams } from 'next/navigation';
 import React, { startTransition } from 'react';
-import { GenerationsPopover } from '@/components/organic/agent/GenerationsPopover';
 import { useGenerationJobsRealtime } from '@/components/organic/hooks/useGenerationJobsRealtime';
 import {
   OpenPlannerDraftProvider,
@@ -114,9 +113,10 @@ export function OrganicWorkspaceTabs({
   const showPlanner = React.useCallback(() => handleValueChange('planner'), [handleValueChange]);
   const openPlannerDraft = useWorkspaceOpenPlannerDraft(showPlanner);
 
-  // Active brand for the shell-wide ticker. Realtime on organic.post_generation_jobs
-  // keeps the live generation summaries fresh on every tab (the ticker lives here,
-  // outside the tab panels, so its counts survive tab switches).
+  // Realtime on organic.post_generation_jobs keeps the generation summaries fresh while
+  // the workspace is open. The ticker ITSELF now lives in the header notification bell —
+  // generations outlive this page, and a widget you have to be on /organic to read is a
+  // widget that goes dark exactly when the work matters most.
   const tickerBrandId = brandId ?? metricsPrefetchParams?.brandId ?? null;
   useGenerationJobsRealtime(tickerBrandId);
 
@@ -127,9 +127,6 @@ export function OrganicWorkspaceTabs({
           <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
 
           <div className="flex shrink-0 items-center gap-2">
-            {/* Shell-wide live generations: visible on every tab once any post is generating. */}
-            <GenerationsPopover brandId={tickerBrandId} onViewDraftAction={openPlannerDraft} />
-
             <nav
               className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5"
               aria-label="Organic workspace"

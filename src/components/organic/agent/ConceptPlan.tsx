@@ -35,6 +35,7 @@ type Props = {
   onViewDraftAction: (draftId: string, target: 'calendar' | 'list') => void;
   onEnrichDraftAction?: (draftId: string) => void;
   onGenerateMediaAction?: (draftId: string, format: string, previewRevision: string) => void;
+  onRetryJobAction?: (jobId: string) => void;
 };
 
 // Stable per-card identity so a re-click (a per-card button or the footer)
@@ -144,6 +145,7 @@ export function ConceptPlan({
   onViewDraftAction,
   onEnrichDraftAction,
   onGenerateMediaAction,
+  onRetryJobAction,
 }: Props) {
   const [dismissed, setDismissed] = useState(false);
   const [generatingAll, setGeneratingAll] = useState(false);
@@ -276,6 +278,7 @@ export function ConceptPlan({
                   onGenerateItemAction(item.itemId, makeClientKey(plan.planId, item.itemId))
                 }
                 onGenerateMedia={onGenerateMediaAction}
+                onRetryJob={onRetryJobAction}
                 onViewDraft={onViewDraftAction}
                 pipeline={pipelineFor(item.itemId)}
                 status={resolveStatus(item)}

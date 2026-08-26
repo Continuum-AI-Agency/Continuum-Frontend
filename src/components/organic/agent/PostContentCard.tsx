@@ -2,20 +2,13 @@
 
 import type { UiFetchedPost } from '@continuum/contracts';
 import { ExternalLink } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { useState } from 'react';
-import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { ChatMediaThumb, MediaFallbackTile } from '@/components/chat/media/ChatMedia';
 import { mediaFromFetchedPost } from '@/components/chat/media/media';
 import { MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-
-const PLATFORM_GRADIENTS: Record<string, string> = {
-  instagram: 'from-purple-600 to-pink-500',
-  facebook: 'from-blue-600 to-blue-400',
-  tiktok: 'from-zinc-800 to-zinc-600',
-  draft: 'from-slate-600 to-slate-500',
-};
 
 function formatMetricValue(value: number | null): string {
   if (value === null) return '—';
@@ -51,7 +44,8 @@ export function PostContentCard({ post }: Props) {
 
   const platformLabel = post.platform ?? post.source;
   const media = mediaFromFetchedPost(post);
-  const gradient = PLATFORM_GRADIENTS[post.source] ?? 'from-muted to-muted/60';
+  const fallbackSeed = post.caption ?? post.topic ?? platformLabel;
+  const reduceMotion = useReducedMotion();
 
   const topMetric = post.metrics
     ? (Object.entries(post.metrics).find(([, v]) => v !== null) ?? null)
@@ -79,14 +73,16 @@ export function PostContentCard({ post }: Props) {
         render={
           <motion.button
             className={cn(
-              'w-[132px] shrink-0 rounded-xl overflow-hidden cursor-pointer text-left',
+              // w-36 rather than a pixel literal: the strip's track rides --font-size-root
+              // with the rest of the density ladder.
+              'w-36 shrink-0 overflow-hidden rounded-lg cursor-pointer text-left',
               'border border-border/40 bg-card',
-              'transition-[border-color,box-shadow] duration-150',
-              'hover:border-primary/30 hover:shadow-[0_2px_12px_rgba(0,0,0,0.10)]',
+              'transition-[border-color] duration-150',
+              'hover:border-primary/30',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
             )}
-            whileHover={{ scale: 1.02, y: -1 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            whileHover={reduceMotion ? undefined : { y: -2 }}
+            transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
             aria-label={
               post.caption ? `Post: ${post.caption.slice(0, 60)}` : `${platformLabel} post`
             }
@@ -97,7 +93,7 @@ export function PostContentCard({ post }: Props) {
               {media ? (
                 <ChatMediaThumb media={media} className="absolute inset-0 rounded-none" />
               ) : (
-                <div className={cn('absolute inset-0 bg-gradient-to-br', gradient)} />
+                <MediaFallbackTile className="absolute inset-0 border-0" seed={fallbackSeed} />
               )}
               {post.rank != null && (
                 <span className="absolute top-1.5 right-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-bold text-amber-300 backdrop-blur-sm leading-none">
@@ -142,11 +138,9 @@ export function PostContentCard({ post }: Props) {
             never saw the post. */}
         {media ? (
           <div className="relative h-48 w-full overflow-hidden bg-muted">
-            <ChatMediaThumb media={media} className="rounded-none" />
+            <ChatMediaThumb media={media} className="rounded-none" hoverPlay />
           </div>
-        ) : (
-          <div className={cn('h-1 w-full bg-gradient-to-r', gradient)} />
-        )}
+        ) : null}
         <div className="p-4 space-y-3">
           <div className="flex items-center gap-1.5 flex-wrap">
             <PlatformTag platform={platformLabel} />

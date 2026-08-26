@@ -5,7 +5,6 @@ import {
   resolveOrganicAgentLabel,
   resolveOrganicGenerationDisplay,
 } from '@continuum/contracts';
-import { type ConceptStatus, resolveConceptStatus } from './conceptStatus';
 import {
   AlertCircle,
   Check,
@@ -17,28 +16,24 @@ import {
   Wand2,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
-import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
-import { mediaFromPreviewUrls } from '@/components/chat/media/media';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
+import { type ChatMedia, mediaFromPreviewUrls } from '@/components/chat/media/media';
+import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
 import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from '@/components/ui/carousel';
+  AgentArtifactCard,
+  MetaRow,
+  PlatformTag,
+  StatusLabel,
+} from '@/components/shared/agent-cards/agentCardKit';
 import { Progress } from '@/components/ui/progress';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { useDraftRealizedImages, useDraftStoryboard } from '../hooks/useDraftStoryboard';
-import { AgentArtifactCard, MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
-import type {
-  CheckpointState,
-  PipelineCardState,
-  PipelinePreview,
-  PipelineStage,
-  PipelineStageNode,
-} from './types';
+import { resolveConceptPreviewUrls } from './conceptPreview';
+import { type ConceptStatus, resolveConceptStatus } from './conceptStatus';
+import { StatusDetail } from './StatusDetail';
+import type { CheckpointState, PipelineCardState, PipelineStage, PipelineStageNode } from './types';
 
 // One vocabulary across surfaces: the stepper labels each stage with the SAME canonical
 // resolver the generations widget uses, instead of a divergent local map.
@@ -52,40 +47,22 @@ function qualityPercent(score: number | undefined): number | null {
   return score <= 1 ? Math.round(score * 100) : Math.round(score);
 }
 
-function resolvePreviewImages(preview: PipelinePreview | undefined): string[] {
-  if (!preview) return [];
-  if (preview.images?.length) return preview.images;
-  if (preview.imageUrl) return [preview.imageUrl];
-  return [];
-}
-
-// A generated reel is an MP4; rendering it into an <img> is why generated video previews came out
-// blank. The shared primitive reads the draft's format and gives video a real poster frame.
-function PreviewImages({ images, format }: { images: string[]; format?: string | null }) {
-  const media = mediaFromPreviewUrls('preview', images, format);
+/**
+ * This card is full width, so unlike the plan row it has the room to page in place: the
+ * shared carousel puts its arrows inside the tile on hover and owns the k/N counter, which
+ * a bare shadcn Carousel with arrows hanging outside the frame did not.
+ */
+function PreviewImages({
+  media,
+  onOpen,
+}: {
+  media: readonly ChatMedia[];
+  onOpen: (index: number) => void;
+}) {
   if (media.length === 0) return null;
-
-  if (media.length > 1) {
-    return (
-      <Carousel className="w-full">
-        <CarouselContent>
-          {media.map((item) => (
-            <CarouselItem key={item.id}>
-              <div className={cn('h-[220px] w-full overflow-hidden rounded-lg', IMAGE_OUTLINE)}>
-                <ChatMediaThumb media={item} className="rounded-none" />
-              </div>
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-        <CarouselPrevious />
-        <CarouselNext />
-      </Carousel>
-    );
-  }
-
   return (
     <div className={cn('h-[220px] w-full overflow-hidden rounded-lg', IMAGE_OUTLINE)}>
-      <ChatMediaThumb media={media[0]} className="rounded-none" />
+      <ChatMediaCarousel hoverPlay items={media} onOpen={onOpen} />
     </div>
   );
 }
@@ -276,17 +253,40 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
   // finishes after the chat stream closes, so this is the reliable inline source.
   const realizedImages = useDraftRealizedImages(card.draftId);
   const draftStoryboard = useDraftStoryboard(card.draftId);
-  const cardImages = resolvePreviewImages(card.preview);
+  const cardImages = resolveConceptPreviewUrls(card.preview);
   // Final realized media (re-signed on calendar load) wins over the live blueprint
   // preview and the storyboard concept, so the card upgrades to the finished image
   // after "Generate media"; before realize, the live blueprint frame wins over the
   // durable storyboard fallback.
-  const previewImages =
-    realizedImages.length > 0
-      ? realizedImages
-      : cardImages.length > 0
-        ? cardImages
-        : draftStoryboard;
+  const usingRealized = realizedImages.length > 0;
+  const previewImages = usingRealized
+    ? realizedImages
+    : cardImages.length > 0
+      ? cardImages
+      : draftStoryboard;
+
+  // Only realized media may read its kind from the draft's format. A storyboard frame is a
+  // still even for a reel, and calling it a video puts a PNG in a <video> tag.
+  const previewMedia = useMemo(
+    () =>
+      mediaFromPreviewUrls(
+        `preview:${card.jobId}`,
+        previewImages,
+        card.preview?.format,
+        usingRealized ? 'realized' : 'storyboard',
+      ),
+    [card.jobId, previewImages, card.preview?.format, usingRealized],
+  );
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const lightboxItems: LightboxItem[] = useMemo(
+    () =>
+      previewMedia.map((item) => ({
+        url: item.url,
+        caption: item.caption ?? card.preview?.caption ?? '',
+        isVideo: item.kind === 'video',
+      })),
+    [previewMedia, card.preview?.caption],
+  );
 
   // Approve-through media actions, wired exactly like ConceptCard's: Enrich while
   // only text exists, Generate media once the blueprint landed. Neither shows once
@@ -326,13 +326,26 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
   }, [card.status, card.draftId, requestCalendarRefetch]);
 
   return (
-    <AgentArtifactCard className="space-y-3 p-3.5">
+    <AgentArtifactCard className="gap-[var(--card-gap)] p-[var(--card-pad)]">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {card.platform && <PlatformTag platform={card.platform} />}
           <MetaRow items={[card.preview?.format ?? undefined]} />
         </div>
-        <StatusLabel title={state.diagnostic ?? undefined} tone={state.tone}>
+        <StatusLabel
+          detail={
+            <StatusDetail
+              agentName={activeNode?.agentName}
+              checkpoint={card.checkpoint ?? null}
+              diagnostic={state.diagnostic}
+              error={card.error?.message ?? null}
+              pct={card.pct ?? null}
+              stageLabel={activeNode ? stageLabel(activeNode.stage) : state.label}
+            />
+          }
+          title={state.diagnostic ?? undefined}
+          tone={state.tone}
+        >
           {liveLabel ?? state.label}
           {quality != null ? ` · ${quality}%` : ''}
         </StatusLabel>
@@ -362,7 +375,7 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
         />
       ) : null}
 
-      <PreviewImages images={previewImages} format={card.preview?.format} />
+      <PreviewImages media={previewMedia} onOpen={setLightboxIndex} />
 
       {card.preview?.caption && (
         <p className="line-clamp-2 text-sm leading-relaxed text-foreground text-pretty">
@@ -382,7 +395,7 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
       )}
 
       {(showEnrich || showGenerateMedia) && draftId && (
-        <div className="-mx-3.5 -mb-3.5 flex items-stretch border-t border-border/40">
+        <div className="-mx-[var(--card-pad)] -mb-[var(--card-pad)] flex items-stretch border-t border-border/40">
           {showEnrich && (
             <button
               type="button"
@@ -432,6 +445,17 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
             </button>
           )}
         </div>
+      )}
+
+      {lightboxItems.length > 0 && (
+        <MediaLightbox
+          index={lightboxIndex ?? 0}
+          items={lightboxItems}
+          onIndexChange={setLightboxIndex}
+          onOpenChange={(open) => setLightboxIndex(open ? (lightboxIndex ?? 0) : null)}
+          open={lightboxIndex !== null}
+          title={card.preview?.format ?? 'Preview'}
+        />
       )}
     </AgentArtifactCard>
   );

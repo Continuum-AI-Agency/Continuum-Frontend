@@ -87,7 +87,7 @@ export type GenerationCheckpoint = {
 };
 
 // Live registry of in-flight/finished post generations, projected from the agent
-// panel reducer + the bulk run stream so the shell-wide GenerationsPopover can show
+// panel reducer + the bulk run stream so the shell-wide in-flight feed can show
 // status/progress/preview from any organic tab. Ephemeral — never persisted.
 export type GenerationEntry = {
   // Stable UI registry key (e.g. the synthetic `realize:<feId>` for realize streams).

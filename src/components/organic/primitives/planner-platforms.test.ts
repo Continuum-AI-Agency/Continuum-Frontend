@@ -1,5 +1,5 @@
-import { PLATFORM_CAPABILITIES } from '@continuum/contracts';
 import { describe, expect, it } from 'bun:test';
+import { PLATFORM_CAPABILITIES } from '@continuum/contracts';
 import { buildPlannerPlatforms } from './planner-platforms';
 import type {
   OrganicCalendarDay,

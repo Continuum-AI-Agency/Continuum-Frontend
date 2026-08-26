@@ -120,6 +120,27 @@ function restoreStoryboard(
   }));
 }
 
+/**
+ * The snapshot is the authority for a draft's media EXCEPT for the durable pair
+ * (bucket + storage path). A snapshot is written once, at generation time, and it
+ * carries the signed URL that was live then; content_json carries the bucket+path
+ * that never expires. Picking one source wholesale meant a snapshot with any media
+ * key at all shadowed the durable pair for good — so once its signed URL expired,
+ * nothing could re-sign it and the draft rendered a broken image permanently.
+ * Take the pair from content_json when the snapshot has no bucket of its own.
+ */
+function mergeDurableMediaPair(snapshotValue: unknown, placementValue: unknown): unknown {
+  const snapshot = asRecord(snapshotValue);
+  if (Object.keys(snapshot).length === 0) return placementValue;
+
+  const placement = asRecord(placementValue);
+  const durableBucket = readString(placement.bucket);
+  const durablePath = readString(placement.url);
+  if (readString(snapshot.bucket) || !durableBucket || !durablePath) return snapshotValue;
+
+  return { ...snapshot, bucket: durableBucket, url: durablePath };
+}
+
 function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft['mediaSuggestion'] {
   const obj = asRecord(value);
   if (Object.keys(obj).length === 0) return undefined;
@@ -706,9 +727,7 @@ export function mapPersistedRowToCalendarEntry(
   const groupId = readString(row.group_id) ?? null;
 
   const mediaSuggestion = restoreMediaSuggestion(
-    Object.keys(asRecord(snapshot.mediaSuggestion)).length > 0
-      ? snapshot.mediaSuggestion
-      : placementCreative.mediaSuggestion,
+    mergeDurableMediaPair(snapshot.mediaSuggestion, placementCreative.mediaSuggestion),
   );
 
   const draft: OrganicCalendarDraft = {

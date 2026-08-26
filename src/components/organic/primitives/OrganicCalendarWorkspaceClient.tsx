@@ -962,7 +962,7 @@ function OrganicCalendarWorkspaceInner({
 
   // Bulk "Generate media" — opt-in Step-3 realization for image/carousel/reel
   // drafts. Reel and image batches both flow through this single hook so the
-  // GenerationsPopover ticker registers a backendJobId and server-side cancel works.
+  // in-flight feed registers a backendJobId and server-side cancel works.
   const {
     generateDraftMedia,
     isGenerating: isGeneratingMedia,

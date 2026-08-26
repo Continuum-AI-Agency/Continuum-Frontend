@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { z } from 'zod';
+// sonner's <Toaster/> is never mounted in this app, so every toast.*() call here was a
+// silent no-op: "Report ready" has never once reached a user. ToastProvider is the mounted
+// system, and its dedupeKey means a job that transitions twice updates one toast in place.
+import { useToast } from '@/components/ui/ToastProvider';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 export const reportJobSchema = z.object({
@@ -24,6 +27,11 @@ export function useReportJobsRealtime(brandProfileId: string) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const prevStatusRef = useRef<Map<string, string>>(new Map());
+  const { show } = useToast();
+  // The subscription is rebuilt only on brand change; reading `show` through a ref keeps a
+  // provider re-render from tearing down and re-opening the realtime channel.
+  const showRef = useRef(show);
+  showRef.current = show;
 
   const markAllRead = useCallback(() => setUnreadCount(0), []);
 
@@ -57,13 +65,19 @@ export function useReportJobsRealtime(brandProfileId: string) {
 
       if (prevStatus !== undefined && prevStatus !== job.status) {
         if (job.status === 'done') {
-          toast.success('Report ready', {
-            description: 'Your Jaina report has been generated.',
+          showRef.current({
+            title: 'Report ready',
+            description: 'Your performance report has been generated.',
+            variant: 'success',
+            dedupeKey: `report-job:${job.job_id}`,
           });
           setUnreadCount((c) => c + 1);
         } else if (job.status === 'failed') {
-          toast.error('Report failed', {
+          showRef.current({
+            title: 'Report failed',
             description: job.error_message ?? 'Report generation failed.',
+            variant: 'error',
+            dedupeKey: `report-job:${job.job_id}`,
           });
           setUnreadCount((c) => c + 1);
         }

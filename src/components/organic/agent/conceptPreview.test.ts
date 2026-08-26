@@ -1,33 +1,54 @@
 import { describe, expect, it } from 'bun:test';
 
-import { resolveConceptPreviewUrl } from './conceptPreview';
+import { resolveConceptPreviewUrls } from './conceptPreview';
 
-describe('resolveConceptPreviewUrl', () => {
-  it('returns null for empty or missing preview', () => {
-    expect(resolveConceptPreviewUrl(undefined)).toBeNull();
-    expect(resolveConceptPreviewUrl(null)).toBeNull();
-    expect(resolveConceptPreviewUrl({})).toBeNull();
-    expect(resolveConceptPreviewUrl({ imageUrl: '   ' })).toBeNull();
+describe('resolveConceptPreviewUrls', () => {
+  it('returns nothing for an empty or missing preview', () => {
+    expect(resolveConceptPreviewUrls(undefined)).toEqual([]);
+    expect(resolveConceptPreviewUrls(null)).toEqual([]);
+    expect(resolveConceptPreviewUrls({})).toEqual([]);
+    expect(resolveConceptPreviewUrls({ imageUrl: '   ' })).toEqual([]);
   });
 
   it('passes through http(s), data, and blob URLs unchanged', () => {
-    expect(resolveConceptPreviewUrl({ imageUrl: 'https://cdn/x.png' })).toBe('https://cdn/x.png');
-    expect(resolveConceptPreviewUrl({ imageUrl: 'http://cdn/x.png' })).toBe('http://cdn/x.png');
-    expect(resolveConceptPreviewUrl({ imageUrl: 'data:image/png;base64,abc' })).toBe(
+    expect(resolveConceptPreviewUrls({ imageUrl: 'https://cdn/x.png' })).toEqual([
+      'https://cdn/x.png',
+    ]);
+    expect(resolveConceptPreviewUrls({ imageUrl: 'http://cdn/x.png' })).toEqual([
+      'http://cdn/x.png',
+    ]);
+    expect(resolveConceptPreviewUrls({ imageUrl: 'data:image/png;base64,abc' })).toEqual([
       'data:image/png;base64,abc',
-    );
-    expect(resolveConceptPreviewUrl({ imageUrl: 'blob:nanobanana' })).toBe('blob:nanobanana');
+    ]);
+    expect(resolveConceptPreviewUrls({ imageUrl: 'blob:nanobanana' })).toEqual(['blob:nanobanana']);
   });
 
   it('normalizes a bare base64 string into a PNG data URL', () => {
-    expect(resolveConceptPreviewUrl({ imageUrl: 'iVBORw0KGgoAAAANS' })).toBe(
+    expect(resolveConceptPreviewUrls({ imageUrl: 'iVBORw0KGgoAAAANS' })).toEqual([
       'data:image/png;base64,iVBORw0KGgoAAAANS',
-    );
+    ]);
   });
 
-  it('falls back to images[0] when imageUrl is absent', () => {
-    expect(resolveConceptPreviewUrl({ images: ['https://cdn/1.png', 'https://cdn/2.png'] })).toBe(
-      'https://cdn/1.png',
-    );
+  // The regression: a carousel arrives as N storyboard frames and the card showed one of
+  // them, so a carousel and a single post were indistinguishable in the transcript.
+  it('keeps every frame, not just the cover', () => {
+    expect(
+      resolveConceptPreviewUrls({ images: ['https://cdn/1.png', 'https://cdn/2.png'] }),
+    ).toEqual(['https://cdn/1.png', 'https://cdn/2.png']);
+  });
+
+  it('leads with imageUrl and does not repeat it when images carries it too', () => {
+    expect(
+      resolveConceptPreviewUrls({
+        imageUrl: 'https://cdn/cover.png',
+        images: ['https://cdn/cover.png', 'https://cdn/2.png'],
+      }),
+    ).toEqual(['https://cdn/cover.png', 'https://cdn/2.png']);
+  });
+
+  it('drops unusable entries without dropping the frames around them', () => {
+    expect(
+      resolveConceptPreviewUrls({ images: ['https://cdn/1.png', '  ', 'https://cdn/3.png'] }),
+    ).toEqual(['https://cdn/1.png', 'https://cdn/3.png']);
   });
 });

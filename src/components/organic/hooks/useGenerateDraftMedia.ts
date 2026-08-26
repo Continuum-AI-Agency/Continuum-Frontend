@@ -95,7 +95,7 @@ export function reelProgressLabel(
 }
 
 // Synthesizes a stable generation-registry job id for an editor-triggered
-// realize. The realize stream has no backend job id, but the GenerationsPopover
+// realize. The realize stream has no backend job id, but the in-flight feed
 // only needs a stable key per draft to project live status/progress.
 function realizeJobId(feId: string): string {
   return `realize:${feId}`;
@@ -132,7 +132,7 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
       setIsGenerating(true);
 
       // Surface every editor-triggered realize in the shell-wide
-      // GenerationsPopover so closing the editor never hides in-flight work.
+      // in-flight feed so closing the editor never hides running work.
       for (const target of [...reelTargets, ...imageTargets]) {
         upsertGeneration({
           jobId: realizeJobId(target.feId),
@@ -177,7 +177,7 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
         if (error instanceof DOMException && error.name === 'AbortError') {
           // The batch fetch was aborted (editor unmounted / a newer run started).
           // Mark only still-in-flight entries cancelled so they don't hang on
-          // "running" forever in the GenerationsPopover.
+          // "running" forever in the in-flight feed.
           const gens = useCalendarStore.getState().generations;
           for (const target of [...reelTargets, ...imageTargets]) {
             const key = realizeJobId(target.feId);

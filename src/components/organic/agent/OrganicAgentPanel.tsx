@@ -70,6 +70,7 @@ import {
 } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { requestOrganicJobRetry } from '@/lib/organic/agent-retry';
 import {
   fetchOrganicSessionMessagePage,
   type OrganicSessionMessage,
@@ -90,7 +91,7 @@ import { BulkPlanCard } from './BulkPlanCard';
 import { BulkRunPanel } from './BulkRunPanel';
 import { ConceptPlan } from './ConceptPlan';
 import { buildCanvasReference, getCanvasPreview } from './canvasMentions';
-import { resolveConceptPreviewUrl } from './conceptPreview';
+import { resolveConceptPreviewUrls } from './conceptPreview';
 import { deriveOrganicAnchors, milestonesForMessage } from './deriveOrganicAnchors';
 import { MediaLibrarySearchResults } from './MediaLibrarySearchResults';
 import { MessageActions } from './MessageActions';
@@ -418,6 +419,37 @@ export function OrganicAgentPanel({
     },
     [brandId, generateDraftMedia, resolveCalendarFeId],
   );
+  /**
+   * Retry a FAILED generation by resetting its existing row to queued, rather than
+   * enqueuing a second job for the same concept. The durable worker re-runs it from the
+   * context it already persisted, and the dead row does not stay behind inflating the
+   * queued count with work nobody is watching.
+   */
+  const handleRetryJobFromChat = useCallback(
+    (jobId: string) => {
+      dispatch({ type: 'JOB_UPDATE', job: { jobId, status: 'queued' } });
+      void requestOrganicJobRetry({ jobId, brandId }).catch((error: unknown) => {
+        dispatch({
+          type: 'JOB_UPDATE',
+          job: {
+            jobId,
+            status: 'failed',
+            error: {
+              message:
+                error instanceof Error ? error.message : 'Could not retry the failed generation.',
+            },
+          },
+        });
+        show({
+          title: 'Could not retry that generation',
+          description: error instanceof Error ? error.message : undefined,
+          variant: 'error',
+        });
+      });
+    },
+    [brandId, show],
+  );
+
   const {
     skills: brandSkills,
     templates: brandSkillTemplates,
@@ -619,7 +651,7 @@ export function OrganicAgentPanel({
   }, [state.jobs, addDraft]);
 
   // Mirror live job + pipeline state into the shared calendar store so the
-  // shell-wide GenerationsPopover can render status/progress/preview from any
+  // shell-wide in-flight feed can render status/progress/preview from any
   // organic tab. The reducer stays the source of truth; this is a projection.
   useEffect(() => {
     for (const job of Object.values(state.jobs)) {
@@ -632,7 +664,7 @@ export function OrganicAgentPanel({
         status: job.status,
         stage: job.stage ?? pipe?.currentStage ?? null,
         pct: pipe?.pct ?? null,
-        previewUrl: resolveConceptPreviewUrl(pipe?.preview),
+        previewUrl: resolveConceptPreviewUrls(pipe?.preview)[0] ?? null,
         quality: typeof pipe?.quality?.overallScore === 'number' ? pipe.quality.overallScore : null,
         draftId: job.draftId ?? pipe?.draftId ?? null,
         error: job.error?.message ?? pipe?.error?.message ?? null,
@@ -648,7 +680,7 @@ export function OrganicAgentPanel({
         status: pipe.status,
         stage: pipe.currentStage ?? null,
         pct: pipe.pct ?? null,
-        previewUrl: resolveConceptPreviewUrl(pipe.preview),
+        previewUrl: resolveConceptPreviewUrls(pipe.preview)[0] ?? null,
         quality: typeof pipe.quality?.overallScore === 'number' ? pipe.quality.overallScore : null,
         draftId: pipe.draftId ?? null,
         error: pipe.error?.message ?? null,
@@ -1768,6 +1800,7 @@ export function OrganicAgentPanel({
                                       }}
                                       onEnrichDraftAction={handleEnrichDraftFromChat}
                                       onGenerateMediaAction={handleGenerateMediaFromChat}
+                                      onRetryJobAction={handleRetryJobFromChat}
                                     />
                                   </motion.div>
                                 );

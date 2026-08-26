@@ -1,8 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import {
+  AgentButton,
+  AgentCardEyebrow,
+  AgentCardTitle,
+  AgentDecisionCard,
+} from '@/components/shared/agent-cards/agentCardKit';
 import { createBrandSkill } from '@/lib/organic/skills';
-import { AgentButton, AgentCardEyebrow, AgentCardTitle, AgentDecisionCard } from '@/components/shared/agent-cards/agentCardKit';
 import type { SkillProposalCardData } from './types';
 
 type Props = {

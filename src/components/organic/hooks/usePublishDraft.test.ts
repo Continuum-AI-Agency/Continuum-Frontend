@@ -371,9 +371,9 @@ describe('usePublishDraft', () => {
 
       expect(confirmationRequests).toHaveLength(1);
       expect(confirmationRequests[0].title).toContain('Instagram');
-      expect(
-        fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/publish')),
-      ).toHaveLength(1);
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/publish'))).toHaveLength(
+        1,
+      );
     });
 
     // The dialog must show the real caption and account, not a generic warning. That is the whole

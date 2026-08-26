@@ -2,8 +2,6 @@
 
 import type { AeoSnapshotCard as AeoSnapshotCardData } from '@continuum/contracts';
 import { Bot, ExternalLink, Lightbulb, Search } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 import {
   AgentArtifactCard,
   AgentCardBody,
@@ -13,6 +11,8 @@ import {
   AgentCardTitle,
   StatusLabel,
 } from '@/components/shared/agent-cards/agentCardKit';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 function scoreTone(score: number): string {
   if (score >= 70) return 'text-emerald-600 dark:text-emerald-400';

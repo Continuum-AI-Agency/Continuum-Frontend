@@ -17,14 +17,17 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
-import { type ButtonHTMLAttributes, useEffect, useId, useRef, useState } from 'react';
-import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
-import { mediaFromPreviewUrls } from '@/components/chat/media/media';
+import { type ButtonHTMLAttributes, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ChatMediaCarousel, ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { type ChatMedia, mediaFromPreviewUrls } from '@/components/chat/media/media';
+import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
 import { MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { resolveConceptPreviewUrl } from './conceptPreview';
+import { resolveConceptPreviewUrls } from './conceptPreview';
 import { type ConceptStatus, resolvePlanItemStatus } from './conceptStatus';
+import { StatusDetail } from './StatusDetail';
 import type { PipelineCardState, PlanItem, PlanItemStatus } from './types';
 
 // --- Vocabulary -------------------------------------------------------------
@@ -61,6 +64,19 @@ const FORMAT_ICONS: Record<string, LucideIcon> = {
   post: ImageIcon,
 };
 
+// The well takes the shape of the thing it will hold, so a reel is recognisable as a reel
+// before any artwork exists and without reading the label next to it. Height is fixed and
+// the aspect decides the width, which is why there is no pixel literal here.
+const FORMAT_ASPECT: Record<string, string> = {
+  reel: 'aspect-[9/16]',
+  story: 'aspect-[9/16]',
+  carousel: 'aspect-square',
+  post: 'aspect-square',
+};
+
+const wellShape = (format: string | null): string =>
+  cn('h-24 shrink-0', FORMAT_ASPECT[format ?? ''] ?? 'aspect-square');
+
 const IMAGE_OUTLINE = 'outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10';
 
 /** "Mon 25" — the weekly plan's real ordering key, so a plan reads as a schedule. */
@@ -86,42 +102,109 @@ function formatExactSchedule(iso: string): string {
 // --- Pieces -----------------------------------------------------------------
 
 /**
- * The row's 56px media well. It begins as the quiet mark of the format that is
- * coming and becomes the generated artwork once the pipeline produces it — so a
- * plan visibly fills in as it executes instead of announcing it in text.
+ * The row's media well. It begins as the quiet mark of the format that is coming and
+ * becomes the generated artwork once the pipeline produces it — so a plan visibly fills in
+ * as it executes instead of announcing it in text.
+ *
+ * The FACE carries the cover, the format's shape, a play mark for anything with motion and
+ * a slide count. It deliberately does NOT page: at this width the carousel's own arrows
+ * would cover the picture they are paging, and flicking four frames in a 96px tile is
+ * fiddling, not judging. The strip lives one hover away, where it is big enough to read,
+ * and the full-size lightbox is one click.
  */
 function MediaWell({
-  image,
+  media,
   format,
   failed,
+  caption,
+  onOpen,
 }: {
-  image: string | null;
+  media: readonly ChatMedia[];
   format: string | null;
   failed: boolean;
+  caption: string | null;
+  onOpen: (index: number) => void;
 }) {
-  if (image) {
+  const shape = wellShape(format);
+  const cover = media[0];
+
+  if (!cover) {
+    const Icon = failed ? ImageOff : (FORMAT_ICONS[format ?? ''] ?? ImageIcon);
     return (
-      <div className={cn('h-14 w-14 shrink-0 overflow-hidden rounded-md', IMAGE_OUTLINE)}>
-        <ChatMediaThumb
-          media={mediaFromPreviewUrls('concept', [image], format)[0]}
-          className="rounded-none"
-        />
+      <div
+        aria-hidden="true"
+        className={cn(
+          'grid place-items-center rounded-md border border-dashed',
+          shape,
+          failed
+            ? 'border-destructive/30 bg-destructive/5 text-destructive/60'
+            : 'border-border/60 bg-muted/30 text-muted-foreground/70',
+        )}
+      >
+        <Icon className="h-4 w-4" />
       </div>
     );
   }
 
-  const Icon = failed ? ImageOff : (FORMAT_ICONS[format ?? ''] ?? ImageIcon);
+  const formatLabel = format ? (FORMAT_LABELS[format] ?? format) : null;
+
   return (
-    <div
-      aria-hidden="true"
-      className={cn(
-        'grid h-14 w-14 shrink-0 place-items-center rounded-md border border-dashed',
-        failed
-          ? 'border-destructive/30 bg-destructive/5 text-destructive/60'
-          : 'border-border/60 bg-muted/30 text-muted-foreground/70',
+    <div className={cn('relative', shape)}>
+      <HoverCard closeDelay={100} openDelay={180}>
+        {/* The trigger IS the cover, not a wrapper around it. Base UI renders a trigger as an
+            anchor by default and a nested button would be invalid markup, so the button takes
+            its place through `render` — the same shape the plan header's evidence card uses.
+            A bare wrapping div is a trigger the preview never opened from. */}
+        <HoverCardTrigger
+          render={
+            <button
+              aria-label={`Open ${formatLabel ?? 'preview'}`}
+              className={cn(
+                'block size-full cursor-zoom-in overflow-hidden rounded-md',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                IMAGE_OUTLINE,
+              )}
+              onClick={() => onOpen(0)}
+              type="button"
+            >
+              <ChatMediaThumb className="rounded-none" hoverPlay media={cover} />
+            </button>
+          }
+        />
+        <HoverCardContent align="start" className="w-72 p-2" side="right">
+          <div
+            className={cn(
+              'w-full overflow-hidden rounded-md',
+              FORMAT_ASPECT[format ?? ''] ?? 'aspect-square',
+            )}
+          >
+            <ChatMediaCarousel
+              fallbackSeed={formatLabel ?? undefined}
+              hoverPlay
+              items={media}
+              onOpen={onOpen}
+            />
+          </div>
+          <p className="mt-2 text-3xs text-muted-foreground">
+            {[formatLabel, media.length > 1 ? `${media.length} slides` : null]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+          {caption && (
+            <p className="mt-1 line-clamp-4 text-xs leading-relaxed text-foreground/85 text-pretty">
+              {caption}
+            </p>
+          )}
+        </HoverCardContent>
+      </HoverCard>
+
+      {/* Outside the trigger: a badge that swallowed the pointer would close the preview the
+          moment the pointer crossed it. */}
+      {media.length > 1 && (
+        <span className="pointer-events-none absolute bottom-1 right-1 rounded-full bg-black/60 px-1.5 py-0.5 font-medium text-3xs text-white backdrop-blur-sm">
+          {media.length}
+        </span>
       )}
-    >
-      <Icon className="h-4 w-4" />
     </div>
   );
 }
@@ -185,6 +268,12 @@ type Props = {
   onEnrichDraft?: (draftId: string) => void;
   /** Stage-3 "Generate media": realize a blueprint-ready draft (format-routed). */
   onGenerateMedia?: (draftId: string, format: string, previewRevision: string) => void;
+  /**
+   * Re-run the job that failed, IN PLACE. `onGenerate` dispatches a NEW job, which for a
+   * failure leaves the dead row behind — that is how the queued-jobs counter fills with
+   * abandoned work nobody is watching. Only offered when there is a jobId to reset.
+   */
+  onRetryJob?: (jobId: string) => void;
 };
 
 export function ConceptCard({
@@ -198,19 +287,46 @@ export function ConceptCard({
   onViewDraft,
   onEnrichDraft,
   onGenerateMedia,
+  onRetryJob,
 }: Props) {
   const [dispatched, setDispatched] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [mediaActionSent, setMediaActionSent] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const detailId = useId();
   // Synchronous latch: setDispatched is async and updates too late to stop a fast
   // double-click, so this ref blocks the second onGenerate immediately.
   const dispatchInFlightRef = useRef(false);
 
-  const image = resolveConceptPreviewUrl(pipeline?.preview);
   const caption = pipeline?.preview?.caption ?? null;
   const brief = concept.creativeBrief ?? null;
   const draftId = pipeline?.draftId ?? concept.draftId ?? null;
+
+  // A storyboard frame is a still whatever the draft's format is; only realized media may
+  // read its kind from the format. Getting this backwards is what put a PNG in a <video>
+  // and left every reel concept showing a fallback glyph.
+  const mediaStatus = pipeline?.checkpoint?.mediaStatus;
+  const previewMedia = useMemo(() => {
+    const urls = resolveConceptPreviewUrls(pipeline?.preview);
+    if (urls.length === 0) return [];
+    const realized = mediaStatus === 'ready' || mediaStatus === 'user_supplied';
+    return mediaFromPreviewUrls(
+      `concept:${concept.itemId}`,
+      urls,
+      concept.format,
+      realized ? 'realized' : 'storyboard',
+    );
+  }, [pipeline?.preview, mediaStatus, concept.itemId, concept.format]);
+
+  const lightboxItems: LightboxItem[] = useMemo(
+    () =>
+      previewMedia.map((item) => ({
+        url: item.url,
+        caption: item.caption ?? caption ?? '',
+        isVideo: item.kind === 'video',
+      })),
+    [previewMedia, caption],
+  );
 
   const state: ConceptStatus = resolvePlanItemStatus({
     itemStatus: status,
@@ -228,7 +344,6 @@ export function ConceptCard({
         state.kind === 'realized' ||
         state.kind === 'media_failed'),
   );
-  const mediaStatus = pipeline?.checkpoint?.mediaStatus;
   const hasPreviewReady = Boolean(pipeline?.checkpoint?.blueprintReady);
   const previewRevision = pipeline?.checkpoint?.previewRevision;
   // Approve-through media actions: Enrich while only text exists, Generate media once
@@ -259,10 +374,17 @@ export function ConceptCard({
     if (isFailed) dispatchInFlightRef.current = false;
   }, [isFailed]);
 
+  const failedJobId = isFailed ? (pipeline?.jobId ?? null) : null;
+  const canRetryInPlace = Boolean(failedJobId && onRetryJob);
+
   const handleGenerateClick = () => {
     if (dispatchInFlightRef.current) return;
     dispatchInFlightRef.current = true;
     setDispatched(true);
+    if (canRetryInPlace && failedJobId) {
+      onRetryJob?.(failedJobId);
+      return;
+    }
     onGenerate();
   };
 
@@ -284,7 +406,13 @@ export function ConceptCard({
 
   return (
     <article data-slot="concept-row" data-status-kind={state.kind} className="flex gap-3 py-3">
-      <MediaWell image={image} format={concept.format} failed={state.kind === 'media_failed'} />
+      <MediaWell
+        caption={caption}
+        failed={state.kind === 'media_failed'}
+        format={concept.format}
+        media={previewMedia}
+        onOpen={setLightboxIndex}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         {/* ── Metadata strip: scannable, never competing with the content ── */}
@@ -295,7 +423,19 @@ export function ConceptCard({
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {state.kind !== 'concept' && (
-              <StatusLabel title={state.diagnostic ?? undefined} tone={state.tone}>
+              <StatusLabel
+                detail={
+                  <StatusDetail
+                    checkpoint={pipeline?.checkpoint ?? null}
+                    diagnostic={state.diagnostic}
+                    error={pipeline?.error?.message ?? null}
+                    pct={pipeline?.pct ?? null}
+                    stageLabel={state.label}
+                  />
+                }
+                title={state.diagnostic ?? undefined}
+                tone={state.tone}
+              >
                 {state.label}
               </StatusLabel>
             )}
@@ -482,6 +622,19 @@ export function ConceptCard({
           </div>
         </div>
       </div>
+
+      {/* The lightbox is the one component in the repo that already renders video properly,
+          so a reel opens as a reel rather than as a still of one. */}
+      {lightboxItems.length > 0 && (
+        <MediaLightbox
+          index={lightboxIndex ?? 0}
+          items={lightboxItems}
+          onIndexChange={setLightboxIndex}
+          onOpenChange={(open) => setLightboxIndex(open ? (lightboxIndex ?? 0) : null)}
+          open={lightboxIndex !== null}
+          title={concept.format ? (FORMAT_LABELS[concept.format] ?? concept.format) : 'Preview'}
+        />
+      )}
     </article>
   );
 }

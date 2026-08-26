@@ -168,6 +168,83 @@ describe('the row face — judge a post without clicking', () => {
   });
 });
 
+// A reel, a carousel and a single post used to look identical: one square still each, with
+// the format spelled out in the metadata strip and nowhere else. Worse, a reel showed no
+// artwork at all — its storyboard frame is a PNG, the draft's format said "reel", so the PNG
+// went into a <video>, failed, and degraded to the letter-glyph tile.
+describe('format is shown, not only labelled', () => {
+  const previewPipeline = (
+    images: string[],
+    over: Partial<PipelineCardState> = {},
+  ): PipelineCardState => ({
+    jobId: 'job-preview',
+    stages: [],
+    status: 'running',
+    preview: { images },
+    ...over,
+  });
+
+  it('gives a reel a portrait well and a single post a square one', () => {
+    const reel = renderRow({ concept: item({ format: 'reel' }) }).container;
+    expect(reel.querySelector('[class*="aspect-[9/16]"]')).not.toBeNull();
+    cleanup();
+
+    const post = renderRow({ concept: item({ format: 'post' }) }).container;
+    expect(post.querySelector('[class*="aspect-square"]')).not.toBeNull();
+    expect(post.querySelector('[class*="aspect-[9/16]"]')).toBeNull();
+  });
+
+  it('paints a storyboard frame as a still even when the draft is a reel', () => {
+    const { container } = renderRow({
+      concept: item({ format: 'reel' }),
+      pipeline: previewPipeline(['https://cdn/frame-1.png']),
+      status: 'executing',
+    });
+    // The bug was the other way round: a <video> whose source is a PNG, which fails to
+    // decode and leaves the row with the fallback glyph and no artwork at all.
+    expect(container.querySelector('img')).not.toBeNull();
+    expect(container.querySelector('video')).toBeNull();
+  });
+
+  it('plays realized reel media as video once the media ladder finishes', () => {
+    const { container } = renderRow({
+      concept: item({ format: 'reel', draftId: 'draft-1' }),
+      onViewDraft: noop,
+      pipeline: previewPipeline(['https://cdn/final-reel'], {
+        status: 'completed',
+        draftId: 'draft-1',
+        checkpoint: { textReady: true, blueprintReady: true, mediaStatus: 'ready' },
+      }),
+      status: 'completed',
+    });
+    expect(container.querySelector('video')).not.toBeNull();
+  });
+
+  it('says how many frames a carousel has, and says nothing when there is one', () => {
+    const many = renderRow({
+      concept: item({ format: 'carousel' }),
+      pipeline: previewPipeline(['https://cdn/1.png', 'https://cdn/2.png', 'https://cdn/3.png']),
+      status: 'executing',
+    }).container;
+    expect(many.textContent).toContain('3');
+    cleanup();
+
+    const one = renderRow({
+      concept: item({ format: 'post' }),
+      pipeline: previewPipeline(['https://cdn/1.png']),
+      status: 'executing',
+    }).container;
+    // No count on a single frame — a "1" badge is noise, not information.
+    expect(one.querySelector('.backdrop-blur-sm')).toBeNull();
+  });
+
+  it('keeps the dashed format mark while there is no artwork yet', () => {
+    const { container } = renderRow({ concept: item({ format: 'reel' }) });
+    expect(container.querySelector('[class*="border-dashed"]')).not.toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+  });
+});
+
 describe('the rationale is recoverable in full', () => {
   it('keeps the whole rationale in the document, clamped visually rather than truncated', () => {
     renderRow();
@@ -341,7 +418,12 @@ describe('a durable media failure survives the reducer and reaches the row', () 
     panelReducer(initialPanelState(), {
       type: 'HYDRATE_JOBS',
       jobs: [
-        { jobId: 'job-1', brandId: 'brand-1', status: 'running', toolCallId: 'call_abc' } as AgentJobState,
+        {
+          jobId: 'job-1',
+          brandId: 'brand-1',
+          status: 'running',
+          toolCallId: 'call_abc',
+        } as AgentJobState,
       ],
     });
 
