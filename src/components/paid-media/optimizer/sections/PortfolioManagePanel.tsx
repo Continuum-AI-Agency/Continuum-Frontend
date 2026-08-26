@@ -1,19 +1,34 @@
 'use client';
 
 // Inline management for one portfolio, organized into slot-in sections: Identity (name +
-// objective), Strategy (mode + autonomy tier + daily budget), Guardrails (autopilot caps +
-// kill-switch), an Advanced disclosure (target + period budget + velocity cap), and the
-// enrolled campaign→ad-set picker. Save computes a DIFF — it patches only changed config
-// fields, enrolls newly-selected ad sets, and unenrolls removed ones.
+// objective), Strategy (mode + autonomy tier + daily budget), Reporting period, Guardrails
+// (autopilot caps + kill-switch), an Advanced disclosure (target + period budget + velocity
+// cap), and the enrolled campaign→ad-set picker.
 //
-// Objective is now EDITABLE. Changing it changes the KPI the portfolio prices, so enrolled
-// ad sets buying a different result stop matching and freeze as kpi_mismatch — the panel
-// counts them and asks for confirmation before saving that change.
+// This is the screen an operator arms AUTOPILOT from, so two things are load-bearing:
+//
+//  1. EVERY field shows the value the portfolio is running today. There is no
+//     blank-means-keep sentinel. A money guardrail whose current cap is a placeholder is a
+//     guardrail the operator cannot check, and the two autopilot caps were exactly that.
+//     Seeding + dirty-field tracking is React Hook Form's job; the resolver is derived from
+//     the service's own UpdatePortfolioPatchSchema, and every unit conversion lives in ONE
+//     descriptor per field (./portfolioFields).
+//
+//  2. Arming autopilot is STAGED: set both caps → preview what autopilot would have done →
+//     arm. The preview runs the REAL engine through the read-only /cycle/preview edge; only
+//     the two guardrail comparisons are local (./autopilotForecast). Nothing here writes to
+//     Meta.
+//
+// Objective is EDITABLE. Changing it changes the KPI the portfolio prices, so enrolled ad
+// sets buying a different result stop matching and freeze as kpi_mismatch — the panel counts
+// them and asks for confirmation before saving that change.
 
 import {
   type AdSetSnapshot,
   type ApplyMode,
   type BudgetSource,
+  type CycleItemRow,
+  type CyclePreviewItem,
   getOptimizationMetricDefinition,
   LOOKBACK_LABEL,
   LOOKBACK_WINDOWS,
@@ -24,12 +39,12 @@ import {
   type PortfolioLevel,
   type PortfolioListItem,
   recommendLookbackWindow,
-  toMinorUnits,
-  type UpdatePortfolioPatch,
 } from '@continuum/contracts';
-import { Archive, ChevronDown, Loader2, Pause, Play } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { DateRangeField, type DateRangeValue } from '@/components/shared/DateRangeField';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Archive, ChevronDown, Loader2, Pause, Play, SparklesIcon } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { type Control, useController, useForm } from 'react-hook-form';
+import { DateRangeField } from '@/components/shared/DateRangeField';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,19 +68,35 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { currencySymbol, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
 import { buildPortfolioPickerEntities } from '../picker/portfolioPickerEntities';
-import { applyModeExplainer, applyModePill, freezeLabel } from '../reportModel';
+import { applyModeExplainer, applyModePill, freezeLabel, parseReport } from '../reportModel';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../suggestInput';
 import {
+  useCyclePreview,
   useOptimizerAccountEnrollments,
   useOptimizerAccountSnapshots,
   useOptimizerAdsetInventory,
   useOptimizerEnrolledAdsets,
   useOptimizerMutations,
+  useOptimizerPerformance,
 } from '../useOptimizerData';
+import { type AutopilotForecast, forecastAutopilot } from './autopilotForecast';
+import {
+  buildPatch,
+  createPortfolioFormSchema,
+  type NumericFieldKey,
+  type PortfolioCurrentValues,
+  type PortfolioFormPatch,
+  type PortfolioFormValues,
+  toFormValues,
+  toInput,
+  toStored,
+  type UnitContext,
+} from './portfolioFields';
 
 const MODES: OptimizationModeDto[] = ['efficiency', 'balanced', 'scale'];
 /** Bottom → top: observe (no Meta writes) · recommend (human apply) · autopilot. */
@@ -77,7 +108,7 @@ const SUGGESTED_MAX_CHANGE_PCT = '20';
 
 /** A flight window of `days` starting today, as plain ISO dates. Built in UTC so the start
  *  date is the day the operator sees, not a timezone-shifted neighbour. */
-export function nextFlightWindow(days: number, today = new Date()): DateRangeValue {
+export function nextFlightWindow(days: number, today = new Date()): { from: string; to: string } {
   const start = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
   const end = new Date(start.getTime() + (days - 1) * 86_400_000);
   const iso = (date: Date) => date.toISOString().slice(0, 10);
@@ -181,58 +212,103 @@ export function PortfolioManagePanel({
   // Who else holds each ad set's single active enrollment. Drives the picker's "In: X" badge
   // and the move confirmation, so a claimed ad set is a disclosed decision rather than a 409.
   const accountEnrollmentsRead = useOptimizerAccountEnrollments(brandId, adAccountId);
+  // cpa_target and velocity_cap_pct are NOT on the list row (optimizer_list_portfolios does
+  // not return cpa_target at all) — they live on the portfolio row inside the performance
+  // report. This is the same cached query the workspace around this panel already runs, so
+  // seeding those two fields from their real values costs no extra read.
+  const performanceRead = useOptimizerPerformance(portfolio.id);
+  const portfolioRow = useMemo(
+    () => parseReport(performanceRead.data)?.portfolio ?? null,
+    [performanceRead.data],
+  );
   const claims = useMemo(
     () => buildClaimMap(accountEnrollmentsRead.data, portfolio.id),
     [accountEnrollmentsRead.data, portfolio.id],
   );
 
-  const [name, setName] = useState(portfolio.name);
-  const [objective, setObjective] = useState<OptimizationObjective>(
-    portfolio.objective as OptimizationObjective,
+  const currentValues = useMemo<PortfolioCurrentValues>(
+    () => ({
+      name: portfolio.name,
+      objective: portfolio.objective,
+      mode: portfolio.mode,
+      apply_mode: portfolio.apply_mode,
+      budget_source: portfolio.budget_source === 'fixed' ? 'fixed' : 'observed',
+      lookback_window: LOOKBACK_WINDOWS.includes(portfolio.lookback_window as LookbackWindow)
+        ? portfolio.lookback_window
+        : 'd14',
+      period_start: portfolio.period_start,
+      period_end: portfolio.period_end,
+      daily_total: portfolio.daily_total,
+      period_budget: portfolio.period_budget,
+      cpa_target: portfolioRow?.cpa_target ?? null,
+      velocity_cap_pct: portfolioRow?.velocity_cap_pct ?? null,
+      max_daily_apply_minor: portfolio.max_daily_apply_minor,
+      max_change_pct_per_cycle: portfolio.max_change_pct_per_cycle,
+    }),
+    [portfolio, portfolioRow],
   );
-  const [mode, setMode] = useState<OptimizationModeDto>(portfolio.mode as OptimizationModeDto);
-  const [applyMode, setApplyMode] = useState<ApplyMode>(portfolio.apply_mode as ApplyMode);
-  // Confirmation gate: flipping ON autopilot begins writing real budgets, so it opens a
-  // dialog before it takes effect (mirrors the Archive confirm).
-  const [pendingAutopilot, setPendingAutopilot] = useState(false);
-  // Confirmation gate: changing the objective freezes the ad sets that buy a different result.
-  const [showObjectiveConfirm, setShowObjectiveConfirm] = useState(false);
-  const [dailyTotal, setDailyTotal] = useState(
-    portfolio.daily_total != null ? String(portfolio.daily_total) : '',
+
+  // The seed is read in the STORED objective's unit — that is the unit the stored cpa_target
+  // was written in. Keeping it independent of the selected objective is also what stops the
+  // `values` identity from churning as the objective select changes.
+  const seedUnit = useMemo<UnitContext>(
+    () => ({
+      currency,
+      denominatorMultiplier: getOptimizationMetricDefinition(
+        portfolio.objective as OptimizationObjective,
+      ).denominatorMultiplier,
+    }),
+    [currency, portfolio.objective],
   );
-  const [budgetSource, setBudgetSource] = useState<BudgetSource>(
-    portfolio.budget_source === 'fixed' ? 'fixed' : 'observed',
+  const seededValues = useMemo(
+    () => toFormValues(currentValues, seedUnit),
+    [currentValues, seedUnit],
   );
-  const [lookbackWindow, setLookbackWindow] = useState<LookbackWindow>(
-    LOOKBACK_WINDOWS.includes(portfolio.lookback_window as LookbackWindow)
-      ? (portfolio.lookback_window as LookbackWindow)
-      : 'd14',
+
+  // The conversion context the RESOLVER reads, updated below once the selected objective is
+  // known. It has to be a getter: cpa_target is priced in the selected objective's unit, and
+  // that value lives in the very form this schema is used to build.
+  const formUnitRef = useRef<UnitContext>(seedUnit);
+  const schema = useMemo(
+    () => createPortfolioFormSchema(() => formUnitRef.current, currentValues),
+    [currentValues],
   );
-  const [flight, setFlight] = useState<DateRangeValue>({
-    from: portfolio.period_start ?? null,
-    to: portfolio.period_end ?? null,
+
+  const form = useForm<PortfolioFormValues, unknown, PortfolioFormPatch>({
+    resolver: zodResolver(schema),
+    defaultValues: seededValues,
+    // The report read lands after mount; `values` re-seeds the untouched fields from it
+    // without discarding anything the operator has already changed.
+    values: seededValues,
+    resetOptions: { keepDirtyValues: true },
   });
-  const [cpaTarget, setCpaTarget] = useState('');
-  const [periodBudget, setPeriodBudget] = useState('');
-  const [velocityCap, setVelocityCap] = useState('');
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  // Autopilot blast-radius guardrails. Inputs are MAJOR: dollars/day and percent/cycle;
-  // converted to the contract's minor units / fraction on save. Blank = keep current.
-  const [maxDailyApply, setMaxDailyApply] = useState('');
-  const [maxChangePct, setMaxChangePct] = useState('');
-  const isPaused = Boolean(portfolio.autopilot_paused);
-  // null until the operator first touches the picker — before that the enrolled roster is
-  // the selection (kept reactive as the async read resolves).
-  const [selection, setSelection] = useState<string[] | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const values = form.watch();
+
+  const objective = values.objective as OptimizationObjective;
+  const applyMode = values.apply_mode as ApplyMode;
+  const budgetSource = values.budget_source as BudgetSource;
+  const lookbackWindow = values.lookback_window as LookbackWindow;
   // Metric follows the SELECTED objective so the target label + its unit conversion track it.
   const metric = getOptimizationMetricDefinition(objective);
+  const formUnit = useMemo<UnitContext>(
+    () => ({ currency, denominatorMultiplier: metric.denominatorMultiplier }),
+    [currency, metric.denominatorMultiplier],
+  );
+  formUnitRef.current = formUnit;
+
+  // Live reads of the two guardrails, through the SAME descriptor the resolver uses — the
+  // gate below and the value submitted can never disagree about what "20" means.
+  const capMinor = toStored('max_daily_apply_minor', values.max_daily_apply_minor, formUnit);
+  const capPct = toStored('max_change_pct_per_cycle', values.max_change_pct_per_cycle, formUnit);
+  const dailyNum = toStored('daily_total', values.daily_total, formUnit) ?? 0;
 
   const enrolledIds = useMemo(
     () => enrolledRead.data.map((row) => row.adset_id),
     [enrolledRead.data],
   );
+  // null until the operator first touches the picker — before that the enrolled roster is
+  // the selection (kept reactive as the async read resolves).
+  const [selection, setSelection] = useState<string[] | null>(null);
   const selectedAdsetIds = selection ?? enrolledIds;
   const pickerEntities = useMemo(
     () =>
@@ -258,57 +334,6 @@ export function PortfolioManagePanel({
     [objectiveChanged, enrolledIds, snapshotsRead.data, metric.kpiField],
   );
 
-  const patch = useMemo<UpdatePortfolioPatch>(() => {
-    const next: UpdatePortfolioPatch = {};
-    if (name.trim() && name.trim() !== portfolio.name) next.name = name.trim();
-    if (objective !== portfolio.objective) next.objective = objective;
-    if (mode !== portfolio.mode) next.mode = mode;
-    if (applyMode !== portfolio.apply_mode) next.apply_mode = applyMode;
-    const daily = Number.parseFloat(dailyTotal);
-    if (Number.isFinite(daily) && daily >= 0 && daily !== portfolio.daily_total) {
-      next.daily_total = daily;
-    }
-    const cpa = Number.parseFloat(cpaTarget);
-    if (Number.isFinite(cpa) && cpa > 0) next.cpa_target = cpa / metric.denominatorMultiplier;
-    const period = Number.parseFloat(periodBudget);
-    if (Number.isFinite(period) && period >= 0 && period !== portfolio.period_budget) {
-      next.period_budget = period;
-    }
-    if (budgetSource !== (portfolio.budget_source ?? 'observed')) next.budget_source = budgetSource;
-    if (lookbackWindow !== (portfolio.lookback_window ?? 'd14')) {
-      next.lookback_window = lookbackWindow;
-    }
-    // null clears a flight date (back to unpaced); undefined leaves it untouched.
-    if (flight.from !== (portfolio.period_start ?? null)) next.period_start = flight.from;
-    if (flight.to !== (portfolio.period_end ?? null)) next.period_end = flight.to;
-    const velocity = Number.parseFloat(velocityCap);
-    if (Number.isFinite(velocity) && velocity >= 0) next.velocity_cap_pct = velocity / 100;
-    const maxDaily = Number.parseFloat(maxDailyApply);
-    if (Number.isFinite(maxDaily) && maxDaily >= 0) {
-      next.max_daily_apply_minor = toMinorUnits(maxDaily, currency);
-    }
-    const maxPct = Number.parseFloat(maxChangePct);
-    if (Number.isFinite(maxPct) && maxPct >= 0) next.max_change_pct_per_cycle = maxPct / 100;
-    return next;
-  }, [
-    name,
-    objective,
-    mode,
-    applyMode,
-    dailyTotal,
-    cpaTarget,
-    periodBudget,
-    velocityCap,
-    maxDailyApply,
-    maxChangePct,
-    budgetSource,
-    lookbackWindow,
-    flight,
-    portfolio,
-    currency,
-    metric.denominatorMultiplier,
-  ]);
-
   // The live sum of the SELECTED ad sets' budgets — what an 'observed' portfolio actually
   // reallocates within, and the number the daily-budget field should be pinned to if a human
   // wants a fixed target that matches reality today.
@@ -329,26 +354,33 @@ export function PortfolioManagePanel({
     [snapshotsRead.data, selectedAdsetIds, metric.kpiField, metric.resultLabel],
   );
 
+  const [pendingAutopilot, setPendingAutopilot] = useState(false);
+  const [showObjectiveConfirm, setShowObjectiveConfirm] = useState(false);
   const [showMoveConfirm, setShowMoveConfirm] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // The operator has opened the staged arming flow. Also what makes the guardrail section
+  // reachable on a portfolio that is not on autopilot — see `guardrailsRelevant`.
+  const [arming, setArming] = useState(false);
+  const isPaused = Boolean(portfolio.autopilot_paused);
 
   // Autopilot writes real budgets to Meta, and the apply layer reads an absent cap as
   // UNCAPPED — so it may only be armed once BOTH guardrails are set and positive. The DB
   // refuses the flip too (optimizer_portfolios_autopilot_guardrails_chk); this keeps the user
-  // from reaching a save that would only fail. A blank input means "keep current".
-  const guardrailsReady = useMemo(() => {
-    const dailyCapMinor = patch.max_daily_apply_minor ?? portfolio.max_daily_apply_minor;
-    const pctCap = patch.max_change_pct_per_cycle ?? portfolio.max_change_pct_per_cycle;
-    return Boolean(dailyCapMinor && dailyCapMinor > 0 && pctCap && pctCap > 0);
-  }, [patch, portfolio]);
+  // from reaching a save that would only fail.
+  const guardrailsReady = Boolean(capMinor && capMinor > 0 && capPct && capPct > 0);
+  const isArmed = applyMode === 'autopilot';
+  // Rendered only when it is about to matter: the portfolio runs on autopilot, the form has
+  // selected it, or the operator opened the staged arming flow.
+  const guardrailsRelevant = portfolio.apply_mode === 'autopilot' || isArmed || arming;
 
-  // Flip to autopilot only through the confirm dialog; every other transition is immediate.
+  // Flip to autopilot only through the staged flow; every other transition is immediate.
   function handleApplyModeChange(value: ApplyMode) {
-    if (value === 'autopilot' && applyMode !== 'autopilot') {
+    if (value === 'autopilot' && !isArmed) {
       if (!guardrailsReady) return;
-      setPendingAutopilot(true);
-    } else {
-      setApplyMode(value);
+      setArming(true);
+      return;
     }
+    form.setValue('apply_mode', value, { shouldDirty: true });
   }
 
   const { toAdd, toRemove } = useMemo(() => {
@@ -360,15 +392,20 @@ export function PortfolioManagePanel({
     };
   }, [enrolledIds, selectedAdsetIds]);
 
-  const hasChanges = Object.keys(patch).length > 0 || toAdd.length > 0 || toRemove.length > 0;
+  const hasChanges = form.formState.isDirty || toAdd.length > 0 || toRemove.length > 0;
+  const saving =
+    form.formState.isSubmitting || update.isPending || enroll.isPending || unenroll.isPending;
 
   // Which ad sets this save would take from other portfolios, and who loses them.
   const pendingMoves = useMemo(() => previewMoves(toAdd, claims), [toAdd, claims]);
 
-  async function performSave() {
-    if (!hasChanges || saving) return;
-    setSaving(true);
-    setError(null);
+  // The values a confirm dialog is holding: validated and already in contract units, so the
+  // dialog's action performs exactly the save the operator was shown.
+  const confirmedValues = useRef<PortfolioFormPatch | null>(null);
+
+  async function performSave(patchValues: PortfolioFormPatch) {
+    const patch = buildPatch(patchValues, form.formState.dirtyFields);
+    form.clearErrors('root');
     try {
       if (Object.keys(patch).length > 0) {
         await update.mutateAsync({ portfolio_id: portfolio.id, patch });
@@ -377,8 +414,8 @@ export function PortfolioManagePanel({
         const nameById = new Map(pickerEntities.map((entity) => [entity.id, entity.name]));
         const adset_names: Record<string, string> = {};
         for (const id of toAdd) {
-          const name = nameById.get(id);
-          if (name && name.trim().length > 0) adset_names[id] = name;
+          const entityName = nameById.get(id);
+          if (entityName && entityName.trim().length > 0) adset_names[id] = entityName;
         }
         await enroll.mutateAsync({
           portfolio_id: portfolio.id,
@@ -386,16 +423,16 @@ export function PortfolioManagePanel({
           ...(Object.keys(adset_names).length > 0 ? { adset_names } : {}),
         });
       }
-      await Promise.all(
-        toRemove.map((adsetId) =>
-          unenroll.mutateAsync({ portfolio_id: portfolio.id, adset_id: adsetId }),
-        ),
-      );
+      // Sequential, not Promise.all: one rejection out of N then names the ad set that
+      // actually failed instead of whichever race lost.
+      for (const adsetId of toRemove) {
+        await unenroll.mutateAsync({ portfolio_id: portfolio.id, adset_id: adsetId });
+      }
       onDone?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save your changes.');
-    } finally {
-      setSaving(false);
+      form.setError('root', {
+        message: err instanceof Error ? err.message : 'Could not save your changes.',
+      });
     }
   }
 
@@ -403,8 +440,9 @@ export function PortfolioManagePanel({
   // mismatched ad sets; enrolling a claimed ad set REMOVES it from another portfolio (the DB
   // allows exactly one active enrollment). Objective first — it is the more destructive of
   // the two, and the move dialog names the portfolios that lose ad sets either way.
-  function handleSaveClick() {
-    if (!hasChanges || saving) return;
+  const submit = form.handleSubmit(async (patchValues) => {
+    if (!hasChanges) return;
+    confirmedValues.current = patchValues;
     if (objectiveChanged && affectedAdsets.length > 0) {
       setShowObjectiveConfirm(true);
       return;
@@ -413,7 +451,12 @@ export function PortfolioManagePanel({
       setShowMoveConfirm(true);
       return;
     }
-    void performSave();
+    await performSave(patchValues);
+  });
+
+  function saveConfirmed() {
+    const patchValues = confirmedValues.current;
+    if (patchValues) void performSave(patchValues);
   }
 
   function handleArchive() {
@@ -421,9 +464,9 @@ export function PortfolioManagePanel({
   }
 
   const symbol = currencySymbol(currency);
-  const dailyNum = Number.parseFloat(dailyTotal || String(portfolio.daily_total ?? ''));
-  const hasDaily = Number.isFinite(dailyNum) && dailyNum > 0;
+  const hasDaily = dailyNum > 0;
   const mismatchLabel = freezeLabel('kpi_mismatch')?.label ?? 'Held · different goal';
+  const rootError = form.formState.errors.root?.message;
 
   // One definition per field, shared by the chip and the Tab accelerator so the value the
   // chip advertises is exactly the value Tab fills in.
@@ -432,23 +475,32 @@ export function PortfolioManagePanel({
   const suggestedMaxDaily = hasDaily ? Math.round(dailyNum * 1.5) : null;
   const suggestedPeriod = hasDaily ? Math.round(dailyNum * PACING_PERIOD_DAYS) : null;
 
+  // What the staged preview scores: the selected roster, at the pool the cycle would run on.
+  const previewSnapshots = useMemo(() => {
+    const selected = new Set(selectedAdsetIds);
+    return snapshotsRead.data.filter((snapshot) => selected.has(snapshot.id));
+  }, [snapshotsRead.data, selectedAdsetIds]);
+  const previewTotal =
+    budgetSource === 'fixed' && dailyNum > 0 ? dailyNum : selectedBudgetSum || dailyNum;
+
   return (
     <div className="space-y-4">
       <Section title="Identity">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor={`manage-name-${portfolio.id}`}>Name</Label>
-            <Input
-              id={`manage-name-${portfolio.id}`}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
+            <Input id={`manage-name-${portfolio.id}`} {...form.register('name')} />
+            {form.formState.errors.name ? (
+              <p className="text-2xs text-destructive">{form.formState.errors.name.message}</p>
+            ) : null}
           </div>
           <div className="space-y-1.5">
             <Label>Objective</Label>
             <Select
               value={objective}
-              onValueChange={(value) => setObjective(value as OptimizationObjective)}
+              onValueChange={(value) =>
+                form.setValue('objective', value as OptimizationObjective, { shouldDirty: true })
+              }
             >
               <SelectTrigger>
                 <SelectValue />
@@ -478,7 +530,12 @@ export function PortfolioManagePanel({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Mode</Label>
-            <Select value={mode} onValueChange={(value) => setMode(value as OptimizationModeDto)}>
+            <Select
+              value={values.mode}
+              onValueChange={(value) =>
+                form.setValue('mode', value as OptimizationModeDto, { shouldDirty: true })
+              }
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -490,7 +547,7 @@ export function PortfolioManagePanel({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-2xs text-muted-foreground">{modeExplainer(mode)}</p>
+            <p className="text-2xs text-muted-foreground">{modeExplainer(values.mode)}</p>
           </div>
           <div className="space-y-1.5">
             <Label>Autonomy tier</Label>
@@ -515,16 +572,25 @@ export function PortfolioManagePanel({
             </Select>
             {/* applyModeExplainer describes the selected tier and re-runs as the select changes. */}
             <p className="text-2xs text-muted-foreground">{applyModeExplainer(applyMode)}</p>
-            {!guardrailsReady && applyMode !== 'autopilot' ? (
-              <p className="text-2xs text-muted-foreground">
-                Set both autopilot guardrails below to enable autopilot.
-              </p>
+            {!guardrailsRelevant ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 gap-1 px-1.5 text-2xs"
+                onClick={() => setArming(true)}
+              >
+                <SparklesIcon aria-hidden="true" className="size-3" />
+                Set up autopilot
+              </Button>
             ) : null}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={`manage-budget-source-${portfolio.id}`}>Total budget</Label>
             <Select
-              onValueChange={(value) => setBudgetSource(value as BudgetSource)}
+              onValueChange={(value) =>
+                form.setValue('budget_source', value as BudgetSource, { shouldDirty: true })
+              }
               value={budgetSource}
             >
               <SelectTrigger id={`manage-budget-source-${portfolio.id}`}>
@@ -541,33 +607,29 @@ export function PortfolioManagePanel({
                 : 'Drives the portfolio toward the daily budget below, so the total can go up or down.'}
             </p>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`manage-daily-${portfolio.id}`}>Daily budget ({symbol})</Label>
-            <Input
-              disabled={budgetSource === 'observed'}
-              id={`manage-daily-${portfolio.id}`}
-              inputMode="decimal"
-              onChange={(event) => setDailyTotal(event.target.value)}
-              onKeyDown={acceptSuggestionOnTab(suggestedDaily, setDailyTotal)}
-              placeholder={suggestionPlaceholder(suggestedDaily, '')}
-              value={dailyTotal}
-            />
+          <NumberField
+            control={form.control}
+            disabled={budgetSource === 'observed'}
+            id={`manage-daily-${portfolio.id}`}
+            label={`Daily budget (${symbol})`}
+            name="daily_total"
+            suggested={suggestedDaily}
+            suggestionLabel={
+              suggestedDaily != null
+                ? `Match current ${symbol}${suggestedDaily.toLocaleString('en-US')}/day`
+                : undefined
+            }
+          >
             {/* The one field that must track the enrolled roster had the least help: nothing
                 re-derived it when the picker changed membership, so a portfolio kept
                 conserving a months-old sum. */}
-            {suggestedDaily != null ? (
-              <SuggestionChip
-                label={`Match current ${symbol}${suggestedDaily.toLocaleString('en-US')}/day`}
-                onClick={() => setDailyTotal(String(suggestedDaily))}
-              />
-            ) : null}
             {budgetSource === 'observed' && selectedBudgetSum > 0 ? (
               <p className="text-2xs text-muted-foreground tabular-nums">
                 Currently {formatCurrency(selectedBudgetSum, currency)}/day across{' '}
                 {selectedAdsetIds.length} {selectedAdsetIds.length === 1 ? 'ad set' : 'ad sets'}.
               </p>
             ) : null}
-          </div>
+          </NumberField>
         </div>
       </Section>
 
@@ -579,7 +641,9 @@ export function PortfolioManagePanel({
           <div className="space-y-1.5">
             <Label htmlFor={`manage-lookback-${portfolio.id}`}>Lookback window</Label>
             <Select
-              onValueChange={(value) => setLookbackWindow(value as LookbackWindow)}
+              onValueChange={(value) =>
+                form.setValue('lookback_window', value as LookbackWindow, { shouldDirty: true })
+              }
               value={lookbackWindow}
             >
               <SelectTrigger id={`manage-lookback-${portfolio.id}`}>
@@ -597,7 +661,9 @@ export function PortfolioManagePanel({
             {lookbackHint.window !== lookbackWindow ? (
               <SuggestionChip
                 label={`Use ${LOOKBACK_LABEL[lookbackHint.window]}`}
-                onClick={() => setLookbackWindow(lookbackHint.window)}
+                onClick={() =>
+                  form.setValue('lookback_window', lookbackHint.window, { shouldDirty: true })
+                }
               />
             ) : null}
           </div>
@@ -606,105 +672,112 @@ export function PortfolioManagePanel({
             <DateRangeField
               disabled={saving}
               id={`manage-flight-${portfolio.id}`}
-              onChange={setFlight}
+              onChange={(range) => {
+                form.setValue('period_start', range.from, { shouldDirty: true });
+                form.setValue('period_end', range.to, { shouldDirty: true });
+              }}
               placeholder="No flight window"
-              value={flight}
+              value={{ from: values.period_start ?? null, to: values.period_end ?? null }}
             />
             <p className="text-2xs text-muted-foreground">
-              {flight.from && flight.to
+              {values.period_start && values.period_end
                 ? 'The period budget paces against these dates.'
                 : 'Set start and end dates to pace against the period budget.'}
             </p>
-            {!(flight.from && flight.to) ? (
+            {!(values.period_start && values.period_end) ? (
               <SuggestionChip
                 label={`Suggest next ${PACING_PERIOD_DAYS} days`}
-                onClick={() => setFlight(nextFlightWindow(PACING_PERIOD_DAYS))}
+                onClick={() => {
+                  const range = nextFlightWindow(PACING_PERIOD_DAYS);
+                  form.setValue('period_start', range.from, { shouldDirty: true });
+                  form.setValue('period_end', range.to, { shouldDirty: true });
+                }}
               />
             ) : null}
           </div>
         </div>
       </Section>
 
-      <Section
-        title="Autopilot guardrails"
-        description="Both are required to turn autopilot on. They bound autonomous budget writes: a change over the % cap is held for your approval instead of being auto-applied."
-        action={
-          portfolio.apply_mode === 'autopilot' || applyMode === 'autopilot' ? (
-            <Button
-              type="button"
-              variant={isPaused ? 'default' : 'outline'}
-              size="sm"
-              className="gap-1.5"
-              disabled={setPaused.isPending || portfolio.apply_mode !== 'autopilot'}
-              onClick={() =>
-                setPaused.mutate({
-                  portfolio_id: portfolio.id,
-                  paused: !isPaused,
-                  reason: isPaused ? undefined : 'Stopped from Manage panel',
-                })
-              }
-            >
-              {setPaused.isPending ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : isPaused ? (
-                <Play className="size-3.5" />
-              ) : (
-                <Pause className="size-3.5" />
-              )}
-              {isPaused ? 'Resume' : 'Stop'}
-            </Button>
-          ) : null
-        }
-      >
-        {isPaused && portfolio.apply_mode === 'autopilot' ? (
-          <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-2xs text-amber-600 dark:text-amber-400">
-            Stopped — no autonomous budget writes until you resume. Ingest and scoring still run.
-          </p>
-        ) : null}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor={`manage-maxdaily-${portfolio.id}`}>
-              Max autopilot spend/day ({symbol})
-            </Label>
-            <Input
+      {guardrailsRelevant ? (
+        <Section
+          title="Autopilot guardrails"
+          description="Both are required to turn autopilot on. They bound autonomous budget writes: a change over the % cap is held for your approval instead of being auto-applied."
+          action={
+            portfolio.apply_mode === 'autopilot' || isArmed ? (
+              <Button
+                type="button"
+                variant={isPaused ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5"
+                disabled={setPaused.isPending || portfolio.apply_mode !== 'autopilot'}
+                onClick={() =>
+                  setPaused.mutate({
+                    portfolio_id: portfolio.id,
+                    paused: !isPaused,
+                    reason: isPaused ? undefined : 'Stopped from Manage panel',
+                  })
+                }
+              >
+                {setPaused.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : isPaused ? (
+                  <Play className="size-3.5" />
+                ) : (
+                  <Pause className="size-3.5" />
+                )}
+                {isPaused ? 'Resume' : 'Stop'}
+              </Button>
+            ) : null
+          }
+        >
+          {isPaused && portfolio.apply_mode === 'autopilot' ? (
+            <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-2xs text-amber-600 dark:text-amber-400">
+              Stopped — no autonomous budget writes until you resume. Ingest and scoring still run.
+            </p>
+          ) : null}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <NumberField
+              control={form.control}
               id={`manage-maxdaily-${portfolio.id}`}
-              inputMode="decimal"
-              value={maxDailyApply}
-              onChange={(event) => setMaxDailyApply(event.target.value)}
-              onKeyDown={acceptSuggestionOnTab(suggestedMaxDaily, setMaxDailyApply)}
-              placeholder={suggestionPlaceholder(
-                suggestedMaxDaily,
-                portfolio.max_daily_apply_minor ? 'leave blank to keep' : 'required for autopilot',
-              )}
-            />
-            {suggestedMaxDaily != null ? (
-              <SuggestionChip
-                label={`Suggest ${symbol}${suggestedMaxDaily.toLocaleString('en-US')}`}
-                onClick={() => setMaxDailyApply(String(suggestedMaxDaily))}
-              />
-            ) : null}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`manage-maxpct-${portfolio.id}`}>Max change per cycle (%)</Label>
-            <Input
-              id={`manage-maxpct-${portfolio.id}`}
-              inputMode="decimal"
-              value={maxChangePct}
-              onChange={(event) => setMaxChangePct(event.target.value)}
-              onKeyDown={acceptSuggestionOnTab(SUGGESTED_MAX_CHANGE_PCT, setMaxChangePct)}
-              placeholder={
-                portfolio.max_change_pct_per_cycle
-                  ? 'leave blank to keep'
-                  : 'required · larger changes held for approval'
+              label={`Max autopilot spend/day (${symbol})`}
+              name="max_daily_apply_minor"
+              suggested={suggestedMaxDaily}
+              suggestionLabel={
+                suggestedMaxDaily != null
+                  ? `Suggest ${symbol}${suggestedMaxDaily.toLocaleString('en-US')}`
+                  : undefined
               }
             />
-            <SuggestionChip
-              label={`Suggest ${SUGGESTED_MAX_CHANGE_PCT}%`}
-              onClick={() => setMaxChangePct(SUGGESTED_MAX_CHANGE_PCT)}
+            <NumberField
+              control={form.control}
+              id={`manage-maxpct-${portfolio.id}`}
+              label="Max change per cycle (%)"
+              name="max_change_pct_per_cycle"
+              suggested={SUGGESTED_MAX_CHANGE_PCT}
+              suggestionLabel={`Suggest ${SUGGESTED_MAX_CHANGE_PCT}%`}
             />
           </div>
-        </div>
-      </Section>
+
+          {!isArmed ? (
+            <ArmAutopilot
+              // Remounting on any input to the forecast drops a stale preview: an operator
+              // must never arm on a run that scored different caps or a different pool.
+              key={`${capMinor}|${capPct}|${previewTotal}|${objective}|${values.mode}|${previewSnapshots.length}`}
+              accountId={adAccountId}
+              brandId={brandId}
+              currency={currency ?? null}
+              dailyTotal={previewTotal}
+              maxChangePctPerCycle={capPct}
+              maxDailyApplyMinor={capMinor}
+              mode={values.mode as OptimizationModeDto}
+              objective={objective}
+              onArm={() => setPendingAutopilot(true)}
+              snapshots={previewSnapshots}
+              unit={formUnit}
+            />
+          ) : null}
+        </Section>
+      ) : null}
 
       <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
         <CollapsibleTrigger
@@ -721,51 +794,38 @@ export function PortfolioManagePanel({
           }
         />
         <CollapsibleContent className="mt-2 grid gap-3 sm:grid-cols-3">
-          <div className="space-y-1.5">
-            <Label htmlFor={`manage-cpa-${portfolio.id}`}>
-              {metric.targetLabel} ({symbol})
-            </Label>
-            <Input
-              id={`manage-cpa-${portfolio.id}`}
-              inputMode="decimal"
-              value={cpaTarget}
-              onChange={(event) => setCpaTarget(event.target.value)}
-              placeholder="leave blank to keep"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`manage-period-${portfolio.id}`}>Period budget ({symbol})</Label>
-            <Input
-              id={`manage-period-${portfolio.id}`}
-              inputMode="decimal"
-              value={periodBudget}
-              onChange={(event) => setPeriodBudget(event.target.value)}
-              onKeyDown={acceptSuggestionOnTab(suggestedPeriod, setPeriodBudget)}
-              placeholder={suggestionPlaceholder(suggestedPeriod, 'leave blank to keep')}
-            />
+          <NumberField
+            control={form.control}
+            id={`manage-cpa-${portfolio.id}`}
+            label={`${metric.targetLabel} (${symbol})`}
+            name="cpa_target"
+          />
+          <NumberField
+            control={form.control}
+            id={`manage-period-${portfolio.id}`}
+            label={`Period budget (${symbol})`}
+            name="period_budget"
+            suggested={suggestedPeriod}
+            suggestionLabel={
+              suggestedPeriod != null
+                ? `Suggest ${symbol}${suggestedPeriod.toLocaleString('en-US')} (${PACING_PERIOD_DAYS}d)`
+                : undefined
+            }
+          >
             <p className="text-2xs text-muted-foreground">
-              Sets the pacing target. Blank estimates it from the daily budget.
+              Sets the pacing target. Clear it to estimate from the daily budget.
             </p>
-            {suggestedPeriod != null ? (
-              <SuggestionChip
-                label={`Suggest ${symbol}${suggestedPeriod.toLocaleString('en-US')} (${PACING_PERIOD_DAYS}d)`}
-                onClick={() => setPeriodBudget(String(suggestedPeriod))}
-              />
-            ) : null}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`manage-velocity-${portfolio.id}`}>Max move per ad set/cycle (%)</Label>
-            <Input
-              id={`manage-velocity-${portfolio.id}`}
-              inputMode="decimal"
-              value={velocityCap}
-              onChange={(event) => setVelocityCap(event.target.value)}
-              placeholder="leave blank to keep"
-            />
+          </NumberField>
+          <NumberField
+            control={form.control}
+            id={`manage-velocity-${portfolio.id}`}
+            label="Max move per ad set/cycle (%)"
+            name="velocity_cap_pct"
+          >
             <p className="text-2xs text-muted-foreground">
               Caps how far any single ad set&rsquo;s budget can move in one cycle.
             </p>
-          </div>
+          </NumberField>
         </CollapsibleContent>
       </Collapsible>
 
@@ -788,8 +848,9 @@ export function PortfolioManagePanel({
             <AlertDialogCancel onClick={() => setPendingAutopilot(false)}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                setApplyMode('autopilot');
+                form.setValue('apply_mode', 'autopilot', { shouldDirty: true });
                 setPendingAutopilot(false);
+                setArming(false);
               }}
             >
               Turn on autopilot
@@ -822,7 +883,7 @@ export function PortfolioManagePanel({
                   setShowMoveConfirm(true);
                   return;
                 }
-                void performSave();
+                saveConfirmed();
               }}
             >
               Change objective &amp; save
@@ -862,7 +923,7 @@ export function PortfolioManagePanel({
             <AlertDialogAction
               onClick={() => {
                 setShowMoveConfirm(false);
-                void performSave();
+                saveConfirmed();
               }}
             >
               Move &amp; save
@@ -912,9 +973,9 @@ export function PortfolioManagePanel({
         <DriftedEnrollments rows={enrolledRead.data} />
       </div>
 
-      {error ? (
+      {rootError ? (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
+          {rootError}
         </p>
       ) : null}
 
@@ -952,13 +1013,241 @@ export function PortfolioManagePanel({
             size="sm"
             className="gap-1.5"
             disabled={!hasChanges || saving}
-            onClick={handleSaveClick}
+            onClick={() => void submit()}
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Step 2 and 3 of arming autopilot: run the cycle the operator is about to hand over, show
+ *  what autopilot would have written and what it would have held, and only then offer the
+ *  arm. The reallocation comes from the REAL engine (the read-only /cycle/preview edge,
+ *  zero writes, no run row) — a client-side re-implementation would drift from what
+ *  actually runs and mislead exactly the person who most needs the truth. */
+function ArmAutopilot({
+  accountId,
+  brandId,
+  currency,
+  dailyTotal,
+  maxChangePctPerCycle,
+  maxDailyApplyMinor,
+  mode,
+  objective,
+  onArm,
+  snapshots,
+  unit,
+}: {
+  accountId: string;
+  brandId: string;
+  currency: string | null;
+  dailyTotal: number;
+  maxChangePctPerCycle: number | null;
+  maxDailyApplyMinor: number | null;
+  mode: OptimizationModeDto;
+  objective: OptimizationObjective;
+  onArm: () => void;
+  snapshots: AdSetSnapshot[];
+  unit: UnitContext;
+}) {
+  const cyclePreview = useCyclePreview();
+  const capsSet = Boolean(
+    maxDailyApplyMinor &&
+      maxDailyApplyMinor > 0 &&
+      maxChangePctPerCycle &&
+      maxChangePctPerCycle > 0,
+  );
+  const canPreview = capsSet && snapshots.length > 0 && dailyTotal > 0;
+  const outcome = cyclePreview.data;
+  const forecast =
+    outcome?.status === 'ready' && maxDailyApplyMinor != null && maxChangePctPerCycle != null
+      ? forecastAutopilot({
+          items: outcome.preview.items,
+          dailyTotal,
+          currency,
+          maxDailyApplyMinor,
+          maxChangePctPerCycle,
+        })
+      : null;
+
+  return (
+    <div className="space-y-2 rounded-md border border-border/60 bg-background/60 p-3">
+      <p className="text-2xs font-medium">
+        {capsSet
+          ? 'Both caps are set. Preview the cycle autopilot would run before you arm it.'
+          : 'Set both caps above to preview what autopilot would do.'}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 text-2xs"
+          disabled={!canPreview || cyclePreview.isPending}
+          onClick={() =>
+            cyclePreview.mutate({
+              brandId,
+              accountId,
+              snapshots,
+              objective,
+              mode,
+              total: dailyTotal,
+            })
+          }
+        >
+          {cyclePreview.isPending ? (
+            <Loader2 className="size-3 animate-spin" />
+          ) : (
+            <SparklesIcon aria-hidden="true" className="size-3" />
+          )}
+          {cyclePreview.isPending ? 'Running the engine…' : 'Preview what autopilot would do'}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="h-7 text-2xs"
+          disabled={outcome?.status !== 'ready'}
+          onClick={onArm}
+        >
+          Arm autopilot
+        </Button>
+      </div>
+      {capsSet && snapshots.length === 0 ? (
+        <p className="text-2xs text-muted-foreground">
+          Enroll at least one ad set below — there is nothing for autopilot to reallocate yet.
+        </p>
+      ) : null}
+      {outcome?.status === 'unavailable' ? (
+        <p className="text-2xs text-muted-foreground">
+          The optimizer preview service isn&rsquo;t reachable for this account, so autopilot
+          can&rsquo;t be previewed right now.
+        </p>
+      ) : null}
+      {outcome?.status === 'error' ? (
+        <p className="text-2xs text-muted-foreground">
+          Couldn&rsquo;t run the preview just now. Try again in a moment.
+        </p>
+      ) : null}
+      {forecast && outcome?.status === 'ready' && maxDailyApplyMinor != null ? (
+        <AutopilotForecastBody
+          currency={currency}
+          dailyTotal={dailyTotal}
+          forecast={forecast}
+          items={outcome.preview.items}
+          maxDailyApplyMinor={maxDailyApplyMinor}
+          unit={unit}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function AutopilotForecastBody({
+  currency,
+  dailyTotal,
+  forecast,
+  items,
+  maxDailyApplyMinor,
+  unit,
+}: {
+  currency: string | null;
+  dailyTotal: number;
+  forecast: AutopilotForecast;
+  items: CyclePreviewItem[];
+  maxDailyApplyMinor: number;
+  unit: UnitContext;
+}) {
+  // Back through the same descriptor that filled the input, so the ceiling named here is
+  // literally the number in the field above it.
+  const ceilingMajor = Number(toInput('max_daily_apply_minor', maxDailyApplyMinor, unit));
+  const flowItems: CycleItemRow[] = items.map((item) => ({
+    adset_id: item.adset_id,
+    current_budget: item.current_budget,
+    final_budget: item.final_budget,
+    change_abs: item.change_abs,
+    change_pct: item.change_pct,
+    diagnostics: item.diagnostics ?? null,
+  }));
+
+  if (forecast.poolOverCeiling) {
+    return (
+      <p className="rounded border border-warning/40 bg-warning/10 px-2 py-1 text-2xs text-warning">
+        This portfolio&rsquo;s {formatCurrency(dailyTotal, currency)}/day pool is over the{' '}
+        {formatCurrency(ceilingMajor, currency)} ceiling, so autopilot would write nothing at all.
+        Raise the ceiling or lower the daily budget before arming.
+      </p>
+    );
+  }
+
+  const applied = forecast.wouldApply.length;
+  const held = forecast.wouldHold.length;
+  return (
+    <div className="space-y-2">
+      <p className="text-2xs text-muted-foreground">
+        On this cycle autopilot would have written{' '}
+        <span className="font-medium text-foreground tabular-nums">{applied}</span>{' '}
+        {applied === 1 ? 'budget change' : 'budget changes'} and held{' '}
+        <span className="font-medium text-foreground tabular-nums">{held}</span> over your % cap for
+        your approval.
+      </p>
+      <ReallocationFlow items={flowItems} currency={currency} />
+      <p className="text-2xs text-muted-foreground">
+        A preview only — the engine ran read-only and nothing was written to Meta.
+      </p>
+    </div>
+  );
+}
+
+/** One numeric config field. The value it shows and the value it submits are converted by the
+ *  SAME descriptor (portfolioFields), so a field can never advertise one number and write
+ *  another — which is the whole reason these live in one place. */
+function NumberField({
+  children,
+  control,
+  disabled,
+  id,
+  label,
+  name,
+  suggested,
+  suggestionLabel,
+}: {
+  children?: React.ReactNode;
+  control: Control<PortfolioFormValues, unknown, PortfolioFormPatch>;
+  disabled?: boolean;
+  id: string;
+  label: string;
+  name: NumericFieldKey;
+  suggested?: string | number | null;
+  suggestionLabel?: string;
+}) {
+  const { field, fieldState } = useController({ control, name });
+  const accept = (value: string) => field.onChange(value);
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        aria-invalid={fieldState.invalid || undefined}
+        disabled={disabled}
+        id={id}
+        inputMode="decimal"
+        onBlur={field.onBlur}
+        onChange={field.onChange}
+        onKeyDown={acceptSuggestionOnTab(suggested, accept)}
+        placeholder={suggestionPlaceholder(suggested, '')}
+        ref={field.ref}
+        value={field.value ?? ''}
+      />
+      {children}
+      {suggested != null && suggestionLabel ? (
+        <SuggestionChip label={suggestionLabel} onClick={() => accept(String(suggested))} />
+      ) : null}
+      {fieldState.error ? (
+        <p className="text-2xs text-destructive">{fieldState.error.message}</p>
+      ) : null}
     </div>
   );
 }

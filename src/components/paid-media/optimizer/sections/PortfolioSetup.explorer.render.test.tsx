@@ -10,7 +10,13 @@ import * as realData from '../useOptimizerData';
 
 // Stub motion so open/close is synchronous — the explorer's reveal is not what this
 // spec asserts, and height:'auto' animations don't settle deterministically in jsdom.
+//
+// Spread over the REAL module, never in place of it: bun's mock.module is process-global
+// with no unmock, so a three-export replacement here made `useMotionValue` / `useTransform`
+// vanish for every other suite in the same run — four chart specs failed to load at all.
+const actualMotion = await import('motion/react');
 mock.module('motion/react', () => ({
+  ...actualMotion,
   AnimatePresence: ({ children }: { children: ReactNode }) => children,
   motion: { div: ({ children }: { children: ReactNode }) => <div>{children}</div> },
   useReducedMotion: () => true,

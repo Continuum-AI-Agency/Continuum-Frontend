@@ -75,8 +75,12 @@ const EMPTY_ACCOUNT_ID = '1296885445611472';
 /** All CBO: 4 campaigns, every ad set held `unsupported_budget`, nothing optimizable. */
 const CBO_ACCOUNT_ID = '1164707387246066';
 
-const ENROLLED_PORTFOLIO_NAME = 'Mensajes Julio 2026';
-const EMPTY_PORTFOLIO_NAME = 'Leads test';
+// Pinned by NAME, so they go stale when the account's portfolios are renamed or replaced —
+// which is what happened to the previous pair ('Mensajes Julio 2026' / 'Leads test'). Verify
+// against optimizer.portfolios for brand 148583e0… before assuming a failure here is a
+// regression: ENROLLED must be the one with active portfolio_adsets, EMPTY the one without.
+const ENROLLED_PORTFOLIO_NAME = 'Citas Agosto - check leads';
+const EMPTY_PORTFOLIO_NAME = 'Reporte Agosto - Citas y Mensajes';
 
 const SHOTS_DIR = resolve(__dirname, '__screenshots__/optimizer-e2e');
 
@@ -189,6 +193,20 @@ async function benchContext(
   return { context, hosts };
 }
 
+/** Reach the SETUP surface (PortfolioSetup) for the pinned ad account — the one screen that
+ *  carries Signal readiness and the CBO projection cards. It backs BOTH the empty-state
+ *  onboarding and the create view, so which one an account lands on depends on whether its
+ *  brand already owns portfolios. That premise drifts with production (the VIVO47 brand owns
+ *  one now, where it owned none), so resolve it at run time instead of pinning it. */
+async function openSetupSurface(page: Page): Promise<void> {
+  const onboarding = page.getByRole('heading', { name: 'Set up the Optimizer' });
+  const newPortfolio = page.getByRole('button', { name: 'New portfolio' });
+  await expect(onboarding.or(newPortfolio).first()).toBeVisible({ timeout: 120_000 });
+  if ((await onboarding.count()) > 0) return;
+  await newPortfolio.click();
+  await expect(page).toHaveURL(/optimizerView=create/);
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Paid Media Optimizer — live experience', () => {
@@ -281,7 +299,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
       ).toBeVisible();
       // …and it names the account that owns them, with the one-click switch.
       await expect(page.getByText(PORTFOLIO_ACCOUNT_LABEL, { exact: true })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Switch' })).toBeVisible();
+      // exact: the sidebar's own "Switch brand" button matches a substring 'Switch' too.
+      await expect(page.getByRole('button', { name: 'Switch', exact: true })).toBeVisible();
       await shoot(page, '03-other-account-notice');
 
       // The browse control must actually reach the portfolios (count is live — match flexibly).
@@ -318,11 +337,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
 
     try {
       await openOptimizationTab(page, CBO_ACCOUNT_ID);
-
-      // This brand owns no portfolios, so onboarding IS the correct surface here.
-      await expect(page.getByRole('heading', { name: 'Set up the Optimizer' })).toBeVisible({
-        timeout: 120_000,
-      });
+      await openSetupSurface(page);
 
       const readiness = page
         .locator('div')
@@ -352,6 +367,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
 
     try {
       await openOptimizationTab(page, CBO_ACCOUNT_ID);
+      await openSetupSurface(page);
 
       await expect(page.getByText(/Projections, not conversions/)).toBeVisible({
         timeout: 120_000,
@@ -505,6 +521,17 @@ test.describe('Paid Media Optimizer — live experience', () => {
       // Manage controls render. Save/Archive are NEVER clicked.
       await expect(page.getByText('Autonomy tier')).toBeVisible();
       await expect(page.getByText(/Enrolled (ad sets|campaigns)/)).toBeVisible();
+
+      // Every config field carries the portfolio's CURRENT value — the whole point of the
+      // config panel, and what it did NOT do while blanks stood in for "keep current".
+      // Read-only: nothing is typed here and nothing is saved.
+      await expect(page.getByLabel('Name', { exact: true })).toHaveValue(ENROLLED_PORTFOLIO_NAME);
+      await expect(page.getByLabel(/^Daily budget/)).toHaveValue('3500');
+
+      // And the autopilot guardrails stay off screen until they matter: this portfolio runs
+      // on Recommend, so its opt-in entry point stands in for the section.
+      await expect(page.getByText('Autopilot guardrails')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Set up autopilot/ })).toBeVisible();
       await shoot(page, '11-workspace-manage');
 
       // Performance restores the reallocation instrument (and the section param drops).
