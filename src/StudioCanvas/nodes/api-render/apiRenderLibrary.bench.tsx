@@ -44,7 +44,7 @@ import {
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { ReactFlowProvider } from '@xyflow/react';
+import { ReactFlowProvider, useStoreApi } from '@xyflow/react';
 import React from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 
@@ -153,6 +153,7 @@ interface Calls {
   batchPreflight: Record<string, unknown>[];
   createInputSet: Record<string, unknown>[];
   createBatch: number;
+  createJob: number;
   register: number;
 }
 let calls: Calls;
@@ -181,6 +182,7 @@ const reset = () => {
     batchPreflight: [],
     createInputSet: [],
     createBatch: 0,
+    createJob: 0,
     register: 0,
   };
   currentJobs = [];
@@ -234,7 +236,10 @@ mock.module('./apiRendersApi', () => ({
         watermarkLogo: watermarkPin,
       };
     },
-    createJob: async () => job({ status: 'queued' }),
+    createJob: async () => {
+      calls.createJob += 1;
+      return job({ status: 'queued' });
+    },
     getJob: async (_brandId: string, jobId: string) => {
       calls.getJob.push(jobId);
       return currentJobs.find((item) => item.id === jobId) ?? job({ id: jobId });
@@ -345,6 +350,17 @@ function Harness({ initial }: { initial: Record<string, unknown> }) {
   );
 }
 
+/**
+ * React Flow's own store, reached from inside the provider the harness mounts. The only
+ * place a "did this node ask to be re-measured" assertion can stand: `useUpdateNodeInternals`
+ * defers to a frame and then calls this action.
+ */
+let flowStore: ReturnType<typeof useStoreApi> | null = null;
+function StoreProbe() {
+  flowStore = useStoreApi();
+  return null;
+}
+
 function renderNode(
   data: Record<string, unknown> = {},
   brandId = BRAND_ID,
@@ -365,6 +381,7 @@ function renderNode(
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <ReactFlowProvider>
+          <StoreProbe />
           <Harness initial={nodeData} />
         </ReactFlowProvider>
       </ToastProvider>
@@ -562,6 +579,103 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
     expect(field.parentElement?.querySelector('input')).toBeTruthy();
     expect(field.parentElement?.querySelector('select')).toBeNull();
     expect(screen.queryByRole('radiogroup')).toBeNull();
+  });
+
+  test('offers exactly the option set when the value set DOES cross the boundary', async () => {
+    // The other half of the same rule: invent nothing, and drop nothing either. A template
+    // that names its nine watermark positions must not be reduced to a free-text box the
+    // renderer will then reject.
+    const positions = ['top_left', 'top_center', 'top_right', 'bottom_right'];
+    renderNode({
+      templateKey: '166',
+      contractHash: 'hash',
+      variableDefinitions: [
+        variable({
+          key: 'watermark_position',
+          label: 'Watermark Position',
+          kind: 'enum',
+          options: positions,
+        }),
+      ],
+    });
+
+    const field = await screen.findByText('Watermark Position');
+    const picker = field.parentElement?.querySelector('select') as HTMLSelectElement;
+    expect(picker).toBeTruthy();
+    expect([...picker.options].map((option) => option.value)).toEqual(['', ...positions]);
+  });
+});
+
+describe('ApiRenderBlock — a contract discovered after the node mounted', () => {
+  const headline = () =>
+    variable({ key: 'headline', label: 'Headline', kind: 'text', required: true });
+  const textNode = { id: 'text1', type: 'string', data: { value: 'Wired headline' } };
+  const textEdge = {
+    id: 'edge-headline',
+    source: 'text1',
+    sourceHandle: 'text',
+    target: 'render1',
+    targetHandle: 'variable-headline',
+  };
+
+  test('advertises the handle only once the template names it, and re-measures the node', async () => {
+    // React Flow caches a node's handle map at mount. A handle that appears later is drawn
+    // but not connectable until the node asks to be re-measured — which is exactly what a
+    // contract fetched AFTER mount produces on every template pick.
+    currentVariables = [headline()];
+    renderNode({}, BRAND_ID, { nodes: [textNode], edges: [textEdge] });
+
+    const picker = await screen.findByLabelText('Render template');
+    expect(document.querySelector('[data-handleid="variable-headline"]')).toBeNull();
+
+    const frames: FrameRequestCallback[] = [];
+    const realFrame = globalThis.requestAnimationFrame;
+    const remeasured: number[] = [];
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return 0;
+    }) as typeof globalThis.requestAnimationFrame;
+    try {
+      flowStore?.setState({
+        updateNodeInternals: (() => remeasured.push(1)) as never,
+      } as never);
+      fireEvent.change(picker, { target: { value: '166' } });
+      await waitFor(() =>
+        expect(document.querySelector('[data-handleid="variable-headline"]')).toBeTruthy(),
+      );
+      act(() => {
+        for (const frame of frames.splice(0)) frame(0);
+      });
+    } finally {
+      globalThis.requestAnimationFrame = realFrame;
+    }
+
+    // Deferred to a frame by `useUpdateNodeInternals`; the frame is what carries the ask.
+    expect(remeasured.length).toBeGreaterThan(0);
+  });
+
+  test('sends the wired text, not the value typed on the node, and submits nothing', async () => {
+    currentVariables = [headline()];
+    renderNode({}, BRAND_ID, { nodes: [textNode], edges: [textEdge] });
+
+    fireEvent.change(await screen.findByLabelText('Render template'), { target: { value: '166' } });
+    const label = await screen.findByText('Headline *');
+    const inline = label.parentElement?.querySelector('input') as HTMLInputElement;
+    // The field stays as the fallback — it just loses to the edge the canvas is drawing.
+    expect(inline).toBeTruthy();
+    fireEvent.change(inline, { target: { value: 'Typed on the node' } });
+    await waitFor(() =>
+      expect(screen.queryByText(/the wired text is used instead of this field/)).toBeTruthy(),
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+    await waitFor(() => expect(calls.preflight.length).toBe(1));
+    expect((calls.preflight[0]?.variables as Record<string, unknown>).headline).toBe(
+      'Wired headline',
+    );
+    // Prepare has no effects. Nothing in this bench queues a render.
+    expect(calls.createJob).toBe(0);
+    expect(calls.createBatch).toBe(0);
   });
 });
 

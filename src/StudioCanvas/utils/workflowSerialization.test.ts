@@ -353,4 +353,48 @@ describe('workflowSerialization', () => {
     expect(data.sourcePath).toBe('brand/ref.png');
     expect(data.bucket).toBe('media-library');
   });
+
+  it('preserves a sha256 contractHash across persist and broadcast serialization', () => {
+    // A hex digest is a strict subset of the base64 alphabet, so the encoded-payload
+    // heuristic used to eat it. ApiRenderBlock early-returns without contractHash, so
+    // losing it on save left render/save-set/batch silently dead after a reload.
+    const digest = '2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881';
+    const nestedDigest = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
+    const node = buildNode({
+      id: 'api-render',
+      type: 'apiRender',
+      data: {
+        templateKey: '166',
+        contractHash: digest,
+        delivery: { assetChecksum: nestedDigest },
+      } as any,
+    });
+
+    const persisted = serializeWorkflowSnapshot([node], [], 'bezier');
+    const broadcast = serializeForBroadcast([node], [], 'bezier');
+
+    for (const data of [persisted.nodes[0].data, broadcast.nodes[0].data] as any[]) {
+      expect(data.contractHash).toBe(digest);
+      expect(data.delivery?.assetChecksum).toBe(nestedDigest);
+    }
+  });
+
+  it('strips a bare base64 payload with no data: prefix in both modes', () => {
+    // The narrowed branch still has to fire: real base64 draws on the full 64-symbol
+    // alphabet, which a digest never does.
+    const payload = `${'AbC+/9zZ'.repeat(24)}==`;
+    const node = buildNode({
+      id: 'ref',
+      type: 'image',
+      data: { image: payload, sourcePath: 'brand/ref.png' } as any,
+    });
+
+    const persisted = serializeWorkflowSnapshot([node], [], 'bezier');
+    const broadcast = serializeForBroadcast([node], [], 'bezier');
+
+    for (const data of [persisted.nodes[0].data, broadcast.nodes[0].data] as any[]) {
+      expect(data.image).toBeUndefined();
+      expect(data.sourcePath).toBe('brand/ref.png');
+    }
+  });
 });

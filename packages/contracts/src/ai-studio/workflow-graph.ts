@@ -734,8 +734,13 @@ const publisherTargetHandles = (node: GraphNodeLike): string[] => {
   return publisherSlots(node).map((slot) => `${PUBLISH_ASSET_INPUT_PREFIX}${slot.id}`);
 };
 
+/** What a template variable may carry over an edge. */
+export type ConnectableApiRenderVariableKind = 'image' | 'video' | 'text';
+
+const CONNECTABLE_API_RENDER_KINDS: readonly string[] = ['image', 'video', 'text'];
+
 /**
- * The template's media variables a caller may actually WIRE.
+ * Whether this template variable gets a Canvas handle — the ONE place that decides it.
  *
  * `reserved` is excluded, and that exclusion belongs HERE rather than at each call site:
  * the Backend fills a reserved variable itself and refuses a caller-supplied value with
@@ -743,10 +748,28 @@ const publisherTargetHandles = (node: GraphNodeLike): string[] => {
  * graph rule that still calls the edge legal lets a saved or agent-authored workflow
  * carry an edge `resolveApiRenderVariables` silently drops — wired on screen, empty at
  * render.
+ *
+ * `number` and `enum` are deliberately NOT wireable: a numeric parameter stays a typed
+ * field and an enum stays a picker over the options the template reflected. A handle
+ * would REPLACE that control rather than add to it.
+ *
+ * Exported because the node body (`RenderVariableFields`), the value resolver
+ * (`resolveApiRenderVariables`) and these graph rules must not each carry their own kind
+ * list — a handle the graph refuses is an edge the canvas paints and the render never
+ * receives, and this repo has already lost a feature to exactly that.
  */
+export const isConnectableApiRenderVariable = (variable: {
+  kind?: unknown;
+  reserved?: unknown;
+}): boolean =>
+  variable?.reserved !== true && CONNECTABLE_API_RENDER_KINDS.includes(String(variable?.kind));
+
+/** The handle id for a template variable. One spelling, one place. */
+export const apiRenderVariableHandleId = (key: string): string => `variable-${key}`;
+
 const apiRenderConnectableVariables = (
   node: GraphNodeLike,
-): Array<{ key: string; kind: 'image' | 'video'; multiple: boolean }> => {
+): Array<{ key: string; kind: ConnectableApiRenderVariableKind; multiple: boolean }> => {
   const variables = (node.data as { variableDefinitions?: unknown })?.variableDefinitions;
   if (!Array.isArray(variables)) return [];
   return variables.flatMap((variable) => {
@@ -757,30 +780,33 @@ const apiRenderConnectableVariables = (
       reserved?: unknown;
       multiple?: unknown;
     };
-    if (value.reserved === true) return [];
-    if (!['image', 'video'].includes(String(value.kind)) || typeof value.key !== 'string')
-      return [];
+    if (!isConnectableApiRenderVariable(value) || typeof value.key !== 'string') return [];
     return [
       {
         key: value.key,
-        kind: value.kind as 'image' | 'video',
-        multiple: value.multiple === true,
+        kind: value.kind as ConnectableApiRenderVariableKind,
+        // A text port carries one scalar: `apiRenderInputValueSchema` has no `string[]`
+        // member, so `multiple` on a text variable is a shape the wire cannot express.
+        // Honouring it here would let the canvas accept edges preflight then refuses.
+        multiple: value.multiple === true && value.kind !== 'text',
       },
     ];
   });
 };
 
-const apiRenderTargetHandles = (node: GraphNodeLike): string[] =>
-  apiRenderConnectableVariables(node).map((variable) => `variable-${variable.key}`);
+export const apiRenderTargetHandles = (node: GraphNodeLike): string[] =>
+  apiRenderConnectableVariables(node).map((variable) => apiRenderVariableHandleId(variable.key));
 
 const apiRenderVariableForHandle = (node: GraphNodeLike, handle: string) =>
-  apiRenderConnectableVariables(node).find((variable) => `variable-${variable.key}` === handle) ??
-  null;
+  apiRenderConnectableVariables(node).find(
+    (variable) => apiRenderVariableHandleId(variable.key) === handle,
+  ) ?? null;
 
 const apiRenderVariableKindForHandle = (
   node: GraphNodeLike,
   handle: string,
-): 'image' | 'video' | null => apiRenderVariableForHandle(node, handle)?.kind ?? null;
+): ConnectableApiRenderVariableKind | null =>
+  apiRenderVariableForHandle(node, handle)?.kind ?? null;
 
 const isImageReferenceHandle = (handleId?: string | null): boolean =>
   typeof handleId === 'string' && IMAGE_REFERENCE_HANDLE_SET.has(handleId);
@@ -1096,6 +1122,9 @@ function isConnectionCompatible(
     const kind = apiRenderVariableKindForHandle(targetNode, targetHandle);
     if (kind === 'image' && !isImageProducingSource(sourceNode, sourceHandle)) return false;
     if (kind === 'video' && !isVideoProducingSource(sourceNode, sourceHandle)) return false;
+    // A text parameter takes whatever a Text Block or a decoder produces. The inline
+    // field stays as the fallback; the wire is what wins when there is one.
+    if (kind === 'text' && !isTextProducingSource(sourceNode, sourceHandle)) return false;
     if (!kind) return false;
   } else if (targetNode.type === 'action') {
     // An action with no op chosen accepts nothing: until `actionId` is set there is no

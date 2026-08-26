@@ -81,6 +81,95 @@ describe('API render Canvas inputs', () => {
   });
 });
 
+const headlineEdge = (source: string) =>
+  ({
+    id: 'edge-headline',
+    source,
+    sourceHandle: 'text',
+    target: 'render',
+    targetHandle: 'variable-headline',
+  }) as Edge;
+
+describe('API render Canvas inputs — a wired text variable', () => {
+  test('a connected Text Block overrides the value typed on the node', () => {
+    // `renderData.variables.headline` is 'Switch today'. The canvas SHOWS text flowing in
+    // from upstream; sending the inline value instead would render something the graph
+    // does not depict.
+    const nodes = [
+      { id: 'render', type: 'apiRender', data: renderData },
+      { id: 'image', type: 'image', data: { assetId: 'asset-1', assetVersionId: 'version-1' } },
+      { id: 'text', type: 'string', data: { value: 'Wired headline' } },
+    ] as StudioNode[];
+    const edges = [
+      {
+        id: 'edge',
+        source: 'image',
+        sourceHandle: 'image',
+        target: 'render',
+        targetHandle: 'variable-hero_image',
+      } as Edge,
+      headlineEdge('text'),
+    ];
+
+    const result = resolveApiRenderVariables({ nodeId: 'render', data: renderData, nodes, edges });
+    expect(result.errors).toEqual([]);
+    expect(result.variables.headline).toBe('Wired headline');
+  });
+
+  test('reads text a generator wrote rather than only a Text Block', () => {
+    const nodes = [
+      { id: 'render', type: 'apiRender', data: renderData },
+      { id: 'image', type: 'image', data: { assetId: 'asset-1', assetVersionId: 'version-1' } },
+      { id: 'text', type: 'string', data: { generatedText: 'Enriched headline' } },
+    ] as StudioNode[];
+
+    const result = resolveApiRenderVariables({
+      nodeId: 'render',
+      data: renderData,
+      nodes,
+      edges: [
+        {
+          id: 'edge',
+          source: 'image',
+          sourceHandle: 'image',
+          target: 'render',
+          targetHandle: 'variable-hero_image',
+        } as Edge,
+        headlineEdge('text'),
+      ],
+    });
+    expect(result.variables.headline).toBe('Enriched headline');
+  });
+
+  test('an empty wired source is missing, not an empty string', () => {
+    // Falling back to the inline value here would send text the canvas no longer shows,
+    // and sending '' would satisfy a required slot with a blank.
+    const nodes = [
+      { id: 'render', type: 'apiRender', data: renderData },
+      { id: 'image', type: 'image', data: { assetId: 'asset-1', assetVersionId: 'version-1' } },
+      { id: 'text', type: 'string', data: { value: '   ' } },
+    ] as StudioNode[];
+
+    const result = resolveApiRenderVariables({
+      nodeId: 'render',
+      data: renderData,
+      nodes,
+      edges: [
+        {
+          id: 'edge',
+          source: 'image',
+          sourceHandle: 'image',
+          target: 'render',
+          targetHandle: 'variable-hero_image',
+        } as Edge,
+        headlineEdge('text'),
+      ],
+    });
+    expect(result.errors).toEqual(['Headline is required']);
+    expect(result.variables.headline).toBeUndefined();
+  });
+});
+
 const galleryData: ApiRenderNodeData = {
   templateKey: '47',
   templateName: 'Vivo',

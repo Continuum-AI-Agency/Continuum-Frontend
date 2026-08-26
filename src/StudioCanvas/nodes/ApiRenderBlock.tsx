@@ -30,10 +30,16 @@ import type {
   ApiRenderWorkspaceStatus,
   PaidCanvasTarget,
 } from '@continuum/contracts';
-import { type NodeProps, NodeResizer, type Node as ReactFlowNode } from '@xyflow/react';
+import { apiRenderTargetHandles } from '@continuum/contracts';
+import {
+  type NodeProps,
+  NodeResizer,
+  type Node as ReactFlowNode,
+  useUpdateNodeInternals,
+} from '@xyflow/react';
 import { Copy, RefreshCw, Trash2 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -98,6 +104,31 @@ export function ApiRenderBlock({
   // not a failed request, it is a working request with the wrong destination.
   // Showing it as an error would be wrong, and showing nothing is worse.
   const [workspace, setWorkspace] = useState<ApiRenderWorkspaceStatus | null>(null);
+
+  // This node's handles ARE its template contract, and the contract is fetched after the
+  // node mounts. React Flow caches a node's handle map at mount, so a handle that appears
+  // later is drawn but not connectable and its edges anchor to the wrong point until
+  // something else forces a measure. Keyed on the handle set, not on every render.
+  const updateNodeInternals = useUpdateNodeInternals();
+  const targetHandles = useMemo(
+    () => apiRenderTargetHandles({ id, type: 'apiRender', data }),
+    [id, data],
+  );
+  const handleSignature = targetHandles.join('|');
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [handleSignature, id, updateNodeInternals]);
+
+  // Which variables already have something wired into them, so the inline field can say
+  // it is being overridden rather than silently losing to the edge.
+  const connectedKeys = useMemo(() => {
+    const wired = new Set<string>();
+    for (const edge of edges) {
+      if (edge.target !== id || !edge.targetHandle?.startsWith('variable-')) continue;
+      wired.add(edge.targetHandle.slice('variable-'.length));
+    }
+    return wired;
+  }, [edges, id]);
 
   const deliveryEnabled = data.deliveryEnabled === true;
   const trackedIds = data.jobIds ?? (data.latestJobId ? [data.latestJobId] : []);
@@ -609,6 +640,7 @@ export function ApiRenderBlock({
             values={data.variables}
             watermarkLogo={prepared?.watermarkLogo ?? null}
             prepared={prepared !== null}
+            connectedKeys={connectedKeys}
             onChange={(key, value) =>
               patchData({ variables: { ...data.variables, [key]: value }, inputSetId: null })
             }

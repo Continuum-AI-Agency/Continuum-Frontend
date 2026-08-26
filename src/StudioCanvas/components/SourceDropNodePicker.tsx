@@ -3,6 +3,7 @@
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -35,7 +36,12 @@ export function SourceDropNodePicker({
         if (!open) onDismiss();
       }}
     >
+      {/* The marker is a positioning anchor, not a control: the menu is opened by the
+          drop, never by a click. `nativeButton={false}` is what tells Base UI the render
+          element is deliberately not a <button> — left at its default it warns on every
+          drop. */}
       <DropdownMenuTrigger
+        nativeButton={false}
         render={
           <div
             className="pointer-events-none fixed h-0 w-0"
@@ -44,12 +50,19 @@ export function SourceDropNodePicker({
         }
       />
       <DropdownMenuContent align="start">
-        <DropdownMenuLabel>Connect to…</DropdownMenuLabel>
-        {candidates.map((candidate) => (
-          <DropdownMenuItem key={candidate.nodeType} onSelect={() => onSelect(candidate.nodeType)}>
-            {candidate.label}
-          </DropdownMenuItem>
-        ))}
+        {/* Base UI's GroupLabel reads its group's context and THROWS outside one — this
+            picker rendered nothing at all until the group was here. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Connect to…</DropdownMenuLabel>
+          {candidates.map((candidate) => (
+            <DropdownMenuItem
+              key={candidate.nodeType}
+              onSelect={() => onSelect(candidate.nodeType)}
+            >
+              {candidate.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

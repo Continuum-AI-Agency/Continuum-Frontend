@@ -12,6 +12,9 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 // and the UI and the agent converge on one room. Falls back to the idempotent
 // ensure_default_canvas_room RPC, which selects the brand's first room or creates a
 // "Main Workspace" when the brand has none.
+//
+// Every candidate id is proven against canvas_rooms before it is returned, so a room
+// that was deleted or belongs to another brand can never reach the canvas.
 export async function resolveInitialCanvasRoomId(
   brandProfileId: string,
   preferredRoomId?: string,
@@ -23,18 +26,14 @@ export async function resolveInitialCanvasRoomId(
   const supabase = await createSupabaseServerClient();
 
   if (preferredRoomId) {
-    const { data: preferredRoom, error: preferredRoomError } = await supabase
-      .schema('brand_profiles')
-      .from('canvas_rooms')
-      .select('id')
-      .eq('brand_profile_id', brandProfileId)
-      .eq('id', preferredRoomId)
-      .maybeSingle();
-
-    if (preferredRoomError) {
-      console.error('[ai-studio] preferred canvas room lookup failed', preferredRoomError);
-    } else if (preferredRoom?.id) {
-      return preferredRoom.id;
+    const preferredRoom = await findBrandRoomId(
+      supabase,
+      brandProfileId,
+      preferredRoomId,
+      'preferred',
+    );
+    if (preferredRoom) {
+      return preferredRoom;
     }
   }
 
@@ -52,7 +51,15 @@ export async function resolveInitialCanvasRoomId(
   if (activeViewError) {
     console.error('[ai-studio] canvas_active_view lookup failed', activeViewError);
   } else if (activeView?.room_id) {
-    return activeView.room_id;
+    const lastSeenRoom = await findBrandRoomId(
+      supabase,
+      brandProfileId,
+      activeView.room_id,
+      'last-seen',
+    );
+    if (lastSeenRoom) {
+      return lastSeenRoom;
+    }
   }
 
   const { data: ensuredRoomId, error: ensureError } = await supabase
@@ -68,4 +75,32 @@ export async function resolveInitialCanvasRoomId(
   }
 
   return ensuredRoomId;
+}
+
+// Proves a candidate room is still a live room of this brand. Neither candidate can
+// be trusted on its own: preferredRoomId arrives from the URL, and canvas_active_view
+// carries no foreign key on room_id, so deleting a room (a plain DELETE — only
+// canvas_sessions cascades) or a brand switch racing the presence heartbeat leaves a
+// row still naming a room this brand does not own. Handing that id to the canvas
+// violates canvas_sessions_room_id_fkey on the very first autosave.
+async function findBrandRoomId(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  brandProfileId: string,
+  roomId: string,
+  source: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .schema('brand_profiles')
+    .from('canvas_rooms')
+    .select('id')
+    .eq('brand_profile_id', brandProfileId)
+    .eq('id', roomId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(`[ai-studio] ${source} canvas room lookup failed`, error);
+    return null;
+  }
+
+  return data?.id ?? null;
 }

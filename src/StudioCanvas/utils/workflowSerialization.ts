@@ -25,12 +25,20 @@ const runtimeNodeKeys = [
 
 const dataUrlPattern = /^data:([a-z]+\/[a-z0-9-+.]+)(;[a-z0-9=[\]!#$%&'*+.^_`{|}~-]+)*;base64,/i;
 const base64LikePattern = /^[a-z0-9+/=]+$/i;
+const hexDigestPattern = /^[0-9a-f]+$/i;
 const minBase64Length = 32;
 
 function isEncodedPayload(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return false;
   if (dataUrlPattern.test(trimmed)) return true;
+  // A hex digest (the apiRender sha256 contractHash, an md5, a dash-less UUID) draws on
+  // 16 of the 64 base64 symbols, so the length+charset test below used to claim it and
+  // the node reloaded without the field it gates on. Base64 of real binary uses the whole
+  // alphabet; an actual payload landing all-hex is 4^-n, nil past the length floor.
+  // ponytail: charset heuristic, not a decoder — swap in a real base64 validator if a
+  // non-hex identifier ever gets eaten too.
+  if (hexDigestPattern.test(trimmed)) return false;
   if (trimmed.length < minBase64Length) return false;
   return base64LikePattern.test(trimmed);
 }

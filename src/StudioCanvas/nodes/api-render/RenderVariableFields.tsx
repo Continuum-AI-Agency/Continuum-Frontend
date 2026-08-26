@@ -3,6 +3,8 @@
 import {
   API_RENDER_MEDIA_LIST_MAX,
   type ApiRenderVariable,
+  apiRenderVariableHandleId,
+  isConnectableApiRenderVariable,
   type PinnedRenderAsset,
 } from '@continuum/contracts';
 import { Handle, Position } from '@xyflow/react';
@@ -64,17 +66,37 @@ function LockedDesignKitField({
   );
 }
 
+/**
+ * The handle a wireable variable exposes. Which kinds get one is
+ * `isConnectableApiRenderVariable` in the contract, never a kind list kept here: a handle
+ * the graph rules refuse is an edge the canvas paints and the render never receives.
+ */
+function VariableHandle({ variable }: { variable: ApiRenderVariable }) {
+  return (
+    <Handle
+      type="target"
+      id={apiRenderVariableHandleId(variable.key)}
+      position={Position.Left}
+      className="!h-3 !w-3 !bg-brand-primary"
+      style={{ top: '50%' }}
+    />
+  );
+}
+
 export function RenderVariableFields({
   definitions,
   values,
   watermarkLogo,
   prepared,
+  connectedKeys,
   onChange,
 }: {
   definitions: ApiRenderVariable[];
   values: Record<string, string | number | boolean> | undefined;
   watermarkLogo: PinnedRenderAsset | null;
   prepared: boolean;
+  /** Variable keys whose handle already has an incoming edge. */
+  connectedKeys?: ReadonlySet<string>;
   onChange: (key: string, value: string | number | boolean) => void;
 }) {
   return (
@@ -99,13 +121,7 @@ export function RenderVariableFields({
             </span>
             {['image', 'video'].includes(variable.kind) ? (
               <>
-                <Handle
-                  type="target"
-                  id={`variable-${variable.key}`}
-                  position={Position.Left}
-                  className="!h-3 !w-3 !bg-brand-primary"
-                  style={{ top: '50%' }}
-                />
+                <VariableHandle variable={variable} />
                 <span className="text-2xs">
                   {variable.multiple
                     ? `Connect up to ${API_RENDER_MEDIA_LIST_MAX} version-pinned ${variable.kind} Library nodes — they render in the order you wire them`
@@ -119,25 +135,50 @@ export function RenderVariableFields({
                 checked={Boolean(values?.[variable.key])}
                 onChange={(event) => onChange(variable.key, event.target.checked)}
               />
-            ) : (
-              // Every non-media, non-boolean parameter is a free text (or number) field.
-              // The contract has `kind: 'enum'` and an `options` array, but the render
-              // fleet's parameter reflection has no enum member and no option list, so
-              // the adapter can only ever emit `text` with `options: []`. An AE dropdown
-              // — the nine-value watermark position control among them — arrives here
-              // with its value set stripped. Offering a picker would mean inventing
-              // choices the renderer never named, so this stays an unconstrained field.
-              <Input
-                className="nodrag h-7 text-xs"
-                type={variable.kind === 'number' ? 'number' : 'text'}
+            ) : variable.kind === 'enum' && variable.options.length > 0 ? (
+              // Only when the value set actually crossed the boundary. The legacy
+              // reflection strips it (`options: []`) and an AE dropdown — the nine-value
+              // watermark position control among them — arrives here as bare text; a
+              // picker in that case would invent choices the renderer never named, so
+              // the empty-option branch below stays an unconstrained field.
+              <select
+                className="nodrag h-7 rounded-md border border-border bg-background px-2 text-xs"
                 value={String(values?.[variable.key] ?? '')}
-                onChange={(event) =>
-                  onChange(
-                    variable.key,
-                    variable.kind === 'number' ? Number(event.target.value) : event.target.value,
-                  )
-                }
-              />
+                onChange={(event) => onChange(variable.key, event.target.value)}
+              >
+                {variable.required ? null : <option value="">Not set…</option>}
+                {variable.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              // Text and number. Text also takes a wire, so a caption written upstream
+              // reaches the render without being retyped here; the field stays as the
+              // fallback and `resolveApiRenderVariables` prefers the wire when there is
+              // one. Number does NOT: a handle would replace the field it must keep.
+              <>
+                {isConnectableApiRenderVariable(variable) ? (
+                  <VariableHandle variable={variable} />
+                ) : null}
+                <Input
+                  className="nodrag h-7 text-xs"
+                  type={variable.kind === 'number' ? 'number' : 'text'}
+                  value={String(values?.[variable.key] ?? '')}
+                  onChange={(event) =>
+                    onChange(
+                      variable.key,
+                      variable.kind === 'number' ? Number(event.target.value) : event.target.value,
+                    )
+                  }
+                />
+                {connectedKeys?.has(variable.key) ? (
+                  <span className="text-2xs text-muted-foreground">
+                    Connected — the wired text is used instead of this field.
+                  </span>
+                ) : null}
+              </>
             )}
           </label>
         ),

@@ -760,6 +760,78 @@ describe('isValidConnection — type matrix', () => {
       ),
     ).toBe(false);
   });
+
+  // A template's text parameters are values too: the caller must be able to feed one from
+  // a Text Block instead of retyping it on the node. `number` and `enum` stay off the
+  // wire — a handle would REPLACE the numeric field and the reflected option picker.
+  const mixedRender = node('render1', 'apiRender', {
+    variableDefinitions: [
+      { key: 'hero_image', label: 'Hero', kind: 'image', reserved: false },
+      { key: 'headline', label: 'Headline', kind: 'text', reserved: false },
+      { key: 'duration', label: 'Duration', kind: 'number', reserved: false },
+      { key: 'position', label: 'Position', kind: 'enum', reserved: false, options: ['tl', 'br'] },
+      { key: WATERMARK_LOGO_VARIABLE_KEY, label: 'Brand logo', kind: 'image', reserved: true },
+    ],
+  });
+  const mixedGraph = [
+    mixedRender,
+    node('string1', 'string', { value: 'Switch today' }),
+    node('image1', 'image', { image: '' }),
+  ];
+  const wire = (source: string, sourceHandle: string, targetHandle: string) =>
+    isValidConnection({ source, sourceHandle, target: 'render1', targetHandle }, [], mixedGraph);
+
+  it('advertises a handle for every wireable variable and for nothing else', () => {
+    expect(getAllowedTargetHandles(mixedRender)).toEqual([
+      'variable-hero_image',
+      'variable-headline',
+    ]);
+  });
+
+  it('accepts a text-producing source on a text variable and refuses a mismatched one', () => {
+    expect(wire('string1', 'text', 'variable-headline')).toBe(true);
+    expect(wire('image1', 'image', 'variable-headline')).toBe(false);
+    expect(wire('string1', 'text', 'variable-hero_image')).toBe(false);
+    expect(wire('image1', 'image', 'variable-hero_image')).toBe(true);
+  });
+
+  it('refuses an edge to a variable that carries no handle at all', () => {
+    expect(wire('string1', 'text', 'variable-duration')).toBe(false);
+    expect(wire('string1', 'text', 'variable-position')).toBe(false);
+  });
+
+  // `apiRenderInputValueSchema` has no `string[]` member, so a second wire is a shape the
+  // wire contract cannot express — even if the template declares the variable `multiple`.
+  it('caps a text variable at one wire whatever the template declares', () => {
+    const multipleText = node('render1', 'apiRender', {
+      variableDefinitions: [
+        { key: 'headline', label: 'Headline', kind: 'text', reserved: false, multiple: true },
+      ],
+    });
+    expect(getTargetHandleConnectionLimit(multipleText, 'variable-headline', [])).toBe(1);
+
+    const taken = [
+      {
+        id: 'e1',
+        source: 'string1',
+        sourceHandle: 'text',
+        target: 'render1',
+        targetHandle: 'variable-headline',
+      },
+    ];
+    expect(
+      isValidConnection(
+        {
+          source: 'string2',
+          sourceHandle: 'text',
+          target: 'render1',
+          targetHandle: 'variable-headline',
+        },
+        taken,
+        [multipleText, node('string1', 'string', {}), node('string2', 'string', {})],
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('isValidConnection — connection limits', () => {
