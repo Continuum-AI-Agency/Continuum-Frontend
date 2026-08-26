@@ -32,6 +32,12 @@ export const handleStyle = (
   ...(top ? { top } : {}),
 });
 
+// Surface + label colours are SEMANTIC TOKENS, never `bg-black`/`text-white`. globals.css
+// carries a blanket `[data-theme="light"] [class*="bg-black"] { background: var(--muted)
+// !important }` (and the same for text-white), so a literal black stage silently renders
+// lavender with dark "white" text in light mode. `bg-muted/30` is what the media nodes
+// (ImageNode, VideoGenBlock) already use and it is correct in both themes.
+
 /** The fields both `action` and `router` carry for whatever came out of them. */
 export interface ModalityPreviewData {
   generatedImage?: string;
@@ -77,10 +83,10 @@ export function ModalityPreview({
   }
   if (modality === 'text' && data.value) {
     return (
-      <div className="nodrag nowheel h-full w-full overflow-y-auto whitespace-pre-wrap p-2 text-left text-xs text-white/90">
+      <div className="nodrag nowheel h-full w-full overflow-y-auto whitespace-pre-wrap p-2 text-left text-xs text-foreground">
         {data.value}
       </div>
     );
   }
-  return <span className="px-3 text-center text-xs text-white/60">{emptyLabel}</span>;
+  return <span className="px-3 text-center text-xs text-muted-foreground">{emptyLabel}</span>;
 }

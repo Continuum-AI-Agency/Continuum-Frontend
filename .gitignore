@@ -15,7 +15,11 @@
 
 # next.js
 /.next/
-/.next-shell-review-*/
+# Every ad-hoc dist dir a bench or gate mints (.next-gate, .next-shell-review-*).
+# Not just repo hygiene: Tailwind v4 auto source detection scans anything git does not
+# ignore, and a Turbopack .sst cache is binary — it yields garbage class candidates like
+# `var(--app-$\x00-h)` that fail CSS parsing and 500 EVERY route.
+/.next-*/
 /out/
 
 # production

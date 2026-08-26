@@ -44,6 +44,7 @@ import { csvFirstColumn } from '../../utils/batch/csvFirstColumn';
 import { resolveCreativeAssetDrop } from '../../utils/resolveCreativeAssetDrop';
 import { stageAndUploadReferenceFile } from '../../utils/uploadReferenceFile';
 import { EDGE_COLOR_BY_MODALITY } from '../modalityPreview';
+import { NodeBadge, NodeTitleBar } from '../NodeChrome';
 
 /** Items the node built from a connected upstream node carry this id prefix, so the sync
  *  can tell its own rows from the ones a person added by hand and never clobber theirs. */
@@ -379,24 +380,16 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        <div className="flex items-center gap-2 border-b bg-muted/40 px-2 py-1.5 text-xs font-semibold">
-          <Layers className="size-3.5 shrink-0" />
-          Batch
-          <span
-            data-testid="batch-node-kind"
-            className="ml-auto shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-          >
+        <NodeTitleBar icon={Layers} label="Batch">
+          <NodeBadge data-testid="batch-node-kind">
             {itemType ? BATCH_KIND_LABEL[itemType] : 'Empty'}
-          </span>
-          <span
-            data-testid="batch-node-count"
-            className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground"
-          >
+          </NodeBadge>
+          <NodeBadge data-testid="batch-node-count" className="tabular-nums">
             {items.length}/{MAX_BATCH_ITEMS}
-          </span>
-        </div>
+          </NodeBadge>
+        </NodeTitleBar>
 
-        <NodeContent className="flex h-[calc(100%-30px)] flex-col gap-1.5 p-1.5">
+        <NodeContent className="flex min-h-0 flex-1 flex-col gap-1 p-1">
           {refusals.length > 0 ? (
             <div
               data-testid="batch-node-refusal"
@@ -408,9 +401,9 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
             </div>
           ) : null}
 
-          <div className="nodrag min-h-0 flex-1 overflow-y-auto rounded border bg-muted/20">
+          <div className="nodrag -mx-1 min-h-0 flex-1 overflow-y-auto border-y border-border/60 bg-muted/20">
             {items.length === 0 ? (
-              <p className="p-3 text-center text-[11px] leading-snug text-muted-foreground">
+              <p className="p-2 text-center text-[11px] leading-snug text-muted-foreground">
                 Add items to fan every node downstream out over them.
               </p>
             ) : (

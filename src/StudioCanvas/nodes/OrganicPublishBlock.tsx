@@ -8,7 +8,7 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
-import { CalendarClock, Copy, Send, Trash2 } from 'lucide-react';
+import { CalendarClock, Copy, Send, Share2, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { OrganicPublishNodeData, PlannerDraftNodeData, StudioNode } from '../types';
+import { NodeBadge, NodeTitleBar } from './NodeChrome';
 import {
   fetchOrganicPublishIntent,
   type OrganicPublishIntent,
@@ -239,17 +240,13 @@ export function OrganicPublishBlock({
         handles={{ target: false, source: false }}
         className="h-full w-full overflow-hidden p-0"
       >
-        <NodeContent className="flex h-full flex-col gap-2 p-3 text-xs">
-          <div className="flex items-center justify-between font-medium">
-            <span>Post to Platform</span>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
-              Organic
-            </span>
-          </div>
-
+        <NodeTitleBar icon={Share2} label="Post to Platform">
+          <NodeBadge>Organic</NodeBadge>
+        </NodeTitleBar>
+        <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5 text-xs">
           <p
             data-testid="publisher-handoff-state"
-            className="rounded bg-muted/60 px-2 py-1 text-2xs text-muted-foreground"
+            className="-mx-1.5 -mt-1.5 border-b border-border/60 bg-muted/50 px-2 py-1 text-2xs text-muted-foreground"
           >
             {data.publishedAt
               ? `Published${data.platformPostId ? ` · ${data.platformPostId}` : ''}`

@@ -20,6 +20,7 @@ import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { useModuleFoldStore } from '../stores/useModuleFoldStore';
 import { COLLAPSED_NODE_TYPE, type CollapsedModuleData } from '../utils/moduleFold';
 import { EDGE_COLOR_BY_MODALITY } from './modalityPreview';
+import { NodeTitleBar } from './NodeChrome';
 
 const PORT_ROW_HEIGHT = 22;
 const FIRST_PORT_TOP = 52;
@@ -71,7 +72,7 @@ export function TechniqueNode({ data, selected }: NodeProps<ReactFlowNode<Collap
   return (
     <div
       className="relative w-[240px]"
-      style={{ height: 64 + rows * PORT_ROW_HEIGHT }}
+      style={{ height: 48 + rows * PORT_ROW_HEIGHT }}
       data-testid="technique-node"
       data-module-id={data.moduleId}
     >
@@ -80,22 +81,18 @@ export function TechniqueNode({ data, selected }: NodeProps<ReactFlowNode<Collap
         selected={selected}
         className="size-full overflow-hidden border-border/60 bg-background"
       >
-        <div className="flex items-center gap-2 border-b bg-muted/40 px-2 py-1.5 text-xs font-semibold">
-          <Blocks className="size-3.5 shrink-0" aria-hidden />
-          <span className="truncate" title={data.label}>
-            {data.label}
-          </span>
+        <NodeTitleBar icon={Blocks} label={data.label} title={data.label}>
           <button
             type="button"
             aria-label={`Expand ${data.label}`}
             data-testid="technique-node-expand"
-            className="nodrag ml-auto shrink-0 rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="nodrag shrink-0 rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={() => expandModule(data.moduleId)}
           >
-            <Maximize2 className="size-3.5" aria-hidden />
+            <Maximize2 className="size-3" aria-hidden />
           </button>
-        </div>
-        <NodeContent className="p-1.5">
+        </NodeTitleBar>
+        <NodeContent className="px-1.5 py-1">
           <p className="text-[10px] text-muted-foreground">
             {data.memberCount} {data.memberCount === 1 ? 'node' : 'nodes'} folded
           </p>

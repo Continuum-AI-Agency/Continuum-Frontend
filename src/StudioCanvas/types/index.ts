@@ -202,6 +202,18 @@ export interface ImageNodeData extends BaseNodeData {
   referenceStatus?: 'processing' | 'ready' | 'error';
   // Server error reason for a failed upload, surfaced on the "Failed" badge hover.
   referenceError?: string;
+  // Credit owed to whoever made this picture. Present on stock photos (Unsplash),
+  // whose licence requires the photographer to be named and linked EVERY time the
+  // image is displayed — so it is persisted on the node rather than held in the
+  // picker that fetched it, and ImageNode renders it.
+  attribution?: MediaAttribution;
+}
+
+export interface MediaAttribution {
+  provider: 'unsplash';
+  photographerName: string;
+  photographerUrl: string;
+  sourceUrl: string;
 }
 
 export interface VideoNodeData extends BaseNodeData {

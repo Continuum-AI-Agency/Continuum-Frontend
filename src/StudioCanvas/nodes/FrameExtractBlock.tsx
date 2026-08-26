@@ -17,6 +17,7 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { FrameExtractNodeData } from '../types';
 import { executeWorkflow } from '../utils/executeWorkflow';
+import { NodeOverlayNote, NodeTitleBar } from './NodeChrome';
 
 export function FrameExtractBlock({
   id,
@@ -53,63 +54,57 @@ export function FrameExtractBlock({
         selected={selected}
         className="size-full overflow-hidden border-border/60 bg-background"
       >
-        <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2 text-xs font-semibold">
-          <Camera className="size-3.5" />
-          Continuity Frame
-        </div>
-        <NodeContent className="flex h-full flex-col gap-2 p-2">
-          <div className="flex gap-2">
-            <select
-              className="nodrag h-8 flex-1 rounded-md border bg-background px-2 text-xs"
-              value={selector}
-              onChange={(event) =>
-                updateNodeData(id, {
-                  selector: event.target.value as FrameExtractNodeData['selector'],
-                })
-              }
-            >
-              <option value="first">First frame</option>
-              <option value="last">Last frame</option>
-              <option value="timestamp">Timestamp</option>
-            </select>
-            {selector === 'timestamp' ? (
-              <Input
-                className="nodrag h-8 w-20 text-xs"
-                type="number"
-                min={0}
-                step={0.1}
-                value={data.timestampSec ?? 0}
-                onChange={(event) =>
-                  updateNodeData(id, { timestampSec: Number(event.target.value) })
-                }
-                aria-label="Frame timestamp in seconds"
-              />
-            ) : null}
-          </div>
-          <div className="flex min-h-24 flex-1 items-center justify-center overflow-hidden rounded border bg-black/90">
-            {data.generatedImage ? (
-              // biome-ignore lint/performance/noImgElement: data URLs and signed rendition URLs are valid here.
-              <img
-                src={data.generatedImage}
-                alt={`${selector} extracted video frame`}
-                className="max-h-full max-w-full object-contain"
-              />
-            ) : (
-              <span className="px-3 text-center text-xs text-white/60">
-                {hasVideo ? 'Ready to extract' : 'Connect a video'}
-              </span>
-            )}
-          </div>
-          {data.error ? <p className="text-xs text-destructive">{data.error}</p> : null}
+        <NodeTitleBar icon={Camera} label="Continuity Frame">
+          <select
+            className="nodrag h-5 rounded-sm border border-border/60 bg-background px-1 text-[10px]"
+            value={selector}
+            aria-label="Which frame to extract"
+            onChange={(event) =>
+              updateNodeData(id, {
+                selector: event.target.value as FrameExtractNodeData['selector'],
+              })
+            }
+          >
+            <option value="first">First</option>
+            <option value="last">Last</option>
+            <option value="timestamp">At time</option>
+          </select>
+          {selector === 'timestamp' ? (
+            <Input
+              className="nodrag h-5 w-12 px-1 text-[10px]"
+              type="number"
+              min={0}
+              step={0.1}
+              value={data.timestampSec ?? 0}
+              onChange={(event) => updateNodeData(id, { timestampSec: Number(event.target.value) })}
+              aria-label="Frame timestamp in seconds"
+            />
+          ) : null}
+        </NodeTitleBar>
+        <NodeContent className="group/preview relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/30 p-0">
+          {data.generatedImage ? (
+            // biome-ignore lint/performance/noImgElement: data URLs and signed rendition URLs are valid here.
+            <img
+              src={data.generatedImage}
+              alt={`${selector} extracted video frame`}
+              className="max-h-full max-w-full object-contain"
+            />
+          ) : (
+            <span className="px-3 text-center text-xs text-muted-foreground">
+              {hasVideo ? 'Ready to extract' : 'Connect a video'}
+            </span>
+          )}
           <Button
-            className="nodrag h-8"
+            className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-[11px] opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
             size="sm"
             disabled={!hasVideo || data.isExecuting}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={() => void extract()}
           >
-            {data.isExecuting ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : null}
-            Extract frame
+            {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            Extract
           </Button>
+          {data.error ? <NodeOverlayNote tone="destructive">{data.error}</NodeOverlayNote> : null}
         </NodeContent>
       </CanvasNode>
       <Handle

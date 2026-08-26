@@ -37,7 +37,7 @@ import {
   type Node as ReactFlowNode,
   useUpdateNodeInternals,
 } from '@xyflow/react';
-import { Copy, RefreshCw, Trash2 } from 'lucide-react';
+import { Clapperboard, Copy, RefreshCw, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -55,6 +55,7 @@ import { RenderJobCard } from './api-render/RenderJobCard';
 import { RenderVariableFields } from './api-render/RenderVariableFields';
 import { resolveApiRenderVariables } from './api-render/resolveApiRenderVariables';
 import { useApiRenderJobs } from './api-render/useApiRenderJobs';
+import { NodeBadge, NodeTitleBar } from './NodeChrome';
 import { publishingApi } from './publish/publishingApi';
 
 /**
@@ -608,14 +609,11 @@ export function ApiRenderBlock({
         handles={{ target: false, source: false }}
         className="h-full w-full overflow-hidden p-0"
       >
-        <NodeContent className="flex h-full flex-col gap-2 overflow-y-auto p-3 text-xs">
-          <div className="flex items-center justify-between">
-            <span className="font-medium">API Render</span>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
-              {deliveryEnabled ? 'Render → Meta' : 'Render → Library'}
-            </span>
-          </div>
-          <p className="rounded bg-muted/60 px-2 py-1 text-2xs text-muted-foreground">
+        <NodeTitleBar icon={Clapperboard} label="API Render">
+          <NodeBadge>{deliveryEnabled ? 'Render → Meta' : 'Render → Library'}</NodeBadge>
+        </NodeTitleBar>
+        <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-1.5 text-xs">
+          <p className="-mx-1.5 -mt-1.5 border-b border-border/60 bg-muted/50 px-2 py-1 text-2xs text-muted-foreground">
             Manual handoff. Prepare has no effects; Confirm queues a watermarked render
             {deliveryEnabled ? ' and a PAUSED ad.' : ' into this brand’s library.'}
           </p>
@@ -647,7 +645,7 @@ export function ApiRenderBlock({
           />
 
           {data.templateKey ? (
-            <div className="flex flex-col gap-1 rounded border border-border/70 p-2">
+            <div className="-mx-1.5 flex flex-col gap-1 border-y border-border/60 px-2 py-1.5">
               <span className="text-2xs text-muted-foreground">Saved input sets</span>
               <select
                 aria-label="Saved input set"
@@ -720,7 +718,7 @@ export function ApiRenderBlock({
           ) : null}
 
           {/* biome-ignore lint/a11y/noLabelWithoutControl: wraps the Switch below */}
-          <label className="flex items-center justify-between rounded border border-border/70 p-2">
+          <label className="-mx-1.5 flex items-center justify-between border-y border-border/60 px-2 py-1.5">
             <span className="text-2xs">
               Also create a PAUSED Meta ad
               <span className="block text-muted-foreground">

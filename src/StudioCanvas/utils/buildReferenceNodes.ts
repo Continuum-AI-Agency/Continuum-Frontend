@@ -5,9 +5,17 @@
 
 import type { UnfurlMediaItem } from '@continuum/contracts';
 
+import type { MediaAttribution } from '../types';
 import type { Point } from './layoutImportedNodes';
 
 const NODE_SIZE = 192;
+
+/**
+ * An unfurled item plus, for stock photos, the credit their licence requires on
+ * every display. Carried through to node data so the canvas can render it after
+ * a reload, long after the picker that fetched it is gone.
+ */
+export type ReferenceMediaItem = UnfurlMediaItem & { attribution?: MediaAttribution };
 
 export interface BuiltReferenceNode {
   id: string;
@@ -29,7 +37,7 @@ const fileNameFromUrl = (rawUrl: string): string => {
 };
 
 export function buildReferenceNodes(
-  items: UnfurlMediaItem[],
+  items: ReferenceMediaItem[],
   positions: Point[],
   makeId: () => string,
 ): BuiltReferenceNode[] {
@@ -37,13 +45,14 @@ export function buildReferenceNodes(
     const position = positions[index] ?? { x: 0, y: 0 };
     const fileName = fileNameFromUrl(item.url);
     const style = { width: NODE_SIZE, height: NODE_SIZE };
+    const attribution = item.attribution ? { attribution: item.attribution } : {};
 
     if (item.kind === 'video') {
       return {
         id: makeId(),
         type: 'video',
         position,
-        data: { video: item.url, sourceUrl: item.url, fileName },
+        data: { video: item.url, sourceUrl: item.url, fileName, ...attribution },
         style,
       };
     }
@@ -51,7 +60,7 @@ export function buildReferenceNodes(
       id: makeId(),
       type: 'image',
       position,
-      data: { image: item.url, sourceUrl: item.url, fileName, aspectRatio: '1:1' },
+      data: { image: item.url, sourceUrl: item.url, fileName, aspectRatio: '1:1', ...attribution },
       style,
     };
   });

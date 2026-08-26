@@ -34,6 +34,7 @@ import {
   runExport,
 } from '../../utils/export/runExport';
 import { EDGE_COLOR_BY_MODALITY, MODALITY_LABEL } from '../modalityPreview';
+import { NodeBadge, NodeTitleBar } from '../NodeChrome';
 
 export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<ExportNodeData>>) {
   const executionControls = useWorkflowExecution();
@@ -116,22 +117,16 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
   }, [brandId, data.format, executionControls, id, roomId, updateNodeData]);
 
   return (
-    <div className="relative h-[200px] w-[280px]">
+    <div className="relative h-[160px] w-[240px]">
       <CanvasNode
         handles={{ target: false, source: false }}
         selected={selected}
         className="size-full overflow-hidden border-border/60 bg-background"
       >
-        <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2 text-xs font-semibold">
-          <Download className="size-3.5 shrink-0" />
-          Export
-          {kind ? (
-            <span className="ml-auto shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-              {MODALITY_LABEL[kind]}
-            </span>
-          ) : null}
-        </div>
-        <NodeContent className="flex h-full flex-col gap-2 p-2">
+        <NodeTitleBar icon={Download} label="Export">
+          {kind ? <NodeBadge>{MODALITY_LABEL[kind]}</NodeBadge> : null}
+        </NodeTitleBar>
+        <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
           {kind && format ? (
             <>
               <Select value={format} onValueChange={(next) => updateNodeData(id, { format: next })}>

@@ -55,10 +55,9 @@ function checkCache() {
   // because every entry here used to point somewhere else.
   const cacheLocations = [
     { name: 'Turbopack Dev Cache', path: path.join(rootDir, '.next', 'dev', 'cache') },
-    { name: 'Turbopack Build Cache', path: path.join(rootDir, '.next', 'build', 'cache') },
+    { name: 'Turbopack Build Cache', path: path.join(rootDir, '.next', 'cache', 'turbopack') },
     { name: 'Fetch Cache', path: path.join(rootDir, '.next', 'cache', 'fetch-cache') },
     { name: 'Image Cache', path: path.join(rootDir, '.next', 'cache', 'images') },
-    { name: 'Webpack Cache', path: path.join(rootDir, '.next', 'cache', 'webpack') },
     { name: 'Node Modules Cache', path: path.join(rootDir, 'node_modules', '.cache') },
   ];
 

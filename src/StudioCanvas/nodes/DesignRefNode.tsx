@@ -43,6 +43,7 @@ import { cn } from '@/lib/utils';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import { toBackendPayload } from '../utils/buildNodePayload';
+import { NodeOverlayNote, NodeTitleBar } from './NodeChrome';
 
 const SPECIMEN_BUCKET = 'brand-docs';
 const SPECIMEN_SIGNED_URL_TTL_SECONDS = 60 * 60 * 8;
@@ -179,11 +180,21 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
         selected={selected}
         className="size-full overflow-hidden border-border/60 bg-background"
       >
-        <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2 text-xs font-semibold">
-          <Gem className="size-3.5" />
-          Design Reference
-        </div>
-        <NodeContent className="flex h-full flex-col gap-2 p-2">
+        <NodeTitleBar icon={Gem} label="Design Reference">
+          <select
+            className="nodrag h-5 rounded-sm border border-border/60 bg-background px-1 text-[10px]"
+            value={mode}
+            aria-label="What this reference emits"
+            onChange={(event) => updateNodeData(id, { mode: event.target.value as DesignRefMode })}
+          >
+            <option value="both">Specimen + tokens</option>
+            <option value="image">Specimen only</option>
+            <option value="tokens">Tokens only</option>
+          </select>
+        </NodeTitleBar>
+
+        {/* The controls are a strip, not a stack — one row of presets, one select. */}
+        <div className="flex shrink-0 flex-col gap-1 border-b border-border/60 p-1">
           <div className="flex gap-1">
             {DESIGN_REF_PRESETS.map((preset) => (
               <Button
@@ -192,16 +203,15 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
                 size="sm"
                 variant={section === preset.section ? 'default' : 'outline'}
                 title={preset.hint}
-                className="nodrag h-7 flex-1 px-1 text-2xs"
+                className="nodrag h-6 flex-1 px-1 text-[10px]"
                 onClick={() => updateNodeData(id, { section: preset.section, mode: preset.mode })}
               >
                 {preset.label}
               </Button>
             ))}
           </div>
-
           <select
-            className="nodrag h-8 rounded-md border bg-background px-2 text-xs"
+            className="nodrag h-6 rounded-sm border border-border/60 bg-background px-1 text-[11px]"
             value={section ?? ''}
             aria-label="Design system section"
             onChange={(event) =>
@@ -217,76 +227,66 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
               </option>
             ))}
           </select>
+        </div>
 
-          <select
-            className="nodrag h-8 rounded-md border bg-background px-2 text-xs"
-            value={mode}
-            aria-label="What this reference emits"
-            onChange={(event) => updateNodeData(id, { mode: event.target.value as DesignRefMode })}
-          >
-            <option value="both">Specimen and tokens</option>
-            <option value="image">Specimen only</option>
-            <option value="tokens">Tokens only</option>
-          </select>
-
+        <NodeContent className="group/preview relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/30 p-0">
           {wantsImage ? (
-            <div className="flex min-h-20 flex-1 items-center justify-center overflow-hidden rounded border bg-muted/30">
-              {data.specimenUrl ? (
-                // biome-ignore lint/performance/noImgElement: signed storage URLs and data URLs are valid here.
-                <img
-                  src={data.specimenUrl}
-                  alt={section ? `${DESIGN_SECTION_LABELS[section]} specimen` : 'Section specimen'}
-                  className="max-h-full max-w-full object-contain"
-                />
-              ) : (
-                <span className="px-3 text-center text-2xs text-muted-foreground">
-                  {!section
-                    ? 'Choose a section'
-                    : isLoading
-                      ? 'Reading the design system…'
-                      : !snapshot
-                        ? 'This brand has no design system yet'
-                        : 'No image in your system for this section — generate one'}
-                </span>
-              )}
-            </div>
+            data.specimenUrl ? (
+              // biome-ignore lint/performance/noImgElement: signed storage URLs and data URLs are valid here.
+              <img
+                src={data.specimenUrl}
+                alt={section ? `${DESIGN_SECTION_LABELS[section]} specimen` : 'Section specimen'}
+                className="max-h-full max-w-full object-contain"
+              />
+            ) : (
+              <span className="px-3 text-center text-2xs text-muted-foreground">
+                {!section
+                  ? 'Choose a section'
+                  : isLoading
+                    ? 'Reading the design system…'
+                    : !snapshot
+                      ? 'This brand has no design system yet'
+                      : 'No image in your system for this section — generate one'}
+              </span>
+            )
           ) : null}
 
           {wantsText && data.tokenSummary ? (
-            <p className="line-clamp-2 rounded bg-muted/30 px-2 py-1 text-2xs text-muted-foreground">
+            <p className="nodrag nowheel size-full overflow-y-auto p-1.5 text-left text-2xs text-muted-foreground">
               {data.tokenSummary.replace(/<\/?design_system>/g, '').trim()}
             </p>
           ) : null}
 
-          {error ? <p className="text-2xs text-destructive">{error}</p> : null}
+          {wantsImage && data.specimenSource !== 'exemplar' ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-[10px] opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
+              disabled={!section || !brandId || isGenerating}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={() => void generateSpecimen()}
+            >
+              {isGenerating ? (
+                <Loader2 className="mr-1 size-3 animate-spin" />
+              ) : (
+                <Sparkles className="mr-1 size-3" />
+              )}
+              {data.specimenUrl ? 'Regenerate' : 'Generate'}
+            </Button>
+          ) : null}
 
-          <div className="flex items-center justify-between gap-2">
-            <span
+          {error ? <NodeOverlayNote tone="destructive">{error}</NodeOverlayNote> : null}
+          {!error && provenance ? (
+            <NodeOverlayNote
               className={cn(
-                'truncate text-2xs',
-                data.specimenSource === 'exemplar' ? 'text-brand-primary' : 'text-muted-foreground',
+                'right-auto max-w-[60%] truncate',
+                data.specimenSource === 'exemplar' && 'text-brand-primary',
               )}
             >
-              {provenance ?? ''}
-            </span>
-            {wantsImage && data.specimenSource !== 'exemplar' ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="nodrag h-7 shrink-0 px-2 text-2xs"
-                disabled={!section || !brandId || isGenerating}
-                onClick={() => void generateSpecimen()}
-              >
-                {isGenerating ? (
-                  <Loader2 className="mr-1 size-3 animate-spin" />
-                ) : (
-                  <Sparkles className="mr-1 size-3" />
-                )}
-                {data.specimenUrl ? 'Regenerate' : 'Generate'}
-              </Button>
-            ) : null}
-          </div>
+              {provenance}
+            </NodeOverlayNote>
+          ) : null}
         </NodeContent>
       </CanvasNode>
 

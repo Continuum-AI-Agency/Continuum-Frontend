@@ -108,7 +108,16 @@ const transformKeyframesFor = (clip: {
   return keyframes.length >= 2 ? keyframes : undefined;
 };
 
-const effectsFor = (clip: {
+/**
+ * A V2 clip's effect instances back into the render spec `composeTimeline` consumes.
+ *
+ * Exported because it is the seam where a declared effect becomes a rendered one, and
+ * a bench that re-implemented it would be proving a copy works. Paired with
+ * `effectsFor` in `nodes/timeline/editorProjectV2Projection.ts` — that writes these
+ * instances, this reads them; changing one without the other reopens the gap where
+ * `chroma_key` sat in the schema for a whole release and never moved a pixel.
+ */
+export const clipEffectSpecFromEditorClip = (clip: {
   timelineStartSec: number;
   durationSec: number;
   playbackRate?: number;
@@ -172,8 +181,44 @@ const effectsFor = (clip: {
       ...(Object.values(adjustments).some((value) => value !== undefined) ? { adjustments } : {}),
     };
   })(),
+  ...(() => {
+    // `background_removal` is treated as a green-screen key, because that is what this
+    // pipeline can actually do — no segmentation model ships in the browser renderer.
+    // Defaults are `chromaKeyConfig`'s own, so an instance stored with no parameters
+    // keys green rather than silently doing nothing.
+    const key = clip.effects?.find(
+      (candidate) =>
+        candidate.enabled &&
+        (candidate.effectType === 'chroma_key' || candidate.effectType === 'background_removal'),
+    );
+    if (!key) return {};
+    return {
+      chromaKey: {
+        color: stringParameter(key.parameters.color) ?? '#00ff00',
+        tolerance: numberParameter(key.parameters.tolerance) ?? 0.3,
+        softness: numberParameter(key.parameters.softness) ?? 0.1,
+      },
+    };
+  })(),
+  ...(() => {
+    const tint = clip.effects?.find(
+      (candidate) => candidate.enabled && candidate.effectId === 'tint',
+    );
+    const color = tint ? stringParameter(tint.parameters.color) : undefined;
+    const amount = tint ? numberParameter(tint.parameters.amount) : undefined;
+    return color && amount !== undefined && amount > 0 ? { tint: { color, amount } } : {};
+  })(),
+  ...(() => {
+    const corner = clip.effects?.find(
+      (candidate) => candidate.enabled && candidate.effectId === 'corner_radius',
+    );
+    const radiusFrac = corner ? numberParameter(corner.parameters.radiusFrac) : undefined;
+    return radiusFrac !== undefined && radiusFrac > 0 ? { cornerRadiusFrac: radiusFrac } : {};
+  })(),
   ...(transformKeyframesFor(clip) ? { keyframes: transformKeyframesFor(clip) } : {}),
 });
+
+const effectsFor = clipEffectSpecFromEditorClip;
 
 const transitionFor = (transition: EditorTransition | undefined): ClipTransition | undefined => {
   if (!transition || transition.transitionType === 'cut') return undefined;

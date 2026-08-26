@@ -2283,6 +2283,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_goal_snapshot: { Args: { p_goal_id: string }; Returns: Json }
       get_goal_storage_object_owner: {
         Args: { p_bucket_id: string; p_name: string }
         Returns: string
@@ -3986,6 +3987,7 @@ export type Database = {
           claimed_at: string | null
           completed_at: string | null
           deadline_at: string | null
+          email_attempts: number
           email_claimed_at: string | null
           email_error: string | null
           email_status: string
@@ -3996,6 +3998,7 @@ export type Database = {
           execution_summary: Json | null
           execution_user_id: string | null
           heartbeat_at: string | null
+          next_email_attempt_at: string
           not_before: string
           origin_env: string | null
           recipients_snapshot: Json | null
@@ -4023,6 +4026,7 @@ export type Database = {
           claimed_at?: string | null
           completed_at?: string | null
           deadline_at?: string | null
+          email_attempts?: number
           email_claimed_at?: string | null
           email_error?: string | null
           email_status?: string
@@ -4033,6 +4037,7 @@ export type Database = {
           execution_summary?: Json | null
           execution_user_id?: string | null
           heartbeat_at?: string | null
+          next_email_attempt_at?: string
           not_before?: string
           origin_env?: string | null
           recipients_snapshot?: Json | null
@@ -4060,6 +4065,7 @@ export type Database = {
           claimed_at?: string | null
           completed_at?: string | null
           deadline_at?: string | null
+          email_attempts?: number
           email_claimed_at?: string | null
           email_error?: string | null
           email_status?: string
@@ -4070,6 +4076,7 @@ export type Database = {
           execution_summary?: Json | null
           execution_user_id?: string | null
           heartbeat_at?: string | null
+          next_email_attempt_at?: string
           not_before?: string
           origin_env?: string | null
           recipients_snapshot?: Json | null
@@ -7082,6 +7089,204 @@ export type Database = {
           },
         ]
       }
+      email_deliveries: {
+        Row: {
+          accepted_at: string | null
+          attempt_count: number
+          brand_id: string | null
+          classification: string
+          created_at: string
+          delivered_at: string | null
+          email_kind: string
+          failed_at: string | null
+          id: string
+          idempotency_key: string
+          last_error_code: string | null
+          last_provider_event_at: string | null
+          next_attempt_at: string
+          provider_message_id: string | null
+          recipient_class: string
+          recipient_email: string
+          source_id: string
+          source_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          attempt_count?: number
+          brand_id?: string | null
+          classification: string
+          created_at?: string
+          delivered_at?: string | null
+          email_kind: string
+          failed_at?: string | null
+          id?: string
+          idempotency_key: string
+          last_error_code?: string | null
+          last_provider_event_at?: string | null
+          next_attempt_at?: string
+          provider_message_id?: string | null
+          recipient_class?: string
+          recipient_email: string
+          source_id: string
+          source_type: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          attempt_count?: number
+          brand_id?: string | null
+          classification?: string
+          created_at?: string
+          delivered_at?: string | null
+          email_kind?: string
+          failed_at?: string | null
+          id?: string
+          idempotency_key?: string
+          last_error_code?: string | null
+          last_provider_event_at?: string | null
+          next_attempt_at?: string
+          provider_message_id?: string | null
+          recipient_class?: string
+          recipient_email?: string
+          source_id?: string
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_deliveries_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "email_deliveries_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_delivery_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          occurred_at: string
+          provider_event_id: string
+          provider_message_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          occurred_at: string
+          provider_event_id: string
+          provider_message_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          provider_event_id?: string
+          provider_message_id?: string
+        }
+        Relationships: []
+      }
+      email_suppressions: {
+        Row: {
+          created_at: string
+          id: string
+          reason: string
+          recipient_email: string
+          scope: string
+          scope_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reason: string
+          recipient_email: string
+          scope: string
+          scope_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reason?: string
+          recipient_email?: string
+          scope?: string
+          scope_id?: string
+        }
+        Relationships: []
+      }
+      email_unsubscribe_tokens: {
+        Row: {
+          brand_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          recipient_email: string
+          scope: string
+          scope_id: string
+          source_id: string
+          source_type: string
+          token_hash: string
+          updated_at: string
+          used_at: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          recipient_email: string
+          scope: string
+          scope_id: string
+          source_id: string
+          source_type: string
+          token_hash: string
+          updated_at?: string
+          used_at?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          recipient_email?: string
+          scope?: string
+          scope_id?: string
+          source_id?: string
+          source_type?: string
+          token_hash?: string
+          updated_at?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_unsubscribe_tokens_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "email_unsubscribe_tokens_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       first_value_report_jobs: {
         Row: {
           attempts: number
@@ -7218,6 +7423,9 @@ export type Database = {
           email: string
           expires_at: string
           id: string
+          last_email_error: string | null
+          last_email_message_id: string | null
+          last_emailed_at: string | null
           revoked_at: string | null
           role: string
           token_hash: string
@@ -7232,6 +7440,9 @@ export type Database = {
           email: string
           expires_at: string
           id?: string
+          last_email_error?: string | null
+          last_email_message_id?: string | null
+          last_emailed_at?: string | null
           revoked_at?: string | null
           role?: string
           token_hash: string
@@ -7246,6 +7457,9 @@ export type Database = {
           email?: string
           expires_at?: string
           id?: string
+          last_email_error?: string | null
+          last_email_message_id?: string | null
+          last_emailed_at?: string | null
           revoked_at?: string | null
           role?: string
           token_hash?: string
@@ -8266,6 +8480,7 @@ export type Database = {
           requested_by: string | null
           resend_message_ids: string[]
           status: string
+          updated_at: string
         }
         Insert: {
           brand_id: string
@@ -8277,6 +8492,7 @@ export type Database = {
           requested_by?: string | null
           resend_message_ids?: string[]
           status?: string
+          updated_at?: string
         }
         Update: {
           brand_id?: string
@@ -8288,6 +8504,7 @@ export type Database = {
           requested_by?: string | null
           resend_message_ids?: string[]
           status?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -10104,6 +10321,16 @@ export type Database = {
         }
         Returns: string
       }
+      apply_email_delivery_event: {
+        Args: {
+          p_event_type: string
+          p_occurred_at: string
+          p_provider_event_id: string
+          p_provider_message_id: string
+          p_status: string
+        }
+        Returns: boolean
+      }
       attach_paid_scaffold_node_creative: {
         Args: {
           p_asset_id: string
@@ -10178,6 +10405,14 @@ export type Database = {
           timezone: string
         }[]
       }
+      claim_email_delivery: {
+        Args: {
+          p_recipient_email: string
+          p_source_id: string
+          p_source_type: string
+        }
+        Returns: boolean
+      }
       claim_first_value_report_jobs: {
         Args: { p_limit?: number; p_lock_owner?: string }
         Returns: {
@@ -10199,6 +10434,7 @@ export type Database = {
           claimed_at: string | null
           completed_at: string | null
           deadline_at: string | null
+          email_attempts: number
           email_claimed_at: string | null
           email_error: string | null
           email_status: string
@@ -10209,6 +10445,7 @@ export type Database = {
           execution_summary: Json | null
           execution_user_id: string | null
           heartbeat_at: string | null
+          next_email_attempt_at: string
           not_before: string
           origin_env: string | null
           recipients_snapshot: Json | null
@@ -10602,6 +10839,7 @@ export type Database = {
         Args: { p_brand_id: string; p_payload: Json; p_preview_run_id: string }
         Returns: string
       }
+      enqueue_continuum_report_schedules: { Args: never; Returns: number }
       enqueue_creative_strategy_job: {
         Args: { p_brand_id: string; p_payload: Json; p_trigger: string }
         Returns: string
@@ -10625,6 +10863,17 @@ export type Database = {
           run_id: string
           updated_at: string
         }[]
+      }
+      finalize_email_delivery: {
+        Args: {
+          p_error_code?: string
+          p_provider_message_id?: string
+          p_recipient_email: string
+          p_source_id: string
+          p_source_type: string
+          p_status: string
+        }
+        Returns: boolean
       }
       get_active_brand_id: { Args: never; Returns: string }
       get_brand_integration_summary: {
@@ -10892,6 +11141,7 @@ export type Database = {
         }
       }
       purge_automation_workflow_evidence: { Args: never; Returns: Json }
+      purge_email_delivery_history: { Args: never; Returns: Json }
       record_audience_group_member_result: {
         Args: {
           p_error_message?: string
@@ -10994,6 +11244,16 @@ export type Database = {
       reschedule_brand_guideline_job: {
         Args: { p_job_id: string; p_not_before: string; p_worker_id: string }
         Returns: boolean
+      }
+      reserve_report_send: {
+        Args: {
+          p_brand_id: string
+          p_recipients: string[]
+          p_report_type: string
+          p_requested_by: string
+          p_within?: string
+        }
+        Returns: string
       }
       resolve_admin_user_directory_name: {
         Args: { metadata: Json }
@@ -12763,6 +13023,51 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_digest_subscriptions: {
+        Row: {
+          active: boolean
+          brand_id: string
+          channel_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          last_sent_at: string | null
+          platform: string
+          prompt: string
+          send_hour_local: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          active?: boolean
+          brand_id: string
+          channel_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_sent_at?: string | null
+          platform: string
+          prompt: string
+          send_hour_local?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          active?: boolean
+          brand_id?: string
+          channel_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_sent_at?: string | null
+          platform?: string
+          prompt?: string
+          send_hour_local?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       chat_link_token_uses: {
         Row: {
           consumed_at: string
@@ -12803,6 +13108,7 @@ export type Database = {
           platform: string
           platform_user_id: string
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           ad_account_id?: string | null
@@ -12813,6 +13119,7 @@ export type Database = {
           platform: string
           platform_user_id: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           ad_account_id?: string | null
@@ -12822,6 +13129,61 @@ export type Database = {
           id?: string
           platform?: string
           platform_user_id?: string
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      slack_installations: {
+        Row: {
+          app_id: string
+          bot_token_encrypted: string
+          bot_user_id: string
+          enterprise_id: string | null
+          installation_id: string
+          installed_at: string
+          installed_by_platform_user_id: string | null
+          installed_by_user_id: string | null
+          is_enterprise_install: boolean
+          revoked_at: string | null
+          scopes: string[] | null
+          status: string
+          team_id: string
+          team_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          app_id: string
+          bot_token_encrypted: string
+          bot_user_id: string
+          enterprise_id?: string | null
+          installation_id: string
+          installed_at?: string
+          installed_by_platform_user_id?: string | null
+          installed_by_user_id?: string | null
+          is_enterprise_install?: boolean
+          revoked_at?: string | null
+          scopes?: string[] | null
+          status?: string
+          team_id: string
+          team_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          app_id?: string
+          bot_token_encrypted?: string
+          bot_user_id?: string
+          enterprise_id?: string | null
+          installation_id?: string
+          installed_at?: string
+          installed_by_platform_user_id?: string | null
+          installed_by_user_id?: string | null
+          is_enterprise_install?: boolean
+          revoked_at?: string | null
+          scopes?: string[] | null
+          status?: string
+          team_id?: string
+          team_name?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -14250,6 +14612,77 @@ export type Database = {
   }
   media: {
     Tables: {
+      ad_render_jobs: {
+        Row: {
+          binding_id: string
+          brand_id: string
+          contract_hash: string
+          created_at: string
+          created_by: string
+          delivery_receipts: Json
+          delivery_target: Json
+          error: string | null
+          finished_at: string | null
+          id: string
+          idempotency_key: string
+          outputs: Json
+          render_input: Json
+          status: string
+          task_uid: string | null
+          template_key: string
+          template_name: string
+          updated_at: string
+        }
+        Insert: {
+          binding_id: string
+          brand_id: string
+          contract_hash: string
+          created_at?: string
+          created_by: string
+          delivery_receipts?: Json
+          delivery_target?: Json
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key: string
+          outputs?: Json
+          render_input?: Json
+          status?: string
+          task_uid?: string | null
+          template_key: string
+          template_name: string
+          updated_at?: string
+        }
+        Update: {
+          binding_id?: string
+          brand_id?: string
+          contract_hash?: string
+          created_at?: string
+          created_by?: string
+          delivery_receipts?: Json
+          delivery_target?: Json
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string
+          outputs?: Json
+          render_input?: Json
+          status?: string
+          task_uid?: string | null
+          template_key?: string
+          template_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_render_jobs_binding_brand_fk"
+            columns: ["binding_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "render_workspace_bindings"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
       asset_campaigns: {
         Row: {
           asset_id: string
@@ -14303,6 +14736,8 @@ export type Database = {
           linked_at: string
           platform: string | null
           platform_post_id: string | null
+          producer_id: string | null
+          producer_kind: string | null
           surface: string
           version_number: number | null
         }
@@ -14319,6 +14754,8 @@ export type Database = {
           linked_at?: string
           platform?: string | null
           platform_post_id?: string | null
+          producer_id?: string | null
+          producer_kind?: string | null
           surface: string
           version_number?: number | null
         }
@@ -14335,6 +14772,8 @@ export type Database = {
           linked_at?: string
           platform?: string | null
           platform_post_id?: string | null
+          producer_id?: string | null
+          producer_kind?: string | null
           surface?: string
           version_number?: number | null
         }
@@ -15098,6 +15537,7 @@ export type Database = {
           progress: number
           result_asset_ids: string[]
           result_asset_refs: Json
+          service_worker_id: string | null
           source_id: string
           source_revision: string
           state: string
@@ -15124,6 +15564,7 @@ export type Database = {
           progress?: number
           result_asset_ids?: string[]
           result_asset_refs?: Json
+          service_worker_id?: string | null
           source_id: string
           source_revision: string
           state?: string
@@ -15150,6 +15591,7 @@ export type Database = {
           progress?: number
           result_asset_ids?: string[]
           result_asset_refs?: Json
+          service_worker_id?: string | null
           source_id?: string
           source_revision?: string
           state?: string
@@ -15252,6 +15694,7 @@ export type Database = {
           deleted_at: string | null
           external_reviewer_session_id: string | null
           id: string
+          mentions: Json
           parent_comment_id: string | null
           resolved_at: string | null
           resolved_by: string | null
@@ -15269,6 +15712,7 @@ export type Database = {
           deleted_at?: string | null
           external_reviewer_session_id?: string | null
           id?: string
+          mentions?: Json
           parent_comment_id?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
@@ -15286,6 +15730,7 @@ export type Database = {
           deleted_at?: string | null
           external_reviewer_session_id?: string | null
           id?: string
+          mentions?: Json
           parent_comment_id?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
@@ -15443,6 +15888,7 @@ export type Database = {
           provider_operation_id: string | null
           request: Json
           result_asset_id: string | null
+          result_payload: Json | null
           result_version_id: string | null
           retryable: boolean
           shot_id: string | null
@@ -15470,6 +15916,7 @@ export type Database = {
           provider_operation_id?: string | null
           request: Json
           result_asset_id?: string | null
+          result_payload?: Json | null
           result_version_id?: string | null
           retryable?: boolean
           shot_id?: string | null
@@ -15497,6 +15944,7 @@ export type Database = {
           provider_operation_id?: string | null
           request?: Json
           result_asset_id?: string | null
+          result_payload?: Json | null
           result_version_id?: string | null
           retryable?: boolean
           shot_id?: string | null
@@ -16004,6 +16452,119 @@ export type Database = {
           },
         ]
       }
+      render_input_sets: {
+        Row: {
+          brand_id: string
+          contract_hash: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          template_key: string
+          updated_at: string
+          variables: Json
+        }
+        Insert: {
+          brand_id: string
+          contract_hash: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          template_key: string
+          updated_at?: string
+          variables?: Json
+        }
+        Update: {
+          brand_id?: string
+          contract_hash?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          template_key?: string
+          updated_at?: string
+          variables?: Json
+        }
+        Relationships: []
+      }
+      render_template_memberships: {
+        Row: {
+          binding_id: string
+          brand_id: string
+          created_at: string
+          enabled: boolean
+          id: string
+          template_key: string
+          updated_at: string
+        }
+        Insert: {
+          binding_id: string
+          brand_id: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          template_key: string
+          updated_at?: string
+        }
+        Update: {
+          binding_id?: string
+          brand_id?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          template_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_template_membership_binding_brand_fk"
+            columns: ["binding_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "render_workspace_bindings"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
+      render_workspace_bindings: {
+        Row: {
+          brand_id: string
+          client_key: string
+          created_at: string
+          created_by: string | null
+          enabled: boolean
+          environment_key: string
+          id: string
+          is_default: boolean
+          picinst: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          client_key: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          environment_key: string
+          id?: string
+          is_default?: boolean
+          picinst: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          client_key?: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          environment_key?: string
+          id?: string
+          is_default?: boolean
+          picinst?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       review_assignments: {
         Row: {
           brand_id: string
@@ -16452,6 +17013,7 @@ export type Database = {
           progress: number
           result_asset_ids: string[]
           result_asset_refs: Json
+          service_worker_id: string | null
           source_id: string
           source_revision: string
           state: string
@@ -16487,6 +17049,7 @@ export type Database = {
           provider_operation_id: string | null
           request: Json
           result_asset_id: string | null
+          result_payload: Json | null
           result_version_id: string | null
           retryable: boolean
           shot_id: string | null
@@ -16497,6 +17060,82 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "editor_generation_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_service_url_ingest_job: {
+        Args: {
+          p_job_id?: string
+          p_lease_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      commit_editor_project_revision: {
+        Args: {
+          p_actor_id: string
+          p_actor_type: string
+          p_batch_id: string
+          p_document: Json
+          p_expected_fingerprint: string
+          p_expected_revision: number
+          p_idempotency_key: string
+          p_new_fingerprint: string
+          p_project_id: string
+          p_stage: string
+          p_summary: string
+          p_title: string
+        }
+        Returns: {
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          document: Json
+          fingerprint: string
+          id: string
+          revision: number
+          schema_version: number
+          stage: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "editor_projects"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -16528,6 +17167,155 @@ export type Database = {
           progress: number
           result_asset_ids: string[]
           result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      complete_service_url_ingest_job: {
+        Args: {
+          p_job_id: string
+          p_lease_token: string
+          p_result_asset_ids: string[]
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      create_editor_project: {
+        Args: {
+          p_actor_id: string
+          p_binding_type?: string
+          p_brand_id: string
+          p_document: Json
+          p_external_id?: string
+          p_fingerprint: string
+          p_project_id: string
+          p_stage: string
+          p_title: string
+        }
+        Returns: {
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          document: Json
+          fingerprint: string
+          id: string
+          revision: number
+          schema_version: number
+          stage: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "editor_projects"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      enqueue_editor_generation_batch: {
+        Args: {
+          p_input_fingerprint: string
+          p_kind: string
+          p_project_id: string
+          p_requested_by: string
+          p_requests: Json
+          p_shot_id: string
+        }
+        Returns: {
+          brand_id: string
+          completed_at: string | null
+          completed_count: number
+          created_at: string
+          failed_count: number
+          id: string
+          input_fingerprint: string
+          kind: string
+          project_id: string
+          requested_by: string | null
+          requested_count: number
+          shot_id: string | null
+          state: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "editor_generation_batches"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      fail_service_url_ingest_job: {
+        Args: {
+          p_error_code: string
+          p_error_message: string
+          p_job_id: string
+          p_lease_token: string
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
           source_id: string
           source_revision: string
           state: string
@@ -16542,6 +17330,50 @@ export type Database = {
         }
       }
       head_version_number: { Args: { p_asset_id: string }; Returns: number }
+      heartbeat_service_url_ingest_job: {
+        Args: {
+          p_job_id: string
+          p_lease_seconds?: number
+          p_lease_token: string
+          p_phase: string
+          p_progress: number
+          p_state: string
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       library_browse_facets: {
         Args: {
           p_brand_id: string
@@ -16668,6 +17500,7 @@ export type Database = {
           title: string
         }[]
       }
+      reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
       search_assets_ranked: {
         Args: {
           filter_asset_ids?: string[]
@@ -16960,54 +17793,63 @@ export type Database = {
           aborted: boolean
           brand_id: string
           created_at: string
+          duration_ms: number | null
           finish_reason: string | null
           id: string
           input_tokens: number | null
           lane: string | null
           outcome: string
           output_tokens: number | null
+          reasoning_tokens: number | null
           run_id: string | null
           session_id: string
           steps: number
           tool_calls: number
           tool_errors: number
           total_tokens: number | null
+          ttft_ms: number | null
           user_id: string
         }
         Insert: {
           aborted?: boolean
           brand_id: string
           created_at?: string
+          duration_ms?: number | null
           finish_reason?: string | null
           id?: string
           input_tokens?: number | null
           lane?: string | null
           outcome: string
           output_tokens?: number | null
+          reasoning_tokens?: number | null
           run_id?: string | null
           session_id: string
           steps?: number
           tool_calls?: number
           tool_errors?: number
           total_tokens?: number | null
+          ttft_ms?: number | null
           user_id: string
         }
         Update: {
           aborted?: boolean
           brand_id?: string
           created_at?: string
+          duration_ms?: number | null
           finish_reason?: string | null
           id?: string
           input_tokens?: number | null
           lane?: string | null
           outcome?: string
           output_tokens?: number | null
+          reasoning_tokens?: number | null
           run_id?: string | null
           session_id?: string
           steps?: number
           tool_calls?: number
           tool_errors?: number
           total_tokens?: number | null
+          ttft_ms?: number | null
           user_id?: string
         }
         Relationships: []
@@ -17128,6 +17970,10 @@ export type Database = {
           brand_id: string
           caller_run_id: string | null
           caller_session_id: string | null
+          chat_channel_id: string | null
+          chat_platform: string | null
+          chat_platform_user_id: string | null
+          chat_workspace_id: string | null
           created_at: string
           cross_call_id: string | null
           id: number
@@ -17150,6 +17996,10 @@ export type Database = {
           brand_id: string
           caller_run_id?: string | null
           caller_session_id?: string | null
+          chat_channel_id?: string | null
+          chat_platform?: string | null
+          chat_platform_user_id?: string | null
+          chat_workspace_id?: string | null
           created_at?: string
           cross_call_id?: string | null
           id?: never
@@ -17172,6 +18022,10 @@ export type Database = {
           brand_id?: string
           caller_run_id?: string | null
           caller_session_id?: string | null
+          chat_channel_id?: string | null
+          chat_platform?: string | null
+          chat_platform_user_id?: string | null
+          chat_workspace_id?: string | null
           created_at?: string
           cross_call_id?: string | null
           id?: never
@@ -18257,6 +19111,7 @@ export type Database = {
     Tables: {
       ad_breakdown_daily: {
         Row: {
+          action_values: Json
           actions: Json
           ad_account_id: string
           ad_id: string
@@ -18272,11 +19127,14 @@ export type Database = {
           link_clicks: number
           observed_at: string
           spend: number
+          video_3s: number | null
           video_p25: number | null
+          video_p50: number | null
           video_p75: number | null
           video_thruplays: number | null
         }
         Insert: {
+          action_values?: Json
           actions?: Json
           ad_account_id: string
           ad_id: string
@@ -18292,11 +19150,14 @@ export type Database = {
           link_clicks?: number
           observed_at?: string
           spend?: number
+          video_3s?: number | null
           video_p25?: number | null
+          video_p50?: number | null
           video_p75?: number | null
           video_thruplays?: number | null
         }
         Update: {
+          action_values?: Json
           actions?: Json
           ad_account_id?: string
           ad_id?: string
@@ -18312,7 +19173,9 @@ export type Database = {
           link_clicks?: number
           observed_at?: string
           spend?: number
+          video_3s?: number | null
           video_p25?: number | null
+          video_p50?: number | null
           video_p75?: number | null
           video_thruplays?: number | null
         }
@@ -19054,6 +19917,7 @@ export type Database = {
           origin_platform: string | null
           origin_platform_user_id: string | null
           origin_thread_id: string | null
+          origin_workspace_id: string | null
           status: string
           step_index: number
           step_name: string | null
@@ -19082,6 +19946,7 @@ export type Database = {
           origin_platform?: string | null
           origin_platform_user_id?: string | null
           origin_thread_id?: string | null
+          origin_workspace_id?: string | null
           status?: string
           step_index?: number
           step_name?: string | null
@@ -19110,6 +19975,7 @@ export type Database = {
           origin_platform?: string | null
           origin_platform_user_id?: string | null
           origin_thread_id?: string | null
+          origin_workspace_id?: string | null
           status?: string
           step_index?: number
           step_name?: string | null
@@ -19125,6 +19991,18 @@ export type Database = {
     }
     Functions: {
       _assert_brand: { Args: { p_brand_id: string }; Returns: undefined }
+      _kpi_count: {
+        Args: {
+          p_actions: Json
+          p_clicks: number
+          p_impressions: number
+          p_kpi: string
+          p_link_clicks: number
+          p_thruplays: number
+        }
+        Returns: number
+      }
+      _purchase_count: { Args: { p_actions: Json }; Returns: number }
       claim_next_creative_label_job: {
         Args: { p_env?: string; p_lease_ttl_sec: number; p_worker_id: string }
         Returns: {
@@ -19484,324 +20362,630 @@ export type Database = {
       }
       tool_events: {
         Row: {
-          brand_id: string
+          action: string | null
+          brand_id: string | null
+          bytes_in: number | null
           bytes_out: number | null
-          cache_hit: boolean
+          cache_hit: boolean | null
           client_id: string | null
           client_name: string | null
+          client_profile: string | null
           created_at: string
-          duration_ms: number
+          dimensions: Json
+          duration_ms: number | null
           email: string | null
           error_code: string | null
+          event_id: string
+          event_kind: string
+          event_name: string
           id: number
+          method: string | null
+          mount_path: string | null
           params_hash: string | null
+          request_id: string | null
+          result_status: string
           session_id: string | null
           status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
+          tool: string | null
+          transport: string | null
           user_id: string
         }
         Insert: {
-          brand_id: string
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
           bytes_out?: number | null
-          cache_hit?: boolean
+          cache_hit?: boolean | null
           client_id?: string | null
           client_name?: string | null
+          client_profile?: string | null
           created_at?: string
-          duration_ms: number
+          dimensions?: Json
+          duration_ms?: number | null
           email?: string | null
           error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
           id?: never
+          method?: string | null
+          mount_path?: string | null
           params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
           session_id?: string | null
           status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
+          tool?: string | null
+          transport?: string | null
           user_id: string
         }
         Update: {
-          brand_id?: string
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
           bytes_out?: number | null
-          cache_hit?: boolean
+          cache_hit?: boolean | null
           client_id?: string | null
           client_name?: string | null
+          client_profile?: string | null
           created_at?: string
-          duration_ms?: number
+          dimensions?: Json
+          duration_ms?: number | null
           email?: string | null
           error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
           id?: never
+          method?: string | null
+          mount_path?: string | null
           params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
           session_id?: string | null
           status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      tool_events_2026_04: {
-        Row: {
-          brand_id: string
-          bytes_out: number | null
-          cache_hit: boolean
-          client_id: string | null
-          client_name: string | null
-          created_at: string
-          duration_ms: number
-          email: string | null
-          error_code: string | null
-          id: number
-          params_hash: string | null
-          session_id: string | null
-          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
-          user_id: string
-        }
-        Insert: {
-          brand_id: string
-          bytes_out?: number | null
-          cache_hit?: boolean
-          client_id?: string | null
-          client_name?: string | null
-          created_at?: string
-          duration_ms: number
-          email?: string | null
-          error_code?: string | null
-          id: number
-          params_hash?: string | null
-          session_id?: string | null
-          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
-          user_id: string
-        }
-        Update: {
-          brand_id?: string
-          bytes_out?: number | null
-          cache_hit?: boolean
-          client_id?: string | null
-          client_name?: string | null
-          created_at?: string
-          duration_ms?: number
-          email?: string | null
-          error_code?: string | null
-          id?: number
-          params_hash?: string | null
-          session_id?: string | null
-          status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string
+          tool?: string | null
+          transport?: string | null
           user_id?: string
         }
         Relationships: []
       }
       tool_events_2026_05: {
         Row: {
-          brand_id: string
+          action: string | null
+          brand_id: string | null
+          bytes_in: number | null
           bytes_out: number | null
-          cache_hit: boolean
+          cache_hit: boolean | null
           client_id: string | null
           client_name: string | null
+          client_profile: string | null
           created_at: string
-          duration_ms: number
+          dimensions: Json
+          duration_ms: number | null
           email: string | null
           error_code: string | null
+          event_id: string
+          event_kind: string
+          event_name: string
           id: number
+          method: string | null
+          mount_path: string | null
           params_hash: string | null
+          request_id: string | null
+          result_status: string
           session_id: string | null
           status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
+          tool: string | null
+          transport: string | null
           user_id: string
         }
         Insert: {
-          brand_id: string
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
           bytes_out?: number | null
-          cache_hit?: boolean
+          cache_hit?: boolean | null
           client_id?: string | null
           client_name?: string | null
+          client_profile?: string | null
           created_at?: string
-          duration_ms: number
+          dimensions?: Json
+          duration_ms?: number | null
           email?: string | null
           error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
           id: number
+          method?: string | null
+          mount_path?: string | null
           params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
           session_id?: string | null
           status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
+          tool?: string | null
+          transport?: string | null
           user_id: string
         }
         Update: {
-          brand_id?: string
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
           bytes_out?: number | null
-          cache_hit?: boolean
+          cache_hit?: boolean | null
           client_id?: string | null
           client_name?: string | null
+          client_profile?: string | null
           created_at?: string
-          duration_ms?: number
+          dimensions?: Json
+          duration_ms?: number | null
           email?: string | null
           error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
           id?: number
+          method?: string | null
+          mount_path?: string | null
           params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
           session_id?: string | null
           status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string
+          tool?: string | null
+          transport?: string | null
           user_id?: string
         }
         Relationships: []
       }
       tool_events_2026_06: {
         Row: {
-          brand_id: string
+          action: string | null
+          brand_id: string | null
+          bytes_in: number | null
           bytes_out: number | null
-          cache_hit: boolean
+          cache_hit: boolean | null
           client_id: string | null
           client_name: string | null
+          client_profile: string | null
           created_at: string
-          duration_ms: number
+          dimensions: Json
+          duration_ms: number | null
           email: string | null
           error_code: string | null
+          event_id: string
+          event_kind: string
+          event_name: string
           id: number
+          method: string | null
+          mount_path: string | null
           params_hash: string | null
+          request_id: string | null
+          result_status: string
           session_id: string | null
           status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
+          tool: string | null
+          transport: string | null
           user_id: string
         }
         Insert: {
-          brand_id: string
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
           bytes_out?: number | null
-          cache_hit?: boolean
+          cache_hit?: boolean | null
           client_id?: string | null
           client_name?: string | null
+          client_profile?: string | null
           created_at?: string
-          duration_ms: number
+          dimensions?: Json
+          duration_ms?: number | null
           email?: string | null
           error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
           id: number
+          method?: string | null
+          mount_path?: string | null
           params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
           session_id?: string | null
           status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
+          tool?: string | null
+          transport?: string | null
           user_id: string
         }
         Update: {
-          brand_id?: string
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
           bytes_out?: number | null
-          cache_hit?: boolean
+          cache_hit?: boolean | null
           client_id?: string | null
           client_name?: string | null
+          client_profile?: string | null
           created_at?: string
-          duration_ms?: number
+          dimensions?: Json
+          duration_ms?: number | null
           email?: string | null
           error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
           id?: number
+          method?: string | null
+          mount_path?: string | null
           params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
           session_id?: string | null
           status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string
+          tool?: string | null
+          transport?: string | null
           user_id?: string
         }
         Relationships: []
       }
       tool_events_2026_07: {
         Row: {
-          brand_id: string
+          action: string | null
+          brand_id: string | null
+          bytes_in: number | null
           bytes_out: number | null
-          cache_hit: boolean
+          cache_hit: boolean | null
           client_id: string | null
           client_name: string | null
+          client_profile: string | null
           created_at: string
-          duration_ms: number
+          dimensions: Json
+          duration_ms: number | null
           email: string | null
           error_code: string | null
+          event_id: string
+          event_kind: string
+          event_name: string
           id: number
+          method: string | null
+          mount_path: string | null
           params_hash: string | null
+          request_id: string | null
+          result_status: string
           session_id: string | null
           status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
+          tool: string | null
+          transport: string | null
           user_id: string
         }
         Insert: {
-          brand_id: string
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
           bytes_out?: number | null
-          cache_hit?: boolean
+          cache_hit?: boolean | null
           client_id?: string | null
           client_name?: string | null
+          client_profile?: string | null
           created_at?: string
-          duration_ms: number
+          dimensions?: Json
+          duration_ms?: number | null
           email?: string | null
           error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
           id: number
+          method?: string | null
+          mount_path?: string | null
           params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
           session_id?: string | null
           status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
+          tool?: string | null
+          transport?: string | null
           user_id: string
         }
         Update: {
-          brand_id?: string
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
           bytes_out?: number | null
-          cache_hit?: boolean
+          cache_hit?: boolean | null
           client_id?: string | null
           client_name?: string | null
+          client_profile?: string | null
           created_at?: string
-          duration_ms?: number
+          dimensions?: Json
+          duration_ms?: number | null
           email?: string | null
           error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
           id?: number
+          method?: string | null
+          mount_path?: string | null
           params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
           session_id?: string | null
           status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string
+          tool?: string | null
+          transport?: string | null
           user_id?: string
         }
         Relationships: []
       }
       tool_events_2026_08: {
         Row: {
-          brand_id: string
+          action: string | null
+          brand_id: string | null
+          bytes_in: number | null
           bytes_out: number | null
-          cache_hit: boolean
+          cache_hit: boolean | null
           client_id: string | null
           client_name: string | null
+          client_profile: string | null
           created_at: string
-          duration_ms: number
+          dimensions: Json
+          duration_ms: number | null
           email: string | null
           error_code: string | null
+          event_id: string
+          event_kind: string
+          event_name: string
           id: number
+          method: string | null
+          mount_path: string | null
           params_hash: string | null
+          request_id: string | null
+          result_status: string
           session_id: string | null
           status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
+          tool: string | null
+          transport: string | null
           user_id: string
         }
         Insert: {
-          brand_id: string
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
           bytes_out?: number | null
-          cache_hit?: boolean
+          cache_hit?: boolean | null
           client_id?: string | null
           client_name?: string | null
+          client_profile?: string | null
           created_at?: string
-          duration_ms: number
+          dimensions?: Json
+          duration_ms?: number | null
           email?: string | null
           error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
           id: number
+          method?: string | null
+          mount_path?: string | null
           params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
           session_id?: string | null
           status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string
+          tool?: string | null
+          transport?: string | null
           user_id: string
         }
         Update: {
-          brand_id?: string
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
           bytes_out?: number | null
-          cache_hit?: boolean
+          cache_hit?: boolean | null
           client_id?: string | null
           client_name?: string | null
+          client_profile?: string | null
           created_at?: string
-          duration_ms?: number
+          dimensions?: Json
+          duration_ms?: number | null
           email?: string | null
           error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
           id?: number
+          method?: string | null
+          mount_path?: string | null
           params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
           session_id?: string | null
           status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string
+          tool?: string | null
+          transport?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tool_events_2026_09: {
+        Row: {
+          action: string | null
+          brand_id: string | null
+          bytes_in: number | null
+          bytes_out: number | null
+          cache_hit: boolean | null
+          client_id: string | null
+          client_name: string | null
+          client_profile: string | null
+          created_at: string
+          dimensions: Json
+          duration_ms: number | null
+          email: string | null
+          error_code: string | null
+          event_id: string
+          event_kind: string
+          event_name: string
+          id: number
+          method: string | null
+          mount_path: string | null
+          params_hash: string | null
+          request_id: string | null
+          result_status: string
+          session_id: string | null
+          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool: string | null
+          transport: string | null
+          user_id: string
+        }
+        Insert: {
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
+          bytes_out?: number | null
+          cache_hit?: boolean | null
+          client_id?: string | null
+          client_name?: string | null
+          client_profile?: string | null
+          created_at?: string
+          dimensions?: Json
+          duration_ms?: number | null
+          email?: string | null
+          error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
+          id: number
+          method?: string | null
+          mount_path?: string | null
+          params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
+          session_id?: string | null
+          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool?: string | null
+          transport?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
+          bytes_out?: number | null
+          cache_hit?: boolean | null
+          client_id?: string | null
+          client_name?: string | null
+          client_profile?: string | null
+          created_at?: string
+          dimensions?: Json
+          duration_ms?: number | null
+          email?: string | null
+          error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
+          id?: number
+          method?: string | null
+          mount_path?: string | null
+          params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
+          session_id?: string | null
+          status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool?: string | null
+          transport?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tool_events_2026_10: {
+        Row: {
+          action: string | null
+          brand_id: string | null
+          bytes_in: number | null
+          bytes_out: number | null
+          cache_hit: boolean | null
+          client_id: string | null
+          client_name: string | null
+          client_profile: string | null
+          created_at: string
+          dimensions: Json
+          duration_ms: number | null
+          email: string | null
+          error_code: string | null
+          event_id: string
+          event_kind: string
+          event_name: string
+          id: number
+          method: string | null
+          mount_path: string | null
+          params_hash: string | null
+          request_id: string | null
+          result_status: string
+          session_id: string | null
+          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool: string | null
+          transport: string | null
+          user_id: string
+        }
+        Insert: {
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
+          bytes_out?: number | null
+          cache_hit?: boolean | null
+          client_id?: string | null
+          client_name?: string | null
+          client_profile?: string | null
+          created_at?: string
+          dimensions?: Json
+          duration_ms?: number | null
+          email?: string | null
+          error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
+          id: number
+          method?: string | null
+          mount_path?: string | null
+          params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
+          session_id?: string | null
+          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool?: string | null
+          transport?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
+          bytes_out?: number | null
+          cache_hit?: boolean | null
+          client_id?: string | null
+          client_name?: string | null
+          client_profile?: string | null
+          created_at?: string
+          dimensions?: Json
+          duration_ms?: number | null
+          email?: string | null
+          error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
+          id?: number
+          method?: string | null
+          mount_path?: string | null
+          params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
+          session_id?: string | null
+          status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool?: string | null
+          transport?: string | null
           user_id?: string
         }
         Relationships: []
@@ -20030,6 +21214,10 @@ export type Database = {
         Returns: string
       }
       create_next_event_partition: { Args: never; Returns: string }
+      delete_mcp_bench_events: {
+        Args: { p_session_id: string }
+        Returns: number
+      }
       enqueue_job: {
         Args: {
           p_brand_id: string
@@ -20040,6 +21228,10 @@ export type Database = {
           p_user_id?: string
         }
         Returns: string
+      }
+      ensure_event_partitions: {
+        Args: { p_months_ahead?: number }
+        Returns: string[]
       }
       fail_operation: {
         Args: {
@@ -20078,6 +21270,10 @@ export type Database = {
         Returns: Json
       }
       get_user_last_brand: { Args: { p_user_id?: string }; Returns: string }
+      is_safe_event_dimensions: {
+        Args: { p_dimensions: Json }
+        Returns: boolean
+      }
       issue_connect_link: {
         Args: {
           p_brand_id: string
@@ -20146,6 +21342,14 @@ export type Database = {
           status: string
         }[]
       }
+      list_brands_integration_status: {
+        Args: { p_brand_ids: string[]; p_user_id: string }
+        Returns: {
+          account_count: number
+          brand_id: string
+          has_active_integration: boolean
+        }[]
+      }
       list_client_registrations: {
         Args: { p_user_id?: string }
         Returns: {
@@ -20182,6 +21386,42 @@ export type Database = {
           tool: string
         }[]
       }
+      list_user_mcp_events: {
+        Args: {
+          p_before?: string
+          p_before_id?: number
+          p_client_id?: string
+          p_limit?: number
+          p_status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          p_tool?: string
+          p_user_id: string
+        }
+        Returns: {
+          action: string
+          brand_id: string
+          bytes_in: number
+          bytes_out: number
+          cache_hit: boolean
+          client_id: string
+          client_name: string
+          client_profile: string
+          created_at: string
+          dimensions: Json
+          duration_ms: number
+          email: string
+          error_code: string
+          event_id: string
+          event_kind: string
+          event_name: string
+          id: number
+          request_id: string
+          result_status: string
+          session_id: string
+          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool: string
+          transport: string
+        }[]
+      }
       log_tool_event: {
         Args: {
           p_brand_id: string
@@ -20204,6 +21444,7 @@ export type Database = {
         Args: { p_client_id: string; p_user_id?: string }
         Returns: undefined
       }
+      mcp_event_store_health: { Args: never; Returns: Json }
       planner_apply_draft_patches: {
         Args: {
           p_atomic?: boolean
@@ -20233,6 +21474,99 @@ export type Database = {
           receipt: Json
         }[]
       }
+      prune_event_partitions: {
+        Args: { p_retention_days?: number }
+        Returns: string[]
+      }
+      query_mcp_events: {
+        Args: {
+          p_action?: string
+          p_before?: string
+          p_before_id?: number
+          p_brand_id?: string
+          p_client_id?: string
+          p_client_profile?: string
+          p_dimensions?: Json
+          p_email?: string
+          p_error_code?: string
+          p_event_id?: string
+          p_event_kind?: string
+          p_event_name?: string
+          p_limit?: number
+          p_request_id?: string
+          p_result_status?: string
+          p_session_id?: string
+          p_since?: string
+          p_status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          p_tool?: string
+          p_transport?: string
+          p_until?: string
+          p_user_id?: string
+        }
+        Returns: {
+          action: string | null
+          brand_id: string | null
+          bytes_in: number | null
+          bytes_out: number | null
+          cache_hit: boolean | null
+          client_id: string | null
+          client_name: string | null
+          client_profile: string | null
+          created_at: string
+          dimensions: Json
+          duration_ms: number | null
+          email: string | null
+          error_code: string | null
+          event_id: string
+          event_kind: string
+          event_name: string
+          id: number
+          method: string | null
+          mount_path: string | null
+          params_hash: string | null
+          request_id: string | null
+          result_status: string
+          session_id: string | null
+          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool: string | null
+          transport: string | null
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "tool_events"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      record_mcp_event: {
+        Args: {
+          p_action: string
+          p_brand_id: string
+          p_bytes_in: number
+          p_bytes_out: number
+          p_cache_hit: boolean
+          p_client_id: string
+          p_client_profile: string
+          p_dimensions: Json
+          p_duration_ms: number
+          p_email: string
+          p_error_code: string
+          p_event_kind: string
+          p_event_name: string
+          p_method: string
+          p_mount_path: string
+          p_params_hash: string
+          p_request_id: string
+          p_result_status: string
+          p_session_id: string
+          p_status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          p_tool: string
+          p_transport: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       record_session: {
         Args: { p_session_id: string; p_user_id?: string }
         Returns: undefined
@@ -20255,6 +21589,19 @@ export type Database = {
         Args: { p_brand_id: string; p_user_id?: string }
         Returns: undefined
       }
+      start_job: { Args: { p_job_id: string }; Returns: undefined }
+      summarize_mcp_events: {
+        Args: { p_since?: string; p_until?: string }
+        Returns: {
+          event_count: number
+          newest_at: string
+          p50_duration_ms: number
+          p95_duration_ms: number
+          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool: string
+          transport: string
+        }[]
+      }
       update_job_progress: {
         Args: { p_job_id: string; p_progress: number }
         Returns: undefined
@@ -20266,7 +21613,12 @@ export type Database = {
     }
     Enums: {
       job_status: "pending" | "running" | "completed" | "failed" | "cancelled"
-      tool_event_status: "ok" | "error" | "denied" | "rate_limited"
+      tool_event_status:
+        | "ok"
+        | "error"
+        | "denied"
+        | "rate_limited"
+        | "cancelled"
       transport_kind: "http_stream" | "stdio"
     }
     CompositeTypes: {
@@ -22184,6 +23536,23 @@ export type Database = {
           variant_family_id: string
         }[]
       }
+      continuum_action_stream: {
+        Args: { p_brand_id: string; p_from: string; p_to: string }
+        Returns: {
+          action: string
+          actor_id: string
+          actor_kind: string
+          asset_id: string
+          occurred_at: string
+          outcome: string
+          producer_id: string
+          producer_kind: string
+          replaced_target_id: string
+          source: string
+          target_id: string
+          target_kind: string
+        }[]
+      }
       decrypt_token: { Args: { token_to_decrypt: string }; Returns: string }
       find_overlapping_brands: {
         Args: never
@@ -22526,6 +23895,8 @@ export type Database = {
           p_link_method: string
           p_platform?: string
           p_platform_post_id?: string
+          p_producer_id?: string
+          p_producer_kind?: string
           p_surface: string
           p_version_number?: number
         }
@@ -22544,6 +23915,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      optimizer_action_count: { Args: { p_since?: string }; Returns: number }
       optimizer_append_logs: { Args: { p_rows: Json }; Returns: number }
       optimizer_archive_portfolio: {
         Args: { p_portfolio_id: string }
@@ -22600,11 +23972,13 @@ export type Database = {
           p_authorized_by?: string
           p_authorized_kind?: string
           p_cycle_ts: string
+          p_justification?: string
           p_meta_receipt?: Json
           p_mode?: string
           p_ok: boolean
           p_portfolio_id: string
           p_prior_status?: string
+          p_recommendation_id?: string
         }
         Returns: undefined
       }
@@ -22615,11 +23989,14 @@ export type Database = {
           p_authorized_by?: string
           p_authorized_kind?: string
           p_cycle_ts: string
+          p_justification?: string
           p_meta_receipt?: Json
           p_mode?: string
           p_ok: boolean
           p_portfolio_id: string
           p_prior_status?: string
+          p_recommendation_id?: string
+          p_reverts_audit_id?: string
         }
         Returns: undefined
       }
@@ -22630,11 +24007,14 @@ export type Database = {
           p_authorized_by?: string
           p_authorized_kind?: string
           p_cycle_ts: string
+          p_justification?: string
           p_meta_receipt?: Json
           p_mode?: string
           p_ok: boolean
           p_portfolio_id: string
           p_prior_minor?: number
+          p_recommendation_id?: string
+          p_reverts_audit_id?: string
         }
         Returns: undefined
       }
@@ -22704,12 +24084,14 @@ export type Database = {
           change_pct: number
           current_budget: number
           final_budget: number
+          reason: string
         }[]
       }
       optimizer_get_approved_pause_recs: {
         Args: { p_portfolio_id: string }
         Returns: {
           adset_id: string
+          reason: string
           rec_id: string
         }[]
       }
@@ -22822,6 +24204,28 @@ export type Database = {
           same_brand: boolean
         }[]
       }
+      optimizer_list_actions: {
+        Args: { p_before?: string; p_brand_id: string; p_limit?: number }
+        Returns: {
+          actor_id: string
+          actor_kind: string
+          after: Json
+          before: Json
+          entity_id: string
+          family: string
+          id: string
+          justification: string
+          op: string
+          portfolio_id: string
+          portfolio_name: string
+          receipt: Json
+          reversible: boolean
+          revert_of: string
+          reverted_by: string
+          run_id: string
+          ts: string
+        }[]
+      }
       optimizer_list_archived_portfolios: {
         Args: { p_brand_id: string }
         Returns: Json
@@ -22908,6 +24312,10 @@ export type Database = {
       }
       optimizer_record_rule_evaluations: {
         Args: { p_portfolio_id: string; p_rows: Json; p_run_id: string }
+        Returns: number
+      }
+      optimizer_refresh_decision_outcomes: {
+        Args: { p_portfolio_id: string }
         Returns: number
       }
       optimizer_request_apply_item: {
@@ -23014,6 +24422,15 @@ export type Database = {
         Args: { p_adset_ids?: string[]; p_brand_id: string }
         Returns: Json
       }
+      paid_media_get_ad_daily_trends: {
+        Args: {
+          p_adset_id: string
+          p_brand_id: string
+          p_cutoff: string
+          p_days?: number
+        }
+        Returns: Json
+      }
       paid_media_get_adset_angles: {
         Args: { p_adset_ids: string[]; p_brand_id: string }
         Returns: Json
@@ -23026,6 +24443,15 @@ export type Database = {
         Args: { p_brand_id: string; p_dimension?: string; p_window?: string }
         Returns: Json
       }
+      paid_media_get_asset_ad_attribution: {
+        Args: {
+          p_asset_id: string
+          p_brand_id: string
+          p_cutoff: string
+          p_window: string
+        }
+        Returns: Json
+      }
       paid_media_get_creative_vector_signals: {
         Args: { p_brand_id: string; p_window?: string }
         Returns: Json
@@ -23033,6 +24459,10 @@ export type Database = {
       paid_media_get_creative_winrates: {
         Args: { p_brand_id: string; p_dimension?: string; p_window?: string }
         Returns: Json
+      }
+      paid_media_upsert_ad_breakdown_daily: {
+        Args: { p_portfolio_id: string; p_rows: Json }
+        Returns: number
       }
       process_scheduled_reports: { Args: never; Returns: Json }
       resolve_meta_context_by_brand_id: {
@@ -23312,7 +24742,7 @@ export const Constants = {
   plugin_mcp: {
     Enums: {
       job_status: ["pending", "running", "completed", "failed", "cancelled"],
-      tool_event_status: ["ok", "error", "denied", "rate_limited"],
+      tool_event_status: ["ok", "error", "denied", "rate_limited", "cancelled"],
       transport_kind: ["http_stream", "stdio"],
     },
   },

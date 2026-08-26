@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -19,15 +19,19 @@ function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, 'utf8'));
 }
 
-function routeChunkBytes(distDirectory, budget) {
-  const directory = path.join(distDirectory, budget.directory);
-  const matches = readdirSync(directory).filter(
-    (fileName) => fileName.startsWith(budget.filePrefix) && fileName.endsWith('.js'),
-  );
-  if (matches.length !== 1) {
-    throw new Error(`${budget.name}: expected one matching chunk, found ${matches.length}`);
+// Next writes one row per app route as { route, firstLoadUncompressedJsBytes, firstLoadChunkPaths },
+// unioning every segment's JS (page, layout, ...) so a layout's contribution is counted here. Layouts
+// are segments, not routes, so they can never be rows of their own — budget the route that carries
+// them instead.
+function routeFirstLoadBytes(distDirectory, budget) {
+  const rows = readJson(path.join(distDirectory, 'diagnostics', 'route-bundle-stats.json'));
+  const row = rows.find((candidate) => candidate.route === budget.route);
+  if (!row) {
+    throw new Error(
+      `${budget.name}: no route-bundle-stats row for "${budget.route}" — renamed or removed?`,
+    );
   }
-  return statSync(path.join(directory, matches[0])).size;
+  return row.firstLoadUncompressedJsBytes;
 }
 
 function rootMainFilesBytes(distDirectory) {
@@ -46,7 +50,7 @@ export function checkBundleBudgets({ distDirectory, configuration }) {
     const actualBytes =
       budget.source === 'rootMainFiles'
         ? rootMainFilesBytes(distDirectory)
-        : routeChunkBytes(distDirectory, budget);
+        : routeFirstLoadBytes(distDirectory, budget);
     const maximumBytes = maxAllowedBytes(budget.baselineBytes, configuration.maxGrowthPercent);
     return {
       name: budget.name,

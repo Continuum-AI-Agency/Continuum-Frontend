@@ -7,22 +7,16 @@
       "baselineBytes": 656148
     },
     {
-      "name": "root layout",
-      "directory": "static/chunks/app",
-      "filePrefix": "layout-",
-      "baselineBytes": 17731
-    },
-    {
       "name": "login route",
-      "directory": "static/chunks/app/(auth)/login",
-      "filePrefix": "page-",
-      "baselineBytes": 24800
+      "source": "routeFirstLoad",
+      "route": "/login",
+      "baselineBytes": 1265075
     },
     {
-      "name": "authenticated layout",
-      "directory": "static/chunks/app/(post-auth)",
-      "filePrefix": "layout-",
-      "baselineBytes": 102292
+      "name": "authenticated dashboard route",
+      "source": "routeFirstLoad",
+      "route": "/organic",
+      "baselineBytes": 3825779
     }
   ]
 }

@@ -15,7 +15,7 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
-import { Copy, ExternalLink, Save, Trash2 } from 'lucide-react';
+import { CalendarRange, Copy, ExternalLink, Save, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { PlannerDraftNodeData, StudioNode } from '../types';
+import { NodeBadge, NodeTitleBar } from './NodeChrome';
 import { describeDraftWriteError } from './publish/draftWriteErrors';
 import { PlannerDraftBrowser } from './publish/PlannerDraftBrowser';
 import { publishingApi } from './publish/publishingApi';
@@ -263,15 +264,11 @@ export function PlannerDraftBlock({
         handles={{ target: false, source: false }}
         className="h-full w-full overflow-hidden p-0"
       >
-        <NodeContent className="flex h-full flex-col gap-2 p-3 text-xs">
-          <div className="flex items-center justify-between font-medium">
-            <span>Planner Draft</span>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
-              Organic
-            </span>
-          </div>
-
-          <div className="nodrag flex rounded-md border border-border p-0.5 text-2xs">
+        <NodeTitleBar icon={CalendarRange} label="Planner Draft">
+          <NodeBadge>Organic</NodeBadge>
+        </NodeTitleBar>
+        <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5 text-xs">
+          <div className="nodrag flex rounded-sm border border-border/60 p-0.5 text-2xs">
             {(['find', 'create'] as const).map((value) => (
               <button
                 key={value}
@@ -324,7 +321,7 @@ export function PlannerDraftBlock({
           ) : null}
 
           {data.targetDraftId ? (
-            <div className="rounded-md border border-border/70 bg-muted/40 p-2">
+            <div className="-mx-1.5 border-y border-border/60 bg-muted/40 px-2 py-1.5">
               <p className="truncate text-xs font-medium">{data.targetTitle ?? 'Planner draft'}</p>
               <p className="text-2xs text-muted-foreground">
                 {data.platform ?? 'instagram'}

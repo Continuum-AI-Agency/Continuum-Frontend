@@ -17,6 +17,7 @@ import type React from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import type { RouterNodeData } from '../types';
 import { EDGE_COLOR_BY_MODALITY, ModalityPreview } from './modalityPreview';
+import { NodeBadge, NodeTitleBar } from './NodeChrome';
 
 const MODALITY_LABEL: Readonly<Record<StudioEmittedModality, string>> = {
   image: 'Image',
@@ -34,27 +35,21 @@ export function RouterNode({ data, selected }: NodeProps<ReactFlowNode<RouterNod
   const locked = data.lockedType;
 
   return (
-    <div className="relative h-[120px] w-[200px]">
+    <div className="relative h-[110px] w-[180px]">
       <CanvasNode
         handles={{ target: false, source: false }}
         selected={selected}
         className="size-full overflow-hidden border-border/60 bg-background"
       >
-        <div className="flex items-center gap-2 border-b bg-muted/40 px-2 py-1.5 text-xs font-semibold">
-          <Share2 className="size-3.5 shrink-0" />
-          Router
-          <span className="ml-auto shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-            {locked ? MODALITY_LABEL[locked] : 'Unset'}
-          </span>
-        </div>
-        <NodeContent className="h-full p-1.5">
-          <div className="flex h-full items-center justify-center overflow-hidden rounded border bg-black/90">
-            <ModalityPreview
-              modality={locked}
-              data={data}
-              emptyLabel={locked ? 'Nothing through yet' : 'Connect a source'}
-            />
-          </div>
+        <NodeTitleBar icon={Share2} label="Router">
+          <NodeBadge>{locked ? MODALITY_LABEL[locked] : 'Unset'}</NodeBadge>
+        </NodeTitleBar>
+        <NodeContent className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/30 p-0">
+          <ModalityPreview
+            modality={locked}
+            data={data}
+            emptyLabel={locked ? 'Nothing through yet' : 'Connect a source'}
+          />
         </NodeContent>
       </CanvasNode>
       <Handle

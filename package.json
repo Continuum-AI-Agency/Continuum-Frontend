@@ -56,6 +56,7 @@
     "planner:e2e:bench": "set -a; . ./.env.local; set +a; NEXT_DIST_DIR=.next/e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json PLAYWRIGHT_BASE_URL=http://localhost:3002 playwright test e2e/organic-planner-chat.spec.ts --workers=1",
     "projection:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/mid-run-projection.spec.ts --workers=1",
     "skills:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/skills-composer.spec.ts --workers=1",
+    "studio:node-chrome:bench": "set -a; . ./.env.local; set +a; PORT=3001 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 NEXT_DIST_DIR=.next/studio-node-chrome-e2e playwright test e2e/studio-node-chrome.bench.spec.ts --workers=1",
     "studio:starter:bench": "bun run e2e/studio-starter.bench.ts",
     "prompts:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/prompt-library.spec.ts --workers=1",
     "agent:runs:bench": "set -a; . ./.env.local; set +a; bun run e2e/agent-runs.bench.ts",

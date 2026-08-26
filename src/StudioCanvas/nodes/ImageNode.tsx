@@ -657,6 +657,32 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                           <span>Marked up</span>
                         </div>
                       )}
+                      {/* Stock licences require the photographer to be credited
+                          and linked wherever the photo is shown, so the credit
+                          travels with the node rather than living in the picker. */}
+                      {data.attribution && (
+                        <div className="absolute inset-x-0 bottom-0 z-10 truncate bg-black/55 px-1.5 py-0.5 text-3xs text-white">
+                          <a
+                            href={data.attribution.photographerUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="hover:underline"
+                            onMouseDown={(event) => event.stopPropagation()}
+                          >
+                            {data.attribution.photographerName}
+                          </a>
+                          {' on '}
+                          <a
+                            href={data.attribution.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="hover:underline"
+                            onMouseDown={(event) => event.stopPropagation()}
+                          >
+                            Unsplash
+                          </a>
+                        </div>
+                      )}
                       {refBadge && refBadge.tone !== 'error' && (
                         <div
                           className={cn(

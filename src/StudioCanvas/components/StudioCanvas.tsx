@@ -11,8 +11,8 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 import type { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu';
-import { type ActionId, type UnfurlMediaItem, validateWorkflowGraph } from '@continuum/contracts';
-import { AtSign, FolderOpen } from 'lucide-react';
+import { type ActionId, type UnsplashPhoto, validateWorkflowGraph } from '@continuum/contracts';
+import { AtSign, Camera, FolderOpen } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -33,6 +33,7 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useToast } from '@/components/ui/ToastProvider';
 import { canvasRoomHref } from '@/lib/ai-studio/canvasRoomLocation';
 import { inlineRemoteImage } from '@/lib/ai-studio/inlineRemoteImage';
+import { trackUnsplashDownload } from '@/lib/api/aiStudioUnsplash.client';
 import type { PlannerAiStudioHandoff } from '@/lib/organic/ai-studio-bridge';
 import { CanvasRuntimeProvider } from '../contexts/CanvasRuntimeContext';
 import { useApplyBackToPlanner } from '../hooks/useApplyBackToPlanner';
@@ -46,7 +47,7 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
 import { DEFAULT_BRAND_BOOK_PIECES } from '../utils/brandEnforcement';
-import { buildReferenceNodes } from '../utils/buildReferenceNodes';
+import { buildReferenceNodes, type ReferenceMediaItem } from '../utils/buildReferenceNodes';
 import { computeReadyNodeIds, computeStyledEdges } from '../utils/edgeStyling';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
@@ -67,6 +68,7 @@ import { NodeInspectorPanel } from './NodeInspectorPanel';
 import { SaveStarterDialog } from './SaveStarterDialog';
 import { SourceDropNodePicker } from './SourceDropNodePicker';
 import { StudioCanvasHeader } from './StudioCanvasHeader';
+import { UnsplashBrowser } from './UnsplashBrowser';
 
 function Flow({
   brandProfileId,
@@ -158,6 +160,7 @@ function Flow({
   const { show } = useToast();
   const [isLoadWorkflowOpen, setIsLoadWorkflowOpen] = useState(false);
   const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
+  const [isUnsplashBrowserOpen, setIsUnsplashBrowserOpen] = useState(false);
   const [isLibraryBrowserOpen, setIsLibraryBrowserOpen] = useState(false);
   const [isSaveStarterOpen, setIsSaveStarterOpen] = useState(false);
   // Where an added node lands: the right-click point, pinned when the Add Node submenu
@@ -224,7 +227,7 @@ function Flow({
   // row at the viewport center. Nodes have no edges, so they are inert references
   // until the user wires them into a generator.
   const placeImportedReferenceNodes = useCallback(
-    (items: UnfurlMediaItem[]) => {
+    (items: ReferenceMediaItem[], { inline = true }: { inline?: boolean } = {}) => {
       if (items.length === 0) return;
       takeSnapshot();
       const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
@@ -245,15 +248,53 @@ function Flow({
       setNodes(nodes.concat(newNodes));
       triggerSave();
 
-      // Remote-URL image references (e.g. Instagram CDN) are invisible to the
-      // generation model until inlined to base64. Convert via the server-side
-      // proxy in the background, surfacing processing/ready status on each node.
-      void inlineReferenceImageNodes(built, {
-        inline: inlineRemoteImage,
-        updateNodeData,
-      });
+      // Instagram CDN urls EXPIRE, so those references are inlined to base64 in
+      // the background. Sources whose urls are durable and public opt out with
+      // `inline: false` and stay hotlinked — which the wire already supports
+      // (a node holding an http url ships as `reference_images[].image_url`, and
+      // the Backend fetches it at generation time).
+      if (inline) {
+        void inlineReferenceImageNodes(built, {
+          inline: inlineRemoteImage,
+          updateNodeData,
+        });
+      }
     },
     [nodes, screenToFlowPosition, setNodes, takeSnapshot, triggerSave, updateNodeData],
+  );
+
+  // Unsplash photos stay hotlinked rather than inlined: their urls are durable
+  // and public, and the licence requires the CDN url to be the one displayed.
+  // Selecting a photo is also the moment Unsplash must be told about — that ping
+  // credits the photographer, so it fires here and is deliberately not awaited.
+  const placeUnsplashPhoto = useCallback(
+    (photo: UnsplashPhoto) => {
+      if (brandProfileId) {
+        void trackUnsplashDownload({
+          brandId: brandProfileId,
+          downloadLocation: photo.downloadLocation,
+        });
+      }
+      placeImportedReferenceNodes(
+        [
+          {
+            kind: 'image',
+            url: photo.url,
+            width: photo.width,
+            height: photo.height,
+            ...(photo.alt ? { alt: photo.alt } : {}),
+            attribution: {
+              provider: 'unsplash',
+              photographerName: photo.photographerName,
+              photographerUrl: photo.photographerUrl,
+              sourceUrl: photo.unsplashUrl,
+            },
+          },
+        ],
+        { inline: false },
+      );
+    },
+    [brandProfileId, placeImportedReferenceNodes],
   );
 
   const handleMouseMove = useCallback(
@@ -490,6 +531,16 @@ function Flow({
                 <AtSign className="mr-2 h-4 w-4" />
                 Import from Instagram
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsUnsplashBrowserOpen((open) => !open)}
+                aria-label="Search Unsplash photos"
+              >
+                <Camera className="mr-2 h-4 w-4" />
+                Unsplash
+              </Button>
             </Panel>
 
             {isLibraryBrowserOpen && (
@@ -508,6 +559,14 @@ function Flow({
                 brandProfileId={brandProfileId}
                 onPlace={placeImportedReferenceNodes}
                 onClose={() => setIsInstagramBrowserOpen(false)}
+              />
+            )}
+
+            {isUnsplashBrowserOpen && (
+              <UnsplashBrowser
+                brandProfileId={brandProfileId}
+                onPick={placeUnsplashPhoto}
+                onClose={() => setIsUnsplashBrowserOpen(false)}
               />
             )}
 

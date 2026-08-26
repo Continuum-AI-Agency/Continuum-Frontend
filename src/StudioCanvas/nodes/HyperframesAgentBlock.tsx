@@ -27,6 +27,7 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { HyperframesAgentNodeData } from '../types';
 import { toggleBrandPiece, toggleSkillId } from '../utils/brandEnforcement';
 import { startHyperframesAgentNode } from '../utils/startHyperframesAgent';
+import { NodeBadge, NodeTitleBar } from './NodeChrome';
 
 const labelForStatus = (status: HyperframesAgentNodeData['status']): string => {
   switch (status) {
@@ -131,22 +132,10 @@ export function HyperframesAgentBlock({
         handles={{ target: false, source: false }}
         className="h-full overflow-hidden border-border/60 bg-background p-0 shadow-sm"
       >
-        <NodeContent className="flex h-full flex-col gap-3 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-violet-500/10 text-violet-500">
-                <Sparkles className="h-4 w-4" />
-              </span>
-              <div>
-                <div className="text-sm font-semibold">HyperFrames Agent</div>
-                <div className="text-2xs text-muted-foreground">Gemini 3.6 Flash</div>
-              </div>
-            </div>
-            <span className="text-2xs font-medium text-muted-foreground">
-              {labelForStatus(data.status)}
-            </span>
-          </div>
-
+        <NodeTitleBar icon={Sparkles} label="HyperFrames Agent" title="Gemini 3.6 Flash">
+          <NodeBadge>{labelForStatus(data.status)}</NodeBadge>
+        </NodeTitleBar>
+        <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
           <textarea
             value={data.prompt}
             onChange={(event) =>

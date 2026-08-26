@@ -13,7 +13,7 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
-import { Copy, Send, Trash2 } from 'lucide-react';
+import { Copy, Megaphone, Send, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { PublisherNodeData, StudioNode } from '../types';
+import { NodeBadge, NodeTitleBar } from './NodeChrome';
 import { publishingApi } from './publish/publishingApi';
 import { resolvePublishingAssets } from './publish/resolvePublishingAssets';
 
@@ -258,19 +259,15 @@ export function PaidPublisherBlock({
         handles={{ target: false, source: false }}
         className="h-full w-full overflow-hidden p-0"
       >
-        <NodeContent className="flex h-full flex-col gap-2 p-3 text-xs">
-          <div className="flex items-center justify-between font-medium">
-            <span>Paid Ad</span>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
-              Meta
-            </span>
-          </div>
-
+        <NodeTitleBar icon={Megaphone} label="Paid Ad">
+          <NodeBadge>Meta</NodeBadge>
+        </NodeTitleBar>
+        <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5 text-xs">
           {/* Terminal handoff — a canvas run never executes a publisher sink. The
               delivery below is the explicit handoff (same service as studio_deliver). */}
           <p
             data-testid="publisher-handoff-state"
-            className="rounded bg-muted/60 px-2 py-1 text-2xs text-muted-foreground"
+            className="-mx-1.5 -mt-1.5 border-b border-border/60 bg-muted/50 px-2 py-1 text-2xs text-muted-foreground"
           >
             {data.publishedAt
               ? 'Delivered — ad creative replaced.'
@@ -356,7 +353,7 @@ export function PaidPublisherBlock({
             onChange={(event) => setQuery(event.target.value)}
           />
 
-          <div className="nodrag min-h-0 flex-1 overflow-y-auto rounded-md border border-border/60">
+          <div className="nodrag -mx-1.5 min-h-0 flex-1 overflow-y-auto border-y border-border/60">
             {loading ? <p className="p-2 text-muted-foreground">Searching…</p> : null}
             {searchError ? <p className="p-2 text-destructive">{searchError}</p> : null}
             {!loading && !searchError

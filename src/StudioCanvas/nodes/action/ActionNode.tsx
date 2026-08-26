@@ -39,6 +39,7 @@ import {
   MODALITY_LABEL,
   ModalityPreview,
 } from '../modalityPreview';
+import { NodeBadge, NodeOverlayNote, NodeTitleBar } from '../NodeChrome';
 import { ActionConfigPopover } from './ActionConfigPopover';
 
 export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<ActionNodeData>>) {
@@ -69,10 +70,10 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
   const hasConfig = actionId ? configFieldsFor(actionId).length > 0 : false;
 
   return (
-    <div className="relative size-full min-h-[220px] min-w-[280px]">
+    <div className="relative size-full min-h-[180px] min-w-[200px]">
       <NodeResizer
-        minWidth={280}
-        minHeight={220}
+        minWidth={200}
+        minHeight={180}
         isVisible={selected}
         lineClassName="border-brand-primary/60"
       />
@@ -81,55 +82,48 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
         selected={selected}
         className="size-full overflow-hidden border-border/60 bg-background"
       >
-        <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2 text-xs font-semibold">
-          <Wand2 className="size-3.5 shrink-0" />
-          <span className="truncate">{def?.label ?? 'Pick an operation'}</span>
-          {outputModality ? (
-            <span className="ml-auto shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-              {MODALITY_LABEL[outputModality]}
-            </span>
+        <NodeTitleBar
+          icon={Wand2}
+          label={def?.label ?? 'Pick an operation'}
+          title={def?.description}
+        >
+          {outputModality ? <NodeBadge>{MODALITY_LABEL[outputModality]}</NodeBadge> : null}
+          {hasConfig && actionId ? (
+            <ActionConfigPopover nodeId={id} actionId={actionId} config={data.config} />
           ) : null}
-        </div>
-        <NodeContent className="flex h-full flex-col gap-2 p-2">
-          {def ? null : (
-            <p className="text-xs text-muted-foreground">
-              Choose an operation for this node from the canvas menu.
-            </p>
-          )}
+        </NodeTitleBar>
+        {/* The preview IS the body — no inner box, no padding, no rows of chrome. */}
+        <NodeContent className="group/preview relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/30 p-0">
           {def ? (
             <>
-              <div className="flex items-center gap-2">
-                <p className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
-                  {def.description}
-                </p>
-                {hasConfig && actionId ? (
-                  <ActionConfigPopover nodeId={id} actionId={actionId} config={data.config} />
-                ) : null}
-              </div>
-              <div className="flex min-h-24 flex-1 items-center justify-center overflow-hidden rounded border bg-black/90">
-                <ModalityPreview
-                  modality={outputModality}
-                  data={data}
-                  emptyLabel={implemented ? 'Ready to run' : 'Not available yet'}
-                />
-              </div>
-              {implemented ? null : (
-                <p className="text-xs text-muted-foreground">
-                  {def.label} is not available yet — no runner has shipped for it.
-                </p>
-              )}
-              {data.error ? <p className="text-xs text-destructive">{data.error}</p> : null}
+              <ModalityPreview
+                modality={outputModality}
+                data={data}
+                emptyLabel={
+                  implemented
+                    ? 'Ready to run'
+                    : `${def.label} is not available yet — no runner has shipped for it.`
+                }
+              />
               <Button
-                className="nodrag h-8"
+                className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-[11px] opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
                 size="sm"
                 disabled={!implemented || data.isExecuting}
+                onMouseDown={(event) => event.stopPropagation()}
                 onClick={() => void run()}
               >
-                {data.isExecuting ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : null}
+                {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
                 Run
               </Button>
+              {data.error ? (
+                <NodeOverlayNote tone="destructive">{data.error}</NodeOverlayNote>
+              ) : null}
             </>
-          ) : null}
+          ) : (
+            <span className="px-3 text-center text-xs text-muted-foreground">
+              Choose an operation for this node from the canvas menu.
+            </span>
+          )}
         </NodeContent>
       </CanvasNode>
       {targetHandles.map((handle, index) => (

@@ -160,11 +160,11 @@ export function ActionConfigPopover({
           <Button
             variant="ghost"
             size="icon"
-            className="nodrag size-7 shrink-0"
+            className="nodrag size-5 shrink-0 text-muted-foreground"
             aria-label="Operation settings"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <Settings2 className="size-3.5" />
+            <Settings2 className="size-3" />
           </Button>
         }
       />
