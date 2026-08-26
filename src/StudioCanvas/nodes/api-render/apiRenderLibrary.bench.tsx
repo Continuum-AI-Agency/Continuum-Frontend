@@ -19,7 +19,10 @@
  *      them, each re-read from the per-job relay and previewed from its own Library copy;
  *   8. progress advances on its own from the REAL five-value status, with no percentage;
  *   9. EVERY output is previewed, lazily, from the live DTO — never from persisted data;
- *  10. no control is invented for a parameter whose value set never crossed the boundary;
+ *  10. enum geometry is honest in both directions — no control is invented for a parameter
+ *      whose value set never crossed the boundary, the exact reflected set is offered when
+ *      it did, and a required enum with nothing chosen SHOWS empty rather than painting
+ *      option one as selected while Prepare refuses it;
  *  11. a finished image output becomes an ordinary canvas reference node pinned to its EXACT
  *      Library version — one per output, idempotent, and carrying no URL-only identity.
  *
@@ -603,6 +606,77 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
     const picker = field.parentElement?.querySelector('select') as HTMLSelectElement;
     expect(picker).toBeTruthy();
     expect([...picker.options].map((option) => option.value)).toEqual(['', ...positions]);
+  });
+
+  // A required picker with no empty option paints option one as selected while the node
+  // has stored nothing. The user reads "top_left", Prepare refuses "…is required", and the
+  // control and the button are describing the same variable differently. The refusal is
+  // correct — what has to be honest is the field.
+  test('a required enum is refused honestly, and nothing is queued', async () => {
+    renderNode({
+      templateKey: '166',
+      contractHash: 'hash',
+      variableDefinitions: [
+        variable({
+          key: 'watermark_position',
+          label: 'Watermark Position',
+          kind: 'enum',
+          required: true,
+          options: ['top_left', 'bottom_right'],
+        }),
+      ],
+    });
+
+    const field = await screen.findByText('Watermark Position *');
+    const picker = field.parentElement?.querySelector('select') as HTMLSelectElement;
+    expect(picker.value).toBe('');
+    expect(picker.options[0]?.disabled).toBe(true);
+    expect(picker.options[0]?.text).toBe('Choose…');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+
+    expect(await screen.findByText(/Watermark Position is required/)).toBeTruthy();
+    // Refused before the wire, and nothing downstream of it moved either.
+    expect(calls.preflight.length).toBe(0);
+    expect(calls.createJob).toBe(0);
+    expect(calls.createBatch).toBe(0);
+  });
+
+  test('the chosen option is exactly what Prepare sends, and nothing is queued', async () => {
+    renderNode({
+      templateKey: '166',
+      contractHash: 'hash',
+      variableDefinitions: [
+        variable({
+          key: 'watermark_position',
+          label: 'Watermark Position',
+          kind: 'enum',
+          required: true,
+          options: ['top_left', 'bottom_right'],
+        }),
+      ],
+    });
+
+    const field = await screen.findByText('Watermark Position *');
+    const picker = field.parentElement?.querySelector('select') as HTMLSelectElement;
+    fireEvent.change(picker, { target: { value: 'bottom_right' } });
+    await waitFor(() =>
+      expect((nodeData.variables as Record<string, unknown>).watermark_position).toBe(
+        'bottom_right',
+      ),
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+    await waitFor(() => expect(calls.preflight.length).toBe(1));
+
+    // The reflected wire value, verbatim — the fleet validates it by exact membership, so
+    // a relabelled or re-cased option is a 400 the user cannot act on.
+    expect((calls.preflight[0]?.variables as Record<string, unknown>).watermark_position).toBe(
+      'bottom_right',
+    );
+    // Prepare has no effects. Nothing in this bench queues a render.
+    expect(calls.createJob).toBe(0);
+    expect(calls.createBatch).toBe(0);
   });
 });
 

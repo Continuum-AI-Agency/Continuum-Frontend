@@ -619,37 +619,52 @@ export function StudioCanvas({
   const searchParams = useSearchParams();
   const currentSearch = searchParams.toString();
   const { rooms, isLoading: roomsLoading } = useCanvasRooms(brandProfileId || '');
-  const [activeRoomId, setActiveRoomId] = useState<string | undefined>(initialRoomId);
+  // A room id only means something paired with the brand it was picked for. An in-app brand
+  // switch is a soft refresh, so this component stays mounted and a room held on its own is
+  // still the PREVIOUS brand's on the render the new brand arrives — which realtime, its
+  // canvas_active_view heartbeat and the run-request hooks would all read as a real pair,
+  // before any effect gets a chance to correct it. Stamping the brand onto the selection and
+  // deriving the room during render makes that pair unrepresentable, while the
+  // server-resolved initialRoomId still connects on first paint.
+  const [roomSelection, setRoomSelection] = useState<{
+    brandProfileId?: string;
+    roomId?: string;
+  }>(() => ({ brandProfileId, roomId: initialRoomId }));
+  const activeRoomId =
+    roomSelection.brandProfileId === brandProfileId ? roomSelection.roomId : undefined;
   const selectRoom = useCallback(
     (roomId: string | undefined) => {
       if (roomId !== activeRoomId) {
         useStudioStore.getState().resetForRoomSwitch();
       }
-      setActiveRoomId(roomId);
+      setRoomSelection({ brandProfileId, roomId });
       router.replace(canvasRoomHref(currentSearch, roomId), { scroll: false });
     },
-    [activeRoomId, currentSearch, router],
+    [activeRoomId, brandProfileId, currentSearch, router],
   );
   const plannerApply = useApplyBackToPlanner({ brandProfileId, organicPlannerSeed });
 
-  // On an in-app brand switch (no full navigation, so the server-resolved
-  // initialRoomId is stale) drop the previous brand's room so the fallback below
-  // re-resolves against the new brand's rooms. Skips the initial mount via the ref
-  // so initialRoomId survives first paint.
+  // The room itself is fenced above; this drops the previous brand's graph and its room
+  // param. resetForBrandSwitch takes the new brand because child effects run before parent
+  // ones — Flow's setBrandId has already run by the time this does, and an arg-less reset
+  // would wipe it back to undefined.
   const previousBrandRef = useRef(brandProfileId);
   useEffect(() => {
-    if (previousBrandRef.current !== brandProfileId) {
-      previousBrandRef.current = brandProfileId;
-      useStudioStore.getState().resetForBrandSwitch();
-      selectRoom(undefined);
-    }
-  }, [brandProfileId, selectRoom]);
+    if (previousBrandRef.current === brandProfileId) return;
+    previousBrandRef.current = brandProfileId;
+    useStudioStore.getState().resetForBrandSwitch(brandProfileId);
+    router.replace(canvasRoomHref(currentSearch, undefined), { scroll: false });
+  }, [brandProfileId, currentSearch, router]);
 
+  // useCanvasRooms keeps the previous brand's rows until its refetch lands, so fall back to
+  // the first room OF THIS BRAND rather than the first row in the array.
   useEffect(() => {
-    if (!activeRoomId && rooms.length > 0) {
-      selectRoom(rooms[0].id);
+    if (activeRoomId) return;
+    const firstBrandRoom = rooms.find((room) => room.brand_profile_id === brandProfileId);
+    if (firstBrandRoom) {
+      selectRoom(firstBrandRoom.id);
     }
-  }, [activeRoomId, rooms, selectRoom]);
+  }, [activeRoomId, brandProfileId, rooms, selectRoom]);
 
   const realtime = useCanvasRealtime(brandProfileId || '', activeRoomId);
   const canvasRuntime = useMemo(

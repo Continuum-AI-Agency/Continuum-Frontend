@@ -146,7 +146,17 @@ export function RenderVariableFields({
                 value={String(values?.[variable.key] ?? '')}
                 onChange={(event) => onChange(variable.key, event.target.value)}
               >
-                {variable.required ? null : <option value="">Not set…</option>}
+                {/*
+                  Always present, so an empty required enum SHOWS empty. Dropping it left
+                  the browser painting option one as selected while '' was what the node
+                  stored — the field read as answered and Prepare then refused it as
+                  missing. Disabled when required so the placeholder cannot be chosen back
+                  as if it were an answer; left selectable otherwise, because clearing an
+                  optional variable is a real thing to want.
+                */}
+                <option value="" disabled={variable.required}>
+                  {variable.required ? 'Choose…' : 'Not set…'}
+                </option>
                 {variable.options.map((option) => (
                   <option key={option} value={option}>
                     {option}

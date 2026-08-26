@@ -65,13 +65,42 @@ describe('RenderVariableFields — enum geometry', () => {
     expect([...picker.options].map((option) => option.value)).toEqual(['', ...options]);
   });
 
-  test('drops the placeholder when the renderer requires a value', () => {
+  // A `<select>` with no empty option paints option one as selected while '' is what is
+  // actually stored. The field then reads "a" and Prepare refuses it as missing — the
+  // control and the button disagreeing about the same variable. The placeholder stays so
+  // an unanswered required enum LOOKS unanswered.
+  test('a required enum shows an empty choose-state instead of selecting option one', () => {
     renderFields([
       variable({ key: 'position', kind: 'enum', required: true, options: ['a', 'b'] }),
     ]);
 
     const picker = screen.getByRole('combobox') as HTMLSelectElement;
-    expect([...picker.options].map((option) => option.value)).toEqual(['a', 'b']);
+    expect([...picker.options].map((option) => option.value)).toEqual(['', 'a', 'b']);
+    expect(picker.value).toBe('');
+    expect(picker.selectedIndex).toBe(0);
+    // Disabled, so the placeholder cannot be chosen back as if it were an answer — it is
+    // a prompt, not a value the renderer accepts.
+    expect(picker.options[0]?.disabled).toBe(true);
+    expect(picker.options[0]?.text).toBe('Choose…');
+  });
+
+  test('a required enum shows the stored value once one is chosen', () => {
+    renderFields(
+      [variable({ key: 'position', kind: 'enum', required: true, options: ['a', 'b'] })],
+      { values: { position: 'b' } },
+    );
+
+    expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('b');
+  });
+
+  // The other direction: clearing an optional variable is a real thing to want, so its
+  // placeholder stays reachable.
+  test('an optional enum keeps its placeholder selectable', () => {
+    renderFields([variable({ key: 'position', kind: 'enum', options: ['a', 'b'] })]);
+
+    const picker = screen.getByRole('combobox') as HTMLSelectElement;
+    expect(picker.options[0]?.disabled).toBe(false);
+    expect(picker.options[0]?.text).toBe('Not set…');
   });
 
   test('invents no picker when the value set never crossed the boundary', () => {
