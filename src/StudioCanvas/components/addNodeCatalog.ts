@@ -4,9 +4,10 @@
 //
 // Two axes, in this order: the registry's CATEGORY (Text / Image / Video / Audio /
 // Document / Action) is the group, and inside a group the rows run provider by provider.
-// The provider rides on the row as its `tag` rather than as a second nesting level —
-// nesting video models under a provider submenu cost four hover-throughs to reach a
-// generator (#260), and a searchable palette makes hovering moot anyway.
+// The provider rides on the row as its `tag`; `sectionLayout` additionally derives ONE
+// nesting level per category for the hover tree — provider submenus where a category
+// spans more than one provider, family submenus for the op catalog — while a
+// single-provider category stays flat and SEARCH stays a flat ranked list either way.
 
 import {
   ACTION_DEFS,
@@ -247,20 +248,94 @@ const plainRows = (): readonly PlacedRow[] =>
 // (Planner Draft, Organic Publish, …) that share the Action group.
 const ALL_ROWS: readonly PlacedRow[] = [...videoModelRows(), ...plainRows(), ...actionOpRows()];
 
-const sectionFor = (category: AddNodeGroup): AddNodeGroupSection => ({
-  group: category,
-  label: CATEGORY_LABELS[category],
-  rows: PROVIDER_ORDER.flatMap((provider) =>
+/** A nested hover submenu inside a category — a provider's rows, or an op family's. */
+export type AddNodeSubGroup = {
+  key: StudioNodeProvider | ActionModality;
+  label: string;
+  rows: readonly AddNodeRow[];
+};
+
+/**
+ * How the hover tree renders one category: `direct` rows first, then one submenu per
+ * sub-group. Every section row appears exactly once across the two. Search mode ignores
+ * this entirely — the ranked list stays flat, the tag already names the provider.
+ */
+export type AddNodeSectionLayout = {
+  direct: readonly AddNodeRow[];
+  subGroups: readonly AddNodeSubGroup[];
+};
+
+/** The op catalog's reading order: stills, clips, text — mirrors ACTION_FAMILY_LABELS. */
+const FAMILY_ORDER: readonly ActionModality[] = ['image', 'video', 'text'];
+
+type SectionEntry = { row: AddNodeRow; provider: StudioNodeProvider };
+
+/**
+ * Family nesting wins over provider nesting: the op catalog is all-Continuum today, so
+ * the two never coexist — if a second op host ever lands, decide the combined shape then.
+ */
+const layoutFor = (entries: readonly SectionEntry[]): AddNodeSectionLayout => {
+  const ops = entries.filter((entry) => entry.row.family !== undefined);
+  if (ops.length > 0) {
+    return {
+      direct: entries.filter((entry) => entry.row.family === undefined).map((entry) => entry.row),
+      subGroups: FAMILY_ORDER.map((family) => ({
+        key: family,
+        label: ACTION_FAMILY_LABELS[family],
+        rows: ops.filter((entry) => entry.row.family === family).map((entry) => entry.row),
+      })).filter((group) => group.rows.length > 0),
+    };
+  }
+
+  const providers = new Set(entries.map((entry) => entry.provider));
+  if (providers.size > 1) {
+    return {
+      direct: [],
+      subGroups: PROVIDER_ORDER.filter((provider) => providers.has(provider)).map((provider) => ({
+        key: provider,
+        label: PROVIDER_LABELS[provider],
+        rows: entries.filter((entry) => entry.provider === provider).map((entry) => entry.row),
+      })),
+    };
+  }
+
+  return { direct: entries.map((entry) => entry.row), subGroups: [] };
+};
+
+const buildSection = (
+  category: AddNodeGroup,
+): { section: AddNodeGroupSection; layout: AddNodeSectionLayout } => {
+  const entries: SectionEntry[] = PROVIDER_ORDER.flatMap((provider) =>
     ALL_ROWS.filter((row) => row.category === category && row.provider === provider).map(
-      ({ category: _category, provider: _provider, ...row }) => row,
+      ({ category: _category, provider: rowProvider, ...row }) => ({ row, provider: rowProvider }),
     ),
-  ),
-});
+  );
+  return {
+    section: {
+      group: category,
+      label: CATEGORY_LABELS[category],
+      rows: entries.map((entry) => entry.row),
+    },
+    layout: layoutFor(entries),
+  };
+};
+
+const BUILT_SECTIONS = STUDIO_NODE_CATEGORY_ORDER.map(buildSection).filter(
+  (built) => built.section.rows.length > 0,
+);
 
 /** Categories in the order contracts publishes them; an empty one is not rendered. */
-export const ADD_NODE_GROUPS: readonly AddNodeGroupSection[] = STUDIO_NODE_CATEGORY_ORDER.map(
-  sectionFor,
-).filter((section) => section.rows.length > 0);
+export const ADD_NODE_GROUPS: readonly AddNodeGroupSection[] = BUILT_SECTIONS.map(
+  (built) => built.section,
+);
+
+const SECTION_LAYOUTS = new Map<AddNodeGroup, AddNodeSectionLayout>(
+  BUILT_SECTIONS.map((built) => [built.section.group, built.layout]),
+);
+
+/** The hover tree's shape for one category. Same row objects the section carries. */
+export const sectionLayout = (section: AddNodeGroupSection): AddNodeSectionLayout =>
+  SECTION_LAYOUTS.get(section.group) ?? { direct: section.rows, subGroups: [] };
 
 export const ADD_NODE_GROUP_ORDER: readonly AddNodeGroup[] = ADD_NODE_GROUPS.map(
   (section) => section.group,

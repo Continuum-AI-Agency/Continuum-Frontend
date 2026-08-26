@@ -119,6 +119,8 @@ describe('CanvasContextMenuContent', () => {
 
     fireEvent.keyDown(getByText('Add Node'), { key: 'Enter' });
     fireEvent.keyDown(getByText('Video'), { key: 'Enter' });
+    // Video spans providers, so its models sit one more hover down, under Fal.
+    fireEvent.keyDown(getByText('Fal'), { key: 'Enter' });
     fireEvent.click(getByText('Pixverse V6'));
 
     expect(props.addNode).toHaveBeenCalledTimes(1);

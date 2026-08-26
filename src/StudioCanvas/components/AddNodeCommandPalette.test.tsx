@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { AddNodeCommandPalette } from './AddNodeCommandPalette';
-import { ADD_NODE_GROUPS } from './addNodeCatalog';
+import { ADD_NODE_GROUPS, sectionLayout } from './addNodeCatalog';
 
 afterEach(cleanup);
 
@@ -65,6 +65,47 @@ function categoryTriggers(): string[] {
   ).map((el) => el.textContent?.trim() ?? '');
 }
 
+/** Open one category submenu with Enter on its trigger and return its (portalled) popup. */
+function openCategory(label: string, group: string): Element {
+  fireEvent.keyDown(screen.getByText(label), { key: 'Enter' });
+  const popup = document.querySelector(
+    `[data-testid="add-node-category"][data-category="${group}"]`,
+  );
+  if (!popup) throw new Error(`no ${group} category popup`);
+  return popup;
+}
+
+/** Open one nested sub-group (provider or family) from an open category popup. */
+function openSubGroup(popup: Element, group: string, key: string): Element {
+  const trigger = popup.querySelector(
+    `[data-slot="context-menu-sub-trigger"][data-subgroup="${key}"]`,
+  );
+  if (!trigger) throw new Error(`no ${key} sub-trigger in ${group}`);
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  const sub = document.querySelector(
+    `[data-testid="add-node-subgroup"][data-category="${group}"][data-subgroup="${key}"]`,
+  );
+  if (!sub) throw new Error(`no ${group}/${key} sub-group popup`);
+  return sub;
+}
+
+/** The row labels a (portalled) popup renders directly — nested popups do not leak in. */
+const labelsIn = (popup: Element): (string | undefined)[] =>
+  Array.from(popup.querySelectorAll('[data-slot="context-menu-item"] span:first-child')).map(
+    (el) => el.textContent?.trim(),
+  );
+
+const subTriggerLabels = (popup: Element): (string | undefined)[] =>
+  Array.from(popup.querySelectorAll('[data-slot="context-menu-sub-trigger"]')).map((el) =>
+    el.textContent?.trim(),
+  );
+
+const sectionFor = (group: string) => {
+  const section = ADD_NODE_GROUPS.find((candidate) => candidate.group === group);
+  if (!section) throw new Error(`no ${group} section`);
+  return section;
+};
+
 describe('AddNodeCommandPalette', () => {
   it(
     'opens as a submenu with the search box and one category submenu per catalog group',
@@ -121,28 +162,120 @@ describe('AddNodeCommandPalette', () => {
   );
 
   it(
-    'lists every catalog row inside its category submenu',
+    'lists every catalog row inside its category submenu, descending nested sub-groups',
     () => {
       const { onAdd } = renderPalette();
 
       for (const section of ADD_NODE_GROUPS) {
-        fireEvent.keyDown(screen.getByText(section.label), { key: 'Enter' });
-        const popup = document.querySelector(
-          `[data-testid="add-node-category"][data-category="${section.group}"]`,
-        );
-        expect(popup).not.toBeNull();
-        const labels = Array.from(
-          popup?.querySelectorAll('[data-slot="context-menu-item"] span:first-child') ?? [],
-        ).map((el) => el.textContent?.trim());
-        expect(labels).toEqual(section.rows.map((row) => row.label));
+        const layout = sectionLayout(section);
+        const popup = openCategory(section.label, section.group);
+
+        expect(labelsIn(popup)).toEqual(layout.direct.map((row) => row.label));
+        expect(subTriggerLabels(popup)).toEqual(layout.subGroups.map((sub) => sub.label));
+
+        for (const sub of layout.subGroups) {
+          const subPopup = openSubGroup(popup, section.group, sub.key);
+          expect(labelsIn(subPopup)).toEqual(sub.rows.map((row) => row.label));
+        }
       }
 
-      const rotate = document.querySelector(
-        '[data-testid="add-node-category"] [data-slot="context-menu-item"][data-action-id="image.rotate"]',
+      // Opening each next sub-group closes its sibling, so re-open the one rotate lives in.
+      const imageOps = openSubGroup(openCategory('Action', 'action'), 'action', 'image');
+      const rotate = imageOps.querySelector(
+        '[data-slot="context-menu-item"][data-action-id="image.rotate"]',
       );
       expect(rotate?.getAttribute('data-action-family')).toBe('image');
       fireEvent.click(rotate as HTMLElement);
       expect(onAdd.mock.calls[0]).toEqual(['action', { actionId: 'image.rotate' }]);
+    },
+    RENDER_TIMEOUT_MS,
+  );
+
+  // Ask 1: a category whose rows span providers nests one more level, in provider order.
+  it(
+    'nests the Video category by provider, and a provider-nested row adds with its model',
+    () => {
+      const { onAdd } = renderPalette();
+      const layout = sectionLayout(sectionFor('video'));
+      const fal = layout.subGroups.find((sub) => sub.key === 'fal');
+      if (!fal) throw new Error('no fal sub-group');
+
+      const popup = openCategory('Video', 'video');
+      expect(labelsIn(popup)).toEqual([]);
+      expect(subTriggerLabels(popup)).toEqual(['Google', 'Fal', 'Continuum']);
+
+      const falPopup = openSubGroup(popup, 'video', 'fal');
+      expect(labelsIn(falPopup)).toEqual(fal.rows.map((row) => row.label));
+
+      const firstRow = fal.rows[0];
+      fireEvent.click(
+        falPopup.querySelector('[data-slot="context-menu-item"]') as HTMLElement,
+      );
+      expect(onAdd.mock.calls[0]).toEqual(['videoGen', { model: firstRow.model }]);
+    },
+    RENDER_TIMEOUT_MS,
+  );
+
+  // Ask 2 (scope addition): ~32 op rows made the Action submenu unusable, so the ops nest
+  // by family while the handoffs/utilities stay one hover deep above them.
+  it(
+    'nests the op catalog by family under the direct utility rows, and an op still adds',
+    () => {
+      const { onAdd } = renderPalette();
+      const layout = sectionLayout(sectionFor('action'));
+
+      const popup = openCategory('Action', 'action');
+      expect(labelsIn(popup)).toEqual(layout.direct.map((row) => row.label));
+      expect(subTriggerLabels(popup)).toEqual(['Image', 'Video', 'Text']);
+
+      const videoOps = openSubGroup(popup, 'action', 'video');
+      const videoFamily = layout.subGroups.find((sub) => sub.key === 'video');
+      expect(labelsIn(videoOps)).toEqual(videoFamily?.rows.map((row) => row.label) ?? []);
+
+      const subtitles = videoOps.querySelector('[data-action-id="video.subtitles"]');
+      expect(subtitles).not.toBeNull();
+      fireEvent.click(subtitles as HTMLElement);
+      expect(onAdd.mock.calls[0]).toEqual(['action', { actionId: 'video.subtitles' }]);
+    },
+    RENDER_TIMEOUT_MS,
+  );
+
+  it(
+    'gives every trigger and row a leading icon, in both modes',
+    () => {
+      renderPalette();
+
+      const triggers = Array.from(
+        document.querySelectorAll(
+          '[data-testid="add-node-palette"] [data-slot="context-menu-sub-trigger"]',
+        ),
+      );
+      expect(triggers.length).toBe(ADD_NODE_GROUPS.length);
+      for (const trigger of triggers) {
+        expect(trigger.querySelector('svg'), trigger.textContent ?? '').not.toBeNull();
+      }
+
+      const popup = openCategory('Action', 'action');
+      const entries = Array.from(
+        popup.querySelectorAll('[data-slot="context-menu-item"], [data-slot="context-menu-sub-trigger"]'),
+      );
+      expect(entries.length).toBeGreaterThan(0);
+      for (const entry of entries) {
+        expect(entry.querySelector('svg'), entry.textContent ?? '').not.toBeNull();
+      }
+      const videoOps = openSubGroup(popup, 'action', 'video');
+      for (const row of videoOps.querySelectorAll('[data-slot="context-menu-item"]')) {
+        expect(row.querySelector('svg'), row.textContent ?? '').not.toBeNull();
+      }
+
+      search('continuum');
+      const items = Array.from(document.querySelectorAll('[data-slot="command-item"]')).filter(
+        (el) => !el.hasAttribute('hidden'),
+      );
+      expect(items.length).toBeGreaterThan(0);
+      for (const item of items) {
+        expect(item.querySelector('svg'), item.textContent ?? '').not.toBeNull();
+      }
     },
     RENDER_TIMEOUT_MS,
   );

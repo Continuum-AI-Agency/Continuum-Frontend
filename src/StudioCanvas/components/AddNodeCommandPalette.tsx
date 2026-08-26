@@ -2,8 +2,11 @@
 
 // Add Node, as ONE submenu with two modes. Hover "Add Node" and the palette opens beside
 // it with a search box on top and the category submenus (Text / Image / Video / …) below,
-// each opening on hover the way the old nested tree did. Type, and the categories give way
-// to cmdk's flat ranked list. Empty the box and the categories come back.
+// each opening on hover the way the old nested tree did. A category that spans providers
+// nests one more level (Google › / Fal › / Continuum ›), and the op catalog nests by
+// family (Image › / Video › / Text ›) under its direct utility rows — `sectionLayout`
+// decides, the palette just renders. Type, and it ALL gives way to cmdk's flat ranked
+// list. Empty the box and the categories come back.
 //
 // cmdk (not Base UI Combobox) on purpose: its command-score MATCHES subsequences, so
 // "vidgen" and "hyp" land on the right row. See Continuum-Frontend/AGENTS.md §4 and
@@ -17,9 +20,40 @@
 // label match is rendered first, in its own group, and left out of its normal one. Fuzzy
 // matching is untouched — the settled cmdk decision stands, the defect was ordering.
 
-import type { ActionId, VideoGeneratorModel } from '@continuum/contracts';
-import { Plus } from 'lucide-react';
+import type { ActionId, ActionModality, VideoGeneratorModel } from '@continuum/contracts';
+import {
+  Braces,
+  CalendarPlus,
+  Camera,
+  Clapperboard,
+  Download,
+  FastForward,
+  FileImage,
+  FileText,
+  FileVideo,
+  Film,
+  Flame,
+  Gem,
+  Image,
+  Layers,
+  Layers2,
+  ListVideo,
+  Megaphone,
+  Plus,
+  Send,
+  Share2,
+  Sparkles,
+  StickyNote,
+  Table,
+  Type,
+  Video,
+  Volume2,
+  Wand2,
+  Zap,
+} from 'lucide-react';
 import { type KeyboardEvent, useMemo, useState } from 'react';
+
+import { GoogleIcon, type IconComponent } from '@/components/shared/icons';
 
 import {
   Command,
@@ -41,12 +75,77 @@ import {
 import {
   ACTION_FAMILY_LABELS,
   ADD_NODE_GROUPS,
+  type AddNodeGroup,
   type AddNodeGroupSection,
   type AddNodeRow,
+  type AddNodeSubGroup,
   addNodeRowKey,
   addNodeSearchValue,
   type StudioCanvasNodeType,
+  sectionLayout,
 } from './addNodeCatalog';
+
+// Presentation only — the catalog stays pure data. Node glyphs reuse the icon each block
+// component already renders for itself (Film on HyperframesAgentBlock, Camera on
+// FrameExtractBlock, Share2 on RouterNode, …); the rest are new picks here. Brand marks
+// come from @/components/shared/icons (lucide ships none); Fal and Continuum have no
+// house glyph, so lucide stand-ins carry them.
+const NODE_TYPE_ICONS: Record<StudioCanvasNodeType, IconComponent> = {
+  nanoGen: Image,
+  videoGen: Video,
+  veoDirector: Video,
+  veoFast: Video,
+  omniGen: Wand2,
+  extendVideo: FastForward,
+  hyperframesAgent: Film,
+  timelineEditor: ListVideo,
+  layerEditor: Layers2,
+  plannerDraft: CalendarPlus,
+  organicPublish: Send,
+  paidPublisher: Megaphone,
+  apiRender: Braces,
+  string: Type,
+  note: StickyNote,
+  image: FileImage,
+  audio: Volume2,
+  document: FileText,
+  video: FileVideo,
+  videoDecode: Clapperboard,
+  frameExtract: Camera,
+  action: Wand2,
+  router: Share2,
+  export: Download,
+  batch: Table,
+  element: Layers,
+  designRef: Gem,
+};
+
+const FAMILY_ICONS: Record<ActionModality, IconComponent> = {
+  image: Image,
+  video: Video,
+  text: Type,
+};
+
+const CATEGORY_ICONS: Record<AddNodeGroup, IconComponent> = {
+  text: Type,
+  image: Image,
+  video: Video,
+  audio: Volume2,
+  document: FileText,
+  action: Zap,
+};
+
+/** Provider submenus wear the host's mark; family submenus wear their modality's. */
+const SUB_GROUP_ICONS: Record<AddNodeSubGroup['key'], IconComponent> = {
+  google: GoogleIcon,
+  fal: Flame,
+  continuum: Sparkles,
+  ...FAMILY_ICONS,
+};
+
+/** An op row wears its family's glyph; every other row wears its node type's. */
+const rowIcon = (row: AddNodeRow): IconComponent =>
+  row.family ? FAMILY_ICONS[row.family] : NODE_TYPE_ICONS[row.type];
 
 /** Every row with the section it belongs to, so a pinned row keeps its real search value. */
 const ALL_ENTRIES: readonly { section: AddNodeGroupSection; row: AddNodeRow }[] =
@@ -74,6 +173,12 @@ const addOptionsFor = (
   row: AddNodeRow,
 ): { model?: VideoGeneratorModel; actionId?: ActionId } | undefined =>
   row.model ? { model: row.model } : row.actionId ? { actionId: row.actionId } : undefined;
+
+/** Sized by the menu/command item itself unless the surface's own convention says mr-2. */
+const RowLeadingIcon = ({ row, className }: { row: AddNodeRow; className?: string }) => {
+  const Icon = rowIcon(row);
+  return <Icon className={className} />;
+};
 
 const RowBody = ({ row }: { row: AddNodeRow }) => (
   <div className="flex min-w-0 flex-col">
@@ -128,9 +233,23 @@ export function AddNodeCommandPalette({
       data-action-family={row.family}
       onSelect={() => onAdd(row.type, addOptionsFor(row))}
     >
+      <RowLeadingIcon row={row} />
       <RowBody row={row} />
       <CommandShortcut>{rowTag(row)}</CommandShortcut>
     </CommandItem>
+  );
+
+  const renderMenuRow = (row: AddNodeRow) => (
+    <ContextMenuItem
+      key={addNodeRowKey(row)}
+      data-action-id={row.actionId}
+      data-action-family={row.family}
+      onClick={() => onAdd(row.type, addOptionsFor(row))}
+    >
+      <RowLeadingIcon row={row} className="mr-2 h-4 w-4" />
+      <RowBody row={row} />
+      <ContextMenuShortcut>{rowTag(row)}</ContextMenuShortcut>
+    </ContextMenuItem>
   );
 
   return (
@@ -183,28 +302,47 @@ export function AddNodeCommandPalette({
             Enter and the arrows before Base UI's own item handling saw them. */}
         {query
           ? null
-          : ADD_NODE_GROUPS.map((section) => (
-              <ContextMenuSub key={section.group}>
-                <ContextMenuSubTrigger inset>{section.label}</ContextMenuSubTrigger>
-                <ContextMenuSubContent
-                  className="nowheel w-72"
-                  data-testid="add-node-category"
-                  data-category={section.group}
-                >
-                  {section.rows.map((row) => (
-                    <ContextMenuItem
-                      key={addNodeRowKey(row)}
-                      data-action-id={row.actionId}
-                      data-action-family={row.family}
-                      onClick={() => onAdd(row.type, addOptionsFor(row))}
-                    >
-                      <RowBody row={row} />
-                      <ContextMenuShortcut>{rowTag(row)}</ContextMenuShortcut>
-                    </ContextMenuItem>
-                  ))}
-                </ContextMenuSubContent>
-              </ContextMenuSub>
-            ))}
+          : ADD_NODE_GROUPS.map((section) => {
+              const CategoryIcon = CATEGORY_ICONS[section.group];
+              // Direct rows first, then one submenu per sub-group: providers where the
+              // category spans more than one, families for the op catalog. A
+              // single-provider category has no sub-groups and stays one hover deep.
+              const layout = sectionLayout(section);
+              return (
+                <ContextMenuSub key={section.group}>
+                  <ContextMenuSubTrigger inset>
+                    <CategoryIcon className="mr-2 h-4 w-4" />
+                    {section.label}
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent
+                    className="nowheel w-72"
+                    data-testid="add-node-category"
+                    data-category={section.group}
+                  >
+                    {layout.direct.map(renderMenuRow)}
+                    {layout.subGroups.map((sub) => {
+                      const SubIcon = SUB_GROUP_ICONS[sub.key];
+                      return (
+                        <ContextMenuSub key={sub.key}>
+                          <ContextMenuSubTrigger inset data-subgroup={sub.key}>
+                            <SubIcon className="mr-2 h-4 w-4" />
+                            {sub.label}
+                          </ContextMenuSubTrigger>
+                          <ContextMenuSubContent
+                            className="nowheel w-72"
+                            data-testid="add-node-subgroup"
+                            data-category={section.group}
+                            data-subgroup={sub.key}
+                          >
+                            {sub.rows.map(renderMenuRow)}
+                          </ContextMenuSubContent>
+                        </ContextMenuSub>
+                      );
+                    })}
+                  </ContextMenuSubContent>
+                </ContextMenuSub>
+              );
+            })}
       </ContextMenuSubContent>
     </ContextMenuSub>
   );

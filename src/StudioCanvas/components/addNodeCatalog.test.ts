@@ -22,6 +22,7 @@ import {
   addNodeSearchValue,
   LEGACY_VIDEO_ALIAS_NODE_TYPES,
   PENDING_PALETTE_NODE_TYPES,
+  sectionLayout,
   STUDIO_CANVAS_NODE_TYPES,
 } from './addNodeCatalog';
 
@@ -272,5 +273,95 @@ describe('addNodeCatalog', () => {
     expect(new Set(values).size, 'cmdk keys items by value — duplicates collapse').toBe(
       values.length,
     );
+  });
+});
+
+// The hover tree's second level. Search mode ignores all of this — the ranked list stays
+// flat — so these pin only what the category submenus render.
+describe('sectionLayout', () => {
+  const providerOf = (row: AddNodeRow): string =>
+    row.model ? getVideoGeneratorProvider(row.model) : STUDIO_NODE_REGISTRY[row.type].provider;
+
+  const layoutOf = (group: string) => {
+    const section = ADD_NODE_GROUPS.find((candidate) => candidate.group === group);
+    if (!section) throw new Error(`no ${group} section`);
+    return { section, layout: sectionLayout(section) };
+  };
+
+  it('nests provider submenus exactly where a category spans more than one provider', () => {
+    for (const section of ADD_NODE_GROUPS) {
+      // The op catalog nests by family instead; the next test owns it.
+      if (section.rows.some((row) => row.family !== undefined)) continue;
+      const providers = new Set(section.rows.map(providerOf));
+      const layout = sectionLayout(section);
+
+      if (providers.size > 1) {
+        expect(layout.direct, section.group).toEqual([]);
+        expect(
+          layout.subGroups.map((sub) => sub.key),
+          section.group,
+        ).toEqual(['google', 'fal', 'continuum'].filter((provider) => providers.has(provider)));
+      } else {
+        expect(layout.subGroups, section.group).toEqual([]);
+        expect(layout.direct, section.group).toEqual([...section.rows]);
+      }
+    }
+
+    // Pin the real shapes so the loop above cannot pass vacuously.
+    expect(layoutOf('video').layout.subGroups.map((sub) => sub.key)).toEqual([
+      'google',
+      'fal',
+      'continuum',
+    ]);
+    expect(layoutOf('image').layout.subGroups.map((sub) => sub.key)).toEqual([
+      'google',
+      'continuum',
+    ]);
+    expect(layoutOf('text').layout.subGroups).toEqual([]);
+  });
+
+  it('files each provider submenu row under its own provider, keeping section order', () => {
+    for (const { section, layout } of [layoutOf('video'), layoutOf('image')]) {
+      for (const sub of layout.subGroups) {
+        expect(['Google', 'Fal', 'Continuum'], section.group).toContain(sub.label);
+        expect(sub.rows, sub.label).toEqual(
+          section.rows.filter((row) => providerOf(row) === sub.key),
+        );
+      }
+    }
+  });
+
+  it('nests the op catalog by family under the direct utility rows', () => {
+    const { section, layout } = layoutOf('action');
+
+    expect(layout.subGroups.map((sub) => sub.key)).toEqual(['image', 'video', 'text']);
+    expect(layout.subGroups.map((sub) => sub.label)).toEqual(['Image', 'Video', 'Text']);
+
+    // The handoffs and utilities stay one hover deep, above the family submenus.
+    expect(layout.direct).toEqual(section.rows.filter((row) => row.family === undefined));
+    expect(layout.direct.length).toBeGreaterThan(0);
+    expect(layout.direct.every((row) => row.actionId === undefined)).toBe(true);
+
+    for (const sub of layout.subGroups) {
+      expect(sub.rows.length, sub.label).toBeGreaterThan(0);
+      expect(
+        sub.rows.every((row) => row.family === sub.key),
+        sub.label,
+      ).toBe(true);
+      expect(sub.rows, sub.label).toEqual(section.rows.filter((row) => row.family === sub.key));
+    }
+  });
+
+  it('places every section row exactly once across direct rows and sub-groups', () => {
+    for (const section of ADD_NODE_GROUPS) {
+      const layout = sectionLayout(section);
+      const flattened = [...layout.direct, ...layout.subGroups.flatMap((sub) => sub.rows)];
+
+      expect(flattened.length, section.group).toBe(section.rows.length);
+      expect([...flattened.map(addNodeRowKey)].sort()).toEqual(
+        [...section.rows.map(addNodeRowKey)].sort(),
+      );
+      for (const row of flattened) expect(section.rows, addNodeRowKey(row)).toContain(row);
+    }
   });
 });
