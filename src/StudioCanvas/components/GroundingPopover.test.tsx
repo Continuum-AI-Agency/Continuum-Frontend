@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// The popover reads the BRAND's system, its book, its direction and its skills. Only the
-// first shapes what this file asserts; the rest are stubbed so the panel renders.
+// The menu reads the BRAND's system, its book, its direction and its skills. Only the
+// first two shape what this file asserts; the rest are stubbed so the sections render.
 mock.module('@/lib/brands/useBrandDesignSections.client', () => ({
   useBrandDesignSections: () => ({
     sections: [
@@ -29,10 +29,20 @@ mock.module('@/lib/organic/skills', () => ({
 }));
 
 import type { DesignSection } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
-import { effectiveDesignSections, GroundingPopover } from './GroundingPopover';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { GroundingChip } from './GroundingChip';
+import { effectiveDesignSections, GroundingMenuSections } from './GroundingPopover';
 
 const IMAGE_ROW: DesignSection[] = ['palette', 'imagery', 'logo'];
+
+// Base UI mounts a portalled positioner per render; on a machine running several
+// benches at once the first one in a file can take longer than bun's 5s default.
+const RENDER_TIMEOUT_MS = 30_000;
 
 describe('effectiveDesignSections', () => {
   it('is null with neither a selection nor a node-type row — the old "all on" reading', () => {
@@ -63,90 +73,238 @@ describe('effectiveDesignSections', () => {
   });
 });
 
-describe('GroundingPopover — design-system provenance', () => {
+// The sections live inside menu submenus, so the harness gives them the Menu.Root
+// context they need. Happy-dom cannot exercise the hover-open path (the real-browser
+// bench covers it); clicking a section trigger uses the same open machinery.
+function renderSections(props: Partial<React.ComponentProps<typeof GroundingMenuSections>> = {}) {
+  return render(
+    <DropdownMenu open>
+      <DropdownMenuTrigger>chip</DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <GroundingMenuSections
+          brandId="brand-1"
+          skillIds={[]}
+          brandBookPieces={undefined}
+          onToggleSkill={() => {}}
+          onTogglePiece={() => {}}
+          onToggleDesignSection={() => {}}
+          {...props}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>,
+  );
+}
+
+async function openSection(name: string) {
+  fireEvent.click(screen.getByText(name));
+  await waitFor(() => expect(screen.getAllByRole('menuitemcheckbox').length).toBeGreaterThan(0));
+}
+
+const rowFor = (label: string) =>
+  screen.getAllByRole('menuitemcheckbox').find((item) => item.textContent?.startsWith(label));
+
+describe('GroundingMenuSections — structure', () => {
   afterEach(cleanup);
 
-  const renderPopover = (props: Partial<React.ComponentProps<typeof GroundingPopover>> = {}) =>
-    render(
-      <GroundingPopover
-        brandId="brand-1"
-        skillIds={[]}
-        brandBookPieces={undefined}
-        onToggleSkill={() => {}}
-        onTogglePiece={() => {}}
-        onToggleDesignSection={() => {}}
-        {...props}
-      />,
-    );
+  it(
+    'renders one hover submenu trigger per section when the menu is open',
+    () => {
+      renderSections();
 
-  const rowFor = (label: string) =>
-    screen.getAllByRole('button').find((button) => button.textContent?.startsWith(label));
+      expect(screen.getByText('Style')).toBeDefined();
+      expect(screen.getByText('Brand book')).toBeDefined();
+      expect(screen.getByText('Design system')).toBeDefined();
+      expect(screen.getByText('Creative skills')).toBeDefined();
+      // No direction pieces are stubbed, so that section must not render.
+      expect(screen.queryByText('Creative direction')).toBeNull();
+    },
+    RENDER_TIMEOUT_MS,
+  );
 
-  it('says "all on" and checks everything when there is no contextual default', () => {
-    // The pre-contextual reading, kept for any surface that has no node type.
-    renderPopover({ designSystemSections: undefined });
+  it(
+    'opening a section expands its checkbox rows',
+    async () => {
+      renderSections();
 
-    expect(screen.getByText('all on')).toBeDefined();
-    expect(rowFor('Motion')?.querySelector('svg')).not.toBeNull();
-  });
+      await openSection('Design system');
 
-  it('reports the count as AUTO and checks only the node type row', () => {
-    // The lie this replaces: with a per-type default, an unselected node used to render
-    // every row checked and "all on" while the payload sent three sections.
-    renderPopover({
-      designSystemSections: undefined,
-      contextual: { autoApplied: IMAGE_ROW, wired: [] },
-    });
+      expect(rowFor('Palette')).toBeDefined();
+      expect(rowFor('Imagery')).toBeDefined();
+      expect(rowFor('Logo')).toBeDefined();
+      expect(rowFor('Motion')).toBeDefined();
+    },
+    RENDER_TIMEOUT_MS,
+  );
 
-    expect(screen.getByText('3 auto')).toBeDefined();
-    expect(screen.getByText(/Switched on by default for this kind of node/)).toBeDefined();
-    expect(rowFor('Palette')?.querySelector('svg')).not.toBeNull();
-    // Motion is not on an image generator's row, so it must not read as applied.
-    expect(rowFor('Motion')?.querySelector('svg')).toBeNull();
-  });
+  it(
+    'fires the toggle callback when a row is clicked',
+    async () => {
+      const onToggleDesignSection = mock(() => {});
+      renderSections({ onToggleDesignSection });
 
-  it('marks a wired section as supplied elsewhere, and disables its toggle', () => {
-    renderPopover({
-      designSystemSections: undefined,
-      contextual: { autoApplied: IMAGE_ROW, wired: ['palette'] },
-    });
+      await openSection('Design system');
+      fireEvent.click(rowFor('Imagery') as HTMLElement);
 
-    expect(screen.getByText('2 auto')).toBeDefined();
-    const palette = rowFor('Palette');
-    expect(palette?.textContent).toContain('wired');
-    expect(palette?.textContent).toContain('Supplied by a connected Design Reference');
-    // Toggling would be subtracted straight back out, so the control says so.
-    expect((palette as HTMLButtonElement).disabled).toBe(true);
-    expect((rowFor('Imagery') as HTMLButtonElement).disabled).toBe(false);
-  });
+      expect(onToggleDesignSection).toHaveBeenCalledWith('imagery');
+    },
+    RENDER_TIMEOUT_MS,
+  );
 
-  it('reports an explicit selection as "on", not "auto"', () => {
-    renderPopover({
-      designSystemSections: ['motion'],
-      contextual: { autoApplied: IMAGE_ROW, wired: [] },
-    });
+  it(
+    'nudges toward Settings instead of piece rows when there is no brand book',
+    async () => {
+      // useBrandBook is stubbed to no tokens, so availability.full is false; pieces []
+      // means enforcement is explicitly OFF (undefined would default it on).
+      renderSections({ brandBookPieces: [] });
 
-    expect(screen.getByText('1 on')).toBeDefined();
-    expect(rowFor('Motion')?.querySelector('svg')).not.toBeNull();
-    expect(rowFor('Palette')?.querySelector('svg')).toBeNull();
-  });
+      fireEvent.click(screen.getByText('Brand book'));
+      await waitFor(() =>
+        expect(screen.getByText(/No brand book yet — finish it in Settings/)).toBeDefined(),
+      );
+      // Enforcement can still be toggled ON only when a book exists; the row is disabled.
+      const enforce = rowFor('Enforce brand book');
+      expect(enforce?.hasAttribute('data-disabled')).toBe(true);
+    },
+    RENDER_TIMEOUT_MS,
+  );
 });
 
-describe('grounding chip + popover styling', () => {
+describe('GroundingMenuSections — design-system provenance', () => {
+  afterEach(cleanup);
+
+  const checkedState = (label: string) => rowFor(label)?.getAttribute('aria-checked');
+
+  it(
+    'says "all on" and checks everything when there is no contextual default',
+    async () => {
+      // The pre-contextual reading, kept for any surface that has no node type.
+      renderSections({ designSystemSections: undefined });
+
+      expect(screen.getByText('all on')).toBeDefined();
+      await openSection('Design system');
+      expect(checkedState('Motion')).toBe('true');
+    },
+    RENDER_TIMEOUT_MS,
+  );
+
+  it(
+    'reports the count as AUTO and checks only the node type row',
+    async () => {
+      // The lie this replaces: with a per-type default, an unselected node used to render
+      // every row checked and "all on" while the payload sent three sections.
+      renderSections({
+        designSystemSections: undefined,
+        contextual: { autoApplied: IMAGE_ROW, wired: [] },
+      });
+
+      expect(screen.getByText('3 auto')).toBeDefined();
+      await openSection('Design system');
+      expect(screen.getByText(/Switched on by default for this kind of node/)).toBeDefined();
+      expect(checkedState('Palette')).toBe('true');
+      // Motion is not on an image generator's row, so it must not read as applied.
+      expect(checkedState('Motion')).toBe('false');
+    },
+    RENDER_TIMEOUT_MS,
+  );
+
+  it(
+    'marks a wired section as supplied elsewhere, and disables its toggle',
+    async () => {
+      renderSections({
+        designSystemSections: undefined,
+        contextual: { autoApplied: IMAGE_ROW, wired: ['palette'] },
+      });
+
+      expect(screen.getByText('2 auto')).toBeDefined();
+      await openSection('Design system');
+      const palette = rowFor('Palette');
+      expect(palette?.textContent).toContain('wired');
+      // Toggling would be subtracted straight back out, so the control says so.
+      expect(palette?.hasAttribute('data-disabled')).toBe(true);
+      expect(rowFor('Imagery')?.hasAttribute('data-disabled')).toBe(false);
+    },
+    RENDER_TIMEOUT_MS,
+  );
+
+  it(
+    'reports an explicit selection as "on", not "auto"',
+    async () => {
+      renderSections({
+        designSystemSections: ['motion'],
+        contextual: { autoApplied: IMAGE_ROW, wired: [] },
+      });
+
+      expect(screen.getByText('1 on')).toBeDefined();
+      await openSection('Design system');
+      expect(checkedState('Motion')).toBe('true');
+      expect(checkedState('Palette')).toBe('false');
+    },
+    RENDER_TIMEOUT_MS,
+  );
+});
+
+describe('GroundingChip — hover menu wiring', () => {
+  afterEach(cleanup);
+
+  it(
+    'the editable chip opens the Style menu with section triggers',
+    async () => {
+      // Happy-dom cannot drive Base UI's hover machinery; the same trigger opens on
+      // click, and the real-browser bench proves the hover path.
+      render(
+        <GroundingChip
+          brandId="brand-1"
+          brandBookPieces={undefined}
+          editable
+          onToggleSkill={() => {}}
+          onTogglePiece={() => {}}
+          onToggleDesignSection={() => {}}
+        />,
+      );
+
+      // The chip's own label also reads "Style", so the sections are the open signal.
+      fireEvent.click(screen.getByRole('button'));
+      await waitFor(() => expect(screen.getByText('Brand book')).toBeDefined());
+      expect(screen.getByText('Creative skills')).toBeDefined();
+    },
+    RENDER_TIMEOUT_MS,
+  );
+
+  it(
+    'the read-only chip gets a plain tooltip, never the menu',
+    () => {
+      render(<GroundingChip brandId="brand-1" brandBookPieces={undefined} inherited />);
+
+      // No menu trigger button, and none of the menu's section triggers.
+      expect(screen.queryByRole('button')).toBeNull();
+      expect(screen.queryByText('Brand book')).toBeNull();
+      expect(screen.queryByText('Creative skills')).toBeNull();
+    },
+    RENDER_TIMEOUT_MS,
+  );
+});
+
+describe('grounding chip + menu styling', () => {
   // Base UI's Positioner sets --available-height; the Radix variable no longer exists, so a
-  // max-h built on it was dropped wholesale and the popover ran past the viewport.
-  it('bounds the popover with the Base UI available-height variable', () => {
+  // max-h built on it was dropped wholesale and the popup ran past the viewport. Submenu
+  // surfaces float over the canvas, so they must not drag/pan/zoom the graph (nodrag nopan
+  // nowheel) and must scroll themselves.
+  it('bounds the submenu surfaces with the Base UI available-height variable', () => {
     const source = readFileSync(join(import.meta.dir, 'GroundingPopover.tsx'), 'utf8');
     expect(source).not.toContain('--radix-');
     expect(source).toContain('var(--available-height)');
+    expect(source).toContain('nowheel');
   });
 
   // TooltipContent is inverted (bg-foreground text-background): any light-theme text colour
   // inside it renders dark-on-dark. Muted reads as opacity, and the canvas must not zoom
-  // when the wheel scrolls the popover list.
-  it('inherits the inverted tooltip colours and stops wheel events reaching the canvas', () => {
+  // when the wheel scrolls the menu. The editable chip's surface must open on hover, not
+  // only on click.
+  it('inherits the inverted tooltip colours, stops wheel events, and hover-opens', () => {
     const source = readFileSync(join(import.meta.dir, 'GroundingChip.tsx'), 'utf8');
     expect(source).toContain('nowheel');
+    expect(source).toContain('openOnHover');
+    expect(source).toContain('var(--available-height)');
     expect(source).not.toContain('text-muted-foreground');
     expect(source).not.toContain('text-foreground');
   });

@@ -2,17 +2,18 @@
 
 // The single grounding indicator on a canvas node. Replaces the old brand badge +
 // ring + hidden-skills-in-a-submenu with ONE compact chip that says, at a glance,
-// what will be forced into the generation ("Brand · Skills 2"). Hover reveals the
-// full list of brand-book pieces and skills WITH their descriptions; on a
-// generation node, clicking opens the editor popover. On the enrich (string) node
-// it is read-only — it surfaces the grounding inherited from the downstream
-// generator so "tele-fill" visibly shows it is brand-guarded + skill-aware.
+// what will be forced into the generation ("Brand · Skills 2"). On a generation
+// node, hovering (or clicking, for touch and keyboard) expands the Style menu out
+// of the chip; hovering a section expands its checkbox rows as a submenu. On the
+// enrich (string) node it is read-only — a plain tooltip surfaces the grounding
+// inherited from the downstream generator so "tele-fill" visibly shows it is
+// brand-guarded + skill-aware.
 
 import type { BrandBookPieceKind, BrandDirectionPiece, DesignSection } from '@continuum/contracts';
 import { SECTION_AUTO_APPLY, suppressedDesignSections } from '@continuum/contracts';
 import { ChevronDown, Gem } from 'lucide-react';
 import React from 'react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
@@ -27,14 +28,14 @@ import {
 import {
   type DesignGroundingContext,
   effectiveDesignSections,
-  GroundingPopover,
+  GroundingMenuSections,
 } from './GroundingPopover';
 
 type Props = {
   brandId?: string;
   skillIds?: string[];
   brandBookPieces: BrandBookPieceKind[] | undefined;
-  // Editable → clicking opens the grounding editor (generation nodes).
+  // Editable → hovering or clicking opens the grounding menu (generation nodes).
   editable?: boolean;
   onToggleSkill?: (skillId: string) => void;
   onTogglePiece?: (kind: BrandBookPieceKind) => void;
@@ -109,7 +110,7 @@ export function GroundingChip({
   const pieces = enforcedConcretePieces(brandBookPieces);
 
   const tooltip = (
-    <div className="max-w-xs space-y-2 text-xs">
+    <div className="flex max-w-xs flex-col gap-2 text-xs">
       {inherited ? (
         <p className="font-medium">Applied when enriching this prompt</p>
       ) : null}
@@ -159,7 +160,7 @@ export function GroundingChip({
         {selectedSkills.length === 0 ? (
           <p className="opacity-70">None</p>
         ) : (
-          <ul className="space-y-0.5 opacity-70">
+          <ul className="flex flex-col gap-0.5 opacity-70">
             {selectedSkills.map((skill) => (
               <li key={skill.id}>
                 · <span className="font-medium">{skill.name}</span>
@@ -169,7 +170,6 @@ export function GroundingChip({
           </ul>
         )}
       </div>
-      {editable ? <p className="opacity-80">Click to edit</p> : null}
     </div>
   );
 
@@ -198,42 +198,33 @@ export function GroundingChip({
   }
 
   return (
-    <TooltipProvider>
-      <Popover>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <PopoverTrigger
-                render={
-                  <button type="button" className="nodrag nopan cursor-pointer">
-                    {chipInner}
-                  </button>
-                }
-              />
-            }
-          />
-          <TooltipContent side="top">{tooltip}</TooltipContent>
-        </Tooltip>
-        <PopoverContent
-          align="start"
-          side="top"
-          collisionPadding={16}
-          className="nodrag nopan nowheel z-[1100] w-96 bg-popover p-0"
-        >
-          <GroundingPopover
-            brandId={brandId}
-            skillIds={ids}
-            brandBookPieces={brandBookPieces}
-            brandDirectionPieces={brandDirectionPieces}
-            designSystemSections={designSystemSections}
-            {...(contextual ? { contextual } : {})}
-            onToggleSkill={(id) => onToggleSkill?.(id)}
-            onTogglePiece={(kind) => onTogglePiece?.(kind)}
-            {...(onToggleDirectionPiece ? { onToggleDirectionPiece } : {})}
-            {...(onToggleDesignSection ? { onToggleDesignSection } : {})}
-          />
-        </PopoverContent>
-      </Popover>
-    </TooltipProvider>
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger
+        openOnHover
+        render={
+          <button type="button" className="nodrag nopan cursor-pointer">
+            {chipInner}
+          </button>
+        }
+      />
+      <DropdownMenuContent
+        align="start"
+        side="top"
+        className="nodrag nopan nowheel z-[1100] w-64 max-h-[min(32rem,var(--available-height))]"
+      >
+        <GroundingMenuSections
+          brandId={brandId}
+          skillIds={ids}
+          brandBookPieces={brandBookPieces}
+          brandDirectionPieces={brandDirectionPieces}
+          designSystemSections={designSystemSections}
+          {...(contextual ? { contextual } : {})}
+          onToggleSkill={(id) => onToggleSkill?.(id)}
+          onTogglePiece={(kind) => onTogglePiece?.(kind)}
+          {...(onToggleDirectionPiece ? { onToggleDirectionPiece } : {})}
+          {...(onToggleDesignSection ? { onToggleDesignSection } : {})}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
