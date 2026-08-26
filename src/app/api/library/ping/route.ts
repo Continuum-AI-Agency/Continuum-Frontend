@@ -138,6 +138,11 @@ export async function POST(request: Request) {
     message,
   });
 
+  // Slack DMs ride on top of the same notification rows; recipients without a
+  // linked Slack account are skipped inside the edge function.
+  const notificationIds = ((inserted ?? []) as Array<{ id: string }>).map((row) => row.id);
+  await sendNotificationSlacks(notificationIds);
+
   return NextResponse.json(reviewPingResponseSchema.parse({ notified, emailed }));
 }
 
@@ -148,6 +153,41 @@ function resolveActorName(user: User): string {
     if (typeof value === 'string' && value.trim().length > 0) return value.trim();
   }
   return user.email ?? 'A teammate';
+}
+
+// Fail-soft Slack fan-out through the shared send-library-notification edge
+// function. Mirrors sendPingEmails: any failure logs and moves on.
+async function sendNotificationSlacks(notificationIds: string[]): Promise<void> {
+  if (notificationIds.length === 0) return;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) {
+    console.warn('[library-ping] slack skipped: missing Supabase env');
+    return;
+  }
+  const appUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL ?? 'http://localhost:3000';
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-library-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({ notificationIds, appUrl }),
+    });
+    if (!response.ok) {
+      console.warn('[library-ping] send-library-notification failed', {
+        status: response.status,
+      });
+    }
+  } catch (error) {
+    console.warn('[library-ping] send-library-notification invoke failed', {
+      error: String(error),
+    });
+  }
 }
 
 // Fail-soft edge invoke: any failure logs and reports 0 emails sent. Mirrors

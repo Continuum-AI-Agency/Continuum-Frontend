@@ -6,7 +6,11 @@
 // fields, so an authors map built from the fetch (plus the caller) fills
 // display names for rows arriving live.
 
-import type { CommentAnnotation, MediaComment } from '@continuum/contracts';
+import {
+  type CommentAnnotation,
+  type MediaComment,
+  parseCommentMentions,
+} from '@continuum/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type CommentAuthor,
@@ -158,6 +162,7 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
         versionId: input.versionId ?? null,
         parentCommentId: input.parentCommentId ?? null,
         body: input.body,
+        mentions: parseCommentMentions(input.body),
         annotation: input.annotation ?? null,
         resolvedAt: null,
         resolvedBy: null,

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { CAROUSEL_SLIDE_TAG, TEXT_EMBEDDING_DIM } from '@continuum/contracts';
+import { CAROUSEL_SLIDE_TAG, TEXT_EMBEDDING_DIM, HIDDEN_LIBRARY_TAGS } from '@continuum/contracts';
 
 // bun's mock.module is process-wide, and the sibling library route specs replace
 // these same modules. Delegating through the shared globalThis hooks they already
@@ -18,6 +18,11 @@ mock.module('@/lib/supabase/server', () => ({
 mock.module('@/lib/media/signed-urls', () => ({
   mintSignedUrl: (...args: unknown[]) => hooks.__testMintSignedUrl?.(...args),
   mintSignedUrls: (...args: unknown[]) => hooks.__testMintSignedUrls?.(...args),
+  // The search route also imports assetSignablePaths; a partial mock makes the
+  // module fail to link with "Export named ... not found" rather than a clear
+  // failure. The sibling assets/route.test.ts mock already carries it.
+  assetSignablePaths: (rows: { bucket: string; storage_path: string }[]) =>
+    rows.map((row) => ({ bucket: row.bucket, path: row.storage_path })),
 }));
 
 const { POST } = await import('../search/route');
@@ -156,7 +161,7 @@ describe('POST /api/library/search — strategy selection', () => {
     expect(vectorCall?.args.filter_brand_id).toBe(BRAND_ID);
     expect(vectorCall?.args.match_count).toBe(24);
     expect(vectorCall?.args.match_threshold).toBe(0.2);
-    expect(vectorCall?.args.filter_exclude_tags).toEqual([CAROUSEL_SLIDE_TAG]);
+    expect(vectorCall?.args.filter_exclude_tags).toEqual([...HIDDEN_LIBRARY_TAGS]);
     // Keyword ranking runs alongside the vector match (hybrid), so an asset with
     // no embedding yet is never hidden by another asset's semantic hit. It adds
     // nothing here, so the strategy stays 'semantic'.
@@ -204,7 +209,7 @@ describe('POST /api/library/search — strategy selection', () => {
 
     const lexicalCall = rpcCalls.find((call) => call.fn === 'search_assets_ranked');
     expect(lexicalCall?.args.q).toBe('olive oil');
-    expect(lexicalCall?.args.filter_exclude_tags).toEqual([CAROUSEL_SLIDE_TAG]);
+    expect(lexicalCall?.args.filter_exclude_tags).toEqual([...HIDDEN_LIBRARY_TAGS]);
     // Field-priority score (title = 3) normalized into the contract's [0,1].
     expect(body.items[0].similarity).toBe(1);
   });

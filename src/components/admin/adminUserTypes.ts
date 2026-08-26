@@ -20,6 +20,11 @@ export type AdminBrandOption = {
   tier: number;
   active: boolean;
   ownerEmail: string | null;
+  // Populated by list_brands for the Brands tab. Optional because the synthetic
+  // options (the global-library row, the audit "All brands" row) have no counts.
+  memberCount?: number;
+  workflowCount?: number;
+  created_at?: string | null;
 };
 
 export type AdminWorkflowTransferResult = {
@@ -27,6 +32,13 @@ export type AdminWorkflowTransferResult = {
   status: 'moved' | 'failed';
   newId?: string;
   error?: string;
+  // A transfer carries the canvas's media with it. Surfacing the counts is what
+  // makes that visible -- the failure this replaces was silent by nature.
+  movedAssets?: number;
+  movedVersions?: number;
+  // Coordinates with no media.assets row. Because canvas signing is
+  // all-or-nothing, these block the transfer rather than degrade it.
+  strandedPaths?: string[];
 };
 
 export type AdminWorkflowLibraryRow = {
@@ -34,6 +46,9 @@ export type AdminWorkflowLibraryRow = {
   brand_profile_id: string | null;
   name: string;
   description: string | null;
+  // List responses carry the node COUNT, not the graph. `content` is present
+  // only on single-workflow responses (a transfer's echo of the row it wrote).
+  node_count?: number;
   content?: unknown;
   tags: string[];
   visibility: 'brand' | 'global';

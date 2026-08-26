@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button';
 import { describeNotification } from '@/lib/notifications/notifications';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
+import { InFlightSection } from './InFlightSection';
+import type { UseInFlightJobsResult } from './useInFlightJobs';
 
 const KIND_ICONS = {
   review_request: EyeIcon,
@@ -32,6 +34,8 @@ export type NotificationsPanelProps = {
   onMarkAllRead: () => void;
   onMarkRead: (notificationId: string) => void;
   onNavigate?: () => void;
+  /** Live work. Omitted in tests that only exercise the durable feed. */
+  inFlight?: UseInFlightJobsResult;
 };
 
 export function NotificationsPanel({
@@ -41,6 +45,7 @@ export function NotificationsPanel({
   onMarkAllRead,
   onMarkRead,
   onNavigate,
+  inFlight,
 }: NotificationsPanelProps) {
   const router = useRouter();
 
@@ -55,6 +60,8 @@ export function NotificationsPanel({
 
   return (
     <div>
+      {inFlight && <InFlightSection feed={inFlight} onNavigate={onNavigate} />}
+
       <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Notifications

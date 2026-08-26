@@ -43,19 +43,22 @@ export type NotificationDisplay = {
   href: string | null;
 };
 
-// Deep-linking to the specific asset is a documented follow-up; every kind
-// currently lands on /library.
+// Every kind deep-links to the asset's detail modal (/library?assetId=…);
+// the library page opens it on load. Legacy rows without an assetId in their
+// payload still land on /library rather than nowhere.
 export function describeNotification(notification: AppNotification): NotificationDisplay {
   const actorName = payloadString(notification, 'actorName') ?? 'A teammate';
   const assetName = payloadString(notification, 'assetName') ?? 'a creative';
   const message = payloadString(notification, 'message');
+  const assetId = payloadString(notification, 'assetId');
+  const href = assetId ? `/library?assetId=${encodeURIComponent(assetId)}` : '/library';
 
   switch (notification.kind) {
     case 'review_request':
       return {
         title: `${actorName} asked you to review “${assetName}”`,
         detail: message,
-        href: '/library',
+        href,
       };
     case 'review_status_change': {
       const status = payloadString(notification, 'status');
@@ -64,20 +67,20 @@ export function describeNotification(notification: AppNotification): Notificatio
           ? `“${assetName}” moved to ${status.replaceAll('_', ' ')}`
           : `“${assetName}” review status changed`,
         detail: message,
-        href: '/library',
+        href,
       };
     }
     case 'comment_reply':
       return {
         title: `${actorName} replied on “${assetName}”`,
-        detail: message,
-        href: '/library',
+        detail: message ?? payloadString(notification, 'excerpt'),
+        href,
       };
     case 'comment_mention':
       return {
         title: `${actorName} mentioned you on “${assetName}”`,
-        detail: message,
-        href: '/library',
+        detail: message ?? payloadString(notification, 'excerpt'),
+        href,
       };
   }
 }

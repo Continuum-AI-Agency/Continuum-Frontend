@@ -9,7 +9,11 @@
 // rows. Same fetch/merge/optimistic-post contract as the single-asset hook,
 // with `assetId` moved from a hook argument into the post input.
 
-import type { CommentAnnotation, MediaComment } from '@continuum/contracts';
+import {
+  type CommentAnnotation,
+  type MediaComment,
+  parseCommentMentions,
+} from '@continuum/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type AssetCommentsSnapshot,
@@ -226,6 +230,7 @@ export function useMultiAssetComments(
         versionId: null,
         parentCommentId: input.parentCommentId ?? null,
         body: input.body,
+        mentions: parseCommentMentions(input.body),
         annotation: input.annotation ?? null,
         resolvedAt: null,
         resolvedBy: null,

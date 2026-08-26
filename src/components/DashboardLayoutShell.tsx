@@ -2,50 +2,48 @@
 
 import dynamic from 'next/dynamic';
 import type React from 'react';
+import { ClientOnly } from '@/components/ui/ClientOnly';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { DashboardHeader } from './dashboard-header';
 import { AppSidebar } from './navigation/AppSidebar';
 import { CommandPaletteProvider } from './navigation/CommandPaletteProvider';
 import { ActiveBrandProvider } from './providers/ActiveBrandProvider';
 
-const CommandPalette = dynamic(
-  () => import('./navigation/CommandPalette').then((m) => ({ default: m.CommandPalette })),
-  { ssr: false },
+// Cache Components: `next/dynamic` with `ssr: false` throws BAILOUT_TO_CLIENT_SIDE_RENDERING
+// during prerender. That throw lands above the instant-validation boundary, so it aborts the
+// static-shell validation of every route under this layout — and, at request time, leaves the
+// whole dashboard subtree (both providers below wrap `children`) out of the streamed HTML.
+// Keep the code-splitting; drop the bailout. The one that genuinely cannot render on the
+// server is mount-gated with <ClientOnly> instead.
+const CommandPalette = dynamic(() =>
+  import('./navigation/CommandPalette').then((m) => ({ default: m.CommandPalette })),
 );
 
-const AgentRunsProvider = dynamic(
-  () =>
-    import('@/components/agents/AgentRunsProvider').then((m) => ({ default: m.AgentRunsProvider })),
-  { ssr: false },
+const AgentRunsProvider = dynamic(() =>
+  import('@/components/agents/AgentRunsProvider').then((m) => ({ default: m.AgentRunsProvider })),
 );
 
-const ClientRenderProvider = dynamic(
-  () =>
-    import('@/lib/client-render/ClientRenderProvider').then((m) => ({
-      default: m.ClientRenderProvider,
-    })),
-  { ssr: false },
+const ClientRenderProvider = dynamic(() =>
+  import('@/lib/client-render/ClientRenderProvider').then((m) => ({
+    default: m.ClientRenderProvider,
+  })),
 );
 
-const StrategicAnalysisRealtimeListener = dynamic(
-  () =>
-    import('./strategic-analyses/StrategicAnalysisRealtimeListener').then((m) => ({
-      default: m.StrategicAnalysisRealtimeListener,
-    })),
-  { ssr: false },
+const StrategicAnalysisRealtimeListener = dynamic(() =>
+  import('./strategic-analyses/StrategicAnalysisRealtimeListener').then((m) => ({
+    default: m.StrategicAnalysisRealtimeListener,
+  })),
 );
 
-const StrategicAnalysisStatusPill = dynamic(
-  () =>
-    import('./strategic-analyses/StrategicAnalysisStatusPill').then((m) => ({
-      default: m.StrategicAnalysisStatusPill,
-    })),
-  { ssr: false },
+const StrategicAnalysisStatusPill = dynamic(() =>
+  import('./strategic-analyses/StrategicAnalysisStatusPill').then((m) => ({
+    default: m.StrategicAnalysisStatusPill,
+  })),
 );
 
-const BrandWelcomeBanner = dynamic(
-  () => import('./welcome/BrandWelcomeBanner').then((m) => ({ default: m.BrandWelcomeBanner })),
-  { ssr: false },
+// Reads `useSearchParams()`, which is a dynamic read during prerender.
+const BrandWelcomeBanner = dynamic(() =>
+  import('./welcome/BrandWelcomeBanner').then((m) => ({ default: m.BrandWelcomeBanner })),
 );
 
 import type { AuthIdentity } from '@/lib/auth/identity';
@@ -115,7 +113,9 @@ export default function DashboardLayoutShell({
                   {/* No inline gutter: surfaces are full-bleed panes and the
                       sidebar's own border-r is the separation. */}
                   <main className="@container/app-main min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-[var(--shell-stack-gap)]">
-                    <BrandWelcomeBanner />
+                    <ClientOnly>
+                      <BrandWelcomeBanner />
+                    </ClientOnly>
                     {children}
                   </main>
                 </SidebarInset>

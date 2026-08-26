@@ -146,6 +146,28 @@ describe('buildRegisterRow / headUpdateFromRegister', () => {
       checksum: null,
     });
   });
+
+  it('carries browser-measured geometry into the row and the promoted head', () => {
+    const measured: RegisterVersionRequest = {
+      ...request,
+      width: 1920,
+      height: 1080,
+      durationMs: 15_400,
+    };
+    const row = buildRegisterRow(measured, { versionNumber: 2, createdBy: 'uploader-1' });
+    expect(row.width).toBe(1920);
+    expect(row.height).toBe(1080);
+    expect(row.duration_ms).toBe(15_400);
+    // Integrity stays server-side territory even when geometry is client-supplied.
+    expect(row.checksum).toBeNull();
+
+    expect(headUpdateFromRegister(measured)).toMatchObject({
+      width: 1920,
+      height: 1080,
+      duration_ms: 15_400,
+      checksum: null,
+    });
+  });
 });
 
 describe('buildRollbackRow / headUpdateFromVersion', () => {

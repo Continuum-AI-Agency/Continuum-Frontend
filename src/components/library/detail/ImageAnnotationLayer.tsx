@@ -23,6 +23,8 @@ type Props = {
   pins: OverlayPin[];
   onSelectPin: (id: string | null) => void;
   posting: boolean;
+  /** Brand context enables @mention autocomplete in the annotation composer. */
+  brandId?: string;
   onPostAnnotated: (body: string, annotation: SpatialAnnotation) => void;
 };
 
@@ -32,6 +34,7 @@ export function ImageAnnotationLayer({
   pins,
   onSelectPin,
   posting,
+  brandId,
   onPostAnnotated,
 }: Props) {
   const { containerRef, containerSize, contentRect, setNaturalSize } = useStageGeometry();
@@ -111,6 +114,7 @@ export function ImageAnnotationLayer({
               placeholder="Comment on this annotation..."
               busy={posting}
               autoFocus
+              brandId={brandId}
               onSubmit={(body) => {
                 onPostAnnotated(body, draftAnnotation);
                 setDraftAnnotation(null);

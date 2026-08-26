@@ -36,6 +36,7 @@ import {
   describeWorkflowNames,
   formatAuditActionLabel,
   formatBrandDisambiguationLabel,
+  formatDate,
   groupPermissionsByUserId,
   membershipLabel,
   resolveAdminTab,
@@ -51,6 +52,7 @@ import type {
   PermissionRow,
 } from '@/components/admin/adminUserTypes';
 import { BrandTransferCombobox } from '@/components/admin/BrandTransferCombobox';
+import { BrandsTab } from '@/components/admin/tabs/BrandsTab';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -92,7 +94,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DEFAULT_SEARCH_DEBOUNCE_MS, useDebounce } from '@/hooks/useDebounce';
+import { fuzzyMatches } from '@/lib/search/fuzzy';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { readEdgeErrorMessage } from '@/lib/supabase/edgeErrorMessage';
 
 type Props = {
   users: AdminUser[];
@@ -123,7 +128,14 @@ type BulkTransferOutcome = {
   workflowName: string;
   status: 'success' | 'failed';
   message?: string;
+  mediaSummary?: string;
 };
+
+function describeMediaMoved(assets?: number, versions?: number): string | undefined {
+  if (!assets) return undefined;
+  const versionSuffix = versions ? ` and ${versions} version${versions === 1 ? '' : 's'}` : '';
+  return `${assets} media item${assets === 1 ? '' : 's'}${versionSuffix} moved`;
+}
 
 const GLOBAL_LIBRARY_BRAND_OPTION: AdminBrandOption = {
   id: 'global',
@@ -132,7 +144,7 @@ const GLOBAL_LIBRARY_BRAND_OPTION: AdminBrandOption = {
   active: true,
   ownerEmail: null,
 };
-const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_DEBOUNCE_MS = DEFAULT_SEARCH_DEBOUNCE_MS;
 
 type AdminAuditResponse = {
   entries?: AdminAuditLogEntry[];
@@ -141,6 +153,23 @@ type AdminAuditResponse = {
 
 const AUDIT_PAGE_SIZE = 50;
 const AUDIT_ACTION_ALL = 'all';
+const AUDIT_BRAND_ALL = 'all';
+const AUDIT_ALL_BRANDS_OPTION: AdminBrandOption = {
+  id: AUDIT_BRAND_ALL,
+  brand_name: 'All brands',
+  tier: 0,
+  active: true,
+  ownerEmail: null,
+};
+
+// Every filter the audit reader accepts. Passed as one object so a new filter
+// cannot be added to the UI and silently dropped from a call site.
+type AuditFilters = {
+  action: string;
+  brandProfileId: string;
+  search: string;
+  actorQuery: string;
+};
 
 type FirstValueReportSmokeResponse = {
   status?: string;
@@ -154,16 +183,6 @@ type FirstValueReportSmokeResponse = {
 
 function getUserInitials(user: AdminUser) {
   return (user.name ?? user.email).slice(0, 2).toUpperCase();
-}
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return 'Unknown';
-  return new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
 }
 
 function roleVariant(role: string | null) {
@@ -209,7 +228,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   );
 
   const [brands, setBrands] = useState<AdminBrandOption[]>([]);
-  const [brandQuery, setBrandQuery] = useState('');
+  const [isBrandLoading, setIsBrandLoading] = useState(false);
   const [sourceBrandId, setSourceBrandId] = useState('global');
   const [targetBrandId, setTargetBrandId] = useState('');
   const [workflowQuery, setWorkflowQuery] = useState('');
@@ -222,6 +241,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const [isAuditLoading, setIsAuditLoading] = useState(false);
   const [auditPage, setAuditPage] = useState(1);
   const [auditActionFilter, setAuditActionFilter] = useState<string>(AUDIT_ACTION_ALL);
+  const [auditBrandFilter, setAuditBrandFilter] = useState<string>(AUDIT_BRAND_ALL);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditActorQuery, setAuditActorQuery] = useState('');
   const [auditPagination, setAuditPagination] = useState<AdminAuditPagination | null>(null);
   const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
   // Monotonic request id so a slow older audit fetch can't overwrite the state of
@@ -261,6 +283,13 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const permissionsByUserId = useMemo(() => groupPermissionsByUserId(permissions), [permissions]);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0] ?? null;
   const selectedMemberships = selectedUser ? (permissionsByUserId.get(selectedUser.id) ?? []) : [];
+  const visibleWorkflows = useMemo(
+    () =>
+      workflows.filter((workflow) =>
+        fuzzyMatches([workflow.name, workflow.description], workflowQuery),
+      ),
+    [workflows, workflowQuery],
+  );
   const focusedWorkflow = workflows.find((workflow) => workflow.id === focusedWorkflowId) ?? null;
   const checkedWorkflows = useMemo(
     () => workflows.filter((workflow) => checkedWorkflowIds.has(workflow.id)),
@@ -278,8 +307,23 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     checkedWorkflows.length > 0 &&
     checkedWorkflows.every((workflow) => workflow.visibility === 'global');
   const brandFilterOptions = useMemo(() => [GLOBAL_LIBRARY_BRAND_OPTION, ...brands], [brands]);
+  const auditBrandFilterOptions = useMemo(() => [AUDIT_ALL_BRANDS_OPTION, ...brands], [brands]);
+  const debouncedAuditSearch = useDebounce(auditSearch);
+  const debouncedAuditActor = useDebounce(auditActorQuery);
+  // One filter object, one dependency. Every audit call site reads this, so a
+  // refresh or a post-transfer reload cannot quietly use a stale filter set.
+  const auditFilters = useMemo<AuditFilters>(
+    () => ({
+      action: auditActionFilter,
+      brandProfileId: auditBrandFilter,
+      search: debouncedAuditSearch,
+      actorQuery: debouncedAuditActor,
+    }),
+    [auditActionFilter, auditBrandFilter, debouncedAuditSearch, debouncedAuditActor],
+  );
   const allVisibleWorkflowsChecked =
-    workflows.length > 0 && workflows.every((workflow) => checkedWorkflowIds.has(workflow.id));
+    visibleWorkflows.length > 0 &&
+    visibleWorkflows.every((workflow) => checkedWorkflowIds.has(workflow.id));
 
   const safePage =
     pagination.totalPages > 0 ? Math.min(pagination.page, pagination.totalPages) : pagination.page;
@@ -347,6 +391,14 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
       });
     },
     [router, startNavTransition],
+  );
+
+  const handleViewBrandWorkflows = useCallback(
+    (brandId: string) => {
+      setSourceBrandId(brandId);
+      handleTabChange('workflows');
+    },
+    [handleTabChange],
   );
 
   const commitSearch = useCallback(
@@ -514,18 +566,26 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   }
 
   async function loadBrands() {
-    const { data, error } = await supabase.functions.invoke<AdminWorkflowResponse>(
-      'admin-workflow-library',
-      {
-        method: 'POST',
-        body: { action: 'list_brands', query: brandQuery, limit: 100 },
-      },
-    );
-    if (error) {
-      show({ title: 'Unable to load brands', description: error.message, variant: 'error' });
-      return;
+    setIsBrandLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke<AdminWorkflowResponse>(
+        'admin-workflow-library',
+        {
+          method: 'POST',
+          // Every brand, once. The combobox fuzzy-matches in memory, which is
+          // both faster than a round trip and the only way the 213 brands past
+          // the old cap were ever reachable.
+          body: { action: 'list_brands', limit: 500 },
+        },
+      );
+      if (error) {
+        show({ title: 'Unable to load brands', description: error.message, variant: 'error' });
+        return;
+      }
+      setBrands(data?.brands ?? []);
+    } finally {
+      setIsBrandLoading(false);
     }
-    setBrands(data?.brands ?? []);
   }
 
   async function loadWorkflows() {
@@ -537,7 +597,6 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
           method: 'POST',
           body: {
             action: 'list',
-            query: workflowQuery,
             ...(sourceBrandId !== 'global' ? { brandProfileId: sourceBrandId } : {}),
           },
         },
@@ -563,7 +622,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     }
   }
 
-  async function loadAuditEntries(page: number, action: string) {
+  async function loadAuditEntries(page: number, filters: AuditFilters) {
     const seq = (auditRequestSeqRef.current += 1);
     const isCurrent = () => seq === auditRequestSeqRef.current;
     setIsAuditLoading(true);
@@ -575,7 +634,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
           body: buildAdminAuditRequestBody({
             page,
             pageSize: AUDIT_PAGE_SIZE,
-            action: action === AUDIT_ACTION_ALL ? null : action,
+            action: filters.action === AUDIT_ACTION_ALL ? null : filters.action,
+            brandProfileId:
+              filters.brandProfileId === AUDIT_BRAND_ALL ? null : filters.brandProfileId,
+            search: filters.search,
+            actorQuery: filters.actorQuery,
           }),
         },
       );
@@ -598,23 +661,39 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   useEffect(() => {
     void loadBrands();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandQuery]);
+  }, []);
 
+  // Only the brand scope refetches. Typing filters the loaded rows in memory, so
+  // the search no longer costs an edge-function call per keystroke.
   useEffect(() => {
     void loadWorkflows();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceBrandId, workflowQuery]);
+  }, [sourceBrandId]);
 
   useEffect(() => {
-    void loadAuditEntries(auditPage, auditActionFilter);
+    void loadAuditEntries(auditPage, auditFilters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auditPage, auditActionFilter]);
+  }, [auditPage, auditFilters]);
 
   function handleAuditActionChange(value: string) {
     setExpandedAuditId(null);
     setAuditPage(1);
     setAuditActionFilter(value);
   }
+
+  function handleAuditBrandChange(value: string) {
+    setExpandedAuditId(null);
+    setAuditPage(1);
+    setAuditBrandFilter(value);
+  }
+
+  // Text filters run server-side, so they debounce. Page resets on the DEBOUNCED
+  // value, not the keystroke: resetting per character would fight a user paging
+  // through results while refining a query.
+  useEffect(() => {
+    setExpandedAuditId(null);
+    setAuditPage(1);
+  }, [debouncedAuditSearch, debouncedAuditActor]);
 
   function goToAuditPage(nextPage: number) {
     setExpandedAuditId(null);
@@ -646,10 +725,13 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
 
   function toggleAllVisibleWorkflowsChecked() {
     setCheckedWorkflowIds((current) => {
-      if (workflows.length > 0 && workflows.every((workflow) => current.has(workflow.id))) {
+      if (
+        visibleWorkflows.length > 0 &&
+        visibleWorkflows.every((workflow) => current.has(workflow.id))
+      ) {
         return new Set();
       }
-      return new Set(workflows.map((workflow) => workflow.id));
+      return new Set(visibleWorkflows.map((workflow) => workflow.id));
     });
   }
 
@@ -682,7 +764,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         (current) => new Set(Array.from(current).filter((id) => !succeededIds.has(id))),
       );
       await loadWorkflows();
-      await loadAuditEntries(auditPage, auditActionFilter);
+      await loadAuditEntries(auditPage, auditFilters);
     } catch (error) {
       show({
         title: 'Bulk action failed',
@@ -707,15 +789,29 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
       run: async () => {
         return Promise.all(
           args.ids.map(async (workflowId) => {
-            const { error } = await supabase.functions.invoke('admin-workflow-library', {
-              method: 'POST',
-              body: args.buildBody(workflowId),
-            });
+            const { data, error } = await supabase.functions.invoke<{ copiedAssets?: number }>(
+              'admin-workflow-library',
+              { method: 'POST', body: args.buildBody(workflowId) },
+            );
+            if (error) {
+              // The refusal reason (which media is unregistered, and why that
+              // blocks the whole canvas) is in the response BODY. `error.message`
+              // is the same generic string for every non-2xx.
+              return {
+                workflowId,
+                workflowName: nameById.get(workflowId) ?? workflowId,
+                status: 'failed' as const,
+                message: await readEdgeErrorMessage(error, 'Workflow transfer failed.'),
+              };
+            }
+            const copiedAssets = data?.copiedAssets ?? 0;
             return {
               workflowId,
               workflowName: nameById.get(workflowId) ?? workflowId,
-              status: error ? ('failed' as const) : ('success' as const),
-              message: error?.message,
+              status: 'success' as const,
+              mediaSummary: copiedAssets
+                ? `${copiedAssets} media item${copiedAssets === 1 ? '' : 's'} copied`
+                : undefined,
             };
           }),
         );
@@ -751,6 +847,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
           workflowName: nameById.get(result.workflowId) ?? result.workflowId,
           status: result.status === 'moved' ? ('success' as const) : ('failed' as const),
           message: result.error,
+          mediaSummary: describeMediaMoved(result.movedAssets, result.movedVersions),
         }));
       },
     });
@@ -858,6 +955,10 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
           <TabsTrigger value="users" className="gap-2">
             <UserCog className="size-4" />
             Users
+          </TabsTrigger>
+          <TabsTrigger value="brands" className="gap-2">
+            <Building2 className="size-4" />
+            Brands
           </TabsTrigger>
           <TabsTrigger value="workflows" className="gap-2">
             <Library className="size-4" />
@@ -1297,6 +1398,15 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         </div>
       </TabsContent>
 
+      <TabsContent value="brands" className="space-y-4">
+        <BrandsTab
+          brands={brands}
+          isLoading={isBrandLoading}
+          onRefresh={() => void loadBrands()}
+          onViewWorkflows={handleViewBrandWorkflows}
+        />
+      </TabsContent>
+
       <TabsContent value="workflows" className="space-y-4">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0 space-y-3">
@@ -1346,7 +1456,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                         <Checkbox
                           checked={allVisibleWorkflowsChecked}
                           onCheckedChange={() => toggleAllVisibleWorkflowsChecked()}
-                          disabled={workflows.length === 0}
+                          disabled={visibleWorkflows.length === 0}
                           aria-label="Select all visible workflows"
                         />
                       </TableHead>
@@ -1365,17 +1475,19 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                           Loading workflows...
                         </TableCell>
                       </TableRow>
-                    ) : workflows.length === 0 ? (
+                    ) : visibleWorkflows.length === 0 ? (
                       <TableRow>
                         <TableCell
                           colSpan={4}
                           className="py-8 text-center text-sm text-muted-foreground"
                         >
-                          No workflows found.
+                          {workflows.length === 0
+                            ? 'No workflows found.'
+                            : `No workflows match "${workflowQuery}".`}
                         </TableCell>
                       </TableRow>
                     ) : (
-                      workflows.map((workflow) => (
+                      visibleWorkflows.map((workflow) => (
                         <TableRow
                           key={workflow.id}
                           data-state={workflow.id === focusedWorkflowId ? 'selected' : undefined}
@@ -1450,13 +1562,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                     </div>
                     <div className="rounded-md border border-subtle bg-default/40 p-2">
                       <span className="block text-muted-foreground">Nodes</span>
-                      <strong className="text-primary">
-                        {Array.isArray(
-                          (focusedWorkflow.content as { nodes?: unknown[] } | undefined)?.nodes,
-                        )
-                          ? (focusedWorkflow.content as { nodes?: unknown[] }).nodes?.length
-                          : 0}
-                      </strong>
+                      <strong className="text-primary">{focusedWorkflow.node_count ?? 0}</strong>
                     </div>
                   </div>
                   <Alert className="border-subtle">
@@ -1494,6 +1600,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                         <p className="truncate text-primary">{result.workflowName}</p>
                         {result.message ? (
                           <p className="text-muted-foreground">{result.message}</p>
+                        ) : null}
+                        {result.mediaSummary ? (
+                          <p className="text-muted-foreground">{result.mediaSummary}</p>
                         ) : null}
                       </div>
                     </li>
@@ -1543,7 +1652,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                         </Button>
                       }
                       title={`Move ${checkedWorkflows.length} workflow${checkedWorkflows.length === 1 ? '' : 's'}?`}
-                      description={`${checkedWorkflowNamesLabel} will be removed from the current brand and re-created under the destination brand. This is logged.`}
+                      description={`${checkedWorkflowNamesLabel} will be removed from the current brand and re-created under the destination brand, and the canvas media moves with them so it still renders. This is logged.`}
                       confirmLabel="Move to brand"
                       onConfirm={() => void handleBulkMove()}
                     />
@@ -1562,7 +1671,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                         </Button>
                       }
                       title={`Copy ${checkedWorkflows.length} workflow${checkedWorkflows.length === 1 ? '' : 's'}?`}
-                      description={`${checkedWorkflowNamesLabel} will be duplicated under the destination brand. Originals are unaffected.`}
+                      description={`${checkedWorkflowNamesLabel} will be duplicated under the destination brand, along with their own copies of the canvas media. Originals and their media are unaffected.`}
                       confirmLabel="Copy to brand"
                       onConfirm={() => void handleBulkCopy()}
                     />
@@ -1603,7 +1712,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                       </Button>
                     }
                     title={`Assign ${checkedWorkflows.length} workflow${checkedWorkflows.length === 1 ? '' : 's'}?`}
-                    description={`${checkedWorkflowNamesLabel} will be copied into the destination brand's canvas workflows.`}
+                    description={`${checkedWorkflowNamesLabel} will be copied into the destination brand's canvas workflows, along with their own copies of the canvas media.`}
                     confirmLabel="Assign to brand canvas"
                     onConfirm={() => void handleBulkAssignToBrand()}
                   />
@@ -1627,7 +1736,36 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
               change.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-[200px]">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search action or target"
+                value={auditSearch}
+                onChange={(event) => setAuditSearch(event.target.value)}
+                className="h-9 pl-9"
+                aria-label="Search the audit log"
+              />
+            </div>
+            <div className="relative w-full sm:w-[180px]">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Filter by actor"
+                value={auditActorQuery}
+                onChange={(event) => setAuditActorQuery(event.target.value)}
+                className="h-9 pl-9"
+                aria-label="Filter the audit log by actor"
+              />
+            </div>
+            <div className="w-full sm:w-[240px]">
+              <BrandTransferCombobox
+                id="audit-brand-filter"
+                brands={auditBrandFilterOptions}
+                value={auditBrandFilter}
+                onChange={handleAuditBrandChange}
+                placeholder="Filter by brand"
+              />
+            </div>
             <Select value={auditActionFilter} onValueChange={handleAuditActionChange}>
               <SelectTrigger className="h-9 w-[220px]" aria-label="Filter by action">
                 <SelectValue placeholder="All actions" />
@@ -1644,7 +1782,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void loadAuditEntries(auditPage, auditActionFilter)}
+              onClick={() => void loadAuditEntries(auditPage, auditFilters)}
               disabled={isAuditLoading}
             >
               {isAuditLoading ? (

@@ -370,6 +370,7 @@ function AssetDetailDialog({
                   pins={imagePins}
                   onSelectPin={setSelectedCommentId}
                   posting={posting}
+                  brandId={brandId}
                   onPostAnnotated={(body, annotation) => void post({ body, annotation })}
                 />
               ) : stage.kind === 'video' ? (
@@ -380,6 +381,7 @@ function AssetDetailDialog({
                   markers={videoMarkers}
                   onSelectMarker={setSelectedCommentId}
                   posting={posting}
+                  brandId={brandId}
                   onPostAtTime={({ body, timeMs, endMs, box }) =>
                     void post({
                       body,
@@ -561,6 +563,7 @@ function AssetDetailDialog({
               <>
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <CommentThreads
+                    brandId={brandId}
                     threads={partition.current}
                     pinLabels={pinLabels}
                     otherVersionThreads={partition.otherVersions}
@@ -589,6 +592,7 @@ function AssetDetailDialog({
                         : 'Add a comment...'
                     }
                     busy={posting}
+                    brandId={brandId}
                     onSubmit={(body) => void post({ body })}
                   />
                 </div>

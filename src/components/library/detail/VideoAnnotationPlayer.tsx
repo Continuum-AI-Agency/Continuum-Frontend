@@ -37,6 +37,8 @@ type Props = {
   markers: VideoTimeMarker[];
   onSelectMarker: (id: string | null) => void;
   posting: boolean;
+  /** Brand context enables @mention autocomplete in the time-pin composer. */
+  brandId?: string;
   onPostAtTime: (input: PostAtTimeInput) => void;
   /** Receives a seek function so the sidebar can jump the player to a thread's timestamp. */
   registerSeek: (seek: (ms: number) => void) => void;
@@ -50,6 +52,7 @@ export function VideoAnnotationPlayer({
   markers,
   onSelectMarker,
   posting,
+  brandId,
   onPostAtTime,
   registerSeek,
   onTimeChange,
@@ -244,6 +247,7 @@ export function VideoAnnotationPlayer({
               }
               busy={posting}
               autoFocus
+              brandId={brandId}
               annotationChip={
                 <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 font-medium tabular-nums text-primary">

@@ -9,6 +9,16 @@ export function membershipLabel(count: number) {
   return `${count} ${count === 1 ? 'membership' : 'memberships'}`;
 }
 
+export function formatDate(value: string | null | undefined) {
+  if (!value) return 'Unknown';
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
 export function formatBrandDisambiguationLabel(brand: AdminBrandOption): string {
   const idSuffix = brand.id.slice(-8);
   return brand.ownerEmail
@@ -133,7 +143,7 @@ export function buildAdminUserListSearchParams(
 // Admin console tabs -------------------------------------------------------
 
 // The admin console tabs, in render order. `users` is the default (no param).
-export const ADMIN_TABS = ['users', 'workflows', 'audit', 'reports'] as const;
+export const ADMIN_TABS = ['users', 'brands', 'workflows', 'audit', 'reports'] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 
 // Coerce a raw `?tab=` value into a known tab, defaulting to `users`. Lets
@@ -171,6 +181,7 @@ export const ADMIN_AUDIT_ACTIONS = [
   'admin.workflow.migrate_global_to_brand',
   'admin.workflow.duplicate_to_brand',
   'admin.workflow.promote_to_global',
+  'admin.workflow.move_to_brand',
 ] as const;
 
 export type AdminAuditAction = (typeof ADMIN_AUDIT_ACTIONS)[number];
@@ -193,14 +204,35 @@ type AdminAuditRequestInput = {
   page: number;
   pageSize: number;
   action?: string | null;
+  brandProfileId?: string | null;
+  search?: string | null;
+  actorQuery?: string | null;
 };
 
-// Build the admin-audit-log request body, omitting the `action` filter when it
-// is unset so the endpoint returns every action rather than filtering on an
-// empty string.
-export function buildAdminAuditRequestBody({ page, pageSize, action }: AdminAuditRequestInput) {
-  const body: { page: number; pageSize: number; action?: string } = { page, pageSize };
+// Build the admin-audit-log request body, omitting any filter that is unset so
+// the endpoint returns every action rather than filtering on an empty string.
+export function buildAdminAuditRequestBody({
+  page,
+  pageSize,
+  action,
+  brandProfileId,
+  search,
+  actorQuery,
+}: AdminAuditRequestInput) {
+  const body: {
+    page: number;
+    pageSize: number;
+    action?: string;
+    brandProfileId?: string;
+    search?: string;
+    actorQuery?: string;
+  } = { page, pageSize };
   if (action) body.action = action;
+  if (brandProfileId) body.brandProfileId = brandProfileId;
+  const trimmedSearch = search?.trim();
+  if (trimmedSearch) body.search = trimmedSearch;
+  const trimmedActor = actorQuery?.trim();
+  if (trimmedActor) body.actorQuery = trimmedActor;
   return body;
 }
 

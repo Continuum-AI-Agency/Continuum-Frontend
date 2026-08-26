@@ -5,11 +5,13 @@
 import {
   type CreateCommentRequest,
   commentAnnotationSchema,
+  commentMentionSchema,
   type DeleteCommentRequest,
   listCommentsResponseSchema,
   type MediaComment,
   type UpdateCommentRequest,
 } from '@continuum/contracts';
+import { z } from 'zod';
 import {
   createAssetCommentOperation,
   deleteAssetCommentOperation,
@@ -26,6 +28,7 @@ export type MediaCommentRow = {
   version_id: string | null;
   parent_comment_id: string | null;
   body: string;
+  mentions?: unknown;
   annotation: unknown;
   resolved_at: string | null;
   resolved_by: string | null;
@@ -60,13 +63,14 @@ export function initialsFor(name: string | null | undefined): string {
   return initials || '?';
 }
 
-// A malformed annotation payload must never take the whole comment down with
-// it — the comment degrades to un-annotated instead.
+// A malformed annotation or mentions payload must never take the whole comment
+// down with it — the comment degrades to un-annotated / un-tagged instead.
 export function commentRowToMediaComment(
   row: MediaCommentRow,
   authors?: Map<string, CommentAuthor>,
 ): MediaComment {
   const parsedAnnotation = commentAnnotationSchema.safeParse(row.annotation);
+  const parsedMentions = z.array(commentMentionSchema).default([]).safeParse(row.mentions);
   const author = row.created_by ? authors?.get(row.created_by) : undefined;
   return {
     id: row.id,
@@ -75,6 +79,7 @@ export function commentRowToMediaComment(
     versionId: row.version_id,
     parentCommentId: row.parent_comment_id,
     body: row.body,
+    mentions: parsedMentions.success ? parsedMentions.data : [],
     annotation: parsedAnnotation.success ? parsedAnnotation.data : null,
     resolvedAt: row.resolved_at,
     resolvedBy: row.resolved_by,

@@ -113,14 +113,6 @@ const WhatsWorkingExplorerPopover = dynamic(
   { ssr: false },
 );
 
-const ReportJobsBell = dynamic(
-  () =>
-    import('@/components/paid-media/jaina/components/ReportJobsBell').then(
-      (mod) => mod.ReportJobsBell,
-    ),
-  { ssr: false },
-);
-
 // The "performance" tab slot now hosts the Paid Media Optimizer surface. The
 // legacy CampaignPerformanceTab component is preserved on disk (see risks note
 // for where it should be re-surfaced) but is no longer wired into this slot.
@@ -445,7 +437,6 @@ export default function PaidMediaClientPage({
             {platform === 'meta' && selectedAdAccount ? (
               <WhatsWorkingExplorerPopover brandId={brandProfileId} />
             ) : null}
-            <ReportJobsBell brandProfileId={brandProfileId} />
             {activeTab === 'jaina' ? (
               <>
                 <Button

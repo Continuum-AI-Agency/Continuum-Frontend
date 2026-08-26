@@ -40,6 +40,9 @@ function requestOrigin(request: Request): string {
 
 // The share target must belong to the brand the caller was authorized for;
 // otherwise a member of brand A could mint public links to brand B's assets.
+// Selection scope never lands here: multi-asset links are owned by the
+// Creative Operations Edge Function (create_share_link), so this helper only
+// ever validates single asset/collection targets.
 async function shareTargetExists(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   input: {
@@ -59,6 +62,8 @@ async function shareTargetExists(
       .maybeSingle();
     return Boolean(data);
   }
+  // Not a stub: selection shares are implemented, but on the edge function
+  // (assetIds up to 250, membership-validated). Point callers there.
   if (input.scope === 'selection') return false;
   const { data } = await mediaSchema(admin)
     .from('collections')

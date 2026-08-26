@@ -115,8 +115,9 @@ export function isOwnedVersionLocation(
   return location.storagePath.startsWith(`${owner.brandId}/${owner.assetId}/`);
 }
 
-// Dimensions/duration/checksum stay null on a fresh upload — analysis is a
-// later milestone and the bytes have not been inspected server-side.
+// Dimensions/duration come from the browser's own decode of the file when it
+// could read them; checksum stays server-side territory (the client cannot
+// attest integrity for a forged location anyway — the sign step pins the path).
 export function buildRegisterRow(
   request: RegisterVersionRequest,
   params: { versionNumber: number; createdBy: string },
@@ -130,9 +131,9 @@ export function buildRegisterRow(
     file_name: request.fileName,
     mime_type: request.mimeType,
     size_bytes: request.sizeBytes,
-    width: null,
-    height: null,
-    duration_ms: null,
+    width: request.width ?? null,
+    height: request.height ?? null,
+    duration_ms: request.durationMs ?? null,
     checksum: null,
     note: request.note ?? null,
     created_by: params.createdBy,
@@ -163,6 +164,9 @@ export function buildRollbackRow(
   };
 }
 
+// The promoted head mirrors the registered version's geometry so the grid and
+// signed-URL consumers keep seeing real dimensions instead of regressing to
+// nulls every time a new version lands.
 export function headUpdateFromRegister(request: RegisterVersionRequest): VersionFileColumns {
   return {
     bucket: request.bucket,
@@ -170,9 +174,9 @@ export function headUpdateFromRegister(request: RegisterVersionRequest): Version
     file_name: request.fileName,
     mime_type: request.mimeType,
     size_bytes: request.sizeBytes,
-    width: null,
-    height: null,
-    duration_ms: null,
+    width: request.width ?? null,
+    height: request.height ?? null,
+    duration_ms: request.durationMs ?? null,
     checksum: null,
   };
 }

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { type UserBrandListItem, useInfiniteUserBrands } from '@/hooks/useInfiniteUserBrands';
 import { useSwitchBrand } from '@/hooks/useSwitchBrand';
+import { fuzzyMatches } from '@/lib/search/fuzzy';
 
 type UserBrandsPanelProps = {
   permissions: BrandPermission[];
@@ -111,7 +112,7 @@ export function UserBrandsPanel({ permissions }: UserBrandsPanelProps) {
         className="max-h-[min(520px,calc(100vh-21rem))] overflow-y-auto rounded-lg border border-border/60 bg-card/20"
       >
         {isLoading && loadedBrands.length === 0 ? (
-          <div className="space-y-3 px-4 py-4" aria-label="Loading brands">
+          <div className="space-y-3 px-4 py-4" role="status" aria-label="Loading brands">
             {Array.from({ length: 5 }).map((_, index) => (
               <div key={index} className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-muted/70" />
@@ -226,36 +227,5 @@ function BrandRow({
 }
 
 export function matchesBrandSearch(brand: UserBrandListItem, query: string): boolean {
-  const normalizedQuery = normalizeSearchText(query);
-  if (!normalizedQuery) {
-    return true;
-  }
-
-  const searchable = [brand.name, brand.role, brand.id].filter((value): value is string =>
-    Boolean(value),
-  );
-
-  return searchable.some((value) => fuzzyIncludes(normalizeSearchText(value), normalizedQuery));
-}
-
-function normalizeSearchText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
-}
-
-function fuzzyIncludes(value: string, query: string): boolean {
-  if (value.includes(query)) {
-    return true;
-  }
-
-  let queryIndex = 0;
-  for (const char of value) {
-    if (char === query[queryIndex]) {
-      queryIndex += 1;
-      if (queryIndex === query.length) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  return fuzzyMatches([brand.name, brand.role, brand.id], query);
 }

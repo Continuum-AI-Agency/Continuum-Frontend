@@ -94,6 +94,52 @@ function isProjectFile(file: File): boolean {
   return format.accepted && format.originalKind === 'file';
 }
 
+// Best-effort media geometry for the register call. Images decode via
+// createImageBitmap; videos read their metadata element. Any failure (or a
+// non-image/video file) just yields nulls — the head row can live without
+// dimensions, but it should never REGRESS to nulls when the browser knows them.
+async function probeMediaDimensions(
+  file: File,
+  mimeType: string,
+): Promise<{ width?: number; height?: number; durationMs?: number }> {
+  try {
+    if (mimeType.startsWith('image/') && typeof createImageBitmap === 'function') {
+      const bitmap = await createImageBitmap(file);
+      const dims = { width: bitmap.width, height: bitmap.height };
+      bitmap.close();
+      return dims;
+    }
+    if (mimeType.startsWith('video/')) {
+      const dims = await new Promise<{ width?: number; height?: number; durationMs?: number }>(
+        (resolve, reject) => {
+          const video = document.createElement('video');
+          video.preload = 'metadata';
+          const done = (result: { width?: number; height?: number; durationMs?: number }) => {
+            video.removeAttribute('src');
+            video.load();
+            resolve(result);
+          };
+          video.onloadedmetadata = () =>
+            done({
+              width: video.videoWidth || undefined,
+              height: video.videoHeight || undefined,
+              durationMs:
+                Number.isFinite(video.duration) && video.duration > 0
+                  ? Math.round(video.duration * 1000)
+                  : undefined,
+            });
+          video.onerror = () => reject(new Error('video metadata unavailable'));
+          video.src = URL.createObjectURL(file);
+        },
+      );
+      return dims;
+    }
+  } catch {
+    // Advisory only — fall through to empty.
+  }
+  return {};
+}
+
 async function uploadProjectVersion(params: {
   supabase: SupabaseBrowserClient;
   ticket: VersionSignUploadResponse;
@@ -176,6 +222,7 @@ export async function uploadNewAssetVersion(
     params.onProgress?.({ uploadedBytes: file.size, totalBytes: file.size, percentage: 100 });
   }
 
+  const mediaDimensions = await probeMediaDimensions(file, contentType);
   const registered = await (deps.registerVersion ?? registerAssetVersion)({
     brandId,
     assetId,
@@ -184,6 +231,7 @@ export async function uploadNewAssetVersion(
     fileName: file.name,
     mimeType: contentType,
     sizeBytes: file.size,
+    ...mediaDimensions,
     note,
     integrityState: projectFile && file.size > 64 * 1024 * 1024 ? 'skipped_large_file' : 'unknown',
     baseVersionId,

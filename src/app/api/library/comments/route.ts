@@ -3,6 +3,7 @@ import {
   deleteCommentRequestSchema,
   listCommentsResponseSchema,
   type MediaComment,
+  parseCommentMentions,
   updateCommentRequestSchema,
 } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -34,9 +35,15 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 // image. The version is always resolved server-side (from the parent thread,
 // from a validated request id, or from the current head), never trusted from
 // the client and never left NULL.
+//
+// The canonical write surface is the Creative Operations Edge Function, whose
+// SQL lifecycle also parses mention tokens and fans out notifications. This
+// route's POST remains as a thin unprivileged fallback: it persists the same
+// parsed mentions for data-model consistency but does not duplicate the
+// notification producer logic.
 
 const COMMENT_SELECT =
-  'id, brand_id, asset_id, version_id, parent_comment_id, body, annotation, resolved_at, resolved_by, created_by, created_at, updated_at, deleted_at';
+  'id, brand_id, asset_id, version_id, parent_comment_id, body, mentions, annotation, resolved_at, resolved_by, created_by, created_at, updated_at, deleted_at';
 
 // Loose id strings on purpose, matching the contracts request schemas the
 // other verbs validate with (see contracts-wire-dto-stay-loose).
@@ -260,6 +267,8 @@ export async function POST(request: Request) {
       version_id: resolved.versionId,
       parent_comment_id: parentCommentId,
       body: input.body,
+      // Parsed from the body tokens server-side; never trusted from the client.
+      mentions: parseCommentMentions(input.body),
       annotation: input.annotation ?? null,
       created_by: caller.userId,
     })
@@ -317,7 +326,10 @@ export async function PATCH(request: Request) {
   }
 
   const patch: Record<string, unknown> = {};
-  if (input.body !== undefined) patch.body = input.body;
+  if (input.body !== undefined) {
+    patch.body = input.body;
+    patch.mentions = parseCommentMentions(input.body);
+  }
   if (input.resolved !== undefined) {
     patch.resolved_at = input.resolved ? new Date().toISOString() : null;
     patch.resolved_by = input.resolved ? caller.userId : null;

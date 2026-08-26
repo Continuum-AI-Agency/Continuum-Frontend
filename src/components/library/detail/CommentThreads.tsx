@@ -12,6 +12,7 @@
 // version they were written on instead of a pin that would point at nothing.
 
 import type { MediaComment } from '@continuum/contracts';
+import { splitCommentBodyForRender } from '@continuum/contracts';
 import { CheckCircle2, ChevronDown, ChevronRight, History, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -23,6 +24,8 @@ import { cn } from '@/lib/utils';
 import { CommentComposer } from './CommentComposer';
 
 type Props = {
+  /** Brand context enables @mention autocomplete in reply composers. */
+  brandId?: string;
   /** Threads written on the version currently on the stage. Only these carry pins. */
   threads: CommentThreadGroups;
   pinLabels: Map<string, string>;
@@ -47,6 +50,26 @@ type Props = {
 
 function authorLabel(comment: MediaComment): string {
   return comment.authorName ?? displayNameFromEmail(comment.authorEmail) ?? 'Member';
+}
+
+// Mention tokens render as chips; everything else stays verbatim text.
+function CommentBodyText({ body }: { body: string }) {
+  const segments = splitCommentBodyForRender(body);
+  return (
+    <>
+      {segments.map((segment, index) =>
+        segment.kind === 'text' ? (
+          // biome-ignore lint/suspicious/noArrayIndexKey: segments are a pure derived split of an immutable string
+          <span key={index}>{segment.text}</span>
+        ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: same derived-split rationale
+          <span key={index} className="rounded bg-primary/10 px-0.5 font-medium text-primary">
+            @{segment.label}
+          </span>
+        ),
+      )}
+    </>
+  );
 }
 
 function CommentBody({
@@ -77,7 +100,7 @@ function CommentBody({
           )}
         </div>
         <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90">
-          {comment.body}
+          <CommentBodyText body={comment.body} />
         </p>
       </div>
     </div>
@@ -85,6 +108,7 @@ function CommentBody({
 }
 
 function ThreadCard({
+  brandId,
   thread,
   pinLabel,
   versionLabel,
@@ -99,6 +123,7 @@ function ThreadCard({
   onResolve,
   onDelete,
 }: {
+  brandId?: string;
   thread: CommentThread;
   pinLabel?: string;
   /** Set only for a thread written on a version other than the one on stage. */
@@ -221,6 +246,7 @@ function ThreadCard({
             submitLabel="Reply"
             busy={posting}
             autoFocus
+            brandId={brandId}
             onSubmit={(body) => {
               onReply(body);
               setReplying(false);
@@ -256,6 +282,7 @@ function SectionToggle({
 }
 
 export function CommentThreads({
+  brandId,
   threads,
   pinLabels,
   otherVersionThreads,
@@ -312,6 +339,7 @@ export function CommentThreads({
       {threads.open.map((thread) => (
         <ThreadCard
           key={thread.root.id}
+          brandId={brandId}
           thread={thread}
           pinLabel={pinLabels.get(thread.root.id)}
           selected={selectedId === thread.root.id}
@@ -335,6 +363,7 @@ export function CommentThreads({
             threads.resolved.map((thread) => (
               <ThreadCard
                 key={thread.root.id}
+                brandId={brandId}
                 thread={thread}
                 pinLabel={pinLabels.get(thread.root.id)}
                 selected={selectedId === thread.root.id}
@@ -364,6 +393,7 @@ export function CommentThreads({
               return (
                 <ThreadCard
                   key={thread.root.id}
+                  brandId={brandId}
                   thread={thread}
                   // No pinLabel and no pin: this thread's geometry addresses
                   // bytes that are not on the stage.

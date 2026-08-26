@@ -48,39 +48,50 @@ describe('mapNotificationRow', () => {
 });
 
 describe('describeNotification', () => {
-  it('describes a review request with actor, asset, and message', () => {
+  it('describes a review request with actor, asset, message, and asset deep link', () => {
     const display = describeNotification(notification({}));
     expect(display.title).toBe('Duane asked you to review “Summer Reel v3”');
     expect(display.detail).toBe('Check the grade');
-    expect(display.href).toBe('/library');
+    expect(display.href).toBe('/library?assetId=asset-1');
   });
 
   it('falls back gracefully when the payload is empty', () => {
     const display = describeNotification(notification({ payload: {} }));
     expect(display.title).toBe('A teammate asked you to review “a creative”');
     expect(display.detail).toBeNull();
+    expect(display.href).toBe('/library');
   });
 
   it('humanizes review status changes', () => {
     const display = describeNotification(
       notification({
         kind: 'review_status_change',
-        payload: { assetName: 'Summer Reel v3', status: 'needs_changes' },
+        payload: { assetId: 'asset-1', assetName: 'Summer Reel v3', status: 'needs_changes' },
       }),
     );
     expect(display.title).toBe('“Summer Reel v3” moved to needs changes');
+    expect(display.href).toBe('/library?assetId=asset-1');
   });
 
-  it('describes replies and mentions', () => {
+  it('describes replies and mentions with the comment excerpt as detail', () => {
     const reply = describeNotification(
-      notification({ kind: 'comment_reply', payload: { actorName: 'Ana', assetName: 'Reel' } }),
+      notification({
+        kind: 'comment_reply',
+        payload: { actorName: 'Ana', assetName: 'Reel', excerpt: 'see @Bo note' },
+      }),
     );
     expect(reply.title).toBe('Ana replied on “Reel”');
+    expect(reply.detail).toBe('see @Bo note');
 
     const mention = describeNotification(
-      notification({ kind: 'comment_mention', payload: { actorName: 'Ana', assetName: 'Reel' } }),
+      notification({
+        kind: 'comment_mention',
+        payload: { actorName: 'Ana', assetName: 'Reel' },
+      }),
     );
     expect(mention.title).toBe('Ana mentioned you on “Reel”');
+    expect(mention.detail).toBeNull();
+    expect(mention.href).toBe(mention.href);
   });
 });
 
