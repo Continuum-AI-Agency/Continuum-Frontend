@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
 
 /**
@@ -23,9 +24,9 @@ import { cn } from '@/lib/utils';
 type AgentCardVariant = 'receipt' | 'artifact' | 'decision';
 
 const AGENT_CARD_VARIANTS: Record<AgentCardVariant, string> = {
-  receipt: 'rounded-xl border-border/40 bg-muted/20 py-0 shadow-none',
-  artifact: 'overflow-hidden rounded-xl border-border/45 bg-card/75 py-0 shadow-none',
-  decision: 'rounded-xl border-border/50 bg-card/80 py-0 shadow-none',
+  receipt: 'rounded-lg border-border/40 bg-muted/20 py-0 shadow-none',
+  artifact: 'overflow-hidden rounded-lg border-border/45 bg-card/75 py-0 shadow-none',
+  decision: 'rounded-lg border-border/50 bg-card/80 py-0 shadow-none',
 };
 
 type AgentCardFrameProps = React.ComponentProps<'div'> & {
@@ -143,20 +144,28 @@ const STATUS_DOT: Record<StatusTone, string> = {
 export function StatusLabel({
   tone = 'neutral',
   title,
+  detail,
   children,
 }: {
   tone?: StatusTone;
   /** Engineer-facing diagnostic. Never render a diagnostic as the visible label. */
   title?: string;
+  /**
+   * What is actually happening, for someone who wants to know rather than debug: the
+   * agent at work, the stage, the percent, the checkpoint ladder. A native `title=` holds
+   * one unstyled line after a browser-controlled delay, which is why nobody ever read it.
+   */
+  detail?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  return (
+  const badge = (
     <Badge
       variant="outline"
       title={title}
       className={cn(
         'h-auto shrink-0 gap-1.5 rounded-md border-transparent bg-transparent px-0 py-0 text-xs font-medium tabular-nums shadow-none hover:bg-transparent',
         STATUS_TEXT[tone],
+        detail && 'cursor-default',
       )}
     >
       <span
@@ -168,6 +177,18 @@ export function StatusLabel({
       />
       {children}
     </Badge>
+  );
+
+  if (!detail) return badge;
+
+  return (
+    <HoverCard closeDelay={80} openDelay={160}>
+      {/* Base UI renders the trigger as an anchor; a status is not a link. */}
+      <HoverCardTrigger render={<span className="shrink-0">{badge}</span>} />
+      <HoverCardContent align="end" className="w-64 p-3" side="bottom">
+        {detail}
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 
