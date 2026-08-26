@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import { type DesignSystemSnapshot, designSystemSnapshotSchema } from './manifest';
-import { renderDesignSystemBlock } from './render';
+import {
+  type DesignSystemFontEmbed,
+  renderDesignSystemBlock,
+  renderDesignSystemStylesheet,
+} from './render';
 
 const snapshot = (over: Partial<DesignSystemSnapshot> = {}): DesignSystemSnapshot =>
   designSystemSnapshotSchema.parse({
@@ -112,5 +116,140 @@ describe('renderDesignSystemBlock', () => {
     expect(palette.block).toContain('#FFAA1C');
     expect(palette.block).not.toContain('Typefaces:');
     expect(palette.block).not.toContain('Titulares siempre');
+  });
+});
+
+describe('renderDesignSystemStylesheet', () => {
+  const font = (family: string, source: string | null = null) => ({ family, tokens: [], source });
+  const poppins: DesignSystemFontEmbed = {
+    family: 'Poppins',
+    weight: 600,
+    format: 'woff2',
+    base64: 'd09GMgABAAAAAA',
+  };
+
+  it('embeds a @font-face per entry, with the format hint the type calls for', () => {
+    const css = renderDesignSystemStylesheet(
+      snapshot({ fonts: [font('Poppins'), font('Georgia')] }),
+      {
+        includeFontImport: false,
+        embedFonts: [
+          poppins,
+          { family: 'Georgia', style: 'italic', format: 'otf', base64: 'T1RUTwAKAIAAAw' },
+        ],
+      },
+    );
+
+    expect(css).toContain("font-family: 'Poppins';");
+    expect(css).toContain('font-weight: 600;');
+    expect(css).toContain("src: url('data:font/woff2;base64,d09GMgABAAAAAA') format('woff2');");
+    expect(css).toContain("font-family: 'Georgia';");
+    expect(css).toContain('font-style: italic;');
+    expect(css).toContain("src: url('data:font/otf;base64,T1RUTwAKAIAAAw') format('opentype');");
+    // A data URI is not a fetch, which is the whole reason this works in the sandbox.
+    expect(css).toContain('font-display: swap;');
+    expect(css.match(/@font-face/g)).toHaveLength(2);
+    // The tokens still carry, under their original names.
+    expect(css).toContain('  --accent: #FFAA1C;');
+  });
+
+  it('maps every format to its own hint', () => {
+    const hints = (['woff2', 'woff', 'otf', 'ttf'] as const).map(
+      (format) =>
+        renderDesignSystemStylesheet(snapshot(), {
+          includeFontImport: false,
+          embedFonts: [{ family: 'Poppins', format, base64: 'AAAA' }],
+        }).match(/format\('([a-z0-9]+)'\)/)?.[1],
+    );
+
+    expect(hints).toEqual(['woff2', 'woff', 'opentype', 'truetype']);
+  });
+
+  it('suppresses the remote @import for an embedded family and keeps it for the rest', () => {
+    const two = snapshot({ fonts: [font('Poppins'), font('Space Grotesk')] });
+
+    const both = renderDesignSystemStylesheet(two, { embedFonts: [poppins] });
+    expect(both).toContain('@import url(');
+    expect(both).toContain('family=Space+Grotesk');
+    expect(both).not.toContain('family=Poppins');
+
+    const all = renderDesignSystemStylesheet(two, {
+      embedFonts: [poppins, { family: 'Space Grotesk', format: 'woff2', base64: 'AAAA' }],
+    });
+    expect(all).not.toContain('@import');
+    expect(all.match(/@font-face/g)).toHaveLength(2);
+  });
+
+  it('drops a declared Google Fonts URL only once no family still needs it', () => {
+    const declared = snapshot({
+      fonts: [font('Poppins', 'https://fonts.googleapis.com/css2?family=Poppins')],
+    });
+
+    expect(renderDesignSystemStylesheet(declared)).toContain('@import');
+    expect(renderDesignSystemStylesheet(declared, { embedFonts: [poppins] })).not.toContain(
+      '@import',
+    );
+  });
+
+  it('is byte-identical to the old output when no fonts are embedded', () => {
+    // The existing callers — hyperframes grounding, the DS export — must not move.
+    const base = snapshot();
+    const oldSandboxed = ':root {\n  --accent: #FFAA1C;\n  --ink: #231F20;\n}';
+
+    expect(renderDesignSystemStylesheet(base, { includeFontImport: false })).toBe(oldSandboxed);
+    expect(renderDesignSystemStylesheet(base, { includeFontImport: false, embedFonts: [] })).toBe(
+      oldSandboxed,
+    );
+    expect(renderDesignSystemStylesheet(base)).toBe(
+      `@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');\n${oldSandboxed}`,
+    );
+  });
+
+  it('rejects a payload that could close the declaration instead of emitting it', () => {
+    const hostile = [
+      "AAAA') format('woff2'); } body { display: none; } @font-face { src: url('",
+      'AAAA;background:url(https://evil.example/x)',
+      'AA\nAA',
+      '',
+    ];
+
+    for (const base64 of hostile) {
+      const css = renderDesignSystemStylesheet(snapshot(), {
+        includeFontImport: false,
+        embedFonts: [{ family: 'Poppins', format: 'woff2', base64 }],
+      });
+      expect(css).not.toContain('@font-face');
+      expect(css).toBe(':root {\n  --accent: #FFAA1C;\n  --ink: #231F20;\n}');
+    }
+  });
+
+  it('rejects a family name carrying CSS delimiters', () => {
+    const css = renderDesignSystemStylesheet(snapshot(), {
+      includeFontImport: false,
+      embedFonts: [
+        { family: "Poppins'; } body { display:none } @x{", format: 'woff2', base64: 'AAAA' },
+      ],
+    });
+
+    expect(css).not.toContain('@font-face');
+    expect(css).not.toContain('display:none');
+  });
+
+  it('leaves a rejected embed’s family on the remote @import rather than on nothing', () => {
+    // A rejected embed is one that does not exist — falling back to the import beats
+    // falling back to a system stack, which is the bug this option exists to fix.
+    const css = renderDesignSystemStylesheet(snapshot(), {
+      embedFonts: [{ family: 'Poppins', format: 'woff2', base64: 'not valid!' }],
+    });
+
+    expect(css).toContain('family=Poppins');
+    expect(css).not.toContain('@font-face');
+  });
+
+  it('returns nothing when there are no tokens to state, embeds or not', () => {
+    const bare = designSystemSnapshotSchema.parse({ ...snapshot(), tokens: [] });
+
+    expect(renderDesignSystemStylesheet(bare)).toBe('');
+    expect(renderDesignSystemStylesheet(bare, { embedFonts: [poppins] })).toBe('');
   });
 });

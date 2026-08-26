@@ -36,4 +36,5 @@ export * from './share';
 export * from './timeline-draft';
 export * from './transformations';
 export * from './unfurl';
+export * from './unsplash';
 export * from './versions';

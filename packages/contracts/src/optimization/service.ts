@@ -566,6 +566,11 @@ export const CycleItemRowSchema = z
     apply_status: CycleItemApplyStatusSchema.nullable().optional(),
     apply_requested_by: z.string().nullable().optional(),
     apply_requested_at: z.string().nullable().optional(),
+    /** The move's "why" in a sentence, written at cycle time (optimizer.cycle_items.reason).
+     *  `diagnostics` carries the SCORES behind the move; this carries the reason a reader can
+     *  act on, and it is what the apply copies into apply_audits.justification. Optional: rows
+     *  scored before the column existed have none. */
+    reason: z.string().nullable().optional(),
   })
   .loose();
 export type CycleItemRow = z.infer<typeof CycleItemRowSchema>;
@@ -1018,6 +1023,16 @@ export const ApplyAuditSchema = z
     mode: z.string().nullable().optional(),
     meta_receipt: z.record(z.string(), z.unknown()).optional(),
     created_at: z.string().optional(),
+    /** Why this write happened, in the words of whatever authorized it — rendered next to the
+     *  before→after instead of a bare number. Copied from cycle_items.reason on a budget apply. */
+    justification: z.string().nullable().optional(),
+    /** The optimizer.recommendations row this write executed, when it executed one. Closes the
+     *  loop between "we recommended X" and "X was written". Null for a plain cycle move. */
+    recommendation_id: z.string().nullable().optional(),
+    /** The apply_audits row this write undoes. A revert is not a special row type — it is an
+     *  ordinary money write pointing back at its target, which is what lets the read model
+     *  answer both "did this undo something" and "was this undone". */
+    reverts_audit_id: z.string().nullable().optional(),
   })
   .loose();
 export type ApplyAudit = z.infer<typeof ApplyAuditSchema>;
@@ -1092,6 +1107,10 @@ export const ApplyRevertResponseSchema = z.object({
   ok: z.boolean(),
   dryRun: z.boolean().optional(),
   auditId: z.string().optional(),
+  /** The NEW apply_audits row this revert wrote, whose `reverts_audit_id` points back at
+   *  `auditId`. Absent on a dry run (no row was written) and on a soft failure. It is what lets
+   *  the caller render the reverting row immediately instead of re-reading the whole feed. */
+  reverts_audit_id: z.string().nullable().optional(),
   would: z.array(z.union([ApplyWouldWriteSchema, AdsetStatusWouldWriteSchema])).default([]),
   applied: z.number().int().nonnegative().optional(),
   failed: z.number().int().nonnegative().optional(),
@@ -1434,6 +1453,77 @@ export const OptimizerLogsResponseSchema = z.object({
   logs: z.array(OptimizerLogRowSchema),
 });
 export type OptimizerLogsResponse = z.infer<typeof OptimizerLogsResponseSchema>;
+
+/** Which audit table an action row came from, and therefore what it means.
+ *  'money'    — a write that touched the ad account (optimizer.apply_audits)
+ *  'settings' — a portfolio config change (optimizer.portfolio_audits)
+ *  'decision' — a recommendation approved or rejected (optimizer.recommendation_audits) */
+export const OptimizerActionFamilySchema = z.enum(['money', 'settings', 'decision']);
+export type OptimizerActionFamily = z.infer<typeof OptimizerActionFamilySchema>;
+
+/** The specific operation inside a family. Enumerated rather than left open because
+ *  optimizer_list_actions emits these as hardcoded SQL literals — they cannot drift without
+ *  a migration, unlike the table columns behind them. */
+export const OptimizerActionOpSchema = z.enum(['budget', 'status', 'setting', 'decision']);
+export type OptimizerActionOp = z.infer<typeof OptimizerActionOpSchema>;
+
+/** One row of the unified optimizer action feed (public.optimizer_list_actions) — every
+ *  state change that has a BEFORE and an AFTER, across all three audit tables.
+ *
+ *  This is the counterpart to OptimizerLogRow, which is now lifecycle-only ("the machine
+ *  ran"). An action row is "something changed", and it carries what a lifecycle row never
+ *  could: the prior value, the new value, who authorized it, why, and whether it can be undone.
+ *
+ *  `before`/`after` are jsonb so ONE row shape carries three unit systems:
+ *    budget    {"minor": 5000}         minor units, account currency
+ *    status    {"status": "ACTIVE"}    Meta effective_status
+ *    setting   {"value": "autopilot"}  the field named by `entity_id`
+ *    decision  {"status": "pending"}   recommendation status
+ *
+ *  DB-derived read model → LOOSE, per the rule at the top of the row-schema block. */
+export const OptimizerActionRowSchema = z
+  .object({
+    id: z.string(),
+    ts: z.string(), // ISO timestamptz — also the keyset cursor (pass it back as p_before)
+    family: OptimizerActionFamilySchema,
+    op: OptimizerActionOpSchema,
+    portfolio_id: z.string().nullable().optional(),
+    portfolio_name: z.string().nullable().optional(),
+    /** The ad, ad set or campaign this touched; on a settings row, the FIELD that changed.
+     *  Lets the feed be filtered by entity across all three families. */
+    entity_id: z.string().nullable().optional(),
+    before: z.record(z.string(), z.unknown()).nullable().optional(),
+    after: z.record(z.string(), z.unknown()).nullable().optional(),
+    justification: z.string().nullable().optional(),
+    /** 'autopilot' (the scheduler wrote it), 'human' (a person authorized it), or 'system'
+     *  (a change with no recorded actor). */
+    actor_kind: z.enum(['autopilot', 'human', 'system']).nullable().optional(),
+    actor_id: z.string().nullable().optional(),
+    run_id: z.string().nullable().optional(),
+    /** TRUE only for an ad-account write that recorded an actual prior value to restore.
+     *  Settings and decisions are shown with their before→after but are NEVER reversible —
+     *  undoing a config change is not one write against Meta, and a button that pretends
+     *  otherwise is how one click becomes an outage. */
+    reversible: z.boolean().nullable().optional(),
+    /** Set when THIS row is itself a revert: the action it undid. */
+    revert_of: z.string().nullable().optional(),
+    /** Set when this row HAS BEEN undone: the revert that undid it. Render "reverted" rather
+     *  than offering the button a second time. */
+    reverted_by: z.string().nullable().optional(),
+    /** The Meta write receipt (fbtrace_id / entity id) on a money row; null elsewhere. */
+    receipt: z.record(z.string(), z.unknown()).nullable().optional(),
+  })
+  .loose();
+export type OptimizerActionRow = z.infer<typeof OptimizerActionRowSchema>;
+
+/** The paginated action-feed envelope. Keyset, not offset: `next_before` is the `ts` of the
+ *  last row returned — hand it straight back as `p_before` for the next page. Null when the
+ *  feed is exhausted, so "is there more" needs no extra count query. */
+export const OptimizerActionListResponseSchema = z.object({
+  actions: z.array(OptimizerActionRowSchema),
+  next_before: z.string().nullable().optional(),
+});
+export type OptimizerActionListResponse = z.infer<typeof OptimizerActionListResponseSchema>;
 
 // ---------------------------------------------------------------------------
 // Rules engine (optimizer.rules) — rules-as-data, and rules-as-permissions

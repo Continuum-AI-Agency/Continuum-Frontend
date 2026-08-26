@@ -12,6 +12,58 @@ export const notificationKindSchema = z.enum([
 ]);
 export type NotificationKind = z.infer<typeof notificationKindSchema>;
 
+// Every producer must stamp at least this context so the bell can deep-link
+// straight to the asset (href = /library?assetId=<assetId>) and render a line.
+export const notificationPayloadBaseSchema = z
+  .object({
+    assetId: z.string().min(1),
+    assetName: z.string().min(1),
+    actorName: z.string().min(1),
+  })
+  .strict();
+export type NotificationPayloadBase = z.infer<typeof notificationPayloadBaseSchema>;
+
+const commentNotificationPayloadSchema = notificationPayloadBaseSchema.extend({
+  commentId: z.string().min(1).optional(),
+  // Plain-text preview of the comment body (mention tokens stripped).
+  excerpt: z.string().max(200).optional(),
+});
+
+export const commentReplyPayloadSchema = commentNotificationPayloadSchema.strict();
+export type CommentReplyPayload = z.infer<typeof commentReplyPayloadSchema>;
+
+export const commentMentionPayloadSchema = commentNotificationPayloadSchema.strict();
+export type CommentMentionPayload = z.infer<typeof commentMentionPayloadSchema>;
+
+export const reviewStatusChangePayloadSchema = notificationPayloadBaseSchema.extend({
+  status: z.string().min(1).optional(),
+  message: z.string().max(2000).optional(),
+});
+export type ReviewStatusChangePayload = z.infer<typeof reviewStatusChangePayloadSchema>;
+
+// Producers write one of the typed payloads above; readers fall back to the
+// permissive record so legacy rows keep rendering.
+export function parseNotificationPayload(
+  kind: NotificationKind,
+  payload: Record<string, unknown>,
+):
+  | CommentReplyPayload
+  | CommentMentionPayload
+  | ReviewStatusChangePayload
+  | Record<string, unknown> {
+  const schema =
+    kind === 'comment_reply'
+      ? commentReplyPayloadSchema
+      : kind === 'comment_mention'
+        ? commentMentionPayloadSchema
+        : kind === 'review_status_change'
+          ? reviewStatusChangePayloadSchema
+          : null;
+  if (!schema) return payload;
+  const parsed = schema.safeParse(payload);
+  return parsed.success ? parsed.data : payload;
+}
+
 export const appNotificationSchema = z
   .object({
     id: z.string().min(1),

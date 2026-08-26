@@ -1,4 +1,5 @@
 export * from './conflicts';
+export * from './image-analysis';
 export * from './lint';
 export * from './manifest';
 export * from './package';

@@ -12,10 +12,11 @@
 // value to be used literally, and handing it `--accent: #FFAA1C` is categorically
 // stronger than telling it the accent is orange.
 
+import { z } from 'zod';
 import type { DesignSystemSnapshot } from './manifest';
 import { effectiveRigorTier } from './manifest';
 import type { DesignSection, DesignSystemSection } from './sections';
-import { type DesignToken, literalHexTokens } from './tokens';
+import { type DesignSystemFont, type DesignToken, literalHexTokens } from './tokens';
 
 /**
  * Sections the caller wants applied.
@@ -153,16 +154,22 @@ export function renderDesignSystemBlock(
 /*  Stylesheet                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/** Google Fonts is the only remote origin a generated composition may reference. */
-function fontImport(snapshot: DesignSystemSnapshot): string | null {
-  const declared = snapshot.fonts
+/**
+ * Google Fonts is the only remote origin a generated composition may reference.
+ *
+ * Takes the families rather than the snapshot because an embedded family must not also
+ * be imported — the import would be a request that resolves to nothing in a sandbox and
+ * to a duplicate everywhere else.
+ */
+function fontImport(fonts: readonly DesignSystemFont[]): string | null {
+  const declared = fonts
     .map((font) => font.source)
     .find((source) => source && /fonts\.googleapis\.com/.test(source));
   if (declared) return `@import url('${declared}');`;
   // Reconstructing the URL when the source did not carry one is what makes a
   // DTCG/Figma import — which has family names but no webfont link — still render in
   // the right typeface rather than silently falling back to a system stack.
-  const families = snapshot.fonts.map((font) => font.family).filter(Boolean);
+  const families = fonts.map((font) => font.family).filter(Boolean);
   if (families.length === 0) return null;
   const query = families
     .map(
@@ -171,6 +178,72 @@ function fontImport(snapshot: DesignSystemSnapshot): string | null {
     )
     .join('&');
   return `@import url('https://fonts.googleapis.com/css2?${query}&display=swap');`;
+}
+
+/**
+ * One font binary the CALLER has already read and base64-encoded.
+ *
+ * A data URI is not a network fetch, so an `@font-face` built from one renders inside a
+ * sandboxed srcdoc iframe with no remote origins — which is the whole reason this exists.
+ * `includeFontImport: false` alone left the typeface silently resolving to a fallback
+ * stack; only the token values carried.
+ *
+ * Contracts code does no IO, so this carries BYTES, not a path or a URL: reading the file
+ * and encoding it is the Backend's job. What belongs here is the shape both sides agree
+ * on and what counts as a value safe to paste into a stylesheet.
+ */
+export const designSystemFontEmbedSchema = z
+  .object({
+    /**
+     * The family name as `font-family` will see it. Nothing that could close the quoted
+     * value or the declaration — this string is interpolated into a stylesheet that
+     * renders in an iframe.
+     */
+    family: z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[^'"(){};\\\r\n]+$/, 'font family must not contain CSS delimiters'),
+    weight: z.number().int().min(1).max(1000).optional(),
+    style: z.enum(['normal', 'italic']).default('normal'),
+    format: z.enum(['woff2', 'woff', 'otf', 'ttf']),
+    /**
+     * Standard base64 of the font file, with no `data:` prefix. The charset check is the
+     * whole boundary guard: it rejects `url(`, `;`, `}` and newlines by construction, so
+     * a hostile value cannot close the `src` declaration and inject CSS.
+     */
+    base64: z
+      .string()
+      .min(1)
+      .regex(/^[A-Za-z0-9+/]+={0,2}$/, 'font payload must be plain base64'),
+  })
+  .strict();
+/** What a caller hands us — `style` defaults, so it stays optional here. */
+export type DesignSystemFontEmbed = z.input<typeof designSystemFontEmbedSchema>;
+/** What survived validation, with the defaults filled in. */
+type ValidatedFontEmbed = z.output<typeof designSystemFontEmbedSchema>;
+
+/** `format()` is a hint the UA uses to skip a file it cannot decode; the mime rides the URI. */
+const fontEmbedFormats: Record<
+  ValidatedFontEmbed['format'],
+  { readonly mime: string; readonly hint: string }
+> = {
+  woff2: { mime: 'font/woff2', hint: 'woff2' },
+  woff: { mime: 'font/woff', hint: 'woff' },
+  otf: { mime: 'font/otf', hint: 'opentype' },
+  ttf: { mime: 'font/ttf', hint: 'truetype' },
+};
+
+function fontFaceBlock(embed: ValidatedFontEmbed): string {
+  const { mime, hint } = fontEmbedFormats[embed.format];
+  const lines = [
+    `  font-family: '${embed.family}';`,
+    ...(embed.weight === undefined ? [] : [`  font-weight: ${embed.weight};`]),
+    `  font-style: ${embed.style};`,
+    '  font-display: swap;',
+    `  src: url('data:${mime};base64,${embed.base64}') format('${hint}');`,
+  ];
+  return `@font-face {\n${lines.join('\n')}\n}`;
 }
 
 /**
@@ -194,18 +267,41 @@ export function renderDesignSystemStylesheet(
      * contradict a standing instruction and silently resolve to a fallback stack
      * anyway. The token values — colours, scale, radii, motion — are the part that
      * carries, and they are unaffected.
+     *
+     * Pass `embedFonts` instead to make the typeface carry too.
      */
     includeFontImport?: boolean;
+    /**
+     * Font binaries to inline as `@font-face` data URIs, independent of
+     * `includeFontImport` — an embed works in the sandbox precisely because it is not a
+     * fetch.
+     *
+     * A family covered by a VALID embed loses its `@import`; emitting both is a wasted
+     * request that resolves to nothing in the sandbox anyway. Families with no embed keep
+     * the import exactly as before — and so does a family whose embed failed validation,
+     * because a rejected embed is one that does not exist, and falling back to the remote
+     * import beats falling back to a system stack.
+     */
+    embedFonts?: readonly DesignSystemFontEmbed[];
   } = {},
 ): string {
   if (snapshot.tokens.length === 0) return '';
   const namedTokens = snapshot.tokens.filter((token) => token.name.startsWith('--'));
   if (namedTokens.length === 0) return '';
 
-  const importLine = options.includeFontImport === false ? null : fontImport(snapshot);
+  const embeds = (options.embedFonts ?? []).flatMap((candidate) => {
+    const parsed = designSystemFontEmbedSchema.safeParse(candidate);
+    return parsed.success ? [parsed.data] : [];
+  });
+  const embedded = new Set(embeds.map((embed) => embed.family.trim().toLowerCase()));
+  const remoteFonts = snapshot.fonts.filter(
+    (font) => !embedded.has(font.family.trim().toLowerCase()),
+  );
+
+  const importLine = options.includeFontImport === false ? null : fontImport(remoteFonts);
   const declarations = namedTokens.map((token) => `  ${token.name}: ${token.value};`).join('\n');
 
-  return [importLine, ':root {', declarations, '}']
+  return [importLine, ...embeds.map(fontFaceBlock), ':root {', declarations, '}']
     .filter((part): part is string => part !== null)
     .join('\n');
 }

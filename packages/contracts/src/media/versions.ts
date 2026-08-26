@@ -92,6 +92,11 @@ export const registerVersionRequestSchema = z
     fileName: z.string().min(1),
     mimeType: z.string().min(1),
     sizeBytes: z.number().int().nonnegative(),
+    // Browser-measured media geometry. Optional and advisory — a null just
+    // leaves the head row without that signal until analysis fills it.
+    width: z.number().int().positive().max(100_000).optional(),
+    height: z.number().int().positive().max(100_000).optional(),
+    durationMs: z.number().int().positive().optional(),
     note: z.string().max(2000).optional(),
     integrityState: assetIntegrityStateSchema.optional(),
     baseVersionId: z.string().uuid().optional(),

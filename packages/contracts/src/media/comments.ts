@@ -68,6 +68,55 @@ export const commentAnnotationSchema = z.discriminatedUnion('kind', [
 ]);
 export type CommentAnnotation = z.infer<typeof commentAnnotationSchema>;
 
+// A mention tags an internal brand member inside a comment body. Identity is
+// the Continuum user id; display text lives in the body token itself so a
+// comment renders correctly even before membership lookup.
+export const commentMentionSchema = z.object({ userId: z.string().min(1) }).strict();
+export type CommentMention = z.infer<typeof commentMentionSchema>;
+
+// Body token format: @[Display Name](continuum-user://<userId>). Markdown-link
+// shaped so unrendered contexts degrade to readable prose.
+export const MENTION_TOKEN_PATTERN = /@\[([^\]\n]+)\]\(continuum-user:\/\/([^)\n]+)\)/g;
+
+export type CommentBodySegment =
+  | { kind: 'text'; text: string }
+  | { kind: 'mention'; userId: string; label: string };
+
+export function splitCommentBodyForRender(body: string): CommentBodySegment[] {
+  const segments: CommentBodySegment[] = [];
+  let cursor = 0;
+  for (const match of body.matchAll(MENTION_TOKEN_PATTERN)) {
+    const start = match.index ?? 0;
+    if (start > cursor) segments.push({ kind: 'text', text: body.slice(cursor, start) });
+    segments.push({ kind: 'mention', label: match[1], userId: match[2] });
+    cursor = start + match[0].length;
+  }
+  if (cursor < body.length) segments.push({ kind: 'text', text: body.slice(cursor) });
+  return segments.length > 0 ? segments : [{ kind: 'text', text: body }];
+}
+
+export function buildMentionToken(userId: string, label: string): string {
+  return `@[${label}](continuum-user://${userId})`;
+}
+
+export function parseCommentMentions(body: string): CommentMention[] {
+  const seen = new Set<string>();
+  const mentions: CommentMention[] = [];
+  for (const match of body.matchAll(MENTION_TOKEN_PATTERN)) {
+    const userId = match[2];
+    if (!seen.has(userId)) {
+      seen.add(userId);
+      mentions.push({ userId });
+    }
+  }
+  return mentions;
+}
+
+export function stripMentionTokensForExcerpt(body: string, maxLength = 140): string {
+  const plain = body.replace(MENTION_TOKEN_PATTERN, '@$1');
+  return plain.length > maxLength ? `${plain.slice(0, maxLength - 1)}…` : plain;
+}
+
 export const mediaCommentSchema = z
   .object({
     id: z.string().min(1),
@@ -76,6 +125,9 @@ export const mediaCommentSchema = z
     versionId: z.string().nullable().optional(),
     parentCommentId: z.string().nullable().optional(),
     body: z.string(),
+    // User ids tagged in the body at write time; validated against brand
+    // membership server-side. Drives rendering and notification fan-out.
+    mentions: z.array(commentMentionSchema).default([]),
     annotation: commentAnnotationSchema.nullable().optional(),
     resolvedAt: z.string().nullable().optional(),
     resolvedBy: z.string().nullable().optional(),
@@ -94,6 +146,9 @@ export const createCommentRequestSchema = z
     brandId: z.string().min(1),
     assetId: z.string().min(1),
     body: z.string().min(1).max(5000),
+    // Redundant with tokens parsed from body, but explicit — the server
+    // validates this list against brand membership before fanning out.
+    mentions: z.array(commentMentionSchema).max(20).optional(),
     annotation: commentAnnotationSchema.optional(),
     parentCommentId: z.string().min(1).optional(),
     versionId: z.string().min(1).optional(),
