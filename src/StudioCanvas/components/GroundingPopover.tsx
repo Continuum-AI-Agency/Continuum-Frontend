@@ -209,7 +209,7 @@ export function GroundingPopover({
 
   return (
     <TooltipProvider delay={250}>
-      <div className="max-h-[min(32rem,var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain p-2">
+      <div className="max-h-[min(32rem,var(--available-height))] overflow-y-auto overscroll-contain p-2">
         <div className="flex flex-col gap-3">
           {/*
             One control, three sources. The brand book, the creative direction the brand

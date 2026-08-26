@@ -1,8 +1,9 @@
 'use client';
 
-// Add Node, as a searchable palette instead of a hover tree. The old menu was three
-// nested ContextMenuSub levels — group, provider, row — which meant four hover-throughs
-// to reach a generator and no way at all to find a node you could only half-name.
+// Add Node, as ONE submenu with two modes. Hover "Add Node" and the palette opens beside
+// it with a search box on top and the category submenus (Text / Image / Video / …) below,
+// each opening on hover the way the old nested tree did. Type, and the categories give way
+// to cmdk's flat ranked list. Empty the box and the categories come back.
 //
 // cmdk (not Base UI Combobox) on purpose: its command-score MATCHES subsequences, so
 // "vidgen" and "hyp" land on the right row. See Continuum-Frontend/AGENTS.md §4 and
@@ -17,7 +18,8 @@
 // matching is untouched — the settled cmdk decision stands, the defect was ordering.
 
 import type { ActionId, VideoGeneratorModel } from '@continuum/contracts';
-import { useMemo, useState } from 'react';
+import { Plus } from 'lucide-react';
+import { type KeyboardEvent, useMemo, useState } from 'react';
 
 import {
   Command,
@@ -28,7 +30,13 @@ import {
   CommandList,
   CommandShortcut,
 } from '@/components/ui/command';
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import {
+  ContextMenuItem,
+  ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+} from '@/components/ui/context-menu';
 
 import {
   ACTION_FAMILY_LABELS,
@@ -67,18 +75,29 @@ const addOptionsFor = (
 ): { model?: VideoGeneratorModel; actionId?: ActionId } | undefined =>
   row.model ? { model: row.model } : row.actionId ? { actionId: row.actionId } : undefined;
 
+const RowBody = ({ row }: { row: AddNodeRow }) => (
+  <div className="flex min-w-0 flex-col">
+    <span>{row.label}</span>
+    {row.desc ? <span className="text-xs text-muted-foreground">{row.desc}</span> : null}
+  </div>
+);
+
+/** The keys Base UI's menu may act on (arrow navigation, Home/End) once the box is empty. */
+const isMenuNavigationKey = (key: string): boolean =>
+  key.startsWith('Arrow') || key === 'Home' || key === 'End';
+
+export type AddNodeHandler = (
+  type: StudioCanvasNodeType,
+  options?: { model?: VideoGeneratorModel; actionId?: ActionId },
+) => void;
+
 export function AddNodeCommandPalette({
-  screenPosition,
   onAdd,
-  onDismiss,
+  onOpenChange,
 }: {
-  /** Where the right-click happened, in SCREEN coordinates — the palette opens there. */
-  screenPosition: { x: number; y: number };
-  onAdd: (
-    type: StudioCanvasNodeType,
-    options?: { model?: VideoGeneratorModel; actionId?: ActionId },
-  ) => void;
-  onDismiss: () => void;
+  onAdd: AddNodeHandler;
+  /** Fires when the Add Node submenu opens or closes — the canvas pins the drop point on open. */
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [query, setQuery] = useState('');
   const pinned = useMemo(() => exactLabelMatches(query), [query]);
@@ -87,7 +106,18 @@ export function AddNodeCommandPalette({
     [pinned],
   );
 
-  const renderRow = (section: AddNodeGroupSection, row: AddNodeRow) => (
+  // The search box lives inside a Base UI menu popup, whose keydown handlers run typeahead
+  // (any printable key jumps focus to a matching item and swallows the character) and
+  // roving focus (arrows). With a query, cmdk owns every key: the list is the thing being
+  // navigated. With none, arrows and Home/End are handed to the menu so they walk the
+  // category submenus. Escape and Tab always pass — they are how the menu closes.
+  const fenceMenuKeys = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape' || event.key === 'Tab') return;
+    if (query === '' && isMenuNavigationKey(event.key)) return;
+    event.stopPropagation();
+  };
+
+  const renderSearchRow = (section: AddNodeGroupSection, row: AddNodeRow) => (
     <CommandItem
       key={addNodeRowKey(row)}
       value={addNodeSearchValue(section, row)}
@@ -98,40 +128,27 @@ export function AddNodeCommandPalette({
       data-action-family={row.family}
       onSelect={() => onAdd(row.type, addOptionsFor(row))}
     >
-      <div className="flex min-w-0 flex-col">
-        <span>{row.label}</span>
-        {row.desc ? <span className="text-xs text-muted-foreground">{row.desc}</span> : null}
-      </div>
+      <RowBody row={row} />
       <CommandShortcut>{rowTag(row)}</CommandShortcut>
     </CommandItem>
   );
 
   return (
-    <Popover
-      open
+    <ContextMenuSub
       onOpenChange={(open) => {
-        if (!open) onDismiss();
+        if (!open) setQuery('');
+        onOpenChange?.(open);
       }}
     >
-      {/* Anchored to a zero-size fixed marker at the drop point, so the palette tracks the
-          cursor and not the canvas pan/zoom. An ANCHOR rather than a Trigger: there is no
-          control to press — the context menu already opened this — and Base UI's Trigger
-          would insist on real button semantics for a marker that must never be focusable. */}
-      <PopoverAnchor
-        render={
-          <div
-            className="pointer-events-none fixed h-0 w-0"
-            style={{ left: screenPosition.x, top: screenPosition.y }}
-          />
-        }
-      />
-      <PopoverContent
-        align="start"
-        side="bottom"
-        className="w-80 p-0"
-        data-testid="add-node-palette"
-      >
-        <Command>
+      <ContextMenuSubTrigger inset>
+        <Plus className="mr-2 h-4 w-4" />
+        Add Node
+      </ContextMenuSubTrigger>
+      {/* `nowheel` keeps a scroll inside the popup from zooming the React Flow pane; the
+          height cap is Base UI's positioner var, so the Action category scrolls instead of
+          running off the viewport. */}
+      <ContextMenuSubContent className="nowheel w-80 p-0" data-testid="add-node-palette">
+        <Command onKeyDown={fenceMenuKeys}>
           <CommandInput
             placeholder="Search nodes…"
             autoFocus
@@ -139,27 +156,56 @@ export function AddNodeCommandPalette({
             value={query}
             onValueChange={setQuery}
           />
-          <CommandList>
-            <CommandEmpty>No node matches that search.</CommandEmpty>
-            {pinned.length > 0 ? (
-              <CommandGroup heading="Best match" data-testid="add-node-palette-pinned">
-                {pinned.map((entry) => renderRow(entry.section, entry.row))}
-              </CommandGroup>
-            ) : null}
-            {ADD_NODE_GROUPS.map((section) => {
-              // A pinned row is rendered ONCE — cmdk keys an item by its value, so leaving
-              // the original in place would collapse the pair back into one row.
-              const rows = section.rows.filter((row) => !pinnedKeys.has(addNodeRowKey(row)));
-              if (rows.length === 0) return null;
-              return (
-                <CommandGroup key={section.group} heading={section.label}>
-                  {rows.map((row) => renderRow(section, row))}
+          {query ? (
+            <CommandList>
+              <CommandEmpty>No node matches that search.</CommandEmpty>
+              {pinned.length > 0 ? (
+                <CommandGroup heading="Best match" data-testid="add-node-palette-pinned">
+                  {pinned.map((entry) => renderSearchRow(entry.section, entry.row))}
                 </CommandGroup>
-              );
-            })}
-          </CommandList>
+              ) : null}
+              {ADD_NODE_GROUPS.map((section) => {
+                // A pinned row is rendered ONCE — cmdk keys an item by its value, so leaving
+                // the original in place would collapse the pair back into one row.
+                const rows = section.rows.filter((row) => !pinnedKeys.has(addNodeRowKey(row)));
+                if (rows.length === 0) return null;
+                return (
+                  <CommandGroup key={section.group} heading={section.label}>
+                    {rows.map((row) => renderSearchRow(section, row))}
+                  </CommandGroup>
+                );
+              })}
+            </CommandList>
+          ) : null}
         </Command>
-      </PopoverContent>
-    </Popover>
+        {/* Siblings of the cmdk root, not children: a keydown inside a category submenu
+            bubbles through its React ancestors, and cmdk's root would otherwise claim
+            Enter and the arrows before Base UI's own item handling saw them. */}
+        {query
+          ? null
+          : ADD_NODE_GROUPS.map((section) => (
+              <ContextMenuSub key={section.group}>
+                <ContextMenuSubTrigger inset>{section.label}</ContextMenuSubTrigger>
+                <ContextMenuSubContent
+                  className="nowheel w-72"
+                  data-testid="add-node-category"
+                  data-category={section.group}
+                >
+                  {section.rows.map((row) => (
+                    <ContextMenuItem
+                      key={addNodeRowKey(row)}
+                      data-action-id={row.actionId}
+                      data-action-family={row.family}
+                      onClick={() => onAdd(row.type, addOptionsFor(row))}
+                    >
+                      <RowBody row={row} />
+                      <ContextMenuShortcut>{rowTag(row)}</ContextMenuShortcut>
+                    </ContextMenuItem>
+                  ))}
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            ))}
+      </ContextMenuSubContent>
+    </ContextMenuSub>
   );
 }

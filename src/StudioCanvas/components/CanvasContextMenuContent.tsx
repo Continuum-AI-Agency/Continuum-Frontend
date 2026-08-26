@@ -1,7 +1,6 @@
 import {
   AtSign,
   FolderOpen,
-  Plus,
   ScanLine,
   ShieldCheck,
   Sparkles,
@@ -23,12 +22,14 @@ import {
 
 import type { InteractionMode } from '../stores/useStudioStore';
 import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
+import { type AddNodeHandler, AddNodeCommandPalette } from './AddNodeCommandPalette';
 
 // The canvas menu's CONTENT only. The ContextMenu root stays in the canvas shell:
 // Base UI's trigger has no disabled prop of its own — it reads the root's
 // `disabled` off the store — so the modal stand-down cannot move here.
 export function CanvasContextMenuContent({
-  openAddNodePalette,
+  addNode,
+  onAddNodeOpenChange,
   openLoadWorkflow,
   openInstagram,
   openSaveStarter,
@@ -41,7 +42,9 @@ export function CanvasContextMenuContent({
   zoomOut,
   fitView,
 }: {
-  openAddNodePalette: () => void;
+  addNode: AddNodeHandler;
+  /** The Add Node submenu opened or closed — the canvas pins the drop point on open. */
+  onAddNodeOpenChange: (open: boolean) => void;
   openLoadWorkflow: () => void;
   openInstagram: () => void;
   openSaveStarter: () => void;
@@ -57,14 +60,9 @@ export function CanvasContextMenuContent({
   return (
     <ContextMenuContent className="w-[clamp(14rem,18vw,18rem)]">
       <ContextMenuLabel>Canvas Actions</ContextMenuLabel>
-      {/* One row, not a three-level hover tree. The catalog is 20+ rows once the video
-          models are expanded, and reaching a generator through group → provider → row cost
-          four hover-throughs (#260) with no way to search. */}
-      <ContextMenuItem inset onSelect={openAddNodePalette}>
-        <Plus className="mr-2 h-4 w-4" />
-        Add Node
-        <ContextMenuShortcut>Search</ContextMenuShortcut>
-      </ContextMenuItem>
+      {/* The hover tree AND a search: category submenus open on hover, and the box on top
+          swaps them for cmdk's ranked list the moment there is a query. */}
+      <AddNodeCommandPalette onAdd={addNode} onOpenChange={onAddNodeOpenChange} />
 
       <ContextMenuItem inset onSelect={openLoadWorkflow}>
         <FolderOpen className="mr-2 h-4 w-4" />

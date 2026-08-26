@@ -1,11 +1,18 @@
+// cmdk needs `window.SyntaxError` (it constructs one while parsing its own value keys) and
+// happy-dom does not put it on `window`. Same shim as command.filter.test.tsx.
+(globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
+  SyntaxError;
+
 // The canvas menu's content is pure props — no store, no ReactFlowProvider. It only
 // needs a ContextMenu root because Base UI's Popup reads the root's open state, so the
-// wrapper here mirrors src/components/ui/context-menu.test.tsx. The one remaining
-// submenu's rows live behind a hover, so this pins the top-level items and that trigger.
+// wrapper here mirrors src/components/ui/context-menu.test.tsx. Submenu rows live behind
+// a hover, so this pins the top-level items and the triggers; Add Node's own contract is
+// AddNodeCommandPalette.test.tsx.
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { ADD_NODE_GROUPS } from './addNodeCatalog';
 import { CanvasContextMenuContent } from './CanvasContextMenuContent';
 
 afterEach(() => {
@@ -14,7 +21,8 @@ afterEach(() => {
 
 function renderMenu(overrides: { hasSelection?: boolean } = {}) {
   const props = {
-    openAddNodePalette: mock(() => {}),
+    addNode: mock(() => {}),
+    onAddNodeOpenChange: mock(() => {}),
     openLoadWorkflow: mock(() => {}),
     openInstagram: mock(() => {}),
     openSaveStarter: mock(() => {}),
@@ -86,18 +94,35 @@ describe('CanvasContextMenuContent', () => {
     expect(props.clearCanvas).toHaveBeenCalledTimes(1);
   });
 
-  // Add Node used to be a three-level ContextMenuSub tree — group, provider, row. It is
-  // now one item that opens the searchable palette, so nothing about the node catalog
-  // renders inside this menu at all.
-  it('opens the node palette from a plain item, not a submenu', () => {
+  // Add Node is a submenu again — the hover tree the product owner asked back for — with
+  // the search box on top of it. Enter on the trigger is the deterministic way to open it
+  // here; the browser opens it on hover (studio-node-palette-bench proves that path).
+  it('opens Add Node as a submenu holding the search box and one category submenu per group', () => {
+    const { getByText, getByTestId, props } = renderMenu();
+    const trigger = getByText('Add Node').closest('[data-slot]');
+
+    expect(trigger?.getAttribute('data-slot')).toBe('context-menu-sub-trigger');
+
+    fireEvent.keyDown(getByText('Add Node'), { key: 'Enter' });
+
+    expect(props.onAddNodeOpenChange).toHaveBeenCalledWith(true);
+    const palette = getByTestId('add-node-palette');
+    expect(palette.querySelector('[data-testid="add-node-palette-input"]')).not.toBeNull();
+    const categories = Array.from(
+      palette.querySelectorAll('[data-slot="context-menu-sub-trigger"]'),
+    ).map((el) => el.textContent?.trim());
+    expect(categories).toEqual(ADD_NODE_GROUPS.map((section) => section.label));
+  });
+
+  it('adds the node a category row is clicked for, with its model', () => {
     const { getByText, props } = renderMenu();
-    const addNode = getByText('Add Node').closest('[data-slot]');
 
-    expect(addNode?.getAttribute('data-slot')).toBe('context-menu-item');
+    fireEvent.keyDown(getByText('Add Node'), { key: 'Enter' });
+    fireEvent.keyDown(getByText('Video'), { key: 'Enter' });
+    fireEvent.click(getByText('Pixverse V6'));
 
-    fireEvent.click(getByText('Add Node'));
-
-    expect(props.openAddNodePalette).toHaveBeenCalledTimes(1);
+    expect(props.addNode).toHaveBeenCalledTimes(1);
+    expect(props.addNode.mock.calls[0]).toEqual(['videoGen', { model: 'pixverse-v6' }]);
   });
 
   // WAS A LIVE BUG (Radix leftover): Base UI's Menu.Item has no `onSelect`, so all four of

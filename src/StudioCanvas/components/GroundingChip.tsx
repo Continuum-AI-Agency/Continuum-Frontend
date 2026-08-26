@@ -111,16 +111,16 @@ export function GroundingChip({
   const tooltip = (
     <div className="max-w-xs space-y-2 text-xs">
       {inherited ? (
-        <p className="font-medium text-foreground">Applied when enriching this prompt</p>
+        <p className="font-medium">Applied when enriching this prompt</p>
       ) : null}
       <div>
-        <p className="font-medium text-foreground">Brand book</p>
+        <p className="font-medium">Brand book</p>
         {!enforced ? (
-          <p className="text-muted-foreground">Off</p>
+          <p className="opacity-70">Off</p>
         ) : isEntireBookEnforced(brandBookPieces) ? (
-          <p className="text-muted-foreground">Entire brand book</p>
+          <p className="opacity-70">Entire brand book</p>
         ) : (
-          <ul className="text-muted-foreground">
+          <ul className="opacity-70">
             {pieces.map((piece) => (
               <li key={piece}>· {BRAND_BOOK_PIECE_LABELS[piece]}</li>
             ))}
@@ -128,8 +128,8 @@ export function GroundingChip({
         )}
       </div>
       <div>
-        <p className="font-medium text-foreground">Creative direction</p>
-        <p className="text-muted-foreground">
+        <p className="font-medium">Creative direction</p>
+        <p className="opacity-70">
           {brandDirectionPieces === undefined
             ? 'Everything this brand has authored'
             : brandDirectionPieces.length === 0
@@ -138,8 +138,8 @@ export function GroundingChip({
         </p>
       </div>
       <div>
-        <p className="font-medium text-foreground">Design system</p>
-        <p className="text-muted-foreground">
+        <p className="font-medium">Design system</p>
+        <p className="opacity-70">
           {effectiveSections === null
             ? 'Everything this brand has approved'
             : effectiveSections.length === 0
@@ -149,27 +149,27 @@ export function GroundingChip({
                 }`}
         </p>
         {contextual && contextual.wired.length > 0 ? (
-          <p className="text-muted-foreground">
+          <p className="opacity-70">
             Wired: {contextual.wired.join(', ')} — from a Design Reference
           </p>
         ) : null}
       </div>
       <div>
-        <p className="font-medium text-foreground">Creative skills</p>
+        <p className="font-medium">Creative skills</p>
         {selectedSkills.length === 0 ? (
-          <p className="text-muted-foreground">None</p>
+          <p className="opacity-70">None</p>
         ) : (
-          <ul className="space-y-0.5 text-muted-foreground">
+          <ul className="space-y-0.5 opacity-70">
             {selectedSkills.map((skill) => (
               <li key={skill.id}>
-                · <span className="text-foreground">{skill.name}</span>
+                · <span className="font-medium">{skill.name}</span>
                 {skill.description ? ` — ${skill.description}` : ''}
               </li>
             ))}
           </ul>
         )}
       </div>
-      {editable ? <p className="text-muted-foreground/80">Click to edit</p> : null}
+      {editable ? <p className="opacity-80">Click to edit</p> : null}
     </div>
   );
 
@@ -218,7 +218,7 @@ export function GroundingChip({
           align="start"
           side="top"
           collisionPadding={16}
-          className="nodrag nopan z-[1100] w-96 bg-popover p-0"
+          className="nodrag nopan nowheel z-[1100] w-96 bg-popover p-0"
         >
           <GroundingPopover
             brandId={brandId}

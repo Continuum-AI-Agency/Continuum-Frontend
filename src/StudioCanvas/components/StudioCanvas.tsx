@@ -10,6 +10,7 @@ import {
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
+import type { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu';
 import { type ActionId, type UnfurlMediaItem, validateWorkflowGraph } from '@continuum/contracts';
 import { AtSign, FolderOpen } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -53,7 +54,6 @@ import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
 import { isValidConnection } from '../utils/isValidConnection';
 import { layoutInRow } from '../utils/layoutImportedNodes';
 import type { VideoGeneratorModel } from '../utils/videoModel';
-import { AddNodeCommandPalette } from './AddNodeCommandPalette';
 import type { StudioCanvasNodeType } from './addNodeCatalog';
 import { CanvasContextMenuContent } from './CanvasContextMenuContent';
 import { CanvasFloatingPanel } from './CanvasFloatingPanel';
@@ -160,11 +160,14 @@ function Flow({
   const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
   const [isLibraryBrowserOpen, setIsLibraryBrowserOpen] = useState(false);
   const [isSaveStarterOpen, setIsSaveStarterOpen] = useState(false);
-  // Where the Add Node palette is anchored, and the position the node lands at. Pinned in
-  // state rather than read from lastMousePositionRef at add time: the palette is portalled
-  // outside the canvas wrapper, so the mouse crosses live canvas on the way to the search
-  // box and would otherwise drag the drop point with it.
-  const [addNodePaletteAt, setAddNodePaletteAt] = useState<{ x: number; y: number } | null>(null);
+  // Where an added node lands: the right-click point, pinned when the Add Node submenu
+  // opens. Read from a ref at add time rather than lastMousePositionRef, because the
+  // submenus are portalled outside the canvas wrapper and the mouse crosses live canvas
+  // on the way to them — and because Base UI nulls contextMenuAnchorRef on close, which
+  // can run before a row's own click handler.
+  const addNodeAnchorRef = useRef<{ x: number; y: number } | null>(null);
+  // A cmdk row is not a menu item, so choosing one closes nothing by itself.
+  const contextMenuActionsRef = useRef<ContextMenuPrimitive.Root.Actions | null>(null);
   // Team chat open/closed lifted here so the composer can reserve the chat panel's
   // footprint and the two overlays never fight for the same bottom-right region.
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -289,8 +292,10 @@ function Flow({
     [nodes, screenToFlowPosition, setNodes, takeSnapshot, triggerSave],
   );
 
-  const openAddNodePalette = useCallback(() => {
-    setAddNodePaletteAt(contextMenuAnchorRef.current ?? lastMousePositionRef.current);
+  const handleAddNodeOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      addNodeAnchorRef.current = contextMenuAnchorRef.current ?? lastMousePositionRef.current;
+    }
   }, []);
 
   const addNodeFromPalette = useCallback(
@@ -298,11 +303,11 @@ function Flow({
       type: StudioCanvasNodeType,
       options?: { model?: VideoGeneratorModel; actionId?: ActionId },
     ) => {
-      if (addNodePaletteAt) lastMousePositionRef.current = addNodePaletteAt;
-      setAddNodePaletteAt(null);
+      if (addNodeAnchorRef.current) lastMousePositionRef.current = addNodeAnchorRef.current;
       addNodeAtPointer(type, options);
+      contextMenuActionsRef.current?.close();
     },
-    [addNodeAtPointer, addNodePaletteAt],
+    [addNodeAtPointer],
   );
 
   const handleCanvasContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
@@ -413,7 +418,11 @@ function Flow({
           and open the canvas menu over the dialog. Base UI's trigger has no disabled prop
           of its own — it reads the menu ROOT's `disabled` off the store and bails before
           opening — so the stand-down belongs here, on the root, mirroring deleteKeyCode. */}
-      <ContextMenu disabled={keyboardScope === 'modal'} onOpenChange={handleContextMenuOpenChange}>
+      <ContextMenu
+        disabled={keyboardScope === 'modal'}
+        onOpenChange={handleContextMenuOpenChange}
+        actionsRef={contextMenuActionsRef}
+      >
         <ContextMenuTrigger className="block h-full w-full">
           <Canvas
             nodes={folded.nodes}
@@ -550,7 +559,8 @@ function Flow({
         </ContextMenuTrigger>
 
         <CanvasContextMenuContent
-          openAddNodePalette={openAddNodePalette}
+          addNode={addNodeFromPalette}
+          onAddNodeOpenChange={handleAddNodeOpenChange}
           openLoadWorkflow={() => setIsLoadWorkflowOpen(true)}
           openInstagram={() => setIsInstagramBrowserOpen(true)}
           openSaveStarter={openSaveStarter}
@@ -564,13 +574,6 @@ function Flow({
           fitView={fitView}
         />
       </ContextMenu>
-      {addNodePaletteAt && (
-        <AddNodeCommandPalette
-          screenPosition={addNodePaletteAt}
-          onAdd={addNodeFromPalette}
-          onDismiss={() => setAddNodePaletteAt(null)}
-        />
-      )}
       {/* Overlaid on the canvas rather than mounted as a React Flow Panel: the hero
           state centres itself on an empty canvas, which the Panel grid cannot express. */}
       <CanvasComposer

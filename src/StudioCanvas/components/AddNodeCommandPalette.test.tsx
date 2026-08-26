@@ -5,6 +5,7 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { AddNodeCommandPalette } from './AddNodeCommandPalette';
 import { ADD_NODE_GROUPS } from './addNodeCatalog';
 
@@ -14,17 +15,21 @@ afterEach(cleanup);
 // the module warmup, and this machine runs several benches at once.
 const RENDER_TIMEOUT_MS = 30_000;
 
+// The palette is a submenu, so it needs an open menu around it. The submenu itself opens
+// on hover in the browser; here Enter on its trigger is the deterministic way in.
 function renderPalette() {
   const onAdd = mock(() => {});
-  const onDismiss = mock(() => {});
+  const onOpenChange = mock(() => {});
   const view = render(
-    <AddNodeCommandPalette
-      screenPosition={{ x: 120, y: 90 }}
-      onAdd={onAdd}
-      onDismiss={onDismiss}
-    />,
+    <ContextMenu open>
+      <ContextMenuTrigger>canvas</ContextMenuTrigger>
+      <ContextMenuContent>
+        <AddNodeCommandPalette onAdd={onAdd} onOpenChange={onOpenChange} />
+      </ContextMenuContent>
+    </ContextMenu>,
   );
-  return { ...view, onAdd, onDismiss };
+  fireEvent.keyDown(screen.getByText('Add Node'), { key: 'Enter' });
+  return { ...view, onAdd, onOpenChange };
 }
 
 const input = (): HTMLElement => screen.getByPlaceholderText('Search nodes…');
@@ -51,20 +56,93 @@ function visibleRows(): string[] {
     .map((el) => el.querySelector('span')?.textContent?.trim() ?? '');
 }
 
+/** The category submenu triggers inside the palette, by label. */
+function categoryTriggers(): string[] {
+  return Array.from(
+    document.querySelectorAll(
+      '[data-testid="add-node-palette"] [data-slot="context-menu-sub-trigger"]',
+    ),
+  ).map((el) => el.textContent?.trim() ?? '');
+}
+
 describe('AddNodeCommandPalette', () => {
   it(
-    'renders every catalog row, under a heading per category',
+    'opens as a submenu with the search box and one category submenu per catalog group',
+    () => {
+      const { onOpenChange } = renderPalette();
+
+      expect(onOpenChange).toHaveBeenCalledWith(true);
+      expect(screen.getByTestId('add-node-palette')).toBeDefined();
+      expect(input()).toBeDefined();
+      expect(categoryTriggers()).toEqual(ADD_NODE_GROUPS.map((section) => section.label));
+      // No query, no list: the categories ARE the browse surface.
+      expect(document.querySelector('[data-slot="command-list"]')).toBeNull();
+      expect(visibleRows()).toEqual([]);
+    },
+    RENDER_TIMEOUT_MS,
+  );
+
+  it(
+    'swaps the categories for the ranked list while there is a query, and back when cleared',
     () => {
       renderPalette();
+
+      search('hyp');
+      expect(categoryTriggers()).toEqual([]);
+      expect(document.querySelector('[data-slot="command-list"]')).not.toBeNull();
+      expect(visibleRows().length).toBeGreaterThan(0);
+
+      search('');
+      expect(document.querySelector('[data-slot="command-list"]')).toBeNull();
+      expect(categoryTriggers()).toEqual(ADD_NODE_GROUPS.map((section) => section.label));
+    },
+    RENDER_TIMEOUT_MS,
+  );
+
+  it(
+    'groups the ranked list under the catalog categories, one heading each',
+    () => {
+      renderPalette();
+
+      // Every Continuum-run row answers this — a query, because with none there is no list.
+      search('continuum');
 
       const headings = Array.from(document.querySelectorAll('[cmdk-group-heading]')).map(
         (el) => el.textContent?.trim() ?? '',
       );
-      expect(headings).toEqual(ADD_NODE_GROUPS.map((section) => section.label));
+      const labels = ADD_NODE_GROUPS.map((section) => section.label);
+      expect(headings.length).toBeGreaterThan(0);
+      expect(new Set(headings).size).toBe(headings.length);
+      expect(headings.every((heading) => labels.includes(heading))).toBe(true);
+      expect(visibleRows()).toContain('Text Block');
+      expect(visibleRows()).toContain('Rotate');
+    },
+    RENDER_TIMEOUT_MS,
+  );
 
-      expect(visibleRows()).toEqual(
-        ADD_NODE_GROUPS.flatMap((section) => section.rows.map((row) => row.label)),
+  it(
+    'lists every catalog row inside its category submenu',
+    () => {
+      const { onAdd } = renderPalette();
+
+      for (const section of ADD_NODE_GROUPS) {
+        fireEvent.keyDown(screen.getByText(section.label), { key: 'Enter' });
+        const popup = document.querySelector(
+          `[data-testid="add-node-category"][data-category="${section.group}"]`,
+        );
+        expect(popup).not.toBeNull();
+        const labels = Array.from(
+          popup?.querySelectorAll('[data-slot="context-menu-item"] span:first-child') ?? [],
+        ).map((el) => el.textContent?.trim());
+        expect(labels).toEqual(section.rows.map((row) => row.label));
+      }
+
+      const rotate = document.querySelector(
+        '[data-testid="add-node-category"] [data-slot="context-menu-item"][data-action-id="image.rotate"]',
       );
+      expect(rotate?.getAttribute('data-action-family')).toBe('image');
+      fireEvent.click(rotate as HTMLElement);
+      expect(onAdd.mock.calls[0]).toEqual(['action', { actionId: 'image.rotate' }]);
     },
     RENDER_TIMEOUT_MS,
   );
@@ -127,6 +205,7 @@ describe('AddNodeCommandPalette', () => {
     () => {
       const { onAdd } = renderPalette();
 
+      search('text block');
       fireEvent.click(screen.getAllByText('Text Block')[0]);
 
       expect(onAdd.mock.calls[0]).toEqual(['string', undefined]);
@@ -185,6 +264,7 @@ describe('AddNodeCommandPalette', () => {
     () => {
       renderPalette();
 
+      search('crop');
       const ids = visibleOpRows().map((row) => row.actionId);
 
       expect(new Set(ids).size).toBe(ids.length);
@@ -254,6 +334,8 @@ describe('AddNodeCommandPalette', () => {
     'shows the family next to the provider on an op row, and only on an op row',
     () => {
       renderPalette();
+
+      search('continuum');
 
       const shortcutOf = (label: string): string | undefined =>
         Array.from(document.querySelectorAll('[data-slot="command-item"]'))

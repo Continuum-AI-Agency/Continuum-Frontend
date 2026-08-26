@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // The popover reads the BRAND's system, its book, its direction and its skills. Only the
 // first shapes what this file asserts; the rest are stubbed so the panel renders.
@@ -127,5 +129,25 @@ describe('GroundingPopover — design-system provenance', () => {
     expect(screen.getByText('1 on')).toBeDefined();
     expect(rowFor('Motion')?.querySelector('svg')).not.toBeNull();
     expect(rowFor('Palette')?.querySelector('svg')).toBeNull();
+  });
+});
+
+describe('grounding chip + popover styling', () => {
+  // Base UI's Positioner sets --available-height; the Radix variable no longer exists, so a
+  // max-h built on it was dropped wholesale and the popover ran past the viewport.
+  it('bounds the popover with the Base UI available-height variable', () => {
+    const source = readFileSync(join(import.meta.dir, 'GroundingPopover.tsx'), 'utf8');
+    expect(source).not.toContain('--radix-');
+    expect(source).toContain('var(--available-height)');
+  });
+
+  // TooltipContent is inverted (bg-foreground text-background): any light-theme text colour
+  // inside it renders dark-on-dark. Muted reads as opacity, and the canvas must not zoom
+  // when the wheel scrolls the popover list.
+  it('inherits the inverted tooltip colours and stops wheel events reaching the canvas', () => {
+    const source = readFileSync(join(import.meta.dir, 'GroundingChip.tsx'), 'utf8');
+    expect(source).toContain('nowheel');
+    expect(source).not.toContain('text-muted-foreground');
+    expect(source).not.toContain('text-foreground');
   });
 });
