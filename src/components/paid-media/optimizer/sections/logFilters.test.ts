@@ -1,199 +1,150 @@
 import { describe, expect, it } from 'bun:test';
-import type { OptimizerLogRow } from '@continuum/contracts';
 import {
   ALL_PORTFOLIOS,
-  classifyEvent,
   distinctPortfolioNames,
-  familyCounts,
-  filterLogs,
-  matchesFamily,
-  readMoneyMove,
-  readSettingChange,
+  filterByPortfolio,
+  readLifecycleRow,
 } from './logFilters';
 
-function row(overrides: Partial<OptimizerLogRow>): OptimizerLogRow {
-  return {
-    id: 1,
-    portfolio_id: '11111111-1111-4111-8111-111111111111',
-    portfolio_name: 'Prospecting',
-    ts: '2026-07-19T00:00:00.000Z',
-    level: 'info',
-    event: 'cycle_complete',
-    fields: {},
-    ...overrides,
-  };
-}
-
-describe('classifyEvent', () => {
-  it('routes every apply_* write into the money family', () => {
-    expect(classifyEvent('apply_executed')).toBe('money');
-    expect(classifyEvent('apply_deduped')).toBe('money');
-    expect(classifyEvent('apply_kill_switch_engaged')).toBe('money');
-  });
-
-  it('routes convert_* writes into the money family', () => {
-    expect(classifyEvent('convert_executed')).toBe('money');
-  });
-
-  it('routes adset_status_* writes (pause/unpause) into the money family', () => {
-    expect(classifyEvent('adset_status_executed')).toBe('money');
-    expect(classifyEvent('adset_status_deduped')).toBe('money');
-  });
-
-  it('routes the audit event into the settings family', () => {
-    expect(classifyEvent('setting_changed')).toBe('settings');
-  });
-
-  it('routes cycle_* and everything else into the cycles family', () => {
-    expect(classifyEvent('cycle_complete')).toBe('cycles');
-    expect(classifyEvent('cycle_skipped')).toBe('cycles');
-    expect(classifyEvent('ingest_malformed_snapshots_skipped')).toBe('cycles');
-  });
-});
-
-describe('matchesFamily', () => {
-  it('passes every row when the filter is all', () => {
-    expect(matchesFamily(row({ event: 'apply_executed' }), 'all')).toBe(true);
-    expect(matchesFamily(row({ event: 'setting_changed' }), 'all')).toBe(true);
-  });
-
-  it('narrows to a single family otherwise', () => {
-    expect(matchesFamily(row({ event: 'apply_executed' }), 'money')).toBe(true);
-    expect(matchesFamily(row({ event: 'apply_executed' }), 'cycles')).toBe(false);
-    expect(matchesFamily(row({ event: 'setting_changed' }), 'settings')).toBe(true);
-  });
-});
+const row = (event: string, fields: Record<string, unknown> = {}) => ({ event, fields });
 
 describe('distinctPortfolioNames', () => {
   it('returns sorted, de-duped, non-null names', () => {
-    const rows = [
-      row({ portfolio_name: 'Retargeting' }),
-      row({ portfolio_name: 'Prospecting' }),
-      row({ portfolio_name: 'Prospecting' }),
-      row({ portfolio_name: null }),
-    ];
-    expect(distinctPortfolioNames(rows)).toEqual(['Prospecting', 'Retargeting']);
+    expect(
+      distinctPortfolioNames([
+        { portfolio_name: 'Retargeting' },
+        { portfolio_name: 'Prospecting' },
+        { portfolio_name: 'Retargeting' },
+        { portfolio_name: null },
+      ]),
+    ).toEqual(['Prospecting', 'Retargeting']);
   });
 });
 
-describe('filterLogs', () => {
+describe('filterByPortfolio', () => {
   const rows = [
-    row({ id: 1, event: 'apply_executed', portfolio_name: 'Prospecting' }),
-    row({ id: 2, event: 'setting_changed', portfolio_name: 'Prospecting' }),
-    row({ id: 3, event: 'cycle_complete', portfolio_name: 'Retargeting' }),
+    { id: 1, portfolio_name: 'Prospecting' },
+    { id: 2, portfolio_name: 'Retargeting' },
+    { id: 3, portfolio_name: null },
   ];
 
-  it('filters by family and portfolio together', () => {
-    expect(
-      filterLogs(rows, { family: 'money', portfolio: ALL_PORTFOLIOS }).map((r) => r.id),
-    ).toEqual([1]);
-    expect(filterLogs(rows, { family: 'all', portfolio: 'Prospecting' }).map((r) => r.id)).toEqual([
-      1, 2,
+  it('passes everything through for the all-portfolios sentinel', () => {
+    expect(filterByPortfolio(rows, ALL_PORTFOLIOS)).toHaveLength(3);
+  });
+
+  it('narrows to one portfolio', () => {
+    expect(filterByPortfolio(rows, 'Retargeting').map((r) => r.id)).toEqual([2]);
+  });
+});
+
+describe('readLifecycleRow gives each lifecycle event a shape', () => {
+  it('reads a completed cycle as its counts, in a fixed order, absent ones dropped', () => {
+    const read = readLifecycleRow(
+      row('cycle_complete', {
+        portfolioId: 'p1',
+        snapshotCount: 12,
+        recommendations: 2,
+        applied: 3,
+        held: 1,
+        deduped: 0,
+        failed: 0,
+      }),
+    );
+    expect(read.title).toBe('Cycle complete');
+    expect(read.facts.map((f) => f.label)).toEqual([
+      'Ad sets scored',
+      'Recommendations',
+      'Applied',
+      'Held for approval',
+      'Already applied',
+      'Failed',
     ]);
-    expect(
-      filterLogs(rows, { family: 'settings', portfolio: 'Retargeting' }).map((r) => r.id),
-    ).toEqual([]);
-  });
-});
-
-describe('familyCounts', () => {
-  it('counts each family and the grand total', () => {
-    const rows = [
-      row({ event: 'apply_executed' }),
-      row({ event: 'apply_deduped' }),
-      row({ event: 'setting_changed' }),
-      row({ event: 'cycle_complete' }),
-    ];
-    expect(familyCounts(rows)).toEqual({ all: 4, money: 2, settings: 1, cycles: 1 });
-  });
-});
-
-describe('readMoneyMove', () => {
-  it('reads prior/target/actor/receipt from an apply_executed row', () => {
-    const move = readMoneyMove({
-      portfolio: 'p',
-      adsetId: 'a',
-      priorMinor: 500000,
-      targetMinor: 450000,
-      authorizedKind: 'autopilot',
-      fbtraceId: 'AbC123trace',
-    });
-    expect(move).toEqual({
-      prior: 500000,
-      target: 450000,
-      priorStatus: null,
-      targetStatus: null,
-      actorKind: 'autopilot',
-      receipt: 'AbC123trace',
-    });
+    expect(read.facts[0]?.value).toBe('12');
   });
 
-  it('tolerates a null prior (first write) and numeric-string values', () => {
-    const move = readMoneyMove({ priorMinor: null, targetMinor: '45000' });
-    expect(move).toEqual({
-      prior: null,
-      target: 45000,
-      priorStatus: null,
-      targetStatus: null,
-      actorKind: null,
-      receipt: null,
-    });
+  it('drops a count the row does not carry rather than printing a zero it never reported', () => {
+    const read = readLifecycleRow(row('cycle_complete', { applied: 2 }));
+    expect(read.facts.map((f) => f.label)).toEqual(['Applied']);
   });
 
-  it('reads the status transition from an adset_status_executed row', () => {
-    const move = readMoneyMove({
-      portfolio: 'p',
-      adsetId: 'a',
-      priorStatus: 'ACTIVE',
-      targetStatus: 'PAUSED',
-      authorizedKind: 'human',
-      fbtraceId: 'PauseTrace1',
-    });
-    expect(move).toEqual({
-      prior: null,
-      target: null,
-      priorStatus: 'ACTIVE',
-      targetStatus: 'PAUSED',
-      actorKind: 'human',
-      receipt: 'PauseTrace1',
-    });
+  // A cycle that ran but skipped reports it on the SAME event; calling that "complete · 0
+  // applied" would be a lie of omission.
+  it('reads a cycle_complete carrying a skip reason as a skip', () => {
+    const read = readLifecycleRow(row('cycle_complete', { skipped: 'no_adsets', applied: 0 }));
+    expect(read.title).toBe('Cycle skipped');
+    expect(read.summary).toContain('Nothing is enrolled');
+    expect(read.facts).toEqual([]);
   });
 
-  it('returns null when no budget/status/receipt fields are present', () => {
-    expect(readMoneyMove({ portfolio: 'p', detail: 'nothing to render' })).toBeNull();
-  });
-});
-
-describe('readSettingChange', () => {
-  it('reads setting/from/to/by/note from a setting_changed row', () => {
-    const change = readSettingChange({
-      setting: 'apply_mode',
-      from: 'recommend',
-      to: 'autopilot',
-      by: 'duane@continuumai.agency',
-      note: 'armed after soak',
-    });
-    expect(change).toEqual({
-      setting: 'apply_mode',
-      from: 'recommend',
-      to: 'autopilot',
-      by: 'duane@continuumai.agency',
-      note: 'armed after soak',
-    });
+  it('explains each skip reason in words', () => {
+    expect(readLifecycleRow(row('cycle_skipped', { reason: 'no_snapshots' })).summary).toContain(
+      'No performance snapshots',
+    );
+    expect(readLifecycleRow(row('cycle_skipped', { reason: 'brand_new' })).summary).toBe(
+      'Skipped: brand_new.',
+    );
+    expect(readLifecycleRow(row('cycle_skipped')).summary).toBeNull();
   });
 
-  it('tolerates a null from (arming from an unset value) and a stripped note', () => {
-    const change = readSettingChange({ setting: 'autopilot_paused', from: null, to: 'true' });
-    expect(change).toEqual({
-      setting: 'autopilot_paused',
-      from: null,
-      to: 'true',
-      by: null,
-      note: null,
-    });
+  it('surfaces the error on a failed cycle instead of hiding it in a fields bag', () => {
+    const read = readLifecycleRow(row('cycle_failed', { error: 'Error: Meta token expired' }));
+    expect(read.title).toBe('Cycle failed');
+    expect(read.summary).toBe('Error: Meta token expired');
   });
 
-  it('returns null when the setting key is absent', () => {
-    expect(readSettingChange({ from: 'a', to: 'b' })).toBeNull();
+  it('names the drifted ad sets, since an operator cannot act on an id alone', () => {
+    const read = readLifecycleRow(
+      row('roster_drift_detected', {
+        seen: 8,
+        missing: 2,
+        adsets: [
+          { id: '120251', name: 'Lookalike 1%' },
+          { id: '120252', name: null },
+        ],
+      }),
+    );
+    expect(read.title).toBe('Roster drift');
+    expect(read.summary).toContain('2 enrolled ad sets');
+    expect(read.facts.map((f) => f.label)).toEqual(['Still present', 'Missing']);
+    expect(read.detail).toEqual(['Lookalike 1% (120251)', '120252']);
+  });
+
+  it('lists the per-item failures on a partial apply failure', () => {
+    const read = readLifecycleRow(
+      row('apply_partial_failure', {
+        applied: 3,
+        failed: 1,
+        failures: [{ adsetId: 'as-9', error: 'rate limited' }],
+      }),
+    );
+    expect(read.title).toBe('Some writes failed');
+    expect(read.facts.map((f) => f.value)).toEqual(['3', '1']);
+    expect(read.detail).toEqual(['as-9: rate limited']);
+  });
+
+  it('reports a persist failure with the error the service recorded', () => {
+    expect(readLifecycleRow(row('apply_results_persist_failed', { error: 'timeout' })).summary).toBe(
+      'timeout',
+    );
+  });
+
+  it('quantifies dropped snapshot rows', () => {
+    const read = readLifecycleRow(
+      row('ingest_malformed_snapshots_skipped', { malformed: 3, total: 40 }),
+    );
+    expect(read.summary).toContain('3 of 40');
+  });
+
+  // The DB feed is a DENYLIST of the action family, so a lifecycle event added tomorrow
+  // reaches this page with no migration and no FE change. It must still read as something.
+  it('humanizes an event it has never seen rather than printing key: value soup', () => {
+    const read = readLifecycleRow(row('scheduler_lease_reclaimed', { error: 'lease expired' }));
+    expect(read.title).toBe('Scheduler lease reclaimed');
+    expect(read.summary).toBe('lease expired');
+    expect(read.facts).toEqual([]);
+  });
+
+  it('tolerates a row with no fields at all', () => {
+    expect(readLifecycleRow({ event: 'cycle_complete' }).facts).toEqual([]);
   });
 });

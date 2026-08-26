@@ -25,6 +25,7 @@ import {
   getOptimizationMetricDefinition,
   ParsedCycleRunReportSchema,
   RunConfidenceSchema,
+  TimelineEventSchema,
 } from '@continuum/contracts';
 import { z } from 'zod';
 import { resolveAdsetName } from '../adsetName';
@@ -35,7 +36,7 @@ import {
   buildConversionFunnel,
   buildCpaHeroPoints,
   buildCpaProjection,
-  buildCycleActionMap,
+  bindTimelineEvents,
   mergeAdDailyByMetric,
   pacingSnapshot,
   projectionEndpoint,
@@ -300,12 +301,36 @@ assert(
   'pacing gauge shows 40% of period budget',
 );
 
-// Hero points enriched + action pins from the report.
-const actionsByTs = buildCycleActionMap(report);
-const heroPoints = buildCpaHeroPoints(cpaSeries, actionsByTs);
+// Hero points enriched + the observed events pinned to the cycle each one could have
+// influenced. Events do NOT land on cycle timestamps — a human edits a budget at 14:32, the
+// cycle ran at 06:00 — so the join is "last cycle at or before the event", not equality.
+const latestCycleTs = cpaSeries.at(-1)?.cycle_ts as string;
+const observedEvents = z.array(TimelineEventSchema).parse([
+  {
+    ts: new Date(Date.parse(latestCycleTs) + 8 * 60 * 60 * 1000).toISOString(),
+    kind: 'applied',
+    label: 'Budget reallocated',
+    count: 1,
+  },
+  {
+    ts: new Date(Date.parse(latestCycleTs) + 9 * 60 * 60 * 1000).toISOString(),
+    kind: 'status',
+    label: 'Pause recommended',
+    count: 1,
+  },
+  // Before the first plotted cycle: there is no point on the chart it could explain.
+  { ts: '2026-01-01T00:00:00.000Z', kind: 'config', label: 'Ancient', count: 1 },
+]);
+const bareHeroPoints = buildCpaHeroPoints(cpaSeries);
+const eventsByTs = bindTimelineEvents(bareHeroPoints, observedEvents);
+const heroPoints = buildCpaHeroPoints(cpaSeries, eventsByTs);
 assert(
   heroPoints.length === 4 && heroPoints.at(-1)?.cpa === 25,
   'hero points derive CPA = spend/conv',
+);
+assert(
+  heroPoints[0]?.events.length === 0,
+  'an event predating every plotted cycle explains no point and is dropped',
 );
 const awarenessMetric = getOptimizationMetricDefinition('awareness');
 const cpmHeroPoints = buildCpaHeroPoints(cpaSeries, {}, awarenessMetric.denominatorMultiplier);
@@ -314,7 +339,7 @@ assert(
   'objective metric maps awareness to CPM without changing the conv_d* wire shape',
 );
 assert(
-  (heroPoints.at(-1)?.actions.length ?? 0) >= 2,
+  (heroPoints.at(-1)?.events.length ?? 0) >= 2,
   'latest cycle carries reallocation + recommendation pins',
 );
 

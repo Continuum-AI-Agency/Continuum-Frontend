@@ -11,24 +11,14 @@ type LogsState = {
   isError?: boolean;
   error?: unknown;
   refetch?: () => void;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  fetchNextPage?: () => void;
 };
 let logsState: LogsState = { data: [], isLoading: false };
 
 mock.module('../useOptimizerData', () => ({
   useOptimizerLogs: () => logsState,
-}));
-
-// Stub the revert dialog to a bare trigger. OptimizerLogs owns the DECISION to offer a revert
-// (audit id + portfolio present); the dialog's own behavior is covered separately. Stubbing it
-// here also decouples this spec from the process-wide `../useOptimizerData` / alert-dialog mocks
-// other optimizer specs register (a real RevertApplyDialog would static-import useRevertApply and
-// break linking when a sibling spec's partial mock is the active one).
-mock.module('./RevertApplyDialog', () => ({
-  RevertApplyDialog: ({ auditId }: { auditId: string }) => (
-    <button type="button" data-audit-id={auditId}>
-      Revert
-    </button>
-  ),
 }));
 
 const { OptimizerLogs } = await import('./OptimizerLogs');
@@ -46,71 +36,50 @@ function row(overrides: Partial<OptimizerLogRow>): OptimizerLogRow {
   };
 }
 
-const MONEY = row({
+const COMPLETE = row({
   id: 1,
-  event: 'apply_executed',
-  fields: {
-    portfolio: '11111111-1111-4111-8111-111111111111',
-    adsetId: '999',
-    priorMinor: 500000,
-    targetMinor: 450000,
-    authorizedKind: 'autopilot',
-    fbtraceId: 'AbC123traceZ',
-  },
+  event: 'cycle_complete',
+  fields: { snapshotCount: 12, recommendations: 2, applied: 3, held: 1 },
 });
 
-const MONEY_WITH_AUDIT = row({
-  id: 4,
-  event: 'apply_executed',
-  fields: {
-    portfolio: '11111111-1111-4111-8111-111111111111',
-    adsetId: '888',
-    priorMinor: 600000,
-    targetMinor: 500000,
-    authorizedKind: 'human',
-    fbtraceId: 'RevTrace9',
-    auditId: '22222222-2222-4222-8222-222222222222',
-  },
-});
-
-const SETTING = row({
+const DRIFT = row({
   id: 2,
-  event: 'setting_changed',
-  fields: {
-    setting: 'apply_mode',
-    from: 'recommend',
-    to: 'autopilot',
-    by: 'duane@continuumai.agency',
-  },
+  level: 'warn',
+  event: 'roster_drift_detected',
+  portfolio_name: 'Retargeting',
+  fields: { seen: 8, missing: 2, adsets: [{ id: '120251', name: 'Lookalike 1%' }] },
 });
 
-const CYCLE = row({ id: 3, event: 'cycle_complete', portfolio_name: 'Retargeting' });
+const FAILED = row({
+  id: 3,
+  level: 'error',
+  event: 'cycle_failed',
+  fields: { error: 'Meta token expired' },
+});
 
-afterEach(cleanup);
 beforeEach(() => {
   logsState = { data: [], isLoading: false };
 });
 
-describe('OptimizerLogs', () => {
-  it('shows the empty state when there is no activity', () => {
-    render(<OptimizerLogs brandId="b" />);
-    expect(screen.getByText('No optimizer activity yet')).toBeTruthy();
+afterEach(cleanup);
+
+describe('OptimizerLogs — the SERVER LOG feed', () => {
+  it('shows the empty state when the optimizer has never run', () => {
+    render(<OptimizerLogs brandId="brand-1" />);
+    expect(screen.getByText('The optimizer has not run yet')).toBeTruthy();
   });
 
-  // A failed read used to render byte-identically to a brand that had simply never run a
-  // cycle — the only tell was that it took ~16s to say nothing.
   it('reports a failed read as a failure, not as an empty feed', () => {
     logsState = {
       data: [],
       isLoading: false,
       isError: true,
-      error: new Error('optimizer-status logs unreachable'),
+      error: new Error('optimizer_read_timeout'),
+      refetch: () => {},
     };
-    render(<OptimizerLogs brandId="b" />);
-
-    expect(screen.queryByText('No optimizer activity yet')).toBeNull();
-    expect(screen.getByText(/Couldn't load the activity log/)).toBeTruthy();
-    expect(document.body.textContent).toContain('optimizer-status logs unreachable');
+    render(<OptimizerLogs brandId="brand-1" />);
+    expect(screen.queryByText('The optimizer has not run yet')).toBeNull();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy();
   });
 
   it('offers a retry that re-runs the read', () => {
@@ -121,78 +90,66 @@ describe('OptimizerLogs', () => {
       isError: true,
       error: new Error('boom'),
       refetch: () => {
-        refetched++;
+        refetched += 1;
       },
     };
-    render(<OptimizerLogs brandId="b" />);
-
+    render(<OptimizerLogs brandId="brand-1" />);
     fireEvent.click(screen.getByRole('button', { name: /retry/i }));
     expect(refetched).toBe(1);
   });
 
-  it('renders a money row as prior → target with the actor kind and a copyable receipt', () => {
-    logsState = { data: [MONEY], isLoading: false };
-    render(<OptimizerLogs brandId="b" />);
-    expect(screen.getByText('500,000')).toBeTruthy();
-    expect(screen.getByText('450,000')).toBeTruthy();
-    expect(screen.getByText('autopilot')).toBeTruthy();
-    const copyBtn = screen.getByLabelText('Copy Meta trace id AbC123traceZ');
-    expect(copyBtn).toBeTruthy();
-    // Clicking must not throw even without a real clipboard in the render environment.
-    fireEvent.click(copyBtn);
-    expect(screen.getByText('AbC123traceZ')).toBeTruthy();
-  });
-
-  it('offers a Revert action on a money row that carries an audit id', () => {
-    logsState = { data: [MONEY_WITH_AUDIT], isLoading: false };
-    render(<OptimizerLogs brandId="b" />);
-    expect(screen.getByRole('button', { name: /Revert/ })).toBeTruthy();
-  });
-
-  it('omits the Revert action on a money row with no audit id (pre-wiring rows)', () => {
-    logsState = { data: [MONEY], isLoading: false };
-    render(<OptimizerLogs brandId="b" />);
-    expect(screen.queryByRole('button', { name: /Revert/ })).toBeNull();
-  });
-
-  it('renders a setting_changed row as from → to · by', () => {
-    logsState = { data: [SETTING], isLoading: false };
-    render(<OptimizerLogs brandId="b" />);
-    expect(screen.getByText('recommend')).toBeTruthy();
-    expect(screen.getByText('autopilot')).toBeTruthy();
-    expect(screen.getByText('· duane@continuumai.agency')).toBeTruthy();
-    expect(screen.getByText('Apply mode')).toBeTruthy();
-  });
-
-  it('filters the feed down to a single family when a filter is pressed', () => {
-    logsState = { data: [MONEY, SETTING, CYCLE], isLoading: false };
-    render(<OptimizerLogs brandId="b" />);
-    // All three visible initially.
-    expect(screen.getByText('Apply executed')).toBeTruthy();
-    expect(screen.getByText('Apply mode')).toBeTruthy();
+  // The whole point of the split: an event is read into a shape, not printed as the first
+  // four keys of its fields bag.
+  it('renders a completed cycle as named counts rather than key: value soup', () => {
+    logsState = { data: [COMPLETE], isLoading: false };
+    render(<OptimizerLogs brandId="brand-1" />);
     expect(screen.getByText('Cycle complete')).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: /Money/ }));
-    expect(screen.getByText('Apply executed')).toBeTruthy();
-    expect(screen.queryByText('Apply mode')).toBeNull();
-    expect(screen.queryByText('Cycle complete')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: /Settings/ }));
-    expect(screen.queryByText('Apply executed')).toBeNull();
-    expect(screen.getByText('Apply mode')).toBeTruthy();
+    expect(screen.getByText('Ad sets scored')).toBeTruthy();
+    expect(screen.getByText('12')).toBeTruthy();
+    expect(screen.queryByText(/snapshotCount:/)).toBeNull();
   });
 
-  it('shows a no-match notice when the active filter excludes every row', () => {
-    logsState = { data: [CYCLE], isLoading: false };
-    render(<OptimizerLogs brandId="b" />);
-    fireEvent.click(screen.getByRole('button', { name: /Money/ }));
-    expect(screen.getByText('No matching activity in this window.')).toBeTruthy();
+  it('names the drifted ad sets behind a disclosure', () => {
+    logsState = { data: [DRIFT], isLoading: false };
+    render(<OptimizerLogs brandId="brand-1" />);
+    expect(screen.getByText('Roster drift')).toBeTruthy();
+    expect(screen.getByText('Lookalike 1% (120251)')).toBeTruthy();
   });
 
-  it('counts each family on its filter button', () => {
-    logsState = { data: [MONEY, SETTING, CYCLE], isLoading: false };
-    render(<OptimizerLogs brandId="b" />);
-    expect(screen.getByRole('button', { name: /^All/ }).textContent).toContain('3');
-    expect(screen.getByRole('button', { name: /Money/ }).textContent).toContain('1');
+  it('surfaces the error text on a failed cycle', () => {
+    logsState = { data: [FAILED], isLoading: false };
+    render(<OptimizerLogs brandId="brand-1" />);
+    expect(screen.getByText('Meta token expired')).toBeTruthy();
+  });
+
+  it('narrows the loaded feed to one portfolio', () => {
+    logsState = { data: [COMPLETE, DRIFT], isLoading: false };
+    render(<OptimizerLogs brandId="brand-1" />);
+    expect(screen.getByText('Cycle complete')).toBeTruthy();
+    expect(screen.getByText('Roster drift')).toBeTruthy();
+  });
+
+  // "100 rows" used to be presented as the world. The footer now says what is loaded and
+  // whether there is more, and the RPC's own cursor decides which.
+  it('says how much is loaded and offers more only when the cursor says there is more', () => {
+    logsState = { data: [COMPLETE, DRIFT], isLoading: false, hasNextPage: false };
+    const { unmount } = render(<OptimizerLogs brandId="brand-1" />);
+    expect(screen.getByText('2 events — that is all of them.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    unmount();
+
+    let loadedMore = 0;
+    logsState = {
+      data: [COMPLETE, DRIFT],
+      isLoading: false,
+      hasNextPage: true,
+      fetchNextPage: () => {
+        loadedMore += 1;
+      },
+    };
+    render(<OptimizerLogs brandId="brand-1" />);
+    expect(screen.getByText('2 events loaded — there are older ones.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(loadedMore).toBe(1);
   });
 });

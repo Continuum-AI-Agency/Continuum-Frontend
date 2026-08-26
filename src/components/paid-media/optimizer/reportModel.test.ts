@@ -5,7 +5,6 @@ import { FreezeReasonSchema } from '@continuum/contracts';
 import {
   actionRoute,
   applyModePill,
-  budgetMoveWhy,
   confidenceBand,
   creativeBriefForRec,
   explainConfidence,
@@ -402,125 +401,6 @@ describe('explainConfidence names the term that is holding the score back', () =
     expect(explainConfidence(undefined)).toBeNull();
     expect(explainConfidence({})).toBeNull();
     expect(explainConfidence({ band: 'medium' })).toBeNull();
-  });
-});
-
-describe('budgetMoveWhy explains one move from what cycle_items already stores', () => {
-  it('reads a cut as a smaller share of the pool', () => {
-    const why = budgetMoveWhy({
-      adset_id: 'a',
-      current_budget: 50,
-      final_budget: 35,
-      change_abs: -15,
-      change_pct: -0.3,
-      diagnostics: { score3d: 0.41, score7d: 0.38, score14d: 0.44 },
-    });
-    expect(why?.lead).toContain('smaller share');
-    expect(why?.windows).toEqual({ d3: 0.41, d7: 0.38, d14: 0.44 });
-    expect(why?.windowsAgree).toBe(true);
-  });
-
-  it('reads a raise as a larger share of the pool', () => {
-    const why = budgetMoveWhy({
-      adset_id: 'b',
-      current_budget: 50,
-      final_budget: 65,
-      change_abs: 15,
-      change_pct: 0.3,
-      diagnostics: null,
-    });
-    expect(why?.lead).toContain('larger share');
-    expect(why?.windows).toBeNull();
-    expect(why?.windowsAgree).toBeNull();
-  });
-
-  it('flags disagreeing windows', () => {
-    const why = budgetMoveWhy({
-      adset_id: 'c',
-      current_budget: 50,
-      final_budget: 65,
-      change_abs: 15,
-      change_pct: 0.3,
-      diagnostics: { score3d: 0.1, score7d: 0.9 },
-    });
-    expect(why?.windowsAgree).toBe(false);
-  });
-
-  it('carries the cost interval and its event count', () => {
-    const why = budgetMoveWhy({
-      adset_id: 'd',
-      current_budget: 50,
-      final_budget: 35,
-      change_abs: -15,
-      change_pct: -0.3,
-      diagnostics: { ci: { cpa: 61, lo: 44, hi: 92, events: 14 } },
-    });
-    expect(why?.cost).toEqual({ cpa: 61, lo: 44, hi: 92, events: 14 });
-  });
-
-  it('says nothing about a HELD row — freezeLabel already owns that explanation', () => {
-    expect(
-      budgetMoveWhy({
-        adset_id: 'e',
-        current_budget: 50,
-        final_budget: 50,
-        change_abs: 0,
-        change_pct: 0,
-        diagnostics: { freezeReason: 'no_conversions' },
-      }),
-    ).toBeNull();
-  });
-
-  it('says nothing about a row that did not move', () => {
-    expect(
-      budgetMoveWhy({
-        adset_id: 'f',
-        current_budget: 50,
-        final_budget: 50,
-        change_abs: 0,
-        change_pct: 0,
-      }),
-    ).toBeNull();
-  });
-
-  // velocityCapped is the engine's raw proportional budget after the velocity clamp — a
-  // BUDGET, not a flag. The old assertion passed `true` and matched a `=== true` test, so
-  // both sides of a wrong contract agreed with each other and neither matched a real row.
-  it('reports the velocity cap when the clamp actually moved the number', () => {
-    const why = budgetMoveWhy({
-      adset_id: 'g',
-      current_budget: 50,
-      final_budget: 65,
-      change_abs: 15,
-      change_pct: 0.3,
-      // Raw share wanted 82.4; the per-cycle velocity band allowed 65.
-      diagnostics: { rawBudget: 82.4, velocityCapped: 65 },
-    });
-    expect(why?.capped).toBe(true);
-  });
-
-  it('does not claim a cap when the clamp left the raw budget alone', () => {
-    const why = budgetMoveWhy({
-      adset_id: 'g',
-      current_budget: 50,
-      final_budget: 55.78,
-      change_abs: 5.78,
-      change_pct: 0.11,
-      diagnostics: { rawBudget: 55.78, velocityCapped: 55.78 },
-    });
-    expect(why?.capped).toBe(false);
-  });
-
-  it('does not claim a cap on a row that predates rawBudget', () => {
-    const why = budgetMoveWhy({
-      adset_id: 'g',
-      current_budget: 50,
-      final_budget: 65,
-      change_abs: 15,
-      change_pct: 0.3,
-      diagnostics: { velocityCapped: 65 },
-    });
-    expect(why?.capped).toBe(false);
   });
 });
 

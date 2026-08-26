@@ -135,6 +135,11 @@ const executableReport = {
 // back to the pure-selection `report` in afterEach so the existing suites are untouched.
 let activeReport: unknown = report;
 
+// The portfolio's recent ad-account writes, as public.optimizer_list_actions returns them.
+// Empty by default so the existing queue specs are unaffected.
+const RECENT_AUDIT_ID = '66666666-6666-4666-8666-666666666666';
+let recentActions: Record<string, unknown>[] = [];
+
 const requestApplyItemsMutate = mock(() => {});
 const setStatusesMutate = mock(() => {});
 const setStatusMutate = mock(() => {});
@@ -165,6 +170,7 @@ const applyAdsetStatusMutate = mock(
 
 mock.module('../useOptimizerData', () => ({
   useOptimizerPerformance: () => ({ data: activeReport, isLoading: false }),
+  useOptimizerActions: () => ({ data: recentActions }),
   useOptimizerEnrolledAdsets: () => ({ data: [] }),
   useOptimizerMutations: () => ({
     setStatus: { mutate: setStatusMutate, isPending: false },
@@ -215,6 +221,17 @@ mock.module('@/components/ui/alert-dialog', () => ({
 
 // RecommendationInsight opens its own edge read; stub it to the label text so this suite is
 // only about the queue's selection/approval behavior.
+// The undo strip mounts the SAME RevertApplyDialog the action feed does; stub it to its
+// trigger so this suite asserts that undo is reachable from the queue, not the dialog's own
+// dry-run -> confirm flow (covered where the dialog lives).
+mock.module('./RevertApplyDialog', () => ({
+  RevertApplyDialog: ({ auditId, scope }: { auditId: string; scope?: string | null }) => (
+    <button type="button" data-audit-id={auditId}>
+      {scope === 'adset_status' ? 'Unpause' : 'Revert'}
+    </button>
+  ),
+}));
+
 mock.module('./RecommendationInsight', () => ({
   RecommendationInsight: ({ kind }: { kind: string }) => <span>{kind}</span>,
 }));
@@ -232,6 +249,7 @@ afterEach(() => {
   applyApprovedHandler = () => {};
   applyAdsetStatusHandler = () => {};
   activeReport = report;
+  recentActions = [];
 });
 
 const portfolio = (over: Partial<PortfolioListItem> = {}): PortfolioListItem =>
@@ -524,6 +542,9 @@ const rebalanceReport = {
       change_abs: -15,
       change_pct: -0.3,
       apply_status: 'held',
+      // The sentence the ENGINE wrote at cycle time (optimizer.cycle_items.reason) — the same
+      // string the apply copies into apply_audits.justification.
+      reason: 'Earned a smaller share of the pool than its current budget.',
       diagnostics: { score3d: 0.41, score7d: 0.38, score14d: 0.44 },
     },
     {
@@ -604,12 +625,26 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     expect(container.textContent).toContain('← funded by Cold Lookalike');
   });
 
-  it('explains a single move from the diagnostics already on the row', () => {
+  // The "why" is READ, never recomputed: the queue renders the persisted cycle_items.reason
+  // so a human and the money ledger cannot be told two different stories about one move.
+  it('renders the persisted reason as the why, alongside the scores behind it', () => {
     activeReport = rebalanceReport;
     const { container } = renderGroup();
     fireEvent.click(screen.getAllByLabelText('Show detail')[0]);
-    expect(container.textContent).toContain('smaller share of the pool');
+    expect(container.textContent).toContain(
+      'Earned a smaller share of the pool than its current budget.',
+    );
     expect(container.textContent).toContain('3d 0.41 / 7d 0.38 / 14d 0.44');
+  });
+
+  // A row scored before the engine persisted a reason says nothing rather than manufacturing
+  // one the audit trail does not carry.
+  it('says no why at all when the row carries no persisted reason', () => {
+    activeReport = rebalanceReport;
+    const { container } = renderGroup();
+    fireEvent.click(screen.getAllByLabelText('Show detail')[1]);
+    expect(container.textContent).toContain('Before → after: $50 → $65');
+    expect(container.textContent).not.toContain('Why:');
   });
 
   it('does NOT group a cycle that only raises — there is no donor and nothing to describe', () => {
@@ -618,6 +653,69 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     expect(container.textContent).not.toContain('Reallocating');
     expect(container.textContent).not.toContain('Moving');
     expect(screen.queryByLabelText('Select all budget moves in this cycle')).toBeNull();
+  });
+});
+
+
+// Approving a change and undoing it belong to the same moment. The confirm dialogs used to
+// end with "revert it from the activity log" — a different page, found by hand. The writes
+// this queue made now sit under it with their undo attached.
+describe('undo is one click from the queue that made the write', () => {
+  const moneyAction = (over: Record<string, unknown> = {}) => ({
+    id: RECENT_AUDIT_ID,
+    ts: '2026-08-26T09:00:00Z',
+    family: 'money',
+    op: 'budget',
+    portfolio_id: '11111111-1111-4111-8111-111111111111',
+    portfolio_name: 'Prospecting',
+    before: { minor: 5000 },
+    after: { minor: 3500 },
+    actor_kind: 'autopilot',
+    reversible: true,
+    ...over,
+  });
+
+  it('lists this portfolio\'s recent ad-account writes with a revert', () => {
+    recentActions = [moneyAction()];
+    renderGroup();
+    expect(screen.getByText('Recently applied')).toBeTruthy();
+    const revert = screen.getByRole('button', { name: 'Revert' });
+    expect(revert.getAttribute('data-audit-id')).toBe(RECENT_AUDIT_ID);
+  });
+
+  it('gates the button on the RPC flag, never on the row shape', () => {
+    recentActions = [moneyAction({ reversible: false })];
+    renderGroup();
+    expect(screen.queryByRole('button', { name: 'Revert' })).toBeNull();
+  });
+
+  it('shows an already-undone write as reverted instead of offering it again', () => {
+    recentActions = [moneyAction({ reverted_by: '77777777-7777-4777-8777-777777777777' })];
+    renderGroup();
+    expect(screen.getByText('Reverted')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Revert' })).toBeNull();
+  });
+
+  it('never offers undo for a setting change — that is not one write against Meta', () => {
+    recentActions = [
+      moneyAction({ family: 'settings', op: 'setting', entity_id: 'daily_total', reversible: false }),
+    ];
+    renderGroup();
+    expect(screen.queryByText('Recently applied')).toBeNull();
+  });
+
+  it('shows nothing at all when this portfolio has no recent writes', () => {
+    recentActions = [moneyAction({ portfolio_id: 'some-other-portfolio' })];
+    renderGroup();
+    expect(screen.queryByText('Recently applied')).toBeNull();
+  });
+
+  it('tells the operator undo is right here, not on another page', () => {
+    activeReport = executableReport;
+    const { container } = renderGroup();
+    fireEvent.click(screen.getByRole('button', { name: /apply .* budget move/i }));
+    expect(container.textContent).toContain('Recently applied below');
+    expect(container.textContent).not.toContain('from the activity log');
   });
 });
 

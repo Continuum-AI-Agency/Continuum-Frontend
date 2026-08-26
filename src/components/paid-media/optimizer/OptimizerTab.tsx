@@ -3,7 +3,7 @@
 // Paid Media Optimizer surface — rebuilt from the reference-ui-preview.html
 // visual spec as native shadcn/Tailwind + Radix + @bklit charts. Rendered inside
 // the Scale page's "Optimization" (performance) tab slot. Four sub-views
-// (Overview / Portfolios / Actions / Logs) plus an onboarding/empty state when
+// (Overview / Portfolios / Actions / Activity) plus an onboarding/empty state when
 // the brand has no portfolios yet (or the optimizer backend is not reachable —
 // its edge functions deploy later, so reads degrade to onboarding rather than
 // erroring). Navigation is URL-backed; authenticated reads use React Query with
@@ -26,7 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { pendingWorkCount } from './reportModel';
 import { OptimizerActions } from './sections/OptimizerActions';
-import { OptimizerLogs } from './sections/OptimizerLogs';
+import { OptimizerActivity } from './sections/OptimizerActivity';
 import { OptimizerOffline } from './sections/OptimizerOffline';
 import { OptimizerOnboarding } from './sections/OptimizerOnboarding';
 import { OptimizerOtherAccountNotice } from './sections/OptimizerOtherAccountNotice';
@@ -331,7 +331,7 @@ export function OptimizerTab({
               </TabsTrigger>
               <TabsTrigger value="logs" className="gap-1.5 px-3 text-xs">
                 <ScrollTextIcon className="size-3.5" />
-                Logs
+                Activity
               </TabsTrigger>
             </TabsList>
           }
@@ -376,7 +376,7 @@ export function OptimizerTab({
         </TabsContent>
 
         <TabsContent value="logs" className="min-h-0 overflow-y-auto p-2">
-          <OptimizerLogs brandId={brandId} />
+          <OptimizerActivity brandId={brandId} currency={currency} />
         </TabsContent>
       </Tabs>
     </section>

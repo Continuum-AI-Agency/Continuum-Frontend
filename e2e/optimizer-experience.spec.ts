@@ -44,8 +44,8 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 //   * The one write this bench makes is the ACTIVE-BRAND PREFERENCE row for the bench
 //     user (brand_profiles.user_brand_preferences) — the same row the in-app brand
 //     switcher writes. It is captured before the run and restored after.
-//   * Money-family log events (apply_* / convert_*) are counted for BOTH brands before
-//     and after, through the `optimizer_list_logs` RPC. NOT through
+//   * Money-family ACTIONS are counted for BOTH brands before and after, through the
+//     `optimizer_list_actions` RPC — the ad-account write ledger itself. NOT through
 //     `.schema('optimizer').from(...)`: the `optimizer` schema is not in PostgREST's
 //     exposed-schema allowlist, so that read silently returns a null count and would
 //     make the money assertion incapable of failing.
@@ -60,12 +60,19 @@ const { serviceRoleKey, publishableKey } = loadProdSupabaseEnv();
 // Verified production pairs. A mismatched (brand, member) pair reads an EMPTY world and
 // reports a false green, so brand AND owner are pinned together here.
 //
-// Production carries TWO duplicate "Easy Fit" brand rows. The AGENCY row below is the one
-// that owns the live portfolios; the client row (6f597f42…, mkt@easyfit.mx) surfaces the
-// same ad account but owns none, and is deliberately not used.
+// Production carries TWO duplicate "Easy Fit" brand rows, and they split the evidence: the
+// AGENCY row owns the live portfolios this bench browses, while the CLIENT row owns every
+// ad-account write in optimizer.apply_audits (and 8 active portfolios of its own on the same
+// ad account). Both are pinned below, and both are inside the money-safety net.
 const OWNER_EMAIL = 'mercadotecniavivo@gmail.com';
 const AGENCY_BRAND_ID = '148583e0-5538-462b-8d3a-acd25b80344e';
 const VIVO47_BRAND_ID = '61b80f51-709a-4408-9f11-04142a286baa';
+/** The OTHER "Easy Fit" row (the bench user is an admin on it). It is where every ad-account
+ *  write in production actually lives — 38 budget writes in optimizer.apply_audits, all of
+ *  them reversible, against 8 active portfolios on the SAME ad account as the agency row,
+ *  which owns zero apply_audits rows. The action feed can only be proven against real rows,
+ *  so the Activity test runs here; every other test stays on the agency row. */
+const EASYFIT_LEDGER_BRAND_ID = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
 
 /** Owns both live portfolios and 64 live ad sets. */
 const PORTFOLIO_ACCOUNT_ID = '521903353286118';
@@ -105,24 +112,33 @@ function subjectOf(accessToken: string): string {
   return decoded.sub;
 }
 
-/** Money-family optimizer log events for a brand. Every budget write logs `apply_executed`
- *  and every convert logs its own `convert_*` event, so a money move cannot happen without
- *  a row appearing here. */
+/** Money-family ACTIONS for a brand — every write that touched the ad account, read from
+ *  the ledger itself (optimizer.apply_audits, via public.optimizer_list_actions).
+ *
+ *  This used to count `apply_*` / `convert_*` rows in `optimizer_list_logs`. That counter is
+ *  now structurally blind: optimizer_list_logs was narrowed to LIFECYCLE server-side and
+ *  DENYLISTS `apply\_%`, so a real budget write would no longer appear in it at all and the
+ *  assertion would have gone on passing while proving nothing. The ledger is the right source
+ *  anyway — apply_audits is written in the same transaction as the ledger confirm, where the
+ *  log sink was best-effort and drops a batch on flush failure. */
 async function moneyEventCount(brandId: string): Promise<number> {
-  const { data, error } = await admin.rpc('optimizer_list_logs', {
+  const { data, error } = await admin.rpc('optimizer_list_actions', {
     p_brand_id: brandId,
     p_limit: 500,
   });
-  if (error) throw new Error(`[optimizer-bench] optimizer_list_logs unreachable: ${error.message}`);
-  const rows = Array.isArray(data) ? (data as Array<{ event?: unknown }>) : [];
-  return rows.filter((row) => typeof row.event === 'string' && /^(apply_|convert_)/.test(row.event))
-    .length;
+  if (error) {
+    throw new Error(`[optimizer-bench] optimizer_list_actions unreachable: ${error.message}`);
+  }
+  const rows = Array.isArray(data) ? (data as Array<{ family?: unknown }>) : [];
+  return rows.filter((row) => row.family === 'money').length;
 }
 
+/** Every brand this bench selects has to be inside the money-safety net, or a write made
+ *  while it was active would go uncounted. */
+const WATCHED_BRAND_IDS = [AGENCY_BRAND_ID, VIVO47_BRAND_ID, EASYFIT_LEDGER_BRAND_ID];
+
 async function totalMoneyEvents(): Promise<number> {
-  const counts = await Promise.all(
-    [AGENCY_BRAND_ID, VIVO47_BRAND_ID].map((brandId) => moneyEventCount(brandId)),
-  );
+  const counts = await Promise.all(WATCHED_BRAND_IDS.map((brandId) => moneyEventCount(brandId)));
   return counts.reduce((sum, count) => sum + count, 0);
 }
 
@@ -223,7 +239,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     originalActiveBrandId = await readActiveBrandPreference();
     moneyEventsBefore = await totalMoneyEvents();
     console.log(
-      `[optimizer-bench] money-family log events BEFORE (both brands): ${moneyEventsBefore}`,
+      `[optimizer-bench] money-family actions BEFORE (watched brands): ${moneyEventsBefore}`,
     );
     console.log(`[optimizer-bench] active brand before: ${originalActiveBrandId ?? '(none)'}`);
   });
@@ -594,12 +610,102 @@ test.describe('Paid Media Optimizer — live experience', () => {
     }
   });
 
-  test('money safety — no money-family event was logged by this run', async () => {
+  // -------------------------------------------------------------------------
+  // Activity — the two feeds that used to be one.
+  //
+  // Runs on EASYFIT_LEDGER_BRAND_ID because that is the brand production actually wrote to:
+  // 38 budget writes in optimizer.apply_audits, 57 portfolio-setting edits, 11 recommendation
+  // decisions. On the agency brand the action feed is legitimately EMPTY, and a green run
+  // against an empty feed would prove nothing about it.
+  //
+  // READ-ONLY, consistent with the money-safety contract at the top of this file: it opens
+  // the Activity sub-view, switches between its two feeds, and pages the action feed. It
+  // never clicks Revert or Unpause — their triggers are asserted to EXIST, never pressed —
+  // and the money-safety test at the end proves the ledger did not move.
+  // -------------------------------------------------------------------------
+  test('activity — Actions and the Server log are two separate feeds, not one merged stream', async ({
+    browser,
+  }) => {
+    await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    const { context } = await benchContext(browser);
+    const page = await context.newPage();
+
+    try {
+      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+
+      await page.getByRole('tab', { name: 'Activity' }).click();
+      await expect(page).toHaveURL(/optimizerView=logs/);
+
+      // The ACTION feed lands first — what we did to the ad account.
+      const actionsToggle = page.getByRole('button', { name: 'Actions', exact: true });
+      await expect(actionsToggle).toHaveAttribute('aria-pressed', 'true', { timeout: 120_000 });
+      await expect(page.getByText('Nothing has changed yet')).toHaveCount(0, { timeout: 120_000 });
+
+      // Every action row states WHAT changed, before → after. A budget row is labelled by the
+      // field it moved, not by an event name.
+      await expect(page.getByText('Daily budget').first()).toBeVisible({ timeout: 120_000 });
+
+      // WHO: the RPC's actor_kind, rendered rather than left implicit.
+      const actorLine = page.getByText(/· (Autopilot|Human|System)$/);
+      await expect(actorLine.first()).toBeVisible();
+      console.log(`[optimizer-bench] first action actor: "${await actorLine.first().innerText()}"`);
+
+      // UNDO: this brand's 38 budget writes are all `reversible` in the RPC, so the feed MUST
+      // offer at least one revert. The trigger is asserted, never clicked.
+      const revertTriggers = page.getByRole('button', { name: /^(Revert|Unpause)$/ });
+      const revertCount = await revertTriggers.count();
+      console.log(`[optimizer-bench] revertible action rows on page 1: ${revertCount}`);
+      expect(
+        revertCount,
+        'every production budget write on this brand is reversible — the feed must offer undo',
+      ).toBeGreaterThan(0);
+
+      // PAGINATION: 106 actions exist and one page is 50, so the footer must say there are
+      // older ones — not present the loaded window as the whole world.
+      const moreFooter = page.getByText(/\d+ actions loaded — there are older ones\./);
+      await expect(moreFooter).toBeVisible({ timeout: 60_000 });
+      const beforeText = await moreFooter.innerText();
+      await page.getByRole('button', { name: 'Load more' }).click();
+      await expect(
+        page.getByText(/\d+ actions (loaded — there are older ones\.|— that is all of them\.)/),
+      ).not.toHaveText(beforeText, { timeout: 60_000 });
+      console.log(`[optimizer-bench] action feed footer after Load more: "${await page.getByText(/\d+ actions /).first().innerText()}"`);
+
+      await shoot(page, '14-activity-actions');
+
+      // The SERVER LOG is the other half — lifecycle only, structured rather than a dump of
+      // the first four keys of a fields bag.
+      await page.getByRole('button', { name: 'Server log' }).click();
+      await expect(page.getByRole('button', { name: 'Server log' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+
+      const lifecycle = page
+        .getByText('Cycle complete')
+        .or(page.getByText('Cycle skipped'))
+        .or(page.getByText('Roster drift'))
+        .or(page.getByText('The optimizer has not run yet'));
+      await expect(lifecycle.first()).toBeVisible({ timeout: 120_000 });
+
+      // The split is load-bearing: an ad-account write must NOT appear in the server log.
+      // 'Daily budget' is the action feed's own label for a budget move, and it was visible
+      // on the other feed moments ago.
+      await expect(page.getByText('Daily budget')).toHaveCount(0);
+      // ...and undo lives with the action, never with the lifecycle row.
+      await expect(page.getByRole('button', { name: /^(Revert|Unpause)$/ })).toHaveCount(0);
+      await shoot(page, '15-activity-server-log');
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('money safety — no ad-account write was made by this run', async () => {
     const after = await totalMoneyEvents();
-    console.log(`[optimizer-bench] money-family log events AFTER (both brands): ${after}`);
+    console.log(`[optimizer-bench] money-family actions AFTER (watched brands): ${after}`);
     expect(
       after,
-      `money-family (apply_*/convert_*) events changed during a read/browse bench: ${moneyEventsBefore} → ${after}`,
+      `money-family actions changed during a read/browse bench: ${moneyEventsBefore} → ${after}`,
     ).toBe(moneyEventsBefore);
   });
 });

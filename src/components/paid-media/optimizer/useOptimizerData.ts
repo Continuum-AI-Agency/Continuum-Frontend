@@ -47,6 +47,7 @@ import {
   type OptimizerInsightRequest,
   type OptimizerInsightResponse,
   OptimizerInsightResponseSchema,
+  OptimizerActionRowSchema,
   type OptimizerLogRow,
   OptimizerLogsResponseSchema,
   type PaidAdAngle,
@@ -69,11 +70,12 @@ import {
   TimelineEventSchema,
   type UpdatePortfolioPatch,
 } from '@continuum/contracts';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { dedupeById, type FeedPage, pageOnTimestamp } from './feedPaging';
 import { recommendationInsightKey } from './insightKey';
 import { hasPendingWork } from './reportModel';
 import { type AccountSnapshotsResult, parseOptimizerSnapshotEnvelope } from './snapshotEnvelope';
@@ -153,6 +155,7 @@ export const optimizerQueryKeys = {
   cpaSeries: (portfolioId: string) => ['optimizer', 'efficiency-series', portfolioId] as const,
   renewals: (brandId: string) => ['optimizer', 'renewals', brandId] as const,
   logs: (brandId: string) => ['optimizer', 'logs', brandId] as const,
+  actions: (brandId: string) => ['optimizer', 'actions', brandId] as const,
   suggestions: (brandId: string, adAccountId: string | null, level: PortfolioLevel = 'adset') =>
     ['optimizer', 'suggestions', brandId, adAccountId ?? 'all', level] as const,
   accountSnapshots: (
@@ -351,9 +354,32 @@ async function fetchRenewals(brandId: string): Promise<RenewalTask[]> {
     .parse(data ?? []);
 }
 
-async function fetchLogs(brandId: string): Promise<OptimizerLogRow[]> {
+/** How many rows one page of either feed asks for. Both RPCs clamp to 500; this is the
+ *  page size, not the size of the world — `fetchNextPage` walks the keyset from here. */
+export const OPTIMIZER_FEED_PAGE_SIZE = 50;
+
+/** The action-feed row as the FE reads it: the contract row with `op` widened to a plain
+ *  string.
+ *
+ *  public.optimizer_list_actions emits a fifth op — 'convert', for a CBO→ABO restructure —
+ *  that OptimizerActionOpSchema does not carry yet (the gap is pinned by
+ *  supabase/functions/optimizer-status/actions.test.ts). Parsing with the un-widened enum
+ *  would reject the WHOLE page over one conversion, so the feed accepts any op string and
+ *  the renderer labels an unrecognised one by its raw value. */
+const OptimizerActionFeedRowSchema = OptimizerActionRowSchema.extend({ op: z.string() });
+export type OptimizerActionFeedRow = z.infer<typeof OptimizerActionFeedRowSchema>;
+
+const OptimizerActionFeedPageSchema = z.object({
+  actions: z.array(OptimizerActionFeedRowSchema),
+  next_before: z.string().nullable().optional(),
+});
+
+async function fetchLogsPage(
+  brandId: string,
+  before: string | null,
+): Promise<FeedPage<OptimizerLogRow>> {
   const { data, error } = await getClient().functions.invoke('optimizer-status', {
-    body: { view: 'logs', brand_id: brandId, limit: 100 },
+    body: { view: 'logs', brand_id: brandId, limit: OPTIMIZER_FEED_PAGE_SIZE, before },
   });
   if (error) throw new Error('optimizer-status logs unreachable');
   const parsed = OptimizerLogsResponseSchema.safeParse(data);
@@ -363,7 +389,30 @@ async function fetchLogs(brandId: string): Promise<OptimizerLogRow[]> {
     console.error('optimizer-status logs: unexpected shape', parsed.error.issues);
     throw new Error('optimizer-status returned an unexpected logs shape');
   }
-  return parsed.data.logs;
+  // The logs view of the edge returns `{ logs }` and nothing else — its response shape is
+  // load-bearing for already-deployed clients — so the cursor is derived here instead of
+  // being served. optimizer_list_logs filters with a STRICT `ts <`, so the trailing tie
+  // group has to be dropped and re-fetched or every row sharing the boundary timestamp
+  // becomes permanently unreachable (the same rule the actions view applies server-side).
+  return pageOnTimestamp(parsed.data.logs, OPTIMIZER_FEED_PAGE_SIZE);
+}
+
+async function fetchActionsPage(
+  brandId: string,
+  before: string | null,
+): Promise<FeedPage<OptimizerActionFeedRow>> {
+  const { data, error } = await getClient().functions.invoke('optimizer-status', {
+    body: { view: 'actions', brand_id: brandId, limit: OPTIMIZER_FEED_PAGE_SIZE, before },
+  });
+  if (error) throw new Error('optimizer-status actions unreachable');
+  const parsed = OptimizerActionFeedPageSchema.safeParse(data);
+  if (!parsed.success) {
+    console.error('optimizer-status actions: unexpected shape', parsed.error.issues);
+    throw new Error('optimizer-status returned an unexpected actions shape');
+  }
+  // The actions view DOES serve its cursor (and owns the tie handling), so it is taken
+  // as given rather than recomputed.
+  return { rows: parsed.data.actions, nextBefore: parsed.data.next_before ?? null };
 }
 
 async function fetchSuggestions(
@@ -940,6 +989,7 @@ const EMPTY_ACCOUNTS: AdAccount[] = [];
 const EMPTY_CPA: CpaSeriesPoint[] = [];
 const EMPTY_RENEWALS: RenewalTask[] = [];
 const EMPTY_LOGS: OptimizerLogRow[] = [];
+const EMPTY_ACTIONS: OptimizerActionFeedRow[] = [];
 const EMPTY_SNAPSHOTS: AdSetSnapshot[] = [];
 const EMPTY_ENROLLED: PortfolioAdset[] = [];
 const EMPTY_ACCOUNT_ENROLLMENTS: AccountEnrollment[] = [];
@@ -1084,11 +1134,65 @@ export function useOptimizerRenewals(brandId: string) {
   });
 }
 
+type OptimizerPagedReadOptions<TRow> = {
+  queryKey: readonly unknown[];
+  fetchPage: (before: string | null) => Promise<FeedPage<TRow>>;
+  empty: TRow[];
+  enabled: boolean;
+  staleTime: number;
+  refetchInterval?: number | false;
+};
+
+/** The keyset sibling of useOptimizerRead: same timeout, same retry budget, same
+ *  "`data` is always a renderable model" contract — but the model grows a page at a time
+ *  instead of pretending the first 100 rows are the world. `hasNextPage` is the RPC's own
+ *  answer (a null cursor), so "load more" appears only when there really is more. */
+function useOptimizerPagedRead<TRow extends { id: string | number }>({
+  queryKey,
+  fetchPage,
+  empty,
+  enabled,
+  staleTime,
+  refetchInterval = false,
+}: OptimizerPagedReadOptions<TRow>) {
+  const query = useInfiniteQuery({
+    queryKey,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => withReadTimeout(fetchPage(pageParam)),
+    getNextPageParam: (lastPage: FeedPage<TRow>) => lastPage.nextBefore,
+    enabled,
+    staleTime,
+    gcTime: THIRTY_MINUTES,
+    refetchInterval,
+    retry: 1,
+  });
+
+  const pages = query.data?.pages;
+  const rows = useMemo(() => (pages ? dedupeById(pages) : empty), [pages, empty]);
+  return { ...query, data: rows };
+}
+
+/** The brand's LIFECYCLE feed — "the machine ran". Money writes, config changes and
+ *  recommendation decisions are NOT here; they are actions, and they live in
+ *  useOptimizerActions with a before, an after and a revert. */
 export function useOptimizerLogs(brandId: string) {
-  return useOptimizerRead({
+  return useOptimizerPagedRead({
     queryKey: optimizerQueryKeys.logs(brandId),
-    queryFn: () => fetchLogs(brandId),
+    fetchPage: (before) => fetchLogsPage(brandId, before),
     empty: EMPTY_LOGS,
+    enabled: Boolean(brandId),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+}
+
+/** The brand's ACTION feed — every state change with a before and an after, across money
+ *  writes, portfolio settings and recommendation decisions. */
+export function useOptimizerActions(brandId: string) {
+  return useOptimizerPagedRead({
+    queryKey: optimizerQueryKeys.actions(brandId),
+    fetchPage: (before) => fetchActionsPage(brandId, before),
+    empty: EMPTY_ACTIONS,
     enabled: Boolean(brandId),
     staleTime: 30_000,
     refetchInterval: 30_000,

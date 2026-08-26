@@ -50,7 +50,6 @@ import { formatCurrency } from '../format';
 import {
   actionRoute,
   applyModeExplainer,
-  budgetMoveWhy,
   creativeBriefForRec,
   notImplementedMessage,
   parseReport,
@@ -61,10 +60,12 @@ import {
 import {
   useApplyAdsetStatus,
   useApplyApproved,
+  useOptimizerActions,
   useOptimizerEnrolledAdsets,
   useOptimizerMutations,
   useOptimizerPerformance,
 } from '../useOptimizerData';
+import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
 import { RecommendationInsight } from './RecommendationInsight';
 
@@ -563,8 +564,8 @@ export function OptimizerActionsPortfolioGroup({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirm === 'pause'
-                ? 'Pausing stops these ad sets from spending immediately. Every pause is logged and can be reverted (unpaused) from the activity log.'
-                : 'This writes the approved daily budgets to Meta now. Every change is logged and can be reverted from the activity log.'}
+                ? 'Pausing stops these ad sets from spending immediately. Every pause lands in Recently applied below, where one click unpauses it.'
+                : 'This writes the approved daily budgets to Meta now. Every change lands in Recently applied below, where one click puts the prior budget back.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -576,6 +577,12 @@ export function OptimizerActionsPortfolioGroup({
         </AlertDialogContent>
       </AlertDialog>
 
+      <PortfolioRecentActions
+        brandId={brandId}
+        portfolioId={portfolio.id}
+        currency={null}
+      />
+
       {/* Nothing above clears selection on refetch — a mutation's invalidate rebuilds the rows,
           and a stale key would silently point at nothing. */}
       <SelectionSweeper
@@ -584,6 +591,56 @@ export function OptimizerActionsPortfolioGroup({
         onSweep={clearTransient}
       />
     </section>
+  );
+}
+
+/** How many recent ad-account writes this portfolio shows inline. Enough to undo the move
+ *  you just made without leaving the queue; the whole trail is in Activity → Actions. */
+const RECENT_ACTION_LIMIT = 5;
+
+/**
+ * The undo strip: this portfolio's most recent ad-account writes, each with one-click revert.
+ *
+ * Approving a change and undoing it used to live in two different places — the queue applied,
+ * and the confirm dialog told you to go find the activity log if you changed your mind. The
+ * write and its undo belong to the same moment, so the writes land here, under the queue that
+ * made them.
+ *
+ * Eligibility is the RPC's `reversible`, never a guess from the row's shape: TRUE only for a
+ * write that recorded a real prior value to restore. A row already undone says so instead of
+ * offering the button twice. Settings and decisions are excluded outright — undoing a config
+ * change is not one write against Meta, and a button that pretends otherwise is how one click
+ * becomes an outage.
+ */
+function PortfolioRecentActions({
+  brandId,
+  portfolioId,
+  currency,
+}: {
+  brandId: string;
+  portfolioId: string;
+  currency: string | null;
+}) {
+  const actionsQuery = useOptimizerActions(brandId);
+  // A failed or empty action read must not push an error into the queue — the queue's own work
+  // is unaffected by it. The full feed reports its own outage in Activity → Actions.
+  const recent = actionsQuery.data
+    .filter((row) => row.portfolio_id === portfolioId && row.family === 'money')
+    .slice(0, RECENT_ACTION_LIMIT);
+
+  if (recent.length === 0) return null;
+
+  return (
+    <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+      <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Recently applied
+      </p>
+      <ul className="space-y-2">
+        {recent.map((row) => (
+          <ActionRow key={row.id} row={row} brandId={brandId} currency={currency} />
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -1085,9 +1142,29 @@ function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
   );
 }
 
-/** A budget move said as a sentence, then the numbers behind it. Everything here comes from
- *  what cycle_items already persists, so it reads correctly on rows scored long before this
- *  existed — no engine change, no re-run required. */
+/** The three scoring windows behind a move, as "3d 1.20 / 7d 1.15 / 14d 1.31". Read straight
+ *  off the persisted diagnostics — these are the NUMBERS, not the sentence. */
+function scoreWindows(item: CycleItemRow): string | null {
+  const diag = item.diagnostics ?? null;
+  const parts = (
+    [
+      ['3d', diag?.score3d],
+      ['7d', diag?.score7d],
+      ['14d', diag?.score14d],
+    ] as const
+  )
+    .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+    .map(([label, value]) => `${label} ${(value as number).toFixed(2)}`);
+  return parts.length > 0 ? parts.join(' / ') : null;
+}
+
+/** A budget move said as a sentence, then the numbers behind it.
+ *
+ *  The sentence is the one the ENGINE wrote at cycle time and persisted to
+ *  optimizer.cycle_items.reason — the same string the apply copies into
+ *  apply_audits.justification, so the queue and the money ledger cannot tell two different
+ *  stories about one move. Absent on rows scored before the engine persisted it; the row
+ *  then shows its numbers and no "Why", rather than a second explanation computed here. */
 function BudgetDetail({
   item,
   currency,
@@ -1097,25 +1174,15 @@ function BudgetDetail({
   currency: string | null;
   counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
 }) {
-  const why = budgetMoveWhy(item);
-  const windows = why?.windows ?? null;
-  const windowText = windows
-    ? (
-        [
-          windows.d3 != null ? `3d ${windows.d3.toFixed(2)}` : null,
-          windows.d7 != null ? `7d ${windows.d7.toFixed(2)}` : null,
-          windows.d14 != null ? `14d ${windows.d14.toFixed(2)}` : null,
-        ].filter(Boolean) as string[]
-      ).join(' / ')
-    : null;
+  const windowText = scoreWindows(item);
+  const ci = item.diagnostics?.ci ?? null;
+  const cpa = typeof ci?.cpa === 'number' && Number.isFinite(ci.cpa) ? ci.cpa : null;
 
   return (
     <>
-      {why ? (
+      {item.reason ? (
         <p>
-          <span className="font-medium text-foreground">Why:</span> {why.lead}
-          {why.windowsAgree === false ? ' The windows disagree, so treat it as provisional.' : ''}
-          {why.capped ? ' Truncated by the max-move-per-cycle guardrail.' : ''}
+          <span className="font-medium text-foreground">Why:</span> {item.reason}
         </p>
       ) : null}
       <p>
@@ -1128,14 +1195,14 @@ function BudgetDetail({
           <span className="font-medium text-foreground">Score:</span> {windowText}
         </p>
       ) : null}
-      {why?.cost ? (
+      {cpa != null ? (
         <p>
           <span className="font-medium text-foreground">Cost:</span>{' '}
-          {formatCurrency(why.cost.cpa, currency)}
-          {why.cost.lo != null && why.cost.hi != null
-            ? ` (likely ${formatCurrency(why.cost.lo, currency)}–${formatCurrency(why.cost.hi, currency)})`
+          {formatCurrency(cpa, currency)}
+          {typeof ci?.lo === 'number' && typeof ci?.hi === 'number'
+            ? ` (likely ${formatCurrency(ci.lo, currency)}–${formatCurrency(ci.hi, currency)})`
             : ''}
-          {why.cost.events != null ? ` from ${why.cost.events} events` : ''}
+          {typeof ci?.events === 'number' ? ` from ${ci.events} events` : ''}
         </p>
       ) : null}
       {counterparty ? (

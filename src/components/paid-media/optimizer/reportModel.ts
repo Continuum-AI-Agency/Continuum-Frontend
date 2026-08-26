@@ -8,7 +8,6 @@ import {
   buildCreativeRequestBrief,
   type CreativeRequestBrief,
   type CreativeVariationSeedInput,
-  type CycleItemDiagnostics,
   type CycleItemRow,
   type CycleRunReport,
   type ParsedCycleRunReport,
@@ -136,61 +135,17 @@ export function explainConfidence(
 }
 
 // ── Why one budget move happened ─────────────────────────────────────────────
-// Assembled entirely from what cycle_items already persists, so it works on rows
-// scored before this shipped. Numbers stay raw — the caller owns currency.
-
-export type BudgetMoveWhy = {
-  lead: string;
-  windows: { d3: number | null; d7: number | null; d14: number | null } | null;
-  windowsAgree: boolean | null;
-  cost: { cpa: number; lo: number | null; hi: number | null; events: number | null } | null;
-  capped: boolean;
-};
-
-const finite = (value: number | null | undefined): number | null =>
-  typeof value === 'number' && Number.isFinite(value) ? value : null;
-
-/** Null when the row is HELD — freezeLabel already explains those, and a held ad set
- *  was left unchanged on purpose rather than scored into a move. */
-export function budgetMoveWhy(item: CycleItemRow): BudgetMoveWhy | null {
-  const diag = item.diagnostics ?? null;
-  if (diag?.freezeReason) return null;
-
-  const change = finite(item.change_abs) ?? 0;
-  if (change === 0) return null;
-
-  // The solver water-fills in proportion to each ad set's shrunk composite score, so a
-  // raise means exactly this: its score earned a bigger slice of the pool than the
-  // budget it currently holds. Not "it beat the average".
-  const lead =
-    change > 0
-      ? 'Earned a larger share of the pool than its current budget.'
-      : 'Earned a smaller share of the pool than its current budget.';
-
-  const d3 = finite(diag?.score3d);
-  const d7 = finite(diag?.score7d);
-  const d14 = finite(diag?.score14d);
-  const present = [d3, d7, d14].filter((value): value is number => value != null && value > 0);
-  // ponytail: max/min ratio, not the engine's coefficient of variation. Good enough to
-  // say "agree"/"disagree" in a sentence; use the engine's consistency term if this ever
-  // needs to be the same number the score was computed from.
-  const windowsAgree =
-    present.length >= 2 ? Math.max(...present) / Math.min(...present) <= 1.35 : null;
-
-  const ci = diag?.ci ?? null;
-  const cpa = finite(ci?.cpa);
-
-  return {
-    lead,
-    windows: d3 == null && d7 == null && d14 == null ? null : { d3, d7, d14 },
-    windowsAgree,
-    cost:
-      cpa == null
-        ? null
-        : { cpa, lo: finite(ci?.lo), hi: finite(ci?.hi), events: finite(ci?.events) },
-    capped: velocityCapTruncated(diag),
-  };
-}
+// It is NOT computed here any more. The engine composes the sentence at cycle time
+// (packages/optimization-engine/src/explain.ts — moveReasonText) and persists it to
+// optimizer.cycle_items.reason, which the apply then copies into
+// optimizer.apply_audits.justification. So the "why" a human reads in the Actions queue is
+// byte-for-byte the "why" recorded in the money ledger.
+//
+// The local budgetMoveWhy that used to live here computed a second, parallel explanation
+// from the same diagnostics. Two implementations of one sentence is a drift waiting to
+// happen — and the one in the audit trail is the one that has to be true. Render
+// `item.reason`; when it is absent (a row scored before the engine persisted it) say
+// nothing rather than manufacture a reason the ledger does not carry.
 
 // ── What counts as work waiting on a human ───────────────────────────────────
 // ONE definition, because the proxy drifted once already. The Actions queue used
@@ -215,20 +170,6 @@ export function hasPendingWork(portfolio: {
   pending_budget_moves?: number;
 }): boolean {
   return pendingWorkCount(portfolio) > 0;
-}
-
-/** Did the per-cycle velocity guardrail actually truncate this move?
- *
- *  velocityCapped is the raw proportional budget CLAMPED to the ad set's velocity band, so
- *  the guardrail bit exactly when the clamp changed the number. The old test was
- *  `velocityCapped === true`, which never fired on a real row — the field is a budget, not
- *  a flag — so this hint has been silently absent since it shipped. Epsilon because both
- *  sides are floating-point money. */
-function velocityCapTruncated(diag: CycleItemDiagnostics | null | undefined): boolean {
-  const raw = finite(diag?.rawBudget);
-  const capped = finite(diag?.velocityCapped);
-  if (raw == null || capped == null) return false;
-  return Math.abs(raw - capped) > 0.005;
 }
 
 /** Confidence band → badge variant + label, tolerant of loose DB strings. */
