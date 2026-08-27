@@ -28,6 +28,7 @@ import {
   saveRigorOverride,
 } from '@/lib/brands/designSystem.client';
 import { downloadDesignSystemBundle } from '@/lib/brands/designSystemExport';
+import { BrandEnginePanels } from './BrandEnginePanels';
 
 export interface DesignSystemSectionProps {
   brandId: string;
@@ -45,6 +46,9 @@ export function DesignSystemSection({ brandId }: DesignSystemSectionProps) {
         <>
           <ConflictBar brandId={brandId} snapshot={snapshot} onResolved={state.refresh} />
           <RigorControl brandId={brandId} snapshot={snapshot} onChanged={state.refresh} />
+          {/* Read before edit. The panels are what the engine will actually do with this
+              system; the cards below are where it is corrected. */}
+          <BrandEnginePanels snapshot={snapshot} fontsInStore={state.fontsInStore} />
           <div className="grid gap-4 md:grid-cols-2">
             {snapshot.sections.map((section) => (
               <SectionCard

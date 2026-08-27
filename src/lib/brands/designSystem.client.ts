@@ -10,6 +10,7 @@
 
 import {
   type DesignSection,
+  type DesignSystemFontFace,
   type DesignSystemSnapshot,
   packageDesignSystemUpload,
 } from '@continuum/contracts';
@@ -35,6 +36,15 @@ export interface DesignSystemResponse {
    * can list a brand's exemplars but cannot fetch one.
    */
   design_system_id: string | null;
+  /**
+   * The faces the engine ACTUALLY HOLDS — not the ones the system declares.
+   *
+   * Optional because an older Backend does not send it, and the difference between
+   * "this brand has no fonts" and "this Backend cannot tell me" must not collapse into
+   * one empty array: the typography panel says so out loud rather than badging every
+   * declared face `missing` on the strength of a field that was never there.
+   */
+  fonts_in_store?: DesignSystemFontFace[];
 }
 
 export function fetchDesignSystem(brandId: string): Promise<DesignSystemResponse> {

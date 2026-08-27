@@ -73,6 +73,7 @@
     "planner:composition:e2e:bench": "bun run e2e/planner-composition-edge.e2e.bench.ts",
     "planner:preview:e2e:bench": "set -a; . ./.env.local; set +a; PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 NEXT_DIST_DIR=.next/planner-preview-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/organic-planner-preview.spec.ts --workers=1",
     "changelog:e2e:bench": "bun test src/components/changelog/WhatsNewBell.bench.test.tsx",
+    "brand:panels:bench": "set -a; . ./.env.local; set +a; BRAND_PANELS_BENCH_BACKEND_PORT=4412 NEXT_PUBLIC_API_URL=http://127.0.0.1:4412 API_URL=http://127.0.0.1:4412 PORT=3112 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3112 NEXT_DIST_DIR=.next/brand-panels-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/brand-panels.bench.spec.ts --workers=1",
     "brand-system:export:e2e:bench": "bun run e2e/brand-system-export.bench.ts"
   },
   "dependencies": {

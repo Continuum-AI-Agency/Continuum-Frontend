@@ -15,7 +15,7 @@
 // landed on an already-subscribed channel and threw, taking the settings page to the
 // global error boundary.
 
-import type { DesignSystemSnapshot } from '@continuum/contracts';
+import type { DesignSystemFontFace, DesignSystemSnapshot } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchDesignSystem } from '@/lib/brands/designSystem.client';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
@@ -25,6 +25,11 @@ export type DesignSystemPhase = 'idle' | 'loading' | 'parsing' | 'ready' | 'erro
 export interface DesignSystemState {
   phase: DesignSystemPhase;
   snapshot: DesignSystemSnapshot | null;
+  /**
+   * Faces present in the font store, or `null` when the Backend did not report.
+   * `[]` means "we looked and there are none"; `null` means "we could not look".
+   */
+  fontsInStore: DesignSystemFontFace[] | null;
   progressStep: string | null;
   progressPercent: number;
   errorMessage: string | null;
@@ -47,6 +52,7 @@ const STALE_PARSE_MS = 180_000;
 
 export function useDesignSystem(brandId: string | null): DesignSystemState {
   const [snapshot, setSnapshot] = useState<DesignSystemSnapshot | null>(null);
+  const [fontsInStore, setFontsInStore] = useState<DesignSystemFontFace[] | null>(null);
   const [phase, setPhase] = useState<DesignSystemPhase>('idle');
   const [progressStep, setProgressStep] = useState<string | null>(null);
   const [progressPercent, setProgressPercent] = useState(0);
@@ -60,6 +66,7 @@ export function useDesignSystem(brandId: string | null): DesignSystemState {
     try {
       const response = await fetchDesignSystem(brandId);
       setSnapshot(response.design_system);
+      setFontsInStore(response.fonts_in_store ?? null);
       setVersion(response.version);
       if (response.status === 'parsing') setPhase('parsing');
       else if (response.status === 'error') setPhase('error');
@@ -122,6 +129,7 @@ export function useDesignSystem(brandId: string | null): DesignSystemState {
   return {
     phase,
     snapshot,
+    fontsInStore,
     progressStep,
     progressPercent,
     errorMessage,
