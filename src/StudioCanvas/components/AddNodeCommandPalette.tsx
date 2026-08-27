@@ -20,9 +20,15 @@
 // The fix is therefore a RENDER-order pin, not a scoring tweak: an exact, case-insensitive
 // label match is rendered first, in its own group, and left out of its normal one. Fuzzy
 // matching is untouched — the settled cmdk decision stands, the defect was ordering.
+//
+// Techniques ride the same two modes: a "Techniques ›" submenu FIRST above the categories
+// (the thing people reuse most), and a "Techniques" group in the ranked list. The palette
+// is handed the list and the apply callback as props — it never touches the store or the
+// apply hook itself, which is what keeps it renderable in a test with no canvas around it.
 
 import type { ActionId, ActionModality, VideoGeneratorModel } from '@continuum/contracts';
 import {
+  Blocks,
   Braces,
   CalendarPlus,
   Camera,
@@ -61,6 +67,7 @@ import {
 import { type KeyboardEvent, useMemo, useState } from 'react';
 
 import { GoogleIcon, type IconComponent } from '@/components/shared/icons';
+import type { TechniqueItem } from '@/lib/ai-studio/techniques';
 
 import {
   Command,
@@ -72,7 +79,10 @@ import {
   CommandShortcut,
 } from '@/components/ui/command';
 import {
+  ContextMenuCheckboxItem,
   ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
   ContextMenuShortcut,
   ContextMenuSub,
   ContextMenuSubContent,
@@ -185,6 +195,27 @@ const exactLabelMatches = (
   return ALL_ENTRIES.filter((entry) => entry.row.label.toLowerCase() === needle);
 };
 
+/** A technique whose name IS the query pins beside the exact-label node rows. */
+const exactTechniqueMatches = (items: TechniqueItem[], query: string): TechniqueItem[] => {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  return items.filter((item) => item.name.trim().toLowerCase() === needle);
+};
+
+/** What a technique's row says at the end: its port contract, e.g. "2 in · 1 out". */
+const techniquePortSummary = (item: TechniqueItem): string =>
+  `${item.inputPorts.length} in · ${item.outputPorts.length} out`;
+
+const techniqueKindLabel = (item: TechniqueItem): string =>
+  item.kind.charAt(0).toUpperCase() + item.kind.slice(1);
+
+const TechniqueBody = ({ item }: { item: TechniqueItem }) => (
+  <div className="flex min-w-0 flex-col">
+    <span>{item.name}</span>
+    <span className="text-xs text-muted-foreground">{techniqueKindLabel(item)}</span>
+  </div>
+);
+
 /** What rides at the end of the row: who runs it, and for an op, what it runs on. */
 const rowTag = (row: AddNodeRow): string =>
   row.family ? `${ACTION_FAMILY_LABELS[row.family]} · ${row.tag}` : row.tag;
@@ -217,20 +248,47 @@ export type AddNodeHandler = (
   options?: { model?: VideoGeneratorModel; actionId?: ActionId },
 ) => void;
 
+export type ApplyTechniqueHandler = (
+  technique: TechniqueItem,
+  options: { collapsed: boolean },
+) => void;
+
+export type PaletteTechniques = { items: TechniqueItem[]; isLoading: boolean };
+
+const NO_TECHNIQUES: PaletteTechniques = { items: [], isLoading: false };
+
 export function AddNodeCommandPalette({
   onAdd,
   onOpenChange,
+  techniques = NO_TECHNIQUES,
+  onApplyTechnique,
 }: {
   onAdd: AddNodeHandler;
   /** Fires when the Add Node submenu opens or closes — the canvas pins the drop point on open. */
   onOpenChange?: (open: boolean) => void;
+  /** Brand techniques merged with the global premades, as useTechniques returns them. */
+  techniques?: PaletteTechniques;
+  onApplyTechnique?: ApplyTechniqueHandler;
 }) {
   const [query, setQuery] = useState('');
+  // Presentation-only choice that lives as long as the menu does: the popup unmounts on
+  // close, so it starts unticked on every open, like the search box starts empty.
+  const [dropCollapsed, setDropCollapsed] = useState(false);
   const pinned = useMemo(() => exactLabelMatches(query), [query]);
   const pinnedKeys = useMemo(
     () => new Set(pinned.map((entry) => addNodeRowKey(entry.row))),
     [pinned],
   );
+  const pinnedTechniques = useMemo(
+    () => exactTechniqueMatches(techniques.items, query),
+    [techniques.items, query],
+  );
+  const unpinnedTechniques = useMemo(
+    () => techniques.items.filter((item) => !pinnedTechniques.includes(item)),
+    [techniques.items, pinnedTechniques],
+  );
+  const applyTechnique = (item: TechniqueItem) =>
+    onApplyTechnique?.(item, { collapsed: dropCollapsed });
 
   // The search box lives inside a Base UI menu popup, whose keydown handlers run typeahead
   // (any printable key jumps focus to a matching item and swallows the character) and
@@ -259,6 +317,61 @@ export function AddNodeCommandPalette({
       <CommandShortcut>{rowTag(row)}</CommandShortcut>
     </CommandItem>
   );
+
+  const renderTechniqueSearchRow = (item: TechniqueItem) => (
+    <CommandItem
+      key={`technique:${item.id}`}
+      // The id keeps two same-named techniques apart: cmdk keys an item by its value.
+      value={`${item.name} ${item.kind} technique ${item.id}`}
+      data-technique-id={item.id}
+      data-technique-tier={item.tier}
+      onSelect={() => applyTechnique(item)}
+    >
+      <Blocks />
+      <TechniqueBody item={item} />
+      <CommandShortcut>{techniquePortSummary(item)}</CommandShortcut>
+    </CommandItem>
+  );
+
+  const renderTechniqueMenuRow = (item: TechniqueItem) => (
+    <ContextMenuItem
+      key={item.id}
+      data-technique-id={item.id}
+      data-technique-tier={item.tier}
+      onClick={() => applyTechnique(item)}
+    >
+      <Blocks className="mr-2 h-4 w-4" />
+      <TechniqueBody item={item} />
+      <ContextMenuShortcut>{techniquePortSummary(item)}</ContextMenuShortcut>
+    </ContextMenuItem>
+  );
+
+  const renderTechniqueRows = () => {
+    if (techniques.items.length === 0) {
+      return (
+        <ContextMenuItem disabled>
+          {techniques.isLoading
+            ? 'Loading…'
+            : 'No techniques yet — select nodes, then Save as technique'}
+        </ContextMenuItem>
+      );
+    }
+    const brand = techniques.items.filter((item) => item.tier === 'brand');
+    const premade = techniques.items.filter((item) => item.tier === 'global');
+    // Both tiers present: label each. One tier: a flat list, no heading to read past.
+    if (brand.length === 0 || premade.length === 0) {
+      return techniques.items.map(renderTechniqueMenuRow);
+    }
+    return (
+      <>
+        <ContextMenuLabel>Brand</ContextMenuLabel>
+        {brand.map(renderTechniqueMenuRow)}
+        <ContextMenuSeparator />
+        <ContextMenuLabel>Premade</ContextMenuLabel>
+        {premade.map(renderTechniqueMenuRow)}
+      </>
+    );
+  };
 
   const renderMenuRow = (row: AddNodeRow) => (
     <ContextMenuItem
@@ -319,9 +432,17 @@ export function AddNodeCommandPalette({
           {query ? (
             <CommandList>
               <CommandEmpty>No node matches that search.</CommandEmpty>
-              {pinned.length > 0 ? (
+              {pinned.length > 0 || pinnedTechniques.length > 0 ? (
                 <CommandGroup heading="Best match" data-testid="add-node-palette-pinned">
+                  {pinnedTechniques.map(renderTechniqueSearchRow)}
                   {pinned.map((entry) => renderSearchRow(entry.section, entry.row))}
+                </CommandGroup>
+              ) : null}
+              {/* Only while there are techniques: cmdk keeps an empty group's heading in
+                  the DOM, and the headings are pinned to the catalog's labels. */}
+              {unpinnedTechniques.length > 0 ? (
+                <CommandGroup heading="Techniques" data-testid="add-node-palette-techniques">
+                  {unpinnedTechniques.map(renderTechniqueSearchRow)}
                 </CommandGroup>
               ) : null}
               {ADD_NODE_GROUPS.map((section) => {
@@ -341,6 +462,25 @@ export function AddNodeCommandPalette({
         {/* Siblings of the cmdk root, not children: a keydown inside a category submenu
             bubbles through its React ancestors, and cmdk's root would otherwise claim
             Enter and the arrows before Base UI's own item handling saw them. */}
+        {query ? null : (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger inset data-testid="add-node-techniques-trigger">
+              <Blocks className="mr-2 h-4 w-4" />
+              Techniques
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="nowheel w-72" data-testid="add-node-techniques">
+              <ContextMenuCheckboxItem
+                checked={dropCollapsed}
+                onCheckedChange={setDropCollapsed}
+                data-testid="add-node-techniques-collapsed"
+              >
+                Drop collapsed
+              </ContextMenuCheckboxItem>
+              <ContextMenuSeparator />
+              {renderTechniqueRows()}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
         {query
           ? null
           : ADD_NODE_GROUPS.map((section) => {

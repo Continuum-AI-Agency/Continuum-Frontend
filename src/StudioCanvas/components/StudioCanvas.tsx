@@ -33,10 +33,16 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useToast } from '@/components/ui/ToastProvider';
 import { canvasRoomHref } from '@/lib/ai-studio/canvasRoomLocation';
 import { inlineRemoteImage } from '@/lib/ai-studio/inlineRemoteImage';
+import {
+  type TechniqueItem,
+  techniqueApplyOptions,
+  useTechniques,
+} from '@/lib/ai-studio/techniques';
 import { trackUnsplashDownload } from '@/lib/api/aiStudioUnsplash.client';
 import type { PlannerAiStudioHandoff } from '@/lib/organic/ai-studio-bridge';
 import { CanvasRuntimeProvider } from '../contexts/CanvasRuntimeContext';
 import { useApplyBackToPlanner } from '../hooks/useApplyBackToPlanner';
+import { useApplyWorkflow } from '../hooks/useApplyWorkflow';
 import { useCanvasDnD } from '../hooks/useCanvasDnD';
 import { useCanvasKeyboardShortcuts } from '../hooks/useCanvasKeyboardShortcuts';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
@@ -351,6 +357,20 @@ function Flow({
     [addNodeAtPointer],
   );
 
+  // The Techniques submenu: the same anchor a node add lands on, through the one apply
+  // path every saved graph travels (useApplyWorkflow snapshots, saves and fits the view).
+  const techniques = useTechniques(brandProfileId);
+  const applyWorkflow = useApplyWorkflow();
+  const applyTechniqueFromPalette = useCallback(
+    (technique: TechniqueItem, { collapsed }: { collapsed: boolean }) => {
+      const anchor = addNodeAnchorRef.current ?? lastMousePositionRef.current;
+      const position = screenToFlowPosition(anchor);
+      contextMenuActionsRef.current?.close();
+      void applyWorkflow(technique.workflow, techniqueApplyOptions(position, collapsed));
+    },
+    [applyWorkflow, screenToFlowPosition],
+  );
+
   const handleCanvasContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
     contextMenuAnchorRef.current = { x: event.clientX, y: event.clientY };
   }, []);
@@ -620,6 +640,8 @@ function Flow({
         <CanvasContextMenuContent
           addNode={addNodeFromPalette}
           onAddNodeOpenChange={handleAddNodeOpenChange}
+          techniques={techniques}
+          onApplyTechnique={applyTechniqueFromPalette}
           openLoadWorkflow={() => setIsLoadWorkflowOpen(true)}
           openInstagram={() => setIsInstagramBrowserOpen(true)}
           openSaveStarter={openSaveStarter}

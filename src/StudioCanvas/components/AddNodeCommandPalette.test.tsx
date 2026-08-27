@@ -6,7 +6,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { AddNodeCommandPalette } from './AddNodeCommandPalette';
+import type { TechniqueItem } from '@/lib/ai-studio/techniques';
+import { AddNodeCommandPalette, type PaletteTechniques } from './AddNodeCommandPalette';
 import { ADD_NODE_GROUPS, sectionLayout } from './addNodeCatalog';
 
 afterEach(cleanup);
@@ -15,22 +16,82 @@ afterEach(cleanup);
 // the module warmup, and this machine runs several benches at once.
 const RENDER_TIMEOUT_MS = 30_000;
 
+/** A technique the way useTechniques hands one over — the palette never unpacks `workflow`. */
+function technique(
+  over: Pick<TechniqueItem, 'id' | 'name' | 'tier'> & Partial<TechniqueItem>,
+): TechniqueItem {
+  return {
+    kind: 'generation',
+    inputPorts: [
+      { id: 'in-1', nodeRef: 'gen', handleId: 'ref-image', dataType: 'image', origin: 'open' },
+      { id: 'in-2', nodeRef: 'gen', handleId: 'prompt', dataType: 'text', origin: 'open' },
+    ],
+    outputPorts: [{ id: 'out-1', nodeRef: 'gen', handleId: 'image', dataType: 'image' }],
+    nodeCount: 2,
+    edgeCount: 1,
+    workflow: {
+      id: over.id,
+      brandProfileId: over.tier === 'brand' ? 'brand-1' : 'global',
+      name: over.name,
+      nodes: [],
+      edges: [],
+      source: over.tier,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+    ...over,
+  };
+}
+
+const BRAND_TECHNIQUE = technique({ id: 'tq-brand', name: 'Palette smash-up', tier: 'brand' });
+const PREMADE_TECHNIQUE = technique({
+  id: 'tq-global',
+  name: 'Product on plinth',
+  tier: 'global',
+  kind: 'assembly',
+});
+
 // The palette is a submenu, so it needs an open menu around it. The submenu itself opens
 // on hover in the browser; here Enter on its trigger is the deterministic way in.
-function renderPalette() {
+function renderPalette(techniques?: PaletteTechniques) {
   const onAdd = mock(() => {});
   const onOpenChange = mock(() => {});
+  const onApplyTechnique = mock(() => {});
   const view = render(
     <ContextMenu open>
       <ContextMenuTrigger>canvas</ContextMenuTrigger>
       <ContextMenuContent>
-        <AddNodeCommandPalette onAdd={onAdd} onOpenChange={onOpenChange} />
+        <AddNodeCommandPalette
+          onAdd={onAdd}
+          onOpenChange={onOpenChange}
+          techniques={techniques}
+          onApplyTechnique={onApplyTechnique}
+        />
       </ContextMenuContent>
     </ContextMenu>,
   );
   fireEvent.keyDown(screen.getByText('Add Node'), { key: 'Enter' });
-  return { ...view, onAdd, onOpenChange };
+  return { ...view, onAdd, onOpenChange, onApplyTechnique };
 }
+
+/** Open the Techniques submenu with Enter on its trigger and return its (portalled) popup. */
+function openTechniques(): Element {
+  fireEvent.keyDown(screen.getByText('Techniques'), { key: 'Enter' });
+  const popup = document.querySelector('[data-testid="add-node-techniques"]');
+  if (!popup) throw new Error('no techniques popup');
+  return popup;
+}
+
+/** The technique rows a popup or list renders, in DOM order. */
+const techniqueRowsIn = (root: ParentNode): { id: string; tier: string; name: string }[] =>
+  Array.from(root.querySelectorAll('[data-technique-id]')).map((el) => ({
+    id: el.getAttribute('data-technique-id') ?? '',
+    tier: el.getAttribute('data-technique-tier') ?? '',
+    name: el.querySelector('span')?.textContent?.trim() ?? '',
+  }));
+
+/** Techniques ride first, then one submenu per catalog group. */
+const EXPECTED_TRIGGERS = ['Techniques', ...ADD_NODE_GROUPS.map((section) => section.label)];
 
 const input = (): HTMLElement => screen.getByPlaceholderText('Search nodes…');
 
@@ -115,7 +176,7 @@ describe('AddNodeCommandPalette', () => {
       expect(onOpenChange).toHaveBeenCalledWith(true);
       expect(screen.getByTestId('add-node-palette')).toBeDefined();
       expect(input()).toBeDefined();
-      expect(categoryTriggers()).toEqual(ADD_NODE_GROUPS.map((section) => section.label));
+      expect(categoryTriggers()).toEqual(EXPECTED_TRIGGERS);
       // No query, no list: the categories ARE the browse surface.
       expect(document.querySelector('[data-slot="command-list"]')).toBeNull();
       expect(visibleRows()).toEqual([]);
@@ -135,7 +196,7 @@ describe('AddNodeCommandPalette', () => {
 
       search('');
       expect(document.querySelector('[data-slot="command-list"]')).toBeNull();
-      expect(categoryTriggers()).toEqual(ADD_NODE_GROUPS.map((section) => section.label));
+      expect(categoryTriggers()).toEqual(EXPECTED_TRIGGERS);
     },
     RENDER_TIMEOUT_MS,
   );
@@ -303,7 +364,7 @@ describe('AddNodeCommandPalette', () => {
           '[data-testid="add-node-palette"] [data-slot="context-menu-sub-trigger"]',
         ),
       );
-      expect(triggers.length).toBe(ADD_NODE_GROUPS.length);
+      expect(triggers.length).toBe(EXPECTED_TRIGGERS.length);
       for (const trigger of triggers) {
         expect(trigger.querySelector('svg'), trigger.textContent ?? '').not.toBeNull();
       }
@@ -554,4 +615,180 @@ describe('AddNodeCommandPalette', () => {
     },
     RENDER_TIMEOUT_MS,
   );
+
+  // Techniques could be SAVED (inspector → Save as technique) but nothing loaded one. The
+  // submenu is the load path: brand rows and the global premades, each with its port
+  // contract, applied at the right-click point by the canvas — never by the palette.
+  describe('techniques', () => {
+    it(
+      'lists Brand and Premade rows, each with its kind and port summary',
+      () => {
+        renderPalette({ items: [BRAND_TECHNIQUE, PREMADE_TECHNIQUE], isLoading: false });
+
+        const popup = openTechniques();
+        expect(techniqueRowsIn(popup)).toEqual([
+          { id: 'tq-brand', tier: 'brand', name: 'Palette smash-up' },
+          { id: 'tq-global', tier: 'global', name: 'Product on plinth' },
+        ]);
+        const labels = Array.from(popup.querySelectorAll('[data-slot="context-menu-label"]')).map(
+          (el) => el.textContent?.trim(),
+        );
+        expect(labels).toEqual(['Brand', 'Premade']);
+        const brandRow = popup.querySelector('[data-technique-id="tq-brand"]');
+        expect(brandRow?.textContent).toContain('Generation');
+        expect(brandRow?.querySelector('[data-slot="context-menu-shortcut"]')?.textContent).toBe(
+          '2 in · 1 out',
+        );
+        expect(brandRow?.querySelector('svg')).not.toBeNull();
+        expect(popup.querySelector('[data-technique-id="tq-global"]')?.textContent).toContain(
+          'Assembly',
+        );
+      },
+      RENDER_TIMEOUT_MS,
+    );
+
+    it(
+      'lays a single tier out flat, with no group label to read past',
+      () => {
+        renderPalette({ items: [BRAND_TECHNIQUE], isLoading: false });
+
+        const popup = openTechniques();
+        expect(techniqueRowsIn(popup).map((row) => row.id)).toEqual(['tq-brand']);
+        expect(popup.querySelectorAll('[data-slot="context-menu-label"]').length).toBe(0);
+      },
+      RENDER_TIMEOUT_MS,
+    );
+
+    it(
+      'shows a disabled empty state when the brand has none and there are no premades',
+      () => {
+        renderPalette({ items: [], isLoading: false });
+
+        const popup = openTechniques();
+        const empty = popup.querySelector('[data-slot="context-menu-item"]');
+        expect(empty?.textContent).toBe('No techniques yet — select nodes, then Save as technique');
+        expect(empty?.getAttribute('aria-disabled')).toBe('true');
+        expect(techniqueRowsIn(popup)).toEqual([]);
+      },
+      RENDER_TIMEOUT_MS,
+    );
+
+    it(
+      'shows a disabled Loading row while the lists are still on their way',
+      () => {
+        renderPalette({ items: [], isLoading: true });
+
+        const popup = openTechniques();
+        const loading = popup.querySelector('[data-slot="context-menu-item"]');
+        expect(loading?.textContent).toBe('Loading…');
+        expect(loading?.getAttribute('aria-disabled')).toBe('true');
+      },
+      RENDER_TIMEOUT_MS,
+    );
+
+    it(
+      'applies the clicked technique expanded by default',
+      () => {
+        const { onApplyTechnique, onAdd } = renderPalette({
+          items: [BRAND_TECHNIQUE, PREMADE_TECHNIQUE],
+          isLoading: false,
+        });
+
+        const popup = openTechniques();
+        fireEvent.click(popup.querySelector('[data-technique-id="tq-global"]') as HTMLElement);
+
+        expect(onApplyTechnique).toHaveBeenCalledTimes(1);
+        expect(onApplyTechnique.mock.calls[0]).toEqual([PREMADE_TECHNIQUE, { collapsed: false }]);
+        expect(onAdd).not.toHaveBeenCalled();
+      },
+      RENDER_TIMEOUT_MS,
+    );
+
+    it(
+      'applies collapsed once Drop collapsed is ticked',
+      () => {
+        const { onApplyTechnique } = renderPalette({ items: [BRAND_TECHNIQUE], isLoading: false });
+
+        const popup = openTechniques();
+        const toggle = popup.querySelector('[data-testid="add-node-techniques-collapsed"]');
+        expect(toggle?.getAttribute('aria-checked')).toBe('false');
+        fireEvent.click(toggle as HTMLElement);
+        expect(
+          document
+            .querySelector('[data-testid="add-node-techniques-collapsed"]')
+            ?.getAttribute('aria-checked'),
+        ).toBe('true');
+
+        fireEvent.click(document.querySelector('[data-technique-id="tq-brand"]') as HTMLElement);
+        expect(onApplyTechnique.mock.calls[0]).toEqual([BRAND_TECHNIQUE, { collapsed: true }]);
+      },
+      RENDER_TIMEOUT_MS,
+    );
+
+    it(
+      'lists techniques under their own heading in search mode, and Enter applies one',
+      () => {
+        const { onApplyTechnique, onAdd } = renderPalette({
+          items: [BRAND_TECHNIQUE, PREMADE_TECHNIQUE],
+          isLoading: false,
+        });
+
+        search('plinth');
+        const group = document.querySelector('[data-testid="add-node-palette-techniques"]');
+        expect(group?.querySelector('[cmdk-group-heading]')?.textContent?.trim()).toBe(
+          'Techniques',
+        );
+        expect(visibleRows()[0]).toBe('Product on plinth');
+        const row = document.querySelector(
+          '[data-slot="command-item"][data-technique-id="tq-global"]',
+        );
+        expect(row?.getAttribute('data-technique-tier')).toBe('global');
+        expect(row?.querySelector('[data-slot="command-shortcut"]')?.textContent).toBe(
+          '2 in · 1 out',
+        );
+
+        fireEvent.keyDown(input(), { key: 'Enter' });
+        expect(onApplyTechnique.mock.calls[0]).toEqual([PREMADE_TECHNIQUE, { collapsed: false }]);
+        expect(onAdd).not.toHaveBeenCalled();
+      },
+      RENDER_TIMEOUT_MS,
+    );
+
+    it(
+      'pins a technique whose name is the query, once, above the fuzzy ranking',
+      () => {
+        // Named after a node label on purpose: both exact matches pin, technique first.
+        const shadow = technique({ id: 'tq-export', name: 'Export', tier: 'brand' });
+        renderPalette({ items: [shadow, PREMADE_TECHNIQUE], isLoading: false });
+
+        search('export');
+
+        const rows = visibleRows();
+        expect(rows.slice(0, 2)).toEqual(['Export', 'Export']);
+        expect(rows.filter((row) => row === 'Export')).toHaveLength(2);
+        const pinnedIds = techniqueRowsIn(
+          document.querySelector('[data-testid="add-node-palette-pinned"]') as Element,
+        ).map((row) => row.id);
+        expect(pinnedIds).toEqual(['tq-export']);
+        expect(
+          techniqueRowsIn(
+            document.querySelector('[data-testid="add-node-palette-techniques"]') as Element,
+          ).map((row) => row.id),
+        ).not.toContain('tq-export');
+      },
+      RENDER_TIMEOUT_MS,
+    );
+
+    it(
+      'keeps the ranked list free of a Techniques heading when there are none',
+      () => {
+        renderPalette({ items: [], isLoading: false });
+
+        search('continuum');
+
+        expect(document.querySelector('[data-testid="add-node-palette-techniques"]')).toBeNull();
+      },
+      RENDER_TIMEOUT_MS,
+    );
+  });
 });

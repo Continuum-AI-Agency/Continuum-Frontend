@@ -22,7 +22,12 @@ import {
 
 import type { InteractionMode } from '../stores/useStudioStore';
 import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
-import { type AddNodeHandler, AddNodeCommandPalette } from './AddNodeCommandPalette';
+import {
+  type AddNodeHandler,
+  AddNodeCommandPalette,
+  type ApplyTechniqueHandler,
+  type PaletteTechniques,
+} from './AddNodeCommandPalette';
 
 // The canvas menu's CONTENT only. The ContextMenu root stays in the canvas shell:
 // Base UI's trigger has no disabled prop of its own — it reads the root's
@@ -30,6 +35,8 @@ import { type AddNodeHandler, AddNodeCommandPalette } from './AddNodeCommandPale
 export function CanvasContextMenuContent({
   addNode,
   onAddNodeOpenChange,
+  techniques,
+  onApplyTechnique,
   openLoadWorkflow,
   openInstagram,
   openSaveStarter,
@@ -45,6 +52,9 @@ export function CanvasContextMenuContent({
   addNode: AddNodeHandler;
   /** The Add Node submenu opened or closed — the canvas pins the drop point on open. */
   onAddNodeOpenChange: (open: boolean) => void;
+  /** What the palette's Techniques submenu lists; the canvas owns the fetch. */
+  techniques?: PaletteTechniques;
+  onApplyTechnique?: ApplyTechniqueHandler;
   openLoadWorkflow: () => void;
   openInstagram: () => void;
   openSaveStarter: () => void;
@@ -62,7 +72,12 @@ export function CanvasContextMenuContent({
       <ContextMenuLabel>Canvas Actions</ContextMenuLabel>
       {/* The hover tree AND a search: category submenus open on hover, and the box on top
           swaps them for cmdk's ranked list the moment there is a query. */}
-      <AddNodeCommandPalette onAdd={addNode} onOpenChange={onAddNodeOpenChange} />
+      <AddNodeCommandPalette
+        onAdd={addNode}
+        onOpenChange={onAddNodeOpenChange}
+        techniques={techniques}
+        onApplyTechnique={onApplyTechnique}
+      />
 
       <ContextMenuItem inset onSelect={openLoadWorkflow}>
         <FolderOpen className="mr-2 h-4 w-4" />

@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
+import type { TechniqueItem } from '@/lib/ai-studio/techniques';
 import { ADD_NODE_GROUPS } from './addNodeCatalog';
 import { CanvasContextMenuContent } from './CanvasContextMenuContent';
 
@@ -19,10 +20,33 @@ afterEach(() => {
   cleanup();
 });
 
-function renderMenu(overrides: { hasSelection?: boolean } = {}) {
+const TECHNIQUE: TechniqueItem = {
+  id: 'tq-1',
+  name: 'Palette smash-up',
+  kind: 'generation',
+  tier: 'brand',
+  inputPorts: [{ id: 'in-1', nodeRef: 'gen', handleId: 'ref-image', dataType: 'image' }],
+  outputPorts: [{ id: 'out-1', nodeRef: 'gen', handleId: 'image', dataType: 'image' }],
+  nodeCount: 2,
+  edgeCount: 1,
+  workflow: {
+    id: 'tq-1',
+    brandProfileId: 'brand-1',
+    name: 'Palette smash-up',
+    nodes: [],
+    edges: [],
+    source: 'brand',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+};
+
+function renderMenu(overrides: { hasSelection?: boolean; techniques?: TechniqueItem[] } = {}) {
   const props = {
     addNode: mock(() => {}),
     onAddNodeOpenChange: mock(() => {}),
+    techniques: { items: overrides.techniques ?? [], isLoading: false },
+    onApplyTechnique: mock(() => {}),
     openLoadWorkflow: mock(() => {}),
     openInstagram: mock(() => {}),
     openSaveStarter: mock(() => {}),
@@ -111,7 +135,24 @@ describe('CanvasContextMenuContent', () => {
     const categories = Array.from(
       palette.querySelectorAll('[data-slot="context-menu-sub-trigger"]'),
     ).map((el) => el.textContent?.trim());
-    expect(categories).toEqual(ADD_NODE_GROUPS.map((section) => section.label));
+    expect(categories).toEqual(['Techniques', ...ADD_NODE_GROUPS.map((section) => section.label)]);
+  });
+
+  // The technique list and its apply callback are the canvas's — this only carries them.
+  it('passes the techniques through to the palette and relays an apply', () => {
+    const { getByText, props } = renderMenu({ techniques: [TECHNIQUE] });
+
+    fireEvent.keyDown(getByText('Add Node'), { key: 'Enter' });
+    fireEvent.keyDown(getByText('Techniques'), { key: 'Enter' });
+    const row = document.querySelector(
+      '[data-testid="add-node-techniques"] [data-technique-id="tq-1"]',
+    );
+    expect(row?.textContent).toContain('Palette smash-up');
+    fireEvent.click(row as HTMLElement);
+
+    expect(props.onApplyTechnique).toHaveBeenCalledTimes(1);
+    expect(props.onApplyTechnique.mock.calls[0]).toEqual([TECHNIQUE, { collapsed: false }]);
+    expect(props.addNode).not.toHaveBeenCalled();
   });
 
   it('adds the node a category row is clicked for, with its model', () => {
