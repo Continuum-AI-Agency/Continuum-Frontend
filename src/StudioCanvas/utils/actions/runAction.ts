@@ -1,4 +1,9 @@
-import { ACTION_DEFS, type ActionId, actionDef } from '@continuum/contracts';
+import {
+  ACTION_DEFS,
+  type ActionId,
+  actionDef,
+  type DesignSystemSnapshot,
+} from '@continuum/contracts';
 import type { NodeOutput } from '../../types/execution';
 import { runActionInWorker } from '../../workers/spliceWorkerClient';
 import { parseDataUrl } from '../dataUrl';
@@ -22,6 +27,7 @@ import {
   rotateImage,
   type TintBlend,
 } from './imageOps';
+import { setImageText } from './imageText';
 import { isOverlayActionId, runOverlayAction } from './overlayOp';
 import { concatText, findReplace, type SplitTextMode, splitText } from './textOps';
 import { runLongExposureAction } from './videoOps';
@@ -53,6 +59,12 @@ export interface RunActionArgs {
   inputs: ResolvedActionInput[];
   /** Raw `node.data.config`; parsed against the op's schema before anything runs. */
   config: unknown;
+  /**
+   * The brand's design system, for the ops whose output is a BRAND decision rather than a
+   * pixel transform. `image.text` resolves its ink and its faces from tokens here and refuses
+   * to run without it — a headline in a guessed colour is worse than a headline that failed.
+   */
+  designSystem?: DesignSystemSnapshot | null;
   signal?: AbortSignal;
   onProgress?: (fraction: number) => void;
 }
@@ -238,6 +250,19 @@ const SYNC_OPS: Partial<Record<ActionId, SyncOp>> = {
         aspectFrom(config),
         (config.background as string) ?? '#000000',
       ),
+    ),
+
+  // The one image op that reads the BRAND, not just the pixels: where the lines break and
+  // what has to happen to the photo are measured by `planPlacement` against this very image,
+  // and the ink comes from a design-system token that is never re-derived in the draw path.
+  'image.text': async (args, config) =>
+    imageOutput(
+      await setImageText({
+        designSystem: args.designSystem,
+        config,
+        image: await loadImage(inputFor(args, 'in')),
+        headline: inputFor(args, 'text-in').text ?? '',
+      }),
     ),
 
   // Sync because the OUTPUT is a still: the frames decode in the page, the blend
