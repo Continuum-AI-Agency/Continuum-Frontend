@@ -1,6 +1,9 @@
 // Optimizer execution is backend-owned. Only its validated wire shapes belong
 // in the shared FE<->BE contract package.
 
+// One normalized row of public.continuum_action_stream, and the fold that makes a change
+// and its undo read as ONE entry. Shared by every surface that narrates what we did.
+export * from './action-stream';
 // Setup advisor — what a selection will actually DO under an objective/budget/target, said
 // before the portfolio is created. Shared so an agent gets the same warnings a human does.
 export * from './advisor';
