@@ -5,9 +5,11 @@
 // composite); edits to these sections are out of scope here.
 import type { BrandGuidelines, BrandStrategy } from '@continuum/contracts';
 import { Badge } from '@/components/ui/badge';
-import type { AgentPreviewBuckets } from '../state/agentPreview';
+import type { AgentPreviewBuckets, SectionStatus } from '../state/agentPreview';
 import { CardSurface } from './CardSurface';
 import { HorizontalRow } from './HorizontalRow';
+import { ProvenanceMark } from './RevealMarks';
+import { provenanceOf } from './reveal';
 
 function auditScore(audit: unknown): number | null {
   if (audit && typeof audit === 'object' && 'score' in audit) {
@@ -70,21 +72,38 @@ function GuidelinesBody({ guidelines }: { guidelines: BrandGuidelines }) {
   );
 }
 
-export function StrategyGuidelinesRow({ buckets }: { buckets: AgentPreviewBuckets | null }) {
+export function StrategyGuidelinesRow({
+  buckets,
+  settled = false,
+}: {
+  buckets: AgentPreviewBuckets | null;
+  /** True once the run is over, so an untouched section reads as empty, not pending. */
+  settled?: boolean;
+}) {
   const strategy = buckets?.strategy ?? null;
   const guidelines = buckets?.guidelines ?? null;
+  const statusFor = (status: SectionStatus | undefined): SectionStatus | undefined =>
+    settled && (status === undefined || status === 'idle') ? 'skipped' : status;
 
   return (
     <HorizontalRow label="Brand strategy" layout="grid">
       <CardSurface
         title="Strategy"
         badge="Positioning"
-        status={buckets?.sectionStatus.strategy}
+        status={statusFor(buckets?.sectionStatus.strategy)}
         isEmpty={!strategy}
         minBodyHeight={140}
         maxBodyHeight={320}
         className="h-full"
-        chips={<ScoreChip score={auditScore(buckets?.audits.strategy)} />}
+        chips={
+          <>
+            <ProvenanceMark
+              field="strategy"
+              provenance={provenanceOf(strategy, 'brand analysis')}
+            />
+            <ScoreChip score={auditScore(buckets?.audits.strategy)} />
+          </>
+        }
       >
         {strategy ? <StrategyBody strategy={strategy} /> : null}
       </CardSurface>
@@ -92,12 +111,20 @@ export function StrategyGuidelinesRow({ buckets }: { buckets: AgentPreviewBucket
       <CardSurface
         title="Guidelines"
         badge="Operating rules"
-        status={buckets?.sectionStatus.guidelines}
+        status={statusFor(buckets?.sectionStatus.guidelines)}
         isEmpty={!guidelines}
         minBodyHeight={140}
         maxBodyHeight={320}
         className="h-full"
-        chips={<ScoreChip score={auditScore(buckets?.audits.guidelines)} />}
+        chips={
+          <>
+            <ProvenanceMark
+              field="guidelines"
+              provenance={provenanceOf(guidelines, 'brand analysis')}
+            />
+            <ScoreChip score={auditScore(buckets?.audits.guidelines)} />
+          </>
+        }
       >
         {guidelines ? <GuidelinesBody guidelines={guidelines} /> : null}
       </CardSurface>

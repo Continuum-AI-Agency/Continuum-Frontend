@@ -15,6 +15,7 @@
 
 import type { DesignSystemFontFace, DesignSystemSnapshot } from '@continuum/contracts';
 import { useMemo } from 'react';
+import { NO_SPECIMEN_NOTE, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
 import {
   type BrandFacts,
@@ -202,18 +203,12 @@ function TypeInventoryPanel({ inventory }: { inventory: TypeInventory }) {
                 </div>
                 <div className="flex shrink-0 items-baseline gap-3">
                   <span className="text-right text-xs text-secondary">{row.detail}</span>
-                  <Badge variant={row.present ? 'success' : 'warning'} data-testid="type-badge">
-                    {row.present ? 'in the engine' : 'missing'}
-                  </Badge>
+                  <TypefaceHoldBadge held={row.present} />
                 </div>
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-secondary">
-            No specimen is rendered here. Brand faces are licensed to the brand, so the file is
-            never served to a browser — and for a face we do not hold, the only specimen we could
-            draw would be a substitute, which would show you a typeface that is not yours.
-          </p>
+          <p className="mt-3 text-xs text-secondary">{NO_SPECIMEN_NOTE}</p>
         </>
       )}
     </Panel>

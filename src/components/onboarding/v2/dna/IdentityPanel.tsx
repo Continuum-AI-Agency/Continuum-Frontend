@@ -2,12 +2,12 @@ import { ArrowSquareOut, Sparkle } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createSignedAssetUrl } from '@/lib/creative-assets/storageClient';
-import type { ReadinessFinding } from '@/lib/onboarding/agentClient';
+import type { ReadinessFinding, WebsitePalette } from '@/lib/onboarding/agentClient';
 import { FindingCallout } from '../readiness/FindingCallout';
 import type { AgentPreviewBuckets } from '../state/agentPreview';
-import { ColorSwatch } from './ColorSwatch';
 import { EditableHeading } from './EditableHeading';
-import { FontSample } from './FontSample';
+import { NoSpecimenNote, PaletteReadout, ProvenanceMark, TypefaceReadout } from './RevealMarks';
+import { deriveRevealedPalette, deriveRevealedTypography, provenanceOf } from './reveal';
 import { TonePicker } from './TonePicker';
 
 type IdentityPanelProps = {
@@ -39,13 +39,18 @@ export function IdentityPanel({
 }: IdentityPanelProps) {
   const resolvedLogo = useResolvedLogo(logoPath);
   const resolved = resolveFromBuckets({ name, colors, typography, heroStatement }, agentBuckets);
+  const colours = deriveRevealedPalette(resolved.colors, resolved.palette);
+  const typefaces = deriveRevealedTypography(resolved.typography, resolved.typographySource);
   const firstImpression = agentBuckets?.firstImpression?.headline ?? null;
   const firstImpressionStatus = agentBuckets?.sectionStatus.first_impression;
   const hideFirstImpression =
     !firstImpression && (firstImpressionStatus === 'skipped' || firstImpressionStatus === 'error');
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm text-foreground">
+    <div
+      className="overflow-hidden rounded-xl border border-border bg-card shadow-sm text-foreground"
+      data-testid="brand-dna-identity"
+    >
       <div
         className={`grid grid-cols-1 divide-y divide-border/70 lg:divide-x lg:divide-y-0 ${
           hideFirstImpression
@@ -86,6 +91,11 @@ export function IdentityPanel({
               &ldquo;{resolved.heroStatement}&rdquo;
             </p>
           ) : null}
+          <ProvenanceMark
+            field="hero-statement"
+            provenance={provenanceOf(resolved.heroStatement, resolved.heroSource)}
+            emptyLabel="no statement found"
+          />
         </Subsection>
 
         {hideFirstImpression ? null : (
@@ -96,35 +106,49 @@ export function IdentityPanel({
                 <Sparkle className="mt-0.5 h-3 w-3 shrink-0 text-[var(--cs-violet,#5a39ff)]" />
                 <span className="min-w-0">{firstImpression}</span>
               </p>
-            ) : (
+            ) : firstImpressionStatus === 'running' ? (
               <p className="text-sm italic text-muted-foreground">Listening for the hook…</p>
+            ) : null}
+            {firstImpressionStatus === 'running' ? null : (
+              <ProvenanceMark
+                field="first-impression"
+                provenance={provenanceOf(firstImpression, 'site analysis')}
+                emptyLabel="nothing found"
+              />
             )}
           </Subsection>
         )}
 
-        <Subsection>
+        <Subsection testId="reveal-palette-section">
           <SubsectionHeader title="Palette" chip={brandIdentityChip} />
-          {resolved.colors.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {resolved.colors.map((hex, index) => (
-                <ColorSwatch key={`${hex}-${index}`} hex={hex} />
-              ))}
-            </div>
+          {colours.length > 0 ? (
+            <PaletteReadout colours={colours} />
           ) : (
-            <p className="text-sm italic text-muted-foreground">No palette detected.</p>
+            <p className="text-sm text-muted-foreground">
+              No colour read from this brand&apos;s material.
+            </p>
           )}
+          <ProvenanceMark
+            field="palette"
+            provenance={provenanceOf(colours, resolved.colorsSource)}
+            emptyLabel="nothing found"
+          />
         </Subsection>
 
-        <Subsection>
+        {/*
+          No `in the engine` badge here, unlike the settings panel: onboarding never reads
+          the brand font store (the design system arrives later, and this screen must not
+          add a fetch to the run), so what we hold is genuinely UNKNOWN at this point.
+          Badging it either way would be the same invention the specimen was.
+        */}
+        <Subsection testId="reveal-typography">
           <SubsectionHeader title="Typography" chip={brandIdentityChip} />
-          {resolved.typography.primary || resolved.typography.secondary ? (
-            <div className="flex gap-5">
-              <FontSample family={resolved.typography.primary} label="Primary" weight={700} />
-              <FontSample family={resolved.typography.secondary} label="Secondary" weight={400} />
-            </div>
-          ) : (
-            <p className="text-sm italic text-muted-foreground">No fonts detected.</p>
-          )}
+          <div className="flex gap-5">
+            {typefaces.map((typeface) => (
+              <TypefaceReadout key={typeface.slot} {...typeface} />
+            ))}
+          </div>
+          <NoSpecimenNote />
         </Subsection>
       </div>
 
@@ -141,8 +165,20 @@ export function IdentityPanel({
   );
 }
 
-function Subsection({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={`space-y-2 p-5 ${className ?? ''}`}>{children}</section>;
+function Subsection({
+  children,
+  className,
+  testId,
+}: {
+  children: ReactNode;
+  className?: string;
+  testId?: string;
+}) {
+  return (
+    <section className={`space-y-2 p-5 ${className ?? ''}`} data-testid={testId}>
+      {children}
+    </section>
+  );
 }
 
 function SubsectionHeader({ title, chip }: { title: string; chip?: ReactNode }) {
@@ -156,20 +192,39 @@ function SubsectionHeader({ title, chip }: { title: string; chip?: ReactNode }) 
   );
 }
 
-function derivePaletteArray(palette: unknown): string[] {
-  if (!palette || typeof palette !== 'object') return [];
-  const p = palette as {
-    primary?: string | null;
-    secondary?: string | null;
-    accent?: string | null;
-    background?: string | null;
-    text?: string | null;
-  };
-  return [p.primary, p.secondary, p.accent, p.background, p.text].filter((hex): hex is string =>
-    Boolean(hex),
-  );
+/** Where a revealed value actually came from. Only these two exist on this screen. */
+const SOURCE_SITE = 'site analysis';
+const SOURCE_SAVED = 'saved profile';
+
+interface ResolvedIdentity {
+  name: string;
+  nameSource: string;
+  colors: string[];
+  /** The roled palette, present only when the value came from the site analysis. */
+  palette: WebsitePalette | null;
+  colorsSource: string;
+  typography: { primary: string | null; secondary: string | null };
+  typographySource: string;
+  heroStatement: string | null;
+  heroSource: string;
 }
 
+function derivePaletteArray(palette: WebsitePalette | null | undefined): string[] {
+  if (!palette) return [];
+  return [
+    palette.primary,
+    palette.secondary,
+    palette.accent,
+    palette.background,
+    palette.text,
+  ].filter((hex): hex is string => Boolean(hex));
+}
+
+/**
+ * The saved brand profile wins over the live run, and each field remembers which it came
+ * from — a panel that shows a value without saying where it read it is the thing this
+ * screen was getting wrong.
+ */
 function resolveFromBuckets(
   brandInputs: {
     name: string;
@@ -178,26 +233,27 @@ function resolveFromBuckets(
     heroStatement: string | null;
   },
   buckets?: AgentPreviewBuckets | null,
-): {
-  name: string;
-  colors: string[];
-  typography: { primary: string | null; secondary: string | null };
-  heroStatement: string | null;
-} {
-  const name = brandInputs.name || buckets?.brandProfile?.brand_name || '';
-  const colors =
-    brandInputs.colors.length > 0
-      ? brandInputs.colors
-      : derivePaletteArray(buckets?.website?.palette);
-  const typography =
-    brandInputs.typography.primary || brandInputs.typography.secondary
+): ResolvedIdentity {
+  const fromSite = brandInputs.colors.length === 0;
+  const sitePalette = fromSite ? (buckets?.website?.palette ?? null) : null;
+  const savedTypography = brandInputs.typography.primary || brandInputs.typography.secondary;
+
+  return {
+    name: brandInputs.name || buckets?.brandProfile?.brand_name || '',
+    nameSource: brandInputs.name ? SOURCE_SAVED : SOURCE_SITE,
+    colors: fromSite ? derivePaletteArray(sitePalette) : brandInputs.colors,
+    palette: sitePalette,
+    colorsSource: fromSite ? SOURCE_SITE : SOURCE_SAVED,
+    typography: savedTypography
       ? brandInputs.typography
       : {
           primary: buckets?.website?.typography?.primary ?? null,
           secondary: buckets?.website?.typography?.secondary ?? null,
-        };
-  const heroStatement = brandInputs.heroStatement || buckets?.website?.hero_statement || null;
-  return { name, colors, typography, heroStatement };
+        },
+    typographySource: savedTypography ? SOURCE_SAVED : SOURCE_SITE,
+    heroStatement: brandInputs.heroStatement || buckets?.website?.hero_statement || null,
+    heroSource: brandInputs.heroStatement ? SOURCE_SAVED : SOURCE_SITE,
+  };
 }
 
 function useResolvedLogo(logoPath: string | null): string | null {

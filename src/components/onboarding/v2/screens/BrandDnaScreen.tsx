@@ -12,6 +12,8 @@ import { CardSurface } from '../dna/CardSurface';
 import { EditableProse } from '../dna/EditableProse';
 import { HorizontalRow } from '../dna/HorizontalRow';
 import { IdentityPanel } from '../dna/IdentityPanel';
+import { ProvenanceMark } from '../dna/RevealMarks';
+import { provenanceOf } from '../dna/reveal';
 import { ReadinessCard } from '../dna/ReadinessCard';
 import { RunProgressBanner } from '../dna/RunProgressBanner';
 import { StrategyGuidelinesRow } from '../dna/StrategyGuidelinesRow';
@@ -154,6 +156,13 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
   const successfulCount = countSuccessfulSections(agentBuckets);
   const thinResult = settled && successfulCount < 3;
 
+  // A section still `idle` once the run has SETTLED is not loading — it is finished with
+  // nothing. A resumed snapshot carries no per-section status at all, so without this an
+  // empty voice breathes a skeleton for ever and never admits it found nothing, which is
+  // the same lie as a placeholder.
+  const resolvedStatus = (status: SectionStatus | undefined): SectionStatus | undefined =>
+    settled && (status === undefined || status === 'idle') ? 'skipped' : status;
+
   return (
     <motion.div
       variants={reveal}
@@ -215,7 +224,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           <CardSurface
             title="Business overview"
             badge="Core"
-            status={businessStatus}
+            status={resolvedStatus(businessStatus)}
             isEmpty={businessEmpty}
             minBodyHeight={140}
             maxBodyHeight={320}
@@ -223,6 +232,13 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             className="h-full"
             chips={
               <>
+                <ProvenanceMark
+                  field="business-overview"
+                  provenance={provenanceOf(
+                    overviewValue,
+                    brand.overview ? 'saved profile' : 'brand analysis',
+                  )}
+                />
                 <DimensionChip dim="value_proposition" readiness={readiness} loading={loading} />
                 <DimensionChip dim="success_metrics" readiness={readiness} loading={loading} />
               </>
@@ -247,13 +263,21 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           <CardSurface
             title="Brand voice & tone"
             badge="Voice"
-            status={voiceStatus}
+            status={resolvedStatus(voiceStatus)}
             isEmpty={voiceEmpty}
             minBodyHeight={140}
             maxBodyHeight={320}
             skeleton={voiceSkeleton}
             className="h-full"
-            chips={<DimensionChip dim="positioning" readiness={readiness} loading={loading} />}
+            chips={
+              <>
+                <ProvenanceMark
+                  field="brand-voice"
+                  provenance={provenanceOf(voice ?? voiceDraft, 'brand analysis')}
+                />
+                <DimensionChip dim="positioning" readiness={readiness} loading={loading} />
+              </>
+            }
             findings={<FindingsStack findings={[findingFor(readiness, 'positioning')]} />}
           >
             {voice ? (
@@ -266,7 +290,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           <CardSurface
             title="Target audience"
             badge="Audience"
-            status={audienceStatus}
+            status={resolvedStatus(audienceStatus)}
             isEmpty={audienceEmpty}
             minBodyHeight={140}
             maxBodyHeight={320}
@@ -274,6 +298,13 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             className="h-full"
             chips={
               <>
+                <ProvenanceMark
+                  field="target-audience"
+                  provenance={provenanceOf(
+                    audienceValue,
+                    brand.targetAudience ? 'saved profile' : 'brand analysis',
+                  )}
+                />
                 <DimensionChip dim="icp_clarity" readiness={readiness} loading={loading} />
                 <DimensionChip dim="customer_pains" readiness={readiness} loading={loading} />
               </>
@@ -298,7 +329,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
       </motion.div>
 
       <motion.div variants={card} className="mb-4">
-        <StrategyGuidelinesRow buckets={agentBuckets} />
+        <StrategyGuidelinesRow buckets={agentBuckets} settled={settled} />
       </motion.div>
 
       <motion.div variants={card} className="mb-4">
