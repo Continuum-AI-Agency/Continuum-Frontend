@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+import { VERNE_TITLE_MEASURE, VERNE_TITLE_MIN_CONTRAST } from '../design-system/placement';
+import { designSectionSchema } from '../design-system/sections';
+
 // The Canvas action catalog — every deterministic operation an `action` node can run,
 // declared in one place so a new op is a registry entry rather than a node type.
 //
@@ -57,6 +60,7 @@ export const ACTION_IDS = [
   'image.chromaKey',
   'image.crop',
   'image.pad',
+  'image.text',
   'video.grade',
   'video.filter',
   'video.effect',
@@ -185,6 +189,50 @@ const padConfig = z.object({
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
     .default('#000000'),
+});
+
+/**
+ * `image.text` — the placement INTENT, never the placement.
+ *
+ * The plan is COMPUTED at run time by `planPlacement` (design-system/placement.ts) from the
+ * image, the text and these settings: the line breaks, the per-line sizes, the anchor pixel
+ * and the contrast ladder all depend on pixels and font metrics that contracts cannot see.
+ * Storing a `PlacementPlan` here would freeze a decision against an image that has since been
+ * regenerated, and a stale plan is worse than none — it looks authoritative.
+ *
+ * Two rules shape the fields:
+ *
+ *   • Colour is a REFERENCE, not a value. `inkSection` + `inkToken` name a token in the brand's
+ *     design system; the brand stays the source of truth, so re-tinting a palette re-tints
+ *     every headline instead of leaving hand-typed hexes behind. (It also happens to fit the
+ *     Frontend's generic config panel, which introspects Zod and renders number / string /
+ *     boolean / enum only — a colour picker is a Frontend change, not a contract one.)
+ *   • Calibrated defaults come from the `VERNE_*` constants rather than being retyped, so a
+ *     retune moves both the planner and the node's default in one edit.
+ */
+const textPlacementConfig = z.object({
+  /** Which section supplies the type tokens — family, weights and the size scale. */
+  typeSection: designSectionSchema.default('typography'),
+  /** Which section supplies the ink colour. */
+  inkSection: designSectionSchema.default('palette'),
+  /** Token NAME within `inkSection`. Empty means the section's default ink. */
+  inkToken: z.string().max(120).default(''),
+  /**
+   * The edge the measure is pinned to. CEILING: `titleBox`/`planPlacement` pin to the right
+   * today (`placementAnchorSchema.edge` is the literal `'right'`), so a runner handed `left`
+   * has nothing to call yet — the mirror lands with the runner, not with this declaration.
+   */
+  anchor: z.enum(['left', 'right']).default('right'),
+  /** Composition measure — the width lines break to — as a fraction of the image width. */
+  measure: z.number().min(0.1).max(1).default(VERNE_TITLE_MEASURE),
+  /** WCAG ratio the headline must hold against whatever is behind it. */
+  minContrast: z.number().min(1).max(21).default(VERNE_TITLE_MIN_CONTRAST),
+  /**
+   * May the treatment ladder touch the BACKGROUND (harmonise, then veil) to reach
+   * `minContrast`? False pins the piece at rung 0: the plan comes back with the ratio it
+   * actually measured and `cleared: false`, rather than a photo quietly washed out.
+   */
+  escalate: z.boolean().default(true),
 });
 
 const overlayTransformConfig = z.object({
@@ -317,6 +365,21 @@ export const ACTION_DEFS = {
     inputs: singleImageIn,
     output: 'image',
     config: padConfig,
+  },
+  'image.text': {
+    id: 'image.text',
+    family: 'image',
+    label: 'Set Type',
+    description:
+      'Sets brand type over a still — the placement is measured from the image, not guessed.',
+    group: 'Overlay',
+    execution: 'sync',
+    inputs: [
+      { handle: 'in', modality: 'image', max: 1 },
+      { handle: 'text-in', modality: 'text', max: 1 },
+    ],
+    output: 'image',
+    config: textPlacementConfig,
   },
   'image.duplicate': {
     id: 'image.duplicate',

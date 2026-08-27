@@ -74,6 +74,18 @@ export const SECTION_AUTO_APPLY: Partial<Record<StudioNodeType, readonly DesignS
   // A cut. The editor composes existing clips and draws titles/lower-thirds over them,
   // so type and colour apply; nothing here generates imagery.
   timelineEditor: ['typography', 'palette'],
+
+  // Deterministic ops. `typography` is here for the same reason it is on hyperframesAgent
+  // and off nanoGen: `image.text` SETS type rather than drawing an approximation of it, and
+  // it is the only surface in the product that can do that over a generated still. `logo`
+  // rides along because an op composites a real file where a model can only smear one.
+  //
+  // CEILING, stated rather than hidden: this map is keyed by node TYPE and there is one
+  // `action` type for the whole catalog, so this row also reaches `image.blur` and
+  // `video.speed`. It is inert there — a deterministic op builds no prompt, so there is no
+  // budget to spend — but it is a blunt instrument, and the day an op wants a DIFFERENT row
+  // the key has to become the action id, not another node type.
+  action: ['typography', 'palette', 'logo'],
 };
 
 /* -------------------------------------------------------------------------- */
@@ -358,4 +370,6 @@ const SPECIMEN_SUBJECTS: Record<DesignSection, string> = {
   voice: 'a card showing the brand voice as short labelled example phrases',
   imagery: 'a contact sheet of images in the brand art direction',
   logo: 'the brand mark shown alone, at rest, with its clear space marked',
+  formats:
+    'a format sheet — each output size drawn to scale as a labelled rectangle, with its headline safe zone shaded',
 };

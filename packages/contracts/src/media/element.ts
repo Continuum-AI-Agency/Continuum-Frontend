@@ -22,6 +22,7 @@
 // §9 the emission/fallback semantics.
 
 import { z } from 'zod';
+import { campaignMoneySchema } from '../goals/campaign-artifacts';
 import { type LibraryImageRef, libraryImageRefSchema } from './library-reference';
 
 // --- Vocabulary --------------------------------------------------------------
@@ -71,6 +72,47 @@ export const isElementPersonCategory = (category: ElementCategory): boolean =>
  */
 export const ELEMENT_REFERENCE_TAG = 'element-reference';
 
+// --- Product facts -----------------------------------------------------------
+
+/**
+ * Variants per product. A colourway/size grid is the shape a real catalog export has;
+ * beyond this the brand is uploading a whole store as one Element and wants many.
+ */
+export const ELEMENT_PRODUCT_VARIANT_LIMIT = 100;
+
+/**
+ * Money is `campaignMoneySchema` from `../goals/campaign-artifacts` — the money type this
+ * package already has. Minor-units integer plus an ISO-4217 code, never a float: 19.99
+ * USD is `{ amountMinor: 1999, currency: 'USD' }`. A second money type here would be a
+ * second rounding rule.
+ */
+export const elementProductVariantSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    sku: z.string().min(1).max(120).nullable().optional(),
+    price: campaignMoneySchema.nullable().optional(),
+  })
+  .strict();
+export type ElementProductVariant = z.infer<typeof elementProductVariantSchema>;
+
+/**
+ * The non-image half of a product Element.
+ *
+ * EVERY field is optional, and the block itself is optional wherever it appears. An
+ * Element is a set of reference images first — a product with no price is still a
+ * product, and every payload that parsed before this block existed still parses to the
+ * same object, without a `product` key.
+ */
+export const elementProductFactsSchema = z
+  .object({
+    sku: z.string().min(1).max(120).nullable().optional(),
+    price: campaignMoneySchema.nullable().optional(),
+    productUrl: z.string().url().max(2000).nullable().optional(),
+    variants: z.array(elementProductVariantSchema).max(ELEMENT_PRODUCT_VARIANT_LIMIT).default([]),
+  })
+  .strict();
+export type ElementProductFacts = z.infer<typeof elementProductFactsSchema>;
+
 // --- The stored shape --------------------------------------------------------
 
 /**
@@ -89,6 +131,7 @@ export const elementOriginRefSchema = z
     category: elementCategorySchema,
     guidelines: z.string().max(2000).nullable().optional(),
     rightsNote: z.string().max(500).nullable().optional(),
+    product: elementProductFactsSchema.optional(),
     referenceHistory: z.array(z.string().uuid()).default([]),
     defaultReferenceAssetId: z.string().uuid().nullable().default(null),
   })
@@ -112,6 +155,7 @@ export const elementRecordSchema = z
     category: elementCategorySchema,
     guidelines: z.string().nullable(),
     rightsNote: z.string().nullable(),
+    product: elementProductFactsSchema.nullable().optional(),
     members: z.array(elementMemberSchema).max(ELEMENT_MEMBER_LIMIT),
     referenceHistory: z.array(z.string().uuid()),
     defaultReferenceAssetId: z.string().uuid().nullable(),
@@ -136,6 +180,7 @@ export const elementErrorCodeSchema = z.enum([
   'element_rights_note_required',
   'element_reference_not_in_history',
   'element_reference_generation_failed',
+  'element_catalog_row_invalid',
 ]);
 export type ElementErrorCode = z.infer<typeof elementErrorCodeSchema>;
 
@@ -153,6 +198,7 @@ export const createElementRequestSchema = z
     category: elementCategorySchema,
     guidelines: z.string().max(2000).nullable().optional(),
     rightsNote: z.string().max(500).nullable().optional(),
+    product: elementProductFactsSchema.optional(),
     memberAssetIds: memberIdsSchema,
   })
   .strict();
@@ -164,6 +210,7 @@ export const updateElementRequestSchema = z
     name: z.string().min(1).max(200).optional(),
     guidelines: z.string().max(2000).nullable().optional(),
     rightsNote: z.string().max(500).nullable().optional(),
+    product: elementProductFactsSchema.optional(),
     memberAssetIds: memberIdsSchema.optional(),
   })
   .strict();
@@ -218,6 +265,183 @@ export const elementSlug = (name: string): string => {
 };
 
 export const elementExternalKey = (slug: string): string => `element:${slug}`;
+
+/**
+ * Decide whether an incoming catalog row is a product we ALREADY hold.
+ *
+ * SKU wins over slug because the slug is derived from the name and the name is exactly
+ * what a catalog export edits: "Hero Bottle" becoming "Hero Bottle 500ml" is a rename,
+ * not a new product, and matching on slug alone would import a duplicate every quarter.
+ * Slug is the fallback for the (very common) product carrying no SKU.
+ *
+ * `update` returns the EXISTING Element's id and nothing else, because that Element's
+ * `slug`/`external_key` were fixed at create and must stay fixed — which is the whole
+ * reason this decision is made here rather than by re-deriving a key from the new name.
+ */
+export type ElementCatalogMatch =
+  | { action: 'update'; elementId: string; matchedBy: 'sku' | 'slug' }
+  | { action: 'create'; slug: string; externalKey: string };
+
+const normalizeSku = (sku: string | null | undefined): string | null => {
+  const trimmed = sku?.trim().toLowerCase();
+  return trimmed ? trimmed : null;
+};
+
+interface SkuBearing {
+  product?: { sku?: string | null } | null;
+}
+
+export const matchCatalogRowToElement = (
+  row: { name: string } & SkuBearing,
+  existing: readonly ({ id: string; slug: string } & SkuBearing)[],
+): ElementCatalogMatch => {
+  const sku = normalizeSku(row.product?.sku);
+  if (sku) {
+    const bySku = existing.find((candidate) => normalizeSku(candidate.product?.sku) === sku);
+    if (bySku) return { action: 'update', elementId: bySku.id, matchedBy: 'sku' };
+  }
+  const slug = elementSlug(row.name);
+  const bySlug = existing.find((candidate) => candidate.slug === slug);
+  if (bySlug) return { action: 'update', elementId: bySlug.id, matchedBy: 'slug' };
+  return { action: 'create', slug, externalKey: elementExternalKey(slug) };
+};
+
+// --- Catalog import ----------------------------------------------------------
+
+/**
+ * Rows per submission. A brand hands us a catalog export, not a hand-typed form — a
+ * few hundred products is one real collection and still one HTTP body.
+ */
+export const ELEMENT_CATALOG_ROW_LIMIT = 500;
+
+/** One product in a catalog submission: a name, its facts, and its images. */
+export const elementCatalogRowSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    guidelines: z.string().max(2000).nullable().optional(),
+    rightsNote: z.string().max(500).nullable().optional(),
+    product: elementProductFactsSchema.optional(),
+    memberAssetIds: memberIdsSchema,
+  })
+  .strict();
+export type ElementCatalogRow = z.infer<typeof elementCatalogRowSchema>;
+
+/**
+ * `rows` is `unknown[]` ON PURPOSE. `z.array(elementCatalogRowSchema)` here would fail a
+ * 200-product upload whole because row 47 has a malformed price — a catalog nobody can
+ * upload. The envelope checks only what is cheap and total (the brand, the row count);
+ * each row is judged on its own by `partitionElementCatalog`.
+ */
+export const importElementCatalogRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    category: elementCategorySchema.default('product'),
+    rows: z.array(z.unknown()).min(1).max(ELEMENT_CATALOG_ROW_LIMIT),
+  })
+  .strict();
+export type ImportElementCatalogRequest = z.infer<typeof importElementCatalogRequestSchema>;
+
+export const elementCatalogAcceptedSchema = z
+  .object({
+    status: z.literal('accepted'),
+    index: z.number().int().nonnegative(),
+    row: elementCatalogRowSchema,
+    slug: z.string(),
+    externalKey: z.string(),
+  })
+  .strict();
+export type ElementCatalogAccepted = z.infer<typeof elementCatalogAcceptedSchema>;
+
+export const elementCatalogRejectedSchema = z
+  .object({
+    status: z.literal('rejected'),
+    index: z.number().int().nonnegative(),
+    /** Best effort — a row too malformed to read a name off reports null. */
+    name: z.string().nullable(),
+    reason: elementErrorCodeSchema,
+    /** `path: message`, one per failed field, so row 47 can actually be FIXED. */
+    issues: z.array(z.string()),
+  })
+  .strict();
+export type ElementCatalogRejected = z.infer<typeof elementCatalogRejectedSchema>;
+
+export const elementCatalogOutcomeSchema = z.discriminatedUnion('status', [
+  elementCatalogAcceptedSchema,
+  elementCatalogRejectedSchema,
+]);
+export type ElementCatalogOutcome = z.infer<typeof elementCatalogOutcomeSchema>;
+
+export const importElementCatalogResponseSchema = z
+  .object({
+    accepted: z.array(elementCatalogAcceptedSchema),
+    rejected: z.array(elementCatalogRejectedSchema),
+  })
+  .strict();
+export type ImportElementCatalogResponse = z.infer<typeof importElementCatalogResponseSchema>;
+
+const readRowName = (raw: unknown): string | null => {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const name = (raw as Record<string, unknown>).name;
+  return typeof name === 'string' && name.trim().length > 0 ? name : null;
+};
+
+/**
+ * Judge a catalog submission row by row. Pure — no id, no clock, no store.
+ *
+ * Two things reject a row: it does not parse, or its slug collides with a row already
+ * accepted in the SAME submission. The second is not pedantry — `unique (brand_id, kind,
+ * external_key)` would reject the duplicate at the database anyway, halfway through the
+ * import, with nothing pointing at which row caused it.
+ *
+ * A rejected row never stops its neighbours. The caller creates the accepted rows and
+ * hands the rejected ones back with their index.
+ */
+export const partitionElementCatalog = (
+  rows: readonly unknown[],
+): { accepted: ElementCatalogAccepted[]; rejected: ElementCatalogRejected[] } => {
+  const accepted: ElementCatalogAccepted[] = [];
+  const rejected: ElementCatalogRejected[] = [];
+  const seenSlugs = new Set<string>();
+
+  rows.forEach((raw, index) => {
+    const parsed = elementCatalogRowSchema.safeParse(raw);
+    if (!parsed.success) {
+      rejected.push({
+        status: 'rejected',
+        index,
+        name: readRowName(raw),
+        reason: 'element_catalog_row_invalid',
+        issues: parsed.error.issues.map(
+          (issue) => `${issue.path.join('.') || '(row)'}: ${issue.message}`,
+        ),
+      });
+      return;
+    }
+
+    const slug = elementSlug(parsed.data.name);
+    if (seenSlugs.has(slug)) {
+      rejected.push({
+        status: 'rejected',
+        index,
+        name: parsed.data.name,
+        reason: 'element_name_conflict',
+        issues: [`name: "${parsed.data.name}" repeats the slug "${slug}" from an earlier row`],
+      });
+      return;
+    }
+
+    seenSlugs.add(slug);
+    accepted.push({
+      status: 'accepted',
+      index,
+      row: parsed.data,
+      slug,
+      externalKey: elementExternalKey(slug),
+    });
+  });
+
+  return { accepted, rejected };
+};
 
 // --- Emission ----------------------------------------------------------------
 

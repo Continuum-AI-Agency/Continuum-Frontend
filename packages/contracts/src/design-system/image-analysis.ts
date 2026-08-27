@@ -50,6 +50,16 @@ export interface Size {
   readonly height: number;
 }
 
+/**
+ * One measured sample on a curve: `[x, y]`, x ascending across the curve.
+ *
+ * Named because it is shared: the `formats` design section stores curves in exactly this
+ * shape (`designMeasuredCurveSchema` in sections.ts) so a brand's measured geometry and
+ * Verne's hard-coded curves are read by the SAME {@link interp}. Two point shapes would
+ * mean two interpolators, and the second one is always the one with the off-by-one.
+ */
+export type CurvePoint = readonly [number, number];
+
 /** The whole frame — the default box for the whole-image measurements. */
 export const FULL_FRAME: FractionalBox = { x0: 0, y0: 0, x1: 1, y1: 1 };
 
@@ -108,7 +118,7 @@ export const VERNE_STACK_RATIO_MAX = 1.05;
  * `render_pieza.py` notes these reproduce mailing (1021), story (656), postIG (600) and
  * postFB (540) heights to the pixel. Not estimates.
  */
-export const VERNE_PHOTO_RATIO_CURVE: readonly (readonly [number, number])[] = [
+export const VERNE_PHOTO_RATIO_CURVE: readonly CurvePoint[] = [
   [0.485, 1.567],
   [0.563, 1.648],
   [0.799, 1.8],
@@ -527,7 +537,7 @@ export function regionCalm(
  *
  * `points` must be sorted ascending by x.
  */
-export function interp(x: number, points: readonly (readonly [number, number])[]): number {
+export function interp(x: number, points: readonly CurvePoint[]): number {
   if (points.length === 0) return Number.NaN;
   if (x <= points[0][0]) return points[0][1];
   const last = points[points.length - 1];
@@ -619,7 +629,7 @@ export interface UpscaleOptions {
   /** Aspect at or below which the layout stacks. Defaults to {@link VERNE_STACK_RATIO_MAX}. */
   readonly stackRatioMax?: number;
   /** Photo-block aspect curve. Defaults to {@link VERNE_PHOTO_RATIO_CURVE}. */
-  readonly photoRatioCurve?: readonly (readonly [number, number])[];
+  readonly photoRatioCurve?: readonly CurvePoint[];
 }
 
 /**

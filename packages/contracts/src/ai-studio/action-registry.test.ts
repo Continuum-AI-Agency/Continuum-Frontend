@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-
+import { VERNE_TITLE_MEASURE, VERNE_TITLE_MIN_CONTRAST } from '../design-system/placement';
 import {
   ACTION_DEFS,
   ACTION_IDS,
@@ -17,8 +17,8 @@ describe('ACTION_DEFS', () => {
   // A count, not a floor: silently trimming the catalog is exactly the drift this
   // registry exists to stop, and a shrinking list should have to be edited on purpose.
   it('declares the whole catalog up front', () => {
-    expect(ACTION_IDS).toHaveLength(32);
-    expect(ACTION_IDS.filter((id) => id.startsWith('image.'))).toHaveLength(10);
+    expect(ACTION_IDS).toHaveLength(33);
+    expect(ACTION_IDS.filter((id) => id.startsWith('image.'))).toHaveLength(11);
     expect(ACTION_IDS.filter((id) => id.startsWith('video.'))).toHaveLength(19);
     expect(ACTION_IDS.filter((id) => id.startsWith('text.'))).toHaveLength(3);
   });
@@ -67,6 +67,10 @@ describe('ACTION_DEFS', () => {
     expect(ACTION_DEFS['image.rotate'].config.safeParse({ degrees: 4000 }).success).toBe(false);
     expect(ACTION_DEFS['video.speed'].config.safeParse({ rate: 0 }).success).toBe(false);
     expect(ACTION_DEFS['image.tint'].config.safeParse({ color: 'red' }).success).toBe(false);
+    // A measure wider than the piece and a contrast ratio no pair of colours can reach are
+    // both settings that would produce a plan nothing can honour — refuse them at the edge.
+    expect(ACTION_DEFS['image.text'].config.safeParse({ measure: 1.4 }).success).toBe(false);
+    expect(ACTION_DEFS['image.text'].config.safeParse({ minContrast: 25 }).success).toBe(false);
   });
 
   it('marks the ops whose runtime emits several items', () => {
@@ -77,6 +81,37 @@ describe('ACTION_DEFS', () => {
       'video.extractFrames',
       'video.split',
     ]);
+  });
+});
+
+// The op that exists because a diffusion model cannot set type: the still arrives on `in`,
+// the words on `text-in`, and the placement is decided afterwards by code.
+describe('image.text', () => {
+  it('is in the catalog as a sync image op', () => {
+    expect(isActionId('image.text')).toBe(true);
+    expect(ACTION_DEFS['image.text'].execution).toBe('sync');
+    expect(actionOutputModality('image.text')).toBe('image');
+  });
+
+  it('takes the picture and the words on separate ports', () => {
+    expect(actionInputPort('image.text', 'in')?.modality).toBe('image');
+    expect(actionInputPort('image.text', 'text-in')?.modality).toBe('text');
+    expect(ACTION_DEFS['image.text'].inputs).toHaveLength(2);
+  });
+
+  // Defaults come from placement.ts rather than being retyped, so a retune of the calibrated
+  // constants moves the planner and this node's default together.
+  it('defaults to the calibrated measure and contrast floor', () => {
+    const parsed = ACTION_DEFS['image.text'].config.parse({});
+    expect(parsed).toEqual({
+      typeSection: 'typography',
+      inkSection: 'palette',
+      inkToken: '',
+      anchor: 'right',
+      measure: VERNE_TITLE_MEASURE,
+      minContrast: VERNE_TITLE_MIN_CONTRAST,
+      escalate: true,
+    });
   });
 });
 

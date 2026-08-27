@@ -13,6 +13,13 @@ export type { DeepPartial, EngineConfig, WindowWeights } from './config';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
 export { DRAG_SPEND_SHARE, evaluateCreative, LAGGARD_COST_MULTIPLE } from './creative';
 export { reallocate } from './engine';
+export type { BudgetMoveWhy, ExplainDiagnostics } from './explain';
+export {
+  budgetMoveWhy,
+  freezeLabel,
+  moveReasonText,
+  velocityCapTruncated,
+} from './explain';
 export { evaluateFatigue } from './fatigue';
 // Hierarchical (tree-aware) generalization of `shrinkScores` in ./significance:
 // shrink each node toward its parent's already-shrunk estimate instead of one

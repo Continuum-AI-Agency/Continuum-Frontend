@@ -13,6 +13,7 @@
 
 import { z } from 'zod';
 import type { BrandColorRole, BrandFontToken, BrandMdTokens } from '../onboarding/brand-md';
+import { interp } from './image-analysis';
 import { type DesignToken, literalHexTokens } from './tokens';
 
 export const designSectionSchema = z.enum([
@@ -28,6 +29,7 @@ export const designSectionSchema = z.enum([
   'voice',
   'imagery',
   'logo',
+  'formats',
 ]);
 export type DesignSection = z.infer<typeof designSectionSchema>;
 
@@ -46,6 +48,7 @@ export const DESIGN_SECTION_LABELS: Record<DesignSection, string> = {
   voice: 'Voice',
   imagery: 'Imagery',
   logo: 'Logo',
+  formats: 'Formats',
 };
 
 /**
@@ -60,6 +63,11 @@ export const GATEABLE_SECTIONS: readonly DesignSection[] = Object.freeze([
   'typography',
   'radii',
   'shadows',
+  // `formats` is gateable, and it is the most literally checkable section here: its content is
+  // measured geometry in the render's own coordinate space, so "the headline sits inside the
+  // safe zone" and "the header band is interp(aspect) of the base width" are both answerable by
+  // measuring the output. `layout` stays out for the opposite reason — it is prose about grids.
+  'formats',
 ]);
 
 export const isGateableSection = (section: DesignSection): boolean =>
@@ -152,6 +160,129 @@ export const designSystemSectionSchema = z
   .strict();
 export type DesignSystemSection = z.infer<typeof designSystemSectionSchema>;
 
+// ── `formats`: the brand's measured layout geometry ───────────────────────────────────────
+
+/** A fraction of the frame, 0..1. */
+const fractionSchema = z.number().min(0).max(1);
+
+/**
+ * The region of a format where a headline may sit, as fractions of the frame.
+ *
+ * Structurally `FractionalBox` from image-analysis.ts, so a parsed safe zone goes straight
+ * into `resolveBox` / `headlineLegibility` with no adapter in between — the zone the brand
+ * declared is the zone the legibility gate measures.
+ */
+export const designSafeZoneSchema = z
+  .object({ x0: fractionSchema, y0: fractionSchema, x1: fractionSchema, y1: fractionSchema })
+  .strict()
+  .refine((box) => box.x0 < box.x1 && box.y0 < box.y1, {
+    message: 'safe zone must enclose area: x0 < x1 and y0 < y1',
+  });
+export type DesignSafeZone = z.infer<typeof designSafeZoneSchema>;
+
+/**
+ * A MEASURED interpolation curve: `[formatAspect, value]` samples taken off real artwork.
+ *
+ * Not a formula and not a guess. These are what a designer's finished adaptations actually
+ * did — {@link VERNE_PHOTO_RATIO_CURVE} reproduces four real pieces to the pixel — and
+ * {@link interp} reads between them. Two points is the floor because one point is a
+ * constant, and a constant does not need a curve.
+ *
+ * `unit` is what keeps the no-raw-pixels rule enforceable. A `ratio` curve carries aspect
+ * ratios (a photo block at 1.567..2.224); a `fraction` curve carries fractions of
+ * `baseWidth` and is rejected the moment someone pastes `194` into it, which is exactly
+ * the mistake that puts a pixel back into a spec meant to survive every canvas.
+ */
+export const designMeasuredCurveSchema = z
+  .object({
+    unit: z.enum(['ratio', 'fraction']),
+    /** `[aspect, value]` samples, strictly ascending by aspect. */
+    points: z
+      .array(z.tuple([z.number().positive(), z.number()]))
+      .min(2)
+      .max(24),
+  })
+  .strict()
+  .refine((curve) => curve.points.every(([x], i) => i === 0 || x > curve.points[i - 1][0]), {
+    message: 'curve points must be strictly ascending by aspect',
+  })
+  .refine((curve) => curve.unit !== 'fraction' || curve.points.every(([, y]) => y >= 0 && y <= 1), {
+    message: 'a fraction curve carries fractions of baseWidth, 0..1 — not pixels',
+  });
+export type DesignMeasuredCurve = z.infer<typeof designMeasuredCurveSchema>;
+
+/**
+ * One named output format, and where its headline may live.
+ *
+ * `width`/`height` are the only raw pixels in this section; the id is the name a recipe
+ * refers to (`postIG`, `story`). The shape is `RenderFormat` from image-analysis.ts, so a
+ * brand's own format list feeds `requiredUpscale` directly.
+ *
+ * `safeZone: null` is a STATEMENT, not a missing value — this format puts no text over
+ * imagery, the way Verne's T3/T4 templates do. Making the field optional instead would
+ * collapse "deliberately none" and "nobody measured it yet" into the same value, and a
+ * renderer cannot tell those apart.
+ */
+export const designFormatSchema = z
+  .object({
+    id: z.string().min(1).max(80),
+    width: z.number().int().positive().max(20000),
+    height: z.number().int().positive().max(20000),
+    safeZone: designSafeZoneSchema.nullable(),
+  })
+  .strict();
+export type DesignFormat = z.infer<typeof designFormatSchema>;
+
+/**
+ * What a `formats` section's `content` carries.
+ *
+ * EVERY DIMENSION HERE IS A RATIO OR A FRACTION, never a raw pixel — the single exception
+ * is a format's own `width`/`height`, which is what all the fractions are fractions OF.
+ * That is the whole reason one spec can hold across every output: a header band recorded
+ * as `0.18 of the base width` survives 1080x1351 and 1080x1920 unchanged, while `194px` is
+ * true for exactly one canvas and silently wrong on the next. A renderer that reads this
+ * stops hard-coding geometry; a brand panel that reads it can finally show it.
+ *
+ * Aspect ratios are DERIVED (`width / height`) and never stored, for the same reason a
+ * token's resolved value is not stored twice: two copies of one number is one number and
+ * one bug waiting for someone to edit only the other one.
+ */
+export const designFormatsContentSchema = z
+  .object({
+    /**
+     * The canvas every fraction below is measured against, in pixels.
+     *
+     * Not "the biggest format" and not a constant — it is whatever width the brand's
+     * artwork was actually laid out at, because that is the denominator the measurements
+     * came out of.
+     */
+    baseWidth: z.number().int().positive().max(20000),
+    formats: z.array(designFormatSchema).min(1).max(40),
+    /**
+     * Measured curves by name — `photoAspect`, `headerBand`, whatever this brand measured.
+     *
+     * Open-keyed on purpose: the closed thing is the SHAPE of a measurement, not its
+     * subject. Closing the subject list would mean a brand that measured one more thing
+     * has to ship a migration to say so.
+     */
+    curves: z.record(z.string(), designMeasuredCurveSchema).default({}),
+  })
+  .strict()
+  .refine((content) => new Set(content.formats.map((f) => f.id)).size === content.formats.length, {
+    message: 'format ids must be unique — a duplicate makes one of them unreachable by name',
+  });
+export type DesignFormatsContent = z.infer<typeof designFormatsContentSchema>;
+
+/**
+ * Read a measured curve at a format's aspect ratio.
+ *
+ * Exists so nobody re-implements the clamping: {@link interp} holds the endpoint value
+ * outside the measured range rather than extrapolating, because past the last real piece
+ * there is no data — only arithmetic that looks like data.
+ */
+export const readDesignCurve = (curve: DesignMeasuredCurve, aspect: number): number =>
+  interp(aspect, curve.points);
+
 /**
  * Map a source format's own grouping onto our closed enum.
  *
@@ -173,6 +304,7 @@ export function sectionForSourceGroup(group: string): DesignSection | null {
   if (normalized.startsWith('shadow') || normalized.startsWith('elevation')) return 'shadows';
   if (normalized.startsWith('radi')) return 'radii';
   if (normalized.startsWith('layout') || normalized.startsWith('grid')) return 'layout';
+  if (normalized.startsWith('format') || normalized.startsWith('adaptation')) return 'formats';
   return null;
 }
 

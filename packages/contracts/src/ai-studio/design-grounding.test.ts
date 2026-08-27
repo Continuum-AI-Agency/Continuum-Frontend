@@ -63,6 +63,9 @@ describe('SECTION_AUTO_APPLY', () => {
     expect(SECTION_AUTO_APPLY.veoDirector).not.toContain('typography');
     // HyperFrames writes HTML, so it is the one surface that CAN.
     expect(SECTION_AUTO_APPLY.hyperframesAgent).toContain('typography');
+    // And `action`, which is where `image.text` SETS type over a still rather than asking a
+    // model to draw letterforms.
+    expect(SECTION_AUTO_APPLY.action).toEqual(['typography', 'palette', 'logo']);
   });
 
   it('keeps motion on clips and off stills', () => {
