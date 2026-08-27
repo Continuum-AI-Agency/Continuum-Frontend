@@ -26,6 +26,9 @@ import {
   elementRecordSchema,
   type GenerateElementReferenceResponse,
   generateElementReferenceResponseSchema,
+  type ImportElementCatalogRequest,
+  type ImportElementCatalogResponse,
+  importElementCatalogResponseSchema,
   isElementPersonCategory,
   type LibraryImageRef,
   type ListElementsResponse,
@@ -74,6 +77,23 @@ export function createElement(input: CreateElementRequest): Promise<ElementRecor
       cache: 'no-store',
     })
     .then((response) => response.element);
+}
+
+/**
+ * Bulk catalog import. ALWAYS 200 when the envelope is valid — the body is a report, not
+ * a verdict, so a caller that treats a non-empty `rejected` as a failed request throws
+ * away the rows that landed. Read `accepted` and `rejected` together, both by index.
+ */
+export function importElementCatalog(
+  input: ImportElementCatalogRequest,
+): Promise<ImportElementCatalogResponse> {
+  return http.request<ImportElementCatalogResponse>({
+    path: `${ELEMENTS_ROUTE}/catalog`,
+    method: 'POST',
+    body: input,
+    schema: importElementCatalogResponseSchema,
+    cache: 'no-store',
+  });
 }
 
 export function updateElement(

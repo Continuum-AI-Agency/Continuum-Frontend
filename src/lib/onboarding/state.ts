@@ -201,7 +201,7 @@ export const brandInviteSchema = z.object({
 });
 
 const onboardingStateSchema = z.object({
-  step: z.number().int().min(0).max(6),
+  step: z.number().int().min(0).max(7),
   brand: brandSchema,
   documents: z.array(onboardingDocumentSchema),
   connections: z.object(connectionShape),
@@ -220,7 +220,7 @@ const onboardingStateSchema = z.object({
 });
 
 const onboardingPatchSchema = z.object({
-  step: z.number().int().min(0).max(6).optional(),
+  step: z.number().int().min(0).max(7).optional(),
   brand: brandSchema.partial().optional(),
   documents: z.array(onboardingDocumentSchema).optional(),
   connections: z.object(connectionPatchShape).partial().optional(),
@@ -446,7 +446,7 @@ export function createBrandId(): string {
 function clampStep(step: number): number {
   if (Number.isNaN(step)) return 0;
   if (step < 0) return 0;
-  if (step > 6) return 6;
+  if (step > 7) return 7;
   return step;
 }
 

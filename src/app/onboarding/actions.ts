@@ -109,7 +109,10 @@ export async function completeOnboardingAction(brandId: string): Promise<Onboard
   const user = await getClaimsIdentity();
   const state = await applyOnboardingPatch(brandId, {
     completedAt: new Date().toISOString(),
-    step: 6,
+    // The last screen. Bumped with the wizard when the product-catalog step landed —
+    // completing at anything short of the final index resumes a completed brand onto a
+    // screen it already finished.
+    step: 7,
   });
 
   // Completion analytics are emitted only after the durable completion write.

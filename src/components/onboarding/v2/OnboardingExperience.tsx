@@ -31,6 +31,7 @@ import { OnboardingBrandSwitcher } from './OnboardingBrandSwitcher';
 import { OnboardingShell, type ShellPillId } from './OnboardingShell';
 import type { StepperState } from './OnboardingStepper';
 import { BrandDnaScreen } from './screens/BrandDnaScreen';
+import { CatalogScreen } from './screens/CatalogScreen';
 import {
   CompetitorInspirationsScreen,
   type SelectedInspiration,
@@ -51,9 +52,9 @@ import { BackgroundJobsProvider, useBackgroundJobs } from './state/BackgroundJob
 import { JobPersistor } from './state/JobPersistor';
 import { runCreativePrewarm, runScrape } from './state/jobRunners';
 
-type ScreenIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type ScreenIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 // Post-Brand-DNA "Competitor Inspirations → brand-guided generations" finale.
 // On by default: only disabled when the flag is explicitly "false" (then Brand
@@ -226,6 +227,9 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   // to the brand-guided generation screen (which only needs the brand guidelines).
   // Held while a design system is being read — see DocumentsScreen for why.
   const [designSystemBusy, setDesignSystemBusy] = useState(false);
+  // Same contract, one step later: a catalog import in flight holds Continue, because
+  // advancing mid-import unmounts the only place the per-row report is shown.
+  const [catalogBusy, setCatalogBusy] = useState(false);
 
   const handleContinueToInspirations = () => {
     const integrationCount = Math.max(assignedAccountIds.length, countSelectedAccounts(state));
@@ -243,7 +247,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
             reason: 'no_connected_instagram',
           });
         }
-        await navigate(skipInspirations ? 6 : 5);
+        await navigate(skipInspirations ? 7 : 6);
       } catch (error) {
         show({
           title: "Couldn't continue",
@@ -412,22 +416,28 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
         state: stepState(screen, 1),
       },
       {
+        id: 'catalog' as const,
+        label: 'Products',
+        description: 'Add what you sell',
+        state: stepState(screen, 2),
+      },
+      {
         id: 'integrations' as const,
         label: 'Connect channels',
         description: 'Link your accounts',
-        state: stepState(screen, 2),
+        state: stepState(screen, 3),
       },
       {
         id: 'invites' as const,
         label: 'Invite team',
         description: 'Bring teammates in',
-        state: stepState(screen, 3),
+        state: stepState(screen, 4),
       },
       {
         id: 'dna' as const,
         label: 'Brand DNA',
         description: 'Review and launch',
-        state: stepState(screen, 4),
+        state: stepState(screen, 5),
       },
     ],
     [screen],
@@ -436,9 +446,10 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   const onStepClick = (id: ShellPillId) => {
     if (id === 'website') void navigate(0);
     if (id === 'documents' && screen >= 1) void navigate(1);
-    if (id === 'integrations' && screen >= 2) void navigate(2);
-    if (id === 'invites' && screen >= 3) void navigate(3);
-    if (id === 'dna' && screen >= 4) void navigate(4);
+    if (id === 'catalog' && screen >= 2) void navigate(2);
+    if (id === 'integrations' && screen >= 3) void navigate(3);
+    if (id === 'invites' && screen >= 4) void navigate(4);
+    if (id === 'dna' && screen >= 5) void navigate(5);
   };
 
   const { hint, actions } = useBottomBar({
@@ -448,6 +459,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     onLaunch: handleLaunch,
     onContinueToInspirations: handleContinueToInspirations,
     designSystemBusy,
+    catalogBusy,
     inspirationsEnabled: INSPIRATIONS_ENABLED,
     launching,
   });
@@ -465,7 +477,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   }, [screen]);
 
   useEffect(() => {
-    if (screen !== 4) return;
+    if (screen !== 5) return;
     if (jobs.agentPreview.status !== 'idle') return;
     if (!domain) return;
 
@@ -498,7 +510,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       if (cancelled || !latest) return;
 
       if (latest.status === 'running') {
-        trackOnboardingEvent('onboarding_step_viewed', { screen: 4, resumed: true });
+        trackOnboardingEvent('onboarding_step_viewed', { screen: 5, resumed: true });
         await start('agentPreview', (signal) =>
           runAgentPreview(
             {
@@ -628,29 +640,31 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
               onDesignSystemBusyChange={setDesignSystemBusy}
             />
           ) : screen === 2 ? (
-            <IntegrationsScreen onAdvance={() => void navigate(3)} />
+            <CatalogScreen totalSteps={TOTAL_STEPS} onBusyChange={setCatalogBusy} />
           ) : screen === 3 ? (
-            <InvitesScreen totalSteps={TOTAL_STEPS} />
+            <IntegrationsScreen onAdvance={() => void navigate(4)} />
           ) : screen === 4 ? (
+            <InvitesScreen totalSteps={TOTAL_STEPS} />
+          ) : screen === 5 ? (
             <BrandDnaScreen
               agentBuckets={agentBuckets}
               readinessLoading={readinessLoading}
               onRetry={handleAgentRerun}
             />
-          ) : screen === 5 ? (
+          ) : screen === 6 ? (
             <CompetitorInspirationsScreen
               brandId={brandId}
               selected={selectedInspiration}
               onSelect={(selection) => void updateState({ selectedInspiration: selection })}
-              onContinue={() => void navigate(6)}
-              onBack={() => void navigate(4)}
+              onContinue={() => void navigate(7)}
+              onBack={() => void navigate(5)}
             />
           ) : (
             <InspirationGenerationScreen
               brandId={brandId}
               onFinish={handleFinishToDashboard}
               finishing={launching}
-              onBack={() => void navigate(hasConnectedInstagram(state) ? 5 : 4)}
+              onBack={() => void navigate(hasConnectedInstagram(state) ? 6 : 5)}
               emailReportOptIn={state.emailReportOptIn ?? true}
               onEmailReportOptInChange={(value) => {
                 emailReportOptInRef.current = value;
@@ -693,18 +707,21 @@ function resumeScreenFor(state: OnboardingState): ScreenIndex {
   const hasInvites = (state.invites?.length ?? 0) > 0;
   const hasDocuments = (state.documents?.length ?? 0) > 0;
 
+  // No catalog floor: whether the brand imported products is not derivable from
+  // OnboardingState (the products are Elements, read over HTTP), and a floor that
+  // guessed would skip the step for a brand that never saw it.
   let dataFloor: ScreenIndex = 0;
   if (brand.website) dataFloor = 1;
   if (hasDocuments) dataFloor = 2;
-  if (hasAnyConnection) dataFloor = 3;
-  if (hasInvites) dataFloor = 4;
-  if (hasDna) dataFloor = 4;
+  if (hasAnyConnection) dataFloor = 4;
+  if (hasInvites) dataFloor = 5;
+  if (hasDna) dataFloor = 5;
 
-  const persistedStep = Math.min(6, Math.max(0, state.step ?? 0)) as ScreenIndex;
+  const persistedStep = Math.min(7, Math.max(0, state.step ?? 0)) as ScreenIndex;
   return Math.max(persistedStep, dataFloor) as ScreenIndex;
 }
 
-function stepState(screen: ScreenIndex, pillIndex: 0 | 1 | 2 | 3 | 4): StepperState {
+function stepState(screen: ScreenIndex, pillIndex: 0 | 1 | 2 | 3 | 4 | 5): StepperState {
   if (pillIndex < screen) return 'done';
   if (pillIndex === screen) return 'active';
   return 'pending';
@@ -719,6 +736,7 @@ function useBottomBar({
   inspirationsEnabled,
   launching,
   designSystemBusy,
+  catalogBusy,
 }: {
   screen: ScreenIndex;
   navigate: (next: ScreenIndex) => Promise<boolean>;
@@ -728,6 +746,7 @@ function useBottomBar({
   inspirationsEnabled: boolean;
   launching: boolean;
   designSystemBusy: boolean;
+  catalogBusy: boolean;
 }) {
   const { jobs } = useBackgroundJobs();
   const dnaReady = jobs.agentPreview.status === 'done';
@@ -767,17 +786,31 @@ function useBottomBar({
   }
   if (screen === 2) {
     return {
-      hint: '',
+      hint: catalogBusy
+        ? 'Importing your products — this stays open until every row has an answer.'
+        : 'Optional. Add what you sell, or skip — nothing later needs it.',
       actions: (
         <>
           <Button variant="outline" size="sm" onClick={() => void navigate(1)}>
             ← Back
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => void navigate(3)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="catalog-skip"
+            onClick={() => void navigate(3)}
+            disabled={catalogBusy}
+          >
             Skip for now
           </Button>
-          <Button variant="default" size="sm" onClick={() => void navigate(3)}>
-            Continue →
+          <Button
+            variant="default"
+            size="sm"
+            data-testid="catalog-continue"
+            onClick={() => void navigate(3)}
+            disabled={catalogBusy}
+          >
+            {catalogBusy ? 'Importing…' : 'Continue →'}
           </Button>
         </>
       ),
@@ -785,7 +818,7 @@ function useBottomBar({
   }
   if (screen === 3) {
     return {
-      hint: 'Add teammates — or invite them later from Settings.',
+      hint: '',
       actions: (
         <>
           <Button variant="outline" size="sm" onClick={() => void navigate(2)}>
@@ -795,13 +828,31 @@ function useBottomBar({
             Skip for now
           </Button>
           <Button variant="default" size="sm" onClick={() => void navigate(4)}>
-            {dnaReady ? 'Reveal Brand DNA →' : 'Continue →'}
+            Continue →
           </Button>
         </>
       ),
     };
   }
   if (screen === 4) {
+    return {
+      hint: 'Add teammates — or invite them later from Settings.',
+      actions: (
+        <>
+          <Button variant="outline" size="sm" onClick={() => void navigate(3)}>
+            ← Back
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => void navigate(5)}>
+            Skip for now
+          </Button>
+          <Button variant="default" size="sm" onClick={() => void navigate(5)}>
+            {dnaReady ? 'Reveal Brand DNA →' : 'Continue →'}
+          </Button>
+        </>
+      ),
+    };
+  }
+  if (screen === 5) {
     if (inspirationsEnabled) {
       return {
         hint: '',
@@ -826,6 +877,6 @@ function useBottomBar({
       ),
     };
   }
-  // Screens 5 (inspirations) and 6 (generation) render their own footer CTAs.
+  // Screens 6 (inspirations) and 7 (generation) render their own footer CTAs.
   return { hint: '', actions: null };
 }

@@ -1,7 +1,7 @@
 import { OnboardingStepper, type StepperState } from './OnboardingStepper';
 import { StartOverButton } from './StartOverButton';
 
-export type ShellPillId = 'website' | 'documents' | 'integrations' | 'invites' | 'dna';
+export type ShellPillId = 'website' | 'documents' | 'catalog' | 'integrations' | 'invites' | 'dna';
 
 type StepDef = { id: ShellPillId; label: string; description: string; state: StepperState };
 
