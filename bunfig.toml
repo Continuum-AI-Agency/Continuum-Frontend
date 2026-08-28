@@ -1,2 +1,8 @@
+# Vercel clones this repo STANDALONE, so this file — not the monorepo root bunfig —
+# is the one Bun reads there. Pin the flat layout: the isolated linker breaks
+# Turbopack/Next.js project-root inference (see the monorepo root bunfig.toml).
+[install]
+linker = "hoisted"
+
 [test]
 preload = ["../test/setup-bun-test.ts", "./bun-test-setup.ts"]
