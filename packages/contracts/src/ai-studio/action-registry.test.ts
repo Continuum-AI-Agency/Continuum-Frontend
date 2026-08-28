@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import { VERNE_TITLE_MEASURE, VERNE_TITLE_MIN_CONTRAST } from '../design-system/placement';
+import {
+  BURN_IN_ANCHORS,
+  VERNE_TITLE_ANCHOR_OFFSET_Y,
+  VERNE_TITLE_BOX_TOP,
+  VERNE_TITLE_MEASURE,
+  VERNE_TITLE_MIN_CONTRAST,
+  VERNE_TITLE_RIGHT_MARGIN,
+} from '../design-system/placement';
 import {
   ACTION_DEFS,
   ACTION_IDS,
@@ -104,14 +111,58 @@ describe('image.text', () => {
   it('defaults to the calibrated measure and contrast floor', () => {
     const parsed = ACTION_DEFS['image.text'].config.parse({});
     expect(parsed).toEqual({
-      typeSection: 'typography',
-      inkSection: 'palette',
+      anchor: 'top-right',
+      offsetX: 0,
+      offsetY: VERNE_TITLE_ANCHOR_OFFSET_Y,
+      marginFrac: VERNE_TITLE_RIGHT_MARGIN,
       inkToken: '',
-      anchor: 'right',
       measure: VERNE_TITLE_MEASURE,
       minContrast: VERNE_TITLE_MIN_CONTRAST,
       escalate: true,
     });
+  });
+
+  // The whole point of carrying the offset as a default rather than re-anchoring the op:
+  // `top-right` + this nudge lands the block exactly where ten measured adaptations put it.
+  it('reproduces the calibrated headline top from the anchor plus its nudge', () => {
+    const parsed = ACTION_DEFS['image.text'].config.parse({}) as {
+      marginFrac: number;
+      offsetY: number;
+    };
+    expect(parsed.marginFrac + parsed.offsetY).toBeCloseTo(VERNE_TITLE_BOX_TOP, 6);
+  });
+
+  // A section enum offered `motion`, `voice`, `radii` and `iconography` as the source of a
+  // text colour. They are gone, and this test is what stops them coming back through a
+  // "just one more knob" edit.
+  it('asks nothing about design SECTIONS — type is typography, ink is the palette', () => {
+    const parsed = ACTION_DEFS['image.text'].config.parse({});
+    expect(Object.keys(parsed as object).sort()).toEqual([
+      'anchor',
+      'escalate',
+      'inkToken',
+      'marginFrac',
+      'measure',
+      'minContrast',
+      'offsetX',
+      'offsetY',
+    ]);
+  });
+
+  it('accepts all nine anchor points and refuses anything else', () => {
+    for (const anchor of BURN_IN_ANCHORS) {
+      expect(ACTION_DEFS['image.text'].config.safeParse({ anchor }).success, anchor).toBe(true);
+    }
+    expect(BURN_IN_ANCHORS).toHaveLength(9);
+    expect(ACTION_DEFS['image.text'].config.safeParse({ anchor: 'right' }).success).toBe(false);
+  });
+
+  // Fractions, never pixels: the same node runs against 1080x1350 and 1080x1920, and a
+  // pixel offset would mean something different in each.
+  it('bounds the nudge to the frame it is a fraction of', () => {
+    expect(ACTION_DEFS['image.text'].config.safeParse({ offsetX: 1.4 }).success).toBe(false);
+    expect(ACTION_DEFS['image.text'].config.safeParse({ offsetY: -1.4 }).success).toBe(false);
+    expect(ACTION_DEFS['image.text'].config.safeParse({ offsetX: -0.2 }).success).toBe(true);
   });
 });
 

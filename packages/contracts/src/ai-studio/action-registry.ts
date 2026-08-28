@@ -1,7 +1,12 @@
 import { z } from 'zod';
 
-import { VERNE_TITLE_MEASURE, VERNE_TITLE_MIN_CONTRAST } from '../design-system/placement';
-import { designSectionSchema } from '../design-system/sections';
+import {
+  burnInAnchorSchema,
+  VERNE_TITLE_ANCHOR_OFFSET_Y,
+  VERNE_TITLE_MEASURE,
+  VERNE_TITLE_MIN_CONTRAST,
+  VERNE_TITLE_RIGHT_MARGIN,
+} from '../design-system/placement';
 
 // The Canvas action catalog — every deterministic operation an `action` node can run,
 // declared in one place so a new op is a registry entry rather than a node type.
@@ -200,29 +205,42 @@ const padConfig = z.object({
  * Storing a `PlacementPlan` here would freeze a decision against an image that has since been
  * regenerated, and a stale plan is worse than none — it looks authoritative.
  *
- * Two rules shape the fields:
+ * Three rules shape the fields:
  *
- *   • Colour is a REFERENCE, not a value. `inkSection` + `inkToken` name a token in the brand's
- *     design system; the brand stays the source of truth, so re-tinting a palette re-tints
- *     every headline instead of leaving hand-typed hexes behind. (It also happens to fit the
- *     Frontend's generic config panel, which introspects Zod and renders number / string /
- *     boolean / enum only — a colour picker is a Frontend change, not a contract one.)
+ *   • PLACEMENT IS DIRECT MANIPULATION, not a form. An anchor plus a nudge is what a drag
+ *     writes and what a snap clears, so the panel and the runner share one representation.
+ *     An earlier cut of this schema exposed `typeSection`/`inkSection` as raw
+ *     `designSectionSchema` enums purely so the generic Zod panel could render SOMETHING;
+ *     that offered `motion` and `iconography` as the source of a text colour. Type comes
+ *     from typography and ink comes from the palette — neither is a question with a second
+ *     right answer, so neither is a field. `image.text` gets its own panel instead
+ *     (`nodes/action/BurnInConfig.tsx`), the way `video.overlay` and `video.subtitles` do.
+ *   • FRACTIONS, NEVER PIXELS. The same node has to hold when it runs against a 1080×1350
+ *     and a 1080×1920 frame; a pixel offset silently means something different in each.
  *   • Calibrated defaults come from the `VERNE_*` constants rather than being retyped, so a
  *     retune moves both the planner and the node's default in one edit.
  */
 const textPlacementConfig = z.object({
-  /** Which section supplies the type tokens — family, weights and the size scale. */
-  typeSection: designSectionSchema.default('typography'),
-  /** Which section supplies the ink colour. */
-  inkSection: designSectionSchema.default('palette'),
-  /** Token NAME within `inkSection`. Empty means the section's default ink. */
-  inkToken: z.string().max(120).default(''),
+  /** Which of the nine anchor points the measure is pinned to. */
+  anchor: burnInAnchorSchema.default('top-right'),
   /**
-   * The edge the measure is pinned to. CEILING: `titleBox`/`planPlacement` pin to the right
-   * today (`placementAnchorSchema.edge` is the literal `'right'`), so a runner handed `left`
-   * has nothing to call yet — the mirror lands with the runner, not with this declaration.
+   * Nudge off the anchor, as a fraction of the frame's width and height.
+   *
+   * ZERO IS THE ANCHOR, and that is load-bearing: a snapped placement carries no offset, so
+   * it stays anchor-relative and survives a change of output size. Only a hand-dragged block
+   * that landed outside the snap radius keeps a residual here, expressed against whichever
+   * anchor it ended up nearest.
    */
-  anchor: z.enum(['left', 'right']).default('right'),
+  offsetX: z.number().min(-1).max(1).default(0),
+  offsetY: z.number().min(-1).max(1).default(VERNE_TITLE_ANCHOR_OFFSET_Y),
+  /** Clear space between the block and the frame edge, as a fraction of the axis it is on. */
+  marginFrac: z.number().min(0).max(0.45).default(VERNE_TITLE_RIGHT_MARGIN),
+  /**
+   * Token NAME in the brand's PALETTE — the one thing about the ink a user gets to choose.
+   * Empty means the palette's default ink. A REFERENCE, not a value: re-tinting the palette
+   * re-tints every headline instead of leaving hand-typed hexes behind.
+   */
+  inkToken: z.string().max(120).default(''),
   /** Composition measure — the width lines break to — as a fraction of the image width. */
   measure: z.number().min(0.1).max(1).default(VERNE_TITLE_MEASURE),
   /** WCAG ratio the headline must hold against whatever is behind it. */
@@ -231,6 +249,9 @@ const textPlacementConfig = z.object({
    * May the treatment ladder touch the BACKGROUND (harmonise, then veil) to reach
    * `minContrast`? False pins the piece at rung 0: the plan comes back with the ratio it
    * actually measured and `cleared: false`, rather than a photo quietly washed out.
+   *
+   * The ladder outranks the placement, always: a hand-dragged block over a dark patch
+   * escalates the BACKGROUND rather than moving the type somewhere friendlier.
    */
   escalate: z.boolean().default(true),
 });

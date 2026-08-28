@@ -18,28 +18,38 @@
 //     {@link createMeasurer} — this is the single biggest source of drift in type placement.
 
 import {
-  darkPercentileContrast,
+  type BurnInAnchor,
   type DesignSection,
   type DesignSystemSnapshot,
   type DesignToken,
-  FULL_FRAME,
+  darkPercentileContrast,
   type FractionalBox,
+  FULL_FRAME,
   type HeadlineToken,
   isLiteralHex,
   type MeasureText,
   type PixelBuffer,
   type PlacementPlan,
   type PlacementTreatment,
-  planPlacement,
   type ProbeContrast,
-  resolveBox,
+  planPlacement,
   type Rgb,
-  sectionForToken,
+  resolveBox,
   type Size,
+  sectionForToken,
   type TextStyle,
   type TreatmentStep,
 } from '@continuum/contracts';
+import { headlineBlockExtent, placementOptionsFor } from './burnInPlacement';
 import type { DrawableImage } from './imageOps';
+
+// Type comes from typography and ink comes from the palette. These were config fields once —
+// two `designSectionSchema` enums that offered `motion`, `voice`, `radii` and `iconography` as
+// the source of a headline colour, purely so the generic Zod panel had something to render.
+// They are constants because there is no second right answer, and a question with one right
+// answer and eleven wrong ones is not a setting.
+const TYPE_SECTION: DesignSection = 'typography';
+const INK_SECTION: DesignSection = 'palette';
 
 // ── Ink ──────────────────────────────────────────────────────────────────────────────────
 
@@ -371,8 +381,12 @@ async function drawSvg(ctx: Ctx2d, svg: string, frame: Size): Promise<void> {
 // ── The op ───────────────────────────────────────────────────────────────────────────────
 
 export interface ImageTextSettings {
-  readonly typeSection: DesignSection;
-  readonly inkSection: DesignSection;
+  /** One of the nine anchor points the type block is pinned to. */
+  readonly anchor: BurnInAnchor;
+  /** Nudge off the anchor, as a fraction of the frame's width / height. Zero IS the anchor. */
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly marginFrac: number;
   readonly inkToken: string;
   readonly measure: number;
   readonly minContrast: number;
@@ -381,8 +395,10 @@ export interface ImageTextSettings {
 
 /** `textPlacementConfig`, already parsed by `parseActionConfig`, read as the shape it is. */
 export const readSettings = (config: Record<string, unknown>): ImageTextSettings => ({
-  typeSection: config.typeSection as DesignSection,
-  inkSection: config.inkSection as DesignSection,
+  anchor: config.anchor as BurnInAnchor,
+  offsetX: config.offsetX as number,
+  offsetY: config.offsetY as number,
+  marginFrac: config.marginFrac as number,
   inkToken: (config.inkToken as string) ?? '',
   measure: config.measure as number,
   minContrast: config.minContrast as number,
@@ -401,6 +417,17 @@ export interface HeadlineRender {
  * No framing search: the input image IS the frame, so there is no crop slack to spend and
  * re-cropping the user's picture is not what "set type on this" was asked for. `planPlacement`
  * takes the centred crop when no `source` is given, which is the identity here.
+ *
+ * THE PLACEMENT IS AN INPUT TO THE PLAN, NEVER A REPLACEMENT FOR IT. The anchor and the nudge
+ * choose WHERE the measure sits; `planPlacement` still breaks the lines, sizes them, probes the
+ * pixels behind them and walks the treatment ladder. Because the box moves WITH the block, a
+ * hand-dragged headline over a dark patch escalates the BACKGROUND exactly as an anchored one
+ * does — the ladder is documented never to move or resize the type, so the placement always
+ * survives and readability is what changes.
+ *
+ * ONE MEASURER for the block extent and for the plan. Two would be the same drift
+ * `createMeasurer` exists to prevent, one level up: a block sized by metrics the breaker did
+ * not use sits somewhere the user never put it.
  */
 export async function renderHeadline(args: {
   image: DrawableImage;
@@ -414,15 +441,33 @@ export async function renderHeadline(args: {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('This browser could not create a 2D canvas context to set type');
 
+  const tokens = parseHeadline(args.headline);
+  const measureText = createMeasurer(args.faces, 0);
+  const extent = headlineBlockExtent({
+    tokens,
+    frame,
+    measureText,
+    measureFraction: args.settings.measure,
+  });
+  const placement = placementOptionsFor(
+    {
+      anchor: args.settings.anchor,
+      offsetX: args.settings.offsetX,
+      offsetY: args.settings.offsetY,
+      marginFrac: args.settings.marginFrac,
+    },
+    extent,
+  );
+
   const probe = createProbe(args.image, frame, args.ink);
   const escalate = args.settings.escalate;
   const planned = planPlacement({
-    tokens: parseHeadline(args.headline),
+    tokens,
     frame,
-    measureText: createMeasurer(args.faces, 0),
+    measureText,
     probeContrast: probe,
     options: {
-      measureFraction: args.settings.measure,
+      ...placement,
       ink: args.ink,
       // escalate:false pins the piece at rung 0. A zero bar makes the ladder return `direct`
       // after ONE probe instead of walking eight it is forbidden to use; the ratio it carries
@@ -473,8 +518,8 @@ export async function setImageText(args: {
   }
 
   const settings = readSettings(args.config);
-  const ink = resolveInk(args.designSystem, settings.inkSection, settings.inkToken);
-  const faces = resolveFaces(args.designSystem, settings.typeSection);
+  const ink = resolveInk(args.designSystem, INK_SECTION, settings.inkToken);
+  const faces = resolveFaces(args.designSystem, TYPE_SECTION);
   const rendered = await renderHeadline({
     image: args.image,
     headline: args.headline,

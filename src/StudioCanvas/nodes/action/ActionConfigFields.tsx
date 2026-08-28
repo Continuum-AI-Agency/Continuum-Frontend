@@ -23,6 +23,7 @@ import {
   parseActionConfig,
 } from '../../utils/actions/actionConfig';
 import { isOverlayActionId } from '../../utils/actions/overlayOp';
+import { BurnInConfig } from './BurnInConfig';
 import { OverlayConfig } from './OverlayConfig';
 import { SubtitlesConfig } from './SubtitlesConfig';
 
@@ -167,6 +168,11 @@ export function ActionConfigFields({
   }
   if (isOverlayActionId(actionId)) {
     return <OverlayConfig nodeId={nodeId} actionId={actionId} config={config} />;
+  }
+  // Placement is a place on a frame, and ink is a colour. Neither survives contact with the
+  // four field kinds above — the attempt is what put design-section enums in the schema.
+  if (actionId === 'image.text') {
+    return <BurnInConfig nodeId={nodeId} config={config} />;
   }
   return (
     <div className="flex flex-col gap-3">

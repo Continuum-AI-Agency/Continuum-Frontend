@@ -40,9 +40,13 @@ export function ActionConfigPopover({
         className={
           actionId === 'video.subtitles'
             ? 'nodrag nowheel max-h-[70vh] w-[420px] overflow-y-auto'
-            : isOverlayActionId(actionId)
-              ? 'nodrag nowheel max-h-96 w-72 overflow-y-auto'
-              : 'nodrag nowheel max-h-80 w-64 overflow-y-auto'
+            : // The burn-in panel is a drag surface, not a field list: it needs a preview big
+              // enough to place type on, which a 64-wide column is not.
+              actionId === 'image.text'
+              ? 'nodrag nowheel max-h-[70vh] w-80 overflow-y-auto'
+              : isOverlayActionId(actionId)
+                ? 'nodrag nowheel max-h-96 w-72 overflow-y-auto'
+                : 'nodrag nowheel max-h-80 w-64 overflow-y-auto'
         }
         onMouseDown={(event) => event.stopPropagation()}
       >

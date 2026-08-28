@@ -7,18 +7,29 @@
 // back, and re-measures it with the same `darkPercentileContrast` the op planned against.
 
 import {
-  darkPercentileContrast,
   type DesignSystemSnapshot,
+  darkPercentileContrast,
   EMPTY_ADHERENCE,
   FULL_FRAME,
   type PixelBuffer,
   type Rgb,
-  titleBox,
   VERNE_INK_DISTANCE,
+  VERNE_TITLE_ANCHOR_OFFSET_Y,
   VERNE_TITLE_MIN_CONTRAST,
+  VERNE_TITLE_RIGHT_MARGIN,
 } from '@continuum/contracts';
-import { renderHeadline, resolveFaces, resolveInk } from '../../src/StudioCanvas/utils/actions/imageText';
+import {
+  blockRect,
+  headlineBlockExtent,
+} from '../../src/StudioCanvas/utils/actions/burnInPlacement';
 import { canvasToDataUrl } from '../../src/StudioCanvas/utils/actions/imageOps';
+import {
+  createMeasurer,
+  parseHeadline,
+  renderHeadline,
+  resolveFaces,
+  resolveInk,
+} from '../../src/StudioCanvas/utils/actions/imageText';
 import { runAction } from '../../src/StudioCanvas/utils/actions/runAction';
 
 const WIDTH = 1080;
@@ -93,14 +104,42 @@ const BRAND: DesignSystemSnapshot = {
 };
 
 const CONFIG = {
-  typeSection: 'typography',
-  inkSection: 'palette',
+  anchor: 'top-right' as const,
+  offsetX: 0,
+  offsetY: VERNE_TITLE_ANCHOR_OFFSET_Y,
+  marginFrac: VERNE_TITLE_RIGHT_MARGIN,
   inkToken: 'ink',
-  anchor: 'right',
   measure: MEASURE,
   minContrast: VERNE_TITLE_MIN_CONTRAST,
   escalate: true,
 };
+
+/**
+ * The box the type was actually set in, for this run's config.
+ *
+ * `titleBox({measureFraction})` used to answer this, and it stopped being able to: placement is
+ * now an anchor plus a nudge, so the box is wherever the block was PUT. Derived from the same
+ * two functions the op derives it from, which is what keeps this measurement pointed at the
+ * type rather than at a band the type may no longer be in.
+ */
+function headlineBox() {
+  const frame = { width: WIDTH, height: HEIGHT };
+  const extent = headlineBlockExtent({
+    tokens: parseHeadline(HEADLINE),
+    frame,
+    measureText: createMeasurer(resolveFaces(BRAND, 'typography'), 0),
+    measureFraction: MEASURE,
+  });
+  return blockRect(
+    {
+      anchor: CONFIG.anchor,
+      offsetX: CONFIG.offsetX,
+      offsetY: CONFIG.offsetY,
+      marginFrac: CONFIG.marginFrac,
+    },
+    extent,
+  );
+}
 
 async function decode(dataUrl: string): Promise<{ pixels: PixelBuffer; bytes: number }> {
   const response = await fetch(dataUrl);
@@ -219,7 +258,12 @@ export interface ImageTextBenchRun {
   missingDesignSystemError: string | null;
 }
 
-async function runCase(label: string, seed: number, floor: number, ceiling: number): Promise<ImageTextCase> {
+async function runCase(
+  label: string,
+  seed: number,
+  floor: number,
+  ceiling: number,
+): Promise<ImageTextCase> {
   const photo = gradientPhoto(seed, floor, ceiling);
   const photoUrl = await canvasToDataUrl(photo);
   const ink = resolveInk(BRAND, 'palette', 'ink');
@@ -242,21 +286,16 @@ async function runCase(label: string, seed: number, floor: number, ceiling: numb
   // The same inputs again, for the PLAN the dispatcher does not hand back. Deterministic, so
   // this is the plan the frame above was drawn from — the assertions below check that it is.
   const { plan, svg } = await renderHeadline({
-    image: (await createImageBitmap(await photo.convertToBlob())) as unknown as CanvasImageSource & {
+    image: (await createImageBitmap(
+      await photo.convertToBlob(),
+    )) as unknown as CanvasImageSource & {
       width: number;
       height: number;
     },
     headline: HEADLINE,
     ink,
     faces,
-    settings: {
-      typeSection: 'typography',
-      inkSection: 'palette',
-      inkToken: 'ink',
-      measure: MEASURE,
-      minContrast: VERNE_TITLE_MIN_CONTRAST,
-      escalate: true,
-    },
+    settings: CONFIG,
   });
 
   return {
@@ -271,11 +310,14 @@ async function runCase(label: string, seed: number, floor: number, ceiling: numb
     svgMentionsBlob: svg.includes('blob:'),
     mimeType: output.mimeType ?? '',
     bytes: rendered.bytes,
-    measurement: measureBox(rendered.pixels, titleBox({ measureFraction: MEASURE }), ink),
+    measurement: measureBox(rendered.pixels, headlineBox(), ink),
   };
 }
 
-async function refusal(mutate: (config: Record<string, unknown>) => Record<string, unknown>, drop: boolean) {
+async function refusal(
+  mutate: (config: Record<string, unknown>) => Record<string, unknown>,
+  drop: boolean,
+) {
   const photoUrl = await canvasToDataUrl(gradientPhoto(7, 150, 230));
   try {
     await runAction({

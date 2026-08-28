@@ -670,6 +670,51 @@ export interface PlacementOptions {
   readonly orphanPenalty?: number;
 }
 
+// ── Anchors ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * The nine places a burn-in can be pinned to — corners, edge midpoints, centre.
+ *
+ * The five names the video burn-in already uses (`utils/actions/overlayPresets.ts`) are reused
+ * VERBATIM and the four midpoints follow the same `<row>-<column>` shape. A second vocabulary
+ * for "top right" is how two placement pickers end up disagreeing about one idea.
+ */
+export const BURN_IN_ANCHORS = [
+  'top-left',
+  'top-center',
+  'top-right',
+  'center-left',
+  'center',
+  'center-right',
+  'bottom-left',
+  'bottom-center',
+  'bottom-right',
+] as const;
+
+export const burnInAnchorSchema = z.enum(BURN_IN_ANCHORS);
+export type BurnInAnchor = z.infer<typeof burnInAnchorSchema>;
+
+export type AnchorRow = 'top' | 'center' | 'bottom';
+export type AnchorColumn = 'left' | 'center' | 'right';
+
+/** The row and column an anchor names. `center` is the one name that carries both axes. */
+export function anchorAxes(anchor: BurnInAnchor): { row: AnchorRow; column: AnchorColumn } {
+  if (anchor === 'center') return { row: 'center', column: 'center' };
+  const [row, column] = anchor.split('-');
+  return { row: row as AnchorRow, column: column as AnchorColumn };
+}
+
+/**
+ * The reference headline's top edge is NOT one of the nine anchor points: `VERNE_TITLE_BOX_TOP`
+ * (0.18) sits well below where `top-*` puts a block at `VERNE_TITLE_RIGHT_MARGIN`. Carried as
+ * the nudge that reproduces it exactly, so moving `image.text` onto an anchor model does not
+ * quietly move a placement calibrated on ten real adaptations. Rounded because the raw
+ * subtraction is 0.10500000000000001 and that float would be persisted into every node config.
+ */
+export const VERNE_TITLE_ANCHOR_OFFSET_Y = Number(
+  (VERNE_TITLE_BOX_TOP - VERNE_TITLE_RIGHT_MARGIN).toFixed(4),
+);
+
 /**
  * The headline box as fractions of the photo. Horizontally it is exactly the measure pinned to
  * the right margin, so it moves when either constant is retuned; vertically it is the measured
