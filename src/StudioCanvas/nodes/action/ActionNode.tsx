@@ -32,6 +32,7 @@ import { isImplementedAction } from '../../utils/actions/runAction';
 import { executeWorkflow } from '../../utils/executeWorkflow';
 import { handleStyle, MODALITY_LABEL, ModalityPreview } from '../modalityPreview';
 import { NodeBadge, NodeOverlayNote, NodeTitleBar } from '../NodeChrome';
+import { ActionBrandNote } from './ActionBrandNote';
 import { ActionConfigPopover } from './ActionConfigPopover';
 
 export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<ActionNodeData>>) {
@@ -80,6 +81,9 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
           title={def?.description}
         >
           {outputModality ? <NodeBadge>{MODALITY_LABEL[outputModality]}</NodeBadge> : null}
+          {/* Still no per-op branch in here: which ops have a brand value to name is decided
+              inside ActionBrandNote, beside the resolver it reads. */}
+          {actionId ? <ActionBrandNote actionId={actionId} /> : null}
           {hasConfig && actionId ? (
             <ActionConfigPopover nodeId={id} actionId={actionId} config={data.config} />
           ) : null}

@@ -2,7 +2,7 @@ import {
   ACTION_DEFS,
   type ActionId,
   actionDef,
-  type DesignSystemSnapshot,
+  type BrandTypeInputs,
 } from '@continuum/contracts';
 import type { NodeOutput } from '../../types/execution';
 import { runActionInWorker } from '../../workers/spliceWorkerClient';
@@ -60,11 +60,13 @@ export interface RunActionArgs {
   /** Raw `node.data.config`; parsed against the op's schema before anything runs. */
   config: unknown;
   /**
-   * The brand's design system, for the ops whose output is a BRAND decision rather than a
-   * pixel transform. `image.text` resolves its ink and its faces from tokens here and refuses
-   * to run without it — a headline in a guessed colour is worse than a headline that failed.
+   * Whatever brand shapes the caller could reach, for the ops whose output is a BRAND decision
+   * rather than a pixel transform. `image.text` resolves its faces and its ink from these —
+   * design system, brand book, kit, scrape, in that order — and refuses only when NO source
+   * yields an ink, because a headline in a guessed colour is worse than one that failed.
+   * Every field is optional: a read that failed and a value that is absent are the same thing.
    */
-  designSystem?: DesignSystemSnapshot | null;
+  brand?: BrandTypeInputs | null;
   signal?: AbortSignal;
   onProgress?: (fraction: number) => void;
 }
@@ -258,7 +260,7 @@ const SYNC_OPS: Partial<Record<ActionId, SyncOp>> = {
   'image.text': async (args, config) =>
     imageOutput(
       await setImageText({
-        designSystem: args.designSystem,
+        brand: args.brand,
         config,
         image: await loadImage(inputFor(args, 'in')),
         headline: inputFor(args, 'text-in').text ?? '',

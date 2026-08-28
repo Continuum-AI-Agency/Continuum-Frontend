@@ -4,6 +4,7 @@ import {
   type MeasureText,
   type PlacementPlan,
   planPlacement,
+  PRELOADED_TYPE_FACES,
   type ProbeContrast,
   type TreatmentStep,
   VERNE_VEIL_FLOORS,
@@ -11,12 +12,13 @@ import {
 import { describe, expect, it } from 'bun:test';
 import {
   applyTreatment,
+  describeHeadlineFaces,
   headlineSvg,
   headlineSvgDataUri,
   parseHeadline,
   parseHexColour,
-  resolveFaces,
-  resolveInk,
+  resolveHeadlineFaces,
+  resolveHeadlineInk,
 } from './imageText';
 
 // COVERAGE GAP, on purpose, and the same one `imageOps.test.ts` declares: bun + happy-dom has
@@ -106,36 +108,46 @@ describe('parseHexColour', () => {
   });
 });
 
-describe('resolveInk', () => {
-  it('resolves the named token out of the named section', () => {
-    expect(resolveInk(PALETTE, 'palette', 'ink')).toEqual([0x0f, 0x1f, 0x43]);
-    expect(resolveInk(PALETTE, 'palette', '--ink')).toEqual([0x0f, 0x1f, 0x43]);
-    expect(resolveInk(PALETTE, 'palette', 'ACCENT')).toEqual([0xde, 0x82, 0x18]);
+describe('resolveHeadlineInk', () => {
+  const brand = { designSystem: PALETTE };
+
+  it('resolves the named token, and names where it read it', () => {
+    expect(resolveHeadlineInk(brand, 'ink')).toEqual({
+      rgb: [0x0f, 0x1f, 0x43],
+      source: 'design-system',
+      tokenName: '--ink',
+    });
+    expect(resolveHeadlineInk(brand, '--ink')?.rgb).toEqual([0x0f, 0x1f, 0x43]);
+    expect(resolveHeadlineInk(brand, 'ACCENT')?.rgb).toEqual([0xde, 0x82, 0x18]);
   });
 
-  it('takes the section default ink by ROLE, not by source order', () => {
+  it('takes the default ink by ROLE, not by source order', () => {
     // `--accent` is listed first; `--ink` is the body ink. An empty token name must not mean
     // "whichever colour happens to be first in the export".
-    expect(resolveInk(PALETTE, 'palette', '')).toEqual([0x0f, 0x1f, 0x43]);
+    expect(resolveHeadlineInk(brand, '')?.rgb).toEqual([0x0f, 0x1f, 0x43]);
   });
 
-  it('THROWS on a token that does not exist rather than defaulting to black', () => {
-    expect(() => resolveInk(PALETTE, 'palette', 'headline-ink')).toThrow(/headline-ink/);
+  it('returns NULL on a token that does not exist rather than defaulting to black', () => {
+    // The refusal moved to the caller — `setImageText` owns the message, because only it knows
+    // whether the TYPE resolved. What must never happen here is a guessed colour.
+    expect(resolveHeadlineInk(brand, 'headline-ink')).toBeNull();
   });
 
-  it('THROWS on a token that exists but resolves to no literal colour', () => {
+  it('returns NULL on a token that exists but resolves to no literal colour', () => {
     const aliased = designSystem([
       { ...colourToken('--ink', 'var(--brand)'), resolvedValue: null },
     ]);
-    expect(() => resolveInk(aliased, 'palette', 'ink')).toThrow(/literal colour/);
+    expect(resolveHeadlineInk({ designSystem: aliased }, 'ink')).toBeNull();
   });
 
-  it('THROWS when the section carries no colour at all', () => {
-    expect(() => resolveInk(designSystem([]), 'palette', '')).toThrow(/no resolvable colour/);
+  it('returns NULL when the brand carries no colour at all', () => {
+    expect(resolveHeadlineInk({ designSystem: designSystem([]) }, '')).toBeNull();
   });
 });
 
-describe('resolveFaces', () => {
+describe('resolveHeadlineFaces', () => {
+  const declaredInter = designSystem([], [{ family: 'Inter', tokens: [], source: null }]);
+
   it('reads the family off a typography font token and keeps a real fallback stack', () => {
     const system = designSystem([
       {
@@ -147,17 +159,21 @@ describe('resolveFaces', () => {
         description: null,
       },
     ]);
-    const faces = resolveFaces(system, 'typography');
+    const faces = resolveHeadlineFaces({ designSystem: system });
+    expect(faces.family).toBe('Sohne Breit');
     expect(faces.stack.startsWith("'Sohne Breit', ")).toBe(true);
     expect(faces.stack).toContain('sans-serif');
   });
 
-  it('falls back to the declared families, then to a system stack', () => {
-    expect(resolveFaces(designSystem([], [{ family: 'Inter', tokens: [], source: null }]), 'typography').stack)
-      .toContain("'Inter'");
-    expect(resolveFaces(designSystem([]), 'typography').stack).toBe(
-      "'Helvetica Neue', Helvetica, Arial, sans-serif",
-    );
+  it('falls back to the declared families, then to the face this product SHIPS', () => {
+    expect(resolveHeadlineFaces({ designSystem: declaredInter }).stack).toContain("'Inter'");
+
+    // CHANGED, and the point of the chain: a brand with type nowhere no longer lands on a bare
+    // system stack. It lands on the preloaded face — bytes this product can embed — and SAYS so.
+    const none = resolveHeadlineFaces({ designSystem: designSystem([]) });
+    expect(none.family).toBe(PRELOADED_TYPE_FACES.display);
+    expect(none.source).toBe('fallback');
+    expect(none.stack).toContain(PRELOADED_TYPE_FACES.display);
   });
 
   it('reads numeric weights from the section when the brand declared them', () => {
@@ -179,11 +195,32 @@ describe('resolveFaces', () => {
         description: null,
       },
     ]);
-    expect(resolveFaces(system, 'typography')).toMatchObject({ lightWeight: 250, boldWeight: 800 });
-    expect(resolveFaces(designSystem([]), 'typography')).toMatchObject({
+    expect(resolveHeadlineFaces({ designSystem: system })).toMatchObject({
+      lightWeight: 250,
+      boldWeight: 800,
+    });
+    expect(resolveHeadlineFaces({ designSystem: designSystem([]) })).toMatchObject({
       lightWeight: 300,
       boldWeight: 700,
     });
+  });
+});
+
+describe('describeHeadlineFaces', () => {
+  it('names the face AND the rung it came from', () => {
+    const described = describeHeadlineFaces(
+      resolveHeadlineFaces({
+        designSystem: designSystem([], [{ family: 'Inter', tokens: [], source: null }]),
+      }),
+    );
+    expect(described).toContain('Inter');
+    expect(described).toMatch(/design system/i);
+  });
+
+  it('says a substitute is a substitute rather than passing it off as the brand', () => {
+    const described = describeHeadlineFaces(resolveHeadlineFaces({}));
+    expect(described).toContain(PRELOADED_TYPE_FACES.display);
+    expect(described).toMatch(/no brand face found/i);
   });
 });
 
@@ -202,7 +239,13 @@ describe('parseHeadline', () => {
 });
 
 describe('headlineSvg', () => {
-  const faces = { stack: "'Test', sans-serif", lightWeight: 300, boldWeight: 700 };
+  const faces = {
+    stack: "'Test', sans-serif",
+    lightWeight: 300,
+    boldWeight: 700,
+    family: 'Test',
+    source: 'design-system',
+  } as const;
 
   it('draws exactly the lines the plan decided — no more, no fewer', () => {
     for (const rung of [0, 1, 3]) {
@@ -255,7 +298,13 @@ describe('headlineSvgDataUri', () => {
   it('is a data: URI and never a blob: one', () => {
     // A blob-sourced SVG taints the canvas, and the next Mediabunny frame read throws
     // 'tainted sources'. This assertion is the regression fence on a fixed bug.
-    const uri = headlineSvgDataUri(headlineSvg(planAtRung(0), { stack: 'x', lightWeight: 300, boldWeight: 700 }, INK));
+    const uri = headlineSvgDataUri(
+      headlineSvg(
+        planAtRung(0),
+        { stack: 'x', lightWeight: 300, boldWeight: 700, family: 'x', source: 'fallback' },
+        INK,
+      ),
+    );
     expect(uri.startsWith('data:image/svg+xml;charset=utf-8,')).toBe(true);
     expect(uri).not.toContain('blob:');
     expect(decodeURIComponent(uri.split(',')[1])).toContain('<svg');

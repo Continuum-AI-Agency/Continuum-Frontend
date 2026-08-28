@@ -125,6 +125,8 @@ async function main(): Promise<void> {
   await browser.close();
 
   const inkHex = `#${run.ink.map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+  const modalOf = (c: { measurement: { modalInk: readonly number[] } }) =>
+    `#${c.measurement.modalInk.map((b) => b.toString(16).padStart(2, '0')).join('')}`;
   record('drive image.text in real Chrome', 'PASS', `${run.cases.length} cases, ink ${inkHex}`);
   note(`font stack resolved to ${run.fontStack}`);
 
@@ -189,28 +191,77 @@ async function main(): Promise<void> {
     `rung ${dark.rung} (${dark.treatment}), measured ${dark.measurement.backgroundRatio.toFixed(2)}:1`,
   );
 
+  // Both halves of the same guarantee, and the guarantee is unchanged: a token that does not
+  // exist NEVER silently becomes black. With the ink fallback off it fails loudly, exactly as
+  // before; with it on it substitutes the brand's OWN default ink — a real brand colour, one
+  // step, labelled — rather than reaching past it to a measurement.
   check(
-    'an unresolvable ink token FAILS LOUDLY instead of defaulting to black',
+    'an unresolvable ink token FAILS LOUDLY when the ink fallback is off',
     Boolean(run.unresolvableTokenError?.includes('headline-ink')),
     run.unresolvableTokenError ?? 'the op returned an image for a token that does not exist',
   );
+  const substituted = run.unresolvableTokenFallback;
   check(
-    'no design system is a refusal, not a guessed colour',
-    Boolean(run.missingDesignSystemError?.includes('design system')),
-    run.missingDesignSystemError ?? 'the op ran with no brand at all',
+    'and with the fallback ON it takes the BRAND default, never the measured black',
+    substituted.substituted &&
+      substituted.inkSource === 'design-system' &&
+      substituted.measurement.modalInk[0] === run.ink[0] &&
+      substituted.measurement.modalInk[1] === run.ink[1] &&
+      substituted.measurement.modalInk[2] === run.ink[2],
+    `substituted=${substituted.substituted}, ink from ${substituted.inkSource}, ` +
+      `modal ink ${modalOf(substituted)} vs token ${inkHex} — a measured fallback would have ` +
+      'drawn #111111 here and this comparison would fail',
+  );
+  // This check used to read "no design system is a refusal" and matched the word `design
+  // system` in the message. The refusal survives — the ink chain has no fallback rung — but the
+  // SCOPE was wrong: a missing design system used to fail the whole node, when a design system
+  // is one of four places an ink can come from. So the claim is now the one that actually
+  // matters and the string match is stricter, not looser: it refuses, it names the ink, and it
+  // may not blame the design system or an op name that no longer exists.
+  check(
+    'no brand at all is still a refusal WITH THE INK FALLBACK OFF, not a guessed colour',
+    Boolean(
+      run.noBrandAtAllError &&
+        /ink|colour/i.test(run.noBrandAtAllError) &&
+        // Not "fix the token": there is no brand to hold one. The no-brand branch outranks the
+        // named-token branch, and this is what pins that order.
+        /no brand could be read/i.test(run.noBrandAtAllError) &&
+        !/Set Type/.test(run.noBrandAtAllError) &&
+        !/needs the brand's design system/.test(run.noBrandAtAllError),
+    ),
+    run.noBrandAtAllError ?? 'the op ran with no brand at all',
+  );
+  check(
+    'a brand with a FACE and no colour refuses on the INK with the fallback off, and says the type resolved',
+    Boolean(
+      run.typeButNoInkError &&
+        /colour/i.test(run.typeButNoInkError) &&
+        /type resolved/i.test(run.typeButNoInkError),
+    ),
+    run.typeButNoInkError ?? 'the op set type in a colour no brand shape carries',
+  );
+  const viaBrandMd = run.cases[2];
+  check(
+    'THE FIX: the legible render above came through brand.md, with no design system in reach',
+    viaBrandMd?.typeSource === 'brand-md' && viaBrandMd?.inkSource === 'brand-md',
+    `${viaBrandMd?.label}: face ${viaBrandMd?.family} from ${viaBrandMd?.typeSource}, ink from ` +
+      `${viaBrandMd?.inkSource} — the same case the op used to throw on before drawing anything`,
   );
 
   record(
     'the design system arrives over HTTP from the Backend',
     'SKIP',
-    'executeWorkflow → loadDesignSystem → /brand-knowledge/design-system needs an authenticated ' +
-      'Backend; this run injects the snapshot directly into runAction, so that ONE hop is unexercised',
+    'executeWorkflow → loadBrandTypeInputs → /brand-knowledge/design-system + get-brand-book + ' +
+      'the brand_profiles row all need an authenticated Backend; this run injects the brand ' +
+      'shapes directly into runAction, so those reads are unexercised',
   );
   record(
     'the brand webfont binary is embedded in the glyph run',
     'SKIP',
-    'no font-byte source exists yet (Continuum-Backend/App/brand-knowledge/fonts is in flight), so ' +
-      'both the measure and the draw resolve the SAME fallback stack — consistent, not yet the brand face',
+    'the cases above use a BRAND face (Georgia) and no byte source for brand faces exists yet ' +
+      '(Continuum-Backend/App/brand-knowledge/fonts is in flight), so nothing is embedded on this ' +
+      'path. The PRELOADED fallback faces are embedded and burnin:type:bench asserts that; a ' +
+      "brand's own webfont binary is the hop still uncovered",
   );
 
   finish();

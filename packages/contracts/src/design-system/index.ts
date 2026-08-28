@@ -11,3 +11,4 @@ export * from './render';
 export * from './rigor';
 export * from './sections';
 export * from './tokens';
+export * from './typeResolution';

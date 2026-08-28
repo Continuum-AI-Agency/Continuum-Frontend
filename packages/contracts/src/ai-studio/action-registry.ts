@@ -254,6 +254,24 @@ const textPlacementConfig = z.object({
    * escalates the BACKGROUND rather than moving the type somewhere friendlier.
    */
   escalate: z.boolean().default(true),
+  /**
+   * May the op set the headline in a face Continuum ships when the brand names none anywhere?
+   *
+   * DEFAULT ON, because a node that refuses to draw is worth less than one that draws and says
+   * what it drew — and it says so: the resolved face and its rung are on the node and in the
+   * panel either way. OFF restores a hard refusal, which is the right setting for a piece where
+   * a substitute typeface is worse than no piece at all.
+   */
+  fallbackType: z.boolean().default(true),
+  /**
+   * May the op MEASURE a legible ink off the photo when no brand shape carries a colour?
+   *
+   * Same trade, and the same default. The fallback is never a hard-coded hex — `deriveLegibleInk`
+   * compares near-black against the box's darkest slice and white against its brightest, and
+   * takes the winner — so OFF is not "avoid a guess", it is "this piece must be in a brand
+   * colour or not exist".
+   */
+  fallbackInk: z.boolean().default(true),
 });
 
 const overlayTransformConfig = z.object({

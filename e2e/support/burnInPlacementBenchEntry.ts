@@ -37,8 +37,8 @@ import {
   createMeasurer,
   parseHeadline,
   renderHeadline,
-  resolveFaces,
-  resolveInk,
+  resolveHeadlineFaces,
+  resolveHeadlineInk,
 } from '../../src/StudioCanvas/utils/actions/imageText';
 import { runAction } from '../../src/StudioCanvas/utils/actions/runAction';
 
@@ -313,7 +313,7 @@ export interface PlacedCase {
 
 /** The block extent for a frame, from the same measurer and breaker the render uses. */
 function extentFor(frame: Size, measure: number): BlockExtent {
-  const faces = resolveFaces(BRAND, 'typography');
+  const faces = resolveHeadlineFaces({ designSystem: BRAND });
   return headlineBlockExtent({
     tokens: parseHeadline(HEADLINE),
     frame,
@@ -329,8 +329,9 @@ async function runCase(
   source: OffscreenCanvas,
 ): Promise<PlacedCase> {
   const photoUrl = await canvasToDataUrl(source);
-  const ink = resolveInk(BRAND, 'palette', 'ink');
-  const faces = resolveFaces(BRAND, 'typography');
+  const ink = resolveHeadlineInk({ designSystem: BRAND }, 'ink');
+  if (!ink) throw new Error(`${label}: the bench brand's ink token did not resolve`);
+  const faces = resolveHeadlineFaces({ designSystem: BRAND });
 
   // The REAL dispatcher: parseActionConfig -> SYNC_OPS['image.text'] -> setImageText. If the
   // schema stops carrying the offset, or the op stops reading it, it fails HERE and not in a
@@ -342,7 +343,7 @@ async function runCase(
       { handle: 'text-in', text: HEADLINE },
     ],
     config,
-    designSystem: BRAND,
+    brand: { designSystem: BRAND },
   });
   if (output.type !== 'image') throw new Error(`${label}: the op returned ${output.type}`);
   const decoded = await decode(`data:${output.mimeType};base64,${output.base64}`);
@@ -358,7 +359,7 @@ async function runCase(
       height: number;
     },
     headline: HEADLINE,
-    ink,
+    ink: ink.rgb,
     faces,
     settings: config,
   });
@@ -377,13 +378,13 @@ async function runCase(
     label,
     frame,
     config,
-    ink: inkBox(decoded.pixels, ink),
+    ink: inkBox(decoded.pixels, ink.rgb),
     planBox: plan.box,
     askedBox: asked,
     planLines: plan.lines.length,
     rung: plan.treatment.rung,
     treatment: plan.treatment.kind,
-    measured: backgroundContrast(decoded.pixels, asked, ink),
+    measured: backgroundContrast(decoded.pixels, asked, ink.rgb),
     bytes: decoded.bytes,
   };
 }
@@ -464,7 +465,11 @@ async function run(): Promise<BurnInPlacementBenchRun> {
   );
 
   return {
-    ink: [...resolveInk(BRAND, 'palette', 'ink')] as [number, number, number],
+    ink: [...(resolveHeadlineInk({ designSystem: BRAND }, 'ink')?.rgb ?? [0, 0, 0])] as [
+      number,
+      number,
+      number,
+    ],
     minContrast: VERNE_TITLE_MIN_CONTRAST,
     snapRadius: BURN_IN_SNAP_RADIUS,
     drag: { before, after, brokenOffset },

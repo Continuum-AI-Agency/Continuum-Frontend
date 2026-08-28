@@ -155,8 +155,51 @@ export async function ensureCaptionFonts(families: readonly string[]): Promise<s
   return registerCaptionFonts(await loadCaptionFonts(families));
 }
 
+
+/**
+ * One family as an `@font-face` rule with the woff2 inlined as a data URI.
+ *
+ * Registering a face on `document.fonts` is enough for a canvas MEASURE and useless for an
+ * SVG DRAW: an SVG rasterised through `new Image()` is an isolated document that cannot see
+ * the page's font set and cannot fetch a webfont, so a `font-family` it names resolves to a
+ * locally installed face or to the generic fallback. Inlining the bytes is the only way the
+ * two halves of the burn-in — the metrics the plan was computed from, and the glyphs that get
+ * drawn — end up in the same typeface. That is also what makes the burn-in's `fallback` rung
+ * honest rather than a label over Helvetica.
+ *
+ * Null for a family with no file behind it — a brand's own face is not something we hold.
+ */
+const faceCssCache = new Map<string, Promise<string | null>>();
+
+export function captionFontFaceCss(family: string | undefined): Promise<string | null> {
+  const spec = captionFontSpec(family);
+  if (!spec) return Promise.resolve(null);
+  let pending = faceCssCache.get(spec.family);
+  if (!pending) {
+    pending = loadCaptionFonts([spec.family])
+      .then((payloads) => {
+        const payload = payloads[0];
+        if (!payload) return null;
+        const bytes = new Uint8Array(payload.bytes);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        }
+        return (
+          `@font-face{font-family:'${spec.family}';` +
+          `src:url(data:font/woff2;base64,${btoa(binary)}) format('woff2');` +
+          `font-weight:${spec.weightRange};font-style:normal;}`
+        );
+      })
+      .catch(() => null);
+    faceCssCache.set(spec.family, pending);
+  }
+  return pending;
+}
+
 /** Test seam: forget every cached byte buffer and registration. */
 export function resetCaptionFontsForTest(): void {
   byteCache.clear();
   registered.clear();
+  faceCssCache.clear();
 }

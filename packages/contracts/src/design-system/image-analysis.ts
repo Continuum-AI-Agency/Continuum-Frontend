@@ -274,7 +274,42 @@ export function darkPercentileContrast(
   foreground: Rgb = VERNE_NAVY,
   opts: DarkPercentileOptions = {},
 ): DarkPercentileContrast {
+  return percentileSliceContrast(pixels, box, foreground, opts.percentile ?? VERNE_DARK_PERCENTILE, 'below');
+}
+
+/**
+ * The same measurement against the BRIGHTEST slice — the worst case for a LIGHT foreground.
+ *
+ * Verne only ever set dark type, so only the dark slice existed. A headline that may be white
+ * needs the mirror, and it needs it for the same reason: a mostly-dark photo with one blown
+ * highlight averages dark and renders a white headline that vanishes across the highlight.
+ * Choosing between a light and a dark ink by comparing both against the DARK slice would
+ * flatter white on exactly the photos where it is least legible.
+ *
+ * `percentile` names the slice from the same end as {@link darkPercentileContrast}: 20 means
+ * "the brightest 20%".
+ */
+export function brightPercentileContrast(
+  pixels: PixelBuffer,
+  box: FractionalBox = VERNE_HEADLINE_ZONE,
+  foreground: Rgb = VERNE_NAVY,
+  opts: DarkPercentileOptions = {},
+): DarkPercentileContrast {
   const q = opts.percentile ?? VERNE_DARK_PERCENTILE;
+  return percentileSliceContrast(pixels, box, foreground, 100 - q, 'above');
+}
+
+/**
+ * The shared body. ONE loop, so the dark and bright readings cannot drift into measuring
+ * different things — the step order documented above is calibrated and belongs in one place.
+ */
+function percentileSliceContrast(
+  pixels: PixelBuffer,
+  box: FractionalBox,
+  foreground: Rgb,
+  q: number,
+  keep: 'below' | 'above',
+): DarkPercentileContrast {
   const rect = resolveBox(pixels, box);
   const count = rect.width * rect.height;
   const luma = new Float64Array(count);
@@ -293,7 +328,8 @@ export function darkPercentileContrast(
   let selected = 0;
   for (let row = 0; row < rect.height; row += 1) {
     for (let col = 0; col < rect.width; col += 1) {
-      if (luma[row * rect.width + col] > cut) continue;
+      const value = luma[row * rect.width + col];
+      if (keep === 'below' ? value > cut : value < cut) continue;
       const px = pixelAt(pixels, rect.x + col, rect.y + row);
       r += px[0];
       g += px[1];

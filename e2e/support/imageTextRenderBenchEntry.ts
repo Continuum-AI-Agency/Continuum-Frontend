@@ -7,6 +7,8 @@
 // back, and re-measures it with the same `darkPercentileContrast` the op planned against.
 
 import {
+  type BrandTypeInputs,
+  type BrandTypeSource,
   type DesignSystemSnapshot,
   darkPercentileContrast,
   EMPTY_ADHERENCE,
@@ -25,10 +27,11 @@ import {
 import { canvasToDataUrl } from '../../src/StudioCanvas/utils/actions/imageOps';
 import {
   createMeasurer,
+  embedFace,
   parseHeadline,
   renderHeadline,
-  resolveFaces,
-  resolveInk,
+  resolveHeadlineFaces,
+  resolveHeadlineInk,
 } from '../../src/StudioCanvas/utils/actions/imageText';
 import { runAction } from '../../src/StudioCanvas/utils/actions/runAction';
 
@@ -103,6 +106,23 @@ const BRAND: DesignSystemSnapshot = {
   conflicts: [],
 };
 
+/**
+ * The same brand values reached through two different rungs of the type chain.
+ *
+ * Georgia and `#0f1f43` on both, deliberately: the legibility measurements below are then
+ * comparable across rungs, and anything that differs between the two cases is the RESOLUTION
+ * rather than the typeface. The brand.md colour carries `name: 'ink'` so one CONFIG — including
+ * its named `inkToken` — drives both, which also proves a named ink token is not a
+ * design-system-only affordance.
+ */
+const FROM_DESIGN_SYSTEM: BrandTypeInputs = { designSystem: BRAND };
+const FROM_BRAND_MD: BrandTypeInputs = {
+  brandMd: {
+    colors: [{ value: INK_HEX, role: 'text', name: 'ink' }],
+    typography: [{ family: 'Georgia', role: 'display' }],
+  },
+};
+
 const CONFIG = {
   anchor: 'top-right' as const,
   offsetX: 0,
@@ -122,12 +142,12 @@ const CONFIG = {
  * two functions the op derives it from, which is what keeps this measurement pointed at the
  * type rather than at a band the type may no longer be in.
  */
-function headlineBox() {
+function headlineBox(brand: BrandTypeInputs) {
   const frame = { width: WIDTH, height: HEIGHT };
   const extent = headlineBlockExtent({
     tokens: parseHeadline(HEADLINE),
     frame,
-    measureText: createMeasurer(resolveFaces(BRAND, 'typography'), 0),
+    measureText: createMeasurer(resolveHeadlineFaces(brand), 0),
     measureFraction: MEASURE,
   });
   return blockRect(
@@ -235,6 +255,12 @@ function measureBox(frame: PixelBuffer, box: typeof FULL_FRAME, ink: Rgb): BoxMe
 
 export interface ImageTextCase {
   label: string;
+  /** Which rung of the chain named the face — so "it rendered" is attributed, not assumed. */
+  typeSource: BrandTypeSource;
+  family: string;
+  inkSource: string;
+  /** True when the named ink token did not resolve and the brand default stood in for it. */
+  substituted: boolean;
   /** Rung the ladder stopped on: 0 untouched, 1 harmonised, 2+ that many cumulative veils. */
   rung: number;
   treatment: string;
@@ -255,7 +281,10 @@ export interface ImageTextBenchRun {
   fontStack: string;
   cases: ImageTextCase[];
   unresolvableTokenError: string | null;
-  missingDesignSystemError: string | null;
+  /** The same bad token with the fallback ON — a labelled substitution, not a measurement. */
+  unresolvableTokenFallback: ImageTextCase;
+  noBrandAtAllError: string | null;
+  typeButNoInkError: string | null;
 }
 
 async function runCase(
@@ -263,11 +292,17 @@ async function runCase(
   seed: number,
   floor: number,
   ceiling: number,
+  brand: BrandTypeInputs = FROM_DESIGN_SYSTEM,
+  overrides: Partial<typeof CONFIG> = {},
 ): Promise<ImageTextCase> {
+  const config = { ...CONFIG, ...overrides };
   const photo = gradientPhoto(seed, floor, ceiling);
   const photoUrl = await canvasToDataUrl(photo);
-  const ink = resolveInk(BRAND, 'palette', 'ink');
-  const faces = resolveFaces(BRAND, 'typography');
+  const faces = resolveHeadlineFaces(brand);
+  // The op's own three-step ink resolution, so a substituted token is graded as what it drew.
+  const exact = resolveHeadlineInk(brand, config.inkToken);
+  const ink = exact ?? resolveHeadlineInk(brand, '');
+  if (!ink) throw new Error(`${label}: the bench brand yielded no ink`);
 
   // The REAL dispatcher: parseActionConfig → SYNC_OPS['image.text'] → loadImage → setImageText
   // → imageOutput. Nothing is stubbed on this path.
@@ -277,14 +312,16 @@ async function runCase(
       { handle: 'in', imageUrl: photoUrl },
       { handle: 'text-in', text: HEADLINE },
     ],
-    config: CONFIG,
-    designSystem: BRAND,
+    config,
+    brand,
   });
   if (output.type !== 'image') throw new Error(`${label}: the op returned ${output.type}`);
   const rendered = await decode(`data:${output.mimeType};base64,${output.base64}`);
 
   // The same inputs again, for the PLAN the dispatcher does not hand back. Deterministic, so
   // this is the plan the frame above was drawn from — the assertions below check that it is.
+  // `embedFace` is the op's OWN call, not a copy of it: a family whose bytes we ship changes
+  // both the metrics and the glyphs, so re-planning without it would grade a different frame.
   const { plan, svg } = await renderHeadline({
     image: (await createImageBitmap(
       await photo.convertToBlob(),
@@ -293,13 +330,17 @@ async function runCase(
       height: number;
     },
     headline: HEADLINE,
-    ink,
+    ink: ink.rgb,
     faces,
-    settings: CONFIG,
+    settings: config,
+    fontFaceCss: await embedFace(faces.family),
   });
 
   return {
     label,
+    typeSource: faces.source,
+    family: faces.family,
+    inkSource: ink.source,
     rung: plan.treatment.rung,
     treatment: plan.treatment.kind,
     plannedRatio: plan.treatment.ratio,
@@ -310,13 +351,14 @@ async function runCase(
     svgMentionsBlob: svg.includes('blob:'),
     mimeType: output.mimeType ?? '',
     bytes: rendered.bytes,
-    measurement: measureBox(rendered.pixels, headlineBox(), ink),
+    substituted: exact === null,
+    measurement: measureBox(rendered.pixels, headlineBox(brand), ink.rgb),
   };
 }
 
 async function refusal(
   mutate: (config: Record<string, unknown>) => Record<string, unknown>,
-  drop: boolean,
+  brand: BrandTypeInputs | null,
 ) {
   const photoUrl = await canvasToDataUrl(gradientPhoto(7, 150, 230));
   try {
@@ -327,7 +369,7 @@ async function refusal(
         { handle: 'text-in', text: HEADLINE },
       ],
       config: mutate({ ...CONFIG }),
-      designSystem: drop ? null : BRAND,
+      brand,
     });
     return null;
   } catch (error) {
@@ -336,18 +378,47 @@ async function refusal(
 }
 
 async function run(): Promise<ImageTextBenchRun> {
+  const ink = resolveHeadlineInk(FROM_DESIGN_SYSTEM, CONFIG.inkToken);
+  if (!ink) throw new Error('the bench design system yielded no ink');
   return {
     minContrast: VERNE_TITLE_MIN_CONTRAST,
-    ink: [...resolveInk(BRAND, 'palette', 'ink')] as [number, number, number],
-    fontStack: resolveFaces(BRAND, 'typography').stack,
+    ink: [...ink.rgb] as [number, number, number],
+    fontStack: resolveHeadlineFaces(FROM_DESIGN_SYSTEM).stack,
+    // APPEND-ONLY: the runner indexes [0] and [1] for the ladder assertions.
     cases: [
       // Bright enough that the navy reads straight off the photo — the ladder must not fire.
       await runCase('bright photo, no treatment needed', 0x5eed1, 168, 244),
       // Dark enough that rung 0 fails and the ladder has to rescue the piece.
       await runCase('dark photo, ladder escalates', 0x5eed2, 26, 96),
+      // The same bright photo through a brand with NO design system. Every legibility and ink
+      // assertion in the per-case loop applies to it unchanged, which is the point: the rung the
+      // op used to refuse over now has to clear the same contrast bar in the same measured box.
+      await runCase('bright photo, brand.md only', 0x5eed1, 168, 244, FROM_BRAND_MD),
     ],
-    unresolvableTokenError: await refusal((c) => ({ ...c, inkToken: 'headline-ink' }), false),
-    missingDesignSystemError: await refusal((c) => c, true),
+    // A token nothing carries, with the ink fallback OFF: still the loud failure it always was.
+    unresolvableTokenError: await refusal(
+      (c) => ({ ...c, inkToken: 'headline-ink', fallbackInk: false }),
+      FROM_DESIGN_SYSTEM,
+    ),
+    // The same token with the fallback ON. It must NOT reach the measured black — the brand has
+    // a real ink and the substitution stops there, labelled.
+    unresolvableTokenFallback: await runCase(
+      'bright photo, ink token that does not exist',
+      0x5eed1,
+      168,
+      244,
+      FROM_DESIGN_SYSTEM,
+      { inkToken: 'headline-ink' },
+    ),
+    // No brand reachable at all. Still a refusal — the ink chain has no fallback rung — but the
+    // message may no longer blame the design system, because a design system is now one of four
+    // places an ink can come from rather than the only one.
+    noBrandAtAllError: await refusal((c) => ({ ...c, fallbackInk: false }), null),
+    // A brand with a FACE and no colour: the exact split this change introduced. Type resolves,
+    // ink does not, and the refusal has to say which of the two is missing.
+    typeButNoInkError: await refusal((c) => ({ ...c, fallbackInk: false }), {
+      brandKit: { typography: { primary: 'Georgia' } },
+    }),
   };
 }
 

@@ -119,7 +119,29 @@ describe('image.text', () => {
       measure: VERNE_TITLE_MEASURE,
       minContrast: VERNE_TITLE_MIN_CONTRAST,
       escalate: true,
+      fallbackType: true,
+      fallbackInk: true,
     });
+  });
+
+  // Both fallbacks default ON so the node GENERATES for a brand that has neither a typeface nor
+  // a colour on file — which is most brands before onboarding finishes. Flipping either default
+  // to false turns this op back into a wall for exactly those brands, so the defaults are
+  // pinned here rather than left to the schema to state quietly.
+  it('defaults both fallbacks ON, so the node draws for a brand with nothing on file', () => {
+    const parsed = ACTION_DEFS['image.text'].config.parse({}) as {
+      fallbackType: boolean;
+      fallbackInk: boolean;
+    };
+    expect(parsed.fallbackType).toBe(true);
+    expect(parsed.fallbackInk).toBe(true);
+    // And both are genuinely opt-OUT, not decorative.
+    const off = ACTION_DEFS['image.text'].config.parse({
+      fallbackType: false,
+      fallbackInk: false,
+    }) as { fallbackType: boolean; fallbackInk: boolean };
+    expect(off.fallbackType).toBe(false);
+    expect(off.fallbackInk).toBe(false);
   });
 
   // The whole point of carrying the offset as a default rather than re-anchoring the op:
@@ -140,6 +162,8 @@ describe('image.text', () => {
     expect(Object.keys(parsed as object).sort()).toEqual([
       'anchor',
       'escalate',
+      'fallbackInk',
+      'fallbackType',
       'inkToken',
       'marginFrac',
       'measure',

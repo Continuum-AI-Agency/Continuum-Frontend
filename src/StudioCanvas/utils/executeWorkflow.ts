@@ -9,7 +9,6 @@ import {
   type BatchItem,
   batchItemType,
   combineBatches,
-  type DesignSystemSnapshot,
   isActionId,
   LAYER_EDITOR_IMAGE_INPUT_HANDLE,
   MAX_BATCH_ITEMS,
@@ -23,7 +22,7 @@ import {
   variationIndexFromHandle,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
-import { fetchDesignSystem } from '@/lib/brands/designSystem.client';
+import { loadBrandTypeInputs } from '@/lib/brands/brandTypeInputs.client';
 import { registerCanvasOutput } from '@/lib/creative-assets/registerCanvasAsset';
 import { persistAssetRendition } from '@/lib/library/assetPreview';
 import { readServerSentEvents } from '@/lib/sse/readServerSentEvents';
@@ -155,22 +154,6 @@ type NodeReadiness = {
   // them, so the run halts cleanly at the gate.
   awaiting?: boolean;
 };
-
-/**
- * The brand's design system, or null.
- *
- * A missing system is not an error HERE — only the op that needs one may refuse, and it does
- * so with a message about type rather than about a fetch. A failed READ is folded into the
- * same null on purpose: the op's refusal is the honest surface for both.
- */
-async function loadDesignSystem(brandId: string | undefined): Promise<DesignSystemSnapshot | null> {
-  if (!brandId) return null;
-  try {
-    return (await fetchDesignSystem(brandId)).design_system;
-  } catch {
-    return null;
-  }
-}
 
 const normalizeText = (value?: string | null): string | undefined => {
   const trimmed = typeof value === 'string' ? value.trim() : '';
@@ -2455,11 +2438,13 @@ export async function executeWorkflow(
         const def = ACTION_DEFS[actionId];
         const config = (data.config ?? {}) as Record<string, unknown>;
 
-        // Only the op that reads the BRAND pays for the round trip. Fetched per run rather
-        // than cached: a design system re-ingested mid-session must not set type in the
-        // colour it had this morning.
-        const designSystem =
-          actionId === 'image.text' ? await loadDesignSystem(workflowBrandId) : null;
+        // Only the op that reads the BRAND pays for the round trips. `loadBrandTypeInputs` is
+        // the SAME reader the burn-in's config panel previews through, so a panel that promises
+        // a face cannot be looking at a different brand than the render uses. Fetched per run
+        // rather than cached: a brand re-ingested mid-session must not set type in the face it
+        // had this morning.
+        const brand =
+          actionId === 'image.text' ? await loadBrandTypeInputs(workflowBrandId) : null;
 
         // Cancel reaches a long re-encode the same way it reaches a generation.
         const controller = controls.registerController(nodeId);
@@ -2492,7 +2477,7 @@ export async function executeWorkflow(
                   await actionInputFromItem(item, handle, collectionPort.modality),
                 ],
                 config,
-                designSystem,
+                brand,
                 signal: controller.signal,
               }),
             );
@@ -2514,7 +2499,7 @@ export async function executeWorkflow(
               actionId,
               inputs: await resolveActionInputsFor(def, nodeId, edges, resolvedOutputs, nodeById),
               config,
-              designSystem,
+              brand,
               signal: controller.signal,
             });
           }

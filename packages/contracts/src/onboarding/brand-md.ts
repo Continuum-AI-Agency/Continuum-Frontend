@@ -231,9 +231,16 @@ export function assembleBrandMd(args: {
 
 const COLOR_ROLES = brandColorRoleEnum.options;
 
-function extractColors(
+/**
+ * The brand's colours as role-tagged tokens, from a palette or a bare kit list.
+ *
+ * Exported because the burn-in's ink chain (design-system/typeResolution.ts) reads the
+ * SAME shapes from the kit and the scrape. A second copy of this mapping is how "the kit
+ * says navy" and "the piece is navy" stop meaning the same thing.
+ */
+export function extractBrandColorTokens(
   palette: BrandPalette | null | undefined,
-  kitColors: string[],
+  kitColors: readonly string[],
 ): Array<{ value: string; role: BrandColorRole }> {
   const fromPalette = COLOR_ROLES.flatMap((role) => {
     const value = palette?.[role];
@@ -246,7 +253,8 @@ function extractColors(
     .map((value, index) => ({ value, role: COLOR_ROLES[index] }));
 }
 
-function extractTypography(
+/** `primary -> display`, `secondary -> body`. The one place that mapping is written. */
+export function extractBrandFontTokens(
   typography: BrandTypography | null | undefined,
 ): Array<{ family: string; role: 'display' | 'body' }> {
   const out: Array<{ family: string; role: 'display' | 'body' }> = [];
@@ -297,8 +305,8 @@ export function extractBrandTokens(
   return brandMdTokensSchema.parse({
     schema_version: 1,
     brand_name: dna.brand_name,
-    colors: extractColors(dna.palette, kit?.colors ?? []),
-    typography: extractTypography(dna.typography),
+    colors: extractBrandColorTokens(dna.palette, kit?.colors ?? []),
+    typography: extractBrandFontTokens(dna.typography),
     logo: logoPath ? { storage_path: logoPath, treatment_default: 'palette-only' } : null,
     voice: extractVoice(dna),
     personality: extractPersonality(dna),

@@ -14,13 +14,12 @@ mock.module('../../stores/useStudioStore', () => ({
 }));
 
 let snapshot: unknown = null;
-mock.module('@/lib/brands/useBrandDesignSections.client', () => ({
-  useBrandDesignSections: () => ({
-    sections: [],
+mock.module('@/lib/brands/useBrandType.client', () => ({
+  useBrandType: () => ({
+    inputs: { designSystem: snapshot },
     snapshot,
-    designSystemId: null,
+    facesReady: true,
     isLoading: false,
-    error: null,
   }),
 }));
 
@@ -197,6 +196,67 @@ describe('BurnInConfig', () => {
   it('says out loud that contrast outranks placement', () => {
     render(<BurnInConfig nodeId="act-1" config={{}} />);
     expect(screen.getByText(/outranks placement/i)).toBeTruthy();
+  });
+
+  // A substitute face is fine; an unlabelled one is not. The panel is the surface that has to
+  // name it, and `burnin:type:bench` SKIPs the DOM hop on the strength of these two tests.
+  it('names the resolved face and the shape it was read from', () => {
+    render(<BurnInConfig nodeId="act-1" config={{}} />);
+    const source = screen.getByTestId('burn-in-type-source');
+    expect(source.getAttribute('data-type-source')).toBe('design-system');
+    expect(source.textContent).toContain('Georgia');
+    expect(screen.getByText(/Read from the design system/i)).toBeTruthy();
+  });
+
+  it('says plainly that no brand face was found when the chain reaches its last rung', () => {
+    snapshot = null;
+    render(<BurnInConfig nodeId="act-1" config={{}} />);
+    const source = screen.getByTestId('burn-in-type-source');
+    expect(source.getAttribute('data-type-source')).toBe('fallback');
+    expect(source.textContent).toMatch(/no brand face found/i);
+    expect(screen.getByText(/set in a face Continuum ships/i)).toBeTruthy();
+  });
+
+  it('names where the INK came from, and says what happens when there is none', () => {
+    render(<BurnInConfig nodeId="act-1" config={{}} />);
+    expect(screen.getByTestId('burn-in-ink-source').textContent).toContain(
+      'from the design system',
+    );
+    cleanup();
+    snapshot = null;
+    render(<BurnInConfig nodeId="act-1" config={{}} />);
+    // Not a refusal any more, and the panel must not still threaten one: the ink is measured.
+    expect(screen.getByTestId('burn-in-ink-source').textContent).toMatch(/MEASURED from the photo/);
+  });
+
+  // Both fallbacks are opt-out, and the panel's job is to say what OFF costs — a switch
+  // labelled only with what ON does leaves the user to guess why their node started refusing.
+  it('offers both fallbacks, defaulted ON so the node generates out of the box', () => {
+    render(<BurnInConfig nodeId="act-1" config={{}} />);
+    // Base UI's Switch reports state as `data-checked` / `data-unchecked`, not aria-checked.
+    expect(screen.getByLabelText('Use a fallback typeface').hasAttribute('data-checked')).toBe(true);
+    expect(screen.getByLabelText('Measure a fallback ink').hasAttribute('data-checked')).toBe(true);
+  });
+
+  it('says what OFF does, not just what ON does', () => {
+    render(<BurnInConfig nodeId="act-1" config={{}} />);
+    expect(screen.getAllByText(/OFF makes this action REFUSE TO RUN/).length).toBe(2);
+  });
+
+  it('writes each toggle independently', () => {
+    render(<BurnInConfig nodeId="act-1" config={{}} />);
+    fireEvent.click(screen.getByLabelText('Measure a fallback ink'));
+    expect(lastConfig()).toMatchObject({ fallbackInk: false });
+    fireEvent.click(screen.getByLabelText('Use a fallback typeface'));
+    expect(lastConfig()).toMatchObject({ fallbackType: false });
+  });
+
+  it('warns that a colourless brand will REFUSE once the ink fallback is off', () => {
+    snapshot = null;
+    render(<BurnInConfig nodeId="act-1" config={{ fallbackInk: false }} />);
+    expect(screen.getByTestId('burn-in-ink-source').textContent).toMatch(
+      /switched off — this action will refuse/i,
+    );
   });
 });
 

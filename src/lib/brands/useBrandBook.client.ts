@@ -12,7 +12,9 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export const brandBookQueryKey = (brandId?: string) => ['brand-book', brandId] as const;
 
-async function fetchBrandBookClient(brandId: string): Promise<BrandBookResponse | null> {
+/** Exported for the callers that need the book OUTSIDE React — the canvas resolves a brand's
+ *  type mid-run, where a hook is not available and a second fetcher would be a second answer. */
+export async function fetchBrandBookClient(brandId: string): Promise<BrandBookResponse | null> {
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.functions.invoke('get-brand-book', { body: { brandId } });
   if (error) {

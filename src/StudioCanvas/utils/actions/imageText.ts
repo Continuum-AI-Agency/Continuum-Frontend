@@ -7,10 +7,15 @@
 //
 // Three invariants hold the whole thing up:
 //
-//   • THE INK IS THE TOKEN. It is resolved from the brand's design system once, handed to the
-//     planner, and written into the SVG `fill` verbatim. Nothing in the draw path recolours
-//     it, and an unresolvable token throws — a silent black headline on a brand piece is a
-//     worse outcome than a refusal somebody can act on.
+//   • THE INK IS THE TOKEN. It is resolved from the brand ONCE — design system, then the
+//     brand book, then the kit, then the scrape — handed to the planner, and written into the
+//     SVG `fill` verbatim. Nothing in the draw path recolours it, and a brand that yields no
+//     colour anywhere still throws: a silent black headline on a brand piece is a worse
+//     outcome than a refusal somebody can act on.
+//   • TYPE IS NOT INK. The face walks the same chain and then one rung further, to a face
+//     this product ships and can embed. That rung is LABELLED, never silent — see
+//     `resolveBrandType` (contracts, design-system/typeResolution.ts). Refusing the whole
+//     node because the typography was somewhere else was the old bug.
 //   • ONE TREATMENT FUNCTION. {@link applyTreatment} is what the contrast PROBE composites and
 //     what the final frame composites. Two implementations would drift, and they would drift
 //     in the flattering direction: the plan would claim a ratio the render never reached.
@@ -18,9 +23,13 @@
 //     {@link createMeasurer} — this is the single biggest source of drift in type placement.
 
 import {
+  BRAND_INK_SOURCE_LABEL,
+  BRAND_TYPE_SOURCE_LABEL,
+  type BrandInkSource,
+  type BrandTypeInputs,
+  type BrandTypeSource,
   type BurnInAnchor,
   type DesignSection,
-  type DesignSystemSnapshot,
   type DesignToken,
   darkPercentileContrast,
   type FractionalBox,
@@ -32,7 +41,11 @@ import {
   type PlacementPlan,
   type PlacementTreatment,
   type ProbeContrast,
+  deriveLegibleInk,
+  hasAnyBrandShape,
   planPlacement,
+  resolveBrandInk,
+  resolveBrandType,
   type Rgb,
   resolveBox,
   type Size,
@@ -40,16 +53,17 @@ import {
   type TextStyle,
   type TreatmentStep,
 } from '@continuum/contracts';
-import { headlineBlockExtent, placementOptionsFor } from './burnInPlacement';
+import { captionFontFaceCss, ensureCaptionFonts } from '@/lib/clips/captionFonts';
+import { blockRect, headlineBlockExtent, placementOptionsFor } from './burnInPlacement';
 import type { DrawableImage } from './imageOps';
 
-// Type comes from typography and ink comes from the palette. These were config fields once —
-// two `designSectionSchema` enums that offered `motion`, `voice`, `radii` and `iconography` as
-// the source of a headline colour, purely so the generic Zod panel had something to render.
-// They are constants because there is no second right answer, and a question with one right
-// answer and eleven wrong ones is not a setting.
+// Type comes from typography. This was a config field once — a `designSectionSchema` enum that
+// offered `motion`, `voice`, `radii` and `iconography` as the source of a headline face, purely
+// so the generic Zod panel had something to render. It is a constant because there is no second
+// right answer, and a question with one right answer and eleven wrong ones is not a setting.
+// The ink's own section died with it: `resolveBrandInk` walks the brand's shapes and names the
+// one it read, which is strictly more than a section name ever said.
 const TYPE_SECTION: DesignSection = 'typography';
-const INK_SECTION: DesignSection = 'palette';
 
 // ── Ink ──────────────────────────────────────────────────────────────────────────────────
 
@@ -71,49 +85,37 @@ export function parseHexColour(value: string): Rgb | null {
 export const rgbToHex = (rgb: Rgb): string =>
   `#${rgb.map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 
-const bareName = (name: string): string => name.trim().toLowerCase().replace(/^--/, '');
+/** The ink, plus WHERE it came from — the panel names the source beside the swatch. */
+export interface HeadlineInk {
+  readonly rgb: Rgb;
+  /** Set when the config named a token nothing carries and the brand's default was used. */
+  readonly substitutedFor?: string;
+  /** `fallback` only ever comes from {@link deriveHeadlineInk} — the brand walker cannot say it. */
+  readonly source: BrandTypeSource;
+  /** The token the colour was named by, when the source named one. */
+  readonly tokenName: string | null;
+  /** Which of the two measured candidates won, on the fallback rung only. */
+  readonly fallbackName?: 'black' | 'white';
+  /** What the winner measured against its own worst case. Reported by the bench. */
+  readonly fallbackRatio?: number;
+}
 
 /**
- * Names a design system gives its body ink, in preference order — the same vocabulary
- * `projectSectionsToBrandTokens` reads for the `text` colour role, so "the section's default
- * ink" means the same colour on both sides rather than "whichever token was listed first".
- */
-const DEFAULT_INK_NAMES = /^(fg-1|text|ink|foreground|body|navy)$/;
-
-const tokensIn = (
-  snapshot: DesignSystemSnapshot,
-  section: DesignSection,
-  kind: DesignToken['kind'],
-): DesignToken[] =>
-  snapshot.tokens.filter((token) => token.kind === kind && sectionForToken(token) === section);
-
-/**
- * The headline colour, from the brand's own tokens.
+ * The headline colour, from whichever brand shape actually carries colour.
  *
- * THROWS rather than falling back. A design-system reference that silently resolves to black
- * produces a piece that looks finished and is off-brand, which is the failure nobody catches
- * until it is published; an error names the token and the section so it can be fixed.
+ * NULL rather than a throw, and never a default. Only {@link setImageText} knows whether the
+ * TYPE resolved, and "this brand has no colour" and "nothing about this brand could be read"
+ * are different sentences — the code this replaces printed one message for both, and blamed
+ * the design system for a brand that had never uploaded one.
+ *
+ * The chain itself is `resolveBrandInk` (contracts, design-system/typeResolution.ts), which
+ * has no fallback rung on purpose: a guessed brand colour is worse than a refusal.
  */
-export function resolveInk(
-  snapshot: DesignSystemSnapshot,
-  section: DesignSection,
-  tokenName: string,
-): Rgb {
-  const colours = tokensIn(snapshot, section, 'color');
-  const wanted = bareName(tokenName);
-  const named = wanted ? colours.filter((token) => bareName(token.name) === wanted) : [];
-  const defaults = colours.filter((token) => DEFAULT_INK_NAMES.test(bareName(token.name)));
-  const pool = wanted ? named : [...defaults, ...colours];
-
-  for (const token of pool) {
-    const rgb = parseHexColour(token.resolvedValue ?? token.value);
-    if (rgb) return rgb;
-  }
-  throw new Error(
-    wanted
-      ? `The "${section}" section has no colour token named "${tokenName}" that resolves to a literal colour — set the type in the brand's real ink or fix the token, do not ship a guessed one.`
-      : `The "${section}" section carries no resolvable colour token, so there is no brand ink to set this type in.`,
-  );
+export function resolveHeadlineInk(inputs: BrandTypeInputs, tokenName = ''): HeadlineInk | null {
+  const resolved = resolveBrandInk(inputs, tokenName);
+  if (!resolved) return null;
+  const rgb = parseHexColour(resolved.hex);
+  return rgb ? { rgb, source: resolved.source, tokenName: resolved.tokenName } : null;
 }
 
 // ── Faces ────────────────────────────────────────────────────────────────────────────────
@@ -125,18 +127,24 @@ export function resolveInk(
  * draws are built from the same {@link HeadlineFaces}, because a measure and a draw that
  * resolve different families produce a plan whose line breaks do not match the glyphs.
  *
- * CEILING: an SVG rendered as an image cannot load a remote webfont, so a brand family that is
- * not installed locally resolves to the fallback in BOTH paths — consistent, and not yet the
- * brand's face. Embedding the binary as an `@font-face` data URI (the shape
- * `designSystemFontEmbedSchema` already describes) is the upgrade, and it needs a byte source.
+ * A family we ship bytes for is made real on both sides by {@link embedFace}; every other
+ * family still resolves to `FALLBACK_STACK` in both paths, because an SVG rasterised as an
+ * image cannot fetch a webfont. `source` is honest about which brand SHAPE named the family —
+ * it does not claim the bytes were found.
  */
 export interface HeadlineFaces {
   readonly stack: string;
   readonly lightWeight: number;
   readonly boldWeight: number;
+  /** The family the stack leads with: what the UI names, and the key the embed looks up. */
+  readonly family: string;
+  /** Which of the brand's shapes the family came from. `fallback` means none of them did. */
+  readonly source: BrandTypeSource;
 }
 
 const FALLBACK_STACK = "'Helvetica Neue', Helvetica, Arial, sans-serif";
+
+const bareName = (name: string): string => name.trim().toLowerCase().replace(/^--/, '');
 
 /** A family name safe to interpolate into a font shorthand and an XML attribute. */
 const quoteFamily = (family: string): string | null => {
@@ -153,22 +161,55 @@ const weightFrom = (tokens: readonly DesignToken[], match: RegExp): number | nul
   return null;
 };
 
-export function resolveFaces(
-  snapshot: DesignSystemSnapshot,
-  section: DesignSection,
-): HeadlineFaces {
-  const fontTokens = tokensIn(snapshot, section, 'font');
-  const declared = fontTokens
-    .map((token) => quoteFamily((token.resolvedValue ?? token.value).split(',')[0] ?? ''))
-    .find((family): family is string => family !== null);
-  const family = declared ?? quoteFamily(snapshot.fonts[0]?.family ?? '');
-  const scale = snapshot.tokens.filter((token) => sectionForToken(token) === section);
+/**
+ * The faces, from anywhere the brand keeps type — and always an answer.
+ *
+ * WHICH FAMILY is the chain's call (`resolveBrandType`), so the burn-in, the panel preview and
+ * anything else that has to name the face read the same rung. WHAT WEIGHTS is still a design
+ * system question: `w-light` / `w-bold` are type-scale tokens and no other brand shape carries
+ * them, so a brand resolved off its brand book gets the 300/700 defaults rather than a weight
+ * invented from a family name.
+ */
+export function resolveHeadlineFaces(inputs: BrandTypeInputs): HeadlineFaces {
+  const type = resolveBrandType(inputs);
+  const family = quoteFamily(type.display);
+  const scale = (inputs.designSystem?.tokens ?? []).filter(
+    (token) => sectionForToken(token) === TYPE_SECTION,
+  );
   return {
     stack: family ? `${family}, ${FALLBACK_STACK}` : FALLBACK_STACK,
     lightWeight: weightFrom(scale, /light|thin/) ?? 300,
     boldWeight: weightFrom(scale, /bold|black|heavy/) ?? 700,
+    family: type.display,
+    source: type.source,
   };
 }
+
+/**
+ * One sentence naming the face AND its rung, for the node badge and the config panel.
+ *
+ * Shared so the two surfaces cannot drift into saying different things about one render. A
+ * substitute face is fine; an unlabelled substitute is the lie this product does not tell.
+ */
+export const describeHeadlineFaces = (faces: HeadlineFaces): string =>
+  faces.source === 'fallback'
+    ? `${faces.family} — no brand face found`
+    : `${faces.family} — from ${BRAND_TYPE_SOURCE_LABEL[faces.source]}`;
+
+/**
+ * The same sentence for the INK, and the reason it is a separate function rather than a
+ * parameter: the fallback rung means something different here. A fallback FACE is a face we
+ * ship; a fallback INK is a measurement, so the label has to say what was measured and why,
+ * not just that nothing was found.
+ */
+export const describeHeadlineInk = (ink: HeadlineInk): string => {
+  if (ink.source === 'fallback') {
+    return `no brand colour found — using ${ink.fallbackName ?? 'black'} for legibility`;
+  }
+  const named = `${ink.tokenName ?? rgbToHex(ink.rgb)} — from ${BRAND_INK_SOURCE_LABEL[ink.source]}`;
+  // A substitution is still a substitution even when what replaced it is a real brand colour.
+  return ink.substitutedFor ? `${named} (no token named "${ink.substitutedFor}")` : named;
+};
 
 const fontShorthand = (faces: HeadlineFaces, style: TextStyle): string =>
   `${style.weight === 'bold' ? faces.boldWeight : faces.lightWeight} ${style.sizePx}px ${faces.stack}`;
@@ -284,6 +325,58 @@ function createProbe(image: DrawableImage, frame: Size, ink: Rgb): ProbeContrast
   };
 }
 
+/**
+ * The last ink rung: measure the photo where the type will sit, and take the legible one.
+ *
+ * The box is the one thing this needs and the plan has not produced yet — but the plan is not
+ * required for it. `headlineBlockExtent` + `placementOptionsFor` derive where the block WILL
+ * be from the faces and the settings alone, which is exactly what the panel does to draw the
+ * drag rectangle. So the ink is measured over the same pixels the type will cover, before the
+ * planner that needs an ink ever runs.
+ *
+ * Measured over the PRISTINE photo, deliberately. The treatment ladder runs afterwards and
+ * exists to rescue whatever ink it is handed; choosing the ink against an already-veiled frame
+ * would pick the colour that suits a treatment nobody has decided on yet.
+ */
+export function deriveHeadlineInk(
+  image: DrawableImage,
+  headline: string,
+  faces: HeadlineFaces,
+  settings: ImageTextSettings,
+): HeadlineInk {
+  const frame: Size = { width: image.width, height: image.height };
+  const canvas = new OffscreenCanvas(frame.width, frame.height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('This browser could not create a 2D canvas context to measure ink');
+  ctx.drawImage(image, 0, 0, frame.width, frame.height);
+
+  const extent = headlineBlockExtent({
+    tokens: parseHeadline(headline),
+    frame,
+    measureText: createMeasurer(faces, 0),
+    measureFraction: settings.measure,
+  });
+  // `blockRect`, not `placementOptionsFor`: the same fractional box the panel draws the drag
+  // rectangle from, so the ink is measured over exactly the pixels the user placed the type on.
+  const box = blockRect(
+    {
+      anchor: settings.anchor,
+      offsetX: settings.offsetX,
+      offsetY: settings.offsetY,
+      marginFrac: settings.marginFrac,
+    },
+    extent,
+  );
+  const derived = deriveLegibleInk(readBox(ctx, frame, box), FULL_FRAME);
+  return {
+    rgb: derived.rgb,
+    source: 'fallback',
+    tokenName: null,
+    fallbackName: derived.name,
+    fallbackRatio: derived.ratio,
+  };
+}
+
 /** The box, as a packed buffer `darkPercentileContrast` can read whole. */
 function readBox(ctx: Ctx2d, frame: Size, box: FractionalBox): PixelBuffer {
   const rect = resolveBox(frame, box);
@@ -323,7 +416,12 @@ const escapeXml = (value: string): string =>
  * share a BASELINE rather than a box top — the thing that made the reference's type "look
  * different" even when the faces were right.
  */
-export function headlineSvg(plan: PlacementPlan, faces: HeadlineFaces, ink: Rgb): string {
+export function headlineSvg(
+  plan: PlacementPlan,
+  faces: HeadlineFaces,
+  ink: Rgb,
+  fontFaceCss?: string | null,
+): string {
   const { width, height } = plan.frame;
   const lines = plan.lines
     .map((line) => {
@@ -345,9 +443,44 @@ export function headlineSvg(plan: PlacementPlan, faces: HeadlineFaces, ink: Rgb)
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" ` +
     `viewBox="0 0 ${width} ${height}">` +
+    (fontFaceCss ? `<defs><style type="text/css">${escapeXml(fontFaceCss)}</style></defs>` : '') +
     `<g font-family="${escapeXml(faces.stack)}" fill="${rgbToHex(ink)}" font-kerning="none" ` +
     `style="font-variant-ligatures:none">${lines}</g></svg>`
   );
+}
+
+/**
+ * Make one family real on BOTH sides of the render, or say it could not.
+ *
+ * Two different mechanisms, one call, because they have to agree: `registerCaptionFonts` puts
+ * the face on this thread's `FontFaceSet` so `ctx.measureText` sizes the plan in it, and the
+ * `@font-face` data URI puts the same bytes inside the SVG so the glyphs are drawn in it. Skip
+ * either and the piece breaks in the direction that is hardest to see — a plan measured in
+ * Montserrat and drawn in Helvetica breaks its own lines in the wrong places.
+ *
+ * Null for a family we do not hold bytes for, which today is every brand face.
+ *
+ * CEILING, unchanged and now stated where it bites: an SVG rasterised as an image cannot fetch
+ * a webfont, so a BRAND family that is not installed on this machine still resolves to
+ * `FALLBACK_STACK` in both paths. Consistent, and not yet the brand's face. `HeadlineFaces.source`
+ * is honest about which SHAPE named the family; it does not claim the bytes were found. The
+ * upgrade is a byte source for brand faces (`designSystemFontEmbedSchema` already describes the
+ * shape) — and when it lands it plugs in exactly here.
+ *
+ * Exported for the benches that call `renderHeadline` directly to read back a plan: they have to
+ * feed it the SAME face this op fed it, or the frame they grade is not the frame the op drew.
+ */
+export async function embedFace(family: string): Promise<string | null> {
+  try {
+    const [css] = await Promise.all([captionFontFaceCss(family), ensureCaptionFonts([family])]);
+    return css;
+  } catch {
+    // NEVER THROWS. A 404 or a network blip on `/fonts/*.woff2` must not take the op down: the
+    // whole point of the last rung is that it draws. Without the bytes the family resolves to
+    // `FALLBACK_STACK` on both sides — consistent, and a headline in a substitute face beats an
+    // exception. Found by `text:render:bench`, which serves no fonts at all.
+    return null;
+  }
 }
 
 /**
@@ -391,6 +524,10 @@ export interface ImageTextSettings {
   readonly measure: number;
   readonly minContrast: number;
   readonly escalate: boolean;
+  /** May the face fall back to one Continuum ships? Off restores a hard refusal. */
+  readonly fallbackType: boolean;
+  /** May the ink be MEASURED off the photo? Off restores a hard refusal. */
+  readonly fallbackInk: boolean;
 }
 
 /** `textPlacementConfig`, already parsed by `parseActionConfig`, read as the shape it is. */
@@ -403,6 +540,8 @@ export const readSettings = (config: Record<string, unknown>): ImageTextSettings
   measure: config.measure as number,
   minContrast: config.minContrast as number,
   escalate: config.escalate as boolean,
+  fallbackType: config.fallbackType !== false,
+  fallbackInk: config.fallbackInk !== false,
 });
 
 export interface HeadlineRender {
@@ -435,6 +574,12 @@ export async function renderHeadline(args: {
   ink: Rgb;
   faces: HeadlineFaces;
   settings: ImageTextSettings;
+  /**
+   * The `@font-face` rule to inline, when the face is one we ship. Resolved by the CALLER and
+   * awaited BEFORE the measurer is built — `createMeasurer` reads the thread's font set at
+   * call time, so registering after this point would size the plan in the wrong face.
+   */
+  fontFaceCss?: string | null;
 }): Promise<HeadlineRender> {
   const frame: Size = { width: args.image.width, height: args.image.height };
   const canvas = new OffscreenCanvas(frame.width, frame.height);
@@ -480,7 +625,7 @@ export async function renderHeadline(args: {
 
   ctx.drawImage(args.image, 0, 0, frame.width, frame.height);
   applyTreatment(ctx, plan.treatment.steps, frame, args.ink);
-  const svg = headlineSvg(plan, args.faces, args.ink);
+  const svg = headlineSvg(plan, args.faces, args.ink, args.fontFaceCss);
   await drawSvg(ctx, svg, frame);
   return { plan, svg, canvas };
 }
@@ -494,38 +639,104 @@ function pinnedToRungZero(plan: PlacementPlan, minContrast: number): PlacementPl
 }
 
 /**
- * The `SYNC_OPS` adapter: resolve the brand's tokens, render, hand back the finished frame.
+ * The `SYNC_OPS` adapter: resolve the brand's type and ink, render, hand back the frame.
  *
- * The design system is required, not optional. Without it there is no ink and no faces, and the
- * only thing this op could do is invent them — which is the one thing it must never do.
+ * THE TWO REFUSALS ARE NOT THE SAME REFUSAL, and collapsing them is the bug this replaces. A
+ * missing design system used to fail the whole node — correct for the INK, where a guess ships
+ * an off-brand piece nobody catches, and wrong for the TYPE, where the brand's faces are very
+ * often in its brand book instead. So: type always resolves, down to a face we ship and embed,
+ * and says which rung it used; ink walks the same shapes and refuses when NONE of them carry a
+ * colour. The message names which of the two is missing rather than blaming "the design system".
  *
  * Returns the CANVAS, not a `NodeOutput`: `imageOutput` in runAction.ts is the one place a
  * finished canvas becomes an output, and every other image op goes through it.
  */
 export async function setImageText(args: {
-  designSystem: DesignSystemSnapshot | null | undefined;
+  brand: BrandTypeInputs | null | undefined;
   config: Record<string, unknown>;
   image: DrawableImage;
   headline: string;
 }): Promise<OffscreenCanvas> {
-  if (!args.designSystem) {
-    throw new Error(
-      'Setting type needs the brand\'s design system — pick a brand with one before running "Set Type".',
-    );
-  }
   if (!args.headline.trim()) {
     throw new Error('Nothing is connected to this action\'s "text-in" input');
   }
 
+  const brand = args.brand ?? {};
   const settings = readSettings(args.config);
-  const ink = resolveInk(args.designSystem, INK_SECTION, settings.inkToken);
-  const faces = resolveFaces(args.designSystem, TYPE_SECTION);
+  const faces = resolveHeadlineFaces(brand);
+  if (faces.source === 'fallback' && !settings.fallbackType) {
+    throw new Error(
+      'This brand names no typeface — not in a design system, a brand book, a brand kit or a ' +
+        'website — and "Use a fallback typeface" is switched off for this action. Switch it on ' +
+        `to set the headline in ${faces.family}, or add a typeface to the brand.`,
+    );
+  }
+
+  // The face has to be registered BEFORE anything measures: `createMeasurer` reads this
+  // thread's font set at call time, and the ink is chosen over the box those metrics produce.
+  const fontFaceCss = await embedFace(faces.family);
+
+  // THREE STEPS, WORST LAST. A named token nothing carries falls back to the brand's OWN
+  // default ink before it falls back to a measurement: the brand has a colour, it just is not
+  // the one the config asked for, and reaching past it to a measured black would be a larger
+  // substitution than the situation calls for. Every step that substitutes says so.
+  const wanted = settings.inkToken.trim();
+  const exact = resolveHeadlineInk(brand, settings.inkToken);
+  // OFF gates BOTH substitutions, not just the measured one. "Do not substitute" cannot mean
+  // "substitute a different brand colour instead" — a user who switched this off and picked a
+  // swatch wants that swatch or a refusal, and a broken token is exactly when they need to hear
+  // about it. ON, the ladder below descends one step at a time.
+  if (!exact && !settings.fallbackInk) {
+    throw new Error(inkRefusal(brand, settings.inkToken, faces));
+  }
+  const substitute = exact ?? (wanted ? resolveHeadlineInk(brand, '') : null);
+  const brandInk = exact ?? (substitute ? { ...substitute, substitutedFor: wanted } : null);
+  const ink = brandInk ?? deriveHeadlineInk(args.image, args.headline, faces, settings);
+
   const rendered = await renderHeadline({
     image: args.image,
     headline: args.headline,
-    ink,
+    ink: ink.rgb,
     faces,
     settings,
+    fontFaceCss,
   });
   return rendered.canvas;
+}
+
+/**
+ * What to say when the ink, and only the ink, could not be found.
+ *
+ * Three different sentences because they have three different fixes: pick the token that
+ * exists, add a colour to the brand, or pick a brand at all. The face is named in every one of
+ * them, because "Burn In Text refused" reads as "it found nothing" unless it says otherwise.
+ */
+function inkRefusal(brand: BrandTypeInputs, tokenName: string, faces: HeadlineFaces): string {
+  const type = `The type resolved (${describeHeadlineFaces(faces)}), so only the colour is missing.`;
+  // What switching the toggle back on would ACTUALLY do, which is not the same sentence in
+  // every branch: a brand that has SOME colour substitutes its own default ink, and only a
+  // brand with none at all reaches the measurement.
+  const onWould = resolveHeadlineInk(brand, '')
+    ? 'Switching "Measure a fallback ink" back on uses this brand\'s default ink instead.'
+    : 'Switching "Measure a fallback ink" back on sets it in a legible black or white measured from the photo.';
+  // "Nothing could be read" OUTRANKS "that token is missing", and the order is the whole point:
+  // a config naming `--ink` against a brand nobody could read is not a broken token, and telling
+  // someone to fix a swatch they cannot see is worse than telling them nothing.
+  if (!hasAnyBrandShape(brand)) {
+    return (
+      'No brand could be read, so there is no ink to set this type in. Pick a brand, then run ' +
+      `"Burn In Text" again. ${type} ${onWould}`
+    );
+  }
+  if (tokenName.trim()) {
+    return (
+      `No colour token named "${tokenName}" resolves to a literal colour anywhere in this ` +
+      `brand — its design system, brand book, kit and website were all checked. Pick a ` +
+      `different swatch or fix the token; "Burn In Text" will not guess an ink. ${type} ${onWould}`
+    );
+  }
+  return (
+    'This brand carries no colour — not in a design system, a brand book, a brand kit or a ' +
+    `website scrape. Add one brand colour and "Burn In Text" will use it. ${type} ${onWould}`
+  );
 }

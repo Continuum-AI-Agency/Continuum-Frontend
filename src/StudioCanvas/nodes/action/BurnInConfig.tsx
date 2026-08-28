@@ -20,8 +20,10 @@
 // rather than being moved somewhere friendlier. The panel says so instead of implying otherwise.
 
 import {
+  BRAND_TYPE_SOURCE_LABEL,
   BURN_IN_ANCHORS,
   type BurnInAnchor,
+  PRELOADED_TYPE_FACES,
   type DesignToken,
   type HeadlineToken,
   type MeasureText,
@@ -33,7 +35,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
+import { useBrandType } from '@/lib/brands/useBrandType.client';
 import { useNodeConfigPatch } from '../../hooks/useNodeConfigPatch';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { StudioNode } from '../../types';
@@ -49,9 +51,13 @@ import {
 } from '../../utils/actions/burnInPlacement';
 import {
   createMeasurer,
+  describeHeadlineFaces,
+  type HeadlineFaces,
   parseHeadline,
+  describeHeadlineInk,
   parseHexColour,
-  resolveFaces,
+  resolveHeadlineFaces,
+  resolveHeadlineInk,
 } from '../../utils/actions/imageText';
 
 /** Frame the preview assumes until the real image reports its own dimensions. */
@@ -118,16 +124,17 @@ export function resolveBurnInPreviewSources(
 /**
  * The measurer the preview sizes the block with.
  *
- * CEILING: it resolves the same fallback stack the RENDER resolves for any face the machine
- * does not have installed (see `resolveFaces`), so the preview's line count is the render's
- * line count for every brand whose family is not local — which is all of them today. When a
- * font-byte source lands, both sides move together because both call `resolveFaces`.
+ * SAME FACES AS THE RENDER, from the same chain: `resolveHeadlineFaces` is what both call, and
+ * `useBrandType` registers a preloaded family on `document.fonts` before this measures — so a
+ * brand on the fallback rung is previewed in Montserrat because that is what will be burned in.
+ * A brand family the machine does not hold bytes for still resolves to the fallback stack in
+ * BOTH paths, which keeps the preview's line count equal to the render's.
  *
  * Returns null where there is no canvas to measure with (a test renderer, an old browser);
  * the caller falls back to a nominal two-line block and labels the preview approximate rather
  * than refusing to draw a panel over it.
  */
-function previewMeasurer(faces: ReturnType<typeof resolveFaces>): MeasureText | null {
+function previewMeasurer(faces: HeadlineFaces): MeasureText | null {
   try {
     return createMeasurer(faces, 0);
   } catch {
@@ -358,7 +365,7 @@ export function BurnInConfig({
   const nodes = useStudioStore((state) => state.nodes);
   const edges = useStudioStore((state) => state.edges);
   const brandId = useStudioStore((state) => state.brandId);
-  const { snapshot } = useBrandDesignSections(brandId);
+  const { inputs: brand, snapshot, facesReady } = useBrandType(brandId);
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [dragOrigin, setDragOrigin] = useState<Point | null>(null);
 
@@ -372,6 +379,8 @@ export function BurnInConfig({
   const measure = num(current.measure, 0.61);
   const minContrast = num(current.minContrast, 3.2);
   const escalate = current.escalate !== false;
+  const fallbackType = current.fallbackType !== false;
+  const fallbackInk = current.fallbackInk !== false;
   const inkToken = typeof current.inkToken === 'string' ? current.inkToken : '';
 
   const sources = useMemo(
@@ -396,18 +405,23 @@ export function BurnInConfig({
     [snapshot],
   );
 
+  // THE SAME CHAIN THE RENDER WALKS, from the same reader — so a panel that names a face is
+  // naming the one that will be burned in, on every rung including the fallback.
+  const faces = useMemo(() => resolveHeadlineFaces(brand), [brand]);
+  const ink = useMemo(() => resolveHeadlineInk(brand, inkToken), [brand, inkToken]);
+
   const extent = useMemo<BlockExtent>(() => {
     const tokens: HeadlineToken[] = sources.headline ? parseHeadline(sources.headline) : [];
-    const faces = snapshot
-      ? resolveFaces(snapshot, 'typography')
-      : { stack: 'sans-serif', lightWeight: 300, boldWeight: 700 };
-    const measureText = tokens.length > 0 ? previewMeasurer(faces) : null;
+    // `facesReady` gates the measure rather than decorating it: `createMeasurer` reads this
+    // thread's font set at call time, so measuring before a preloaded face registers sizes the
+    // block in Helvetica and hands the user a rectangle the render will not reproduce.
+    const measureText = tokens.length > 0 && facesReady ? previewMeasurer(faces) : null;
     if (!measureText) {
       // Nominal two lines: enough of a block to grab and place before the words arrive.
       return { widthFrac: measure, heightFrac: (0.066 + 0.067) * aspect, lines: 0 };
     }
     return headlineBlockExtent({ tokens, frame, measureText, measureFraction: measure });
-  }, [aspect, frame, measure, snapshot, sources.headline]);
+  }, [aspect, faces, facesReady, frame, measure, sources.headline]);
 
   const write = (patchIn: Record<string, unknown>) => {
     patch(nodeId, 'action', { config: { ...current, ...patchIn } });
@@ -465,6 +479,24 @@ export function BurnInConfig({
         </p>
       </section>
 
+      <section className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs">Type</Label>
+          <span
+            className="text-2xs text-muted-foreground"
+            data-testid="burn-in-type-source"
+            data-type-source={faces.source}
+          >
+            {describeHeadlineFaces(faces)}
+          </span>
+        </div>
+        <p className="text-2xs text-muted-foreground">
+          {faces.source === 'fallback'
+            ? 'No typeface was found in this brand’s design system, brand book, kit or website, so the headline is set in a face Continuum ships. Add one and it is used the next time this runs.'
+            : `Read from ${BRAND_TYPE_SOURCE_LABEL[faces.source]}. The headline is set in it, never in a face typed here.`}
+        </p>
+      </section>
+
       <section className="flex flex-col gap-1.5">
         <Label className="text-xs">Ink</Label>
         <div className="flex flex-wrap gap-1">
@@ -498,10 +530,12 @@ export function BurnInConfig({
             />
           ))}
         </div>
-        <p className="text-2xs text-muted-foreground">
-          {inkTokens.length > 0
-            ? 'The brand palette. The type is set in the token, never a hand-typed hex.'
-            : 'This brand has no palette colours yet — the headline uses the palette default.'}
+        <p className="text-2xs text-muted-foreground" data-testid="burn-in-ink-source">
+          {ink
+            ? `${describeHeadlineInk(ink)}. The type is set in the token, never a hand-typed hex.`
+            : fallbackInk
+              ? 'No brand colour anywhere — not in a design system, a brand book, a kit or a website. A legible black or white is MEASURED from the photo at render time, and the piece says which it used.'
+              : 'No brand colour anywhere, and the fallback ink is switched off — this action will refuse rather than draw. Add a brand colour, or switch the fallback back on below.'}
         </p>
       </section>
 
@@ -535,7 +569,43 @@ export function BurnInConfig({
 
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col">
-          <Label htmlFor={`burn-in-escalate-${nodeId}`} className="text-xs">
+          <Label id={`burn-in-fallback-type-${nodeId}`} className="text-xs">
+            Use a fallback typeface
+          </Label>
+          <p className="max-w-[15rem] text-2xs text-muted-foreground">
+            OFF makes this action REFUSE TO RUN for a brand that names no typeface, instead of
+            setting the headline in {PRELOADED_TYPE_FACES.display}. Turn it off for a piece where a
+            substitute face is worse than no piece.
+          </p>
+        </div>
+        <Switch
+          aria-labelledby={`burn-in-fallback-type-${nodeId}`}
+          checked={fallbackType}
+          onCheckedChange={(checked) => write({ fallbackType: checked })}
+        />
+      </div>
+
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col">
+          <Label id={`burn-in-fallback-ink-${nodeId}`} className="text-xs">
+            Measure a fallback ink
+          </Label>
+          <p className="max-w-[15rem] text-2xs text-muted-foreground">
+            OFF makes this action REFUSE TO RUN for a brand with no colour, instead of measuring a
+            legible black or white off the photo. Never a hard-coded hex either way — the two
+            candidates are compared against the darkest and brightest of what is behind the type.
+          </p>
+        </div>
+        <Switch
+          aria-labelledby={`burn-in-fallback-ink-${nodeId}`}
+          checked={fallbackInk}
+          onCheckedChange={(checked) => write({ fallbackInk: checked })}
+        />
+      </div>
+
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col">
+          <Label id={`burn-in-escalate-${nodeId}`} className="text-xs">
             Treat the background
           </Label>
           <p className="max-w-[15rem] text-2xs text-muted-foreground">
@@ -545,7 +615,7 @@ export function BurnInConfig({
           </p>
         </div>
         <Switch
-          id={`burn-in-escalate-${nodeId}`}
+          aria-labelledby={`burn-in-escalate-${nodeId}`}
           checked={escalate}
           onCheckedChange={(checked) => write({ escalate: checked })}
         />
