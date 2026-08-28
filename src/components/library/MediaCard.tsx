@@ -501,9 +501,11 @@ function MediaCardHoverDetail({
 function GenerateClipsButton({
   onGenerate,
   disabled,
+  title,
 }: {
   onGenerate: () => void;
   disabled: boolean;
+  title: string;
 }) {
   return (
     <button
@@ -514,7 +516,7 @@ function GenerateClipsButton({
       }}
       disabled={disabled}
       className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground/70 transition-colors hover:text-foreground disabled:opacity-50"
-      title="Generate clips from this video"
+      title={title}
     >
       <Scissors className="size-3" />
       Clips
@@ -545,10 +547,13 @@ export function MediaCard({
     day: 'numeric',
     year: 'numeric',
   });
-  // Clip generation re-reads the source bytes and re-transcribes from scratch, so it
-  // consumes nothing vision analysis produces. Both terminal outcomes qualify — the
-  // analysed one and the deliberately skipped one. skipped_long_form is the common
-  // case, since anything worth clipping is longer than vision analysis covers.
+  // Mirrors CLIP_STT_MAX_AUDIO_SEC in clip-transcribe. Enforced here as well so an
+  // over-long video is refused before any bytes move, rather than after the browser has
+  // downloaded it and extracted its audio. An unknown duration stays eligible: the edge
+  // function refuses it with a real message, which beats hiding the action over a value
+  // the upload simply failed to read.
+  const clipSourceTooLongMs = 5 * 60 * 1000;
+  const clipSourceTooLong = asset.durationMs != null && asset.durationMs > clipSourceTooLongMs;
   const canGenerateClips =
     asset.kind === 'video' && (asset.status === 'ready' || asset.status === 'skipped_long_form');
   const activeProgress = progress && progress.sourceAssetId === asset.id ? progress : null;
@@ -692,7 +697,12 @@ export function MediaCard({
                         onGenerate={() =>
                           void generate(asset, { quality, captionsEnabled, captionStyle })
                         }
-                        disabled={isGenerating}
+                        disabled={isGenerating || clipSourceTooLong}
+                        title={
+                          clipSourceTooLong
+                            ? `Clips currently supports videos up to ${clipSourceTooLongMs / 60000} minutes`
+                            : 'Generate clips from this video'
+                        }
                       />
                     </div>
                   )}
