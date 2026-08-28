@@ -601,7 +601,8 @@ function Flow({
             <NodeInspectorPanel onEnforceBrandBook={enforceBrandBookOnSelection} />
 
             <Controls fitViewOptions={STUDIO_FIT_VIEW_OPTIONS} />
-            <MiniMap className="!border !bg-background/95" />
+            {/* Same corner as Controls; the left margin clears the control bar so they sit side by side. */}
+            <MiniMap position="bottom-left" className="!ml-14 !border !bg-background/95" />
 
             {Object.entries(remoteCursors).map(([userId, cursor]) => (
               <Cursor
