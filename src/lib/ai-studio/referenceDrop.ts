@@ -16,6 +16,7 @@ export type ParsedReferenceDropPayload =
       mimeType?: string;
       sizeBytes?: number;
       assetId?: string;
+      assetVersionId?: string;
       brandId?: string;
       /** Library video rows that recorded a duration carry it through the drop. */
       durationMs?: number;
@@ -29,7 +30,13 @@ type ReactFlowAssetDropPayload = {
     path?: string;
     publicUrl?: string;
     mimeType?: string;
-    meta?: { size?: number; assetId?: string; brandId?: string; durationMs?: number };
+    meta?: {
+      size?: number;
+      assetId?: string;
+      assetVersionId?: string;
+      brandId?: string;
+      durationMs?: number;
+    };
   };
 };
 
@@ -56,6 +63,7 @@ export function parseReferenceDropPayload(raw: string): ParsedReferenceDropPaylo
         mimeType: parsed.payload?.mimeType,
         sizeBytes: parsed.payload?.meta?.size,
         assetId: parsed.payload?.meta?.assetId,
+        assetVersionId: parsed.payload?.meta?.assetVersionId,
         brandId: parsed.payload?.meta?.brandId,
         durationMs: positiveFiniteOrUndefined(parsed.payload?.meta?.durationMs),
       };

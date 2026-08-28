@@ -122,13 +122,14 @@ export function useCanvasDnD() {
       let assetData = {};
       let style = { width: 192, height: 192 };
 
-      // assetId is only set when the drop came from the Library. It is what lets a
-      // generation fed by this node be credited back to the asset that fed it.
+      // Library drops keep both the asset and exact version so downstream work is
+      // reproducible instead of silently following a later Library head.
       if (assetNodeType === 'image') {
         assetData = {
           image: resolved.dataUrl,
           fileName: resolved.fileName,
           assetId: resolved.assetId,
+          assetVersionId: resolved.assetVersionId,
           sourcePath: resolved.sourcePath,
           bucket: resolved.bucket,
           sourceUrl: resolved.sourceUrl,
@@ -138,6 +139,7 @@ export function useCanvasDnD() {
           video: resolved.dataUrl,
           fileName: resolved.fileName,
           assetId: resolved.assetId,
+          assetVersionId: resolved.assetVersionId,
           sourcePath: resolved.sourcePath,
           bucket: resolved.bucket,
           sourceUrl: resolved.sourceUrl,
@@ -146,7 +148,15 @@ export function useCanvasDnD() {
           durationMs: resolved.durationMs,
         };
       } else if (assetNodeType === 'audio') {
-        assetData = { audio: resolved.dataUrl, fileName: resolved.fileName };
+        assetData = {
+          audio: resolved.dataUrl,
+          fileName: resolved.fileName,
+          assetId: resolved.assetId,
+          assetVersionId: resolved.assetVersionId,
+          sourcePath: resolved.sourcePath,
+          bucket: resolved.bucket,
+          sourceUrl: resolved.sourceUrl,
+        };
         style = { width: 192, height: 100 };
       } else if (assetNodeType === 'document') {
         assetData = {

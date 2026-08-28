@@ -184,6 +184,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       src: string;
       fileName?: string;
       assetId?: string;
+      assetVersionId?: string;
       sourcePath?: string;
       bucket?: string;
       sourceUrl?: string;
@@ -196,6 +197,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
         hasMarkup: false,
         fileName: opts.fileName,
         assetId: opts.assetId,
+        assetVersionId: opts.assetVersionId,
         sourcePath: opts.sourcePath,
         bucket: opts.bucket,
         sourceUrl: opts.sourceUrl,
@@ -241,6 +243,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       hasMarkup: false,
       fileName: undefined,
       assetId: undefined,
+      assetVersionId: undefined,
       sourcePath: undefined,
       bucket: undefined,
       sourceUrl: undefined,
@@ -444,6 +447,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
         src: resolved.dataUrl,
         fileName: resolved.fileName,
         assetId: resolved.assetId,
+        assetVersionId: resolved.assetVersionId,
         sourcePath: resolved.sourcePath,
         bucket: resolved.bucket,
         sourceUrl: resolved.sourceUrl,

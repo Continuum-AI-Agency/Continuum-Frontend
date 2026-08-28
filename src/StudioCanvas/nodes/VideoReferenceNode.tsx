@@ -252,6 +252,7 @@ export function VideoReferenceNode({
         video: resolved.dataUrl,
         fileName: resolved.fileName,
         assetId: resolved.assetId,
+        assetVersionId: resolved.assetVersionId,
         sourcePath: resolved.sourcePath,
         bucket: resolved.bucket,
         sourceUrl: resolved.sourceUrl,

@@ -222,6 +222,7 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
         audio: resolved.sourceUrl ?? resolved.dataUrl,
         fileName: resolved.fileName,
         assetId: resolved.assetId,
+        assetVersionId: resolved.assetVersionId,
         sourcePath: resolved.sourcePath,
         bucket: resolved.bucket,
         sourceUrl: resolved.sourceUrl,

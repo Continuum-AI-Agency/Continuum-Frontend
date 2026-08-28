@@ -55,7 +55,7 @@ describe('resolveCreativeAssetDrop', () => {
         path: 'brand/asset.png',
         publicUrl: 'https://expired.example/asset.png',
         mimeType: 'image/png',
-        meta: { assetId: 'asset-1', brandId: 'brand-1' },
+        meta: { assetId: 'asset-1', assetVersionId: 'version-1', brandId: 'brand-1' },
       },
     });
     const resolverWithFreshUrl = mock(async () => ({
@@ -75,6 +75,7 @@ describe('resolveCreativeAssetDrop', () => {
       // Carries the Library asset id, so anything generated from this reference can
       // be traced back to the asset that fed it.
       expect(result.assetId).toBe('asset-1');
+      expect(result.assetVersionId).toBe('version-1');
     }
   });
 

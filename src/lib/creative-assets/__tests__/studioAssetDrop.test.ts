@@ -36,6 +36,7 @@ const baseAsset: MediaAsset = {
   source: 'ai_generated',
   originRef: { surface: 'creative_studio' },
   status: 'ready',
+  headVersionId: 'version-1',
   title: 'A sunset',
   description: 'desc',
   tags: ['sunset'],
@@ -80,6 +81,7 @@ describe('buildStudioAssetDropPayload', () => {
     const p = buildStudioAssetDropPayload(baseAsset).payload;
     expect(p.meta).toEqual({
       assetId: 'asset-1',
+      assetVersionId: 'version-1',
       brandId: 'brand-1',
       title: 'A sunset',
       kind: 'image',

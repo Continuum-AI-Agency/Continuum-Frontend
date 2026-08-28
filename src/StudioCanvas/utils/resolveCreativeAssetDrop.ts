@@ -21,6 +21,7 @@ export type CreativeAssetDropSuccess = {
   // carries it). The node keeps it so a generation fed by this reference can be
   // traced back to the asset.
   assetId?: string;
+  assetVersionId?: string;
   sourcePath?: string;
   bucket?: string;
   sourceUrl?: string;
@@ -141,6 +142,7 @@ export async function resolveCreativeAssetDrop(
       mimeType,
       fileName: sourceName && sourceName !== 'data-url' ? sourceName : undefined,
       assetId: parsed.kind === 'remote' ? parsed.assetId : undefined,
+      assetVersionId: parsed.kind === 'remote' ? parsed.assetVersionId : undefined,
       sourcePath: parsed.kind === 'remote' ? parsed.path : undefined,
       bucket: parsed.kind === 'remote' ? parsed.bucket : undefined,
       sourceUrl: parsed.kind === 'remote' ? (sourceUrl ?? parsed.publicUrl) : undefined,
