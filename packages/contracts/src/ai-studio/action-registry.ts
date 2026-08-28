@@ -390,9 +390,9 @@ export const ACTION_DEFS = {
   'image.text': {
     id: 'image.text',
     family: 'image',
-    label: 'Set Type',
+    label: 'Burn In Text',
     description:
-      'Sets brand type over a still — the placement is measured from the image, not guessed.',
+      'Burns brand type into a still. The placement is measured from the image — line breaks, size and contrast — rather than guessed, and the ink is always the brand token.',
     group: 'Overlay',
     execution: 'sync',
     inputs: [
