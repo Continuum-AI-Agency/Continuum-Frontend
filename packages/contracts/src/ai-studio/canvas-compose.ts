@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { crossAgentProvenanceSchema } from '../agents/cross-agent';
+import { canvasVisualEvidenceSchema } from './visual-evidence';
 
 // Request envelope for the in-app Canvas Composer — POST /api/ai-studio/canvas/compose.
 // The response is an NDJSON stream of aiStudioComposerFrameSchema frames.
@@ -109,6 +110,12 @@ export const canvasComposeRequestSchema = z
     history: z.array(composerHistoryMessageSchema).max(COMPOSER_HISTORY_MAX_MESSAGES).optional(),
     /** Browser-extracted first/middle/last frames for an inline Video Editor command. */
     editorContext: canvasEditorContextSchema.optional(),
+    /**
+     * Frames the browser sampled from canvas media before this turn started. Carried
+     * outside the model's context until `look_at` pulls one in, so a turn that never
+     * looks never pays for looking.
+     */
+    visualEvidence: canvasVisualEvidenceSchema.optional(),
     /** Present when this turn was initiated by another agent (cross-agent call). */
     provenance: crossAgentProvenanceSchema.optional(),
   })

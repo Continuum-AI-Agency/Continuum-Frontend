@@ -87,14 +87,6 @@ export async function startGoogleSync(
   });
 }
 
-export async function deauthorizeMeta(): Promise<void> {
-  await http.request({
-    path: '/integrations/meta/deauthorize',
-    method: 'POST',
-    cache: 'no-store',
-  });
-}
-
 // Re-pull the latest Meta accounts/assets using stored tokens. Mirrors
 // resyncTikTok/resyncX. This is the FE entry point to the already-tested
 // POST /meta/resync that was never wired up (#154) — the picker calls it in the
@@ -106,14 +98,6 @@ export async function resyncMeta(platformEmail?: string): Promise<MetaResyncResp
     method: 'POST',
     body: platformEmail ? { platform_email: platformEmail } : {},
     schema: metaResyncResponseSchema,
-    cache: 'no-store',
-  });
-}
-
-export async function deauthorizeGoogle(): Promise<void> {
-  await http.request({
-    path: '/integrations/google/deauthorize',
-    method: 'POST',
     cache: 'no-store',
   });
 }
@@ -133,15 +117,6 @@ export async function resyncTikTok(platformUserId?: string): Promise<TikTokResyn
     method: 'POST',
     body: platformUserId ? { platform_user_id: platformUserId } : {},
     schema: tiktokResyncResponseSchema,
-    cache: 'no-store',
-  });
-}
-
-export async function deauthorizeTikTok(platformUserId: string): Promise<void> {
-  await http.request({
-    path: '/integrations/tiktok/deauthorize',
-    method: 'POST',
-    body: { platform_user_id: platformUserId },
     cache: 'no-store',
   });
 }
@@ -174,15 +149,6 @@ export async function resyncLinkedIn(platformUserId?: string): Promise<LinkedInR
   });
 }
 
-export async function deauthorizeLinkedIn(platformUserId?: string): Promise<void> {
-  await http.request({
-    path: '/integrations/linkedin/deauthorize',
-    method: 'POST',
-    body: platformUserId ? { platform_user_id: platformUserId } : {},
-    cache: 'no-store',
-  });
-}
-
 export async function startXSync(callbackUrl: string): Promise<XSyncResponse> {
   return http.request({
     path: buildSyncPath('/integrations/x/sync', { callback_url: callbackUrl }),
@@ -202,20 +168,49 @@ export async function resyncX(platformUserId?: string): Promise<XResyncResponse>
   });
 }
 
-export async function deauthorizeX(platformUserId: string): Promise<void> {
-  await http.request({
-    path: '/integrations/x/deauthorize',
-    method: 'POST',
-    body: { platform_user_id: platformUserId },
-    cache: 'no-store',
-  });
-}
-
 type StartGoogleDrivePickerParams = {
   brandId: string;
   callbackUrl: string;
   context: string;
 };
+
+/**
+ * Removing a personal OAuth connection is addressed by its integration id, not
+ * by provider. The five per-provider deauthorize endpoints this replaces each
+ * identified the connection differently and Meta/Google required a
+ * `platform_email` the Frontend never had — so those two disconnects always
+ * returned 400.
+ */
+export type DisconnectPreview = {
+  integrationId: string;
+  provider: string;
+  label: string;
+  accountCount: number;
+  brands: Array<{ id: string; name: string }>;
+  queuedPostCount: number;
+};
+
+export type DisconnectResult = {
+  brandsRevoked: string[];
+  accountsRemoved: number;
+  postsDetached: number;
+};
+
+export async function fetchDisconnectPreview(integrationId: string): Promise<DisconnectPreview> {
+  return http.request({
+    path: `/integrations/connections/${encodeURIComponent(integrationId)}/disconnect-preview`,
+    method: 'GET',
+    cache: 'no-store',
+  });
+}
+
+export async function disconnectConnection(integrationId: string): Promise<DisconnectResult> {
+  return http.request({
+    path: `/integrations/connections/${encodeURIComponent(integrationId)}/disconnect`,
+    method: 'POST',
+    cache: 'no-store',
+  });
+}
 
 export async function startGoogleDrivePicker(
   params: StartGoogleDrivePickerParams,
@@ -255,21 +250,9 @@ export function useStartGoogleAccountChooserSync() {
   });
 }
 
-export function useDeauthorizeMeta() {
-  return useMutation({
-    mutationFn: () => deauthorizeMeta(),
-  });
-}
-
 export function useResyncMeta() {
   return useMutation({
     mutationFn: (platformEmail?: string) => resyncMeta(platformEmail),
-  });
-}
-
-export function useDeauthorizeGoogle() {
-  return useMutation({
-    mutationFn: () => deauthorizeGoogle(),
   });
 }
 
@@ -282,12 +265,6 @@ export function useStartTikTokSync() {
 export function useResyncTikTok() {
   return useMutation({
     mutationFn: (platformUserId?: string) => resyncTikTok(platformUserId),
-  });
-}
-
-export function useDeauthorizeTikTok() {
-  return useMutation({
-    mutationFn: (platformUserId: string) => deauthorizeTikTok(platformUserId),
   });
 }
 
@@ -306,12 +283,6 @@ export function useResyncLinkedIn() {
   });
 }
 
-export function useDeauthorizeLinkedIn() {
-  return useMutation({
-    mutationFn: (platformUserId?: string) => deauthorizeLinkedIn(platformUserId),
-  });
-}
-
 export function useStartXSync() {
   return useMutation({
     mutationFn: (callbackUrl: string) => startXSync(callbackUrl),
@@ -321,12 +292,6 @@ export function useStartXSync() {
 export function useResyncX() {
   return useMutation({
     mutationFn: (platformUserId?: string) => resyncX(platformUserId),
-  });
-}
-
-export function useDeauthorizeX() {
-  return useMutation({
-    mutationFn: (platformUserId: string) => deauthorizeX(platformUserId),
   });
 }
 

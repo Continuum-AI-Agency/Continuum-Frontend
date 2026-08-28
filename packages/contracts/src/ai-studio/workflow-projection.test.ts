@@ -246,9 +246,18 @@ describe('projectGraphForAgent', () => {
   // Widened deliberately and narrowly: a layer document is authored in a dialog and a
   // router's lock is derived from its wiring, so neither has a field an agent can set.
   it('keeps the node types with nothing agent-settable empty', () => {
-    expect(AGENT_FIELD_WHITELIST.layerEditor).toEqual([]);
+    // A router's lock is DERIVED from its wiring, so there is nothing to set.
     expect(AGENT_FIELD_WHITELIST.router).toEqual([]);
+    expect(AGENT_FIELD_WHITELIST.document).toEqual([]);
     expect(AGENT_FIELD_WHITELIST.element).toContain('elementId');
+  });
+
+  // The layer document itself stays editor-owned, exactly like timelineEditor.items —
+  // but the frame is a thing an agent can be asked for ("make it 9:16") and must be able
+  // to read back, so the node is half-writable rather than invisible.
+  it('lets an agent set a layerEditor frame but never its layers', () => {
+    expect(AGENT_FIELD_WHITELIST.layerEditor).toEqual(['frameWidth', 'frameHeight', 'aspectRatio']);
+    expect(AGENT_FIELD_WHITELIST.layerEditor).not.toContain('layers');
   });
 
   it('leaves small graphs untruncated', () => {

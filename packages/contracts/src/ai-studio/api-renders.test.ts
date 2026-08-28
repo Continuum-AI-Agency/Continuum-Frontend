@@ -185,8 +185,14 @@ describe('API render contracts', () => {
         ],
       },
     };
-    expect(getAllowedTargetHandles(node)).toEqual(['variable-hero_image', 'variable-end_card']);
-    expect(getTargetHandleConnectionLimit(node, 'variable-hero_image', [])).toBe(1);
+    expect(getAllowedTargetHandles(node)).toEqual([
+      'variable-hero_image',
+      'variable-headline',
+      'variable-end_card',
+    ]);
+    expect(getTargetHandleConnectionLimit(node, 'variable-hero_image', [])).toBe(
+      API_RENDER_MEDIA_LIST_MAX,
+    );
     expect(
       isValidConnection(
         {
@@ -201,10 +207,9 @@ describe('API render contracts', () => {
     ).toBe(true);
   });
 
-  // A `multiple` variable is a graph-runner `media_list` port the renderer LOOPS over.
-  // Capping its handle at one connection made the whole multi-image path unreachable
-  // from the canvas while the wire contract already accepted twenty pins.
-  it('opens a multiple media variable to the wire contract’s own cap', () => {
+  // Every media input accepts several wires. A media_list stays one ordered renderer
+  // input; a scalar media slot is serialized into one render variation per wire.
+  it('opens media variables to the Canvas variation cap', () => {
     const node = {
       id: 'render-1',
       type: 'apiRender',
@@ -219,7 +224,9 @@ describe('API render contracts', () => {
     expect(getTargetHandleConnectionLimit(node, 'variable-gallery', [])).toBe(
       API_RENDER_MEDIA_LIST_MAX,
     );
-    expect(getTargetHandleConnectionLimit(node, 'variable-hero_image', [])).toBe(1);
+    expect(getTargetHandleConnectionLimit(node, 'variable-hero_image', [])).toBe(
+      API_RENDER_MEDIA_LIST_MAX,
+    );
     // Reserved stays caller-forbidden: no handle, and no limit to argue about.
     expect(getAllowedTargetHandles(node)).toEqual(['variable-gallery', 'variable-hero_image']);
     expect(getTargetHandleConnectionLimit(node, 'variable-watermark_logo', [])).toBeUndefined();

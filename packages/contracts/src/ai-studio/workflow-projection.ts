@@ -1,4 +1,6 @@
+import { STUDIO_NODE_REGISTRY, type StudioNodeDefinition } from './node-registry';
 import { timelineAuthoringDocumentSchema, timelineDocumentFingerprint } from './timeline-authoring';
+import { validateWorkflowGraph } from './workflow-builder';
 import type {
   GraphEdgeLike,
   GraphNodeLike,
@@ -44,9 +46,11 @@ export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   export: ['format'],
   // A router's lock is derived from its wiring, not chosen.
   router: [],
-  // Layer documents are authored in the editor dialog; there is no useful field an agent
-  // can set from a prompt.
-  layerEditor: [],
+  // `layers` stays editor-owned — a layer document is authored in the dialog, exactly as
+  // `timelineEditor.items` is. The FRAME is not: an agent asked for a 9:16 composite had
+  // no way to say so and no way to read back what it got, which made the whole node
+  // invisible to it rather than merely half-writable.
+  layerEditor: ['frameWidth', 'frameHeight', 'aspectRatio'],
   // `elementId` is the whole binding — the node resolves the saved element from it, and
   // the agent gets ids from the `list_elements` tool. `elementName` is display-only
   // (a label fallback), carried so a projection reads as a name and not a bare uuid.
@@ -516,4 +520,165 @@ export function projectGraphForAgent(
   }
   if (scope) projection.scope = scope;
   return projection;
+}
+
+// ---------------------------------------------------------------------------
+// Outline + diagnosis — the two reads that scale past MAX_PROJECTED_NODES
+// ---------------------------------------------------------------------------
+
+// Past ~60 nodes a full projection serves an arbitrary slice of the canvas and calls
+// it the canvas. An OUTLINE serves all of it instead: identity, type and degree, no
+// config and no wiring strings. One line is ~10 tokens against a projected node's
+// ~100, so the whole shape of a 200-node workflow costs less than a third of a
+// truncated read of it — and the agent can then focus a second, scoped hop on the
+// part that matters. The cap is a backstop, not the working limit.
+export const MAX_OUTLINED_NODES = 250;
+
+export interface OutlinedGraph {
+  node_count: number;
+  edge_count: number;
+  node_types: Record<string, number>;
+  /** `<id> <type> ["label"] <in-degree>→<out-degree>`, one line per node. */
+  outline: string[];
+  truncated?: ProjectedTruncation;
+}
+
+function countNodeTypes(nodes: ProjectionInput['nodes']): Record<string, number> {
+  const nodeTypes: Record<string, number> = {};
+  for (const node of nodes) {
+    const type = node.type ?? 'unknown';
+    nodeTypes[type] = (nodeTypes[type] ?? 0) + 1;
+  }
+  return nodeTypes;
+}
+
+/**
+ * Identity and shape only. Deliberately NOT a projection with fields removed: the
+ * whole point is that no per-node config is read at all, so the cost per node is
+ * flat regardless of how much prompt text a node carries.
+ */
+export function outlineGraphForAgent(graph: ProjectionInput): OutlinedGraph {
+  const inDegree = new Map<string, number>();
+  const outDegree = new Map<string, number>();
+  for (const edge of graph.edges) {
+    outDegree.set(edge.source, (outDegree.get(edge.source) ?? 0) + 1);
+    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
+  }
+
+  const window = graph.nodes.slice(0, MAX_OUTLINED_NODES);
+  const outline = window.map((node) => {
+    const data = node.data ?? {};
+    const label =
+      typeof data.label === 'string' && data.label.trim() ? ` "${capText(data.label)}"` : '';
+    return `${node.id} ${node.type ?? 'unknown'}${label} ${inDegree.get(node.id) ?? 0}→${outDegree.get(node.id) ?? 0}`;
+  });
+
+  const result: OutlinedGraph = {
+    node_count: graph.nodes.length,
+    edge_count: graph.edges.length,
+    node_types: countNodeTypes(graph.nodes),
+    outline,
+  };
+  const nodesOmitted = graph.nodes.length - outline.length;
+  if (nodesOmitted > 0) result.truncated = { nodes_omitted: nodesOmitted, edges_omitted: 0 };
+  return result;
+}
+
+export interface CanvasGraphIssue {
+  node_id?: string;
+  edge_id?: string;
+  code: string;
+  issue: string;
+}
+
+export interface GraphDiagnosis {
+  node_count: number;
+  edge_count: number;
+  issues: CanvasGraphIssue[];
+  issues_omitted?: number;
+}
+
+export const MAX_REPORTED_GRAPH_ISSUES = 20;
+
+// The fields whose absence leaves a node inert — it renders nothing and drops every
+// edge wired to it, silently. Each is the node's whole binding, not a preference, and
+// none of them is an edge-level fault, so `validateWorkflowGraph` cannot see them.
+const REQUIRED_BINDING_BY_TYPE: Partial<Record<StudioNodeType, string>> = {
+  action: 'actionId',
+  export: 'format',
+  element: 'elementId',
+  designRef: 'section',
+  batch: 'itemType',
+};
+
+// Which nodes are USELESS unwired, as opposed to merely terminal. A generator with no
+// consumer is the normal end of a workflow — the human runs it and takes the image — so
+// flagging it would fire on nearly every healthy canvas, and a diagnostic that fires on
+// healthy canvases is noise the agent learns to ignore. `producesMedia` is exactly the
+// line: a node that yields media can be the deliverable, a node that does not (a prompt,
+// an unwired reference, a router, a batch) does nothing at all until something reads it.
+function isMidChainType(type: string): boolean {
+  if (type === 'note' || type === 'export') return false;
+  const definition: StudioNodeDefinition | undefined = STUDIO_NODE_REGISTRY[type as StudioNodeType];
+  return definition !== undefined && definition.sink === undefined && !definition.producesMedia;
+}
+
+/**
+ * The cheap answer to "why won't my canvas run".
+ *
+ * The edge-level half — cycles, dangling edges, incompatible or over-capacity
+ * connections, missing prompts — is `validateWorkflowGraph`, the same check the builder
+ * runs, so a diagnosis can never disagree with what a write would reject. Added here are
+ * only the two faults that are invisible to it: a node whose binding was never set, and
+ * a mid-chain node nothing consumes. Both are legal graphs that quietly produce nothing.
+ */
+export function diagnoseGraphForAgent(graph: ProjectionInput): GraphDiagnosis {
+  const issues: CanvasGraphIssue[] = validateWorkflowGraph({
+    nodes: graph.nodes,
+    edges: graph.edges,
+  }).issues.map((issue) => ({
+    ...(issue.nodeId ? { node_id: issue.nodeId } : {}),
+    ...(issue.edgeId ? { edge_id: issue.edgeId } : {}),
+    code: issue.code,
+    issue: issue.message,
+  }));
+
+  const outgoing = new Set(graph.edges.map((edge) => edge.source));
+
+  for (const node of graph.nodes) {
+    const type = node.type ?? 'unknown';
+    const data = node.data ?? {};
+
+    const binding = REQUIRED_BINDING_BY_TYPE[type as StudioNodeType];
+    if (binding && isEmpty(data[binding])) {
+      // A batch carrying items already has its modality from the first item's `kind`,
+      // so an itemType-less batch is only inert while it is also empty.
+      const inert = type !== 'batch' || !Array.isArray(data.items) || data.items.length === 0;
+      if (inert) {
+        issues.push({
+          node_id: node.id,
+          code: 'missing_binding',
+          issue: `${binding} is not set — the node is inert and drops every edge wired to it`,
+        });
+      }
+    }
+
+    if (isMidChainType(type) && !outgoing.has(node.id)) {
+      issues.push({
+        node_id: node.id,
+        code: 'nothing_consumes',
+        issue: 'nothing consumes it — wire it onward or remove it',
+      });
+    }
+  }
+
+  const result: GraphDiagnosis = {
+    node_count: graph.nodes.length,
+    edge_count: graph.edges.length,
+    issues: issues.slice(0, MAX_REPORTED_GRAPH_ISSUES),
+  };
+  if (issues.length > MAX_REPORTED_GRAPH_ISSUES) {
+    result.issues_omitted = issues.length - MAX_REPORTED_GRAPH_ISSUES;
+  }
+  return result;
 }

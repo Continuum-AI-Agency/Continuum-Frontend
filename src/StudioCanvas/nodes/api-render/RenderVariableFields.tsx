@@ -1,22 +1,16 @@
 'use client';
 
 import {
-  API_RENDER_MEDIA_LIST_MAX,
   type ApiRenderVariable,
   apiRenderVariableHandleId,
   isConnectableApiRenderVariable,
-  type PinnedRenderAsset,
 } from '@continuum/contracts';
 import { Handle, Position } from '@xyflow/react';
-import { Lock } from 'lucide-react';
+import { Check, ImageIcon, Lock, Video } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-
-/**
- * A pin is two uuids; showing them whole buries the row. Twelve characters is enough to
- * tell two pins apart by eye and to match against a Library row or a bench assertion.
- */
-const shortId = (id: string) => id.slice(0, 12);
+import { cn } from '@/lib/utils';
+import { apiRenderVariableLabel } from './resolveApiRenderVariables';
 
 /**
  * The one variable the caller may not supply. The backend resolves the brand's logo from
@@ -24,44 +18,19 @@ const shortId = (id: string) => id.slice(0, 12);
  * resulting `{assetId, versionId}` into the signed confirmation.
  *
  * So the browser does NOTHING here: no upload, no `register-canvas`, no byte copy, no
- * second pin. It renders a locked field and — after preflight — echoes the exact pin the
- * server froze. No `Handle` either: a connectable handle would advertise an input the
- * server refuses with `400 render_reserved_variable`.
+ * second pin. It renders a locked field. No `Handle` either: a connectable handle would
+ * advertise an input the server refuses with `400 render_reserved_variable`.
  */
-function LockedDesignKitField({
-  variable,
-  pin,
-  prepared,
-}: {
-  variable: ApiRenderVariable;
-  pin: PinnedRenderAsset | null;
-  prepared: boolean;
-}) {
+function LockedDesignKitField({ variable }: { variable: ApiRenderVariable }) {
   return (
-    <div className="flex flex-col gap-1 rounded border border-border/70 bg-muted/40 p-2">
-      <span className="flex items-center gap-1 text-2xs text-muted-foreground">
-        <Lock className="h-3 w-3" aria-hidden />
-        {variable.label}
+    <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1.5">
+      <span className="flex min-w-0 items-center gap-1.5 text-2xs">
+        <Lock className="size-3 text-muted-foreground" aria-hidden />
+        <span className="truncate">{apiRenderVariableLabel(variable)}</span>
       </span>
-      <Badge variant="muted" className="w-fit">
-        Design Kit · Brand logo — filled by Continuum
+      <Badge variant="muted" className="shrink-0 gap-1">
+        <Check className="size-3" aria-hidden /> Brand logo
       </Badge>
-      {pin ? (
-        <span className="font-mono text-2xs text-muted-foreground">
-          Pinned · asset {shortId(pin.assetId)} · version {shortId(pin.versionId)}
-        </span>
-      ) : prepared ? (
-        // The template declares the slot but the confirmation came back without a pin.
-        // Saying "pinned" here would claim a freeze that did not happen.
-        <span className="text-2xs text-muted-foreground">
-          Not pinned in this confirmation — the render will be refused if the brand has no usable
-          logo.
-        </span>
-      ) : (
-        <span className="text-2xs text-muted-foreground">
-          Resolved and pinned when you prepare the render.
-        </span>
-      )}
     </div>
   );
 }
@@ -86,46 +55,62 @@ function VariableHandle({ variable }: { variable: ApiRenderVariable }) {
 export function RenderVariableFields({
   definitions,
   values,
-  watermarkLogo,
-  prepared,
   connectedKeys,
+  mediaStatus,
   onChange,
 }: {
   definitions: ApiRenderVariable[];
   values: Record<string, string | number | boolean> | undefined;
-  watermarkLogo: PinnedRenderAsset | null;
-  prepared: boolean;
   /** Variable keys whose handle already has an incoming edge. */
   connectedKeys?: ReadonlySet<string>;
+  mediaStatus?: ReadonlyMap<string, { connected: number; ready: number }>;
   onChange: (key: string, value: string | number | boolean) => void;
 }) {
   return (
     <>
       {definitions.map((variable) =>
         variable.reserved ? (
-          <LockedDesignKitField
-            key={variable.key}
-            variable={variable}
-            pin={watermarkLogo}
-            prepared={prepared}
-          />
+          <LockedDesignKitField key={variable.key} variable={variable} />
         ) : (
           // biome-ignore lint/a11y/noLabelWithoutControl: wraps its own input a few lines below
           <label
             key={variable.key}
-            className="relative flex flex-col gap-1 rounded border border-border/70 p-2"
+            className={cn(
+              'relative flex flex-col gap-1 rounded-md border p-2',
+              variable.kind === 'image' && 'border-sky-500/30 bg-sky-500/5',
+              variable.kind === 'video' && 'border-violet-500/30 bg-violet-500/5',
+              !['image', 'video'].includes(variable.kind) && 'border-border/70',
+            )}
           >
             <span className="text-2xs text-muted-foreground">
-              {variable.label}
+              {apiRenderVariableLabel(variable)}
               {variable.required ? ' *' : ''}
             </span>
             {['image', 'video'].includes(variable.kind) ? (
               <>
                 <VariableHandle variable={variable} />
-                <span className="text-2xs">
-                  {variable.multiple
-                    ? `Connect up to ${API_RENDER_MEDIA_LIST_MAX} version-pinned ${variable.kind} Library nodes — they render in the order you wire them`
-                    : `Connect a version-pinned ${variable.kind} Library node`}
+                <span className="flex items-center justify-between gap-2 text-2xs">
+                  <span className="flex items-center gap-1">
+                    {variable.kind === 'image' ? (
+                      <ImageIcon className="size-3 text-sky-600" aria-hidden />
+                    ) : (
+                      <Video className="size-3 text-violet-600" aria-hidden />
+                    )}
+                    {variable.kind === 'image' ? 'Images' : 'Videos'}
+                  </span>
+                  {(() => {
+                    const status = mediaStatus?.get(variable.key) ?? { connected: 0, ready: 0 };
+                    if (status.connected === 0)
+                      return <span className="text-muted-foreground">Connect media</span>;
+                    if (status.ready !== status.connected)
+                      return <span className="text-destructive">Needs Library version</span>;
+                    return (
+                      <span className="text-emerald-700">
+                        {status.ready} ready
+                        {!variable.multiple && status.ready > 1 ? ' · variations' : ''}
+                      </span>
+                    );
+                  })()}
                 </span>
               </>
             ) : variable.kind === 'boolean' ? (
@@ -149,7 +134,7 @@ export function RenderVariableFields({
                 {/*
                   Always present, so an empty required enum SHOWS empty. Dropping it left
                   the browser painting option one as selected while '' was what the node
-                  stored — the field read as answered and Prepare then refused it as
+                  stored — the field read as answered while the stored value was still
                   missing. Disabled when required so the placeholder cannot be chosen back
                   as if it were an answer; left selectable otherwise, because clearing an
                   optional variable is a real thing to want.

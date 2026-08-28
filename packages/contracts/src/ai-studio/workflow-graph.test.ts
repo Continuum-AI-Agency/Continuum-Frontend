@@ -1211,6 +1211,62 @@ describe('Canvas V3 node defaults', () => {
     expect(patch.data).toEqual({ config: { degrees: 90 } });
     expect(patch.changes).toEqual([]);
   });
+
+  // The agent is TOLD each op's config keys by describeNodeVocabulary and is allowed to
+  // write them, so an unchecked config was a value it was invited to invent and nothing
+  // ever read back — a silent no-op at generation time.
+  it("keeps a config the op's own schema accepts", () => {
+    const result = coerceNodeConfig('action', {
+      actionId: 'image.rotate',
+      config: { degrees: 90 },
+    });
+    expect(result.data.config).toEqual({ degrees: 90 });
+    expect(result.changes).toEqual([]);
+  });
+
+  // Per key, not per object: these schemas are all-defaulted, so rejecting the whole
+  // config over one bad field would throw away the fields the user did ask for.
+  it('drops only the offending key and keeps its siblings', () => {
+    const result = coerceNodeConfig('action', {
+      actionId: 'image.rotate',
+      config: { degrees: 'ninety', expand: true },
+    });
+    expect(result.data.config).toEqual({ expand: true });
+    expect(result.changes).toHaveLength(1);
+    expect(result.changes[0]).toContain('degrees');
+  });
+
+  it('drops a key the op does not have', () => {
+    const result = coerceNodeConfig('action', {
+      actionId: 'image.rotate',
+      config: { nope: 1, degrees: 45 },
+    });
+    expect(result.data.config).toEqual({ degrees: 45 });
+    expect(result.changes[0]).toContain('not a config key for image.rotate');
+  });
+
+  // A partial update names the config but not the op; the op is on the node already.
+  it('checks a config against the op already on the node', () => {
+    const result = coerceNodeConfig(
+      'action',
+      { config: { degrees: 'ninety' } },
+      { actionId: 'image.rotate' },
+    );
+    expect(result.data.config).toEqual({});
+    expect(result.changes).toHaveLength(1);
+  });
+
+  // Writing the op and its config together must check against the op being WRITTEN,
+  // not against whatever the node used to be.
+  it('checks against the op being written, not the one being replaced', () => {
+    const result = coerceNodeConfig(
+      'action',
+      { actionId: 'image.rotate', config: { degrees: 45 } },
+      { actionId: 'video.speed', config: { rate: 2 } },
+    );
+    expect(result.data.config).toEqual({ degrees: 45 });
+    expect(result.changes).toEqual([]);
+  });
 });
 
 describe('Canvas V3 handles', () => {

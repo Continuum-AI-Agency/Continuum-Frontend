@@ -285,14 +285,6 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         >
           <BrandGrantsSection brandProfileId={activeBrandId} />
         </SettingsSection>
-        {user?.id ? (
-          <SettingsSection
-            title="Your shared connections"
-            description="Personal connections you have shared, and the brands they reach."
-          >
-            <MyConnectionsSharingSection userId={user.id} />
-          </SettingsSection>
-        ) : null}
         <SettingsSection
           title="Ad naming convention"
           description="Declare how you name ads so paid-media insights can read them by their named parts."
@@ -372,6 +364,14 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             reconnectPrompts={reconnectPrompts}
           />
         </SettingsSection>
+        {user?.id ? (
+          <SettingsSection
+            title="Sharing and removal"
+            description="Which brands each connection reaches, and how to take one back."
+          >
+            <MyConnectionsSharingSection userId={user.id} />
+          </SettingsSection>
+        ) : null}
         <SettingsSection
           title="Chat request delivery"
           description="Slack and Microsoft Teams identities that can receive Goal questions. Choose the preferred route for this brand."

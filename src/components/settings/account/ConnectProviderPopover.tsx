@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, RefreshCw, TriangleAlert, Unplug, UserPlus } from 'lucide-react';
+import { Plus, RefreshCw, TriangleAlert, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -8,11 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
-  useDeauthorizeGoogle,
-  useDeauthorizeLinkedIn,
-  useDeauthorizeMeta,
-  useDeauthorizeTikTok,
-  useDeauthorizeX,
   useStartGoogleAccountChooserSync,
   useStartGoogleSync,
   useStartLinkedInSync,
@@ -60,11 +55,6 @@ export function ConnectProviderPopover({
   const tiktokSync = useStartTikTokSync();
   const linkedinSync = useStartLinkedInSync();
   const xSync = useStartXSync();
-  const metaDeauthorize = useDeauthorizeMeta();
-  const googleDeauthorize = useDeauthorizeGoogle();
-  const tiktokDeauthorize = useDeauthorizeTikTok();
-  const linkedinDeauthorize = useDeauthorizeLinkedIn();
-  const xDeauthorize = useDeauthorizeX();
 
   const buildCallbackUrl = (provider: ProviderGroup) => {
     const origin =
@@ -248,48 +238,6 @@ export function ConnectProviderPopover({
     });
   };
 
-  const handleDisconnect = (provider: ProviderGroup) => {
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm(
-        `Disconnect ${PROVIDER_GROUP_LABELS[provider]}? This revokes access to your accounts.`,
-      )
-    ) {
-      return;
-    }
-    startTransition(async () => {
-      try {
-        if (provider === 'google') {
-          await googleDeauthorize.mutateAsync();
-        } else if (provider === 'tiktok') {
-          const account = integrations.tiktok?.accounts[0];
-          if (!account?.externalAccountId) throw new Error('No TikTok account found.');
-          await tiktokDeauthorize.mutateAsync(account.externalAccountId);
-        } else if (provider === 'linkedin') {
-          await linkedinDeauthorize.mutateAsync(undefined);
-        } else if (provider === 'x') {
-          const account = integrations.x?.accounts[0];
-          if (!account?.externalAccountId) throw new Error('No X account found.');
-          await xDeauthorize.mutateAsync(account.externalAccountId);
-        } else {
-          await metaDeauthorize.mutateAsync();
-        }
-        router.refresh();
-        show({
-          title: 'Disconnected',
-          description: `${PROVIDER_GROUP_LABELS[provider]} access revoked.`,
-          variant: 'success',
-        });
-      } catch (error) {
-        show({
-          title: 'Unable to disconnect',
-          description: error instanceof Error ? error.message : 'Please retry shortly.',
-          variant: 'error',
-        });
-      }
-    });
-  };
-
   return (
     <Popover>
       <PopoverTrigger
@@ -397,16 +345,6 @@ export function ConnectProviderPopover({
                         disabled={isPending}
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        title="Disconnect"
-                        onClick={() => handleDisconnect(providerId)}
-                        disabled={isPending}
-                      >
-                        <Unplug className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   ) : providerId === 'linkedin' ? (

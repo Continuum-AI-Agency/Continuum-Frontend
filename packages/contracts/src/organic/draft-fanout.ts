@@ -89,7 +89,8 @@ export const draftFanOutMemberSchema = z.object({
   id: z.string(),
   platform: publishPlatformSchema,
   clientKey: z.string(),
-  platformAccountId: z.string(),
+  /** Null on a source row drafted before an account was bound; siblings always carry one. */
+  platformAccountId: z.string().nullable(),
   status: z.string(),
   /** True for the source row, which is never re-created. */
   isSource: z.boolean(),

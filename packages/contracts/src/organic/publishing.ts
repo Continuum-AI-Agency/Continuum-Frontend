@@ -154,6 +154,10 @@ export const publishErrorCodeSchema = z.enum([
   'validation_error',
   // Compliance gate reasons (see assertPublishable):
   'quality_failed',
+  // No account is bound to the draft and none could be resolved for its platform. Drafts are
+  // written before an account is chosen, so this is the ordinary "nothing connected yet" state
+  // — the publish is the stage that needs one.
+  'account_missing',
   'media_missing',
   // The draft resolved to no caption at all. A platform accepts a container with no caption
   // param and posts it blank, so this fails closed rather than publishing an empty post.

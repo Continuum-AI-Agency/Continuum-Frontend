@@ -163,9 +163,7 @@ type NodeReadiness = {
  * so with a message about type rather than about a fetch. A failed READ is folded into the
  * same null on purpose: the op's refusal is the honest surface for both.
  */
-async function loadDesignSystem(
-  brandId: string | undefined,
-): Promise<DesignSystemSnapshot | null> {
+async function loadDesignSystem(brandId: string | undefined): Promise<DesignSystemSnapshot | null> {
   if (!brandId) return null;
   try {
     return (await fetchDesignSystem(brandId)).design_system;
@@ -1682,6 +1680,7 @@ export async function executeWorkflow(
       mimeType: string;
       sizeBytes?: number;
     },
+    variationIndex?: number,
   ): Promise<RegisterCanvasAssetResponse | null> => {
     const brandProfileId = workflowBrandId;
     if (!brandProfileId) return Promise.resolve(null);
@@ -1712,9 +1711,26 @@ export async function executeWorkflow(
       asset.kind === 'video' ? { videoSource: asset.url } : undefined,
     ).then((registered) => {
       if (!registered?.assetId) return registered;
-      useStudioStore.getState().updateNodeData(nodeId, {
-        renderOutputAssetId: registered.assetId,
-        renderOutputAssetVersionId: registered.assetVersionId ?? undefined,
+      const state = useStudioStore.getState();
+      const current = state.getNodeById(nodeId)?.data as Record<string, unknown> | undefined;
+      const generatedImages = Array.isArray(current?.generatedImages)
+        ? ([...current.generatedImages] as GeneratedImageVariation[])
+        : [];
+      if (variationIndex !== undefined && generatedImages[variationIndex]) {
+        generatedImages[variationIndex] = {
+          ...generatedImages[variationIndex],
+          assetId: registered.assetId,
+          assetVersionId: registered.assetVersionId ?? undefined,
+        };
+      }
+      state.updateNodeData(nodeId, {
+        ...(variationIndex === undefined || variationIndex === 0
+          ? {
+              renderOutputAssetId: registered.assetId,
+              renderOutputAssetVersionId: registered.assetVersionId ?? undefined,
+            }
+          : {}),
+        ...(variationIndex === undefined ? {} : { generatedImages }),
       });
       useStudioStore.getState().triggerSave();
       return registered;
@@ -1782,14 +1798,18 @@ export async function executeWorkflow(
       useStudioStore.getState().triggerSave();
       output.items.forEach((item, index) => {
         if (item.assetId || !variations[index]) return;
-        registerCanvasIfDurable(nodeId, {
-          kind: 'image',
-          bucket: item.storageBucket,
-          storagePath: item.storagePath,
-          url: variations[index].url,
-          mimeType: item.mimeType,
-          sizeBytes: item.sizeBytes,
-        });
+        registerCanvasIfDurable(
+          nodeId,
+          {
+            kind: 'image',
+            bucket: item.storageBucket,
+            storagePath: item.storagePath,
+            url: variations[index].url,
+            mimeType: item.mimeType,
+            sizeBytes: item.sizeBytes,
+          },
+          index,
+        );
       });
     } else if (output.type === 'image') {
       const rawBase64 = output.base64 ?? '';

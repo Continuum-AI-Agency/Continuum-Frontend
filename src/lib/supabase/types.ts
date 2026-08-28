@@ -13134,6 +13134,83 @@ export type Database = {
         }
         Relationships: []
       }
+      optimizer_action_deliveries: {
+        Row: {
+          audit_ids: string[]
+          brand_id: string
+          connection_id: string | null
+          created_at: string
+          cycle_key: string
+          delivered_at: string | null
+          delivery_attempts: number
+          failed_at: string | null
+          failure_summary: string | null
+          id: string
+          lease_claimed_at: string | null
+          lease_claimed_by: string | null
+          next_attempt_at: string
+          platform: string | null
+          provider_channel_id: string | null
+          provider_message_id: string | null
+          provider_thread_id: string | null
+          recipient_user_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          audit_ids: string[]
+          brand_id: string
+          connection_id?: string | null
+          created_at?: string
+          cycle_key: string
+          delivered_at?: string | null
+          delivery_attempts?: number
+          failed_at?: string | null
+          failure_summary?: string | null
+          id?: string
+          lease_claimed_at?: string | null
+          lease_claimed_by?: string | null
+          next_attempt_at?: string
+          platform?: string | null
+          provider_channel_id?: string | null
+          provider_message_id?: string | null
+          provider_thread_id?: string | null
+          recipient_user_id: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          audit_ids?: string[]
+          brand_id?: string
+          connection_id?: string | null
+          created_at?: string
+          cycle_key?: string
+          delivered_at?: string | null
+          delivery_attempts?: number
+          failed_at?: string | null
+          failure_summary?: string | null
+          id?: string
+          lease_claimed_at?: string | null
+          lease_claimed_by?: string | null
+          next_attempt_at?: string
+          platform?: string | null
+          provider_channel_id?: string | null
+          provider_message_id?: string | null
+          provider_thread_id?: string | null
+          recipient_user_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "optimizer_action_deliveries_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "chat_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       slack_installations: {
         Row: {
           app_id: string
@@ -17867,7 +17944,7 @@ export type Database = {
           instagram_post_id: string | null
           media_stage: string
           platform: string | null
-          platform_account_id: string
+          platform_account_id: string | null
           platform_post_id: string | null
           position: Json | null
           published_at: string | null
@@ -17890,7 +17967,7 @@ export type Database = {
           instagram_post_id?: string | null
           media_stage?: string
           platform?: string | null
-          platform_account_id: string
+          platform_account_id?: string | null
           platform_post_id?: string | null
           position?: Json | null
           published_at?: string | null
@@ -17913,7 +17990,7 @@ export type Database = {
           instagram_post_id?: string | null
           media_stage?: string
           platform?: string | null
-          platform_account_id?: string
+          platform_account_id?: string | null
           platform_post_id?: string | null
           position?: Json | null
           published_at?: string | null
@@ -23540,14 +23617,20 @@ export type Database = {
         Args: { p_brand_id: string; p_from: string; p_to: string }
         Returns: {
           action: string
+          action_id: string
           actor_id: string
           actor_kind: string
+          after: Json
           asset_id: string
+          before: Json
+          currency: string
+          justification: string
           occurred_at: string
           outcome: string
           producer_id: string
           producer_kind: string
           replaced_target_id: string
+          reverts_action_id: string
           source: string
           target_id: string
           target_kind: string
@@ -23930,6 +24013,8 @@ export type Database = {
         Returns: {
           ad_account_id: string
           apply_mode: string
+          apply_mode_changed_by: string
+          autopilot_paused: boolean
           brand_id: string
           budget_source: string
           config: Json
@@ -23938,6 +24023,8 @@ export type Database = {
           id: string
           level: string
           lookback_window: string
+          max_change_pct_per_cycle: number
+          max_daily_apply_minor: number
           mode: string
           objective: string
           period_budget: number
@@ -24006,6 +24093,7 @@ export type Database = {
           p_audit_id?: string
           p_authorized_by?: string
           p_authorized_kind?: string
+          p_currency?: string
           p_cycle_ts: string
           p_justification?: string
           p_meta_receipt?: Json
@@ -24262,6 +24350,8 @@ export type Database = {
         Returns: {
           ad_account_id: string
           apply_mode: string
+          apply_mode_changed_by: string
+          autopilot_paused: boolean
           brand_id: string
           budget_source: string
           config: Json
@@ -24270,6 +24360,8 @@ export type Database = {
           id: string
           level: string
           lookback_window: string
+          max_change_pct_per_cycle: number
+          max_daily_apply_minor: number
           mode: string
           objective: string
           period_budget: number

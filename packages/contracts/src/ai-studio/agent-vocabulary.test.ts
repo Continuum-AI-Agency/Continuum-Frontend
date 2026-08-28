@@ -5,6 +5,7 @@ import { describeNodeVocabulary } from './agent-vocabulary';
 import { BATCH_COMBINE_MODES, BATCH_ITEM_KINDS } from './batch-node';
 import { designRefModeSchema } from './design-grounding';
 import { IMAGE_EXPORT_FORMATS, VIDEO_EXPORT_FORMATS } from './export-formats';
+import { workflowEditOpSchema } from './workflow-builder';
 import { STUDIO_NODE_TYPES, timelineItemSpecSchema } from './workflow-graph';
 
 describe('describeNodeVocabulary', () => {
@@ -98,7 +99,7 @@ describe('action op catalog', () => {
 
   it('groups by family then by the registry group order', () => {
     const headings = lines.filter((line) => / · /.test(line) && !line.startsWith('  '));
-    expect(headings.slice(0, 3)).toEqual(['image · Colour', 'image · Transform', 'video · Colour']);
+    expect(headings.slice(0, 3)).toEqual(['image · Colour', 'image · Transform', 'image · Overlay']);
     for (const id of ACTION_IDS) {
       const family = ACTION_DEFS[id].family;
       const group = ACTION_DEFS[id].group;
@@ -195,5 +196,41 @@ describe('timeline placement drift guard', () => {
 
   it('lists the real transition vocabulary', () => {
     expect(describeNodeVocabulary()).toContain('crossDissolve');
+  });
+});
+
+// The toolloop `edit` scenario failed 2/3 before this block existed: the model spent nine
+// consecutive edit_canvas calls cycling ref/value/config against id/label/data. The block
+// is derived from the schema, and this is the guard that it stays derived.
+describe('edit op wire shape', () => {
+  const block = describeNodeVocabulary();
+  const options = (
+    workflowEditOpSchema as unknown as {
+      options: Array<{
+        shape: Record<string, { safeParse: (i: unknown) => { success: boolean } }>;
+      }>;
+    }
+  ).options;
+
+  it('renders every op in the union with its exact field names', () => {
+    expect(options.length).toBeGreaterThan(0);
+    for (const option of options) {
+      const op = (option.shape.op as unknown as { def: { values?: string[]; value?: string } }).def;
+      const name = op.values?.[0] ?? op.value;
+      const fields = Object.keys(option.shape).filter((key) => key !== 'op');
+      const required = fields.filter((key) => !option.shape[key]?.safeParse(undefined).success);
+      const optional = fields.filter((key) => option.shape[key]?.safeParse(undefined).success);
+      const line = `  ${name}: ${['op', ...required, ...optional.map((k) => `[${k}]`)].join(', ')}`;
+      expect(block).toContain(line);
+    }
+  });
+
+  // The failure was INTERFERENCE, not ignorance: build_canvas's spellings are already in
+  // the turn's context when the edit is written, so the divergence must be called out.
+  it('warns that build and edit spell their fields differently', () => {
+    expect(block).toContain('EDIT OPS');
+    expect(block).toContain('an edit names an EXISTING node `id` and wires `from`/`to`');
+    expect(block).toContain('not `config`, not `value`');
+    expect(block).toContain('not `from_ref`');
   });
 });

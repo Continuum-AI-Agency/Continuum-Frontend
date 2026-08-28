@@ -1038,11 +1038,12 @@ export function getTargetHandleConnectionLimit(
   // One draft per publish. Fanning several drafts into one publish node would make
   // "Post now" mean N irreversible posts behind a single confirmation.
   if (node.type === 'organicPublish' && targetHandle === DRAFT_INPUT_HANDLE) return 1;
-  // A `multiple` variable is a graph-runner `media_list` port; its cap is the wire
-  // contract's own array bound, so the canvas cannot accept an edge preflight refuses.
+  // Media lists stay ordered renderer arrays; several wires on a scalar media slot become
+  // separate render variations. Both use the same bounded Canvas fan-out.
   if (node.type === 'apiRender') {
     const variable = apiRenderVariableForHandle(node, targetHandle);
-    if (variable) return variable.multiple ? API_RENDER_MEDIA_LIST_MAX : 1;
+    if (variable)
+      return variable.kind === 'image' || variable.kind === 'video' ? API_RENDER_MEDIA_LIST_MAX : 1;
   }
   if (node.type === 'omniGen' && isImageReferenceHandle(targetHandle)) return 3;
   // The op's own port declares its cap: one clip for a speed change, twenty for a stitch.
@@ -1927,19 +1928,74 @@ function coerceVideoGeneratorConfig(
  * they accept, so an invented one produces a node with no ports that silently drops
  * every edge somebody wires to it. Unknown ids are dropped at write time.
  *
- * `config` is deliberately NOT validated here yet, and is not on the agent field
- * whitelist — the per-op schemas in `action-registry.ts` land with the runtime that
- * reads them.
+ * `config` is checked against that op's own schema in `action-registry.ts`, PER KEY.
+ * The agent is told each op's config keys by `describeNodeVocabulary` and is allowed to
+ * write them, so an unchecked config was a value the model was invited to invent and
+ * nothing ever read back — it surfaced as a silent no-op at generation time. Per key and
+ * not per object because these schemas are all-defaulted: rejecting the whole object
+ * over one bad field would throw away the fields the user actually asked for, while
+ * dropping just the bad key leaves that one field at its default and keeps the rest.
  */
-function coerceActionConfig(patch: Record<string, unknown>): NodeConfigCoercion {
-  if (!('actionId' in patch)) return { data: patch, changes: [] };
-  if (patch.actionId === null || patch.actionId === undefined || isActionId(patch.actionId)) {
-    return { data: patch, changes: [] };
+function coerceActionConfig(
+  patch: Record<string, unknown>,
+  current: Record<string, unknown> = {},
+): NodeConfigCoercion {
+  const changes: string[] = [];
+  const next: Record<string, unknown> = { ...patch };
+
+  if ('actionId' in patch && !(patch.actionId === null || patch.actionId === undefined)) {
+    if (!isActionId(patch.actionId)) {
+      next.actionId = null;
+      changes.push(`"${String(patch.actionId)}" is not an action in the catalog — cleared it`);
+    }
   }
-  return {
-    data: { ...patch, actionId: null },
-    changes: [`"${String(patch.actionId)}" is not an action in the catalog — cleared it`],
-  };
+
+  if (!('config' in patch) || patch.config === null || typeof patch.config !== 'object') {
+    return { data: next, changes };
+  }
+
+  // The op the config will be read under: the one being written this patch, else the one
+  // already on the node. A config written in the same breath as its op must be checked
+  // against THAT op, not against whatever the node used to be.
+  const effectiveActionId = isActionId(next.actionId)
+    ? next.actionId
+    : isActionId(current.actionId)
+      ? current.actionId
+      : undefined;
+
+  // No resolvable op means no schema to check against — so the config is left exactly as
+  // written rather than wiped. Every real write reaches here with the node's current data,
+  // so an unresolvable op is a node that HAS no op, which is already inert and already
+  // reported by `diagnoseGraphForAgent` as a missing binding. Destroying the config the
+  // user set would lose real data to say something the diagnosis says better.
+  if (effectiveActionId === undefined) return { data: next, changes };
+
+  // Every op's config is a `z.object` today; one that is not degrades to "no keys known",
+  // and a config whose keys cannot be checked is not written rather than written blind.
+  const shape = (actionDef(effectiveActionId)?.config as { shape?: Record<string, unknown> })
+    ?.shape;
+  const checked: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(patch.config as Record<string, unknown>)) {
+    const fieldSchema = shape?.[key] as
+      | { safeParse?: (input: unknown) => { success: boolean; data?: unknown } }
+      | undefined;
+    if (!fieldSchema?.safeParse) {
+      changes.push(`"${key}" is not a config key for ${effectiveActionId} — dropped it`);
+      continue;
+    }
+    const parsed = fieldSchema.safeParse(value);
+    if (!parsed.success) {
+      changes.push(
+        `${effectiveActionId} config "${key}": ${JSON.stringify(value)} is not valid — dropped it, the default applies`,
+      );
+      continue;
+    }
+    checked[key] = parsed.data;
+  }
+
+  next.config = checked;
+  return { data: next, changes };
 }
 
 export function coerceNodeConfig(
@@ -1948,7 +2004,7 @@ export function coerceNodeConfig(
   current: Record<string, unknown> = {},
 ): NodeConfigCoercion {
   if (isVideoGeneratorNodeType(type)) return coerceVideoGeneratorConfig(type, patch, current);
-  if (type === 'action') return coerceActionConfig(patch);
+  if (type === 'action') return coerceActionConfig(patch, current);
   if (type !== 'nanoGen') return { data: patch, changes: [] };
 
   const changes: string[] = [];

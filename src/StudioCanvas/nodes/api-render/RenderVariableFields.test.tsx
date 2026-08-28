@@ -40,8 +40,6 @@ function renderFields(
       <RenderVariableFields
         definitions={definitions}
         values={extra.values}
-        watermarkLogo={null}
-        prepared={false}
         connectedKeys={extra.connectedKeys}
         onChange={extra.onChange ?? (() => undefined)}
       />
@@ -66,8 +64,8 @@ describe('RenderVariableFields — enum geometry', () => {
   });
 
   // A `<select>` with no empty option paints option one as selected while '' is what is
-  // actually stored. The field then reads "a" and Prepare refuses it as missing — the
-  // control and the button disagreeing about the same variable. The placeholder stays so
+  // actually stored. The field then reads "a" while the stored value remains missing — the
+  // control and the renderer disagreeing about the same variable. The placeholder stays so
   // an unanswered required enum LOOKS unanswered.
   test('a required enum shows an empty choose-state instead of selecting option one', () => {
     renderFields([
@@ -135,6 +133,12 @@ describe('RenderVariableFields — numeric geometry', () => {
 });
 
 describe('RenderVariableFields — text geometry', () => {
+  test('normalizes the reflected Spanish title to English', () => {
+    renderFields([variable({ key: 'titulo', label: 'Titulo' })]);
+    expect(screen.getByText('Title')).toBeTruthy();
+    expect(screen.queryByText('Titulo')).toBeNull();
+  });
+
   test('carries a handle AND keeps the inline field as the fallback', () => {
     renderFields([variable()], { values: { headline: 'Typed here' } });
 
@@ -176,7 +180,7 @@ describe('RenderVariableFields — media and reserved geometry', () => {
       }),
     ]);
 
-    expect(screen.getByText('Design Kit · Brand logo — filled by Continuum')).toBeTruthy();
+    expect(screen.getByText('Brand logo')).toBeTruthy();
     expect(handleFor('watermark_logo')).toBeNull();
     expect(screen.queryByRole('textbox')).toBeNull();
   });

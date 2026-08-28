@@ -15,6 +15,7 @@
 // ADDITIVE for this wave: the node context menus keep their config copies. Slimming
 // them is a separate change against files this shell does not own.
 
+import { actionDef } from '@continuum/contracts';
 import {
   Blocks,
   Combine,
@@ -29,15 +30,17 @@ import { Button } from '@/components/ui/button';
 import { useNodeConfigPatch } from '../hooks/useNodeConfigPatch';
 import { useModuleFoldStore } from '../stores/useModuleFoldStore';
 import { useStudioStore } from '../stores/useStudioStore';
-import { moduleIdForNode } from '../utils/moduleFold';
 import type {
+  ActionNodeData,
   ExtendVideoNodeData,
   NanoGenNodeData,
   OmniGenNodeData,
   StudioNode,
   VideoGenNodeData,
 } from '../types';
+import { moduleIdForNode } from '../utils/moduleFold';
 import { CanvasFloatingPanel } from './CanvasFloatingPanel';
+import { ActionSection } from './inspector/ActionSection';
 import { ExtendVideoSection } from './inspector/ExtendVideoSection';
 import { GenericSection } from './inspector/GenericSection';
 import { GroundingSection } from './inspector/GroundingSection';
@@ -65,6 +68,11 @@ const humanizeType = (type: string): string =>
 function nodeTitle(node: StudioNode): string {
   const label = (node.data as { label?: unknown }).label;
   if (typeof label === 'string' && label.trim().length > 0) return label;
+  // "Action" names the node type, never the op. The registry label is the only thing
+  // that distinguishes one of the 31 ops from another.
+  if (node.type === 'action') {
+    return actionDef((node.data as ActionNodeData).actionId)?.label ?? 'Action';
+  }
   const type = node.type ?? '';
   return TYPE_TITLES[type] ?? humanizeType(type) ?? 'Node';
 }
@@ -77,6 +85,8 @@ function ConfigSection({
   onPatch: (patch: Record<string, unknown>) => void;
 }) {
   switch (node.type) {
+    case 'action':
+      return <ActionSection nodeId={node.id} data={node.data as ActionNodeData} />;
     case 'nanoGen':
       return <ImageGenSection data={node.data as NanoGenNodeData} onPatch={onPatch} />;
     case 'videoGen':

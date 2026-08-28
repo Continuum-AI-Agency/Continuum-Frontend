@@ -13,6 +13,8 @@
 //                         and it must be two sequential frames, never a composite.
 //   master_and_crops   -- one master at the tallest ratio, derivatives referencing
 //                         it, so a set shares one exposure instead of N generations.
+//   variation_set      -- N takes on ONE brief is a batch fan-out into ONE generator,
+//                         never N generators; the batch is what repeats the node.
 
 import { z } from 'zod';
 import type { ConnectSpec, NodeSpec } from './workflow-builder';
@@ -336,4 +338,86 @@ export function compileMasterAndCropsWorkflow(input: MasterAndCropsRecipe): Comp
     connections,
     outputRefs,
   };
+}
+
+// ---------------------------------------------------------------------------
+// variation_set
+// ---------------------------------------------------------------------------
+
+export const variationSchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/i),
+    prompt: z
+      .string()
+      .min(1)
+      .max(2000)
+      .describe('This variation written out in full, generation-ready. Not a delta.'),
+  })
+  .strict();
+export type Variation = z.infer<typeof variationSchema>;
+
+export const variationSetRecipeSchema = z
+  .object({
+    recipe: z.literal('variation_set'),
+    variations: z.array(variationSchema).min(2).max(20),
+    aspectRatio: z.string().min(1).default('16:9'),
+    imageModel: z.string().min(1).default('nano-banana-2'),
+  })
+  .strict()
+  .superRefine((recipe, context) => {
+    const ids = recipe.variations.map((variation) => variation.id);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['variations'],
+        message: 'Variation ids must be unique',
+      });
+    }
+  });
+export type VariationSetRecipe = z.infer<typeof variationSetRecipeSchema>;
+
+/**
+ * N `string` nodes into ONE `batch`, and the batch into ONE generator.
+ *
+ * The trap this closes is the difference between "N variations of one brief" and "N
+ * different briefs". They look identical in a prompt and are opposite graphs: N briefs
+ * is N generators, N variations is ONE generator that a batch repeats. The composer
+ * reached for N generators often enough that the system prompt argues against it in
+ * three separate places — an argument a compiler settles.
+ *
+ * `itemType` is set here because nothing else will set it head-first: the browser effect
+ * that stamps a batch's modality never runs for a graph built server-side, and a batch
+ * with no modality has no output, so every edge from it to a generator is refused.
+ */
+export function compileVariationSetWorkflow(input: VariationSetRecipe): CompiledFormatWorkflow {
+  const recipe = variationSetRecipeSchema.parse(input);
+  const nodes: NodeSpec[] = [];
+  const connections: ConnectSpec[] = [];
+
+  const batchRef = 'variations:batch';
+  const generatorRef = 'variations:image';
+
+  for (const variation of recipe.variations) {
+    const promptRef = `variation:${variation.id}:prompt`;
+    nodes.push({ ref: promptRef, type: 'string', data: { value: variation.prompt } });
+    connections.push({ from_ref: promptRef, to_ref: batchRef, role: 'items' });
+  }
+
+  nodes.push({
+    ref: batchRef,
+    type: 'batch',
+    // zip, not cross: one list walked item by item. `cross` pairs two batches and would
+    // turn N variations into N× whatever else is wired in.
+    data: { combine: 'zip', itemType: 'text' },
+  });
+  nodes.push({
+    ref: generatorRef,
+    type: 'nanoGen',
+    // No positivePrompt: the batch supplies each variation's wording in turn, and a
+    // wired prompt replaces the node's own text rather than appending to it.
+    data: { model: recipe.imageModel, positivePrompt: '', aspectRatio: recipe.aspectRatio },
+  });
+  connections.push({ from_ref: batchRef, to_ref: generatorRef, role: 'prompt' });
+
+  return { nodes, connections, outputRefs: [generatorRef] };
 }

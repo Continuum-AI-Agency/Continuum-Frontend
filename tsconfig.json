@@ -94,7 +94,13 @@
     ".next-elements-onboard/types/**/*.ts",
     ".next-elements-onboard/dev/types/**/*.ts",
     ".next/studio-node-chrome-e2e/types/**/*.ts",
-    ".next/studio-node-chrome-e2e/dev/types/**/*.ts"
+    ".next/studio-node-chrome-e2e/dev/types/**/*.ts",
+    ".next-technique-gate/types/**/*.ts",
+    ".next-technique-gate/dev/types/**/*.ts",
+    ".next/admin-search-e2e/types/**/*.ts",
+    ".next/admin-search-e2e/dev/types/**/*.ts",
+    ".next/goals-orchestrator-e2e/types/**/*.ts",
+    ".next/goals-orchestrator-e2e/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

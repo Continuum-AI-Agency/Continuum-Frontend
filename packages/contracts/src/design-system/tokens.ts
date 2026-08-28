@@ -181,3 +181,29 @@ export function literalHexTokens(tokens: readonly DesignToken[]): DesignToken[] 
       token.kind === 'color' && token.resolvedValue !== null && isLiteralHex(token.resolvedValue),
   );
 }
+
+/**
+ * One font face the ENGINE ACTUALLY HOLDS, as a settings surface reads it.
+ *
+ * The distinction from {@link designSystemFontSchema} is the whole point: that one is
+ * what the system DECLARES ("this brand uses Publico"), this one is what we can
+ * actually render with. A brand whose design system names four families and whose
+ * store holds none is not a brand with four families — it is a brand whose pieces will
+ * ship in a substitute typeface — and only the second shape can say so.
+ *
+ * `path` is deliberately absent. The store's rule is that a brand font is never
+ * publicly reachable by URL (`brand-knowledge/fonts/store.ts`), and a storage key
+ * handed to a browser is one signed-URL call away from being exactly that. The panel
+ * needs to know a face EXISTS, not where it lives.
+ */
+export const designSystemFontFaceSchema = z
+  .object({
+    family: z.string().min(1).max(200),
+    /** Null when the stored face declared none — `@font-face` then defaults to 400. */
+    weight: z.number().int().min(1).max(1000).nullable().default(null),
+    style: z.enum(['normal', 'italic']),
+    format: z.enum(['woff2', 'woff', 'otf', 'ttf']),
+    bytes: z.number().int().nonnegative(),
+  })
+  .strict();
+export type DesignSystemFontFace = z.infer<typeof designSystemFontFaceSchema>;

@@ -100,6 +100,10 @@ const CASES = [
   { id: 'chrome-router', type: 'router', overrides: {} },
   { id: 'chrome-export', type: 'export', overrides: {} },
   { id: 'chrome-batch', type: 'batch', overrides: {} },
+  // The widest config in the catalog. Its controls were laid out for a 288px popover;
+  // the inspector is 320px, so this is the case that would overflow if any of them
+  // carried a fixed width.
+  { id: 'chrome-overlay', type: 'action', overrides: { actionId: 'video.overlay' } },
 ] as const;
 
 function buildGraph(): { nodes: SeededNode[]; edges: unknown[] } {
@@ -323,5 +327,53 @@ test.describe('studio node chrome — edge to edge', () => {
     }
 
     await action.screenshot({ path: `${SCREENSHOT_DIR}/action-closeup.png` });
+  });
+
+  test('selecting an action node opens its op config in the right-hand inspector', async () => {
+    await openCanvas(page);
+    const action = nodeBox(page, 'chrome-action');
+    await expect(action).toBeVisible({ timeout: 60_000 });
+
+    // `image.rotate` carries a real registry field (degrees), so an inspector that
+    // renders the op's knobs shows a control here — where GenericSection, the fallback
+    // this node used to land on, only ever printed a read-only key/value list.
+    await action.click({ position: { x: 20, y: 60 } });
+
+    const inspector = page.getByTestId('node-inspector');
+    await expect(inspector).toBeVisible({ timeout: 15_000 });
+
+    // The panel titles the OP, not the node type: "Action" names 31 different things.
+    await expect(page.getByText('Rotate', { exact: true }).first()).toBeVisible();
+    await expect(inspector.getByText('Configuration')).toBeVisible();
+
+    const degrees = inspector.locator('#action-config-chrome-action-degrees');
+    await expect(degrees).toBeVisible();
+
+    // It is the WRITE path, not a readout — the same `useNodeConfigPatch` the gear uses.
+    await degrees.fill('90');
+    await expect(degrees).toHaveValue('90');
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/action-inspector.png` });
+  });
+
+  test('the widest op config fits the inspector without overflowing it', async () => {
+    await openCanvas(page);
+    const overlay = nodeBox(page, 'chrome-overlay');
+    await expect(overlay).toBeVisible({ timeout: 60_000 });
+    await overlay.click({ position: { x: 20, y: 60 } });
+
+    const inspector = page.getByTestId('node-inspector');
+    await expect(inspector).toBeVisible({ timeout: 15_000 });
+
+    const overflow = await inspector.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(
+      overflow.scrollWidth,
+      'overlay config overflows the inspector horizontally',
+    ).toBeLessThanOrEqual(overflow.clientWidth + 1);
+
+    await inspector.screenshot({ path: `${SCREENSHOT_DIR}/overlay-inspector.png` });
   });
 });

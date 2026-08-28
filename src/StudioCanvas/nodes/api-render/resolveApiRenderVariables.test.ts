@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { API_RENDER_MEDIA_LIST_MAX } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import type { ApiRenderNodeData, StudioNode } from '../../types';
-import { resolveApiRenderVariables } from './resolveApiRenderVariables';
+import { resolveApiRenderVariables, resolveApiRenderVariations } from './resolveApiRenderVariables';
 
 const renderData: ApiRenderNodeData = {
   templateKey: '47',
@@ -77,7 +77,48 @@ describe('API render Canvas inputs', () => {
     ] as Edge[];
 
     const result = resolveApiRenderVariables({ nodeId: 'render', data: renderData, nodes, edges });
-    expect(result.errors).toEqual(['Hero image needs a version-pinned Library asset']);
+    expect(result.errors).toEqual(['Hero image needs a Library asset']);
+  });
+
+  test('serializes every scalar media input into a labeled variation', () => {
+    const nodes = [
+      { id: 'render', type: 'apiRender', data: renderData },
+      { id: 'image-1', type: 'image', data: { assetId: 'asset-1', assetVersionId: 'version-1' } },
+      { id: 'image-2', type: 'image', data: { assetId: 'asset-2', assetVersionId: 'version-2' } },
+    ] as StudioNode[];
+    const edges = [1, 2].map(
+      (index) =>
+        ({
+          id: `edge-${index}`,
+          source: `image-${index}`,
+          sourceHandle: 'image',
+          target: 'render',
+          targetHandle: 'variable-hero_image',
+        }) as Edge,
+    );
+
+    expect(
+      resolveApiRenderVariations({ nodeId: 'render', data: renderData, nodes, edges }),
+    ).toEqual({
+      count: 2,
+      records: [
+        {
+          label: 'Variation 1',
+          variables: {
+            hero_image: { assetId: 'asset-1', versionId: 'version-1' },
+            headline: 'Switch today',
+          },
+        },
+        {
+          label: 'Variation 2',
+          variables: {
+            hero_image: { assetId: 'asset-2', versionId: 'version-2' },
+            headline: 'Switch today',
+          },
+        },
+      ],
+      errors: [],
+    });
   });
 });
 
@@ -250,7 +291,7 @@ describe('API render Canvas inputs — a multiple media variable', () => {
       edges,
     });
 
-    expect(result.errors).toEqual(['Gallery needs a version-pinned Library asset']);
+    expect(result.errors).toEqual(['Gallery needs a Library asset']);
     expect(result.variables.gallery).toBeUndefined();
   });
 
@@ -284,7 +325,7 @@ describe('API render Canvas inputs — a multiple media variable', () => {
       edges: indexes.map(galleryEdge),
     });
 
-    expect(result.errors).toEqual(['Gallery needs a version-pinned Library asset']);
+    expect(result.errors).toEqual(['Gallery needs a Library asset']);
   });
 
   test('a single-value variable still resolves to one bare pin, not a list', () => {

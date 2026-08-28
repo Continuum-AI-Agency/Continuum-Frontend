@@ -22,6 +22,7 @@ import { http } from '@/lib/api/http';
 import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
 import type { StudioNode } from '@/StudioCanvas/types';
 import { appendElementGrounding } from './elementMentions';
+import { collectVisualEvidence } from './visualEvidence';
 
 // The composer's transcript and optimistic graph projection. Durable mutations
 // land server-side first; composer.patch mirrors each committed graph immediately
@@ -305,6 +306,13 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
       // the expanded chat asked to remember.
       const history = options?.remember ? buildHistoryPayload(turnsRef.current) : [];
       const references = toCanvasComposerReferences(options?.references ?? []);
+      // Sampled BEFORE the request goes out, because a compose run is detachable and
+      // the agent may decide to look long after this tab has stopped listening. Fails
+      // soft to [] — losing frames costs the agent a look, never the turn.
+      const visualEvidence = await collectVisualEvidence({
+        nodes: useStudioStore.getState().nodes,
+        ...(selectedNodeIds?.length ? { selectedNodeIds } : {}),
+      }).catch(() => []);
       const idempotencyKey = newTurnId();
       setTurns((previous) => [
         ...previous,
@@ -329,6 +337,7 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
             ...(references.length ? { references } : {}),
             ...(history.length ? { history } : {}),
             ...(options?.editorContext ? { editorContext: options.editorContext } : {}),
+            ...(visualEvidence.length ? { visualEvidence } : {}),
           },
           onFrame: (frame) => {
             // composer.started names the durable run this stream is a view of; that is

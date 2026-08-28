@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronsDown, ChevronUp } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -95,30 +95,30 @@ export function ChatMinimap({ anchors, className }: ChatMinimapProps) {
         })}
       </nav>
 
-      <div className="pointer-events-auto flex items-center gap-1.5">
-        {nextResponseId ? (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => scrollToMessage(nextResponseId)}
-            className="rounded-full shadow-sm"
-          >
-            Next response
-          </Button>
-        ) : null}
+      {nextResponseId ? (
         <Button
           type="button"
-          variant="secondary"
-          size="icon-sm"
-          aria-label="Scroll to latest"
-          disabled={!scrollable.end}
-          onClick={() => scrollToEnd()}
-          className="rounded-full shadow-sm disabled:opacity-0"
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Jump to next response"
+          onClick={() => scrollToMessage(nextResponseId)}
+          className="pointer-events-auto text-muted-foreground"
         >
-          <ChevronDown aria-hidden="true" />
+          <ChevronsDown aria-hidden="true" />
         </Button>
-      </div>
+      ) : null}
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Scroll to latest"
+        disabled={!scrollable.end}
+        onClick={() => scrollToEnd()}
+        className="pointer-events-auto text-muted-foreground disabled:opacity-0"
+      >
+        <ChevronDown aria-hidden="true" />
+      </Button>
     </div>
   );
 }

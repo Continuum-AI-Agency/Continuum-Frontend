@@ -5,7 +5,6 @@
 
 import {
   type ActionId,
-  type ActionModality,
   actionDef,
   actionInputPort,
   actionOutputModality,
@@ -21,24 +20,17 @@ import {
   type Node as ReactFlowNode,
 } from '@xyflow/react';
 import { Loader2, Wand2 } from 'lucide-react';
-import type React from 'react';
 import { useCallback } from 'react';
 
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
-import { NodeVideoPreview } from '../../components/NodeVideoPreview';
 import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { ActionNodeData } from '../../types';
 import { configFieldsFor } from '../../utils/actions/actionConfig';
 import { isImplementedAction } from '../../utils/actions/runAction';
 import { executeWorkflow } from '../../utils/executeWorkflow';
-import {
-  EDGE_COLOR_BY_MODALITY,
-  handleStyle,
-  MODALITY_LABEL,
-  ModalityPreview,
-} from '../modalityPreview';
+import { handleStyle, MODALITY_LABEL, ModalityPreview } from '../modalityPreview';
 import { NodeBadge, NodeOverlayNote, NodeTitleBar } from '../NodeChrome';
 import { ActionConfigPopover } from './ActionConfigPopover';
 

@@ -10,6 +10,7 @@ import {
   supportsImageSize,
 } from './image-size';
 import { STUDIO_NODE_REGISTRY } from './node-registry';
+import { workflowEditOpSchema } from './workflow-builder';
 import {
   CLIP_TRANSITION_TYPES,
   createNodeData,
@@ -175,8 +176,9 @@ function describeActionOps(): string {
     'inert node with no handles. Set the op FIRST, then wire. `in(n)` is an input handle and its',
     'connection limit, `out` the single output (carrying the family modality unless written',
     '`out:image`), `*` a COLLECTION output a downstream batch fans out over. After the last `·`',
-    "are that op's `data.config` keys — omit any you are unsure of: one out-of-range value drops",
-    'the WHOLE config back to defaults.',
+    "are that op's `data.config` keys. They are checked on write against that op's own",
+    'schema: an unknown key, or a value outside its range, is dropped and that ONE field',
+    'falls back to its default — the rest of the config you set still stands.',
   ];
   for (const family of actionFamilyOrder()) {
     for (const group of actionGroupOrder()) {
@@ -238,6 +240,82 @@ const TIMELINE_ITEM_SHAPE: Record<keyof TimelineItemSpec, string> = {
   transition: `{ type: ${CLIP_TRANSITION_TYPES.join('|')}, durationSec } — INTO this clip (optional)`,
 };
 
+// ---------------------------------------------------------------------------
+// The edit-op wire shape
+// ---------------------------------------------------------------------------
+
+// Same lesson as TIMELINE_ITEM_SHAPE, one level up: an op whose field names are guessed
+// is rejected by a `.strict()` union and costs a whole tool-loop step per wrong guess.
+// Measured on the toolloop bench's `edit` scenario before this block existed — the model
+// spent NINE consecutive edit_canvas calls cycling ref/value/config against
+// id/label/data, burned 100k input tokens, and still dropped half the edit.
+//
+// The trap is not ignorance, it is INTERFERENCE: build_canvas names a new node `ref` and
+// wires `from_ref`/`to_ref`, so those spellings are already in the turn's context when
+// the edit is written. Every op below is derived from `workflowEditOpSchema` itself, so
+// the two spellings cannot drift apart in the prompt the way they did in the model.
+const EDIT_OP_FIELD_NOTES: Record<string, string> = {
+  id: 'the EXISTING node id, from inspect_canvas or build_canvas refToId — never your own ref',
+  ref: 'your name for a node being ADDED — add_node is the one op that takes a ref',
+  data: 'config fields, e.g. { positivePrompt } — not `config`, not `value`',
+  label: 'the new display name — not `value`',
+  from: 'source node id — not `from_ref`',
+  to: 'target node id — not `to_ref`',
+  role: 'optional hint like "prompt" or "ref-images"; the canvas resolves the handle',
+  items: 'see TIMELINE PLACEMENT below',
+};
+
+interface EditOpShape {
+  op: string;
+  required: string[];
+  optional: string[];
+}
+
+/** Every member of the discriminated union, read off the schema rather than retyped. */
+function editOpShapes(): EditOpShape[] {
+  const union = workflowEditOpSchema as unknown as {
+    options?: Array<{
+      shape: Record<string, { safeParse: (input: unknown) => { success: boolean } }>;
+    }>;
+    def?: {
+      options?: Array<{
+        shape: Record<string, { safeParse: (input: unknown) => { success: boolean } }>;
+      }>;
+    };
+  };
+  const options = union.options ?? union.def?.options ?? [];
+  return options.flatMap((option) => {
+    const shape = option.shape;
+    // The discriminant's literal value is the op name. Zod does not expose it the same
+    // way across minor versions, so probe it: exactly one string parses.
+    const opField = shape.op as unknown as { def?: { values?: string[]; value?: string } };
+    const op = opField?.def?.values?.[0] ?? opField?.def?.value;
+    if (typeof op !== 'string') return [];
+    const required: string[] = [];
+    const optional: string[] = [];
+    for (const key of Object.keys(shape)) {
+      if (key === 'op') continue;
+      (shape[key]?.safeParse(undefined).success ? optional : required).push(key);
+    }
+    return [{ op, required, optional }];
+  });
+}
+
+function describeEditOps(): string {
+  const lines = [
+    'EDIT OPS — the exact wire shape of every `edit_canvas` op. A `[key]` is optional.',
+    "These field names are NOT build_canvas's. A build names a NEW node `ref` and wires",
+    '`from_ref`/`to_ref`; an edit names an EXISTING node `id` and wires `from`/`to`. Carrying',
+    'the build spelling into an edit is rejected outright and costs a whole tool call.',
+  ];
+  for (const { op, required, optional } of editOpShapes()) {
+    const fields = [...required, ...optional.map((key) => `[${key}]`)];
+    lines.push(`  ${op}: ${['op', ...fields].join(', ')}`);
+  }
+  const notes = Object.entries(EDIT_OP_FIELD_NOTES).map(([key, note]) => `  ${key} — ${note}`);
+  return [...lines, 'What each field means:', ...notes].join('\n');
+}
+
 function describeTimelinePlacement(): string {
   const fields = Object.entries(TIMELINE_ITEM_SHAPE)
     .map(([field, hint]) => `    ${field}: ${hint}`)
@@ -264,6 +342,8 @@ export function describeNodeVocabulary(): string {
     describeActionOps(),
     '',
     describeVideoModels(),
+    '',
+    describeEditOps(),
     '',
     describeTimelinePlacement(),
     '',

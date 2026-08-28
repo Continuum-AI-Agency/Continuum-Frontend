@@ -1,3 +1,4 @@
+import { RemoveConnectionButton } from '@/components/integrations/RemoveConnectionButton';
 import { ShareConnectionButton } from '@/components/integrations/ShareConnectionButton';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import { fetchMyConnectionGrants } from '@/lib/integrations/grants';
@@ -51,16 +52,19 @@ export async function MyConnectionsSharingSection({ userId }: MyConnectionsShari
   return (
     <GlassPanel className="p-[var(--card-pad)]">
       <div className="mb-4">
-        <h3 className="text-base font-semibold text-foreground">Share with brands</h3>
+        <h3 className="text-base font-semibold text-foreground">Your connections</h3>
         <p className="text-sm text-muted-foreground">
-          Grant any brand you own or administer access to these connections so teammates can use
-          them.
+          Share a connection with any brand you own or administer, or remove it from your account
+          entirely — which pulls it from every brand at once.
         </p>
       </div>
 
       <ul className="flex flex-col gap-2">
         {connections.map((connection) => {
-          const label = formatProvider(connection.provider);
+          const providerLabel = formatProvider(connection.provider);
+          const label = connection.identity
+            ? `${providerLabel} — ${connection.identity}`
+            : providerLabel;
           const grantedTo = grantsByIntegration.get(connection.id) ?? [];
           return (
             <li
@@ -94,11 +98,14 @@ export async function MyConnectionsSharingSection({ userId }: MyConnectionsShari
                   </span>
                 )}
               </div>
-              <ShareConnectionButton
-                integrationId={connection.id}
-                integrationLabel={label}
-                alreadyGrantedBrandIds={grantedTo.map((g) => g.brandProfileId)}
-              />
+              <div className="flex items-center gap-1">
+                <ShareConnectionButton
+                  integrationId={connection.id}
+                  integrationLabel={label}
+                  alreadyGrantedBrandIds={grantedTo.map((g) => g.brandProfileId)}
+                />
+                <RemoveConnectionButton integrationId={connection.id} integrationLabel={label} />
+              </div>
             </li>
           );
         })}

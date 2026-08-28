@@ -8,22 +8,24 @@
  *   3. rendering is LIBRARY-ONLY by default — preflight carries no `delivery` and Meta is
  *      never even searched — and Meta delivery is an explicit opt-in;
  *   4. a `reserved` variable is locked: no input, no handle, nothing registered from the
- *      browser, no required-error, and the exact frozen pin is echoed after preflight;
- *   5. saved input sets round-trip, and rendering from one sends `inputSetId` INSTEAD of
+ *      browser, and no required-error;
+ *   5. scalar media wires serialize into labeled variations and the node states the count
+ *      before the one-click preflight plus queue submission;
+ *   6. saved input sets round-trip, and rendering from one sends `inputSetId` INSTEAD of
  *      `variables` (the contract refuses both);
- *   6. one of five saved sets and all five take the SAME route — exactly the checked
- *      records, in the order they were checked, one confirm for the lot — and every job id
+ *   7. one of five saved sets and all five take the SAME route — exactly the checked
+ *      records, in the order they were checked, one submit for the lot — and every job id
  *      the 202 returns is persisted, because that response is the only handle these renders
  *      will ever have: no batch id is stored server-side;
- *   7. tracked ids survive a remount the recent-jobs list does not cover — all five of
+ *   8. tracked ids survive a remount the recent-jobs list does not cover — all five of
  *      them, each re-read from the per-job relay and previewed from its own Library copy;
- *   8. progress advances on its own from the REAL five-value status, with no percentage;
- *   9. EVERY output is previewed, lazily, from the live DTO — never from persisted data;
- *  10. enum geometry is honest in both directions — no control is invented for a parameter
+ *   9. progress advances on its own from the REAL five-value status, with no percentage;
+ *  10. EVERY output is previewed, lazily, from the live DTO — never from persisted data;
+ *  11. enum geometry is honest in both directions — no control is invented for a parameter
  *      whose value set never crossed the boundary, the exact reflected set is offered when
  *      it did, and a required enum with nothing chosen SHOWS empty rather than painting
- *      option one as selected while Prepare refuses it;
- *  11. a finished image output becomes an ordinary canvas reference node pinned to its EXACT
+ *      option one as selected while Render refuses it;
+ *  12. a finished image output becomes an ordinary canvas reference node pinned to its EXACT
  *      Library version — one per output, idempotent, and carrying no URL-only identity.
  *
  * UN-EXERCISED HOPS, STATED EXPLICITLY — this bench does NOT cover:
@@ -39,12 +41,7 @@
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import {
-  API_RENDER_MEDIA_LIST_MAX,
-  type ApiRenderInputSet,
-  type ApiRenderJob,
-  type ApiRenderVariable,
-} from '@continuum/contracts';
+import type { ApiRenderInputSet, ApiRenderJob, ApiRenderVariable } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider, useStoreApi } from '@xyflow/react';
@@ -448,22 +445,22 @@ describe('ApiRenderBlock — workspace gate and active brand', () => {
 });
 
 describe('ApiRenderBlock — library-only by default, Meta opt-in', () => {
-  test('prepares with NO delivery block and never searches Meta', async () => {
+  test('renders with NO delivery block and never searches Meta', async () => {
     currentVariables = [variable()];
     renderNode({ templateKey: '166', contractHash: 'hash', variableDefinitions: [variable()] });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
     await waitFor(() => expect(calls.preflight.length).toBe(1));
 
     expect(calls.preflight[0]).not.toHaveProperty('delivery');
     // The old node ran a Graph campaign search on every mount, for every render.
     expect(calls.searchPaid).toBe(0);
-    expect(await screen.findByText('Library only — no Meta delivery')).toBeTruthy();
+    expect(calls.createJob).toBe(1);
   });
 
   test('the header states where the render is going', async () => {
     renderNode({ templateKey: '166' });
-    expect(await screen.findByText('Render → Library')).toBeTruthy();
+    expect((await screen.findAllByText(/saves to Library/)).length).toBeGreaterThan(0);
   });
 
   test('switching Meta delivery on reveals the pickers and demands a target', async () => {
@@ -473,7 +470,7 @@ describe('ApiRenderBlock — library-only by default, Meta opt-in', () => {
     expect(await screen.findByLabelText('Meta campaign')).toBeTruthy();
     await waitFor(() => expect(calls.searchPaid).toBeGreaterThan(0));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Prepare' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Render 1' }));
     expect(
       await screen.findByText('Choose a campaign and ad set, or switch Meta delivery off.'),
     ).toBeTruthy();
@@ -518,54 +515,27 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
       variableDefinitions: reservedContract,
     });
 
-    expect(await screen.findByText('Design Kit · Brand logo — filled by Continuum')).toBeTruthy();
+    expect(await screen.findByText('Brand logo')).toBeTruthy();
     // A connectable handle would advertise an input the server refuses outright.
     expect(document.querySelector('[data-handleid="variable-watermark_logo"]')).toBeNull();
     // The browser resolves, copies, registers and pins NOTHING for this key.
     expect(calls.register).toBe(0);
   });
 
-  test('Prepare does not error on the reserved key and never sends it', async () => {
+  test('Render does not error on the reserved key and never sends it', async () => {
     renderNode({
       templateKey: '166',
       contractHash: 'hash',
       variableDefinitions: reservedContract,
     });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
     await waitFor(() => expect(calls.preflight.length).toBe(1));
 
-    // `reserved` is ALSO `required`; keying off `required` alone refused Prepare here.
+    // `reserved` is ALSO `required`; keying off `required` alone refused the render here.
     const sent = calls.preflight[0]?.variables as Record<string, unknown>;
     expect(sent).not.toHaveProperty('watermark_logo');
-    expect(screen.queryByText(/needs a version-pinned/)).toBeNull();
-  });
-
-  test('echoes the exact pin the server froze into the confirmation', async () => {
-    watermarkPin = { assetId: ASSET_ID, versionId: VERSION_ID };
-    renderNode({
-      templateKey: '166',
-      contractHash: 'hash',
-      variableDefinitions: reservedContract,
-    });
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
-    // A key name proves a slot was filled, not WHICH asset filled it.
-    const pinned = await screen.findByText(/^Pinned · asset/);
-    expect(pinned.textContent).toContain(ASSET_ID.slice(0, 12));
-    expect(pinned.textContent).toContain(VERSION_ID.slice(0, 12));
-  });
-
-  test('says un-pinned rather than implying a freeze that did not happen', async () => {
-    watermarkPin = null;
-    renderNode({
-      templateKey: '166',
-      contractHash: 'hash',
-      variableDefinitions: reservedContract,
-    });
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
-    expect(await screen.findByText(/Not pinned in this confirmation/)).toBeTruthy();
+    expect(screen.queryByText(/needs a Library asset/)).toBeNull();
   });
 
   test('invents no control for a parameter whose value set never crossed the boundary', async () => {
@@ -633,7 +603,7 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
     expect(picker.options[0]?.disabled).toBe(true);
     expect(picker.options[0]?.text).toBe('Choose…');
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
 
     expect(await screen.findByText(/Watermark Position is required/)).toBeTruthy();
     // Refused before the wire, and nothing downstream of it moved either.
@@ -642,7 +612,7 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
     expect(calls.createBatch).toBe(0);
   });
 
-  test('the chosen option is exactly what Prepare sends, and nothing is queued', async () => {
+  test('the chosen option is exactly what Render sends', async () => {
     renderNode({
       templateKey: '166',
       contractHash: 'hash',
@@ -666,7 +636,7 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
       ),
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
     await waitFor(() => expect(calls.preflight.length).toBe(1));
 
     // The reflected wire value, verbatim — the fleet validates it by exact membership, so
@@ -674,8 +644,7 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
     expect((calls.preflight[0]?.variables as Record<string, unknown>).watermark_position).toBe(
       'bottom_right',
     );
-    // Prepare has no effects. Nothing in this bench queues a render.
-    expect(calls.createJob).toBe(0);
+    expect(calls.createJob).toBe(1);
     expect(calls.createBatch).toBe(0);
   });
 });
@@ -728,7 +697,7 @@ describe('ApiRenderBlock — a contract discovered after the node mounted', () =
     expect(remeasured.length).toBeGreaterThan(0);
   });
 
-  test('sends the wired text, not the value typed on the node, and submits nothing', async () => {
+  test('sends the wired text, not the value typed on the node', async () => {
     currentVariables = [headline()];
     renderNode({}, BRAND_ID, { nodes: [textNode], edges: [textEdge] });
 
@@ -742,13 +711,12 @@ describe('ApiRenderBlock — a contract discovered after the node mounted', () =
       expect(screen.queryByText(/the wired text is used instead of this field/)).toBeTruthy(),
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
     await waitFor(() => expect(calls.preflight.length).toBe(1));
     expect((calls.preflight[0]?.variables as Record<string, unknown>).headline).toBe(
       'Wired headline',
     );
-    // Prepare has no effects. Nothing in this bench queues a render.
-    expect(calls.createJob).toBe(0);
+    expect(calls.createJob).toBe(1);
     expect(calls.createBatch).toBe(0);
   });
 });
@@ -779,6 +747,42 @@ describe('ApiRenderBlock — a multiple media variable', () => {
   });
   const WIRED = [3, 1, 4, 2, 5];
 
+  test('serializes scalar media wires and states the variation count before submission', async () => {
+    const hero = variable({
+      key: 'hero_image',
+      label: 'Hero image',
+      kind: 'image',
+      required: true,
+    });
+    renderNode(
+      { templateKey: '166', contractHash: 'hash', variableDefinitions: [hero] },
+      BRAND_ID,
+      {
+        nodes: [1, 2].map(libraryNode),
+        edges: [1, 2].map((index) => ({
+          ...galleryEdge(index),
+          targetHandle: 'variable-hero_image',
+        })),
+      },
+    );
+
+    expect(await screen.findByRole('button', { name: 'Render 2' })).toBeTruthy();
+    expect(await screen.findByText('2 ready · variations')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Render 2' }));
+    await waitFor(() => expect(calls.batchPreflight.length).toBe(1));
+    expect(calls.batchPreflight[0]?.records).toEqual([
+      {
+        label: 'Variation 1',
+        variables: { hero_image: pin(1) },
+      },
+      {
+        label: 'Variation 2',
+        variables: { hero_image: pin(2) },
+      },
+    ]);
+    expect(calls.createBatch).toBe(1);
+  });
+
   test('sends five wired Library images as five pins, in the order they were wired', async () => {
     currentVariables = [gallery];
     renderNode(
@@ -787,7 +791,7 @@ describe('ApiRenderBlock — a multiple media variable', () => {
       { nodes: WIRED.map(libraryNode), edges: WIRED.map(galleryEdge) },
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
     await waitFor(() => expect(calls.preflight.length).toBe(1));
 
     const sent = (calls.preflight[0]?.variables as Record<string, unknown>).gallery;
@@ -812,12 +816,12 @@ describe('ApiRenderBlock — a multiple media variable', () => {
       },
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
-    expect(await screen.findByText('Gallery needs a version-pinned Library asset')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
+    expect(await screen.findByText('Gallery needs a Library asset')).toBeTruthy();
     expect(calls.preflight.length).toBe(0);
   });
 
-  test('says one-or-more on a list port and exactly-one on a single port', async () => {
+  test('color-codes media slots and states how many inputs are ready', async () => {
     renderNode({
       templateKey: '166',
       contractHash: 'hash',
@@ -827,12 +831,8 @@ describe('ApiRenderBlock — a multiple media variable', () => {
       ],
     });
 
-    expect(
-      await screen.findByText(`Connect up to ${API_RENDER_MEDIA_LIST_MAX} version-pinned image`, {
-        exact: false,
-      }),
-    ).toBeTruthy();
-    expect(await screen.findByText('Connect a version-pinned image Library node')).toBeTruthy();
+    expect((await screen.findAllByText('Images')).length).toBe(2);
+    expect((await screen.findAllByText('Connect media')).length).toBe(2);
   });
 });
 
@@ -846,10 +846,10 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
       variables: { headline: 'launch day' },
     });
 
-    fireEvent.change(await screen.findByLabelText('New input set name'), {
+    fireEvent.change(await screen.findByLabelText('New preset name'), {
       target: { value: 'Set A' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save as…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(calls.createInputSet.length).toBe(1));
     expect(calls.createInputSet[0]?.name).toBe('Set A');
@@ -860,10 +860,10 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
     createInputSetError = new Error('409 render_input_set_name_taken');
     renderNode({ templateKey: '166', contractHash: 'hash', variableDefinitions: [] });
 
-    fireEvent.change(await screen.findByLabelText('New input set name'), {
+    fireEvent.change(await screen.findByLabelText('New preset name'), {
       target: { value: 'Set A' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save as…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     const message = await screen.findByText(
       'A set with that name already exists for this template.',
@@ -880,7 +880,7 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
       inputSetId: SET_A,
     });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
     await waitFor(() => expect(calls.preflight.length).toBe(1));
 
     // The contract refuses both and refuses neither — one source, always.
@@ -897,11 +897,10 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
       batchInputSetIds: [SET_A, SET_B],
     });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare 2 renders' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render 2' }));
     await waitFor(() => expect(calls.batchPreflight.length).toBe(1));
     expect((calls.batchPreflight[0]?.records as unknown[]).length).toBe(2);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Confirm batch' }));
     await waitFor(() => expect(calls.createBatch).toBe(1));
 
     // No batch id is persisted server-side and `GET /jobs` cannot filter by one, so this
@@ -916,7 +915,7 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
     fireEvent.click(await screen.findByLabelText('Set C'));
     await waitFor(() => expect(nodeData.batchInputSetIds).toEqual([SET_C]));
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare 1 render' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
     await waitFor(() => expect(calls.batchPreflight.length).toBe(1));
 
     // One of five is still a batch of one — the single-render route is never touched, so
@@ -925,9 +924,7 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
     // Not a count: the id and the label of the set that was actually checked, and nothing
     // from the four that were not.
     expect(calls.batchPreflight[0]?.records).toEqual([{ label: 'Set C', inputSetId: SET_C }]);
-    expect(await screen.findByText('1 render prepared')).toBeTruthy();
-    expect(screen.getByText('Set C · 1 inputs')).toBeTruthy();
-    expect(screen.queryByText('Set A · 1 inputs')).toBeNull();
+    await waitFor(() => expect(calls.createBatch).toBe(1));
 
     // The other half of "exactly one": the selection must swap, not accumulate.
     fireEvent.click(screen.getByLabelText('Set D'));
@@ -964,11 +961,10 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
       expect(nodeData.batchInputSetIds).toEqual(clicks.map((click) => click.inputSetId)),
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Prepare 5 renders' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render 5' }));
     await waitFor(() => expect(calls.batchPreflight.length).toBe(1));
     expect(calls.batchPreflight[0]?.records).toEqual(clicks);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Confirm batch' }));
     // ONE confirmation request from the browser for all five, not five `createJob` calls
     // the client could drop partway through its own loop.
     //

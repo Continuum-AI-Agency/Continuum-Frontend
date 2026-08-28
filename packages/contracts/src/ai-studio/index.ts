@@ -26,6 +26,7 @@ export * from './prompt-enrichment';
 export * from './timeline-authoring';
 export * from './ugc-workflow';
 export * from './video-production';
+export * from './visual-evidence';
 export * from './workflow-builder';
 export * from './workflow-fragment';
 export * from './workflow-graph';
