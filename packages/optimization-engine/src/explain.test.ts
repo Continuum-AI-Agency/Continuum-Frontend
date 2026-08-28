@@ -101,3 +101,18 @@ describe('moveReasonText is the one line persisted next to the money', () => {
     expect(moveReasonText(-5, { ci: { cpa: 12, events: 1 } })).toContain('on 1 event.');
   });
 });
+
+it('rounds the cost-per-result figure instead of pasting a raw quotient', () => {
+  // The field report: MX$50.00 -> MX$51.54 carried "Cost per result 29.91909090909091".
+  const reason = moveReasonText(154, {
+    score3d: 1, score7d: 1, score14d: 1,
+    ci: { cpa: 29.91909090909091, events: 44 },
+  });
+  expect(reason).toContain('Cost per result 29.92 on 44 events.');
+  expect(reason).not.toContain('29.919');
+});
+
+it('keeps a whole-number cost per result whole', () => {
+  const reason = moveReasonText(154, { ci: { cpa: 61, events: 14 } });
+  expect(reason).toContain('Cost per result 61 on 14 events.');
+});

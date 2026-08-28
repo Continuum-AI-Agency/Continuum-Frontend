@@ -40,6 +40,16 @@ export type BudgetMoveWhy = {
 const finite = (value: number | null | undefined): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 
+/** A money-ish figure in a sentence a human reads, not a float in a log line.
+ *
+ *  `ci.cpa` is a raw quotient — spend over events — so it arrives as 29.91909090909091 and
+ *  went into apply_audits.justification verbatim. Two decimals, trailing zeros dropped, so
+ *  61 stays "61" and 29.919… reads "29.92". The dashboard's formatCpa already rounds for
+ *  the same reason; this is the same intent for the persisted sentence, which has no
+ *  currency to hand and so renders a bare number by design.
+ */
+const readableFigure = (value: number): string => String(Math.round(value * 100) / 100);
+
 /** Did the per-cycle velocity guardrail actually truncate this move?
  *
  *  velocityCapped is the raw proportional budget CLAMPED to the ad set's velocity band, so
@@ -178,8 +188,8 @@ export function moveReasonText(
     const events = why.cost.events;
     parts.push(
       events == null
-        ? `Cost per result ${why.cost.cpa}.`
-        : `Cost per result ${why.cost.cpa} on ${events} event${events === 1 ? '' : 's'}.`,
+        ? `Cost per result ${readableFigure(why.cost.cpa)}.`
+        : `Cost per result ${readableFigure(why.cost.cpa)} on ${events} event${events === 1 ? '' : 's'}.`,
     );
   }
   if (why.capped) parts.push('Truncated by the per-cycle velocity cap.');
