@@ -88,7 +88,7 @@ const imageRefFromOutput = (
 // `assetId` once they come from the Library (dragged in, uploaded, or seeded by
 // "Open in Canvas"); a node with no assetId is a loose file with no performance
 // history, and is simply omitted rather than guessed at.
-const collectReferenceAssetIds = (
+export const collectReferenceAssetIds = (
   edges: Edge[],
   allNodes: { id: string; data?: unknown }[],
 ): string[] => {

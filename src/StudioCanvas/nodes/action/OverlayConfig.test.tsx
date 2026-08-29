@@ -86,7 +86,9 @@ describe('OverlayConfig', () => {
     expect(patch).toHaveBeenCalledWith(
       'act-1',
       'action',
-      expect.objectContaining({ config: expect.objectContaining({ startSec: null, endSec: null }) }),
+      expect.objectContaining({
+        config: expect.objectContaining({ startSec: null, endSec: null }),
+      }),
     );
   });
 

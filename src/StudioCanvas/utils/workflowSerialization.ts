@@ -126,6 +126,19 @@ function stripRuntimeNodeData(
         return durable;
       });
     }
+
+    // An omni variation is inserted optimistically as `pending` and patched when
+    // the turn lands. Persisting one means a tab closed mid-turn reloads into a
+    // tile that spins forever with nothing left to resolve it — the turn it was
+    // waiting on died with the page.
+    if (Array.isArray(next.variations)) {
+      next.variations = next.variations.filter(
+        (variation) =>
+          !variation ||
+          typeof variation !== 'object' ||
+          (variation as Record<string, unknown>).status !== 'pending',
+      );
+    }
   }
 
   if (Array.isArray(next.inputs)) {

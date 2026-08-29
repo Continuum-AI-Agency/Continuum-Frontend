@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { designSystemSnapshotSchema } from '../design-system/manifest';
 import { documentCategorySchema, toDocumentCategory } from '../documents/category';
 import { brandDnaSchema } from './brand-dna';
 import { brandMdTokensSchema } from './brand-md';
@@ -86,6 +87,13 @@ export const brandBookAssembledSchema = z
     guidelines: z.array(brandBookGuidelineSchema).default([]),
     documents: z.array(brandBookDocumentSchema).default([]),
     report: brandBookReportLayerSchema.nullable().default(null),
+    // The brand's ACTIVE design system, as the same validated snapshot the settings
+    // panel and the generation paths read. Optional in both directions: only a handful
+    // of brands have one, and 300+ books were written before this key existed — a read
+    // model may not start rejecting rows it already wrote. `.catch(null)` keeps that
+    // true going forward too: a stored snapshot the schema later outgrows degrades to
+    // "this brand has no design system" instead of erroring the whole book.
+    design_system: designSystemSnapshotSchema.nullable().default(null).catch(null),
   })
   .passthrough();
 export type BrandBookAssembled = z.infer<typeof brandBookAssembledSchema>;

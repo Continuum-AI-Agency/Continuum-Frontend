@@ -203,8 +203,8 @@ export const STUDIO_NODE_REGISTRY = {
     signatureFields: VIDEO_GENERATOR_SIGNATURE_FIELDS,
   },
   omniGen: {
-    label: 'Omni Flash (Edit)',
-    description: 'Generate a clip, then chat to edit it into variations',
+    label: 'Omni 1.1 Flash (Edit)',
+    description: 'Generate a clip, then chat to edit, extend and upscale it into variations',
     category: 'video',
     provider: 'google',
     purpose: 'Gemini Omni video generator, conversational variations',

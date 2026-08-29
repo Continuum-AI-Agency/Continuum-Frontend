@@ -15,8 +15,8 @@ import {
   FlipVertical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NumberScrubField } from '@/components/ui/number-field';
 import {
   Select,
   SelectContent,
@@ -78,44 +78,6 @@ export interface LayerInspectorProps {
   onFlip: (axis: 'x' | 'y') => void;
 }
 
-function NumberField({
-  label,
-  value,
-  onChange,
-  step = 1,
-  suffix,
-}: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-  step?: number;
-  suffix?: string;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <Label className="text-3xs uppercase tracking-wide text-muted-foreground">{label}</Label>
-      <div className="relative">
-        <Input
-          type="number"
-          step={step}
-          value={Number.isFinite(value) ? Math.round(value * 100) / 100 : 0}
-          aria-label={label}
-          onChange={(event) => {
-            const next = Number.parseFloat(event.currentTarget.value);
-            if (Number.isFinite(next)) onChange(next);
-          }}
-          className="h-7 pr-6 text-2xs tabular-nums"
-        />
-        {suffix ? (
-          <span className="pointer-events-none absolute right-2 top-1.5 text-3xs text-muted-foreground">
-            {suffix}
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 export function LayerInspector({
   frame,
   onFrameChange,
@@ -155,13 +117,13 @@ export function LayerInspector({
           </SelectContent>
         </Select>
         <div className="grid grid-cols-2 gap-1.5">
-          <NumberField
+          <NumberScrubField
             label="Width"
             value={frame.width}
             step={16}
             onChange={(width) => onFrameChange(width, frame.height)}
           />
-          <NumberField
+          <NumberScrubField
             label="Height"
             value={frame.height}
             step={16}
@@ -208,17 +170,17 @@ export function LayerInspector({
               Transform
             </h3>
             <div className="grid grid-cols-2 gap-1.5">
-              <NumberField
+              <NumberScrubField
                 label="X"
                 value={layer.position.x}
                 onChange={(x) => onLayerChange({ position: { ...layer.position, x } })}
               />
-              <NumberField
+              <NumberScrubField
                 label="Y"
                 value={layer.position.y}
                 onChange={(y) => onLayerChange({ position: { ...layer.position, y } })}
               />
-              <NumberField
+              <NumberScrubField
                 label="Scale X"
                 value={layer.scale.x * 100}
                 suffix="%"
@@ -226,7 +188,7 @@ export function LayerInspector({
                   onLayerChange({ scale: { ...layer.scale, x: percent / 100 } })
                 }
               />
-              <NumberField
+              <NumberScrubField
                 label="Scale Y"
                 value={layer.scale.y * 100}
                 suffix="%"
@@ -234,7 +196,7 @@ export function LayerInspector({
                   onLayerChange({ scale: { ...layer.scale, y: percent / 100 } })
                 }
               />
-              <NumberField
+              <NumberScrubField
                 label="Rotation"
                 value={layer.rotation}
                 suffix="°"
@@ -284,12 +246,12 @@ export function LayerInspector({
               Anchor
             </h3>
             <div className="grid grid-cols-2 gap-1.5">
-              <NumberField
+              <NumberScrubField
                 label="Anchor X"
                 value={layer.anchor.x}
                 onChange={(x) => onLayerChange({ anchor: { ...layer.anchor, x } })}
               />
-              <NumberField
+              <NumberScrubField
                 label="Anchor Y"
                 value={layer.anchor.y}
                 onChange={(y) => onLayerChange({ anchor: { ...layer.anchor, y } })}

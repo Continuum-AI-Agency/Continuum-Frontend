@@ -17,8 +17,9 @@
 //     `resolveBrandType` (contracts, design-system/typeResolution.ts). Refusing the whole
 //     node because the typography was somewhere else was the old bug.
 //   • ONE TREATMENT FUNCTION. {@link applyTreatment} is what the contrast PROBE composites and
-//     what the final frame composites. Two implementations would drift, and they would drift
-//     in the flattering direction: the plan would claim a ratio the render never reached.
+//     what the final frame composites — over the SAME box, so the feathered edges are inside
+//     the measurement. Two implementations would drift, and they would drift in the flattering
+//     direction: the plan would claim a ratio the render never reached.
 //   • THE METRICS THE PLAN WAS COMPUTED FROM ARE THE METRICS THAT GET DRAWN. See
 //     {@link createMeasurer} — this is the single biggest source of drift in type placement.
 
@@ -263,6 +264,20 @@ export function createMeasurer(faces: HeadlineFaces, trackingPx: number): Measur
 const HARMONISE_PASTEL_MIX = 0.82;
 /** How hard the pastel lifts the shadows. */
 const HARMONISE_STRENGTH = 0.35;
+/** Feather radius of the scrim, as a fraction of the BOX's short side (`_scrim`'s `pluma`). */
+const SCRIM_FEATHER_FRACTION = 0.18;
+
+/**
+ * How far past the box the scrim's feather reaches, in px. Nothing beyond this is touched.
+ *
+ * Exported for `text:render:bench`, which asserts that every pixel outside this band is
+ * byte-identical before and after. It calls the function rather than re-deriving the number, so
+ * the fence cannot drift away from the thing it is fencing.
+ */
+export function scrimReachPx(frame: Size, box: FractionalBox): number {
+  const rect = resolveBox(frame, box);
+  return 2 * Math.max(2, Math.min(rect.width, rect.height) * SCRIM_FEATHER_FRACTION);
+}
 
 const pastelOf = (ink: Rgb): string =>
   rgbToHex([
@@ -274,28 +289,65 @@ const pastelOf = (ink: Rgb): string =>
 type Ctx2d = OffscreenCanvasRenderingContext2D;
 
 /**
- * Composite one treatment stack onto a frame that already holds the photo.
+ * Composite the treatment onto a frame that already holds the photo — BEHIND THE HEADLINE ONLY:
+ * `box` plus the feather ring around it, and not one pixel further.
  *
- * THE STACK IS CUMULATIVE and it is applied from the pristine photo every time, in order —
- * which is what makes veiling correct: white at `m1` then at `m2` leaves `m1 + m2 − m1·m2`,
- * not `max(m1, m2)`. Deriving each rung from the original with only that rung's own step gives
- * numbers that are wrong in the flattering direction.
+ * This is `_scrim` (render_pieza.py:797), not `_velo_marca` (:836). The reference has both and
+ * they are for different jobs: `_velo_marca` is one client's house-style horizontal ramp across
+ * the whole frame, and `_scrim` is what a designer actually does when the headline lands on a
+ * dark patch — *lighten only the indicated box, with blurred edges; lift the background just
+ * beneath the text*. A general-purpose "Burn In Text" node wants the second one. Porting the
+ * first is what made this wash out every photo it touched.
  *
- * `harmonise` lifts the shadows toward a pastel of the brand ink with a `lighten` composite, so
- * a pixel already brighter than the pastel is untouched and only the shadows move.
+ * FEATHERED, because a hard-edged rectangle reads as a box stuck on top of the photo. The
+ * radius is `max(2, min(w, h) · 0.18)` of the BOX, exactly as `pluma` is. `ctx.filter = blur(σ)`
+ * over one fillRect, not hand-rolled gradient stops: four edge gradients plus four corner
+ * gradients would be more code for a worse approximation of a Gaussian.
  *
- * CEILING: the veil is a flat wash over the whole frame, not the brand's gradient. It is what
- * the probe measures and therefore what the plan is true about; a gradient pinned to the
- * anchored edge is the upgrade, and it changes the measurement, so it lands with a re-bench.
+ * THE RAMP FALLS OUTSIDE THE BOX, NOT INSIDE IT, and that is a contrast requirement rather than
+ * a taste one. Feathering inward puts half the box's area — a 0.18 ring on both sides — under a
+ * ramp that reaches zero exactly where the type's edges are; the probe then reads the untreated
+ * corners as its dark percentile and NO floor clears, not even 0.9. Measured: the dark bench
+ * photo exhausted the whole ladder at 1.52:1. So the fill is the box grown by one feather and
+ * the clip is the box grown by two, with σ = feather/2: the measured box sits at ≥ 97 % of the
+ * chosen alpha, the ramp lives in the ring beyond it, and the clip caps the reach at
+ * {@link scrimReachPx} so "only behind the headline" stays a guarantee rather than a hope.
+ *
+ * HARMONISE IS BOX-LOCAL TOO, deliberately. In the reference `_armonizar` is a global tone
+ * treatment because that IS the client's look, applied to every piece whether or not a headline
+ * needed rescuing. Here it is only ever reached BECAUSE the ladder is rescuing one headline, and
+ * a global lift to fix a local problem is the same bug as the global veil. Keeping both rungs on
+ * the same geometry also keeps the ladder honest: rung 1's measurement predicts rung 2's look.
+ *
+ * The steps are applied from the pristine photo, in order, and there is at most one veil among
+ * them — `resolveTreatment` raises a floor rather than adding a layer.
  */
 export function applyTreatment(
   ctx: Ctx2d,
   steps: readonly TreatmentStep[],
   frame: Size,
   ink: Rgb,
+  box: FractionalBox,
 ): void {
+  if (steps.length === 0) return;
+  const rect = resolveBox(frame, box);
+  const reach = scrimReachPx(frame, box);
+  const feather = reach / 2;
+  const grown = (by: number) => ({
+    x: rect.x - by,
+    y: rect.y - by,
+    width: rect.width + 2 * by,
+    height: rect.height + 2 * by,
+  });
+  const core = grown(feather);
+  const bounds = grown(reach);
+  const blur = `blur(${(feather / 2).toFixed(2)}px)`;
   for (const step of steps) {
     ctx.save();
+    ctx.beginPath();
+    ctx.rect(bounds.x, bounds.y, bounds.width, bounds.height);
+    ctx.clip();
+    ctx.filter = blur;
     if (step.kind === 'harmonise') {
       ctx.globalCompositeOperation = 'lighten';
       ctx.globalAlpha = HARMONISE_STRENGTH;
@@ -305,7 +357,7 @@ export function applyTreatment(
       ctx.globalAlpha = step.floor;
       ctx.fillStyle = '#ffffff';
     }
-    ctx.fillRect(0, 0, frame.width, frame.height);
+    ctx.fillRect(core.x, core.y, core.width, core.height);
     ctx.restore();
   }
 }
@@ -320,7 +372,7 @@ function createProbe(image: DrawableImage, frame: Size, ink: Rgb): ProbeContrast
     ctx.globalAlpha = 1;
     ctx.clearRect(0, 0, frame.width, frame.height);
     ctx.drawImage(image, 0, 0, frame.width, frame.height);
-    applyTreatment(ctx, state.treatments, frame, ink);
+    applyTreatment(ctx, state.treatments, frame, ink, box);
     return boxContrast(readBox(ctx, frame, box), ink);
   };
 }
@@ -624,7 +676,7 @@ export async function renderHeadline(args: {
   const plan = escalate ? planned : pinnedToRungZero(planned, args.settings.minContrast);
 
   ctx.drawImage(args.image, 0, 0, frame.width, frame.height);
-  applyTreatment(ctx, plan.treatment.steps, frame, args.ink);
+  applyTreatment(ctx, plan.treatment.steps, frame, args.ink, plan.treatment.box);
   const svg = headlineSvg(plan, args.faces, args.ink, args.fontFaceCss);
   await drawSvg(ctx, svg, frame);
   return { plan, svg, canvas };

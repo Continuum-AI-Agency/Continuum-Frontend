@@ -1,5 +1,5 @@
-import { VERNE_TITLE_RIGHT_MARGIN } from '@continuum/contracts';
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { VERNE_TITLE_RIGHT_MARGIN } from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 // The panel's own behaviour is what is under test: what it WRITES for a pick, a drag and a
@@ -154,9 +154,9 @@ describe('BurnInConfig', () => {
     render(<BurnInConfig nodeId="act-1" config={{ anchor: 'center', offsetX: 0, offsetY: 0 }} />);
     dragBlockBy({ x: 0.18, y: 0.22 });
     const written = lastConfig();
-    expect(Math.abs(written.offsetX as number) + Math.abs(written.offsetY as number)).toBeGreaterThan(
-      0,
-    );
+    expect(
+      Math.abs(written.offsetX as number) + Math.abs(written.offsetY as number),
+    ).toBeGreaterThan(0);
     for (const key of ['offsetX', 'offsetY'] as const) {
       expect(Math.abs(written[key] as number)).toBeLessThanOrEqual(1);
     }
@@ -171,7 +171,9 @@ describe('BurnInConfig', () => {
   // `top-right`'s origin is `1 - margin - measure`; `top-left`'s is `margin`. The gap between
   // them is exactly the drag that has to land, and landing it must clear the nudge.
   it('a drag released ON a point snaps to it and clears the nudge', () => {
-    render(<BurnInConfig nodeId="act-1" config={{ anchor: 'top-right', offsetX: 0, offsetY: 0 }} />);
+    render(
+      <BurnInConfig nodeId="act-1" config={{ anchor: 'top-right', offsetX: 0, offsetY: 0 }} />,
+    );
     dragBlockBy({ x: -(1 - 2 * VERNE_TITLE_RIGHT_MARGIN - 0.61), y: 0 });
     expect(lastConfig()).toMatchObject({ anchor: 'top-left', offsetX: 0, offsetY: 0 });
   });
@@ -234,7 +236,9 @@ describe('BurnInConfig', () => {
   it('offers both fallbacks, defaulted ON so the node generates out of the box', () => {
     render(<BurnInConfig nodeId="act-1" config={{}} />);
     // Base UI's Switch reports state as `data-checked` / `data-unchecked`, not aria-checked.
-    expect(screen.getByLabelText('Use a fallback typeface').hasAttribute('data-checked')).toBe(true);
+    expect(screen.getByLabelText('Use a fallback typeface').hasAttribute('data-checked')).toBe(
+      true,
+    );
     expect(screen.getByLabelText('Measure a fallback ink').hasAttribute('data-checked')).toBe(true);
   });
 
@@ -263,7 +267,11 @@ describe('BurnInConfig', () => {
 describe('resolveBurnInPreviewSources', () => {
   it('reads the real picture and the real words off the upstream nodes', () => {
     // biome-ignore lint/suspicious/noExplicitAny: structural node fixtures
-    const sources = resolveBurnInPreviewSources('act-1', [ACTION_NODE, IMAGE_NODE, TEXT_NODE] as any, EDGES as any);
+    const sources = resolveBurnInPreviewSources(
+      'act-1',
+      [ACTION_NODE, IMAGE_NODE, TEXT_NODE] as any,
+      EDGES as any,
+    );
     expect(sources.imageUrl).toBe('data:image/png;base64,AAA');
     expect(sources.headline).toContain('University of London');
   });
@@ -271,7 +279,11 @@ describe('resolveBurnInPreviewSources', () => {
   it('a generator that has not produced a frame yet resolves to nothing, not to a guess', () => {
     const pending = { id: 'img-1', type: 'nanoGen', position: { x: 0, y: 0 }, data: {} };
     // biome-ignore lint/suspicious/noExplicitAny: structural node fixtures
-    const sources = resolveBurnInPreviewSources('act-1', [ACTION_NODE, pending] as any, EDGES as any);
+    const sources = resolveBurnInPreviewSources(
+      'act-1',
+      [ACTION_NODE, pending] as any,
+      EDGES as any,
+    );
     expect(sources.imageUrl).toBeUndefined();
   });
 
@@ -283,7 +295,11 @@ describe('resolveBurnInPreviewSources', () => {
       data: { generatedImageUrl: 'https://cdn.test/frame.png' },
     };
     // biome-ignore lint/suspicious/noExplicitAny: structural node fixtures
-    const sources = resolveBurnInPreviewSources('act-1', [ACTION_NODE, generated] as any, EDGES as any);
+    const sources = resolveBurnInPreviewSources(
+      'act-1',
+      [ACTION_NODE, generated] as any,
+      EDGES as any,
+    );
     expect(sources.imageUrl).toBe('https://cdn.test/frame.png');
   });
 });

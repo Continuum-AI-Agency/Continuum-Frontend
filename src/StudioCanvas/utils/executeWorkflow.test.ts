@@ -2499,4 +2499,158 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
     expect(reported).toContain('could not be loaded');
     expect(reported).not.toContain('Missing connected input');
   });
+
+
+});
+
+describe('executeWorkflow — omniGen payload', () => {
+  const runOmni = async (
+    nodes: StudioNode[],
+    edges: Edge[],
+  ): Promise<Record<string, unknown>> => {
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    let captured: Record<string, unknown> = {};
+    const executeOmniTurn = mock(async (_nodeId: string, payload: Record<string, unknown>) => {
+      captured = payload;
+      return {
+        success: true,
+        interactionId: 'v1_new',
+        output: {
+          type: 'video',
+          url: 'https://example.com/out.mp4',
+          storagePath: 'p',
+          storageBucket: 'b',
+        },
+      };
+    });
+    const controls = {
+      executeGeneration: mock(async () => ({ success: true })),
+      executeVideoExtension: mock(async () => ({ success: true })),
+      executeEnrichment: mock(async () => ({ success: true })),
+      executeOmniTurn,
+      cancel: () => {},
+      reset: () => {},
+      isExecuting: true,
+      error: null,
+    };
+
+    await executeWorkflow(controls as never, { targetNodeId: 'omni', brandId: 'brand-1' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return captured;
+  };
+
+  // The chip wrote designSystemSections into node data and the payload builder
+  // dropped it, so the design-system switch was live-looking and inert.
+  it('carries the grounding the node collected, and the resolution', async () => {
+    const payload = await runOmni(
+      [
+        {
+          id: 'omni',
+          position: { x: 0, y: 0 },
+          type: 'omniGen',
+          data: {
+            model: 'gemini-omni-flash',
+            prompt: 'a marble on a track',
+            aspectRatio: '16:9',
+            resolution: '360p',
+            skillIds: ['skill-1'],
+            brandBookPieces: ['tone'],
+            designSystemSections: ['color'],
+          },
+        } as unknown as StudioNode,
+      ],
+      [],
+    );
+
+    expect(payload.turn).toBe('generate');
+    expect(payload.resolution).toBe('360p');
+    expect(payload.designSystemSections).toEqual(['color']);
+    expect(payload.skillIds).toEqual(['skill-1']);
+    expect(payload.brandBookPieces).toEqual(['tone']);
+  });
+
+  it('defaults the resolution rather than letting the Backend pick silently', async () => {
+    const payload = await runOmni(
+      [
+        {
+          id: 'omni',
+          position: { x: 0, y: 0 },
+          type: 'omniGen',
+          data: { model: 'gemini-omni-flash', prompt: 'a marble', aspectRatio: '16:9' },
+        } as unknown as StudioNode,
+      ],
+      [],
+    );
+    expect(payload.resolution).toBe('720p');
+  });
+
+  it('turns a clip on ref-video into an extend of that clip', async () => {
+    const payload = await runOmni(
+      [
+        {
+          id: 'clip',
+          position: { x: 0, y: 0 },
+          type: 'video',
+          data: { video: 'https://example.com/source.mp4' },
+        } as unknown as StudioNode,
+        {
+          id: 'omni',
+          position: { x: 0, y: 0 },
+          type: 'omniGen',
+          data: {
+            model: 'gemini-omni-flash',
+            prompt: 'continue the scene',
+            aspectRatio: '16:9',
+            videoTask: 'extend',
+          },
+        } as unknown as StudioNode,
+      ],
+      [
+        {
+          id: 'e-clip',
+          source: 'clip',
+          target: 'omni',
+          sourceHandle: 'video',
+          targetHandle: 'ref-video',
+        },
+      ],
+    );
+
+    expect(payload.turn).toBe('extend');
+    expect(payload.sourceVideo).toEqual({
+      uri: 'https://example.com/source.mp4',
+      mimeType: 'video/mp4',
+    });
+  });
+
+  it('edits the wired clip when the node is not set to extend', async () => {
+    const payload = await runOmni(
+      [
+        {
+          id: 'clip',
+          position: { x: 0, y: 0 },
+          type: 'video',
+          data: { video: 'https://example.com/source.mp4' },
+        } as unknown as StudioNode,
+        {
+          id: 'omni',
+          position: { x: 0, y: 0 },
+          type: 'omniGen',
+          data: { model: 'gemini-omni-flash', prompt: 'warmer light', aspectRatio: '16:9' },
+        } as unknown as StudioNode,
+      ],
+      [
+        {
+          id: 'e-clip',
+          source: 'clip',
+          target: 'omni',
+          sourceHandle: 'video',
+          targetHandle: 'ref-video',
+        },
+      ],
+    );
+    expect(payload.turn).toBe('edit');
+  });
 });

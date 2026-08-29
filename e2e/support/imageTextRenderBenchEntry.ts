@@ -32,6 +32,7 @@ import {
   renderHeadline,
   resolveHeadlineFaces,
   resolveHeadlineInk,
+  scrimReachPx,
 } from '../../src/StudioCanvas/utils/actions/imageText';
 import { runAction } from '../../src/StudioCanvas/utils/actions/runAction';
 
@@ -253,6 +254,82 @@ function measureBox(frame: PixelBuffer, box: typeof FULL_FRAME, ink: Rgb): BoxMe
   };
 }
 
+/**
+ * What the treatment actually TOUCHED — source photo against rendered frame, split by the box.
+ *
+ * The bug this measures is invisible to every other assertion in this bench: a treatment that
+ * washes the WHOLE photo still clears the contrast bar behind the type, still draws the token
+ * ink, still breaks the right number of lines. Only a before/after over pixels nowhere near the
+ * headline can see it. `outside` skips the band the scrim's feather is allowed to reach — from
+ * `scrimReachPx`, the renderer's OWN number, so the fence cannot drift from the thing it fences
+ * — and everything past it must be byte-identical. `inside` skips the glyphs, so it measures the
+ * BACKGROUND moving rather than the type arriving: that is what stops this passing by doing
+ * nothing.
+ */
+export interface TreatmentFootprint {
+  /** Mean per-channel |Δ| over the frame OUTSIDE the box and its margin. Should be ~0. */
+  outsideMeanDelta: number;
+  /** The single worst per-channel |Δ| out there. One washed pixel is still a wash. */
+  outsideMaxDelta: number;
+  outsidePixels: number;
+  /** Mean per-channel |Δ| INSIDE the box, over pixels the glyphs do not cover. */
+  insideMeanDelta: number;
+  insidePixels: number;
+  /** How far past the box the scrim was allowed to reach, in px — the excluded band. */
+  reachPx: number;
+}
+
+function treatmentFootprint(
+  before: PixelBuffer,
+  after: PixelBuffer,
+  box: typeof FULL_FRAME,
+  ink: Rgb,
+): TreatmentFootprint {
+  const x0 = Math.trunc(box.x0 * after.width);
+  const y0 = Math.trunc(box.y0 * after.height);
+  const x1 = Math.trunc(box.x1 * after.width);
+  const y1 = Math.trunc(box.y1 * after.height);
+  // One px of slack past the scrim's own reach, for the rounding at the clip's edge.
+  const margin = scrimReachPx({ width: after.width, height: after.height }, box) + 1;
+  let outsideSum = 0;
+  let outsideMax = 0;
+  let outsideCount = 0;
+  let insideSum = 0;
+  let insideCount = 0;
+
+  for (let y = 0; y < after.height; y += 1) {
+    for (let x = 0; x < after.width; x += 1) {
+      const i = (y * after.width + x) * after.channels;
+      const j = (y * before.width + x) * before.channels;
+      const dr = Math.abs(after.data[i] - before.data[j]);
+      const dg = Math.abs(after.data[i + 1] - before.data[j + 1]);
+      const db = Math.abs(after.data[i + 2] - before.data[j + 2]);
+      const inside = x >= x0 && x < x1 && y >= y0 && y < y1;
+      if (inside) {
+        const px: Rgb = [after.data[i], after.data[i + 1], after.data[i + 2]];
+        if (l1(px, ink) >= VERNE_INK_DISTANCE) {
+          insideSum += (dr + dg + db) / 3;
+          insideCount += 1;
+        }
+        continue;
+      }
+      if (x >= x0 - margin && x < x1 + margin && y >= y0 - margin && y < y1 + margin) continue;
+      outsideSum += (dr + dg + db) / 3;
+      outsideMax = Math.max(outsideMax, dr, dg, db);
+      outsideCount += 1;
+    }
+  }
+
+  return {
+    outsideMeanDelta: outsideCount === 0 ? 0 : outsideSum / outsideCount,
+    outsideMaxDelta: outsideMax,
+    outsidePixels: outsideCount,
+    insideMeanDelta: insideCount === 0 ? 0 : insideSum / insideCount,
+    insidePixels: insideCount,
+    reachPx: margin - 1,
+  };
+}
+
 export interface ImageTextCase {
   label: string;
   /** Which rung of the chain named the face — so "it rendered" is attributed, not assumed. */
@@ -261,9 +338,16 @@ export interface ImageTextCase {
   inkSource: string;
   /** True when the named ink token did not resolve and the brand default stood in for it. */
   substituted: boolean;
-  /** Rung the ladder stopped on: 0 untouched, 1 harmonised, 2+ that many cumulative veils. */
+  /** Rung the ladder stopped on: 0 untouched, 1 harmonised, 2+ harmonised plus ONE veil. */
   rung: number;
   treatment: string;
+  /** Every step the plan handed the renderer, in order — `harmonise` / `veil@0.42`. */
+  steps: string[];
+  /** The floor of each veil in the plan. Length must be 0 or 1; N is the stacking bug. */
+  veilFloors: number[];
+  /** The floor the ladder RESOLVED on, for a veiled treatment. */
+  resolvedVeilFloor: number | null;
+  footprint: TreatmentFootprint;
   plannedRatio: number;
   planCleared: boolean;
   planLines: number;
@@ -298,6 +382,9 @@ async function runCase(
   const config = { ...CONFIG, ...overrides };
   const photo = gradientPhoto(seed, floor, ceiling);
   const photoUrl = await canvasToDataUrl(photo);
+  // The op decodes `photoUrl`, so the honest BEFORE is that round-trip, not the canvas that
+  // produced it — a lossy encode would otherwise show up as a treatment that touched the frame.
+  const source = await decode(photoUrl);
   const faces = resolveHeadlineFaces(brand);
   // The op's own three-step ink resolution, so a substituted token is graded as what it drew.
   const exact = resolveHeadlineInk(brand, config.inkToken);
@@ -336,6 +423,7 @@ async function runCase(
     fontFaceCss: await embedFace(faces.family),
   });
 
+  const box = headlineBox(brand);
   return {
     label,
     typeSource: faces.source,
@@ -343,6 +431,12 @@ async function runCase(
     inkSource: ink.source,
     rung: plan.treatment.rung,
     treatment: plan.treatment.kind,
+    steps: plan.treatment.steps.map((step) =>
+      step.kind === 'veil' ? `veil@${step.floor}` : step.kind,
+    ),
+    veilFloors: plan.treatment.steps.flatMap((step) => (step.kind === 'veil' ? [step.floor] : [])),
+    resolvedVeilFloor: plan.treatment.kind === 'veiled' ? plan.treatment.veilFloor : null,
+    footprint: treatmentFootprint(source.pixels, rendered.pixels, box, ink.rgb),
     plannedRatio: plan.treatment.ratio,
     planCleared: plan.treatment.cleared,
     planLines: plan.lines.length,
@@ -352,7 +446,7 @@ async function runCase(
     mimeType: output.mimeType ?? '',
     bytes: rendered.bytes,
     substituted: exact === null,
-    measurement: measureBox(rendered.pixels, headlineBox(brand), ink.rgb),
+    measurement: measureBox(rendered.pixels, box, ink.rgb),
   };
 }
 
@@ -384,7 +478,7 @@ async function run(): Promise<ImageTextBenchRun> {
     minContrast: VERNE_TITLE_MIN_CONTRAST,
     ink: [...ink.rgb] as [number, number, number],
     fontStack: resolveHeadlineFaces(FROM_DESIGN_SYSTEM).stack,
-    // APPEND-ONLY: the runner indexes [0] and [1] for the ladder assertions.
+    // APPEND-ONLY: the runner indexes [0], [1], [2] and [3].
     cases: [
       // Bright enough that the navy reads straight off the photo — the ladder must not fire.
       await runCase('bright photo, no treatment needed', 0x5eed1, 168, 244),
@@ -394,6 +488,13 @@ async function run(): Promise<ImageTextBenchRun> {
       // assertion in the per-case loop applies to it unchanged, which is the point: the rung the
       // op used to refuse over now has to clear the same contrast bar in the same measured box.
       await runCase('bright photo, brand.md only', 0x5eed1, 168, 244, FROM_BRAND_MD),
+      // NEAR-BLACK against a bar it has to CLIMB for, which is the case the stacking bug needed:
+      // at floor 0.15 a stacked veil and a single one paint nearly the same picture, so only a
+      // photo forced several rungs up the ladder tells the two apart. Graded against the
+      // standard 3.2 like every other case — a piece that clears 7 clears 3.2 by construction.
+      await runCase('near-black photo, a bar it must climb for', 0x5eed3, 0, 24, FROM_DESIGN_SYSTEM, {
+        minContrast: 7,
+      }),
     ],
     // A token nothing carries, with the ink fallback OFF: still the loud failure it always was.
     unresolvableTokenError: await refusal(

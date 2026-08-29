@@ -19,6 +19,7 @@ import {
   parseHexColour,
   resolveHeadlineFaces,
   resolveHeadlineInk,
+  scrimReachPx,
 } from './imageText';
 
 // COVERAGE GAP, on purpose, and the same one `imageOps.test.ts` declares: bun + happy-dom has
@@ -312,26 +313,68 @@ describe('headlineSvgDataUri', () => {
 });
 
 describe('applyTreatment', () => {
+  // 200x100 frame, box pinned top-right: rect = 90x40 px, so the feather is 40 * 0.18 = 7.2 px
+  // and the inset fill is inside the box on every edge. An 8x8 frame cannot show that.
+  const FRAME = { width: 200, height: 100 };
+  const BOX = { x0: 0.5, y0: 0.1, x1: 0.95, y1: 0.5 };
+  const RECT = { x: 100, y: 10, width: 90, height: 40 };
+  const FEATHER = 40 * 0.18;
+  const CORE = {
+    x: RECT.x - FEATHER,
+    y: RECT.y - FEATHER,
+    width: RECT.width + 2 * FEATHER,
+    height: RECT.height + 2 * FEATHER,
+  };
+  const BOUNDS = {
+    x: RECT.x - 2 * FEATHER,
+    y: RECT.y - 2 * FEATHER,
+    width: RECT.width + 4 * FEATHER,
+    height: RECT.height + 4 * FEATHER,
+  };
+
   interface Painted {
     op: string;
     alpha: number;
     fill: string;
+    filter: string;
+    clip: { x: number; y: number; width: number; height: number } | null;
+    rect: { x: number; y: number; width: number; height: number };
   }
 
   const recordingContext = () => {
     const painted: Painted[] = [];
-    const state = { globalCompositeOperation: 'source-over', globalAlpha: 1, fillStyle: '#000000' };
+    const state = {
+      globalCompositeOperation: 'source-over',
+      globalAlpha: 1,
+      fillStyle: '#000000',
+      filter: 'none',
+    };
+    let path: Painted['clip'] = null;
+    let clip: Painted['clip'] = null;
     const ctx = {
       ...state,
       save() {},
       restore() {
         Object.assign(ctx, state);
+        clip = null;
       },
-      fillRect() {
+      beginPath() {
+        path = null;
+      },
+      rect(x: number, y: number, width: number, height: number) {
+        path = { x, y, width, height };
+      },
+      clip() {
+        clip = path;
+      },
+      fillRect(x: number, y: number, width: number, height: number) {
         painted.push({
           op: ctx.globalCompositeOperation,
           alpha: ctx.globalAlpha,
           fill: ctx.fillStyle,
+          filter: ctx.filter,
+          clip,
+          rect: { x, y, width, height },
         });
       },
     };
@@ -340,19 +383,61 @@ describe('applyTreatment', () => {
 
   const run = (steps: TreatmentStep[]) => {
     const { ctx, painted } = recordingContext();
-    applyTreatment(ctx as unknown as OffscreenCanvasRenderingContext2D, steps, { width: 8, height: 8 }, INK);
+    applyTreatment(ctx as unknown as OffscreenCanvasRenderingContext2D, steps, FRAME, INK, BOX);
     return painted;
   };
 
-  it('composites each veil floor in order, so coverage accumulates', () => {
-    const painted = run([
-      { kind: 'veil', floor: 0.15 },
-      { kind: 'veil', floor: 0.28 },
-    ]);
-    expect(painted).toEqual([
-      { op: 'source-over', alpha: 0.15, fill: '#ffffff' },
-      { op: 'source-over', alpha: 0.28, fill: '#ffffff' },
-    ]);
+  const blurRadius = (filter: string) => Number(/blur\(([\d.]+)px\)/.exec(filter)?.[1] ?? Number.NaN);
+
+  it('lightens the box and its feather — it never fills the frame', () => {
+    // The user report this fixes was "why does it always wash out the image?". A fillRect over
+    // the frame is that bug, and this is the fence on it. The clip is the hard stop: whatever
+    // the blur does, nothing outside `scrimReachPx` of the box can be painted.
+    for (const painted of [run([{ kind: 'harmonise' }]), run([{ kind: 'veil', floor: 0.42 }])]) {
+      expect(painted).toHaveLength(1);
+      const [step] = painted;
+      expect(step.clip).toEqual(BOUNDS);
+      expect(step.clip?.width).toBeLessThan(FRAME.width);
+      expect(step.clip?.height).toBeLessThan(FRAME.height);
+    }
+  });
+
+  it('keeps the MEASURED box at full strength and puts the ramp outside it', () => {
+    // Feathering inward is the trap: a 0.18 ring on both sides is half the box's area, the ramp
+    // hits zero exactly where the type's edges are, and no floor on the ladder ever clears.
+    const [step] = run([{ kind: 'veil', floor: 0.42 }]);
+    expect(step.rect).toEqual(CORE);
+    expect(step.rect.x).toBeLessThan(RECT.x);
+    expect(step.rect.x + step.rect.width).toBeGreaterThan(RECT.x + RECT.width);
+    // A hard-edged rectangle reads as a box stuck on top of the photo — the blur is the fix, and
+    // it is derived from the box, not from the frame. σ = feather/2 puts the box edge 2σ inside
+    // the fill, i.e. at >= 97 % of the chosen alpha.
+    expect(blurRadius(step.filter)).toBeCloseTo(FEATHER / 2, 1);
+    expect(scrimReachPx(FRAME, BOX)).toBeCloseTo(2 * FEATHER, 5);
+  });
+
+  it('holds a 2 px floor on the feather for a box too small to have one', () => {
+    const { ctx, painted } = recordingContext();
+    const tiny = { x0: 0, y0: 0, x1: 0.01, y1: 0.01 };
+    applyTreatment(
+      ctx as unknown as OffscreenCanvasRenderingContext2D,
+      [{ kind: 'veil', floor: 0.42 }],
+      FRAME,
+      INK,
+      tiny,
+    );
+    expect(scrimReachPx(FRAME, tiny)).toBe(4);
+    expect(painted[0].rect.width).toBeGreaterThan(0);
+    expect(painted[0].rect.height).toBeGreaterThan(0);
+    expect(blurRadius(painted[0].filter)).toBeCloseTo(1, 5);
+  });
+
+  it('composites ONE veil at the resolved floor, not one per floor tried', () => {
+    // `resolveTreatment` no longer emits a step per floor, so this is what a real escalation
+    // hands the renderer: harmonise, then a single veil.
+    const painted = run([{ kind: 'harmonise' }, { kind: 'veil', floor: 0.42 }]);
+    expect(painted).toHaveLength(2);
+    expect(painted[1]).toMatchObject({ op: 'source-over', alpha: 0.42, fill: '#ffffff' });
   });
 
   it('lifts the shadows with a LIGHTEN composite, so a bright pixel is untouched', () => {
@@ -365,5 +450,9 @@ describe('applyTreatment', () => {
     const painted = run([{ kind: 'harmonise' }, ...VERNE_VEIL_FLOORS.map((floor) => ({ kind: 'veil' as const, floor }))]);
     expect(painted.length).toBe(VERNE_VEIL_FLOORS.length + 1);
     for (const step of painted) expect(step.fill).not.toBe(INK_HEX);
+  });
+
+  it('paints nothing at all when the plan asked for no treatment', () => {
+    expect(run([])).toEqual([]);
   });
 });

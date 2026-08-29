@@ -88,7 +88,7 @@ export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
     'resolution',
     'referenceMode',
   ],
-  omniGen: ['model', 'prompt', 'aspectRatio'],
+  omniGen: ['model', 'prompt', 'aspectRatio', 'resolution'],
   extendVideo: ['prompt'],
   timelineEditor: [
     'outputFormat',

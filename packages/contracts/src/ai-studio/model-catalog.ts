@@ -60,7 +60,7 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
   },
   {
     id: 'gemini-omni-flash',
-    label: 'Gemini Omni Flash (Video)',
+    label: 'Gemini Omni 1.1 Flash (Video)',
     provider: 'google',
     medium: 'video',
     status: 'beta',

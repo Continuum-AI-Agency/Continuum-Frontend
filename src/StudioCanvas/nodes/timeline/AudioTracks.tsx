@@ -3,6 +3,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { Music2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { NumberScrubField } from '@/components/ui/number-field';
 import { cn } from '@/lib/utils';
 import type { TimelineItem } from '../../types';
 import type { ResolvedAudioPlacement } from './audioTrackModel';
@@ -15,37 +16,6 @@ type AudioPatch = Partial<
     'startSec' | 'trimStartSec' | 'trimEndSec' | 'volume' | 'audioFadeInSec' | 'audioFadeOutSec'
   >
 >;
-
-function NumberField({
-  label,
-  value,
-  step = 0.1,
-  min = 0,
-  max,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  step?: number;
-  min?: number;
-  max?: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label className="flex items-center gap-1 text-3xs text-muted-foreground">
-      {label}
-      <input
-        type="number"
-        className="h-6 w-16 rounded border border-border/70 bg-background px-1 text-2xs tabular-nums text-foreground"
-        value={Number.isFinite(value) ? value : 0}
-        min={min}
-        max={max}
-        step={step}
-        onChange={(event) => onChange(event.currentTarget.valueAsNumber || 0)}
-      />
-    </label>
-  );
-}
 
 export function AudioTracks({
   placements,
@@ -116,34 +86,51 @@ export function AudioTracks({
           <span className="max-w-32 truncate text-2xs font-medium">
             {labelFor(selected.item.sourceNodeId)}
           </span>
-          <NumberField
+          <NumberScrubField
+            orientation="inline"
+            min={0}
+            step={0.1}
             label="At"
             value={selected.startSec}
             onChange={(startSec) => onPatch(selected.item.id, { startSec })}
           />
-          <NumberField
+          <NumberScrubField
+            orientation="inline"
+            min={0}
+            step={0.1}
             label="In"
             value={selected.item.trimStartSec ?? 0}
             onChange={(trimStartSec) => onPatch(selected.item.id, { trimStartSec })}
           />
-          <NumberField
+          <NumberScrubField
+            orientation="inline"
+            min={0}
+            step={0.1}
             label="Out"
             value={selected.item.trimEndSec ?? selected.durationSec}
             onChange={(trimEndSec) => onPatch(selected.item.id, { trimEndSec })}
           />
-          <NumberField
+          <NumberScrubField
+            orientation="inline"
+            min={0}
             label="Gain"
             value={selected.item.volume ?? 1}
             step={0.05}
             max={4}
             onChange={(volume) => onPatch(selected.item.id, { volume })}
           />
-          <NumberField
+          <NumberScrubField
+            orientation="inline"
+            min={0}
+            step={0.1}
             label="Fade in"
             value={selected.item.audioFadeInSec ?? 0}
             onChange={(audioFadeInSec) => onPatch(selected.item.id, { audioFadeInSec })}
           />
-          <NumberField
+          <NumberScrubField
+            orientation="inline"
+            min={0}
+            step={0.1}
             label="Fade out"
             value={selected.item.audioFadeOutSec ?? 0}
             onChange={(audioFadeOutSec) => onPatch(selected.item.id, { audioFadeOutSec })}

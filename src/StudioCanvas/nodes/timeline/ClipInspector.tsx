@@ -5,8 +5,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NumberScrubField } from '@/components/ui/number-field';
 import { Separator } from '@/components/ui/separator';
-import { Slider } from '@/components/ui/slider';
+import { SliderField } from '@/components/ui/slider-field';
 import { Switch } from '@/components/ui/switch';
 import type { TimelineItem } from '../../types';
 import {
@@ -64,46 +65,6 @@ const KEN_BURNS_DEFAULT: NonNullable<ClipEffectSpec['kenBurns']> = {
   from: { scale: 1 },
   to: { scale: 1.2 },
 };
-
-function secInput(value: number): string {
-  return Number.isFinite(value) ? value.toFixed(2) : '';
-}
-
-function LabeledSlider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  format,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  format?: (value: number) => string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between">
-        <Label className="text-2xs">{label}</Label>
-        <span className="text-2xs tabular-nums text-muted-foreground">
-          {format ? format(value) : value.toFixed(2)}
-        </span>
-      </div>
-      <Slider
-        min={min}
-        max={max}
-        step={step}
-        value={[value]}
-        onValueChange={(next) => onChange(next[0] ?? value)}
-      />
-    </div>
-  );
-}
 
 export function ClipInspector({
   item,
@@ -208,39 +169,29 @@ export function ClipInspector({
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
-              <Label htmlFor="clip-trim-start" className="text-2xs">
-                Trim in (s)
-              </Label>
-              <Input
-                id="clip-trim-start"
-                type="number"
+              <NumberScrubField
+                key={`start-${item.id}-${trimStart}`}
+                defaultValue={trimStart}
+                label="Trim in"
                 min={0}
                 step={0.1}
-                defaultValue={secInput(trimStart)}
-                key={`start-${item.id}-${trimStart}`}
-                onBlur={(event) => {
-                  const next = Number.parseFloat(event.target.value);
-                  if (Number.isFinite(next)) onTrim({ startSec: next });
+                suffix="s"
+                onCommit={(next) => {
+                  if (next !== null) onTrim({ startSec: next });
                 }}
-                className="h-8 text-xs tabular-nums"
               />
             </div>
             <div className="flex flex-col gap-1">
-              <Label htmlFor="clip-trim-end" className="text-2xs">
-                Trim out (s)
-              </Label>
-              <Input
-                id="clip-trim-end"
-                type="number"
+              <NumberScrubField
+                key={`end-${item.id}-${trimEnd}`}
+                defaultValue={trimEnd}
+                label="Trim out"
                 min={0}
                 step={0.1}
-                defaultValue={secInput(trimEnd)}
-                key={`end-${item.id}-${trimEnd}`}
-                onBlur={(event) => {
-                  const next = Number.parseFloat(event.target.value);
-                  if (Number.isFinite(next)) onTrim({ endSec: next });
+                suffix="s"
+                onCommit={(next) => {
+                  if (next !== null) onTrim({ endSec: next });
                 }}
-                className="h-8 text-xs tabular-nums"
               />
             </div>
           </div>
@@ -257,13 +208,13 @@ export function ClipInspector({
           </div>
 
           {context === 'overlay' ? null : (
-            <LabeledSlider
+            <SliderField
               label="Speed"
               value={effects.speed ?? 1}
               min={0.25}
               max={4}
               step={0.05}
-              format={(v) => `${v.toFixed(2)}x`}
+              suffix="x"
               onChange={(v) => onSetEffects({ speed: v })}
             />
           )}
@@ -272,33 +223,33 @@ export function ClipInspector({
             <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
               Audio
             </span>
-            <LabeledSlider
+            <SliderField
               label="Volume"
               value={item.volume ?? 1}
               min={0}
               max={2}
               step={0.05}
-              format={(v) => `${Math.round(v * 100)}%`}
+              format={{ style: 'percent', maximumFractionDigits: 0 }}
               onChange={(v) => onSetAudio?.({ volume: v })}
             />
             {context === 'overlay' ? null : (
               <>
-                <LabeledSlider
+                <SliderField
                   label="Fade in"
                   value={item.audioFadeInSec ?? 0}
                   min={0}
                   max={2}
                   step={0.1}
-                  format={(v) => `${v.toFixed(1)}s`}
+                  suffix="s"
                   onChange={(v) => onSetAudio?.({ audioFadeInSec: v })}
                 />
-                <LabeledSlider
+                <SliderField
                   label="Fade out"
                   value={item.audioFadeOutSec ?? 0}
                   min={0}
                   max={2}
                   step={0.1}
-                  format={(v) => `${v.toFixed(1)}s`}
+                  suffix="s"
                   onChange={(v) => onSetAudio?.({ audioFadeOutSec: v })}
                 />
               </>
@@ -307,21 +258,16 @@ export function ClipInspector({
         </div>
       ) : (
         <div className="flex flex-col gap-1">
-          <Label htmlFor="clip-still" className="text-2xs">
-            Hold duration (s)
-          </Label>
-          <Input
-            id="clip-still"
-            type="number"
+          <NumberScrubField
+            key={`still-${item.id}-${durationSec}`}
+            defaultValue={durationSec}
+            label="Hold duration"
             min={0.1}
             step={0.1}
-            defaultValue={secInput(durationSec)}
-            key={`still-${item.id}-${durationSec}`}
-            onBlur={(event) => {
-              const next = Number.parseFloat(event.target.value);
-              if (Number.isFinite(next)) onSetStill(next);
+            suffix="s"
+            onCommit={(next) => {
+              if (next !== null) onSetStill(next);
             }}
-            className="h-8 text-xs tabular-nums"
           />
         </div>
       )}
@@ -333,7 +279,7 @@ export function ClipInspector({
         <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
           Adjust
         </span>
-        <LabeledSlider
+        <SliderField
           label="Opacity"
           value={effects.opacity ?? 1}
           min={0}
@@ -341,7 +287,7 @@ export function ClipInspector({
           step={0.05}
           onChange={(v) => onSetEffects({ opacity: v })}
         />
-        <LabeledSlider
+        <SliderField
           label="Brightness"
           value={adjustments.brightness ?? 1}
           min={0}
@@ -349,7 +295,7 @@ export function ClipInspector({
           step={0.05}
           onChange={(v) => patchAdjustments({ brightness: v })}
         />
-        <LabeledSlider
+        <SliderField
           label="Contrast"
           value={adjustments.contrast ?? 1}
           min={0}
@@ -357,7 +303,7 @@ export function ClipInspector({
           step={0.05}
           onChange={(v) => patchAdjustments({ contrast: v })}
         />
-        <LabeledSlider
+        <SliderField
           label="Saturation"
           value={adjustments.saturation ?? 1}
           min={0}
@@ -374,7 +320,7 @@ export function ClipInspector({
         <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
           Transform
         </span>
-        <LabeledSlider
+        <SliderField
           label="Scale"
           value={transform.scale ?? 1}
           min={0.2}
@@ -382,13 +328,13 @@ export function ClipInspector({
           step={0.05}
           onChange={(v) => patchTransform({ scale: v })}
         />
-        <LabeledSlider
+        <SliderField
           label="Rotate"
           value={transform.rotate ?? 0}
           min={-180}
           max={180}
           step={5}
-          format={(v) => `${Math.round(v)}°`}
+          suffix="°"
           onChange={(v) => patchTransform({ rotate: v })}
         />
         <div className="flex items-center justify-between">
@@ -504,13 +450,13 @@ export function ClipInspector({
               })}
             </div>
             {item.transition && item.transition.type !== 'cut' ? (
-              <LabeledSlider
+              <SliderField
                 label="Duration"
                 value={item.transition.durationSec}
                 min={0.2}
                 max={2}
                 step={0.1}
-                format={(v) => `${v.toFixed(1)}s`}
+                suffix="s"
                 onChange={(v) =>
                   item.transition && onSetTransition({ type: item.transition.type, durationSec: v })
                 }

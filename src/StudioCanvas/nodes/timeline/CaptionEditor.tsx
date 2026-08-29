@@ -2,6 +2,8 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { NumberScrubField } from '@/components/ui/number-field';
+import { SliderField } from '@/components/ui/slider-field';
 import {
   applyCaptionPreset,
   CAPTION_PRESETS,
@@ -10,7 +12,7 @@ import {
 } from '@/lib/clips/captionPresets';
 import { parseCaptionFile, toSrt, toVtt } from '@/lib/clips/captionsInterchange';
 import type { CaptionStyle, CaptionStyleOverride } from '@/lib/clips/clipCaptionStyle';
-import { DEFAULT_CAPTION_STYLE, resolveCaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { resolveCaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import {
   type CaptionCue,
   captionCueText,
@@ -26,11 +28,6 @@ type Props = {
   onChangeCues: (cues: CaptionCue[]) => void;
   onChangeStyle: (style: CaptionStyle) => void;
 };
-
-function number(value: string, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 function clampFraction(value: number): number {
   return Math.max(0.05, Math.min(0.95, value));
@@ -216,46 +213,34 @@ export function CaptionEditor({
             }
           />
         </label>
-        <label className="grid gap-1">
-          X position
-          <input
-            className="h-7 rounded border border-border bg-background px-2"
-            type="number"
-            min="0.05"
-            max="0.95"
-            step="0.01"
-            value={globalStyle.position?.xFrac ?? DEFAULT_CAPTION_STYLE.position?.xFrac}
-            onChange={(event) =>
-              onChangeStyle({
-                ...globalStyle,
-                position: {
-                  ...globalStyle.position!,
-                  xFrac: clampFraction(number(event.target.value, globalStyle.position!.xFrac)),
-                },
-              })
-            }
-          />
-        </label>
-        <label className="grid gap-1">
-          Y position
-          <input
-            className="h-7 rounded border border-border bg-background px-2"
-            type="number"
-            min="0.05"
-            max="0.95"
-            step="0.01"
-            value={globalStyle.position?.yFrac ?? DEFAULT_CAPTION_STYLE.position?.yFrac}
-            onChange={(event) =>
-              onChangeStyle({
-                ...globalStyle,
-                position: {
-                  ...globalStyle.position!,
-                  yFrac: clampFraction(number(event.target.value, globalStyle.position!.yFrac)),
-                },
-              })
-            }
-          />
-        </label>
+        <SliderField
+          format={{ style: 'percent', maximumFractionDigits: 0 }}
+          label="X position"
+          max={0.95}
+          min={0.05}
+          step={0.01}
+          value={globalStyle.position.xFrac}
+          onChange={(next) =>
+            onChangeStyle({
+              ...globalStyle,
+              position: { ...globalStyle.position, xFrac: clampFraction(next) },
+            })
+          }
+        />
+        <SliderField
+          format={{ style: 'percent', maximumFractionDigits: 0 }}
+          label="Y position"
+          max={0.95}
+          min={0.05}
+          step={0.01}
+          value={globalStyle.position.yFrac}
+          onChange={(next) =>
+            onChangeStyle({
+              ...globalStyle,
+              position: { ...globalStyle.position, yFrac: clampFraction(next) },
+            })
+          }
+        />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border/60">
@@ -307,32 +292,22 @@ export function CaptionEditor({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <label className="grid gap-1">
-              Start
-              <input
-                className="h-7 rounded border border-border bg-background px-2"
-                type="number"
-                step="0.1"
-                min="0"
-                value={selected.startSec}
-                onChange={(event) =>
-                  updateSelected({ startSec: number(event.target.value, selected.startSec) })
-                }
-              />
-            </label>
-            <label className="grid gap-1">
-              End
-              <input
-                className="h-7 rounded border border-border bg-background px-2"
-                type="number"
-                step="0.1"
-                min="0"
-                value={selected.endSec}
-                onChange={(event) =>
-                  updateSelected({ endSec: number(event.target.value, selected.endSec) })
-                }
-              />
-            </label>
+            <NumberScrubField
+              label="Start"
+              min={0}
+              step={0.1}
+              suffix="s"
+              value={selected.startSec}
+              onChange={(startSec) => updateSelected({ startSec })}
+            />
+            <NumberScrubField
+              label="End"
+              min={0}
+              step={0.1}
+              suffix="s"
+              value={selected.endSec}
+              onChange={(endSec) => updateSelected({ endSec })}
+            />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="grid gap-1">

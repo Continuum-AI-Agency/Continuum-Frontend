@@ -107,14 +107,28 @@ describe('ActionConfigPopover', () => {
     cleanup();
   });
 
-  it('renders image.rotate as one bounded number control', () => {
+  it('renders image.rotate as one bounded slider, never a bare number box', () => {
     const { container } = renderPopover('image.rotate');
 
-    const numbers = container.querySelectorAll('input[type="number"]');
-    expect(numbers.length).toBe(1);
-    expect(numbers[0].getAttribute('min')).toBe('-360');
-    expect(numbers[0].getAttribute('max')).toBe('360');
-    expect((numbers[0] as HTMLInputElement).value).toBe('90');
+    // −360…360 at step 1 is 720 stops, a range a drag can resolve, so it earns a track.
+    expect(container.querySelectorAll('[data-slot="slider-field"]').length).toBe(1);
+    expect(container.querySelectorAll('[data-slot="number-scrub-field"]').length).toBe(0);
+
+    const range = container.querySelector('input[type="range"]') as HTMLInputElement;
+    expect(range.getAttribute('min')).toBe('-360');
+    expect(range.getAttribute('max')).toBe('360');
+    expect(range.value).toBe('90');
+  });
+
+  it('renders an unresolvable range as a scrub field rather than a slider', () => {
+    // `size` is 1…10_000 at step 1: bounded, but no track has ten thousand pixels.
+    const { container } = renderPopover('text.split');
+
+    const scrubLabels = Array.from(
+      container.querySelectorAll('[data-slot="number-scrub-field"]'),
+    ).map((field) => field.querySelector('span')?.textContent);
+    expect(scrubLabels).toContain('Size');
+    expect(container.querySelectorAll('[data-slot="slider-field"]').length).toBe(0);
   });
 
   it('renders text.findReplace as two text inputs and three booleans', () => {
@@ -149,16 +163,17 @@ describe('ActionConfigPopover', () => {
     ]);
   });
 
-  it('patches the whole merged config when a value changes', () => {
+  it('patches the whole merged config when the slider is moved by keyboard', () => {
     const { container } = renderPopover('image.rotate');
 
-    fireEvent.change(container.querySelector('input[type="number"]') as HTMLInputElement, {
-      target: { value: '180' },
-    });
+    // Keyboard, not a synthetic drag: it is the path that has to keep working, and the
+    // fader this control came from shipped with its focus ring cleared.
+    const range = container.querySelector('input[type="range"]') as HTMLInputElement;
+    fireEvent.keyDown(range, { key: 'ArrowRight' });
 
     expect(patch).toHaveBeenCalledTimes(1);
     expect(patch).toHaveBeenCalledWith('node-1', 'action', {
-      config: { ...parseActionConfig('image.rotate', {}), degrees: 180 },
+      config: { ...parseActionConfig('image.rotate', {}), degrees: 91 },
     });
   });
 

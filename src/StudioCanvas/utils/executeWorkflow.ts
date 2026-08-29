@@ -12,6 +12,7 @@ import {
   isActionId,
   LAYER_EDITOR_IMAGE_INPUT_HANDLE,
   MAX_BATCH_ITEMS,
+  type OmniGenRequest,
   type RegisterCanvasAssetResponse,
   routerLockedType,
   STUDIO_MEDIA_NODE_TYPES,
@@ -19,6 +20,7 @@ import {
   STUDIO_RUNNABLE_NODE_TYPES,
   type StudioNodeType,
   TIMELINE_MEDIA_INPUT_HANDLE,
+  VIDEO_REFERENCE_VIDEO_HANDLE,
   variationIndexFromHandle,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
@@ -52,6 +54,7 @@ import {
   buildExtendVideoPayload,
   buildNanoGenPayload,
   buildVeoPayload,
+  collectReferenceAssetIds,
   toBackendExtendVideoPayload,
   toBackendPayload,
 } from './buildNodePayload';
@@ -1989,25 +1992,60 @@ export async function executeWorkflow(
 
         const data = node.data as Record<string, unknown>;
         const aspectRatio = (data.aspectRatio === '9:16' ? '9:16' : '16:9') as '16:9' | '9:16';
+        const resolution = (data.resolution ?? '720p') as OmniGenRequest['resolution'];
+
+        const refImageEdges = incoming.filter((edge) =>
+          ['ref-image', 'ref-images'].includes(edge.targetHandle ?? ''),
+        );
 
         // Optional reference images: only inline-base64 refs are sent; URL-only
-        // references are skipped in v1 (the edge fn takes base64 input).
-        const references = incoming
-          .filter((edge) => ['ref-image', 'ref-images'].includes(edge.targetHandle ?? ''))
+        // references are skipped in v1 (the backend route takes base64 input).
+        const references = refImageEdges
           .map((edge) => resolveImageInput(edge, resolvedOutputs, nodeById))
           .filter((ref): ref is { base64: string; mimeType: string } => Boolean(ref?.base64))
           .map((ref) => ({ data: ref.base64, mimeType: ref.mimeType }));
 
+        // A clip wired into ref-video turns the run into an edit or an extend of
+        // THAT clip. A signed URL is passed through as a uri — the Backend inlines
+        // it, rather than the browser shipping megabytes of base64 upstream.
+        const videoEdge = incoming.find(
+          (edge) => edge.targetHandle === VIDEO_REFERENCE_VIDEO_HANDLE,
+        );
+        const videoInput = videoEdge
+          ? resolveVideoInput(videoEdge, resolvedOutputs, nodeById, { allowUri: true })
+          : undefined;
+        const sourceVideo: OmniGenRequest['sourceVideo'] = !videoInput
+          ? undefined
+          : 'base64' in videoInput
+            ? { data: videoInput.base64, mimeType: videoInput.mimeType }
+            : { uri: videoInput.uri, mimeType: 'video/mp4' };
+        const turn: OmniGenRequest['turn'] = sourceVideo
+          ? data.videoTask === 'extend'
+            ? 'extend'
+            : 'edit'
+          : 'generate';
+
+        // Grounding the node collected but the payload used to drop on the floor:
+        // the design-system toggle on the chip wrote here and never reached the
+        // Backend, so the switch looked live and did nothing.
+        const referenceAssetIds = collectReferenceAssetIds(refImageEdges, nodes);
+
         const result = await controls.executeOmniTurn(nodeId, {
           brandId,
-          turn: 'generate',
+          turn,
           prompt,
           aspectRatio,
+          resolution,
           references: references.length > 0 ? references : undefined,
+          sourceVideo,
           skillIds: Array.isArray(data.skillIds) ? (data.skillIds as string[]) : undefined,
           brandBookPieces: Array.isArray(data.brandBookPieces)
             ? (data.brandBookPieces as string[])
             : undefined,
+          designSystemSections: Array.isArray(data.designSystemSections)
+            ? (data.designSystemSections as string[])
+            : undefined,
+          referenceAssetIds: referenceAssetIds.length > 0 ? referenceAssetIds : undefined,
         });
 
         if (!result.success || !result.output) {
@@ -2443,8 +2481,7 @@ export async function executeWorkflow(
         // a face cannot be looking at a different brand than the render uses. Fetched per run
         // rather than cached: a brand re-ingested mid-session must not set type in the face it
         // had this morning.
-        const brand =
-          actionId === 'image.text' ? await loadBrandTypeInputs(workflowBrandId) : null;
+        const brand = actionId === 'image.text' ? await loadBrandTypeInputs(workflowBrandId) : null;
 
         // Cancel reaches a long re-encode the same way it reaches a generation.
         const controller = controls.registerController(nodeId);

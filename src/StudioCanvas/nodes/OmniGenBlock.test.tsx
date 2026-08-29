@@ -39,7 +39,7 @@ const renderNode = (data: OmniGenNodeData) => {
         type: 'omniGen',
         position: { x: 0, y: 0 },
         data,
-        style: { width: 512, height: 360 },
+        style: { width: 360, height: 203 },
       },
     ],
   });
@@ -100,7 +100,7 @@ describe('OmniGenBlock generated-video preview', () => {
     expect((node()?.data as OmniGenNodeData).aspectRatio).toBe('16:9');
   });
 
-  it('scrubs the main preview and leaves the variation strip cropped on purpose', () => {
+  it('scrubs the main preview and letterboxes it', () => {
     const { container } = renderNode(
       omniData({
         generatedVideoUrl: 'https://example.com/clip.mp4',
@@ -114,16 +114,41 @@ describe('OmniGenBlock generated-video preview', () => {
     expect(container.querySelector('media-controller')).not.toBeNull();
     expect(container.querySelector('media-time-range')).not.toBeNull();
 
-    const videos = Array.from(container.querySelectorAll('video'));
-    expect(videos.length).toBeGreaterThan(0);
-    for (const video of videos) {
-      expect(video.getAttribute('preload')).toBe('metadata');
-      expect(video.getAttribute('playsinline')).not.toBeNull();
-    }
-    // The thumbnail strip crops to a square tile deliberately; only the main preview
-    // letterboxes.
     const main = container.querySelector('media-controller video') as HTMLVideoElement;
+    expect(main.getAttribute('preload')).toBe('metadata');
+    expect(main.getAttribute('playsinline')).not.toBeNull();
     expect(main.className).toContain('object-contain');
-    expect(videos.filter((v) => v.className.includes('object-cover')).length).toBeGreaterThan(0);
+  });
+
+  // The launcher shows a count, not the rail: the rail lives in the editor now, and
+  // the whole point of the rebuild is that the node stops carrying the workspace.
+  it('is a launcher — a count and an Open button, no prompt box and no variation rail', () => {
+    const { container, getByRole, getByText, queryByPlaceholderText } = renderNode(
+      omniData({
+        generatedVideoUrl: 'https://example.com/clip.mp4',
+        variations: [
+          { id: 'v1', status: 'done', videoUrl: 'https://example.com/v1.mp4' },
+          { id: 'v2', status: 'done', videoUrl: 'https://example.com/v2.mp4' },
+        ],
+      } as Partial<OmniGenNodeData>),
+    );
+
+    expect(getByRole('button', { name: /open/i })).toBeTruthy();
+    expect(getByText('2 variations')).toBeTruthy();
+    expect(container.querySelector('textarea')).toBeNull();
+    expect(queryByPlaceholderText(/marble/i)).toBeNull();
+    expect(container.querySelectorAll('video').length).toBe(1);
+  });
+
+  it('opens the editor from the node', async () => {
+    const { getByRole, queryByRole } = renderNode(
+      omniData({ generatedVideoUrl: 'https://example.com/clip.mp4' }),
+    );
+
+    expect(queryByRole('dialog')).toBeNull();
+    await act(async () => {
+      fireEvent.click(getByRole('button', { name: /open/i }));
+    });
+    await waitFor(() => expect(queryByRole('dialog')).not.toBeNull());
   });
 });

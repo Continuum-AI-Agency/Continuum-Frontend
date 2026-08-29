@@ -22,6 +22,8 @@ import { Plus, Redo2, Trash2, Type, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NumberScrubField } from '@/components/ui/number-field';
+import { SliderField } from '@/components/ui/slider-field';
 import { listAssetVersions } from '@/lib/library/versions';
 import type { TimelineInputSource, TimelineItem } from '../../types';
 import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
@@ -128,39 +130,6 @@ function useExactPreviewUrls(
   return urls;
 }
 
-function NumberField({
-  label,
-  value,
-  min = 0,
-  max,
-  step = 0.1,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  onChange: (value: number) => void;
-}) {
-  const inputId = useId();
-  return (
-    <label htmlFor={inputId} className="space-y-1 text-3xs text-muted-foreground">
-      <span>{label}</span>
-      <Input
-        id={inputId}
-        type="number"
-        className="h-8 text-xs tabular-nums"
-        value={Number.isFinite(value) ? value : 0}
-        min={min}
-        max={max}
-        step={step}
-        onChange={(event) => onChange(event.currentTarget.valueAsNumber || 0)}
-      />
-    </label>
-  );
-}
-
 function TextOverlayEditor({
   project,
   textTrack,
@@ -261,9 +230,22 @@ function TextOverlayRow({
         className="h-8 text-xs"
       />
       <div className="grid grid-cols-2 gap-2">
-        <NumberField label="At" value={start} max={project.durationSec} onChange={setStart} />
-        <NumberField label="Duration" value={duration} min={0.1} onChange={setDuration} />
-        <NumberField
+        <NumberScrubField
+          min={0}
+          step={0.1}
+          label="At"
+          value={start}
+          max={project.durationSec}
+          onChange={setStart}
+        />
+        <NumberScrubField
+          step={0.1}
+          label="Duration"
+          value={duration}
+          min={0.1}
+          onChange={setDuration}
+        />
+        <NumberScrubField
           label="Size"
           value={fontSize}
           min={1}
@@ -282,8 +264,24 @@ function TextOverlayRow({
             aria-label="Text color"
           />
         </label>
-        <NumberField label="X" value={x} min={0} max={1} step={0.05} onChange={setX} />
-        <NumberField label="Y" value={y} min={0} max={1} step={0.05} onChange={setY} />
+        <SliderField
+          format={{ style: 'percent', maximumFractionDigits: 0 }}
+          label="X"
+          max={1}
+          min={0}
+          step={0.05}
+          value={x}
+          onChange={setX}
+        />
+        <SliderField
+          format={{ style: 'percent', maximumFractionDigits: 0 }}
+          label="Y"
+          max={1}
+          min={0}
+          step={0.05}
+          value={y}
+          onChange={setY}
+        />
       </div>
       <div className="flex justify-end gap-1">
         <Button
@@ -400,24 +398,55 @@ function MediaOverlayRow({
         </span>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <NumberField label="At" value={start} max={project.durationSec} onChange={setStart} />
-        <NumberField label="Duration" value={duration} min={0.1} onChange={setDuration} />
-        <NumberField label="X" value={x} min={0} max={1} step={0.05} onChange={setX} />
-        <NumberField label="Y" value={y} min={0} max={1} step={0.05} onChange={setY} />
-        <NumberField
-          label="Scale"
-          value={scale}
-          min={0.05}
-          max={4}
+        <NumberScrubField
+          min={0}
+          step={0.1}
+          label="At"
+          value={start}
+          max={project.durationSec}
+          onChange={setStart}
+        />
+        <NumberScrubField
+          step={0.1}
+          label="Duration"
+          value={duration}
+          min={0.1}
+          onChange={setDuration}
+        />
+        <SliderField
+          format={{ style: 'percent', maximumFractionDigits: 0 }}
+          label="X"
+          max={1}
+          min={0}
           step={0.05}
+          value={x}
+          onChange={setX}
+        />
+        <SliderField
+          format={{ style: 'percent', maximumFractionDigits: 0 }}
+          label="Y"
+          max={1}
+          min={0}
+          step={0.05}
+          value={y}
+          onChange={setY}
+        />
+        <SliderField
+          label="Scale"
+          max={4}
+          min={0.05}
+          step={0.05}
+          suffix="x"
+          value={scale}
           onChange={setScale}
         />
-        <NumberField
+        <SliderField
+          format={{ style: 'percent', maximumFractionDigits: 0 }}
           label="Opacity"
-          value={opacity}
-          min={0}
           max={1}
+          min={0}
           step={0.05}
+          value={opacity}
           onChange={setOpacity}
         />
       </div>
@@ -554,7 +583,13 @@ function TransitionRow({
             </option>
           ))}
         </select>
-        <NumberField label="Seconds" value={duration} min={0.1} step={0.1} onChange={setDuration} />
+        <NumberScrubField
+          label="Seconds"
+          value={duration}
+          min={0.1}
+          step={0.1}
+          onChange={setDuration}
+        />
       </div>
       <div className="flex justify-end gap-1">
         {transition ? (

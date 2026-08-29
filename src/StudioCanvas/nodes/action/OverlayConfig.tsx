@@ -8,9 +8,9 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
+import { NumberScrubField } from '@/components/ui/number-field';
+import { SliderField } from '@/components/ui/slider-field';
 import { useBrandBook } from '@/lib/brands/useBrandBook.client';
 import { getCreativeAssetsBucket } from '@/lib/creative-assets/config';
 import { createSignedAssetUrl } from '@/lib/creative-assets/storageClient';
@@ -162,44 +162,6 @@ function PlacementPreview({
           width: `${rect.width}px`,
           height: `${rect.height}px`,
           opacity,
-        }}
-      />
-    </div>
-  );
-}
-
-function SliderRow({
-  label,
-  value,
-  min,
-  max,
-  step,
-  format,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  format: (value: number) => string;
-  onChange: (next: number) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium">{label}</span>
-        <span className="text-2xs tabular-nums text-muted-foreground">{format(value)}</span>
-      </div>
-      <Slider
-        aria-label={label}
-        value={[value]}
-        min={min}
-        max={max}
-        step={step}
-        onValueChange={(next: number[]) => {
-          const first = next[0];
-          if (typeof first === 'number' && Number.isFinite(first)) onChange(first);
         }}
       />
     </div>
@@ -367,31 +329,32 @@ export function OverlayConfig({
         </p>
       </section>
 
-      <SliderRow
+      <SliderField
         label="Size"
         value={scale}
         min={0.02}
         max={1}
         step={0.01}
-        format={(value) => `${Math.round(value * 100)}% of the frame`}
+        format={{ style: 'percent', maximumFractionDigits: 0 }}
+        suffix=" of the frame"
         onChange={(next) => write('scale', next)}
       />
-      <SliderRow
+      <SliderField
         label="Edge margin"
         value={marginFrac}
         min={0}
         max={0.25}
         step={0.005}
-        format={(value) => `${(value * 100).toFixed(1)}%`}
+        format={{ style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }}
         onChange={(next) => write('marginFrac', next)}
       />
-      <SliderRow
+      <SliderField
         label="Opacity"
         value={opacity}
         min={0}
         max={1}
         step={0.05}
-        format={(value) => `${Math.round(value * 100)}%`}
+        format={{ style: 'percent', maximumFractionDigits: 0 }}
         onChange={(next) => write('opacity', next)}
       />
 
@@ -415,33 +378,33 @@ export function OverlayConfig({
               Whole clip
             </Button>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-start gap-1">
             {/* null is "unset", which is NOT 0: an empty box means the start of the clip
                 and the end of the clip, and `resolveOverlayWindow` reads it that way. */}
-            <Input
-              className="h-7 text-xs"
-              type="number"
+            <NumberScrubField
+              ariaLabel="Burn-in start seconds"
+              className="flex-1"
+              label="Start"
               min={0}
-              step={0.1}
+              nullable
               placeholder="Start"
-              aria-label="Burn-in start seconds"
-              value={startSec === null ? '' : String(startSec)}
-              onChange={(event) =>
-                write('startSec', event.target.value === '' ? null : Number(event.target.value))
-              }
-            />
-            <span className="text-2xs text-muted-foreground">to</span>
-            <Input
-              className="h-7 text-xs"
-              type="number"
-              min={0}
               step={0.1}
+              suffix="s"
+              value={startSec}
+              onChange={(next) => write('startSec', next)}
+            />
+            <span className="self-end pb-2 text-2xs text-muted-foreground">to</span>
+            <NumberScrubField
+              ariaLabel="Burn-in end seconds"
+              className="flex-1"
+              label="End"
+              min={0}
+              nullable
               placeholder="End"
-              aria-label="Burn-in end seconds"
-              value={endSec === null ? '' : String(endSec)}
-              onChange={(event) =>
-                write('endSec', event.target.value === '' ? null : Number(event.target.value))
-              }
+              step={0.1}
+              suffix="s"
+              value={endSec}
+              onChange={(next) => write('endSec', next)}
             />
           </div>
         </section>

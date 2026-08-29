@@ -77,6 +77,13 @@ function finish(): never {
   process.exit(exitCode);
 }
 
+/** What the stacking bug actually painted: `1 − Π(1 − floor)` over the whole frame, as a %. */
+const stackedCoverage = (veils: number): string =>
+  (
+    100 *
+    (1 - [0.15, 0.28, 0.42, 0.58, 0.75, 0.9].slice(0, veils).reduce((acc, f) => acc * (1 - f), 1))
+  ).toFixed(0);
+
 function buildBundle(): string {
   const dir = mkdtempSync(join(tmpdir(), 'image-text-render-bench-'));
   const outfile = join(dir, 'entry.js');
@@ -190,6 +197,47 @@ async function main(): Promise<void> {
     dark.rung > 0 && dark.measurement.backgroundRatio >= run.minContrast,
     `rung ${dark.rung} (${dark.treatment}), measured ${dark.measurement.backgroundRatio.toFixed(2)}:1`,
   );
+
+  // ── The scrim, on the photo that forced the escalation ──────────────────────────────────
+  //
+  // User report: "why does it always wash out the image?". Two porting errors compounded — the
+  // ladder pushed a veil step per floor it TRIED and the renderer filled the whole frame for
+  // every one of them, so a photo needing floor 0.42 shipped under ~64 % white edge to edge.
+  // Every assertion above stayed green through all of it: the type was legible, the ink was the
+  // token, the lines were the plan's. These three are the ones that can see it.
+  // Graded on the NEAR-BLACK case, not the merely dark one: at floor 0.15 a stacked veil and a
+  // single one paint nearly the same picture. Only a photo that forces the ladder to climb
+  // separates them, and it is also the photo the old code washed out hardest.
+  const deep = run.cases[3];
+  check(
+    'the photo that forces a high floor gets ONE veil at THAT floor, not one per floor tried',
+    deep.veilFloors.length === 1 &&
+      deep.veilFloors[0] === deep.resolvedVeilFloor &&
+      deep.rung >= 4,
+    `steps [${deep.steps.join(', ')}] at rung ${deep.rung} — the stacking bug drew ` +
+      `${deep.rung - 1} veils here, ${stackedCoverage(deep.rung - 1)} % white over the WHOLE frame`,
+  );
+  check(
+    'the treatment lightens ONLY behind the headline — the rest of the photo is untouched',
+    deep.footprint.outsideMaxDelta <= 2 && deep.footprint.outsideMeanDelta < 0.5,
+    `outside the box + its ${deep.footprint.reachPx.toFixed(0)} px feather reach: mean |Δ| ` +
+      `${deep.footprint.outsideMeanDelta.toFixed(3)}, worst channel ${deep.footprint.outsideMaxDelta} ` +
+      `over ${deep.footprint.outsidePixels} px — a full-frame veil at floor ` +
+      `${deep.resolvedVeilFloor ?? 0} moves these by ~${Math.round(255 * (deep.resolvedVeilFloor ?? 0) * 0.9)}`,
+  );
+  check(
+    'and it DID lighten behind it — this cannot pass by treating nothing',
+    deep.footprint.insideMeanDelta >= 8 && dark.footprint.insideMeanDelta >= 8,
+    `inside the box, glyphs excluded: mean |Δ| ${deep.footprint.insideMeanDelta.toFixed(2)} over ` +
+      `${deep.footprint.insidePixels} px (dark case ${dark.footprint.insideMeanDelta.toFixed(2)})`,
+  );
+  for (const c of run.cases) {
+    check(
+      `${c.label}: at most one veil in the plan, whatever the ladder tried`,
+      c.veilFloors.length <= 1 && c.steps.length <= 2,
+      `steps [${c.steps.join(', ') || 'none'}]`,
+    );
+  }
 
   // Both halves of the same guarantee, and the guarantee is unchanged: a token that does not
   // exist NEVER silently becomes black. With the ink fallback off it fails loudly, exactly as

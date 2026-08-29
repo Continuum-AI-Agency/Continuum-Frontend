@@ -965,7 +965,7 @@ export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
     case 'apiRender':
       return apiRenderTargetHandles(node);
     case 'omniGen':
-      return ['prompt-in', 'prompt', 'ref-images'];
+      return ['prompt-in', 'prompt', 'ref-images', VIDEO_REFERENCE_VIDEO_HANDLE];
     case 'string':
       return ['image', 'audio', 'document', 'video'];
     case 'videoDecode':
@@ -1046,6 +1046,8 @@ export function getTargetHandleConnectionLimit(
       return variable.kind === 'image' || variable.kind === 'video' ? API_RENDER_MEDIA_LIST_MAX : 1;
   }
   if (node.type === 'omniGen' && isImageReferenceHandle(targetHandle)) return 3;
+  // One clip to edit or extend. Omni takes exactly one input video per turn.
+  if (node.type === 'omniGen' && targetHandle === VIDEO_REFERENCE_VIDEO_HANDLE) return 1;
   // The op's own port declares its cap: one clip for a speed change, twenty for a stitch.
   if (node.type === 'action') {
     return actionInputPort(node.data?.actionId, targetHandle)?.max;
@@ -1241,6 +1243,8 @@ function isConnectionCompatible(
       if (!isTextProducingSource(sourceNode, sourceHandle)) return false;
     } else if (isImageReferenceHandle(targetHandle)) {
       if (!isImageProducingSource(sourceNode, sourceHandle)) return false;
+    } else if (targetHandle === VIDEO_REFERENCE_VIDEO_HANDLE) {
+      if (!isVideoProducingSource(sourceNode, sourceHandle)) return false;
     } else {
       return false;
     }
@@ -1723,7 +1727,13 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
       // Style is derived from the aspect ratio by createNodeData (nodeStyleFor);
       // 16:9 lands on the historical 512x360.
       return {
-        data: { model: 'gemini-omni-flash', prompt: '', aspectRatio: '16:9', variations: [] },
+        data: {
+          model: 'gemini-omni-flash',
+          prompt: '',
+          aspectRatio: '16:9',
+          resolution: '720p',
+          variations: [],
+        },
       };
     case 'string':
       return { data: { value: '', promptMode: 'enrich' } };

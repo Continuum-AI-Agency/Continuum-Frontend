@@ -12,7 +12,7 @@ import { useCallback } from 'react';
 
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { NumberScrubField } from '@/components/ui/number-field';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { FrameExtractNodeData } from '../types';
@@ -70,14 +70,15 @@ export function FrameExtractBlock({
             <option value="timestamp">At time</option>
           </select>
           {selector === 'timestamp' ? (
-            <Input
-              className="nodrag h-5 w-12 px-1 text-[10px]"
-              type="number"
+            <NumberScrubField
+              // `nodrag` on the root so scrubbing the label moves the value, not the node.
+              className="nodrag"
+              label="Sec"
               min={0}
+              orientation="inline"
               step={0.1}
               value={data.timestampSec ?? 0}
-              onChange={(event) => updateNodeData(id, { timestampSec: Number(event.target.value) })}
-              aria-label="Frame timestamp in seconds"
+              onChange={(timestampSec) => updateNodeData(id, { timestampSec })}
             />
           ) : null}
         </NodeTitleBar>

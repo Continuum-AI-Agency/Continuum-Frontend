@@ -8,6 +8,7 @@ import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NumberScrubField } from '@/components/ui/number-field';
 import {
   Select,
   SelectContent,
@@ -15,11 +16,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SliderField } from '@/components/ui/slider-field';
 import { Switch } from '@/components/ui/switch';
 import { useNodeConfigPatch } from '../../hooks/useNodeConfigPatch';
 import {
   type ConfigField,
   configFieldsFor,
+  type NumberConfigField,
+  numericControlFor,
   parseActionConfig,
 } from '../../utils/actions/actionConfig';
 import { isOverlayActionId } from '../../utils/actions/overlayOp';
@@ -53,7 +57,9 @@ function ConfigControl({
   controlId,
   onChange,
 }: {
-  field: ConfigField;
+  // Numbers never reach here: `NumericField` takes them, because a draggable control
+  // owns its own label and this one does not.
+  field: Exclude<ConfigField, { kind: 'number' }>;
   value: unknown;
   controlId: string;
   onChange: (next: unknown) => void;
@@ -93,44 +99,84 @@ function ConfigControl({
     );
   }
 
-  const isNumber = field.kind === 'number';
   return (
     <div className="flex items-center gap-1">
       <Input
         id={controlId}
         className="h-7 flex-1 text-xs"
-        type={isNumber ? 'number' : 'text'}
+        type="text"
         placeholder={field.nullable ? 'Auto' : undefined}
-        {...(isNumber && field.min !== undefined ? { min: field.min } : {})}
-        {...(isNumber && field.max !== undefined ? { max: field.max } : {})}
-        {...(isNumber ? { step: field.step } : {})}
-        value={
-          isNumber
-            ? typeof value === 'number'
-              ? String(value)
-              : ''
-            : ((value as string | null) ?? '')
-        }
-        onChange={(event) => {
-          const raw = event.target.value;
-          if (!isNumber) {
-            onChange(raw);
-            return;
-          }
-          // An emptied numeric input is "unset" when the field allows it, and nothing at
-          // all when it does not — writing 0 there would be a value the user never chose.
-          if (raw === '') {
-            if (field.nullable) onChange(null);
-            return;
-          }
-          const parsed = Number(raw);
-          if (Number.isFinite(parsed)) onChange(parsed);
-        }}
+        value={(value as string | null) ?? ''}
+        onChange={(event) => onChange(event.target.value)}
       />
       {field.nullable ? (
         <ClearFieldButton label={field.label} onClear={() => onChange(null)} />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Numbers get a control you can drag, never a bare box you must type into. Which one
+ * is `numericControlFor`'s call, not a per-op list: a range a drag can resolve gets
+ * the slider, anything else gets the scrub field.
+ *
+ * Both own their own label — the slider pairs it with a live readout, the scrub field
+ * makes it the drag handle — so this returns the whole field rather than just a control.
+ */
+function NumericField({
+  field,
+  value,
+  onChange,
+}: {
+  field: NumberConfigField;
+  value: unknown;
+  onChange: (next: number | null) => void;
+}) {
+  const current = typeof value === 'number' ? value : field.defaultValue;
+
+  if (numericControlFor(field) === 'slider' && field.min !== undefined && field.max !== undefined) {
+    return (
+      <SliderField
+        label={field.label}
+        max={field.max}
+        min={field.min}
+        step={field.step}
+        value={current ?? field.min}
+        onChange={onChange}
+      />
+    );
+  }
+
+  // Split on `nullable` so the callback type follows it: a field that can be unset
+  // hands back null and needs the clear button, one that cannot does neither.
+  if (field.nullable) {
+    return (
+      <div className="flex items-end gap-1">
+        <NumberScrubField
+          className="flex-1"
+          label={field.label}
+          max={field.max}
+          min={field.min}
+          nullable
+          step={field.step}
+          value={current}
+          onChange={onChange}
+        />
+        <ClearFieldButton label={field.label} onClear={() => onChange(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <NumberScrubField
+      label={field.label}
+      max={field.max}
+      min={field.min}
+      step={field.step}
+      value={current ?? undefined}
+      onChange={onChange}
+    />
   );
 }
 
@@ -177,6 +223,16 @@ export function ActionConfigFields({
   return (
     <div className="flex flex-col gap-3">
       {fields.map((field) => {
+        if (field.kind === 'number') {
+          return (
+            <NumericField
+              key={field.key}
+              field={field}
+              value={current[field.key]}
+              onChange={(next) => write(field.key, next)}
+            />
+          );
+        }
         const controlId = `action-config-${nodeId}-${field.key}`;
         return (
           <div key={field.key} className="flex flex-col gap-1">

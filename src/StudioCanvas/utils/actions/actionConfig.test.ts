@@ -4,6 +4,8 @@ import {
   type ConfigField,
   configFieldsFor,
   humaniseConfigKey,
+  type NumberConfigField,
+  numericControlFor,
   parseActionConfig,
   unsupportedConfigKeys,
 } from './actionConfig';
@@ -195,5 +197,66 @@ describe('humaniseConfigKey', () => {
 
   it('leaves an unknown trailing token alone', () => {
     expect(humaniseConfigKey('sampleFps')).toBe('Sample Fps');
+  });
+});
+
+describe('numericControlFor', () => {
+  const numericFields = (): Array<{ id: string; field: NumberConfigField }> =>
+    ACTION_IDS.flatMap((id) =>
+      configFieldsFor(id)
+        .filter((field): field is NumberConfigField => field.kind === 'number')
+        .map((field) => ({ id, field })),
+    );
+
+  it('routes every numeric field in the registry to one of the two controls', () => {
+    // Neither branch may be empty: an all-slider verdict would mean the unbounded
+    // fields are being drawn on a track with an invented right-hand end, and an
+    // all-scrub verdict would mean the rule is off and nothing gained a slider.
+    const verdicts = numericFields().map(({ field }) => numericControlFor(field));
+    expect(verdicts.length).toBeGreaterThan(0);
+    expect(verdicts.filter((v) => v === 'slider').length).toBeGreaterThan(0);
+    expect(verdicts.filter((v) => v === 'scrub').length).toBeGreaterThan(0);
+  });
+
+  it('gives a slider only to a field a drag can actually aim', () => {
+    for (const { id, field } of numericFields()) {
+      if (numericControlFor(field) !== 'slider') continue;
+      const where = `${id}.${field.key}`;
+      expect(`${where}:${field.nullable}`).toBe(`${where}:false`);
+      expect(typeof field.min).toBe('number');
+      expect(typeof field.max).toBe('number');
+      // Fewer stops than a track has pixels, so every value is reachable by drag.
+      expect((field.max as number) - (field.min as number)).toBeLessThanOrEqual(
+        1000 * field.step,
+      );
+    }
+  });
+
+  it('sends the shapes a track cannot express to the scrub field', () => {
+    const verdict = (id: (typeof ACTION_IDS)[number], key: string) => {
+      const field = configFieldsFor(id).find((entry) => entry.key === key);
+      if (!field || field.kind !== 'number') throw new Error(`${id}.${key} is not a number field`);
+      return numericControlFor(field);
+    };
+
+    // Unbounded: a clip's length is not in the schema, so there is no right-hand end.
+    expect(verdict('video.overlay', 'startSec')).toBe('scrub');
+    expect(verdict('video.overlay', 'endSec')).toBe('scrub');
+    // Nullable: null means "no cap", which is not a position on a track.
+    expect(verdict('text.split', 'maxParts')).toBe('scrub');
+    // Bounded but 10_000 stops wide — a number box wearing a slider.
+    expect(verdict('text.split', 'size')).toBe('scrub');
+  });
+
+  it('gives the bounded knobs a track', () => {
+    const verdict = (id: (typeof ACTION_IDS)[number], key: string) => {
+      const field = configFieldsFor(id).find((entry) => entry.key === key);
+      if (!field || field.kind !== 'number') throw new Error(`${id}.${key} is not a number field`);
+      return numericControlFor(field);
+    };
+
+    expect(verdict('image.rotate', 'degrees')).toBe('slider');
+    expect(verdict('video.overlay', 'opacity')).toBe('slider');
+    expect(verdict('video.overlay', 'scale')).toBe('slider');
   });
 });

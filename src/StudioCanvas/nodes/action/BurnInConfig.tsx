@@ -23,17 +23,17 @@ import {
   BRAND_TYPE_SOURCE_LABEL,
   BURN_IN_ANCHORS,
   type BurnInAnchor,
-  PRELOADED_TYPE_FACES,
   type DesignToken,
   type HeadlineToken,
   type MeasureText,
+  PRELOADED_TYPE_FACES,
   sectionForToken,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { useMemo, useRef, useState } from 'react';
 
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
+import { SliderField } from '@/components/ui/slider-field';
 import { Switch } from '@/components/ui/switch';
 import { useBrandType } from '@/lib/brands/useBrandType.client';
 import { useNodeConfigPatch } from '../../hooks/useNodeConfigPatch';
@@ -52,9 +52,9 @@ import {
 import {
   createMeasurer,
   describeHeadlineFaces,
+  describeHeadlineInk,
   type HeadlineFaces,
   parseHeadline,
-  describeHeadlineInk,
   parseHexColour,
   resolveHeadlineFaces,
   resolveHeadlineInk,
@@ -176,44 +176,6 @@ function AnchorGrid({
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function SliderRow({
-  label,
-  value,
-  min,
-  max,
-  step,
-  format,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  format: (value: number) => string;
-  onChange: (next: number) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium">{label}</span>
-        <span className="text-2xs tabular-nums text-muted-foreground">{format(value)}</span>
-      </div>
-      <Slider
-        aria-label={label}
-        value={[value]}
-        min={min}
-        max={max}
-        step={step}
-        onValueChange={(next: number[]) => {
-          const first = next[0];
-          if (typeof first === 'number' && Number.isFinite(first)) onChange(first);
-        }}
-      />
     </div>
   );
 }
@@ -539,31 +501,32 @@ export function BurnInConfig({
         </p>
       </section>
 
-      <SliderRow
+      <SliderField
         label="Measure"
         value={measure}
         min={0.2}
         max={1}
         step={0.01}
-        format={(value) => `${Math.round(value * 100)}% of the width`}
+        format={{ style: 'percent', maximumFractionDigits: 0 }}
+        suffix=" of the width"
         onChange={(value) => write({ measure: value })}
       />
-      <SliderRow
+      <SliderField
         label="Edge margin"
         value={placement.marginFrac}
         min={0}
         max={0.25}
         step={0.005}
-        format={(value) => `${(value * 100).toFixed(1)}%`}
+        format={{ style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }}
         onChange={(value) => write({ marginFrac: value })}
       />
-      <SliderRow
+      <SliderField
         label="Minimum contrast"
         value={minContrast}
         min={1}
         max={7}
         step={0.1}
-        format={(value) => `${value.toFixed(1)}:1`}
+        suffix=":1"
         onChange={(value) => write({ minContrast: value })}
       />
 

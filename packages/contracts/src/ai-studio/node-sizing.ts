@@ -53,12 +53,16 @@ export const VIDEO_GENERATOR_NODE_BOUNDS: GeneratorNodeBounds = {
   area: { width: 512, height: 288 },
 };
 
-/** omniGen. Taller than the video family because the node carries a chat strip. */
+/**
+ * omniGen. A launcher card: preview, grounding chip and an Open button. The prompting,
+ * the variation library and the output controls all live in the editor dialog now, so the
+ * node no longer needs to be taller than the video family — it needs to be smaller.
+ */
 export const OMNI_GENERATOR_NODE_BOUNDS: GeneratorNodeBounds = {
-  minWidth: 320,
-  minHeight: 260,
-  fallbackWidth: 512,
-  area: { width: 512, height: 360 },
+  minWidth: 240,
+  minHeight: 140,
+  fallbackWidth: 360,
+  area: { width: 360, height: 203 },
 };
 
 /**

@@ -618,10 +618,20 @@ export interface OmniGenNodeData extends BaseNodeData {
    * system is a third source with its own vocabulary.
    */
   designSystemSections?: DesignSection[];
+  /**
+   * Output resolution for the turn. 360p is the draft tier — markedly faster and
+   * cheaper — and 4k is the delivery master; the service enforces the set.
+   */
+  resolution?: '360p' | '720p' | '1080p' | '4k';
+  /**
+   * What a turn does with a clip wired into `ref-video`: change it in place, or
+   * continue it. Meaningless with nothing wired in, which is why it is optional
+   * rather than defaulted into every node.
+   */
+  videoTask?: 'edit' | 'extend';
   variations?: OmniVariation[];
   activeVariationId?: string;
   previousInteractionId?: string;
-  isChatOpen?: boolean;
   generatedVideo?: string | Blob;
   generatedVideoUrl?: string;
   generatedVideoStoragePath?: string;

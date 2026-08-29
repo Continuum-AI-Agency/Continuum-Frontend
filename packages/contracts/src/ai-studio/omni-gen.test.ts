@@ -68,7 +68,7 @@ describe('omni model catalog registration', () => {
 
   it('keeps the backend model id distinct from the canvas id', () => {
     expect(OMNI_GEN_MODEL_ID).toBe('gemini-omni-flash');
-    expect(OMNI_GEN_BACKEND_MODEL).toBe('gemini-omni-flash-preview');
+    expect(OMNI_GEN_BACKEND_MODEL).toBe('gemini-omni-1.1-flash');
   });
 });
 
@@ -80,7 +80,7 @@ describe('omniGen graph registration', () => {
   it('emits a video source handle and prompt/ref target handles', () => {
     const omni = node('omni1', 'omniGen');
     expect(getAllowedSourceHandles(omni)).toEqual(['video']);
-    expect(getAllowedTargetHandles(omni)).toEqual(['prompt-in', 'prompt', 'ref-images']);
+    expect(getAllowedTargetHandles(omni)).toEqual(['prompt-in', 'prompt', 'ref-images', 'ref-video']);
   });
 
   it('accepts a text prompt and an image reference, rejects a video input', () => {

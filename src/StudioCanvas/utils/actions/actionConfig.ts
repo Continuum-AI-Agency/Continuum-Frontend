@@ -246,3 +246,29 @@ export function parseActionConfig(actionId: ActionId, raw: unknown): Record<stri
   const parsed = ACTION_DEFS[actionId].config.safeParse(merged);
   return parsed.success && isRecord(parsed.data) ? parsed.data : defaults;
 }
+
+/** The number variant of `ConfigField`, for callers that have already narrowed. */
+export type NumberConfigField = Extract<ConfigField, { kind: 'number' }>;
+
+/**
+ * A slider needs a range a drag can resolve. Most of the registry qualifies — 0…1
+ * opacity, −180…180 hue, 1…60 fps — but three shapes do not, and each must fall back
+ * to a scrub field rather than render a slider that cannot be aimed:
+ *
+ *  - nullable (`maxParts` is bounded 1…100 but defaults to null, and a track has no
+ *    position that means "unset" — null is not the minimum, it is the absence of one)
+ *  - unbounded (`startSec`, `endSec`, `atSec` carry a min and no max: a clip's length
+ *    is not knowable from the schema, so there is no honest right-hand end)
+ *  - bounded so wide the track runs out of pixels (`size: 1…10_000` at step 1 is ~55
+ *    values per pixel on a 180px track, which is a number box wearing a slider)
+ *
+ * Mechanical, so a new op inherits the right control without a per-field allowlist.
+ */
+const MAX_SLIDER_STEPS = 1000;
+
+export function numericControlFor(field: NumberConfigField): 'slider' | 'scrub' {
+  if (field.nullable) return 'scrub';
+  if (field.min === undefined || field.max === undefined) return 'scrub';
+  if (!(field.step > 0)) return 'scrub';
+  return (field.max - field.min) / field.step > MAX_SLIDER_STEPS ? 'scrub' : 'slider';
+}

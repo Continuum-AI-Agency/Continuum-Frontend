@@ -86,7 +86,7 @@ export type BrandStyleInput = {
 export function resolveCaptionStyle(
   base: CaptionStyle | undefined,
   override?: CaptionStyleOverride,
-): CaptionStyle {
+): CaptionStyle & { position: CaptionPosition } {
   const position = {
     ...DEFAULT_CAPTION_STYLE.position,
     ...base?.position,
