@@ -8,6 +8,7 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { OmniGenNodeData } from '../types';
 import { OMNI_GENERATOR_NODE_BOUNDS } from '../utils/aspectRatioSizing';
 import { OmniGenBlock } from './OmniGenBlock';
+import { clearVideoAspectCache } from '../hooks/useSnapToVideoAspect';
 
 const NODE_ID = 'omni-1';
 
@@ -60,6 +61,9 @@ const node = () => useStudioStore.getState().nodes.find((n) => n.id === NODE_ID)
 
 describe('OmniGenBlock generated-video preview', () => {
   beforeEach(() => {
+    // The video aspect probe is memoized across the module; a stale entry from another
+    // suite would answer instantly and this file's detached-element assertions never fire.
+    clearVideoAspectCache();
     videosCreated = [];
     originalCreateElement = document.createElement.bind(document);
     document.createElement = ((tagName: string, options?: ElementCreationOptions) => {

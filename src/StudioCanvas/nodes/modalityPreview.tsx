@@ -72,6 +72,7 @@ export function ModalityPreview({
     return (
       // biome-ignore lint/performance/noImgElement: data URLs and signed rendition URLs are valid here.
       <img
+        loading="lazy"
         src={data.generatedImage}
         alt="Action output"
         className="max-h-full max-w-full object-contain"

@@ -492,6 +492,7 @@ export function TimelineEditorBlock({
                       <>
                         {/* biome-ignore lint/a11y/useMediaCaption: user-rendered edited clip has no caption track */}
                         <video
+                          preload="none"
                           src={displayVideo}
                           controls
                           className="h-full w-full object-contain"

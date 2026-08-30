@@ -416,6 +416,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                   >
                     {item.kind === 'image' && item.url ? (
                       <img
+                        loading="lazy"
                         src={item.url}
                         alt={batchItemLabel(item, index)}
                         className="size-12 shrink-0 rounded object-cover"
@@ -425,8 +426,8 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                       // No poster frame: a batch of 40 clips that each preload a poster is
                       // 40 range requests before the node has told anyone anything.
                       <video
+                        preload="none"
                         src={item.url}
-                        preload="metadata"
                         muted
                         className="size-12 shrink-0 rounded bg-black object-cover"
                       >

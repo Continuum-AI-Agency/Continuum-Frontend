@@ -5,6 +5,7 @@ import React from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import { VideoReferenceNode } from './VideoReferenceNode';
+import { clearVideoAspectCache } from '../hooks/useSnapToVideoAspect';
 
 const updateNodeData = mock();
 const updateNode = mock();
@@ -15,6 +16,9 @@ let originalTriggerSave: any;
 
 describe('VideoReferenceNode', () => {
   beforeEach(() => {
+    // The video aspect probe is memoized across the module; a stale entry from another
+    // suite would answer instantly and this file's detached-element assertions never fire.
+    clearVideoAspectCache();
     originalUpdateNodeData = useStudioStore.getState().updateNodeData;
     originalUpdateNode = useStudioStore.getState().updateNode;
     originalTriggerSave = useStudioStore.getState().triggerSave;

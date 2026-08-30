@@ -642,6 +642,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                   {preview ? (
                     <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-default">
                       <img
+                        loading="lazy"
                         src={data.originalImage ?? preview}
                         alt="Preview"
                         className="h-full w-full select-none object-contain"
@@ -649,6 +650,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                       />
                       {data.markupLayer && (
                         <img
+                          loading="lazy"
                           src={data.markupLayer}
                           alt="Markup overlay"
                           className="absolute inset-0 h-full w-full select-none object-contain pointer-events-none"

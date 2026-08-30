@@ -162,6 +162,7 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                     // biome-ignore lint/performance/noImgElement: canvas nodes paint signed
                     // storage URLs that next/image cannot resolve at build time.
                     <img
+                      loading="lazy"
                       src={preview}
                       alt={`${name} reference`}
                       className="h-full w-full object-contain"

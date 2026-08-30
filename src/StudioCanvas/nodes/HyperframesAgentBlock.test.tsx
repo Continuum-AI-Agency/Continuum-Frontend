@@ -7,6 +7,7 @@ import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { HyperframesAgentNodeData } from '../types';
 import { HyperframesAgentBlock } from './HyperframesAgentBlock';
+import { clearVideoAspectCache } from '../hooks/useSnapToVideoAspect';
 
 const NODE_ID = 'hyper-1';
 
@@ -69,6 +70,9 @@ const node = () => useStudioStore.getState().nodes.find((n) => n.id === NODE_ID)
 
 describe('HyperframesAgentBlock rendered-composition preview', () => {
   beforeEach(() => {
+    // The video aspect probe is memoized across the module; a stale entry from another
+    // suite would answer instantly and this file's detached-element assertions never fire.
+    clearVideoAspectCache();
     videosCreated = [];
     originalCreateElement = document.createElement.bind(document);
     document.createElement = ((tagName: string, options?: ElementCreationOptions) => {

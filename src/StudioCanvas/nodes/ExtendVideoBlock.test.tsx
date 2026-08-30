@@ -7,6 +7,7 @@ import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { ExtendVideoNodeData } from '../types';
 import { ExtendVideoBlock } from './ExtendVideoBlock';
+import { clearVideoAspectCache } from '../hooks/useSnapToVideoAspect';
 
 // This node had a Radix AspectRatio hardcoded to 16/9 around its preview — the exact
 // construct #232 removed everywhere else, on the one node whose output shape is
@@ -60,6 +61,9 @@ const node = () => useStudioStore.getState().nodes.find((n) => n.id === NODE_ID)
 
 describe('ExtendVideoBlock generated-video preview', () => {
   beforeEach(() => {
+    // The video aspect probe is memoized across the module; a stale entry from another
+    // suite would answer instantly and this file's detached-element assertions never fire.
+    clearVideoAspectCache();
     videosCreated = [];
     originalCreateElement = document.createElement.bind(document);
     document.createElement = ((tagName: string, options?: ElementCreationOptions) => {

@@ -234,6 +234,7 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
             data.specimenUrl ? (
               // biome-ignore lint/performance/noImgElement: signed storage URLs and data URLs are valid here.
               <img
+                loading="lazy"
                 src={data.specimenUrl}
                 alt={section ? `${DESIGN_SECTION_LABELS[section]} specimen` : 'Section specimen'}
                 className="max-h-full max-w-full object-contain"

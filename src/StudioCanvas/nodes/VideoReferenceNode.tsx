@@ -352,11 +352,11 @@ export function VideoReferenceNode({
                     {preview ? (
                       <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black/80">
                         <video
+                          preload="none"
                           src={preview}
                           className="h-full w-full object-contain"
                           muted
                           loop
-                          preload="metadata"
                           playsInline
                           onMouseEnter={(e) => e.currentTarget.play()}
                           onMouseLeave={(e) => e.currentTarget.pause()}
