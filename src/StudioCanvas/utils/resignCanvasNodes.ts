@@ -166,7 +166,10 @@ async function signCoordinates(
           request<CanvasMediaSignResponse>({
             path: CANVAS_MEDIA_SIGN_ROUTE,
             method: 'POST',
-            body: { brandProfileId, items: chunk },
+            // Node previews are painted into boxes a few hundred pixels wide, so ask for
+            // a derivative rather than the stored original (mean 2.1 MB, tail to 32 MB).
+            // The client renderer signs through this same route and must NOT set this.
+            body: { brandProfileId, items: chunk, preview: true },
           }),
         ),
       );
