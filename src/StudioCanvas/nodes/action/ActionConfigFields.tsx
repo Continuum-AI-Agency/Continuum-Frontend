@@ -6,6 +6,7 @@ import type { ActionId } from '@continuum/contracts';
 import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { ColorField } from '@/components/ui/color-field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NumberScrubField } from '@/components/ui/number-field';
@@ -92,6 +93,22 @@ function ConfigControl({
             ))}
           </SelectContent>
         </Select>
+        {field.nullable ? (
+          <ClearFieldButton label={field.label} onClear={() => onChange(null)} />
+        ) : null}
+      </div>
+    );
+  }
+
+  if (field.kind === 'color') {
+    return (
+      <div className="flex items-center gap-1">
+        <ColorField
+          id={controlId}
+          label={field.label}
+          value={typeof value === 'string' ? value : null}
+          onChange={onChange}
+        />
         {field.nullable ? (
           <ClearFieldButton label={field.label} onClear={() => onChange(null)} />
         ) : null}

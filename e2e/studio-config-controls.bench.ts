@@ -23,6 +23,10 @@
  *      `number-scrub-field` instead, rather than being dropped.
  *   4. NULL STAYS REACHABLE         — a nullable numeric field keeps a way to say
  *      "unset", which is not 0 and cannot be expressed on a track.
+ *   5. NO COLOUR IS TYPED           — every config key whose schema is a `#rrggbb` string
+ *      renders a colour picker, and none of them leaves a bare text box behind. Same
+ *      failure mode as the number boxes: an op added later inherits its controls from
+ *      `configFieldsFor`, so a colour that regressed to a hex field would regress silently.
  *
  * NOT covered here, stated rather than implied: this renders in happy-dom, so it proves
  * the control that is MOUNTED, not how it looks or that a real pointer drag moves it.
@@ -124,14 +128,23 @@ const missingScrubs: string[] = [];
 const unreachableNulls: string[] = [];
 const genericOps: string[] = [];
 const handWrittenOps: string[] = [];
+const typedColours: string[] = [];
+const unreachableColourNulls: string[] = [];
 let sliderCount = 0;
 let scrubCount = 0;
 let numericTotal = 0;
+let colourCount = 0;
+let colourTotal = 0;
 
 for (const actionId of ACTION_IDS) {
-  const numeric = configFieldsFor(actionId).filter((field) => field.kind === 'number');
-  if (numeric.length === 0) continue;
+  const fields = configFieldsFor(actionId);
+  const numeric = fields.filter((field) => field.kind === 'number');
+  const colours = fields.filter((field) => field.kind === 'color');
+  // `image.pad` and `video.pad` are a ratio and a COLOUR and nothing else — a numeric-only
+  // guard here would skip the two ops this property most needs to reach.
+  if (numeric.length === 0 && colours.length === 0) continue;
   numericTotal += numeric.length;
+  colourTotal += colours.length;
 
   // The panels that read brand data (the burn-in reads the brand book) go through
   // React Query, so the real component needs a real client to mount at all.
@@ -164,23 +177,27 @@ for (const actionId of ACTION_IDS) {
   sliderCount += sliders.length;
   scrubCount += scrubs.length;
 
+  const swatches = Array.from(container.querySelectorAll('[data-slot="color-field"]'));
+  colourCount += swatches.length;
+
   if (handWritten(actionId)) {
     handWrittenOps.push(actionId);
-    // The only claim these owe: a panel with numbers in it offers something to drag.
-    if (sliders.length + scrubs.length === 0) {
+    // The only claims these owe: a panel with numbers in it offers something to drag, and a
+    // panel with a colour in its schema offers something to pick. How many controls, and
+    // laid out how, is theirs — same reasoning as the numeric parity exemption above.
+    if (numeric.length > 0 && sliders.length + scrubs.length === 0) {
       missingSliders.push(`${actionId}: hand-written panel drew no draggable control`);
+    }
+    if (colours.length > 0 && swatches.length === 0) {
+      typedColours.push(`${actionId}: hand-written panel drew no colour control`);
     }
     cleanup();
     continue;
   }
 
   genericOps.push(actionId);
-  const wantSliders = numeric.filter(
-    (field) => field.kind === 'number' && shouldHaveTrack(field),
-  );
-  const wantScrubs = numeric.filter(
-    (field) => field.kind === 'number' && !shouldHaveTrack(field),
-  );
+  const wantSliders = numeric.filter((field) => field.kind === 'number' && shouldHaveTrack(field));
+  const wantScrubs = numeric.filter((field) => field.kind === 'number' && !shouldHaveTrack(field));
 
   if (sliders.length !== wantSliders.length) {
     missingSliders.push(`${actionId}: drew ${sliders.length}, wanted ${wantSliders.length}`);
@@ -207,6 +224,28 @@ for (const actionId of ACTION_IDS) {
     if (field.kind !== 'number' || !field.nullable) continue;
     const clear = container.querySelector(`[aria-label="Clear ${field.label}"]`);
     if (!clear) unreachableNulls.push(`${actionId}.${field.key}`);
+  }
+
+  // One picker per colour...
+  if (swatches.length !== colours.length) {
+    typedColours.push(`${actionId}: drew ${swatches.length} pickers, wanted ${colours.length}`);
+  }
+  // ...and the control carrying each colour's own id is that picker, not a box. Checked per
+  // KEY rather than by counting text inputs on the page: a scrub field is itself a text
+  // input, so a count would call `video.split` a typed colour and go red on an op with no
+  // colours in it at all.
+  for (const field of colours) {
+    const control = container.querySelector(`[id="action-config-bench-node-${field.key}"]`);
+    if (control?.getAttribute('data-slot') !== 'color-field') {
+      typedColours.push(
+        `${actionId}.${field.key}: rendered <${control?.tagName.toLowerCase() ?? 'nothing'}>, not a picker`,
+      );
+    }
+  }
+  for (const field of colours) {
+    if (!field.nullable) continue;
+    const clear = container.querySelector(`[aria-label="Clear ${field.label}"]`);
+    if (!clear) unreachableColourNulls.push(`${actionId}.${field.key}`);
   }
 
   cleanup();
@@ -238,12 +277,28 @@ check(
     ? 'every nullable numeric field keeps its clear control'
     : `no way to unset: ${unreachableNulls.join(', ')}`,
 );
-// A run that rendered nothing is not a pass. The registry has numeric fields in both
-// classes, so a zero on either side means the sweep never reached the components.
 check(
-  'the sweep actually exercised both controls',
-  sliderCount > 0 && scrubCount > 0 && numericTotal > 0,
-  `${numericTotal} numeric fields → ${sliderCount} sliders, ${scrubCount} scrub fields`,
+  'every colour in the registry is picked, never typed',
+  typedColours.length === 0,
+  typedColours.length === 0
+    ? `${colourTotal} colour fields across ${ACTION_IDS.length} ops, 0 hex text boxes`
+    : typedColours.join('; '),
+);
+check(
+  'a nullable colour can still be set back to null',
+  unreachableColourNulls.length === 0,
+  unreachableColourNulls.length === 0
+    ? 'every nullable colour field keeps its clear control'
+    : `no way to unset: ${unreachableColourNulls.join(', ')}`,
+);
+// A run that rendered nothing is not a pass. The registry has numeric fields in both
+// classes and colours in several ops, so a zero anywhere means the sweep never reached
+// the components.
+check(
+  'the sweep actually exercised every control',
+  sliderCount > 0 && scrubCount > 0 && numericTotal > 0 && colourCount > 0 && colourTotal > 0,
+  `${numericTotal} numeric fields → ${sliderCount} sliders, ${scrubCount} scrub fields; ` +
+    `${colourTotal} colour fields → ${colourCount} pickers`,
 );
 
 const counts = {
@@ -262,8 +317,9 @@ const envelope = {
     'Renders in happy-dom: proves which control is mounted, not pointer-drag behaviour.',
     `Control-per-field parity is asserted for the ${genericOps.length} ops the generic ` +
       `renderer draws. The ${handWrittenOps.length} hand-written panels ` +
-      `(${handWrittenOps.join(', ')}) are held only to "every number is draggable" — ` +
-      'their per-field layout is theirs to choose and is covered by their own specs.',
+      `(${handWrittenOps.join(', ')}) are held only to "every number is draggable" and ` +
+      '"a schema colour gets a picker" — their per-field layout is theirs to choose and is ' +
+      'covered by their own specs.',
   ],
   counts,
   exitCode,

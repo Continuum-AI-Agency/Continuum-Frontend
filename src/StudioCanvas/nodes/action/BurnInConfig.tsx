@@ -30,8 +30,11 @@ import {
   sectionForToken,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
+import { X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
+import { ColorField } from '@/components/ui/color-field';
 import { Label } from '@/components/ui/label';
 import { SliderField } from '@/components/ui/slider-field';
 import { Switch } from '@/components/ui/switch';
@@ -56,6 +59,7 @@ import {
   type HeadlineFaces,
   parseHeadline,
   parseHexColour,
+  resolveCustomInk,
   resolveHeadlineFaces,
   resolveHeadlineInk,
 } from '../../utils/actions/imageText';
@@ -344,6 +348,9 @@ export function BurnInConfig({
   const fallbackType = current.fallbackType !== false;
   const fallbackInk = current.fallbackInk !== false;
   const inkToken = typeof current.inkToken === 'string' ? current.inkToken : '';
+  // Mutually exclusive by construction: every write below sets one and clears the other, so
+  // there is never a selected token AND a selected custom colour to disagree about.
+  const inkHex = typeof current.inkHex === 'string' ? current.inkHex : null;
 
   const sources = useMemo(
     () => resolveBurnInPreviewSources(nodeId, nodes, edges),
@@ -370,7 +377,10 @@ export function BurnInConfig({
   // THE SAME CHAIN THE RENDER WALKS, from the same reader — so a panel that names a face is
   // naming the one that will be burned in, on every rung including the fallback.
   const faces = useMemo(() => resolveHeadlineFaces(brand), [brand]);
-  const ink = useMemo(() => resolveHeadlineInk(brand, inkToken), [brand, inkToken]);
+  const ink = useMemo(
+    () => resolveCustomInk(inkHex) ?? resolveHeadlineInk(brand, inkToken),
+    [brand, inkHex, inkToken],
+  );
 
   const extent = useMemo<BlockExtent>(() => {
     const tokens: HeadlineToken[] = sources.headline ? parseHeadline(sources.headline) : [];
@@ -465,10 +475,10 @@ export function BurnInConfig({
           <button
             type="button"
             aria-label="The palette's default ink"
-            aria-pressed={inkToken === ''}
-            onClick={() => write({ inkToken: '' })}
+            aria-pressed={inkHex === null && inkToken === ''}
+            onClick={() => write({ inkToken: '', inkHex: null })}
             className={`h-6 rounded border px-2 text-2xs ${
-              inkToken === ''
+              inkHex === null && inkToken === ''
                 ? 'border-brand-primary bg-brand-primary/15'
                 : 'border-border/60 text-muted-foreground hover:bg-muted/60'
             }`}
@@ -480,11 +490,11 @@ export function BurnInConfig({
               key={token.name}
               type="button"
               aria-label={token.name}
-              aria-pressed={inkToken === token.name}
+              aria-pressed={inkHex === null && inkToken === token.name}
               title={token.name}
-              onClick={() => write({ inkToken: token.name })}
+              onClick={() => write({ inkToken: token.name, inkHex: null })}
               className={`size-6 rounded border ${
-                inkToken === token.name
+                inkHex === null && inkToken === token.name
                   ? 'border-brand-primary ring-1 ring-brand-primary'
                   : 'border-border/60'
               }`}
@@ -492,9 +502,33 @@ export function BurnInConfig({
             />
           ))}
         </div>
+        <div className="flex items-center gap-1" data-testid="burn-in-ink-custom">
+          <ColorField
+            label="Custom ink"
+            value={inkHex}
+            onChange={(hex) => write({ inkHex: hex, inkToken: '' })}
+          />
+          {inkHex === null ? null : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0"
+              aria-label="Clear the custom ink"
+              title="Back to the palette"
+              onClick={() => write({ inkHex: null })}
+            >
+              <X className="size-3" />
+            </Button>
+          )}
+        </div>
         <p className="text-2xs text-muted-foreground" data-testid="burn-in-ink-source">
           {ink
-            ? `${describeHeadlineInk(ink)}. The type is set in the token, never a hand-typed hex.`
+            ? `${describeHeadlineInk(ink)}. ${
+                inkHex
+                  ? 'A hand-picked colour stays this colour — re-tinting the palette will not move it.'
+                  : 'The token is a reference, so re-tinting the palette re-tints the headline.'
+              }`
             : fallbackInk
               ? 'No brand colour anywhere — not in a design system, a brand book, a kit or a website. A legible black or white is MEASURED from the photo at render time, and the piece says which it used.'
               : 'No brand colour anywhere, and the fallback ink is switched off — this action will refuse rather than draw. Add a brand colour, or switch the fallback back on below.'}

@@ -30,6 +30,7 @@ import {
   embedFace,
   parseHeadline,
   renderHeadline,
+  resolveCustomInk,
   resolveHeadlineFaces,
   resolveHeadlineInk,
   scrimReachPx,
@@ -124,15 +125,25 @@ const FROM_BRAND_MD: BrandTypeInputs = {
   },
 };
 
+/** The hand-picked ink. Deliberately NOT a colour the bench brand carries anywhere, so a
+ *  render that reached the palette instead of this hex grades as the wrong colour. */
+const CUSTOM_INK = '#7b2d8e';
+
 const CONFIG = {
   anchor: 'top-right' as const,
   offsetX: 0,
   offsetY: VERNE_TITLE_ANCHOR_OFFSET_Y,
   marginFrac: VERNE_TITLE_RIGHT_MARGIN,
   inkToken: 'ink',
+  inkHex: null as string | null,
   measure: MEASURE,
   minContrast: VERNE_TITLE_MIN_CONTRAST,
   escalate: true,
+  // Both at their registry defaults. Spelled out rather than left to `parseActionConfig` so a
+  // case can override them — `customInk` turns the ink fallback OFF, which is the whole point
+  // of that case.
+  fallbackType: true,
+  fallbackInk: true,
 };
 
 /**
@@ -369,6 +380,8 @@ export interface ImageTextBenchRun {
   unresolvableTokenFallback: ImageTextCase;
   noBrandAtAllError: string | null;
   typeButNoInkError: string | null;
+  /** A hand-picked ink on a brand carrying NO colour, with the ink fallback OFF. */
+  customInk: ImageTextCase;
 }
 
 async function runCase(
@@ -386,8 +399,10 @@ async function runCase(
   // produced it — a lossy encode would otherwise show up as a treatment that touched the frame.
   const source = await decode(photoUrl);
   const faces = resolveHeadlineFaces(brand);
-  // The op's own three-step ink resolution, so a substituted token is graded as what it drew.
-  const exact = resolveHeadlineInk(brand, config.inkToken);
+  // The op's own ink resolution IN THE OP'S OWN ORDER, so a substituted token is graded as
+  // what it drew — and a hand-picked hex is graded as itself rather than as the token it
+  // overrode. Getting this order wrong here would grade the wrong colour and pass.
+  const exact = resolveCustomInk(config.inkHex) ?? resolveHeadlineInk(brand, config.inkToken);
   const ink = exact ?? resolveHeadlineInk(brand, '');
   if (!ink) throw new Error(`${label}: the bench brand yielded no ink`);
 
@@ -492,9 +507,16 @@ async function run(): Promise<ImageTextBenchRun> {
       // at floor 0.15 a stacked veil and a single one paint nearly the same picture, so only a
       // photo forced several rungs up the ladder tells the two apart. Graded against the
       // standard 3.2 like every other case — a piece that clears 7 clears 3.2 by construction.
-      await runCase('near-black photo, a bar it must climb for', 0x5eed3, 0, 24, FROM_DESIGN_SYSTEM, {
-        minContrast: 7,
-      }),
+      await runCase(
+        'near-black photo, a bar it must climb for',
+        0x5eed3,
+        0,
+        24,
+        FROM_DESIGN_SYSTEM,
+        {
+          minContrast: 7,
+        },
+      ),
     ],
     // A token nothing carries, with the ink fallback OFF: still the loud failure it always was.
     unresolvableTokenError: await refusal(
@@ -520,6 +542,18 @@ async function run(): Promise<ImageTextBenchRun> {
     typeButNoInkError: await refusal((c) => ({ ...c, fallbackInk: false }), {
       brandKit: { typography: { primary: 'Georgia' } },
     }),
+    // THE SAME BRAND AND THE SAME SWITCHES as `typeButNoInkError` — a face, no colour, the ink
+    // fallback OFF — plus a hand-picked hex. That one field is the only difference between a
+    // refusal and a render, which is what makes this the honest test of the short-circuit:
+    // a colour chosen by hand cannot fail to resolve, so the ladder must not run at all.
+    customInk: await runCase(
+      'bright photo, hand-picked ink on a colourless brand',
+      0x5eed1,
+      168,
+      244,
+      { brandKit: { typography: { primary: 'Georgia' } } },
+      { inkHex: CUSTOM_INK, fallbackInk: false },
+    ),
   };
 }
 

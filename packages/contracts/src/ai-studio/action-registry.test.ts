@@ -116,6 +116,8 @@ describe('image.text', () => {
       offsetY: VERNE_TITLE_ANCHOR_OFFSET_Y,
       marginFrac: VERNE_TITLE_RIGHT_MARGIN,
       inkToken: '',
+      // Null, not a colour: the palette chain decides unless somebody picks one by hand.
+      inkHex: null,
       measure: VERNE_TITLE_MEASURE,
       minContrast: VERNE_TITLE_MIN_CONTRAST,
       escalate: true,
@@ -164,6 +166,11 @@ describe('image.text', () => {
       'escalate',
       'fallbackInk',
       'fallbackType',
+      // The ONE colour knob, and it is a colour rather than a section: `inkHex` is a literal
+      // #rrggbb the user pointed at, mutually exclusive with `inkToken`. Added here
+      // deliberately — this list is the guard against a knob arriving unnoticed, so a change
+      // to it has to be a change to this test.
+      'inkHex',
       'inkToken',
       'marginFrac',
       'measure',

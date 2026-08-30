@@ -241,6 +241,21 @@ const textPlacementConfig = z.object({
    * re-tints every headline instead of leaving hand-typed hexes behind.
    */
   inkToken: z.string().max(120).default(''),
+  /**
+   * A literal ink, picked by hand, that opts OUT of the palette chain above.
+   *
+   * MUTUALLY EXCLUSIVE with `inkToken` and deliberately the lesser of the two: a token is a
+   * REFERENCE, so re-tinting the palette re-tints every headline, while a hex set here stays
+   * whatever it was. Null — the default — means the token chain decides, which is what almost
+   * every piece should do. Set, it also short-circuits the substitution ladder in
+   * `setImageText`: a colour chosen by hand cannot fail to resolve, so there is nothing for
+   * `fallbackInk` to fall back FROM.
+   */
+  inkHex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .default(null),
   /** Composition measure — the width lines break to — as a fraction of the image width. */
   measure: z.number().min(0.1).max(1).default(VERNE_TITLE_MEASURE),
   /** WCAG ratio the headline must hold against whatever is behind it. */

@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ColorField } from '@/components/ui/color-field';
 import { NumberScrubField } from '@/components/ui/number-field';
 import { SliderField } from '@/components/ui/slider-field';
 import {
@@ -195,24 +196,22 @@ export function CaptionEditor({
       ) : null}
 
       <div className="grid grid-cols-2 gap-2 text-2xs">
-        <label className="grid gap-1">
+        <div className="grid gap-1">
           Text
-          <input
-            type="color"
+          <ColorField
+            label="Caption text"
             value={globalStyle.textColor}
-            onChange={(event) => onChangeStyle({ ...globalStyle, textColor: event.target.value })}
+            onChange={(textColor) => onChangeStyle({ ...globalStyle, textColor })}
           />
-        </label>
-        <label className="grid gap-1">
+        </div>
+        <div className="grid gap-1">
           Highlight
-          <input
-            type="color"
+          <ColorField
+            label="Caption highlight"
             value={globalStyle.highlightColor}
-            onChange={(event) =>
-              onChangeStyle({ ...globalStyle, highlightColor: event.target.value })
-            }
+            onChange={(highlightColor) => onChangeStyle({ ...globalStyle, highlightColor })}
           />
-        </label>
+        </div>
         <SliderField
           format={{ style: 'percent', maximumFractionDigits: 0 }}
           label="X position"
@@ -310,22 +309,22 @@ export function CaptionEditor({
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <label className="grid gap-1">
+            <div className="grid gap-1">
               Cue text
-              <input
-                type="color"
+              <ColorField
+                label="Cue text"
                 value={resolvedSelectedStyle.textColor}
-                onChange={(event) => updateSelectedStyle({ textColor: event.target.value })}
+                onChange={(textColor) => updateSelectedStyle({ textColor })}
               />
-            </label>
-            <label className="grid gap-1">
+            </div>
+            <div className="grid gap-1">
               Cue highlight
-              <input
-                type="color"
+              <ColorField
+                label="Cue highlight"
                 value={resolvedSelectedStyle.highlightColor}
-                onChange={(event) => updateSelectedStyle({ highlightColor: event.target.value })}
+                onChange={(highlightColor) => updateSelectedStyle({ highlightColor })}
               />
-            </label>
+            </div>
           </div>
           <div className="flex justify-end">
             <Button variant="ghost" size="sm" onClick={() => updateSelected({ style: undefined })}>
