@@ -62,6 +62,31 @@ export function clearVideoAspectCache(): void {
   aspectInFlight.clear();
 }
 
+/**
+ * A `<video>` already on the page showing this exact clip, if there is one.
+ *
+ * The node that wants the ratio is usually rendering the clip already — media-chrome
+ * loads it for the scrub bar the moment the node mounts. Measuring with a second,
+ * detached element therefore downloaded the SAME bytes twice, and because both requests
+ * were issued in the same instant under the same token neither could use the other's
+ * cache entry. Measured: 15 video nodes, 15 distinct clips, 30 requests.
+ */
+function mountedVideoFor(src: string): HTMLVideoElement | null {
+  if (typeof document === 'undefined') return null;
+  for (const element of Array.from(document.querySelectorAll('video'))) {
+    if (element.currentSrc === src || element.getAttribute('src') === src) return element;
+  }
+  return null;
+}
+
+/**
+ * Read a clip's real pixel ratio, preferring the element that is already loading it.
+ *
+ * Falls back to a detached element only when nothing on the page is showing the clip —
+ * a node whose preview has not rendered yet. That element's download IS aborted on
+ * settle: detaching alone does not stop it, so a node flickering through the initial
+ * fitView would otherwise leave megabytes in flight behind it.
+ */
 export function detectAspectRatioFromVideo(src: string): Promise<string | null> {
   return new Promise((resolve) => {
     if (typeof document === 'undefined') {
@@ -69,14 +94,40 @@ export function detectAspectRatioFromVideo(src: string): Promise<string | null> 
       return;
     }
 
+    const ratioOf = (element: HTMLVideoElement): string | null => {
+      const { videoWidth, videoHeight } = element;
+      return videoWidth > 0 && videoHeight > 0
+        ? simplifyAspectRatio(videoWidth, videoHeight)
+        : null;
+    };
+
+    const mounted = mountedVideoFor(src);
+    if (mounted) {
+      // Already has its dimensions — no request of any kind.
+      const known = ratioOf(mounted);
+      if (known) {
+        resolve(known);
+        return;
+      }
+      // Still loading: ride along on the download it is already doing.
+      const onLoaded = () => {
+        mounted.removeEventListener('loadedmetadata', onLoaded);
+        mounted.removeEventListener('error', onFailed);
+        resolve(ratioOf(mounted));
+      };
+      const onFailed = () => {
+        mounted.removeEventListener('loadedmetadata', onLoaded);
+        mounted.removeEventListener('error', onFailed);
+        resolve(null);
+      };
+      mounted.addEventListener('loadedmetadata', onLoaded);
+      mounted.addEventListener('error', onFailed);
+      return;
+    }
+
     const videoElement = document.createElement('video');
     videoElement.preload = 'metadata';
     videoElement.muted = true;
-    // Detaching the element does NOT stop its download — the request keeps running to
-    // completion against a node nobody can see. Clearing `src` and calling `load()` is
-    // what actually aborts it, and both hooks below rely on that: a node that flickers
-    // through the viewport during the initial fitView must not leave megabytes in
-    // flight behind it.
     const release = () => {
       videoElement.onloadedmetadata = null;
       videoElement.onerror = null;
@@ -84,9 +135,7 @@ export function detectAspectRatioFromVideo(src: string): Promise<string | null> 
       videoElement.load();
     };
     videoElement.onloadedmetadata = () => {
-      const { videoWidth, videoHeight } = videoElement;
-      const ratio =
-        videoWidth > 0 && videoHeight > 0 ? simplifyAspectRatio(videoWidth, videoHeight) : null;
+      const ratio = ratioOf(videoElement);
       release();
       resolve(ratio);
     };
