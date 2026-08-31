@@ -213,6 +213,36 @@ describe('ActionConfigPopover', () => {
     });
   });
 
+  // Airtable #292: a run asked for 5 frames with `mode: 'single'` and got 1 back. Nothing
+  // was wrong with the extractor — `single` takes ONE frame at `atSec` and never reads
+  // `count`, and the panel offered `count` anyway. The registry is a discriminated union
+  // in all but name, so the panel has to honour the discriminator.
+  it('offers only the knobs the selected extract mode actually reads', () => {
+    const knobsFor = (mode: string) => {
+      const { container, unmount } = renderPopover('video.extractFrames', { mode });
+      const text = container.textContent ?? '';
+      const labels = ['Count', 'Interval Seconds', 'At Seconds', 'Threshold'].filter((label) =>
+        text.includes(label),
+      );
+      unmount();
+      return labels;
+    };
+
+    expect(knobsFor('single')).toEqual(['At Seconds']);
+    expect(knobsFor('evenly')).toEqual(['Count']);
+    expect(knobsFor('interval')).toEqual(['Interval Seconds']);
+    expect(knobsFor('sceneChange')).toEqual(['Threshold']);
+  });
+
+  it('keeps every extract mode reachable while gating the fields', () => {
+    const { getByTestId } = renderPopover('video.extractFrames', { mode: 'single' });
+
+    const options = Array.from(getByTestId('config-select').querySelectorAll('option')).map(
+      (option) => option.getAttribute('value'),
+    );
+    expect(options).toEqual(['single', 'evenly', 'interval', 'sceneChange']);
+  });
+
   it('routes video.subtitles to the SubtitlesConfig panel', () => {
     const { getByRole } = renderPopover('video.subtitles');
 
