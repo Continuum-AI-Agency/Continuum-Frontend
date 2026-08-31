@@ -362,25 +362,41 @@ describe('escalation ladder', () => {
     expect(treatment.kind).toBe('veiled');
     expect(treatment.rung).toBe(3);
     expect(treatment).toMatchObject({ veilFloor: 0.28, cleared: true, ratio: 9 });
+    // ONE veil, at the floor that cleared. The lower floors it tried and rejected are not in
+    // the plan, because a renderer that composites them all washes the whole photo out.
+    expect(treatment.steps).toEqual([{ kind: 'harmonise' }, { kind: 'veil', floor: 0.28 }]);
+  });
+
+  it('ESCALATION RAISES ONE VEIL\'S FLOOR — it never adds a second veil', () => {
+    const { probe, stacks } = ladderProbe(Number.POSITIVE_INFINITY);
+    const treatment = resolveTreatment(probe, { box, ink: INK });
+    expect(stacks[0]).toEqual([]);
+    expect(stacks[1]).toEqual([{ kind: 'harmonise' }]);
+    // Every veil rung is measured over `[harmonise, veil]` recomputed from the pristine photo,
+    // at the floor being tried — `_velo_marca`'s `v = max(v, piso)`, not a growing stack.
+    for (let i = 2; i < stacks.length; i += 1) {
+      expect(stacks[i]).toEqual([
+        { kind: 'harmonise' },
+        { kind: 'veil', floor: VERNE_VEIL_FLOORS[i - 2] },
+      ]);
+    }
+    expect(stacks.length).toBe(2 + VERNE_VEIL_FLOORS.length);
     expect(treatment.steps).toEqual([
       { kind: 'harmonise' },
-      { kind: 'veil', floor: 0.15 },
-      { kind: 'veil', floor: 0.28 },
+      { kind: 'veil', floor: VERNE_VEIL_FLOORS[VERNE_VEIL_FLOORS.length - 1] },
     ]);
   });
 
-  it('stacks the veils CUMULATIVELY — each rung sees everything applied before it', () => {
-    const { probe, stacks } = ladderProbe(Number.POSITIVE_INFINITY);
-    resolveTreatment(probe, { box, ink: INK });
-    expect(stacks[0]).toEqual([]);
-    expect(stacks[stacks.length - 1]).toEqual([
-      { kind: 'harmonise' },
-      ...VERNE_VEIL_FLOORS.map((floor) => ({ kind: 'veil' as const, floor })),
-    ]);
-    // Each stack is a strict prefix of the next: nothing is ever re-derived from the original.
-    for (let i = 1; i < stacks.length; i += 1) {
-      expect(stacks[i].slice(0, stacks[i - 1].length)).toEqual(stacks[i - 1]);
-      expect(stacks[i].length).toBe(stacks[i - 1].length + 1);
+  it('emits at most two steps, and at most ONE veil, at every rung of the ladder', () => {
+    for (let clearsAt = 0; clearsAt <= 1 + VERNE_VEIL_FLOORS.length; clearsAt += 1) {
+      const { probe } = ladderProbe(clearsAt);
+      const treatment = resolveTreatment(probe, { box, ink: INK });
+      const veils = treatment.steps.filter((step) => step.kind === 'veil');
+      expect(treatment.steps.length).toBeLessThanOrEqual(2);
+      expect(veils.length).toBeLessThanOrEqual(1);
+      if (treatment.kind === 'veiled') {
+        expect(veils).toEqual([{ kind: 'veil', floor: treatment.veilFloor }]);
+      }
     }
   });
 

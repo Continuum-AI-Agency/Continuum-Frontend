@@ -63,6 +63,7 @@ export const ACTION_IDS = [
   'image.flip',
   'image.duplicate',
   'image.chromaKey',
+  'image.removeBackground',
   'image.crop',
   'image.pad',
   'image.text',
@@ -78,6 +79,7 @@ export const ACTION_IDS = [
   'video.pad',
   'video.watermark',
   'video.greenscreen',
+  'video.removeBackground',
   'video.reverse',
   'video.boomerang',
   'video.longExposure',
@@ -178,6 +180,26 @@ const chromaKeyConfig = z.object({
   softness: z.number().min(0).max(1).default(0.1),
 });
 
+// The AI cutout's config, deliberately the SAME SHAPE as chromaKeyConfig minus the
+// three fields that only mean something once you know the background COLOUR. Both
+// keying families should read identically on the node, so `mode` and `replacement`
+// keep their names and their semantics; a matte model just replaces the
+// colour-distance test that used to produce the alpha.
+//
+// No `isolate`: it means "keep only the keyed colour", which has no counterpart when
+// the thing being removed is "everything that is not the subject".
+const removeBackgroundConfig = z.object({
+  mode: z.enum(['remove', 'replace']).default('remove'),
+  // Read in `replace` mode only, and only when nothing is wired to `background-in`.
+  replacement: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .default('#ffffff'),
+  // Softens the matte edge so a cutout does not look scissored. Distinct from chroma
+  // key's `softness`, which widens a colour tolerance band rather than blurring an edge.
+  featherPx: z.number().min(0).max(20).default(0),
+});
+
 const aspectConfig = z.object({
   aspectRatio: z
     .string()
@@ -241,6 +263,21 @@ const textPlacementConfig = z.object({
    * re-tints every headline instead of leaving hand-typed hexes behind.
    */
   inkToken: z.string().max(120).default(''),
+  /**
+   * A literal ink, picked by hand, that opts OUT of the palette chain above.
+   *
+   * MUTUALLY EXCLUSIVE with `inkToken` and deliberately the lesser of the two: a token is a
+   * REFERENCE, so re-tinting the palette re-tints every headline, while a hex set here stays
+   * whatever it was. Null — the default — means the token chain decides, which is what almost
+   * every piece should do. Set, it also short-circuits the substitution ladder in
+   * `setImageText`: a colour chosen by hand cannot fail to resolve, so there is nothing for
+   * `fallbackInk` to fall back FROM.
+   */
+  inkHex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .default(null),
   /** Composition measure — the width lines break to — as a fraction of the image width. */
   measure: z.number().min(0.1).max(1).default(VERNE_TITLE_MEASURE),
   /** WCAG ratio the headline must hold against whatever is behind it. */
@@ -382,6 +419,21 @@ export const ACTION_DEFS = {
     inputs: singleImageIn,
     output: 'image',
     config: chromaKeyConfig,
+  },
+  // `execution: 'sync'` is what the registry's worker⟺video invariant demands, but the
+  // runner is an ORCHESTRATED op: it makes an authenticated call out to the matte
+  // service. `video.subtitles` already carries the same mismatch in the other
+  // direction, and `runAction` consults ORCHESTRATED_OPS before it reads `execution`.
+  'image.removeBackground': {
+    id: 'image.removeBackground',
+    family: 'image',
+    label: 'Remove Background',
+    description: 'Cuts the subject out of any background — no green screen needed.',
+    group: 'Transform',
+    execution: 'sync',
+    inputs: singleImageIn,
+    output: 'image',
+    config: removeBackgroundConfig,
   },
   'image.crop': {
     id: 'image.crop',
@@ -582,6 +634,22 @@ export const ACTION_DEFS = {
     ],
     output: 'video',
     config: chromaKeyConfig,
+  },
+  // The `background-in` port mirrors Greenscreen's and is read in `replace` mode only;
+  // in `remove` mode the op emits a transparent VP9/WebM and the port goes unused.
+  'video.removeBackground': {
+    id: 'video.removeBackground',
+    family: 'video',
+    label: 'Remove Background',
+    description: 'Cuts the subject out of every frame — no green screen needed.',
+    group: 'Overlay',
+    execution: 'worker',
+    inputs: [
+      { handle: 'in', modality: 'video', max: 1 },
+      { handle: 'background-in', modality: 'image', max: 1 },
+    ],
+    output: 'video',
+    config: removeBackgroundConfig,
   },
   'video.reverse': {
     id: 'video.reverse',

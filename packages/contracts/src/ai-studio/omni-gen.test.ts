@@ -28,13 +28,47 @@ describe('omniGenRequestSchema', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('requires previousInteractionId on edit turns', () => {
-    const parsed = omniGenRequestSchema.safeParse({
-      brandId: 'brand-1',
-      turn: 'edit',
-      prompt: 'make the sky sunset orange',
-    });
-    expect(parsed.success).toBe(false);
+  it('rejects an edit or extend turn with neither a prior interaction nor a clip', () => {
+    for (const turn of ['edit', 'extend'] as const) {
+      const parsed = omniGenRequestSchema.safeParse({
+        brandId: 'brand-1',
+        turn,
+        prompt: 'make the sky sunset orange',
+      });
+      expect(parsed.success).toBe(false);
+    }
+  });
+
+  it('accepts an edit or extend turn carrying the clip inline', () => {
+    for (const turn of ['edit', 'extend'] as const) {
+      const parsed = omniGenRequestSchema.safeParse({
+        brandId: 'brand-1',
+        turn,
+        prompt: 'continue the scene',
+        sourceVideo: { data: 'AAAA', mimeType: 'video/mp4' },
+      });
+      expect(parsed.success).toBe(true);
+    }
+  });
+
+  it('accepts every resolution the service supports and nothing else', () => {
+    for (const resolution of ['360p', '720p', '1080p', '4k']) {
+      const parsed = omniGenRequestSchema.safeParse({
+        brandId: 'b',
+        turn: 'generate',
+        prompt: 'x',
+        resolution,
+      });
+      expect(parsed.success).toBe(true);
+    }
+    expect(
+      omniGenRequestSchema.safeParse({
+        brandId: 'b',
+        turn: 'generate',
+        prompt: 'x',
+        resolution: '8k',
+      }).success,
+    ).toBe(false);
   });
 
   it('accepts an edit turn that threads a previous interaction id', () => {
@@ -80,10 +114,15 @@ describe('omniGen graph registration', () => {
   it('emits a video source handle and prompt/ref target handles', () => {
     const omni = node('omni1', 'omniGen');
     expect(getAllowedSourceHandles(omni)).toEqual(['video']);
-    expect(getAllowedTargetHandles(omni)).toEqual(['prompt-in', 'prompt', 'ref-images', 'ref-video']);
+    expect(getAllowedTargetHandles(omni)).toEqual([
+      'prompt-in',
+      'prompt',
+      'ref-images',
+      'ref-video',
+    ]);
   });
 
-  it('accepts a text prompt and an image reference, rejects a video input', () => {
+  it('accepts a text prompt, an image reference and a clip on ref-video', () => {
     const nodes = [
       node('str1', 'string', { value: '' }),
       node('img1', 'image', { image: '' }),
@@ -95,13 +134,16 @@ describe('omniGen graph registration', () => {
 
     expect(valid('str1', 'prompt-in')).toBe(true);
     expect(valid('img1', 'ref-images')).toBe(true);
+    expect(valid('vid1', 'ref-video')).toBe(true);
     expect(valid('vid1', 'ref-images')).toBe(false);
     expect(valid('vid1', 'prompt')).toBe(false);
+    expect(valid('img1', 'ref-video')).toBe(false);
   });
 
-  it('caps reference images at three', () => {
+  it('caps reference images at three and the input clip at one', () => {
     const omni = node('omni1', 'omniGen');
     expect(getTargetHandleConnectionLimit(omni, 'ref-images', [])).toBe(3);
+    expect(getTargetHandleConnectionLimit(omni, 'ref-video', [])).toBe(1);
   });
 
   it('is a video-producing source downstream editors accept', () => {
@@ -120,5 +162,6 @@ describe('omniGen graph registration', () => {
     expect(created.data.model).toBe('gemini-omni-flash');
     expect(created.data.variations).toEqual([]);
     expect(created.data.aspectRatio).toBe('16:9');
+    expect(created.data.resolution).toBe('720p');
   });
 });

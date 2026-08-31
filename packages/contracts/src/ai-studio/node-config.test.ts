@@ -168,10 +168,10 @@ describe('createNodeData — every agent add_node / build_canvas goes through he
       }
     });
 
-    it('sizes omniGen from its own taller envelope', () => {
-      expect(createNodeData('omniGen').style).toEqual({ width: 572, height: 322 });
+    it('sizes omniGen from its launcher envelope', () => {
+      expect(createNodeData('omniGen').style).toEqual({ width: 360, height: 203 });
       const portrait = createNodeData('omniGen', { aspectRatio: '9:16' }).style;
-      expect(portrait).toEqual({ width: 322, height: 572 });
+      expect(portrait).toEqual({ width: 240, height: 427 });
     });
 
     it('leaves a non-generator node on its fixed box', () => {

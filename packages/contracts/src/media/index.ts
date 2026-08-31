@@ -3,6 +3,7 @@ export * from './asset-formats';
 export * from './asset-groups';
 export * from './asset-renditions';
 export * from './attach';
+export * from './background-removal';
 export * from './client-render';
 export * from './clip';
 export * from './collections';
