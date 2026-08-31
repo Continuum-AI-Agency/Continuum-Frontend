@@ -35,6 +35,7 @@
     "optimizer:rebalance:e2e:bench": "playwright test --config playwright.optimizer-rebalance.config.ts --workers=1",
     "command-palette:e2e:bench": "playwright test --config playwright.command-palette.config.ts --workers=1",
     "brands:dedupe:e2e:bench": "playwright test --config playwright.brand-dedupe.config.ts --workers=1",
+    "brands:session-tenancy:e2e:bench": "set -a; . ./.env.local; set +a; playwright test --config playwright.brand-session-tenancy.config.ts --workers=1",
     "optimizer:tooltip:e2e:bench": "playwright test --config playwright.optimizer-tooltip.config.ts --workers=1",
     "organic:metrics:compare:bench": "bun run src/lib/organic/organic-metrics-compare.bench.ts",
     "jaina:stream:bench": "bun run src/lib/jaina/jaina-stream.bench.ts",

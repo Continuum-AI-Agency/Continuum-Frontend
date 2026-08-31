@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
-  }
   agent_workspace: {
     Tables: {
       alignments: {
@@ -5110,7 +5105,7 @@ export type Database = {
           added_at: string
           added_by: string | null
           annotations: Json
-          applies_to: Json
+          applies_to: string[]
           asset_id: string
           authority: string
           brand_id: string
@@ -5123,7 +5118,7 @@ export type Database = {
           added_at?: string
           added_by?: string | null
           annotations?: Json
-          applies_to?: Json
+          applies_to?: string[]
           asset_id: string
           authority: string
           brand_id: string
@@ -5136,7 +5131,7 @@ export type Database = {
           added_at?: string
           added_by?: string | null
           annotations?: Json
-          applies_to?: Json
+          applies_to?: string[]
           asset_id?: string
           authority?: string
           brand_id?: string
@@ -8469,6 +8464,78 @@ export type Database = {
           },
         ]
       }
+      report_schedules: {
+        Row: {
+          brand_id: string
+          cadence: string
+          created_at: string
+          created_by: string | null
+          day_of_month: number | null
+          day_of_week: number | null
+          enabled: boolean
+          external_emails: string[]
+          hour: number
+          id: string
+          last_run_at: string | null
+          next_run_at: string
+          presentation: string
+          recipient_user_ids: string[]
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          cadence: string
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          enabled?: boolean
+          external_emails?: string[]
+          hour?: number
+          id?: string
+          last_run_at?: string | null
+          next_run_at: string
+          presentation?: string
+          recipient_user_ids?: string[]
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          cadence?: string
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          enabled?: boolean
+          external_emails?: string[]
+          hour?: number
+          id?: string
+          last_run_at?: string | null
+          next_run_at?: string
+          presentation?: string
+          recipient_user_ids?: string[]
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_schedules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "report_schedules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_send_receipts: {
         Row: {
           brand_id: string
@@ -8684,6 +8751,42 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_session_brands: {
+        Row: {
+          active_brand_id: string
+          session_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_brand_id: string
+          session_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_brand_id?: string
+          session_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_session_brands_active_brand_id_fkey"
+            columns: ["active_brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "user_session_brands_active_brand_id_fkey"
+            columns: ["active_brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       virality_brand_stats: {
         Row: {
@@ -11098,6 +11201,17 @@ export type Database = {
           tags: string[]
         }[]
       }
+      next_report_schedule_run_at: {
+        Args: {
+          p_after: string
+          p_cadence: string
+          p_dom: number
+          p_dow: number
+          p_hour: number
+          p_tz: string
+        }
+        Returns: string
+      }
       open_paid_scaffold_gate: {
         Args: {
           p_approval_expires_at: string
@@ -11255,6 +11369,7 @@ export type Database = {
         }
         Returns: string
       }
+      resolve_active_brand_for_session: { Args: never; Returns: string }
       resolve_admin_user_directory_name: {
         Args: { metadata: Json }
         Returns: string
@@ -13133,83 +13248,6 @@ export type Database = {
           workspace_id?: string | null
         }
         Relationships: []
-      }
-      optimizer_action_deliveries: {
-        Row: {
-          audit_ids: string[]
-          brand_id: string
-          connection_id: string | null
-          created_at: string
-          cycle_key: string
-          delivered_at: string | null
-          delivery_attempts: number
-          failed_at: string | null
-          failure_summary: string | null
-          id: string
-          lease_claimed_at: string | null
-          lease_claimed_by: string | null
-          next_attempt_at: string
-          platform: string | null
-          provider_channel_id: string | null
-          provider_message_id: string | null
-          provider_thread_id: string | null
-          recipient_user_id: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          audit_ids: string[]
-          brand_id: string
-          connection_id?: string | null
-          created_at?: string
-          cycle_key: string
-          delivered_at?: string | null
-          delivery_attempts?: number
-          failed_at?: string | null
-          failure_summary?: string | null
-          id?: string
-          lease_claimed_at?: string | null
-          lease_claimed_by?: string | null
-          next_attempt_at?: string
-          platform?: string | null
-          provider_channel_id?: string | null
-          provider_message_id?: string | null
-          provider_thread_id?: string | null
-          recipient_user_id: string
-          status: string
-          updated_at?: string
-        }
-        Update: {
-          audit_ids?: string[]
-          brand_id?: string
-          connection_id?: string | null
-          created_at?: string
-          cycle_key?: string
-          delivered_at?: string | null
-          delivery_attempts?: number
-          failed_at?: string | null
-          failure_summary?: string | null
-          id?: string
-          lease_claimed_at?: string | null
-          lease_claimed_by?: string | null
-          next_attempt_at?: string
-          platform?: string | null
-          provider_channel_id?: string | null
-          provider_message_id?: string | null
-          provider_thread_id?: string | null
-          recipient_user_id?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "optimizer_action_deliveries_connection_id_fkey"
-            columns: ["connection_id"]
-            isOneToOne: false
-            referencedRelation: "chat_connections"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       slack_installations: {
         Row: {
@@ -15169,11 +15207,13 @@ export type Database = {
           height: number | null
           id: string
           mime_type: string | null
+          poster_source: string | null
           renderer: string | null
           renderer_version: string | null
           role: string
           size_bytes: number | null
           source_checksum: string | null
+          source_timestamp_ms: number | null
           state: string
           storage_path: string | null
           updated_at: string
@@ -15192,11 +15232,13 @@ export type Database = {
           height?: number | null
           id?: string
           mime_type?: string | null
+          poster_source?: string | null
           renderer?: string | null
           renderer_version?: string | null
           role: string
           size_bytes?: number | null
           source_checksum?: string | null
+          source_timestamp_ms?: number | null
           state?: string
           storage_path?: string | null
           updated_at?: string
@@ -15215,11 +15257,13 @@ export type Database = {
           height?: number | null
           id?: string
           mime_type?: string | null
+          poster_source?: string | null
           renderer?: string | null
           renderer_version?: string | null
           role?: string
           size_bytes?: number | null
           source_checksum?: string | null
+          source_timestamp_ms?: number | null
           state?: string
           storage_path?: string | null
           updated_at?: string
@@ -17940,11 +17984,12 @@ export type Database = {
           content_json: Json | null
           content_plan_id: string | null
           created_at: string
+          group_id: string | null
           id: string
           instagram_post_id: string | null
           media_stage: string
           platform: string | null
-          platform_account_id: string | null
+          platform_account_id: string
           platform_post_id: string | null
           position: Json | null
           published_at: string | null
@@ -17963,11 +18008,12 @@ export type Database = {
           content_json?: Json | null
           content_plan_id?: string | null
           created_at?: string
+          group_id?: string | null
           id?: string
           instagram_post_id?: string | null
           media_stage?: string
           platform?: string | null
-          platform_account_id?: string | null
+          platform_account_id: string
           platform_post_id?: string | null
           position?: Json | null
           published_at?: string | null
@@ -17986,11 +18032,12 @@ export type Database = {
           content_json?: Json | null
           content_plan_id?: string | null
           created_at?: string
+          group_id?: string | null
           id?: string
           instagram_post_id?: string | null
           media_stage?: string
           platform?: string | null
-          platform_account_id?: string | null
+          platform_account_id?: string
           platform_post_id?: string | null
           position?: Json | null
           published_at?: string | null
@@ -18972,6 +19019,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      derive_media_stage: { Args: { content_json: Json }; Returns: string }
       enqueue_post_generation_job: {
         Args: {
           p_account_id: string
@@ -19152,6 +19200,52 @@ export type Database = {
       requeue_post_generation_job: {
         Args: { p_backoff_sec: number; p_job_id: string; p_worker_id: string }
         Returns: boolean
+      }
+      retry_post_generation_job: {
+        Args: { p_job_id: string; p_min_worker_generation: number }
+        Returns: {
+          account_id: string | null
+          attempts: number
+          brand_id: string
+          cancel_requested: boolean
+          claimed_at: string | null
+          client_key: string | null
+          completed_at: string | null
+          creative_brief: Json | null
+          dead_lettered_at: string | null
+          dispatch_context: Json | null
+          draft_id: string | null
+          enqueued_at: string
+          error: Json | null
+          expires_at: string
+          guidance_prompt: string | null
+          heartbeat_at: string | null
+          job_id: string
+          job_type: string
+          last_error: Json | null
+          max_attempts: number
+          min_worker_generation: number
+          next_run_at: string
+          payload: Json | null
+          plan_id: string | null
+          plan_item_id: string | null
+          platform: string
+          progress: Json
+          scheduled_at: string
+          session_id: string
+          started_at: string | null
+          status: Database["organic"]["Enums"]["post_generation_job_status"]
+          trend_id: string | null
+          updated_at: string
+          user_id: string
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "post_generation_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       start_inline_post_generation_job: {
         Args: {
@@ -19535,6 +19629,71 @@ export type Database = {
           targeting_spec?: Json
         }
         Relationships: []
+      }
+      canvas_creative_replacements: {
+        Row: {
+          ad_account_id: string
+          ad_id: string
+          adset_id: string
+          applied_at: string | null
+          asset_ids: string[]
+          brand_id: string
+          campaign_id: string
+          created_at: string
+          created_by: string
+          creative_id: string | null
+          creative_row_id: string | null
+          error: string | null
+          format: string
+          id: string
+          previous_creative_id: string
+          status: string
+        }
+        Insert: {
+          ad_account_id: string
+          ad_id: string
+          adset_id: string
+          applied_at?: string | null
+          asset_ids: string[]
+          brand_id: string
+          campaign_id: string
+          created_at?: string
+          created_by: string
+          creative_id?: string | null
+          creative_row_id?: string | null
+          error?: string | null
+          format: string
+          id?: string
+          previous_creative_id: string
+          status: string
+        }
+        Update: {
+          ad_account_id?: string
+          ad_id?: string
+          adset_id?: string
+          applied_at?: string | null
+          asset_ids?: string[]
+          brand_id?: string
+          campaign_id?: string
+          created_at?: string
+          created_by?: string
+          creative_id?: string | null
+          creative_row_id?: string | null
+          error?: string | null
+          format?: string
+          id?: string
+          previous_creative_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canvas_creative_replacements_creative_row_id_fkey"
+            columns: ["creative_row_id"]
+            isOneToOne: false
+            referencedRelation: "ad_creatives"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       creative_label_jobs: {
         Row: {
@@ -20514,96 +20673,6 @@ export type Database = {
           event_kind?: string
           event_name?: string
           id?: never
-          method?: string | null
-          mount_path?: string | null
-          params_hash?: string | null
-          request_id?: string | null
-          result_status?: string
-          session_id?: string | null
-          status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string | null
-          transport?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      tool_events_2026_05: {
-        Row: {
-          action: string | null
-          brand_id: string | null
-          bytes_in: number | null
-          bytes_out: number | null
-          cache_hit: boolean | null
-          client_id: string | null
-          client_name: string | null
-          client_profile: string | null
-          created_at: string
-          dimensions: Json
-          duration_ms: number | null
-          email: string | null
-          error_code: string | null
-          event_id: string
-          event_kind: string
-          event_name: string
-          id: number
-          method: string | null
-          mount_path: string | null
-          params_hash: string | null
-          request_id: string | null
-          result_status: string
-          session_id: string | null
-          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string | null
-          transport: string | null
-          user_id: string
-        }
-        Insert: {
-          action?: string | null
-          brand_id?: string | null
-          bytes_in?: number | null
-          bytes_out?: number | null
-          cache_hit?: boolean | null
-          client_id?: string | null
-          client_name?: string | null
-          client_profile?: string | null
-          created_at?: string
-          dimensions?: Json
-          duration_ms?: number | null
-          email?: string | null
-          error_code?: string | null
-          event_id?: string
-          event_kind?: string
-          event_name?: string
-          id: number
-          method?: string | null
-          mount_path?: string | null
-          params_hash?: string | null
-          request_id?: string | null
-          result_status?: string
-          session_id?: string | null
-          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string | null
-          transport?: string | null
-          user_id: string
-        }
-        Update: {
-          action?: string | null
-          brand_id?: string | null
-          bytes_in?: number | null
-          bytes_out?: number | null
-          cache_hit?: boolean | null
-          client_id?: string | null
-          client_name?: string | null
-          client_profile?: string | null
-          created_at?: string
-          dimensions?: Json
-          duration_ms?: number | null
-          email?: string | null
-          error_code?: string | null
-          event_id?: string
-          event_kind?: string
-          event_name?: string
-          id?: number
           method?: string | null
           mount_path?: string | null
           params_hash?: string | null
@@ -23617,20 +23686,14 @@ export type Database = {
         Args: { p_brand_id: string; p_from: string; p_to: string }
         Returns: {
           action: string
-          action_id: string
           actor_id: string
           actor_kind: string
-          after: Json
           asset_id: string
-          before: Json
-          currency: string
-          justification: string
           occurred_at: string
           outcome: string
           producer_id: string
           producer_kind: string
           replaced_target_id: string
-          reverts_action_id: string
           source: string
           target_id: string
           target_kind: string
@@ -23998,7 +24061,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      optimizer_action_count: { Args: { p_since?: string }; Returns: number }
       optimizer_append_logs: { Args: { p_rows: Json }; Returns: number }
       optimizer_archive_portfolio: {
         Args: { p_portfolio_id: string }
@@ -24013,8 +24075,6 @@ export type Database = {
         Returns: {
           ad_account_id: string
           apply_mode: string
-          apply_mode_changed_by: string
-          autopilot_paused: boolean
           brand_id: string
           budget_source: string
           config: Json
@@ -24023,8 +24083,6 @@ export type Database = {
           id: string
           level: string
           lookback_window: string
-          max_change_pct_per_cycle: number
-          max_daily_apply_minor: number
           mode: string
           objective: string
           period_budget: number
@@ -24059,13 +24117,11 @@ export type Database = {
           p_authorized_by?: string
           p_authorized_kind?: string
           p_cycle_ts: string
-          p_justification?: string
           p_meta_receipt?: Json
           p_mode?: string
           p_ok: boolean
           p_portfolio_id: string
           p_prior_status?: string
-          p_recommendation_id?: string
         }
         Returns: undefined
       }
@@ -24076,14 +24132,11 @@ export type Database = {
           p_authorized_by?: string
           p_authorized_kind?: string
           p_cycle_ts: string
-          p_justification?: string
           p_meta_receipt?: Json
           p_mode?: string
           p_ok: boolean
           p_portfolio_id: string
           p_prior_status?: string
-          p_recommendation_id?: string
-          p_reverts_audit_id?: string
         }
         Returns: undefined
       }
@@ -24093,16 +24146,12 @@ export type Database = {
           p_audit_id?: string
           p_authorized_by?: string
           p_authorized_kind?: string
-          p_currency?: string
           p_cycle_ts: string
-          p_justification?: string
           p_meta_receipt?: Json
           p_mode?: string
           p_ok: boolean
           p_portfolio_id: string
           p_prior_minor?: number
-          p_recommendation_id?: string
-          p_reverts_audit_id?: string
         }
         Returns: undefined
       }
@@ -24172,14 +24221,12 @@ export type Database = {
           change_pct: number
           current_budget: number
           final_budget: number
-          reason: string
         }[]
       }
       optimizer_get_approved_pause_recs: {
         Args: { p_portfolio_id: string }
         Returns: {
           adset_id: string
-          reason: string
           rec_id: string
         }[]
       }
@@ -24292,28 +24339,6 @@ export type Database = {
           same_brand: boolean
         }[]
       }
-      optimizer_list_actions: {
-        Args: { p_before?: string; p_brand_id: string; p_limit?: number }
-        Returns: {
-          actor_id: string
-          actor_kind: string
-          after: Json
-          before: Json
-          entity_id: string
-          family: string
-          id: string
-          justification: string
-          op: string
-          portfolio_id: string
-          portfolio_name: string
-          receipt: Json
-          reversible: boolean
-          revert_of: string
-          reverted_by: string
-          run_id: string
-          ts: string
-        }[]
-      }
       optimizer_list_archived_portfolios: {
         Args: { p_brand_id: string }
         Returns: Json
@@ -24350,8 +24375,6 @@ export type Database = {
         Returns: {
           ad_account_id: string
           apply_mode: string
-          apply_mode_changed_by: string
-          autopilot_paused: boolean
           brand_id: string
           budget_source: string
           config: Json
@@ -24360,8 +24383,6 @@ export type Database = {
           id: string
           level: string
           lookback_window: string
-          max_change_pct_per_cycle: number
-          max_daily_apply_minor: number
           mode: string
           objective: string
           period_budget: number

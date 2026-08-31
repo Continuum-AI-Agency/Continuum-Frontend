@@ -177,7 +177,11 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
           error: null,
         }),
     permittedIds.length > 0
-      ? supabase.schema('brand_profiles').rpc('get_active_brand_id')
+      ? // Session-scoped: resolves this session's own brand above the account-level
+        // pointer, and pins the session on first read. get_active_brand_id() — which
+        // this calls for tiers 2 and 3 — is account-global, and trusting it alone is
+        // what let two sessions on one login render each other's brand (Airtable #272).
+        supabase.schema('brand_profiles').rpc('resolve_active_brand_for_session')
       : Promise.resolve({ data: null, error: null }),
   ]);
 
