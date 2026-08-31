@@ -293,7 +293,11 @@ export function VideoReferenceNode({
                 selected={selected}
                 className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
               >
-                <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30 group/preview">
+                {/* `nodrag` belongs on the CONTROLS, never on the body: a node whose whole
+                    NodeContent carries it can never be dragged at all (Airtable #297). The
+                    click that opens the file picker survives — React Flow only swallows the
+                    click when the pointer actually moved. */}
+                <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
                   {refBadge && refBadge.tone !== 'error' && (
                     <div
                       className={cn(

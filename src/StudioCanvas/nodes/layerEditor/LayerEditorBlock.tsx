@@ -161,7 +161,9 @@ export function LayerEditorBlock({
                 selected={selected}
                 className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm"
               >
-                <NodeContent className="nodrag relative min-h-0 flex-1 bg-muted/30 p-0">
+                {/* `nodrag` belongs on the CONTROLS, never on the body: a node whose whole
+                    NodeContent carries it can never be dragged at all (Airtable #284). */}
+                <NodeContent className="relative min-h-0 flex-1 bg-muted/30 p-0">
                   {preview ? (
                     // biome-ignore lint/performance/noImgElement: canvas nodes paint signed
                     // storage URLs that next/image cannot resolve at build time.
@@ -193,7 +195,8 @@ export function LayerEditorBlock({
                     type="button"
                     size="sm"
                     variant="secondary"
-                    className="absolute right-2 top-2 z-20 h-6 px-2 text-2xs"
+                    className="nodrag absolute right-2 top-2 z-20 h-6 px-2 text-2xs"
+                    onMouseDown={(event) => event.stopPropagation()}
                     onClick={() => setOpen(true)}
                   >
                     <SquarePen className="mr-1 h-3 w-3" /> Edit

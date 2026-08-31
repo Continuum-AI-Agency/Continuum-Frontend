@@ -78,6 +78,27 @@ describe('VideoReferenceNode', () => {
     expect(screen.getByText('Upload Video')).toBeTruthy();
   });
 
+  // Airtable #297: the whole NodeContent carried `nodrag`, React Flow's own "never start a
+  // drag here" class, so the Upload Video block could not be moved once placed.
+  it('leaves the body draggable', async () => {
+    let renderResult: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      renderResult = render(
+        <ToastProvider>
+          <ReactFlowProvider>
+            <VideoReferenceNode {...defaultProps} />
+          </ReactFlowProvider>
+        </ToastProvider>,
+      );
+    });
+    const container = renderResult?.container;
+    const body = container?.querySelector('[data-slot="card-content"]');
+    expect(body).toBeTruthy();
+    expect(body?.closest('.nodrag')).toBeNull();
+    // The drop target is still the whole body — dragging the node did not cost the affordance.
+    expect(body?.querySelector('label[for="video-file-1"]')).toBeTruthy();
+  });
+
   it('should accept dropped video data URLs', async () => {
     const dataUrl = 'data:video/mp4;base64,drop_video_base64';
     let renderResult: ReturnType<typeof render> | undefined;

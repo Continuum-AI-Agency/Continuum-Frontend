@@ -206,6 +206,29 @@ describe('ElementNode', () => {
     });
   });
 
+  // The same defect as the layer editor and the video reference (Airtable #284/#297): the
+  // body carried `nodrag`, so the node could not be dragged. The Element PICKER keeps it —
+  // that one is a scrolling list of buttons, and a drag there should scroll, not move.
+  it('leaves the body draggable and keeps nodrag on the Element picker', async () => {
+    requestMock.mockResolvedValue({ elements: [buildElement()] } as never);
+    useStudioStore.setState({
+      nodes: [
+        { id: 'node-1', type: 'element', position: { x: 0, y: 0 }, data: { elementId: null } },
+      ] as never,
+      edges: [],
+      brandId: 'brand-1',
+    });
+
+    const { container } = renderNode({ elementId: null });
+
+    const body = container.querySelector('[data-slot="card-content"]');
+    expect(body).toBeTruthy();
+    expect(body?.closest('.nodrag')).toBeNull();
+
+    const picker = await screen.findByText('Choose an Element');
+    expect(picker.closest('.nodrag')).toBeTruthy();
+  });
+
   it('shows the category on a resolved Element', async () => {
     requestMock.mockResolvedValue({
       elements: [buildElement({ category: 'character', members: [{ assetId: 'm', position: 0 }] })],
