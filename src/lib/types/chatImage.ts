@@ -181,6 +181,14 @@ export type BackendChatImageRequestPayload = {
   reset?: boolean;
 };
 
+/**
+ * The body `/ai-studio/extend-video` actually parses.
+ *
+ * The clip rides on `reference_video`, as BYTES. This used to say `video`, and to allow
+ * a `{ uri }` alternative the endpoint has no field for — so every extension of a clip
+ * wired from the Library 400'd with `path:["reference_video"] … received undefined`
+ * while the canvas showed the clip plainly connected (#291).
+ */
 export type BackendExtendVideoRequestPayload = {
   service: string;
   model: SupportedBackendModel | string;
@@ -188,5 +196,5 @@ export type BackendExtendVideoRequestPayload = {
   brand_id: string;
   aspect_ratio?: string;
   resolution?: string;
-  video: { data: string; mime_type: string; filename?: string } | { uri: string };
+  reference_video: { data: string; mime_type: string; filename?: string };
 };

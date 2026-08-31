@@ -1,3 +1,4 @@
+import { routerLockedType } from '@continuum/contracts';
 import {
   addEdge,
   applyEdgeChanges,
@@ -397,10 +398,29 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       },
     };
 
-    set((state) => ({
-      edges: addEdge(newEdge as Edge, state.edges),
-      saveTrigger: state.saveTrigger + 1,
-    }));
+    set((state) => {
+      const edges = addEdge(newEdge as Edge, state.edges);
+      // A router pins its modality on FIRST CONNECT, which is what its own type says
+      // and what its badge reads. Stamping it only when a run reached the node left a
+      // plainly wired router reading "Unset / Connect a source" until somebody pressed
+      // Run (#301).
+      const targetNode = state.nodes.find((node) => node.id === normalized.target);
+      const locked =
+        targetNode?.type === 'router' && !targetNode.data?.lockedType
+          ? routerLockedType(targetNode, edges, state.nodes)
+          : undefined;
+      return {
+        edges,
+        nodes: locked
+          ? state.nodes.map((node) =>
+              node.id === targetNode?.id
+                ? ({ ...node, data: { ...node.data, lockedType: locked } } as StudioNode)
+                : node,
+            )
+          : state.nodes,
+        saveTrigger: state.saveTrigger + 1,
+      };
+    });
   },
 
   setNodes: (nodes: StudioNode[]) => {

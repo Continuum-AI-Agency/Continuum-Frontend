@@ -20,3 +20,11 @@ export function buildDataUrl(mimeType: string, base64: string): string {
   const safeMime = mimeType || 'application/octet-stream';
   return `data:${safeMime};base64,${normalizeBase64Payload(base64)}`;
 }
+
+/** Bytes as base64, for the endpoints whose schema takes data rather than a URL. */
+export async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}

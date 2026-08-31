@@ -94,6 +94,11 @@ describe('ACTION_ENGINES', () => {
         // The burn-in shell.
         'video.overlay',
         'video.watermark',
+        // The matte lane. Its runner is complete and orchestrated (Cloud Run + SSE, see
+        // `ORCHESTRATED_OPS`), so it will never have a mediabunny engine here; it is
+        // held out of `isImplementedAction` for want of an L4 quota, not for want of
+        // code. Landed red with `feat(matte)` — named here rather than counted away.
+        'video.removeBackground',
       ].sort(),
     );
   });
@@ -132,6 +137,23 @@ describe('requireInput', () => {
 
   it('names the missing handle instead of failing deep in the encoder', () => {
     expect(() => requireInput(argsWith([]), 'in')).toThrow(/"in" input/);
+  });
+});
+
+describe('video.stitch', () => {
+  // Bug #304: "Stitch needs at least two clips connected" fired on a node with two
+  // clips connected. The count was right and the message was wrong — the engine only
+  // ever sees resolved blobs, so it must report what it received rather than accuse
+  // the user's wiring. (The two-clip encode itself is `studio:actions:video:e2e:bench`;
+  // reaching it here would mean mocking composeTimeline process-wide.)
+  it('reports how many clips it received rather than blaming the wiring', async () => {
+    await expect(
+      ACTION_ENGINES['video.stitch']!(argsWith([{ handle: 'in', blob: blob('only') }])),
+    ).rejects.toThrow(/received 1 clip/);
+  });
+
+  it('still names the handle when nothing at all is wired', async () => {
+    await expect(ACTION_ENGINES['video.stitch']!(argsWith([]))).rejects.toThrow(/"in" input/);
   });
 });
 

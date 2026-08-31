@@ -9,6 +9,8 @@ import {
   type BatchItem,
   batchItemType,
   combineBatches,
+  DESIGN_REF_IMAGE_OUTPUT_HANDLE,
+  DESIGN_REF_TEXT_OUTPUT_HANDLE,
   isActionId,
   LAYER_EDITOR_IMAGE_INPUT_HANDLE,
   MAX_BATCH_ITEMS,
@@ -16,6 +18,7 @@ import {
   type RegisterCanvasAssetResponse,
   routerLockedType,
   STUDIO_MEDIA_NODE_TYPES,
+  STUDIO_NODE_REGISTRY,
   STUDIO_PUBLISHER_NODE_KINDS,
   STUDIO_RUNNABLE_NODE_TYPES,
   type StudioNodeType,
@@ -59,7 +62,7 @@ import {
   toBackendPayload,
 } from './buildNodePayload';
 import { compositeImages } from './compositeImages';
-import { buildDataUrl, parseDataUrl } from './dataUrl';
+import { blobToBase64, buildDataUrl, parseDataUrl } from './dataUrl';
 import {
   exportKindForSources,
   exportSourcesFromOutputs,
@@ -185,6 +188,13 @@ const resolveTextInput = (
   }
 
   const sourceNode = nodeById.get(edge.source);
+  // A `designRef` never runs, so nothing seeds it; its token summary IS its text
+  // output. Same trap as the Element on a reference port (#290) — a source type the
+  // resolvers were never taught reads as an empty wire.
+  if (sourceNode?.type === 'designRef' && edge.sourceHandle === DESIGN_REF_TEXT_OUTPUT_HANDLE) {
+    return normalizeText((sourceNode.data as Record<string, unknown>).tokenSummary as string);
+  }
+
   if (sourceNode?.type === 'string') {
     const sourceRequiresExecution = getStringExternalInputEdges(allEdges, sourceNode.id).length > 0;
     if (sourceRequiresExecution) {
@@ -231,6 +241,15 @@ const resolveImageInput = (
   }
 
   const sourceNode = nodeById.get(edge.source);
+  if (sourceNode?.type === 'designRef' && edge.sourceHandle === DESIGN_REF_IMAGE_OUTPUT_HANDLE) {
+    // `buildNodePayload` already resolves this specimen; readiness could not see it, so
+    // a design reference on a generator parked the run on "missing" (#290's sibling).
+    const specimen = (sourceNode.data as Record<string, unknown>).specimenUrl as string | undefined;
+    const parsed = parseDataUrl(specimen);
+    if (parsed?.base64) return { base64: parsed.base64, mimeType: parsed.mimeType };
+    if (isHttpUrl(specimen)) return { base64: '', mimeType: 'image/png' };
+  }
+
   if (sourceNode?.type === 'image') {
     const value = (sourceNode.data as any).image as string | undefined;
     const parsed = parseDataUrl(value);
@@ -366,7 +385,7 @@ const getPromptValue = (
   resolvedOutputs: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>,
   allEdges: Edge[],
-): { value?: string; fromEdge: boolean } => {
+): { value?: string; fromEdge: boolean; fromCollection?: boolean; blockedNodeId?: string } => {
   const promptHandles =
     isVideoGeneratorNodeType(node.type) ||
     node.type === 'omniGen' ||
@@ -381,7 +400,17 @@ const getPromptValue = (
     const edgePrompt = promptEdges
       .map((edge) => resolveTextInput(edge, resolvedOutputs, nodeById, allEdges))
       .find(Boolean);
-    return { value: edgePrompt, fromEdge: true };
+    // A batch on the PROMPT port is unwrapped one item per run by the generation
+    // fan-out, exactly as `feedsCollection` already taught the reference ports. Judging
+    // it with `resolveTextInput` — which only knows single strings — parked the graph on
+    // "Missing prompt input" with the batch visibly wired in (#300).
+    const collectionEdge = promptEdges.find((edge) => feedsCollection(edge, resolvedOutputs));
+    return {
+      value: edgePrompt,
+      fromEdge: true,
+      fromCollection: Boolean(collectionEdge),
+      blockedNodeId: promptEdges[0]?.source,
+    };
   }
 
   const inlinePrompt =
@@ -404,7 +433,7 @@ type MissingOptionalInput = {
    * because the media-signing call never reached the backend, for instance. Naming the
    * two cases apart is the difference between a five-minute diagnosis and an hour.
    */
-  reason?: string;
+  reason: string;
 };
 
 /**
@@ -427,13 +456,55 @@ const referenceIsUnreadable = (node: StudioNode | undefined): boolean => {
   return !value || (!value.startsWith('data:') && !isHttpUrl(value));
 };
 
-const unresolvedReferenceReason = (
+/** How a node reads in a message: its own label when it has one, else its type. */
+const describeSource = (sourceNode: StudioNode | undefined): string => {
+  if (!sourceNode) return 'the connected node';
+  const label = asTrimmedString((sourceNode.data as Record<string, unknown>)?.label);
+  const registered = STUDIO_NODE_REGISTRY[sourceNode.type as StudioNodeType]?.label;
+  return label || registered || 'the connected node';
+};
+
+/**
+ * A reference node the user simply never filled in — no media, and no coordinates worth
+ * hydrating either. Distinct from `referenceIsUnreadable`, which is a reference that HAS
+ * coordinates and failed to load; that one is a transient fault, this one is an empty
+ * slot with its own better instruction.
+ */
+const referenceIsEmpty = (node: StudioNode | undefined): boolean => {
+  if (!node || node.type !== 'image') return false;
+  if (hasHydratableMediaReference(node)) return false;
+  const data = node.data as Record<string, unknown>;
+  const image = asTrimmedString(data.image);
+  // Blank AND malformed both count: a `sourceUrl` of "not-a-valid-http-url" is an empty
+  // slot as far as anything that has to read pixels is concerned.
+  return (
+    !image.startsWith('data:') && !isHttpUrl(image) && !isHttpUrl(asTrimmedString(data.sourceUrl))
+  );
+};
+
+/**
+ * Why an input that IS wired did not resolve.
+ *
+ * The rule this exists to keep: no readiness message may say "missing" or "not
+ * connected" about a handle the user can see a wire on. Six Airtable reports (#290,
+ * #291, #300, #301, #304, #305) were the same sentence — the graph says connected, the
+ * node says missing — and every one of them started its diagnosis in the wrong place.
+ * When an edge is present but unresolvable, the message names WHY instead.
+ */
+const unresolvedInputReason = (
   handle: string,
   sourceNode: StudioNode | undefined,
-): string | undefined =>
-  referenceIsUnreadable(sourceNode)
-    ? `The reference on "${handle}" could not be loaded — its signed URL was never refreshed. Check that the canvas can reach the backend.`
-    : undefined;
+  resolvedOutputs: Map<string, NodeOutput>,
+): string => {
+  if (referenceIsUnreadable(sourceNode)) {
+    return `The reference on "${handle}" could not be loaded — its signed URL was never refreshed. Check that the canvas can reach the backend.`;
+  }
+  const source = describeSource(sourceNode);
+  if (sourceNode && !resolvedOutputs.has(sourceNode.id)) {
+    return `The "${handle}" input is waiting on ${source}, which has not produced anything yet`;
+  }
+  return `The "${handle}" input is wired to ${source}, but nothing readable came through it`;
+};
 
 /**
  * A collection satisfies a reference port.
@@ -454,6 +525,14 @@ const findMissingOptionalInput = (
   nodeById: Map<string, StudioNode>,
   allEdges: Edge[],
 ): MissingOptionalInput | undefined => {
+  // Every branch below fires with an edge ALREADY on the handle, so every one of them
+  // owes the user a reason rather than the word "missing" (#290).
+  const unresolved = (edge: Edge, handle: string): MissingOptionalInput => ({
+    label: handle,
+    blockedNodeId: edge.source,
+    reason: unresolvedInputReason(handle, nodeById.get(edge.source), resolvedOutputs),
+  });
+
   if (node.type === 'nanoGen') {
     const refEdges = incomingEdges.filter((edge) =>
       ['ref-image', 'ref-images'].includes(edge.targetHandle ?? ''),
@@ -461,12 +540,7 @@ const findMissingOptionalInput = (
     for (const edge of refEdges) {
       if (feedsCollection(edge, resolvedOutputs)) continue;
       if (!resolveImageInput(edge, resolvedOutputs, nodeById)) {
-        const handle = edge.targetHandle ?? 'ref-images';
-        return {
-          label: handle,
-          blockedNodeId: edge.source,
-          reason: unresolvedReferenceReason(handle, nodeById.get(edge.source)),
-        };
+        return unresolved(edge, edge.targetHandle ?? 'ref-images');
       }
     }
     return undefined;
@@ -479,20 +553,20 @@ const findMissingOptionalInput = (
       if (feedsCollection(edge, resolvedOutputs)) continue;
       if (handle === 'negative') {
         if (!resolveTextInput(edge, resolvedOutputs, nodeById, allEdges)) {
-          return { label: handle, blockedNodeId: edge.source };
+          return unresolved(edge, handle);
         }
       } else if (handle === 'ref-image' || handle === 'ref-images') {
         const supportsImageReferences =
           videoModel !== 'veo-3.1-fast' && videoModel !== 'veo-3.1-lite';
         if (supportsImageReferences && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
-          return { label: handle, blockedNodeId: edge.source };
+          return unresolved(edge, handle);
         }
       } else if (handle === 'ref-video') {
         if (
           videoModel === 'kling-omni' &&
           !resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: false })
         ) {
-          return { label: handle, blockedNodeId: edge.source };
+          return unresolved(edge, handle);
         }
       } else if (
         handle === 'first-frame' ||
@@ -501,7 +575,7 @@ const findMissingOptionalInput = (
       ) {
         const supportsFrames = videoModel === 'veo-3.1-fast' || videoModel === 'veo-3.1-lite';
         if (supportsFrames && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
-          return { label: handle, blockedNodeId: edge.source };
+          return unresolved(edge, handle);
         }
       }
     }
@@ -548,6 +622,13 @@ const collectionInputFor = (
   resolvedOutputs: Map<string, NodeOutput>,
 ): { handle: string; modality: ActionModality; items: NodeOutput[] } | undefined => {
   for (const port of def.inputs) {
+    // A port that takes MANY inputs consumes the whole collection instead of being
+    // fanned over it: Stitch's twenty clips are twenty inputs on one handle, not twenty
+    // runs of one clip each. Fanning it ran Stitch once per clip, each run saw a single
+    // blob, and every one of them died on "Stitch needs at least two clips connected" —
+    // on a node with two clips visibly connected (#304). `resolveActionInputsFor`
+    // expands the collection onto the port instead.
+    if (port.max > 1) continue;
     const edge = getIncomingEdges(edges, nodeId).find((e) => e.targetHandle === port.handle);
     const output = edge ? resolvedOutputs.get(edge.source) : undefined;
     if (output?.type === 'collection') {
@@ -589,9 +670,25 @@ const resolveActionInputsFor = async (
       throw new Error(`Nothing is connected to this action's "${port.handle}" input`);
 
     for (const edge of wired.slice(0, port.max)) {
+      const collection = resolvedOutputs.get(edge.source);
+      if (collection?.type === 'collection') {
+        // A collection on a many-input port IS the port's inputs — a batch of two
+        // clips wired into Stitch is two clips to stitch. Ports that take one are
+        // handled by `collectionInputFor`, which fans the whole action out instead.
+        const room = Math.max(0, port.max - inputs.filter((i) => i.handle === port.handle).length);
+        for (const item of collection.items.slice(0, room)) {
+          inputs.push(await actionInputFromItem(item, port.handle, port.modality));
+        }
+        continue;
+      }
+
       if (port.modality === 'text') {
         const text = resolveTextInput(edge, resolvedOutputs, nodeById, edges);
-        if (text === undefined) throw new Error(`The text feeding "${port.handle}" is not ready`);
+        if (text === undefined) {
+          throw new Error(
+            unresolvedInputReason(port.handle, nodeById.get(edge.source), resolvedOutputs),
+          );
+        }
         inputs.push({ handle: port.handle, text });
         continue;
       }
@@ -613,7 +710,11 @@ const resolveActionInputsFor = async (
       const url = [sourceData.image, sourceData.video, sourceData.sourceUrl].find(
         (value): value is string => typeof value === 'string' && value.length > 0,
       );
-      if (!url) throw new Error(`The input on "${port.handle}" is not ready`);
+      if (!url) {
+        throw new Error(
+          unresolvedInputReason(port.handle, nodeById.get(edge.source), resolvedOutputs),
+        );
+      }
       // A reference node already knows which Library asset it holds, and that id is
       // the only way a backend op can register its result as a DERIVATIVE of this.
       const assetId =
@@ -730,7 +831,12 @@ const getNodeReadiness = (
       if (!inputAvailable) {
         return {
           ready: false,
-          reason: `Missing connected input for ${targetHandle || 'string input'}`,
+          blockedNodeId: edge.source,
+          reason: unresolvedInputReason(
+            targetHandle || 'string input',
+            nodeById.get(edge.source),
+            resolvedOutputs,
+          ),
         };
       }
     }
@@ -759,7 +865,11 @@ const getNodeReadiness = (
       resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }),
     );
     if (!hasVideo) {
-      return { ready: false, reason: 'Missing connected input for video' };
+      return {
+        ready: false,
+        blockedNodeId: videoEdges[0].source,
+        reason: unresolvedInputReason('video', nodeById.get(videoEdges[0].source), resolvedOutputs),
+      };
     }
     return { ready: true };
   }
@@ -774,7 +884,15 @@ const getNodeReadiness = (
     );
     return hasVideo
       ? { ready: true }
-      : { ready: false, reason: 'Missing connected input for video' };
+      : {
+          ready: false,
+          blockedNodeId: videoEdges[0].source,
+          reason: unresolvedInputReason(
+            'video',
+            nodeById.get(videoEdges[0].source),
+            resolvedOutputs,
+          ),
+        };
   }
 
   if (node.type === 'extendVideo') {
@@ -786,7 +904,11 @@ const getNodeReadiness = (
       resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }),
     );
     if (!hasVideo) {
-      return { ready: false, reason: 'Missing connected input for video' };
+      return {
+        ready: false,
+        blockedNodeId: videoEdges[0].source,
+        reason: unresolvedInputReason('video', nodeById.get(videoEdges[0].source), resolvedOutputs),
+      };
     }
 
     const promptEdges = incomingEdges.filter((edge) => edge.targetHandle === 'prompt');
@@ -795,7 +917,15 @@ const getNodeReadiness = (
         .map((edge) => resolveTextInput(edge, resolvedOutputs, nodeById, edges))
         .find(Boolean);
       if (!promptValue) {
-        return { ready: false, reason: 'Missing connected input for prompt' };
+        return {
+          ready: false,
+          blockedNodeId: promptEdges[0].source,
+          reason: unresolvedInputReason(
+            'prompt',
+            nodeById.get(promptEdges[0].source),
+            resolvedOutputs,
+          ),
+        };
       }
     }
 
@@ -848,7 +978,18 @@ const getNodeReadiness = (
       return { ready: false, awaiting: true, reason: 'HyperFrames Agent is still working' };
     }
     const prompt = getPromptValue(node, incomingEdges, resolvedOutputs, nodeById, edges);
-    if (!prompt.value) return { ready: false, reason: 'Add or connect a prompt' };
+    if (!prompt.value && !prompt.fromCollection) {
+      if (!prompt.fromEdge) return { ready: false, reason: 'Add or connect a prompt' };
+      return {
+        ready: false,
+        blockedNodeId: prompt.blockedNodeId,
+        reason: unresolvedInputReason(
+          'prompt',
+          prompt.blockedNodeId ? nodeById.get(prompt.blockedNodeId) : undefined,
+          resolvedOutputs,
+        ),
+      };
+    }
     return { ready: true };
   }
 
@@ -860,22 +1001,35 @@ const getNodeReadiness = (
     const def = actionDef((node.data as Record<string, unknown>).actionId);
     if (!def) return { ready: false, reason: 'Pick an operation for this action' };
     for (const port of def.inputs) {
-      const edge = incomingEdges.find((candidate) => candidate.targetHandle === port.handle);
-      if (!edge) return { ready: false, reason: `Connect ${port.modality} to "${port.handle}"` };
-      // A collection satisfies ANY port modality: the fan-out unwraps it to one item
-      // per run, and the items are already type-locked to the batch's `itemType`.
-      // Checking this only on the video port (as the first cut did) made a batch of
-      // prompts feeding a text op read as permanently not-ready, and the run bailed in
-      // preflight without saying why.
-      const available =
-        resolvedOutputs.get(edge.source)?.type === 'collection' ||
-        (port.modality === 'text'
-          ? resolveTextInput(edge, resolvedOutputs, nodeById, edges) !== undefined
-          : port.modality === 'image'
-            ? Boolean(resolveImageInput(edge, resolvedOutputs, nodeById))
-            : Boolean(resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true })));
-      if (!available) {
-        return { ready: false, reason: `Waiting on the ${port.modality} feeding "${port.handle}"` };
+      // EVERY edge on the port, not just the first. Judging a many-input port by one
+      // wire let the scheduler start the node while its other sources were still
+      // unresolved, and execution then died on `The text feeding "in" is not ready`
+      // with both wires plainly drawn (#305) — the same early start that handed Stitch
+      // one clip (#304).
+      const wired = incomingEdges.filter((candidate) => candidate.targetHandle === port.handle);
+      if (wired.length === 0)
+        return { ready: false, reason: `Connect ${port.modality} to "${port.handle}"` };
+      for (const edge of wired) {
+        // A collection satisfies ANY port modality: a many-input port takes its items
+        // as its inputs, and a single-input port is fanned out one item per run. The
+        // items are already type-locked to the batch's `itemType`. Checking this only
+        // on the video port (as the first cut did) made a batch of prompts feeding a
+        // text op read as permanently not-ready, and the run bailed in preflight
+        // without saying why.
+        const available =
+          resolvedOutputs.get(edge.source)?.type === 'collection' ||
+          (port.modality === 'text'
+            ? resolveTextInput(edge, resolvedOutputs, nodeById, edges) !== undefined
+            : port.modality === 'image'
+              ? Boolean(resolveImageInput(edge, resolvedOutputs, nodeById))
+              : Boolean(resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true })));
+        if (!available) {
+          return {
+            ready: false,
+            blockedNodeId: edge.source,
+            reason: unresolvedInputReason(port.handle, nodeById.get(edge.source), resolvedOutputs),
+          };
+        }
       }
     }
     return { ready: true };
@@ -928,10 +1082,18 @@ const getNodeReadiness = (
   if (UNIMPLEMENTED_RUNNABLE_TYPES[node.type as StudioNodeType]) return { ready: true };
 
   const prompt = getPromptValue(node, incomingEdges, resolvedOutputs, nodeById, edges);
-  if (!prompt.value) {
+  // `fromCollection` is a batch on the prompt port: the fan-out unwraps it to one item
+  // per run, so there is no single string to find here and there never will be (#300).
+  if (!prompt.value && !prompt.fromCollection) {
+    if (!prompt.fromEdge) return { ready: false, reason: 'Missing required prompt' };
     return {
       ready: false,
-      reason: prompt.fromEdge ? 'Missing prompt input' : 'Missing required prompt',
+      blockedNodeId: prompt.blockedNodeId,
+      reason: unresolvedInputReason(
+        'prompt',
+        prompt.blockedNodeId ? nodeById.get(prompt.blockedNodeId) : undefined,
+        resolvedOutputs,
+      ),
     };
   }
 
@@ -1068,6 +1230,7 @@ type WorkflowPreflightIssue = {
 const buildOptimisticPreflightOutputs = (
   executableNodes: StudioNode[],
   nodes: StudioNode[],
+  edges: Edge[],
 ): Map<string, NodeOutput> => {
   const outputs = new Map<string, NodeOutput>();
   for (const node of executableNodes) {
@@ -1094,10 +1257,12 @@ const buildOptimisticPreflightOutputs = (
         outputs.set(node.id, { type: 'collection', itemType, items: [] });
       }
     } else if (node.type === 'router') {
-      // A router only knows its modality once it is locked; before that, asserting one
-      // would invent a constraint. Left unset so the consumer is judged on its own
-      // inputs rather than on a guess.
-      const locked = (node.data as Record<string, unknown>).lockedType;
+      // The modality it is stamped with, or — when nothing has stamped it yet — the one
+      // its own wire implies. Reading `data.lockedType` alone left an unstamped router
+      // with no preflight output at all, so everything downstream of a plainly
+      // connected router was refused before the run started (#301). `routerLockedType`
+      // is the contracts rule that derives it, and it is what the run itself stamps.
+      const locked = routerLockedType(node, edges, nodes);
       if (locked === 'text') outputs.set(node.id, { type: 'text', value: 'preflight-ready' });
       else if (locked === 'image') {
         outputs.set(node.id, { type: 'image', base64: 'preflight-ready', mimeType: 'image/png' });
@@ -1110,6 +1275,15 @@ const buildOptimisticPreflightOutputs = (
   }
 
   for (const node of nodes) {
+    // Sources that never run, and so never appear in `executableNodes` above. Without
+    // them preflight refuses a graph the run itself would have completed.
+    if (node.type === 'element') {
+      const previewUrl = asTrimmedString((node.data as Record<string, unknown>).previewUrl);
+      if (isHttpUrl(previewUrl)) {
+        outputs.set(node.id, { type: 'image', base64: 'preflight-ready', mimeType: 'image/png' });
+      }
+      continue;
+    }
     if (!hasHydratableMediaReference(node)) continue;
     if (node.type === 'image') {
       outputs.set(node.id, {
@@ -1130,7 +1304,7 @@ const findWorkflowPreflightIssue = (
   edges: Edge[],
   mustRegenerate: Set<string>,
 ): WorkflowPreflightIssue | undefined => {
-  const resolvedOutputs = buildOptimisticPreflightOutputs(executableNodes, nodes);
+  const resolvedOutputs = buildOptimisticPreflightOutputs(executableNodes, nodes, edges);
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const failedNodes = new Set<string>();
 
@@ -1162,9 +1336,10 @@ const surfacePreflightIssue = (
   });
 
   const blockedNode = nodes.find((node) => node.id === issue.blockedNodeId);
-  const isMissingImageReference =
-    blockedNode?.type === 'image' &&
-    issue.reason.startsWith('Missing connected input for ref-image');
+  // Structure, not the sentence. This used to sniff `issue.reason` for the literal
+  // "Missing connected input for ref-image", which tied a friendly toast to the exact
+  // wording of a message — so improving the message silently downgraded the toast.
+  const isMissingImageReference = referenceIsEmpty(blockedNode);
   controls.show?.({
     title: isMissingImageReference ? 'Reference image required' : 'Flow needs input',
     description: isMissingImageReference
@@ -1454,6 +1629,23 @@ export async function executeWorkflow(
       const value = normalizeText((node.data as any).value);
       if (value) {
         resolvedOutputs.set(node.id, { type: 'text', value });
+      }
+    }
+
+    // An Element is a SOURCE, like an image node: it never runs, so nothing else ever
+    // put it in the output map, and a generator wired to one reported
+    // "Missing connected input for ref-image" with the wire on screen (#290). Seeding
+    // it here — rather than teaching each resolver about a fifth node type — is what
+    // makes readiness and the payload builder agree, because both read this map.
+    if (node.type === 'element') {
+      const previewUrl = asTrimmedString((node.data as Record<string, unknown>).previewUrl);
+      if (isHttpUrl(previewUrl)) {
+        resolvedOutputs.set(node.id, {
+          type: 'image',
+          base64: '',
+          mimeType: 'image/png',
+          url: previewUrl,
+        });
       }
     }
 
@@ -2310,9 +2502,9 @@ export async function executeWorkflow(
       }
 
       if (node.type === 'extendVideo') {
-        const payload = buildExtendVideoPayload(node, resolvedOutputs, nodes, edges, brandId);
+        const built = buildExtendVideoPayload(node, resolvedOutputs, nodes, edges, brandId);
 
-        if (!payload) {
+        if (!built) {
           updateNodeStatus(nodeId, 'failed', 'Missing required inputs or prompt');
           return false;
         }
@@ -2323,6 +2515,33 @@ export async function executeWorkflow(
         ) {
           updateNodeStatus(nodeId, 'failed', 'Video extension execution unavailable');
           return false;
+        }
+
+        // The endpoint takes the clip's BYTES on `reference_video`; a clip wired from
+        // the Library is a signed URL. Reading it here is what stops the request going
+        // out with a field the schema has no place for (#291).
+        // ponytail: whole-clip base64 in the page. The durable fix is the endpoint
+        // resolving a signed URL the way it already does for `reference_images` — a
+        // backend change, so it is not this one.
+        let payload = built;
+        if (!('data' in payload.video)) {
+          try {
+            const clip = await fetchBlob(payload.video.uri, 'video');
+            payload = {
+              ...payload,
+              video: {
+                data: await blobToBase64(clip),
+                mimeType: clip.type || 'video/mp4',
+              },
+            };
+          } catch (error) {
+            updateNodeStatus(
+              nodeId,
+              'failed',
+              error instanceof Error ? error.message : 'Could not read the connected clip',
+            );
+            return false;
+          }
         }
         const backendPayload = toBackendExtendVideoPayload(payload);
         const result = await controls.executeVideoExtension(nodeId, backendPayload);
