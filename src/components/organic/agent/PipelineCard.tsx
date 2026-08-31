@@ -225,6 +225,12 @@ type PipelineCardProps = {
 
 export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineCardProps) {
   const quality = qualityPercent(card.quality?.overallScore);
+  // WHY a flagged draft was flagged. A passing draft's reviewer notes are not the user's
+  // problem; a failed one's are, and a bare percentage names none of them.
+  const qualityGaps =
+    card.quality && card.quality.passed === false
+      ? [...(card.quality.blockingIssues ?? []), ...(card.quality.requiredFixes ?? [])]
+      : [];
   // ONE status presentation with the plan row: the resolver owns the vocabulary,
   // conceptStatus adds the `kind` that separates real progress from a run we have
   // lost sight of, and media failure from a job that died with nothing to show.
@@ -350,6 +356,14 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
           {quality != null ? ` · ${quality}%` : ''}
         </StatusLabel>
       </div>
+
+      {qualityGaps.length > 0 ? (
+        <ul className="space-y-0.5 text-2xs text-amber-600 dark:text-amber-500">
+          {qualityGaps.map((gap) => (
+            <li key={gap}>{gap}</li>
+          ))}
+        </ul>
+      ) : null}
 
       {card.checkpoint ? (
         <CheckpointStepper checkpoint={card.checkpoint} />

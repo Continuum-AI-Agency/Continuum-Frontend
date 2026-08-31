@@ -33,6 +33,8 @@ type FailedEvent = Extract<PublishEvent, { type: 'failed' }>;
 type PublishIntent = {
   publishable: boolean;
   blockers: { reason: string; message: string }[];
+  /** Non-blocking gaps the confirmation dialog shows alongside the blockers. */
+  warnings: { reason: string; message: string }[];
   platform: string;
   format: string;
   account: { id: string | null; source: string };

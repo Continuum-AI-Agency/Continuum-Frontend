@@ -7,6 +7,7 @@ import type {
   MediaSearchResultsFrame,
   OrganicPostCardData,
   OrganicTrendChartData,
+  PipelineQuality,
   PipelineStage,
   PlanItem,
   ProposedPlan,
@@ -152,15 +153,10 @@ export type PipelinePreview = {
   format: string | null;
 };
 
-export type PipelineQuality = {
-  passed: boolean;
-  overallScore: number;
-  brandFitScore?: number;
-  platformFitScore?: number;
-  noveltyScore?: number;
-  complianceScore?: number;
-  summary?: string;
-};
+// Defined once in @continuum/contracts and re-exported here so the emit side and this
+// render shape cannot drift — the hand-rolled copy that used to live here is exactly how
+// `blockingIssues`/`requiredFixes` reached the wire but never the screen.
+export type { PipelineQuality };
 
 export type PipelineCardStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
