@@ -11,6 +11,7 @@ import {
 import type { Edge } from '@xyflow/react';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { startHyperframesTurn } from '@/lib/api/hyperframesAgent.client';
+import { markRenderStartedHere } from '@/lib/client-render/ownedRuns';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { HyperframesAgentNodeData, StudioNode } from '../types';
 import { effectiveBrandBookPieces } from './brandEnforcement';
@@ -125,6 +126,9 @@ export async function startHyperframesAgentNode(params: {
     origin: { surface: 'ai-studio', roomId: params.roomId, nodeId: params.nodeId },
   };
   useAgentRunStore.getState().upsertRun(run);
+  // The render job the backend enqueues for this run may be picked up by this tab
+  // without an inbox click — the node's own copy already promises that it will be.
+  markRenderStartedHere(response.runId);
   studio.updateNodeData(params.nodeId, {
     sessionId: response.sessionId,
     activeRunId: response.runId,

@@ -10,8 +10,22 @@ import {
   captureHyperframesReviewFrames,
   renderHyperframesVideo,
 } from '@/lib/hyperframes-agent/browserRenderer';
+import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
+import type { HyperframesAgentNodeData } from '@/StudioCanvas/types';
 import { persistTimelineRender } from '@/StudioCanvas/utils/persistTimelineRender';
 import type { ClientRenderExecutor } from '../executorRegistry';
+
+/**
+ * Mirror the render's real phase onto the canvas node.
+ *
+ * The node's own status was written once, optimistically, when the turn was posted and
+ * never again — so `labelForStatus`'s 'reviewing' and 'rendering' cases were unreachable
+ * and a run that WAS rendering still read "Queued" (Airtable #296/#295). A no-op when
+ * this tab has some other canvas open, because `updateNodeData` ignores an unknown id.
+ */
+const markNode = (nodeId: string, data: Partial<HyperframesAgentNodeData>): void => {
+  useStudioStore.getState().updateNodeData(nodeId, data);
+};
 
 const waitForWork = (signal: AbortSignal): Promise<void> =>
   new Promise((resolve, reject) => {
@@ -41,13 +55,17 @@ export const executeHyperframesClientRender: ClientRenderExecutor = async (conte
     );
 
     if (work.kind === 'completed') {
+      markNode(spec.nodeId, { status: 'completed', isExecuting: false, isComplete: true });
       return {
         resultAssetIds: work.resultAssetIds,
         title: 'HyperFrames video finished',
         description: 'The video is saved to Library and ready on the canvas.',
       };
     }
-    if (work.kind === 'failed') throw new Error(work.message);
+    if (work.kind === 'failed') {
+      markNode(spec.nodeId, { status: 'failed', isExecuting: false, error: work.message });
+      throw new Error(work.message);
+    }
     if (work.kind === 'waiting') {
       await context.update({ state: 'claimed', phase: 'Waiting for the agent' });
       await waitForWork(context.signal);
@@ -73,6 +91,7 @@ export const executeHyperframesClientRender: ClientRenderExecutor = async (conte
 
     if (work.kind === 'review') {
       await context.update({ state: 'rendering', progress: 0, phase: 'Reviewing frames' });
+      markNode(spec.nodeId, { status: 'reviewing', isExecuting: true, progress: 0 });
       const frames = await captureHyperframesReviewFrames({
         composition,
         timestampsSeconds: work.timestampsSeconds,
@@ -123,6 +142,7 @@ export const executeHyperframesClientRender: ClientRenderExecutor = async (conte
     }
 
     await context.update({ state: 'rendering', progress: 0, phase: 'Rendering video' });
+    markNode(spec.nodeId, { status: 'rendering', isExecuting: true, progress: 0 });
     let lastReportedBucket = -1;
     const rendered = await renderHyperframesVideo({
       composition,
@@ -131,6 +151,7 @@ export const executeHyperframesClientRender: ClientRenderExecutor = async (conte
         const bucket = Math.floor(progress * 10);
         if (bucket <= lastReportedBucket) return;
         lastReportedBucket = bucket;
+        markNode(spec.nodeId, { status: 'rendering', progress });
         void Promise.all([
           context.update({ state: 'rendering', progress, phase: 'Rendering video' }),
           reportHyperframesProgress(
@@ -162,6 +183,13 @@ export const executeHyperframesClientRender: ClientRenderExecutor = async (conte
       context.signal,
       context.leaseToken,
     );
+    markNode(spec.nodeId, {
+      status: 'completed',
+      isExecuting: false,
+      isComplete: true,
+      progress: 1,
+      renderOutputAssetId: persisted.assetId,
+    });
     return {
       resultAssetIds: [persisted.assetId],
       title: 'HyperFrames video finished',

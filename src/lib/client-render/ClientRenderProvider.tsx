@@ -25,9 +25,19 @@ import {
 import { useStudioRenderQueue } from '@/lib/studio-render/StudioRenderProvider';
 import { probeClientRenderCapabilities } from './capabilities';
 import { getClientRenderExecutor, hasClientRenderExecutor } from './executorRegistry';
+import { shouldAutoRunClientRenderJob } from './ownedRuns';
 import { registerDefaultClientRenderExecutors } from './registerDefaultExecutors';
 
 const POLL_MS = 12_000;
+/**
+ * The queue is polled whether or not the inbox is open.
+ *
+ * It used to be polled ONLY while open, which made the bell badge unreachable: it is
+ * derived from `jobs`, `jobs` stays empty until a poll runs, and a poll only ran once
+ * someone had already opened the thing the badge exists to point at. Jobs waited for
+ * weeks behind that (Airtable #296).
+ */
+const IDLE_POLL_MS = 60_000;
 const HEARTBEAT_MS = 20_000;
 const CLIENT_ID_KEY = 'continuum:client-render:device';
 const OPEN_INBOX_EVENT = 'continuum:client-render:open-inbox';
@@ -101,9 +111,8 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
   }, [activeBrandId]);
 
   useEffect(() => {
-    if (!inboxOpen) return;
     void refresh();
-    const interval = window.setInterval(() => void refresh(), POLL_MS);
+    const interval = window.setInterval(() => void refresh(), inboxOpen ? POLL_MS : IDLE_POLL_MS);
     return () => window.clearInterval(interval);
   }, [inboxOpen, refresh]);
 
@@ -283,6 +292,19 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
     },
     [replaceJob, studioQueue],
   );
+
+  // A run started in THIS tab renders here, without waiting for a click on an inbox the
+  // person has no reason to open — the node that started it already promised as much.
+  // Every other job keeps the consent step: this is not a background worker for the
+  // whole brand's queue.
+  const autoRun = useRef(new Set<string>());
+  useEffect(() => {
+    for (const job of jobs) {
+      if (!shouldAutoRunClientRenderJob(job) || autoRun.current.has(job.id)) continue;
+      autoRun.current.add(job.id);
+      void run(job).catch(() => autoRun.current.delete(job.id));
+    }
+  }, [jobs, run]);
 
   const value = useMemo<ClientRenderContextValue>(
     () => ({
