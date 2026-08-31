@@ -24,12 +24,33 @@ import { mintSessionWithPassword } from './support/auth';
 //   bun run dev:fe:local-supabase   (PORT=3001)
 //   Run with: bun run studio:node-chrome:bench
 //
+// The node-chrome ticket wave (Airtable #284, #297, #295, #283, #292) added four more
+// measurements, all read from the REAL rendered boxes and all GENERIC — they run over
+// every seeded node, so the next node to make the same mistake fails here:
+//   · draggable — no `nodrag` between the node root and its body, or its title bar.
+//     `nodrag` is React Flow's own "never start a drag here" class; a node whose whole
+//     NodeContent carries it cannot be moved at all. Two nodes are then really dragged
+//     with the mouse and their position asserted to change.
+//   · the card fills the node box — `Card`'s default width is `w-sm` (384px), so a node
+//     created 420 wide drew a 384px card and the NodeResizer's handles floated 36px clear
+//     of what the node actually rendered.
+//   · nothing paints over the node's own title — `document.elementFromPoint` across the
+//     title label must hit the label, not a floating pill parked at `top-2`.
+//   · no config field a mode ignores — `video.extractFrames` with `mode: 'single'` reads
+//     `atSec` and never `count`, so `count` is not offered.
+//
 // UN-EXERCISED HOPS, STATED EXPLICITLY — this bench does NOT cover:
 //   · The form-heavy nodes' interior below the first fold (apiRender's variable fields,
 //     publishing's target search). Those are scroll regions; only their chrome is asserted.
 //   · Any node's behaviour. Nothing is run, generated or published here.
 //   · Hover-revealed overlay controls. The floating Run button is asserted PRESENT and
 //     inside its node, not that it reveals on hover — that is a CSS transition.
+//   · The Design Reference's SPECIMEN. The bench brand has no design system, so the
+//     specimen pane renders its empty state and Generate is disabled. What is asserted is
+//     the layout contract — the token pane scrolls and Generate does not sit on it — not a
+//     generated plate.
+//   · Whether a dragged node's new position SURVIVES a reload. The drag is asserted at the
+//     rendered transform; persistence is `canvas_sessions`' own bench.
 
 const LOCAL_OWNER_EMAIL = 'local@continuum.test';
 const LOCAL_OWNER_PASSWORD = 'localdev123';
@@ -106,15 +127,56 @@ const CASES = [
   { id: 'chrome-overlay', type: 'action', overrides: { actionId: 'video.overlay' } },
 ] as const;
 
+// The nodes the node-chrome tickets name. Seeded alongside CASES; the edge-to-edge test
+// runs over CASES only (these carry control strips and padded bodies by design), while
+// every geometry test below runs over both lists.
+const CHROME_CASES = [
+  // #284 and #297: both put `nodrag` on their whole NodeContent.
+  { id: 'chrome-layers', type: 'layerEditor', overrides: {} },
+  { id: 'chrome-video', type: 'video', overrides: {} },
+  // The third instance of the same mistake, which neither ticket named.
+  { id: 'chrome-element', type: 'element', overrides: {} },
+  // #295: the Style pill over the title, and a card narrower than its own node box.
+  { id: 'chrome-hyperframes', type: 'hyperframesAgent', overrides: {} },
+  // #283: title truncated, body clipped mid-word, Generate floating on the text.
+  {
+    id: 'chrome-designref',
+    type: 'designRef',
+    overrides: {
+      mode: 'both',
+      section: null,
+      tokenSummary:
+        'Typefaces: Playfair Display, Instrument Sans, Instrument Serif and JetBrains Mono. ' +
+        'No other family may appear. Display copy sets in Playfair at 48/56 with -2% tracking; ' +
+        'body copy sets in Instrument Sans at 16/24. Numerals are tabular everywhere a column ' +
+        'of figures can occur. Never letterspace lowercase. Never synthesise a weight the ' +
+        'family does not ship — if the weight is missing, change the family, not the render.',
+    },
+  },
+  // #292: the reporter's exact config — five frames asked for, one returned.
+  {
+    id: 'chrome-frames',
+    type: 'action',
+    overrides: { actionId: 'video.extractFrames', config: { mode: 'single', count: 4 } },
+  },
+] as const;
+
+const ALL_CASES = [...CASES, ...CHROME_CASES] as ReadonlyArray<{
+  id: string;
+  type: string;
+  overrides: Record<string, unknown>;
+}>;
+
 function buildGraph(): { nodes: SeededNode[]; edges: unknown[] } {
-  const nodes = CASES.map((testCase, index) =>
+  // A grid rather than a row: eleven nodes on one line zooms fitView down far enough that
+  // a pointer drag no longer resolves. Four per row keeps every node comfortably clear of
+  // the floating toolbar (top-left) and the composer bar (bottom), both of which paint
+  // OVER nodes — and an element screenshot captures whatever is on top of it.
+  const nodes = ALL_CASES.map((testCase, index) =>
     makeNode(
       testCase.id,
       testCase.type,
-      // One row, so fitView centres them in the clear band between the floating
-      // toolbar (top-left) and the composer bar (bottom) — both paint OVER nodes, and an
-      // element screenshot captures whatever is on top of it.
-      { x: index * 360, y: 0 },
+      { x: (index % 4) * 560, y: Math.floor(index / 4) * 620 },
       testCase.overrides,
     ),
   );
@@ -195,6 +257,97 @@ async function bodyFill(page: Page, nodeId: string) {
       nestedBoxes: nested,
     };
   }, nodeId);
+}
+
+/**
+ * The four chrome facts, all read off the REAL rendered boxes.
+ *
+ * `nodrag` is React Flow's own class: a pointerdown whose element chain up to the node
+ * carries it never starts a drag. So "does this node drag from here" is literally "is
+ * there a `nodrag` between here and the node root", and that is what is measured — no
+ * heuristic, the same predicate the library uses.
+ */
+async function nodeChrome(page: Page, nodeId: string) {
+  return page.evaluate((id) => {
+    const node = document.querySelector(`.react-flow__node[data-id="${id}"]`);
+    if (!node) return null;
+    const card = node.querySelector('[data-slot="card"]') as HTMLElement | null;
+    const body = node.querySelector('[data-slot="card-content"]') as HTMLElement | null;
+    const title = node.querySelector('[data-slot="node-title"]') as HTMLElement | null;
+    if (!card || !body) return null;
+
+    const box = (el: Element) => {
+      const rect = el.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    };
+
+    /** The first `nodrag` between `el` and the node root, or null when the drag can start. */
+    const blockedBy = (el: Element | null): string | null => {
+      for (let cursor = el; cursor && cursor !== node; cursor = cursor.parentElement) {
+        if (cursor.classList.contains('nodrag')) return String(cursor.className).slice(0, 90);
+      }
+      return null;
+    };
+
+    // Whatever the NODE paints on its own title. An ancestor (the bar, the card) is not a
+    // cover, and neither is app chrome that happens to float above the canvas — the
+    // floating toolbar overlaps whatever node fitView parks under it, which is a fact about
+    // where this bench puts nodes, not about the node. The defect #295 filed is a node's
+    // OWN child painted over its OWN title, so the hit has to be inside the node.
+    let titleCoveredBy: string | null = null;
+    if (title) {
+      const rect = title.getBoundingClientRect();
+      for (const fraction of [0.04, 0.2, 0.5, 0.8]) {
+        const hit = document.elementFromPoint(
+          rect.left + rect.width * fraction,
+          rect.top + rect.height / 2,
+        );
+        if (!hit || !node.contains(hit)) continue;
+        if (hit === title || title.contains(hit) || hit.contains(title)) continue;
+        titleCoveredBy = `${hit.tagName}.${String(hit.className).slice(0, 90)}`;
+        break;
+      }
+    }
+
+    return {
+      nodeBox: box(node),
+      cardBox: box(card),
+      bodyBlockedBy: blockedBy(body),
+      titleBlockedBy: title ? blockedBy(title) : null,
+      hasTitleBar: Boolean(title),
+      titleCoveredBy,
+      titleBox: title ? box(title) : null,
+      titleText: title?.textContent ?? null,
+      titleTruncated: title ? title.scrollWidth > title.clientWidth + 1 : null,
+    };
+  }, nodeId);
+}
+
+/** The node's own transform, in flow coordinates — what a drag has to change. */
+async function nodeTranslate(page: Page, nodeId: string) {
+  return page.evaluate((id) => {
+    const node = document.querySelector(`.react-flow__node[data-id="${id}"]`) as HTMLElement | null;
+    const match = /translate\(\s*(-?[\d.]+)px[,\s]+(-?[\d.]+)px/.exec(node?.style.transform ?? '');
+    if (!match?.[1] || !match[2]) return null;
+    return { x: Number.parseFloat(match[1]), y: Number.parseFloat(match[2]) };
+  }, nodeId);
+}
+
+/** A real mouse drag from a point inside the node, in screen pixels. */
+async function dragBy(
+  page: Page,
+  origin: { x: number; y: number },
+  delta: { x: number; y: number },
+) {
+  await page.mouse.move(origin.x, origin.y);
+  await page.mouse.down();
+  await page.mouse.move(origin.x + delta.x / 2, origin.y + delta.y / 2, { steps: 6 });
+  // A human drag is not six instant frames: without a tick React Flow's position update
+  // has not rendered by the time the button comes up, and the node reads as unmoved.
+  await page.waitForTimeout(60);
+  await page.mouse.move(origin.x + delta.x, origin.y + delta.y, { steps: 6 });
+  await page.waitForTimeout(60);
+  await page.mouse.up();
 }
 
 async function openCanvas(page: Page) {
@@ -346,14 +499,205 @@ test.describe('studio node chrome — edge to edge', () => {
     await expect(page.getByText('Rotate', { exact: true }).first()).toBeVisible();
     await expect(inspector.getByText('Configuration')).toBeVisible();
 
-    const degrees = inspector.locator('#action-config-chrome-action-degrees');
+    // `degrees` is −360…360 at step 1 — a range a drag CAN resolve — so the panel draws a
+    // fader, not a number box. Its id lives on the field, and the value round-trips through
+    // node data, so reading it back is the proof the write landed.
+    const degrees = inspector.locator('[data-slot="slider-field"]').filter({ hasText: 'Degrees' });
     await expect(degrees).toBeVisible();
+    const range = degrees.locator('input[type="range"]');
+    await expect(range).toHaveValue('90');
 
     // It is the WRITE path, not a readout — the same `useNodeConfigPatch` the gear uses.
-    await degrees.fill('90');
-    await expect(degrees).toHaveValue('90');
+    // Clicking the middle of the track asks for the midpoint of −360…360.
+    const track = degrees.locator('[data-slot="slider-track"]');
+    const trackBox = await track.boundingBox();
+    expect(trackBox).not.toBeNull();
+    if (trackBox) {
+      await page.mouse.click(trackBox.x + trackBox.width / 2, trackBox.y + trackBox.height / 2);
+    }
+    await expect
+      .poll(async () => Number.parseFloat((await range.inputValue()) || 'NaN'))
+      .toBeLessThan(60);
+    expect(Number.parseFloat(await range.inputValue())).toBeGreaterThan(-60);
 
     await page.screenshot({ path: `${SCREENSHOT_DIR}/action-inspector.png` });
+  });
+
+  // ── the node-chrome ticket wave ───────────────────────────────────────────────────
+
+  test('every node drags from its body and from its title bar', async () => {
+    await openCanvas(page);
+    await expect(nodeBox(page, 'chrome-action')).toBeVisible({ timeout: 60_000 });
+
+    const blocked: string[] = [];
+    for (const testCase of ALL_CASES) {
+      await expect(nodeBox(page, testCase.id)).toBeVisible({ timeout: 30_000 });
+      const chrome = await nodeChrome(page, testCase.id);
+      expect(chrome, `${testCase.type}: node did not render a card + body`).not.toBeNull();
+      if (!chrome) continue;
+      if (chrome.bodyBlockedBy) blocked.push(`${testCase.type} body → ${chrome.bodyBlockedBy}`);
+      if (chrome.titleBlockedBy) blocked.push(`${testCase.type} title → ${chrome.titleBlockedBy}`);
+    }
+
+    // `nodrag` on a whole NodeContent is React Flow refusing to start a drag from the node
+    // at all — the defect behind #284 and #297, and the shape every node with an interior
+    // drop zone can repeat. It belongs on the controls.
+    expect(blocked, 'nodrag between a node root and its own body or title bar').toEqual([]);
+  });
+
+  test("nothing paints over a node's own title", async () => {
+    await openCanvas(page);
+    await expect(nodeBox(page, 'chrome-hyperframes')).toBeVisible({ timeout: 60_000 });
+
+    const covered: string[] = [];
+    const truncated: string[] = [];
+    for (const testCase of ALL_CASES) {
+      const chrome = await nodeChrome(page, testCase.id);
+      if (!chrome?.hasTitleBar) continue;
+      if (chrome.titleCoveredBy) {
+        covered.push(`${testCase.id} "${chrome.titleText}" ← ${chrome.titleCoveredBy}`);
+      }
+      if (chrome.titleTruncated) {
+        truncated.push(
+          `${testCase.id} "${chrome.titleText}" in ${chrome.titleBox?.width.toFixed(0)}px`,
+        );
+      }
+    }
+
+    // #295: a Style pill parked at `left-2 top-2` on a node that HAS a title bar painted
+    // over the first characters of it, so the header read "…mes Agent".
+    expect(covered, 'a floating control is painted over a node title').toEqual([]);
+    // #283: "Design Referen…" — the mode select's widest option starved the title.
+    expect(truncated, 'a node title is truncated at its default width').toEqual([]);
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/titles.png` });
+  });
+
+  test('the card fills its node box, so the selection handles bound what is rendered', async () => {
+    await openCanvas(page);
+    await expect(nodeBox(page, 'chrome-hyperframes')).toBeVisible({ timeout: 60_000 });
+
+    const drift: string[] = [];
+    for (const testCase of ALL_CASES) {
+      const chrome = await nodeChrome(page, testCase.id);
+      if (!chrome) continue;
+      const widthGap = Math.abs(chrome.nodeBox.width - chrome.cardBox.width);
+      const heightGap = Math.abs(chrome.nodeBox.height - chrome.cardBox.height);
+      if (widthGap > 2 || heightGap > 2) {
+        drift.push(
+          `${testCase.type}: node ${chrome.nodeBox.width.toFixed(0)}×${chrome.nodeBox.height.toFixed(0)} vs card ${chrome.cardBox.width.toFixed(0)}×${chrome.cardBox.height.toFixed(0)}`,
+        );
+      }
+    }
+    // #295's "flying point in the end": `Card` defaults to `w-sm` (384px), so a node created
+    // 420 wide drew a 384px card and the resizer's handles sat 36px clear of it.
+    expect(drift, 'a card does not fill its own node box').toEqual([]);
+
+    // And the handles themselves, on the node the ticket filed.
+    const hyper = nodeBox(page, 'chrome-hyperframes');
+    await hyper.click({ position: { x: 12, y: 4 } });
+    const handles = page.locator(
+      '.react-flow__node[data-id="chrome-hyperframes"] .react-flow__resize-control.handle',
+    );
+    await expect(handles.first()).toBeVisible({ timeout: 15_000 });
+
+    const cardRect = await hyper.locator('[data-slot="card"]').boundingBox();
+    expect(cardRect).not.toBeNull();
+    const count = await handles.count();
+    expect(count).toBeGreaterThan(0);
+    for (let index = 0; index < count; index += 1) {
+      const handle = await handles.nth(index).boundingBox();
+      if (!handle || !cardRect) continue;
+      const centre = { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 };
+      expect(centre.x, `handle ${index} sits left of the card`).toBeGreaterThanOrEqual(
+        cardRect.x - 2,
+      );
+      expect(centre.x, `handle ${index} sits right of the card`).toBeLessThanOrEqual(
+        cardRect.x + cardRect.width + 2,
+      );
+      expect(centre.y, `handle ${index} sits above the card`).toBeGreaterThanOrEqual(
+        cardRect.y - 2,
+      );
+      expect(centre.y, `handle ${index} sits below the card`).toBeLessThanOrEqual(
+        cardRect.y + cardRect.height + 2,
+      );
+    }
+
+    await hyper.screenshot({ path: `${SCREENSHOT_DIR}/hyperframes-selected.png` });
+  });
+
+  test('the Design Reference body is readable, and Generate does not sit on it', async () => {
+    await openCanvas(page);
+    const designRef = nodeBox(page, 'chrome-designref');
+    await expect(designRef).toBeVisible({ timeout: 60_000 });
+
+    const pane = designRef.getByTestId('design-ref-tokens');
+    await expect(pane).toBeVisible({ timeout: 15_000 });
+
+    // styleguide.md §4: bound the frame, put the overflow in an inner scroll pane.
+    // "Clipping is a bug" — so the last line has to be REACHABLE, not merely present.
+    const scroll = await pane.evaluate((el) => {
+      const style = getComputedStyle(el);
+      el.scrollTop = el.scrollHeight;
+      return {
+        overflowY: style.overflowY,
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+        scrolledTo: el.scrollTop + el.clientHeight,
+      };
+    });
+    expect(['auto', 'scroll'], 'the token pane must be able to scroll').toContain(scroll.overflowY);
+    expect(scroll.scrolledTo, 'the end of the summary is unreachable').toBeGreaterThanOrEqual(
+      scroll.scrollHeight - 2,
+    );
+
+    // The blue button floating on top of the text is the other half of #283.
+    const generate = designRef.getByRole('button', { name: /Generate|Regenerate/ });
+    await expect(generate).toBeVisible();
+    const paneRect = await pane.boundingBox();
+    const generateRect = await generate.boundingBox();
+    expect(paneRect).not.toBeNull();
+    expect(generateRect).not.toBeNull();
+    if (paneRect && generateRect) {
+      const overlaps =
+        generateRect.x < paneRect.x + paneRect.width &&
+        generateRect.x + generateRect.width > paneRect.x &&
+        generateRect.y < paneRect.y + paneRect.height &&
+        generateRect.y + generateRect.height > paneRect.y;
+      expect(overlaps, 'Generate is painted over the token summary').toBe(false);
+    }
+
+    await designRef.screenshot({ path: `${SCREENSHOT_DIR}/design-reference.png` });
+  });
+
+  test('Extract Frames offers no config field the selected mode ignores', async () => {
+    await openCanvas(page);
+    const frames = nodeBox(page, 'chrome-frames');
+    await expect(frames).toBeVisible({ timeout: 60_000 });
+    await frames.click({ position: { x: 20, y: 60 } });
+
+    const inspector = page.getByTestId('node-inspector');
+    await expect(inspector).toBeVisible({ timeout: 15_000 });
+    // The control id carries the node id, so this is unambiguously `chrome-frames`' own
+    // config rather than whatever the inspector had open before.
+    const modeSelect = inspector.locator('#action-config-chrome-frames-mode');
+    await expect(modeSelect).toBeVisible({ timeout: 15_000 });
+
+    // The reporter's config: mode 'single' with count 4. `single` takes ONE frame at
+    // `atSec` and never reads `count`, so offering `count` is the bug (#292).
+    await expect(inspector.getByText('At Seconds', { exact: true })).toBeVisible();
+    await expect(inspector.getByText('Count', { exact: true })).toHaveCount(0);
+    await expect(inspector.getByText('Interval Seconds', { exact: true })).toHaveCount(0);
+    await expect(inspector.getByText('Threshold', { exact: true })).toHaveCount(0);
+
+    // Every mode is still reachable, and picking one swaps in the field it DOES read.
+    await modeSelect.click();
+    await page.getByRole('option', { name: 'evenly', exact: true }).click();
+
+    await expect(inspector.getByText('Count', { exact: true })).toBeVisible();
+    await expect(inspector.getByText('At Seconds', { exact: true })).toHaveCount(0);
+
+    await inspector.screenshot({ path: `${SCREENSHOT_DIR}/extract-frames-inspector.png` });
   });
 
   test('the widest op config fits the inspector without overflowing it', async () => {
@@ -375,5 +719,66 @@ test.describe('studio node chrome — edge to edge', () => {
     ).toBeLessThanOrEqual(overflow.clientWidth + 1);
 
     await inspector.screenshot({ path: `${SCREENSHOT_DIR}/overlay-inspector.png` });
+  });
+
+  // LAST on purpose: dragging moves nodes, and every test above reads their geometry.
+  test('a real pointer drag from the body moves the node', async () => {
+    await openCanvas(page);
+
+    for (const nodeId of ['chrome-layers', 'chrome-video']) {
+      const locator = nodeBox(page, nodeId);
+      await expect(locator).toBeVisible({ timeout: 60_000 });
+      const before = await nodeTranslate(page, nodeId);
+      const rect = await locator.boundingBox();
+      expect(before, `${nodeId}: no transform to read`).not.toBeNull();
+      expect(rect).not.toBeNull();
+      if (!before || !rect) continue;
+
+      // The centre of the body: past the badge and the Edit button, on the surface the
+      // ticket says cannot be grabbed.
+      await dragBy(
+        page,
+        { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
+        { x: 90, y: 60 },
+      );
+
+      // Poll, don't read once: React Flow writes the new position through React state, so
+      // the transform lands on the next render rather than on `mouse.up()`.
+      await expect
+        .poll(async () => (await nodeTranslate(page, nodeId))?.x ?? before.x, {
+          message: `${nodeId} did not move right`,
+        })
+        .toBeGreaterThan(before.x + 5);
+      const after = await nodeTranslate(page, nodeId);
+      expect(after, `${nodeId}: no transform after the drag`).not.toBeNull();
+      expect(after ? after.y - before.y : 0, `${nodeId} did not move down`).toBeGreaterThan(5);
+    }
+
+    // And from the title bar, on a node that has one.
+    const hyper = nodeBox(page, 'chrome-hyperframes');
+    const beforeHyper = await nodeTranslate(page, 'chrome-hyperframes');
+    const titleRect = await hyper.locator('[data-slot="node-title"]').boundingBox();
+    expect(beforeHyper).not.toBeNull();
+    expect(titleRect).not.toBeNull();
+    if (beforeHyper && titleRect) {
+      await dragBy(
+        page,
+        { x: titleRect.x + titleRect.width / 2, y: titleRect.y + titleRect.height / 2 },
+        { x: 80, y: 50 },
+      );
+      await expect
+        .poll(async () => (await nodeTranslate(page, 'chrome-hyperframes'))?.x ?? beforeHyper.x, {
+          message: 'hyperframes did not drag by its header',
+        })
+        .toBeGreaterThan(beforeHyper.x + 5);
+      const afterHyper = await nodeTranslate(page, 'chrome-hyperframes');
+      expect(afterHyper).not.toBeNull();
+      expect(
+        afterHyper ? afterHyper.y - beforeHyper.y : 0,
+        'hyperframes did not drag by its header',
+      ).toBeGreaterThan(5);
+    }
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/after-drag.png` });
   });
 });
