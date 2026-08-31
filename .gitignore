@@ -20,6 +20,10 @@
 # ignore, and a Turbopack .sst cache is binary — it yields garbage class candidates like
 # `var(--app-$\x00-h)` that fail CSS parsing and 500 EVERY route.
 /.next-*/
+# Turbopack's scratch tree. Same hazard as the .next-* caches above — it is binary,
+# it is regenerated on every dev boot, and Tailwind will scan it if git does not
+# ignore it.
+/private/
 /out/
 
 # production
