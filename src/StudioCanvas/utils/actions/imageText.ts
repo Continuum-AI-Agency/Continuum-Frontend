@@ -26,29 +26,28 @@
 import {
   BRAND_INK_SOURCE_LABEL,
   BRAND_TYPE_SOURCE_LABEL,
-  type BrandInkSource,
   type BrandTypeInputs,
   type BrandTypeSource,
   type BurnInAnchor,
   type DesignSection,
   type DesignToken,
   darkPercentileContrast,
+  deriveLegibleInk,
   type FractionalBox,
   FULL_FRAME,
   type HeadlineToken,
+  hasAnyBrandShape,
   isLiteralHex,
   type MeasureText,
   type PixelBuffer,
   type PlacementPlan,
   type PlacementTreatment,
   type ProbeContrast,
-  deriveLegibleInk,
-  hasAnyBrandShape,
   planPlacement,
-  resolveBrandInk,
-  resolveBrandType,
   type Rgb,
   resolveBox,
+  resolveBrandInk,
+  resolveBrandType,
   type Size,
   sectionForToken,
   type TextStyle,
@@ -91,8 +90,13 @@ export interface HeadlineInk {
   readonly rgb: Rgb;
   /** Set when the config named a token nothing carries and the brand's default was used. */
   readonly substitutedFor?: string;
-  /** `fallback` only ever comes from {@link deriveHeadlineInk} — the brand walker cannot say it. */
-  readonly source: BrandTypeSource;
+  /**
+   * `fallback` only ever comes from {@link deriveHeadlineInk} — the brand walker cannot say it.
+   * `custom` only ever comes from a hex the user picked, and is local to this module on
+   * purpose: `BrandTypeSource` is the ladder of brand SHAPES a value was read from, and it
+   * also types the FACE labels, so a colour nobody read from the brand does not belong in it.
+   */
+  readonly source: BrandTypeSource | 'custom';
   /** The token the colour was named by, when the source named one. */
   readonly tokenName: string | null;
   /** Which of the two measured candidates won, on the fallback rung only. */
@@ -117,6 +121,18 @@ export function resolveHeadlineInk(inputs: BrandTypeInputs, tokenName = ''): Hea
   if (!resolved) return null;
   const rgb = parseHexColour(resolved.hex);
   return rgb ? { rgb, source: resolved.source, tokenName: resolved.tokenName } : null;
+}
+
+/**
+ * The ink a user picked by hand, when they picked one.
+ *
+ * Null for null and for anything that is not a colour, so the caller falls through to the
+ * palette chain rather than rendering a headline in a hex somebody mistyped.
+ */
+export function resolveCustomInk(hex: string | null): HeadlineInk | null {
+  if (!hex) return null;
+  const rgb = parseHexColour(hex);
+  return rgb ? { rgb, source: 'custom', tokenName: null } : null;
 }
 
 // ── Faces ────────────────────────────────────────────────────────────────────────────────
@@ -204,6 +220,9 @@ export const describeHeadlineFaces = (faces: HeadlineFaces): string =>
  * not just that nothing was found.
  */
 export const describeHeadlineInk = (ink: HeadlineInk): string => {
+  if (ink.source === 'custom') {
+    return `${rgbToHex(ink.rgb)} — picked by hand, not from the palette`;
+  }
   if (ink.source === 'fallback') {
     return `no brand colour found — using ${ink.fallbackName ?? 'black'} for legibility`;
   }
@@ -573,6 +592,8 @@ export interface ImageTextSettings {
   readonly offsetY: number;
   readonly marginFrac: number;
   readonly inkToken: string;
+  /** A hand-picked ink that outranks {@link inkToken}. Null means the palette chain decides. */
+  readonly inkHex: string | null;
   readonly measure: number;
   readonly minContrast: number;
   readonly escalate: boolean;
@@ -589,6 +610,7 @@ export const readSettings = (config: Record<string, unknown>): ImageTextSettings
   offsetY: config.offsetY as number,
   marginFrac: config.marginFrac as number,
   inkToken: (config.inkToken as string) ?? '',
+  inkHex: typeof config.inkHex === 'string' ? config.inkHex : null,
   measure: config.measure as number,
   minContrast: config.minContrast as number,
   escalate: config.escalate as boolean,
@@ -728,12 +750,17 @@ export async function setImageText(args: {
   // thread's font set at call time, and the ink is chosen over the box those metrics produce.
   const fontFaceCss = await embedFace(faces.family);
 
+  // A HAND-PICKED INK SKIPS THE LADDER ENTIRELY, and has to: every rung below exists to answer
+  // "the brand did not carry the colour we asked for", which a literal hex cannot be. Running
+  // the refusal against it would reject a colour that is right there in the config.
+  const custom = resolveCustomInk(settings.inkHex);
+
   // THREE STEPS, WORST LAST. A named token nothing carries falls back to the brand's OWN
   // default ink before it falls back to a measurement: the brand has a colour, it just is not
   // the one the config asked for, and reaching past it to a measured black would be a larger
   // substitution than the situation calls for. Every step that substitutes says so.
   const wanted = settings.inkToken.trim();
-  const exact = resolveHeadlineInk(brand, settings.inkToken);
+  const exact = custom ?? resolveHeadlineInk(brand, settings.inkToken);
   // OFF gates BOTH substitutions, not just the measured one. "Do not substitute" cannot mean
   // "substitute a different brand colour instead" — a user who switched this off and picked a
   // swatch wants that swatch or a refusal, and a broken token is exactly when they need to hear
@@ -742,6 +769,8 @@ export async function setImageText(args: {
     throw new Error(inkRefusal(brand, settings.inkToken, faces));
   }
   const substitute = exact ?? (wanted ? resolveHeadlineInk(brand, '') : null);
+  // `substitutedFor` is a claim about a token that went missing, so it never rides on a
+  // hand-picked colour — nothing was substituted for anything there.
   const brandInk = exact ?? (substitute ? { ...substitute, substitutedFor: wanted } : null);
   const ink = brandInk ?? deriveHeadlineInk(args.image, args.headline, faces, settings);
 

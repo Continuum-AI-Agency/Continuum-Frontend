@@ -100,7 +100,9 @@
     ".next/admin-search-e2e/types/**/*.ts",
     ".next/admin-search-e2e/dev/types/**/*.ts",
     ".next/goals-orchestrator-e2e/types/**/*.ts",
-    ".next/goals-orchestrator-e2e/dev/types/**/*.ts"
+    ".next/goals-orchestrator-e2e/dev/types/**/*.ts",
+    ".next/studio-color-picker-e2e/types/**/*.ts",
+    ".next/studio-color-picker-e2e/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

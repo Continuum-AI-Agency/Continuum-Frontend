@@ -40,7 +40,8 @@ const record = (step: string, grade: Grade, detail?: string) => {
   results.push({ step, grade, detail });
   console.log(`${GLYPH[grade]} ${grade.padEnd(4)} ${step}${detail ? ` — ${detail}` : ''}`);
 };
-const check = (step: string, ok: boolean, detail?: string) => record(step, ok ? 'PASS' : 'FAIL', detail);
+const check = (step: string, ok: boolean, detail?: string) =>
+  record(step, ok ? 'PASS' : 'FAIL', detail);
 const note = (message: string) => {
   notes.push(message);
   console.log(`· ${message}`);
@@ -90,7 +91,13 @@ function buildBundle(): string {
   try {
     execFileSync(
       'bun',
-      ['build', 'e2e/support/imageTextRenderBenchEntry.ts', '--target=browser', '--outfile', outfile],
+      [
+        'build',
+        'e2e/support/imageTextRenderBenchEntry.ts',
+        '--target=browser',
+        '--outfile',
+        outfile,
+      ],
       { cwd: process.cwd(), stdio: 'pipe' },
     );
     return readFileSync(outfile, 'utf8');
@@ -118,14 +125,25 @@ async function main(): Promise<void> {
   let run: ImageTextBenchRun;
   try {
     await page.route('**/image-text-render-bench', (route) =>
-      route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body></body></html>' }),
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><html><body></body></html>',
+      }),
     );
-    await page.goto('http://127.0.0.1:4173/image-text-render-bench', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4173/image-text-render-bench', {
+      waitUntil: 'domcontentloaded',
+    });
     await page.addScriptTag({ content: bundle, type: 'module' });
-    await page.waitForFunction(() => Boolean(window.__imageTextRenderBench), null, { timeout: 30_000 });
+    await page.waitForFunction(() => Boolean(window.__imageTextRenderBench), null, {
+      timeout: 30_000,
+    });
     run = (await page.evaluate(() => window.__imageTextRenderBench.run())) as ImageTextBenchRun;
   } catch (error) {
-    record('drive image.text in real Chrome', 'FAIL', `${error}${consoleErrors.length ? ` | ${consoleErrors.join(' | ')}` : ''}`);
+    record(
+      'drive image.text in real Chrome',
+      'FAIL',
+      `${error}${consoleErrors.length ? ` | ${consoleErrors.join(' | ')}` : ''}`,
+    );
     await browser.close();
     finish();
   }
@@ -211,9 +229,7 @@ async function main(): Promise<void> {
   const deep = run.cases[3];
   check(
     'the photo that forces a high floor gets ONE veil at THAT floor, not one per floor tried',
-    deep.veilFloors.length === 1 &&
-      deep.veilFloors[0] === deep.resolvedVeilFloor &&
-      deep.rung >= 4,
+    deep.veilFloors.length === 1 && deep.veilFloors[0] === deep.resolvedVeilFloor && deep.rung >= 4,
     `steps [${deep.steps.join(', ')}] at rung ${deep.rung} — the stacking bug drew ` +
       `${deep.rung - 1} veils here, ${stackedCoverage(deep.rung - 1)} % white over the WHOLE frame`,
   );
@@ -288,6 +304,24 @@ async function main(): Promise<void> {
     ),
     run.typeButNoInkError ?? 'the op set type in a colour no brand shape carries',
   );
+  // The short-circuit, graded on pixels: same colourless brand and same fallback-off switch
+  // as the refusal two checks up, and the ONLY difference is the hand-picked hex.
+  const custom = run.customInk;
+  check(
+    'a hand-picked ink DRAWS where the same brand and switches refuse',
+    custom.inkSource === 'custom' && !custom.substituted && custom.bytes > 0,
+    `ink from ${custom.inkSource}, substituted=${custom.substituted}, ${custom.bytes} bytes — ` +
+      'the fallback is OFF and this brand carries no colour, so the palette chain would refuse here',
+  );
+  check(
+    'and the pixels carry THAT colour, not a palette one and not a measured black',
+    Math.abs(custom.measurement.modalInk[0] - 0x7b) <= 6 &&
+      Math.abs(custom.measurement.modalInk[1] - 0x2d) <= 6 &&
+      Math.abs(custom.measurement.modalInk[2] - 0x8e) <= 6,
+    `modal ink ${modalOf(custom)} vs picked #7b2d8e — a measured fallback would have drawn ` +
+      '#111111 or #ffffff here and this comparison would fail',
+  );
+
   const viaBrandMd = run.cases[2];
   check(
     'THE FIX: the legible render above came through brand.md, with no design system in reach',

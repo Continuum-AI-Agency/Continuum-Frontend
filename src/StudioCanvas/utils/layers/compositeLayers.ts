@@ -91,9 +91,7 @@ const toBase64 = async (blob: Blob): Promise<string> => {
 };
 
 /** Composite to a PNG. PNG because the frame is transparent and must stay that way. */
-export async function compositeLayers(
-  input: CompositeLayersInput,
-): Promise<CompositeLayersResult> {
+export async function compositeLayers(input: CompositeLayersInput): Promise<CompositeLayersResult> {
   const { width, height } = input.frame;
   if (typeof OffscreenCanvas === 'undefined') {
     throw new Error('The Layer Editor needs OffscreenCanvas, which this browser does not have');

@@ -73,8 +73,20 @@ describe('createLayer', () => {
   });
 
   test('the id is opaque and independent of the name', () => {
-    const a = createLayer({ sourceNodeId: 'n', name: 'same', sourceWidth: 10, sourceHeight: 10, frame: FRAME });
-    const b = createLayer({ sourceNodeId: 'n', name: 'same', sourceWidth: 10, sourceHeight: 10, frame: FRAME });
+    const a = createLayer({
+      sourceNodeId: 'n',
+      name: 'same',
+      sourceWidth: 10,
+      sourceHeight: 10,
+      frame: FRAME,
+    });
+    const b = createLayer({
+      sourceNodeId: 'n',
+      name: 'same',
+      sourceWidth: 10,
+      sourceHeight: 10,
+      frame: FRAME,
+    });
     expect(a.id).not.toBe(b.id);
     expect(a.name).toBe(b.name);
   });
@@ -191,7 +203,11 @@ describe('remove, duplicate and names', () => {
   });
 
   test('colliding names are REPORTED, never corrected — name is an AE join key', () => {
-    const layers = [box('1', { name: 'Logo' }), box('2', { name: 'Logo' }), box('3', { name: 'BG' })];
+    const layers = [
+      box('1', { name: 'Logo' }),
+      box('2', { name: 'Logo' }),
+      box('3', { name: 'BG' }),
+    ];
     expect([...duplicateNames(layers)]).toEqual(['Logo']);
     // and nothing renamed itself
     expect(layers.map((layer) => layer.name)).toEqual(['Logo', 'Logo', 'BG']);

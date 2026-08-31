@@ -1,7 +1,7 @@
 import type { LayerEditorLayer } from '../../types';
 import type { BlendMode } from '../render/effectSpec';
 import type { Frame } from './frameModel';
-import { type Rect, layerBounds, unionBounds } from './layerTransform';
+import { layerBounds, type Rect, unionBounds } from './layerTransform';
 
 /**
  * Pure document operations on a bottom-first layer array.

@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import type { LayerEditorLayer } from '../../types';
-import { handleCursor, handlePoints, resizeLayer, rotateHandlePoint, rotateLayer } from './layerGizmo';
+import {
+  handleCursor,
+  handlePoints,
+  resizeLayer,
+  rotateHandlePoint,
+  rotateLayer,
+} from './layerGizmo';
 import { layerBounds, sourceToComposition } from './layerTransform';
 
 const layer = (patch: Partial<LayerEditorLayer> = {}): LayerEditorLayer => ({
@@ -104,7 +110,11 @@ describe('rotateLayer', () => {
   test('snaps to a step when asked, and stays inside (-180, 180]', () => {
     const snapped = rotateLayer(layer(), { x: 1200, y: 1000 }, { x: 1190, y: 1100 }, 15);
     expect(snapped.rotation % 15).toBe(0);
-    const wrapped = rotateLayer(layer({ rotation: 170 }), { x: 1200, y: 1000 }, { x: 1000, y: 1200 });
+    const wrapped = rotateLayer(
+      layer({ rotation: 170 }),
+      { x: 1200, y: 1000 },
+      { x: 1000, y: 1200 },
+    );
     expect(wrapped.rotation).toBeGreaterThan(-180);
     expect(wrapped.rotation).toBeLessThanOrEqual(180);
   });

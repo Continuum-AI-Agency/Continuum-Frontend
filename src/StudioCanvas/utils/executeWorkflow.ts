@@ -521,6 +521,7 @@ const actionInputFromOutput = (output: NodeOutput, handle: string): ResolvedActi
     return {
       handle,
       imageUrl: output.base64 ? buildDataUrl(output.mimeType, output.base64) : output.url,
+      ...(output.assetId ? { assetId: output.assetId } : {}),
     };
   }
   if (output.type === 'images') {
@@ -528,9 +529,12 @@ const actionInputFromOutput = (output: NodeOutput, handle: string): ResolvedActi
     return {
       handle,
       imageUrl: item?.base64 ? buildDataUrl(item.mimeType, item.base64) : item?.url,
+      ...(item?.assetId ? { assetId: item.assetId } : {}),
     };
   }
-  if (output.type === 'video') return { handle, imageUrl: output.url };
+  if (output.type === 'video') {
+    return { handle, imageUrl: output.url, ...(output.assetId ? { assetId: output.assetId } : {}) };
+  }
   // A collection reaching here means the fan-out did not unwrap it — the caller's bug,
   // not a shape to guess at.
   return { handle };
@@ -610,10 +614,16 @@ const resolveActionInputsFor = async (
         (value): value is string => typeof value === 'string' && value.length > 0,
       );
       if (!url) throw new Error(`The input on "${port.handle}" is not ready`);
+      // A reference node already knows which Library asset it holds, and that id is
+      // the only way a backend op can register its result as a DERIVATIVE of this.
+      const assetId =
+        typeof sourceData.assetId === 'string' && sourceData.assetId.length > 0
+          ? { assetId: sourceData.assetId }
+          : {};
       inputs.push(
         port.modality === 'video'
-          ? { handle: port.handle, blob: await fetchBlob(url, port.handle) }
-          : { handle: port.handle, imageUrl: url },
+          ? { handle: port.handle, blob: await fetchBlob(url, port.handle), ...assetId }
+          : { handle: port.handle, imageUrl: url, ...assetId },
       );
     }
   }

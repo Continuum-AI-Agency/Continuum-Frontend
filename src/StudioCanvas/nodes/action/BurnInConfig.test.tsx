@@ -195,6 +195,35 @@ describe('BurnInConfig', () => {
     expect(lastConfig()).toMatchObject({ inkToken: '' });
   });
 
+  // A token is a REFERENCE and a hand-picked hex is a VALUE. Holding both would leave the
+  // panel and the render free to disagree about which one wins, so every write clears the other.
+  it('a hand-picked ink clears the token, and a token clears the hand-picked ink', () => {
+    render(<BurnInConfig nodeId="act-1" config={{ inkToken: '--accent' }} />);
+
+    fireEvent.click(screen.getByLabelText('Custom ink colour'));
+    fireEvent.change(screen.getByLabelText('Hex colour'), { target: { value: '#123456' } });
+    expect(lastConfig()).toMatchObject({ inkHex: '#123456', inkToken: '' });
+
+    cleanup();
+    render(<BurnInConfig nodeId="act-1" config={{ inkHex: '#123456' }} />);
+    fireEvent.click(screen.getByLabelText('--accent'));
+    expect(lastConfig()).toMatchObject({ inkToken: '--accent', inkHex: null });
+  });
+
+  it('shows the hand-picked ink as the selected one, and can put it back', () => {
+    render(<BurnInConfig nodeId="act-1" config={{ inkHex: '#123456' }} />);
+
+    // No swatch and no Default may claim to be selected while a custom colour is set.
+    expect(screen.getByLabelText("The palette's default ink").getAttribute('aria-pressed')).toBe(
+      'false',
+    );
+    expect(screen.getByLabelText('--accent').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByTestId('burn-in-ink-source').textContent).toContain('picked by hand');
+
+    fireEvent.click(screen.getByLabelText('Clear the custom ink'));
+    expect(lastConfig()).toMatchObject({ inkHex: null });
+  });
+
   it('says out loud that contrast outranks placement', () => {
     render(<BurnInConfig nodeId="act-1" config={{}} />);
     expect(screen.getByText(/outranks placement/i)).toBeTruthy();

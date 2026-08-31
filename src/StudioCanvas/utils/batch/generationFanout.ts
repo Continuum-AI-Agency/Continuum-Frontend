@@ -13,11 +13,7 @@
 // behaves identically for a batch item and for a plain node — because it IS the same
 // code.
 
-import {
-  type BatchCombine,
-  type BatchItemKind,
-  MAX_BATCH_ITEMS,
-} from '@continuum/contracts';
+import { type BatchCombine, type BatchItemKind, MAX_BATCH_ITEMS } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 
 import type { BackendChatImageRequestPayload } from '@/lib/types/chatImage';

@@ -72,7 +72,7 @@ describe('configFieldsFor per op', () => {
     expect(fields.map((field) => [field.key, field.kind])).toEqual([
       ['degrees', 'number'],
       ['expand', 'boolean'],
-      ['background', 'string'],
+      ['background', 'color'],
     ]);
     expect(fields[0]).toEqual({
       key: 'degrees',
@@ -86,6 +86,72 @@ describe('configFieldsFor per op', () => {
     });
     expect(fields[2]?.nullable).toBe(true);
     expect(fields[2]?.defaultValue).toBeNull();
+  });
+
+  it('reads a #rrggbb schema field as a colour, not a string', () => {
+    // The whole point of the kind: `image.chromaKey` has TWO colours and a plain enum, and
+    // neither colour may come back as something you have to type a hex into.
+    expect(configFieldsFor('image.chromaKey').map((field) => [field.key, field.kind])).toEqual([
+      ['mode', 'enum'],
+      ['color', 'color'],
+      ['replacement', 'color'],
+      ['tolerance', 'number'],
+      ['softness', 'number'],
+    ]);
+  });
+
+  it('reads the colour off the DECLARATION, so a null default is still a colour', () => {
+    // `image.rotate.background` is `.nullable().default(null)`. Recognising colours by
+    // "the default looks like a hex" would hand this one op a text box while its eight
+    // siblings got a picker — the exact drift the generic renderer exists to prevent.
+    const background = configFieldsFor('image.rotate').find((field) => field.key === 'background');
+    expect(background).toEqual({
+      key: 'background',
+      label: 'Background',
+      kind: 'color',
+      nullable: true,
+      defaultValue: null,
+    });
+  });
+
+  it('leaves a string with no hex pattern alone', () => {
+    // `image.pad.aspectRatio` is also a regex-checked string — a `1:1` ratio, not a colour.
+    // A probe that fired on "has a regex" rather than "has THE hex regex" would swallow it.
+    const fields = configFieldsFor('image.pad');
+    expect(fields.find((field) => field.key === 'aspectRatio')?.kind).toBe('string');
+    expect(fields.find((field) => field.key === 'background')?.kind).toBe('color');
+  });
+
+  it('finds every colour in the registry and nothing else', () => {
+    // A PROPERTY over the whole registry, not a frozen list of field names: the way this
+    // regresses is an op added later whose colour quietly renders as a text box, and a list
+    // someone has to remember to extend would go green on exactly that. Note `image.text`
+    // is in scope here even though `BurnInConfig` draws its own ink row — which panel
+    // renders a field is a rendering choice, not a reason for the vocabulary to lie.
+    //
+    // The oracle is INDEPENDENT of the zod introspection under test: it asks each schema
+    // what it ACCEPTS. A field that takes `#00ff00` and refuses both a short hex and a word
+    // is a colour, whatever the check list looks like internally.
+    const acceptsHexOnly = (schema: unknown): boolean => {
+      const parser = schema as { safeParse?: (value: unknown) => { success: boolean } };
+      if (typeof parser.safeParse !== 'function') return false;
+      return (
+        parser.safeParse('#00ff00').success &&
+        !parser.safeParse('#00ff0').success &&
+        !parser.safeParse('not a colour').success
+      );
+    };
+
+    for (const id of ACTION_IDS) {
+      const shape = (ACTION_DEFS[id].config as unknown as { shape?: Record<string, unknown> })
+        .shape;
+      if (!shape) continue;
+      const declared = Object.keys(shape).filter((key) => acceptsHexOnly(shape[key]));
+      const rendered = configFieldsFor(id)
+        .filter((field) => field.kind === 'color')
+        .map((field) => field.key);
+      expect({ id, colours: rendered }).toEqual({ id, colours: declared });
+    }
   });
 
   it('reads text.findReplace as two strings and three booleans', () => {
@@ -226,9 +292,7 @@ describe('numericControlFor', () => {
       expect(typeof field.min).toBe('number');
       expect(typeof field.max).toBe('number');
       // Fewer stops than a track has pixels, so every value is reachable by drag.
-      expect((field.max as number) - (field.min as number)).toBeLessThanOrEqual(
-        1000 * field.step,
-      );
+      expect((field.max as number) - (field.min as number)).toBeLessThanOrEqual(1000 * field.step);
     }
   });
 

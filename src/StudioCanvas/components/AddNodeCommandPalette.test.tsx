@@ -152,8 +152,8 @@ function openSubGroup(popup: Element, group: string, key: string): Element {
 
 /** The row labels a (portalled) popup renders directly — nested popups do not leak in. */
 const labelsIn = (popup: Element): (string | undefined)[] =>
-  Array.from(popup.querySelectorAll('[data-slot="context-menu-item"] span:first-child')).map(
-    (el) => el.textContent?.trim(),
+  Array.from(popup.querySelectorAll('[data-slot="context-menu-item"] span:first-child')).map((el) =>
+    el.textContent?.trim(),
   );
 
 const subTriggerLabels = (popup: Element): (string | undefined)[] =>
@@ -278,9 +278,7 @@ describe('AddNodeCommandPalette', () => {
       expect(labelsIn(falPopup)).toEqual(fal.rows.map((row) => row.label));
 
       const firstRow = fal.rows[0];
-      fireEvent.click(
-        falPopup.querySelector('[data-slot="context-menu-item"]') as HTMLElement,
-      );
+      fireEvent.click(falPopup.querySelector('[data-slot="context-menu-item"]') as HTMLElement);
       expect(onAdd.mock.calls[0]).toEqual(['videoGen', { model: firstRow.model }]);
     },
     RENDER_TIMEOUT_MS,
@@ -310,7 +308,11 @@ describe('AddNodeCommandPalette', () => {
 
       // The click closed the Add Node submenu; re-enter before the next descent.
       fireEvent.keyDown(screen.getByText('Add Node'), { key: 'Enter' });
-      const implementation = openSubGroup(openCategory('Action', 'action'), 'action', 'implementation');
+      const implementation = openSubGroup(
+        openCategory('Action', 'action'),
+        'action',
+        'implementation',
+      );
       expect(labelsIn(implementation)).toEqual([
         'Planner Draft',
         'Post to Platform',
@@ -371,7 +373,9 @@ describe('AddNodeCommandPalette', () => {
 
       const popup = openCategory('Action', 'action');
       const entries = Array.from(
-        popup.querySelectorAll('[data-slot="context-menu-item"], [data-slot="context-menu-sub-trigger"]'),
+        popup.querySelectorAll(
+          '[data-slot="context-menu-item"], [data-slot="context-menu-sub-trigger"]',
+        ),
       );
       expect(entries.length).toBeGreaterThan(0);
       for (const entry of entries) {

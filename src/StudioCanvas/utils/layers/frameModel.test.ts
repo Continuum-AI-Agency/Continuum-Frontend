@@ -28,13 +28,16 @@ describe('clampFrame', () => {
 
 describe('readFrame', () => {
   test('`frame` is authoritative', () => {
-    expect(readFrame({ frame: { width: 1000, height: 500 } })).toEqual({ width: 1000, height: 500 });
+    expect(readFrame({ frame: { width: 1000, height: 500 } })).toEqual({
+      width: 1000,
+      height: 500,
+    });
   });
 
   test("today's contracts seed (flat frameWidth + aspectRatio 1:1) reads 2048 square", () => {
-    expect(readFrame({ layers: [], frameWidth: 2048, frameHeight: 2048, aspectRatio: '1:1' })).toEqual(
-      DEFAULT_FRAME,
-    );
+    expect(
+      readFrame({ layers: [], frameWidth: 2048, frameHeight: 2048, aspectRatio: '1:1' }),
+    ).toEqual(DEFAULT_FRAME);
   });
 
   test('a node created as 9:16 opens PORTRAIT, not square', () => {

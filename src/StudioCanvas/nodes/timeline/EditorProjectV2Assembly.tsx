@@ -21,6 +21,7 @@ import {
 import { Plus, Redo2, Trash2, Type, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ColorField } from '@/components/ui/color-field';
 import { Input } from '@/components/ui/input';
 import { NumberScrubField } from '@/components/ui/number-field';
 import { SliderField } from '@/components/ui/slider-field';
@@ -253,17 +254,10 @@ function TextOverlayRow({
           step={1}
           onChange={setFontSize}
         />
-        <label htmlFor={colorInputId} className="space-y-1 text-3xs text-muted-foreground">
+        <div className="space-y-1 text-3xs text-muted-foreground">
           <span>Color</span>
-          <Input
-            type="color"
-            id={colorInputId}
-            value={color}
-            onChange={(event) => setColor(event.currentTarget.value)}
-            className="h-8 p-1"
-            aria-label="Text color"
-          />
-        </label>
+          <ColorField id={colorInputId} label="Text" value={color} onChange={setColor} />
+        </div>
         <SliderField
           format={{ style: 'percent', maximumFractionDigits: 0 }}
           label="X"

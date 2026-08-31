@@ -2499,15 +2499,10 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
     expect(reported).toContain('could not be loaded');
     expect(reported).not.toContain('Missing connected input');
   });
-
-
 });
 
 describe('executeWorkflow — omniGen payload', () => {
-  const runOmni = async (
-    nodes: StudioNode[],
-    edges: Edge[],
-  ): Promise<Record<string, unknown>> => {
+  const runOmni = async (nodes: StudioNode[], edges: Edge[]): Promise<Record<string, unknown>> => {
     useStudioStore.getState().setNodes(nodes);
     useStudioStore.getState().setEdges(edges);
 

@@ -1,9 +1,4 @@
-import {
-  ACTION_DEFS,
-  type ActionId,
-  actionDef,
-  type BrandTypeInputs,
-} from '@continuum/contracts';
+import { ACTION_DEFS, type ActionId, actionDef, type BrandTypeInputs } from '@continuum/contracts';
 import type { NodeOutput } from '../../types/execution';
 import { runActionInWorker } from '../../workers/spliceWorkerClient';
 import { parseDataUrl } from '../dataUrl';
@@ -52,6 +47,14 @@ export interface ResolvedActionInput {
   blob?: Blob;
   /** Set for text inputs. */
   text?: string;
+  /**
+   * `media.assets` id of whatever produced this input, when it has one.
+   *
+   * Only the ops that hand work to the BACKEND need it, and they need it for one
+   * reason: it is what lets the result be registered as a derivative OF something
+   * rather than as an orphan. A pixel op ignores it entirely.
+   */
+  assetId?: string;
 }
 
 export interface RunActionArgs {
@@ -387,6 +390,23 @@ const WORKER_OPS_WITH_ENGINES = new Set<ActionId>([
 const ORCHESTRATED_OPS: Partial<Record<ActionId, SyncOp>> = {
   'video.subtitles': (args, config) =>
     import('./subtitlesOp').then((m) => m.runSubtitlesAction(args, config)),
+  // Both cutout ops sit here rather than in SYNC_OPS/WORKER_OPS because the matting
+  // runs on a GPU in Cloud Run: the runner's whole job is an authenticated call and
+  // an SSE read. Note `image.removeBackground` declares `execution: 'sync'` to satisfy
+  // the registry's worker⟺video invariant — this map is consulted first, so the
+  // declaration never decides where it actually runs.
+  'image.removeBackground': (args, config) =>
+    import('./removeBackgroundOp').then((m) => m.runRemoveImageBackground(args, config)),
+  // `video.removeBackground` is DELIBERATELY absent, which greys its Run button out
+  // rather than letting it fail in the user's face — the honest state, per the note
+  // on `isImplementedAction` below.
+  //
+  // The runner (`runRemoveVideoBackground`) is complete and its Cloud Run job is
+  // written and deployable; what is missing is an NVIDIA L4 quota allocation on the
+  // GCP project, and BiRefNet on CPU is roughly two seconds PER FRAME — ten minutes
+  // for a thirty-second clip — so there is no CPU fallback worth offering.
+  //
+  // To re-enable: get the L4 quota, `bun run deploy:run:job`, restore this one line.
 };
 
 /**

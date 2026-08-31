@@ -29,6 +29,7 @@ export type ConfigField =
       defaultValue: number | null;
     }
   | { key: string; label: string; kind: 'string'; nullable: boolean; defaultValue: string | null }
+  | { key: string; label: string; kind: 'color'; nullable: boolean; defaultValue: string | null }
   | { key: string; label: string; kind: 'boolean'; nullable: boolean; defaultValue: boolean }
   | {
       key: string;
@@ -65,6 +66,7 @@ interface ZodLike {
     readonly innerType?: unknown;
     readonly shape?: unknown;
     readonly entries?: unknown;
+    readonly checks?: unknown;
   };
   readonly minValue?: unknown;
   readonly maxValue?: unknown;
@@ -137,6 +139,35 @@ export function humaniseConfigKey(key: string): string {
     .join(' ');
 }
 
+/**
+ * Does this string schema DECLARE a six-digit hex colour?
+ *
+ * Read off the declaration, never off the default value: `image.rotate`'s background is
+ * `.nullable().default(null)`, so a colour recognised by "its default looks like a hex"
+ * would silently hand that one op a text box while its eight siblings got a picker.
+ *
+ * Zod exposes no derived getter for a regex the way it does for numeric bounds, so the
+ * check list is the only route — and a check is a bare object carrying `_zod.def`, not a
+ * `.def` of its own. Verified against zod 4.4.3:
+ *   z.string().regex(re) → def.checks[0]._zod.def === { check: 'string_format',
+ *                                                      format: 'regex', pattern: re }
+ * Everything is probed defensively: a zod release that moves this must make the field a
+ * plain string, never throw inside a popover.
+ */
+const HEX_COLOUR_PATTERN = '^#[0-9a-fA-F]{6}$';
+
+function declaresHexColour(schema: ZodLike): boolean {
+  const checks = schema.def?.checks;
+  if (!Array.isArray(checks)) return false;
+  return checks.some((check) => {
+    if (!isRecord(check)) return false;
+    const zod = check._zod;
+    if (!isRecord(zod) || !isRecord(zod.def)) return false;
+    const { format, pattern } = zod.def as { format?: unknown; pattern?: unknown };
+    return format === 'regex' && pattern instanceof RegExp && pattern.source === HEX_COLOUR_PATTERN;
+  });
+}
+
 function fieldFor(key: string, schema: ZodLike, defaultValue: unknown): ConfigField | undefined {
   const { inner, nullable } = unwrap(schema);
   const label = humaniseConfigKey(key);
@@ -163,7 +194,7 @@ function fieldFor(key: string, schema: ZodLike, defaultValue: unknown): ConfigFi
       return {
         key,
         label,
-        kind: 'string',
+        kind: declaresHexColour(inner) ? 'color' : 'string',
         nullable,
         defaultValue: typeof defaultValue === 'string' ? defaultValue : null,
       };

@@ -1,22 +1,26 @@
+import { describe, expect, it } from 'bun:test';
 import {
   type DesignSystemSnapshot,
   EMPTY_ADHERENCE,
   type MeasureText,
   type PlacementPlan,
-  planPlacement,
   PRELOADED_TYPE_FACES,
   type ProbeContrast,
+  planPlacement,
   type TreatmentStep,
   VERNE_VEIL_FLOORS,
 } from '@continuum/contracts';
-import { describe, expect, it } from 'bun:test';
 import {
   applyTreatment,
   describeHeadlineFaces,
+  describeHeadlineInk,
+  type HeadlineInk,
   headlineSvg,
   headlineSvgDataUri,
   parseHeadline,
   parseHexColour,
+  readSettings,
+  resolveCustomInk,
   resolveHeadlineFaces,
   resolveHeadlineInk,
   scrimReachPx,
@@ -146,6 +150,41 @@ describe('resolveHeadlineInk', () => {
   });
 });
 
+describe('resolveCustomInk', () => {
+  it('reads a hand-picked hex as an ink that came from nobody', () => {
+    expect(resolveCustomInk('#0f1f43')).toEqual({
+      rgb: [0x0f, 0x1f, 0x43],
+      source: 'custom',
+      tokenName: null,
+    });
+  });
+
+  it('falls through on null and on anything that is not a colour', () => {
+    // Falling through hands the decision back to the palette chain. Rendering a headline in
+    // a mistyped hex would be the worse answer.
+    expect(resolveCustomInk(null)).toBeNull();
+    expect(resolveCustomInk('')).toBeNull();
+    expect(resolveCustomInk('var(--ink)')).toBeNull();
+    expect(resolveCustomInk('nope')).toBeNull();
+  });
+});
+
+describe('describeHeadlineInk', () => {
+  it('says a hand-picked colour is hand-picked, and does not blame a brand shape', () => {
+    const described = describeHeadlineInk(resolveCustomInk('#0f1f43') as HeadlineInk);
+    expect(described).toContain('#0f1f43');
+    expect(described).toContain('picked by hand');
+  });
+});
+
+describe('readSettings', () => {
+  it('carries the hand-picked ink, and reads a missing one as null rather than a string', () => {
+    expect(readSettings({ inkHex: '#0f1f43' }).inkHex).toBe('#0f1f43');
+    expect(readSettings({}).inkHex).toBeNull();
+    expect(readSettings({ inkHex: null }).inkHex).toBeNull();
+  });
+});
+
 describe('resolveHeadlineFaces', () => {
   const declaredInter = designSystem([], [{ family: 'Inter', tokens: [], source: null }]);
 
@@ -235,7 +274,11 @@ describe('parseHeadline', () => {
   });
 
   it('degrades an unmatched marker to a light run rather than eating the headline', () => {
-    expect(parseHeadline('Estudia ** hoy').map((t) => t.text).join('')).toBe('Estudia  hoy');
+    expect(
+      parseHeadline('Estudia ** hoy')
+        .map((t) => t.text)
+        .join(''),
+    ).toBe('Estudia  hoy');
   });
 });
 
@@ -387,7 +430,8 @@ describe('applyTreatment', () => {
     return painted;
   };
 
-  const blurRadius = (filter: string) => Number(/blur\(([\d.]+)px\)/.exec(filter)?.[1] ?? Number.NaN);
+  const blurRadius = (filter: string) =>
+    Number(/blur\(([\d.]+)px\)/.exec(filter)?.[1] ?? Number.NaN);
 
   it('lightens the box and its feather — it never fills the frame', () => {
     // The user report this fixes was "why does it always wash out the image?". A fillRect over
@@ -447,7 +491,10 @@ describe('applyTreatment', () => {
   });
 
   it('never paints the ink — the ladder escalates the background, never the type', () => {
-    const painted = run([{ kind: 'harmonise' }, ...VERNE_VEIL_FLOORS.map((floor) => ({ kind: 'veil' as const, floor }))]);
+    const painted = run([
+      { kind: 'harmonise' },
+      ...VERNE_VEIL_FLOORS.map((floor) => ({ kind: 'veil' as const, floor })),
+    ]);
     expect(painted.length).toBe(VERNE_VEIL_FLOORS.length + 1);
     for (const step of painted) expect(step.fill).not.toBe(INK_HEX);
   });

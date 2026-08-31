@@ -15,16 +15,7 @@ import { type Point, sourceToComposition, unrotate } from './layerTransform';
 
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
-export const RESIZE_HANDLES: readonly ResizeHandle[] = [
-  'nw',
-  'n',
-  'ne',
-  'e',
-  'se',
-  's',
-  'sw',
-  'w',
-];
+export const RESIZE_HANDLES: readonly ResizeHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
 /** Below this a layer is a line the user can no longer grab. */
 const MIN_SCALE = 0.01;
@@ -67,7 +58,10 @@ function handleLocal(layer: LayerEditorLayer, handle: ResizeHandle): Point {
 /** The eight handles in COMPOSITION pixels, so the stage can place them. */
 export function handlePoints(layer: LayerEditorLayer): Record<ResizeHandle, Point> {
   return Object.fromEntries(
-    RESIZE_HANDLES.map((handle) => [handle, sourceToComposition(layer, handleLocal(layer, handle))]),
+    RESIZE_HANDLES.map((handle) => [
+      handle,
+      sourceToComposition(layer, handleLocal(layer, handle)),
+    ]),
   ) as Record<ResizeHandle, Point>;
 }
 
@@ -98,10 +92,7 @@ export function resizeLayer(
   const oppositeLocal = handleLocal(start, OPPOSITE[handle]);
   const fixed = sourceToComposition(start, oppositeLocal);
 
-  const along = unrotate(
-    { x: pointer.x - fixed.x, y: pointer.y - fixed.y },
-    start.rotation,
-  );
+  const along = unrotate({ x: pointer.x - fixed.x, y: pointer.y - fixed.y }, start.rotation);
   const dx = local.x - oppositeLocal.x;
   const dy = local.y - oppositeLocal.y;
 
@@ -131,10 +122,7 @@ export function resizeLayer(
 
   // Re-place so the opposite handle lands back on `fixed`. Evaluating the transform at
   // position (0,0) gives the anchor->opposite offset under the NEW scale.
-  const offset = sourceToComposition(
-    { ...start, scale, position: { x: 0, y: 0 } },
-    oppositeLocal,
-  );
+  const offset = sourceToComposition({ ...start, scale, position: { x: 0, y: 0 } }, oppositeLocal);
   return { ...start, scale, position: { x: fixed.x - offset.x, y: fixed.y - offset.y } };
 }
 

@@ -22,8 +22,8 @@ import {
   addNodeSearchValue,
   LEGACY_VIDEO_ALIAS_NODE_TYPES,
   PENDING_PALETTE_NODE_TYPES,
-  sectionLayout,
   STUDIO_CANVAS_NODE_TYPES,
+  sectionLayout,
 } from './addNodeCatalog';
 
 /**

@@ -1,9 +1,9 @@
+import { describe, expect, it } from 'bun:test';
 import {
   NANO_GEN_SIGNATURE_FIELDS,
   STUDIO_NODE_TYPES,
   VIDEO_GENERATOR_SIGNATURE_FIELDS,
 } from '@continuum/contracts';
-import { describe, expect, it } from 'bun:test';
 import type { Edge } from '@xyflow/react';
 import type { StudioNode } from '../types';
 import { computeGenerationSignature, isSignatureTracked, nodeIsStale } from './generationSignature';

@@ -347,13 +347,15 @@ const layoutFor = (entries: readonly SectionEntry[]): AddNodeSectionLayout => {
     return {
       direct: [],
       subGroups: [
-        ...UTILITY_GROUP_ORDER.map((group): AddNodeSubGroup => ({
-          key: group,
-          label: UTILITY_GROUP_LABELS[group],
-          rows: utilities
-            .filter((entry) => ACTION_UTILITY_GROUP[entry.row.type] === group)
-            .map((entry) => entry.row),
-        })),
+        ...UTILITY_GROUP_ORDER.map(
+          (group): AddNodeSubGroup => ({
+            key: group,
+            label: UTILITY_GROUP_LABELS[group],
+            rows: utilities
+              .filter((entry) => ACTION_UTILITY_GROUP[entry.row.type] === group)
+              .map((entry) => entry.row),
+          }),
+        ),
         ...FAMILY_ORDER.map(familySub),
       ].filter((sub) => sub.rows.length > 0 || (sub.subGroups?.length ?? 0) > 0),
     };
