@@ -45,6 +45,7 @@ import type {
   TimelineItem,
 } from '../types';
 import type { ImageOutputItem, NodeOutput } from '../types/execution';
+import { collectionPreviewSrcs } from './actions/collectionPreview';
 import { type ResolvedActionInput, runAction } from './actions/runAction';
 import { fanOut } from './batch/fanout';
 import {
@@ -405,12 +406,19 @@ const getPromptValue = (
     // it with `resolveTextInput` — which only knows single strings — parked the graph on
     // "Missing prompt input" with the batch visibly wired in (#300).
     const collectionEdge = promptEdges.find((edge) => feedsCollection(edge, resolvedOutputs));
-    return {
-      value: edgePrompt,
-      fromEdge: true,
-      fromCollection: Boolean(collectionEdge),
-      blockedNodeId: promptEdges[0]?.source,
-    };
+    // A `designRef` on this port CONTRIBUTES its token summary and never demands one
+    // (#289). With nothing else wired and nothing to say, the generator falls back to
+    // its own prompt rather than stopping — a Design Reference must not be the reason a
+    // picture did not happen.
+    const demanding = promptEdges.filter((edge) => !contributesWithoutDemanding(edge, nodeById));
+    if (edgePrompt !== undefined || demanding.length > 0) {
+      return {
+        value: edgePrompt,
+        fromEdge: true,
+        fromCollection: Boolean(collectionEdge),
+        blockedNodeId: demanding[0]?.source ?? promptEdges[0]?.source,
+      };
+    }
   }
 
   const inlinePrompt =
@@ -518,13 +526,31 @@ const unresolvedInputReason = (
 const feedsCollection = (edge: Edge, resolvedOutputs: Map<string, NodeOutput>): boolean =>
   resolvedOutputs.get(edge.source)?.type === 'collection';
 
+/**
+ * A `designRef` contributes; it never demands (Airtable #289).
+ *
+ * The owner's rule for a Design Reference is that it INFORMS a generation and its
+ * critique, and its absence from the result is not a failure. Judging its ports the way
+ * a reference image is judged made the opposite true: a Palette reference whose specimen
+ * had not been generated yet resolved to nothing, so the run stopped on "nothing readable
+ * came through it" and reaching for brand grounding became the thing that blocked the
+ * picture. Filtering the edges once covers every generator branch below, and the payload
+ * builder still sends the specimen and the token summary whenever they exist.
+ */
+const contributesWithoutDemanding = (edge: Edge, nodeById: Map<string, StudioNode>): boolean =>
+  nodeById.get(edge.source)?.type === 'designRef';
+
 const findMissingOptionalInput = (
   node: StudioNode,
-  incomingEdges: Edge[],
+  allIncomingEdges: Edge[],
   resolvedOutputs: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>,
   allEdges: Edge[],
 ): MissingOptionalInput | undefined => {
+  const incomingEdges = allIncomingEdges.filter(
+    (edge) => !contributesWithoutDemanding(edge, nodeById),
+  );
+
   // Every branch below fires with an edge ALREADY on the handle, so every one of them
   // owes the user a reason rather than the word "missing" (#290).
   const unresolved = (edge: Edge, handle: string): MissingOptionalInput => ({
@@ -2079,15 +2105,21 @@ export async function executeWorkflow(
       });
       useStudioStore.getState().triggerSave();
     } else if (output.type === 'collection') {
-      // Only the count and a cover are persisted. The items themselves live in
-      // `resolvedOutputs` for the duration of the run: a hundred base64 stills written
-      // into the canvas row would be stripped by the serializer on the way out anyway.
-      const cover = output.items.find((item) => item.type === 'image');
+      // EVERY item, not a cover. A five-frame extraction that displayed one still was
+      // read as "it only extracts the first available" (#292), and a video collection
+      // matched no image cover at all, so a two-part `video.split` rendered an empty
+      // node (#303). The srcs stay session-lived — the serializer strips data/object
+      // URLs on the way to the canvas row, exactly as it does for a single image.
+      const srcs = collectionPreviewSrcs(output);
+      const [first] = srcs;
       useStudioStore.getState().updateNodeData(nodeId, {
         collectionCount: output.items.length,
         collectionItemType: output.itemType,
-        ...(cover && cover.type === 'image' && cover.base64
-          ? { generatedImage: buildDataUrl(cover.mimeType, cover.base64) }
+        collectionItems: srcs,
+        ...(first
+          ? output.itemType === 'video'
+            ? { generatedVideo: first }
+            : { generatedImage: first }
           : {}),
         isComplete: true,
         isExecuting: false,
