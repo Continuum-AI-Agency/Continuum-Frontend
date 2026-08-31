@@ -118,6 +118,32 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
     expect((node()?.data as HyperframesAgentNodeData).aspectRatio).toBe('16:9');
   });
 
+  // Airtable #295, both halves of it.
+  //
+  // The Style pill was floated at `left-2 top-2` over a node that — unlike the four
+  // generators using that placement — has a title bar, so it painted over the node's own
+  // title and the header read "…mes Agent". And the Card's default width is `w-sm`
+  // (384px) while this node is created 420 wide, so the card drew 36px narrower than the
+  // box the NodeResizer's handles bound: the "flying point in the end".
+  it('puts the grounding chip in the title bar, not over the title', () => {
+    const { container, getByTestId } = renderNode(hyperData());
+
+    const titleBar = container.querySelector('[data-slot="card"] > div');
+    expect(titleBar?.textContent).toContain('HyperFrames Agent');
+    expect(titleBar?.contains(getByTestId('studio-grounding-chip'))).toBe(true);
+
+    // Nothing absolutely positioned is anchored over the bar any more.
+    expect(getByTestId('studio-grounding-chip').closest('.absolute')).toBeNull();
+  });
+
+  it('draws its card at the full width of the node box, so the resize handles bound it', () => {
+    const { container } = renderNode(hyperData());
+    const classes = (container.querySelector('[data-slot="card"]')?.className ?? '').split(/\s+/);
+    // `w-sm` surviving here is the defect: it pins the card to 384px whatever the node is.
+    expect(classes).toContain('size-full');
+    expect(classes).not.toContain('w-sm');
+  });
+
   it('scrubs the composition in-node and only fetches metadata', () => {
     const { container } = renderNode(
       hyperData({ generatedVideoUrl: 'https://example.com/clip.mp4', status: 'completed' }),

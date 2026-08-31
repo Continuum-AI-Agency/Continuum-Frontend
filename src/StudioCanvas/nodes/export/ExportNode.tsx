@@ -117,7 +117,8 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
   }, [brandId, data.format, executionControls, id, roomId, updateNodeData]);
 
   return (
-    <div className="relative h-[160px] w-[240px]">
+    // `size-full`, never a hardcoded box — see RouterNode. The node is created 280x200.
+    <div className="relative size-full min-h-[160px] min-w-[240px]">
       <CanvasNode
         handles={{ target: false, source: false }}
         selected={selected}

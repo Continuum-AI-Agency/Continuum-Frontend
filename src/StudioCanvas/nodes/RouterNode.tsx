@@ -35,7 +35,10 @@ export function RouterNode({ data, selected }: NodeProps<ReactFlowNode<RouterNod
   const locked = data.lockedType;
 
   return (
-    <div className="relative h-[110px] w-[180px]">
+    // `size-full`, never a hardcoded box: the node is created 200x120 by `createNodeData`,
+    // and a card drawn 180x110 inside it leaves React Flow's selection outline bounding
+    // something the user cannot see — the same defect as #295's resize handles.
+    <div className="relative size-full min-h-[110px] min-w-[180px]">
       <CanvasNode
         handles={{ target: false, source: false }}
         selected={selected}

@@ -105,21 +105,7 @@ export function HyperframesAgentBlock({
   );
 
   return (
-    <div className="relative h-full min-h-[360px] min-w-[360px]">
-      {/* Inside the card's top-left, not straddling its border (Airtable #229). */}
-      <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
-        <GroundingChip
-          nodeId={id}
-          nodeType="hyperframesAgent"
-          brandId={runtime?.brandProfileId}
-          skillIds={data.skillIds}
-          brandBookPieces={data.brandBookPieces}
-          editable
-          onToggleSkill={handleToggleSkill}
-          onTogglePiece={handleToggleBrandPiece}
-          className="bg-background/90 shadow-sm backdrop-blur-sm"
-        />
-      </div>
+    <div className="relative size-full min-h-[360px] min-w-[360px]">
       <NodeResizer
         minWidth={360}
         minHeight={360}
@@ -127,12 +113,30 @@ export function HyperframesAgentBlock({
         lineClassName="border-brand-primary/60"
         handleClassName="h-3 w-3 rounded-full border-2 border-background bg-brand-primary"
       />
+      {/* `size-full`, not `h-full`: the Card's own default is `w-sm` (384px), so a node
+          sized 420 wide drew a 384px card inside a 420px box and the NodeResizer's handles
+          floated 36px clear of what the node actually rendered (Airtable #295). */}
       <CanvasNode
         selected={selected}
         handles={{ target: false, source: false }}
-        className="h-full overflow-hidden border-border/60 bg-background p-0 shadow-sm"
+        className="size-full overflow-hidden border-border/60 bg-background p-0 shadow-sm"
       >
         <NodeTitleBar icon={Sparkles} label="HyperFrames Agent" title="Gemini 3.6 Flash">
+          {/* IN the title bar, not floating over it. A pill parked at `top-2` painted over
+              the node's own title and ate its first characters (Airtable #295). */}
+          <div className="shrink-0" data-testid="studio-grounding-chip">
+            <GroundingChip
+              nodeId={id}
+              nodeType="hyperframesAgent"
+              brandId={runtime?.brandProfileId}
+              skillIds={data.skillIds}
+              brandBookPieces={data.brandBookPieces}
+              editable
+              onToggleSkill={handleToggleSkill}
+              onTogglePiece={handleToggleBrandPiece}
+              className="h-5 px-1.5"
+            />
+          </div>
           <NodeBadge>{labelForStatus(data.status)}</NodeBadge>
         </NodeTitleBar>
         <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
