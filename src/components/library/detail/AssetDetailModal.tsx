@@ -20,6 +20,7 @@ import { buildCommentThreads } from '@/lib/library/comments';
 import { enrichOnOpen } from '@/lib/library/enrichment';
 import { SOURCE_LABEL } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
+import { AssetDownloadButton } from '../AssetDownloadButton';
 import { EditTimelineButton } from '../editor/EditTimelineButton';
 import { AssetFieldsPanel } from '../fields/AssetFieldsPanel';
 import { fileExtension, formatBytes } from './assetFileMeta';
@@ -340,12 +341,17 @@ function AssetDetailDialog({
             </DialogDescription>
           </div>
           {/* The header carries only the DELIBERATE workflow verdicts — what this
-              creative's status is, who should look at it, who may see it. Actions
-              that reshape the creative itself are docked onto the creative, below. */}
+              creative's status is, who should look at it, who may see it — plus the
+              two ways a creative LEAVES here: a share link, and the file itself.
+              Actions that reshape the creative are docked onto the creative, below.
+              Download sits here rather than in that toolbar because it is the one
+              action that stays correct on an older version: the toolbar is withdrawn
+              off the head, and a reviewer looking at v2 wants v2's bytes. */}
           <div className="ml-auto flex items-center gap-2">
             <ReviewStatusControl brandId={brandId} asset={asset} onChanged={onAssetChanged} />
             <RequestReviewButton brandId={brandId} asset={asset} />
             <ShareLinkMenu brandId={brandId} asset={asset} />
+            <AssetDownloadButton brandId={brandId} asset={asset} versionId={viewedVersion?.id} />
           </div>
         </header>
 

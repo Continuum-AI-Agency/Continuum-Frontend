@@ -24,6 +24,7 @@ import { seekVideoPreviewFrame } from '@/lib/library/videoPoster';
 import { SOURCE_LABEL } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
 import { viralityScoreForAsset } from '@/lib/virality/assetScore';
+import { AssetDownloadButton } from './AssetDownloadButton';
 import { ClipCaptionToggle } from './ClipCaptionToggle';
 import { ClipProgressStrip } from './ClipProgressStrip';
 import { ClipQualityToggle } from './ClipQualityToggle';
@@ -71,6 +72,11 @@ function useLazyVideoSrc(src: string | null | undefined, immediate: boolean) {
   }, [active]);
   return { ref, activeSrc: active && src ? src : undefined };
 }
+
+// One class for every control in the card's hover corner, so a control added later
+// cannot drift into a different size or a different contrast against the thumbnail.
+const HOVER_CHROME_BUTTON =
+  'flex size-8 items-center justify-center rounded-md border border-white/15 bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/75 focus-visible:opacity-100 group-hover:opacity-100';
 
 // A video card with a poster paints the poster and downloads ZERO video bytes —
 // `preload="none"` plus a withheld `src` — until the pointer enters, at which
@@ -172,8 +178,12 @@ function StatusBadge({ status }: { status: MediaAsset['status'] }) {
 function ClipViralityBadge({ asset }: { asset: MediaAsset }) {
   const virality = viralityScoreForAsset(asset);
   if (!virality) return null;
+  // Positioned by the hover-chrome row it sits in, not by itself: it used to be
+  // `absolute right-2 top-2`, which is the same corner the card's controls occupy —
+  // fine while the only control was image-only Reformat, a collision the moment
+  // every card gained a Download (Airtable #299).
   return (
-    <div className="absolute right-2 top-2 rounded-full bg-background/90 p-0.5 shadow-sm backdrop-blur">
+    <div className="rounded-full bg-background/90 p-0.5 shadow-sm backdrop-blur">
       <ViralityScoreBadge overall={virality.overall} grade={virality.grade} />
     </div>
   );
@@ -644,25 +654,40 @@ export function MediaCard({
                   />
                 )}
                 <StatusBadge status={asset.status} />
-                <ClipViralityBadge asset={asset} />
-                {asset.kind === 'image' && asset.signedUrl ? (
-                  <QuickReformatMenu
-                    asset={asset}
-                    brandId={brandId}
-                    onCompleted={() => onAssetChanged?.()}
-                    trigger={
-                      <button
-                        type="button"
-                        title="Reformat image"
-                        aria-label={`Reformat ${asset.title ?? asset.fileName}`}
-                        className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-md border border-white/15 bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/75 focus-visible:opacity-100 group-hover:opacity-100"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <Scaling className="size-3.5" />
-                      </button>
-                    }
-                  />
-                ) : null}
+                {/* The card's top-right corner, as ONE row: the score badge and every
+                    control share it, so a control added later cannot land on top of
+                    what is already there. `error` is the only status with no bytes
+                    behind it — every other one (including the skipped_* terminals) has
+                    an intact file, so the card offers the save. */}
+                <div className="absolute right-2 top-2 flex items-center gap-1.5">
+                  <ClipViralityBadge asset={asset} />
+                  {asset.kind === 'image' && asset.signedUrl ? (
+                    <QuickReformatMenu
+                      asset={asset}
+                      brandId={brandId}
+                      onCompleted={() => onAssetChanged?.()}
+                      trigger={
+                        <button
+                          type="button"
+                          title="Reformat image"
+                          aria-label={`Reformat ${asset.title ?? asset.fileName}`}
+                          className={HOVER_CHROME_BUTTON}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <Scaling className="size-3.5" />
+                        </button>
+                      }
+                    />
+                  ) : null}
+                  {asset.status !== 'error' ? (
+                    <AssetDownloadButton
+                      brandId={brandId}
+                      asset={asset}
+                      variant="icon"
+                      className={HOVER_CHROME_BUTTON}
+                    />
+                  ) : null}
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5 p-3">
