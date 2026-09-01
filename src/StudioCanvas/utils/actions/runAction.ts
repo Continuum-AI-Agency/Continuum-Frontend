@@ -444,10 +444,19 @@ export async function runAction(args: RunActionArgs): Promise<NodeOutput> {
   if (isOverlayActionId(args.actionId)) return runOverlayAction(args, config);
 
   if (def.execution === 'worker') {
-    const inputs = def.inputs.map((port) => {
-      const resolved = inputFor(args, port.handle);
-      if (!resolved.blob) throw new Error(`The input on "${port.handle}" has no readable bytes`);
-      return { handle: port.handle, blob: resolved.blob };
+    // ONE ENTRY PER WIRE, not per port. `def.inputs` is the PORT list, so mapping it
+    // handed a `max: 20` port exactly one blob however many clips the resolver had
+    // already put on that handle — and `video.stitch` died on "received 1 clip" with
+    // two clips visibly connected (#304). The resolver was fixed in wave 1; this is the
+    // bridge that threw its work away on the way to the worker.
+    const inputs = def.inputs.flatMap((port) => {
+      const wired = inputsFor(args, port.handle);
+      if (wired.length === 0)
+        throw new Error(`Nothing is connected to this action's "${port.handle}" input`);
+      return wired.map((resolved) => {
+        if (!resolved.blob) throw new Error(`The input on "${port.handle}" has no readable bytes`);
+        return { handle: port.handle, blob: resolved.blob };
+      });
     });
     const result = await runActionInWorker({
       actionId: args.actionId,

@@ -98,6 +98,27 @@ describe('useStudioStore', () => {
     );
   });
 
+  // #301 again, on the path the LIVE canvas actually takes. The test above wires the
+  // router by hand, so it only ever exercised `onConnect`; a graph rehydrated from
+  // canvas_sessions, applied from a template, or written by studio_workflow arrives
+  // through setNodes/setEdges with its edges ALREADY there and fires no connection at
+  // all. That router mounted reading "Unset" while its unit test stayed green.
+  it('stamps a router modality on a graph that arrives already wired', () => {
+    useStudioStore.getState().setNodes([
+      { id: 'text1', position: { x: 0, y: 0 }, data: { value: 'hello' }, type: 'string' },
+      { id: 'route', position: { x: 0, y: 0 }, data: { lockedType: null }, type: 'router' },
+    ] as StudioNode[]);
+    useStudioStore
+      .getState()
+      .setEdges([
+        { id: 'e1', source: 'text1', sourceHandle: 'text', target: 'route', targetHandle: 'in' },
+      ]);
+
+    expect(useStudioStore.getState().nodes.find((n) => n.id === 'route')?.data.lockedType).toBe(
+      'text',
+    );
+  });
+
   it('should allow valid NanoGenNode connections', () => {
     const nodes: StudioNode[] = [
       { id: 'text1', position: { x: 0, y: 0 }, data: {}, type: 'string' },

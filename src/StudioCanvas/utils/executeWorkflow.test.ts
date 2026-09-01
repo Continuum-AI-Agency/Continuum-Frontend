@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { Edge } from '@xyflow/react';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
+import * as spliceWorkerClientModule from '../workers/spliceWorkerClient';
 import {
   collectDownstreamLeafIds,
   collectPublisherHandoffs,
@@ -10,6 +11,15 @@ import {
 import { computeGenerationSignature } from './generationSignature';
 
 const rehydrateWorkflowMediaNodes = mock(async (input: StudioNode[]) => input);
+
+/**
+ * Snapshotted at load. `mock.module` REPLACES the live namespace, so spreading the
+ * namespace itself to "restore" it would hand back whatever mock is currently installed.
+ */
+const realSpliceWorkerClient = { ...spliceWorkerClientModule };
+
+/** The one field of the worker's start frame these tests read. */
+type WorkerActionCall = { inputs: { handle: string; blob: Blob }[] };
 
 describe('executeWorkflow', () => {
   const originalFetch = globalThis.fetch;
@@ -2696,7 +2706,38 @@ describe('an edge that exists is never reported as missing', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    // The stub is a module mock, which is process-wide in Bun: put the real client back
+    // so `spliceWorkerClient.test.ts` still tests the real client.
+    mock.module('../workers/spliceWorkerClient', () => realSpliceWorkerClient);
   });
+
+  /**
+   * The splicer worker never boots in a test process, so a run that reaches it fails on
+   * the worker itself and every message-shaped assertion downstream reads green for the
+   * wrong reason. Stubbing the client makes the WORKER PAYLOAD observable — which is the
+   * only place the clip count is a fact rather than a hope.
+   */
+  const stubSpliceWorker = () => {
+    const runActionInWorker = mock(async () => ({
+      blob: new Blob([new Uint8Array(8)], { type: 'video/mp4' }),
+      objectUrl: 'blob:stitched',
+      width: 2,
+      height: 2,
+      durationSec: 2,
+    }));
+    mock.module('../workers/spliceWorkerClient', () => ({
+      ...realSpliceWorkerClient,
+      runActionInWorker,
+    }));
+    return runActionInWorker;
+  };
+
+  /** How many blobs the worker was handed on one handle — 0 when it was never called. */
+  const clipsOnHandle = (runActionInWorker: ReturnType<typeof stubSpliceWorker>, handle: string) =>
+    (
+      (runActionInWorker.mock.calls[0]?.[0] as unknown as WorkerActionCall | undefined)?.inputs ??
+      []
+    ).filter((input) => input.handle === handle).length;
 
   const controls = () => ({
     executeGeneration: mock(async () => ({
@@ -2884,15 +2925,15 @@ describe('an edge that exists is never reported as missing', () => {
         { id: 'e1', source: 'bat', target: 'act', sourceHandle: 'collection', targetHandle: 'in' },
       ]);
 
+    const runInWorker = stubSpliceWorker();
     const c = controls();
     await executeWorkflow(c as never, { targetNodeId: 'act' });
 
-    // The splicer worker never boots in a test process, so the encode cannot be the
-    // assertion. What can: the run got past the clip count and reached the encoder,
-    // instead of telling the user to connect the clips they had connected.
-    expect(String(nodeById('act')?.data.error ?? '')).not.toMatch(
-      /at least two clips|not connected|missing|produced nothing/i,
-    );
+    // The COUNT the worker was handed, not the absence of one error message. The old
+    // assertion was `not.toMatch(/at least two clips|…/)` on the node's error, which the
+    // worker's own "not defined in this process" failure satisfied just as well as a
+    // working stitch — green while the live canvas read "received 1 clip" (#304).
+    expect(clipsOnHandle(runInWorker, 'in')).toBe(2);
   });
 
   // The same port, wired the other way: two separate clip edges. Guards the shape the
@@ -2927,15 +2968,14 @@ describe('an edge that exists is never reported as missing', () => {
       { id: 'e2', source: 'clip-b', target: 'act', sourceHandle: 'video', targetHandle: 'in' },
     ]);
 
+    const runInWorker = stubSpliceWorker();
     const c = controls();
     await executeWorkflow(c as never, { targetNodeId: 'act' });
 
-    // The worker never boots in a test process, so the encode itself cannot be the
-    // assertion. What CAN be asserted is that the run never claimed the two wired
-    // clips were absent.
-    expect(String(nodeById('act')?.data.error ?? '')).not.toMatch(
-      /at least two clips connected|not connected|missing/i,
-    );
+    // Both wires, all the way to the worker payload. `runAction` used to build that
+    // payload from `def.inputs` — the PORT list — so a `max: 20` port arrived carrying
+    // exactly one blob however many clips the resolver had put on it.
+    expect(clipsOnHandle(runInWorker, 'in')).toBe(2);
   });
 
   // Bug #305: Join Text with two text edges failed on
