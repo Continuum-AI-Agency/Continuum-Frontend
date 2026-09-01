@@ -32,6 +32,7 @@ import { isImplementedAction } from '../../utils/actions/runAction';
 import { executeWorkflow } from '../../utils/executeWorkflow';
 import { handleStyle, MODALITY_LABEL, ModalityPreview } from '../modalityPreview';
 import { NodeBadge, NodeOverlayNote, NodeTitleBar } from '../NodeChrome';
+import { NodeDownloadButton } from '../NodeDownloadButton';
 import { ActionBrandNote } from './ActionBrandNote';
 import { ActionConfigPopover } from './ActionConfigPopover';
 
@@ -111,6 +112,14 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
                 {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
                 Run
               </Button>
+              {/* Every op that lands an image or a clip carries the save; the text ops
+                  render nothing here, because the button reads the OUTPUT and a string
+                  is not a file (Airtable #288). */}
+              <NodeDownloadButton
+                nodeType="action"
+                data={data}
+                baseName={def.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}
+              />
               {data.error ? (
                 <NodeOverlayNote tone="destructive">{data.error}</NodeOverlayNote>
               ) : null}

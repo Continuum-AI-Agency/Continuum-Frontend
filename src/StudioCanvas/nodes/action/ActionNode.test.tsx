@@ -114,18 +114,12 @@ describe('ActionNode', () => {
     }
   });
 
-  it('has a runner for every catalog op but the one deliberately held back', () => {
+  it('has a runner for every catalog op', () => {
     // The Wave-3 landing implemented the whole catalog; a real id regressing to
     // unimplemented should fail loudly here rather than silently greying a node.
     //
-    // `video.removeBackground` is the one declared exception, and it is a DECISION, not a
-    // gap: `runAction.ts` leaves it out of the map on purpose so its Run button greys
-    // rather than failing in the user's face, because the matting job needs an NVIDIA L4
-    // quota this project does not have and BiRefNet on CPU is ~2s per frame. Naming it
-    // here keeps the invariant biting for every other op.
-    const deliberatelyUnimplemented = ['video.removeBackground'];
     const unimplemented = ACTION_IDS.filter((id) => !runActionModule.isImplementedAction(id));
-    expect(unimplemented).toEqual(deliberatelyUnimplemented);
+    expect(unimplemented).toEqual([]);
   });
 
   it('leaves Run enabled for an op that has a runner', () => {

@@ -397,16 +397,17 @@ const ORCHESTRATED_OPS: Partial<Record<ActionId, SyncOp>> = {
   // declaration never decides where it actually runs.
   'image.removeBackground': (args, config) =>
     import('./removeBackgroundOp').then((m) => m.runRemoveImageBackground(args, config)),
-  // `video.removeBackground` is DELIBERATELY absent, which greys its Run button out
-  // rather than letting it fail in the user's face — the honest state, per the note
-  // on `isImplementedAction` below.
+  // Live since 2026-08-31: the L4 quota landed and `continuum-matte-video` is
+  // deployed in us-central1 running BiRefNet-portrait at stride 3 — the operating
+  // point `matte:video:matrix` picked, at $0.0096 and 32s of task life for a 4s clip.
   //
-  // The runner (`runRemoveVideoBackground`) is complete and its Cloud Run job is
-  // written and deployable; what is missing is an NVIDIA L4 quota allocation on the
-  // GCP project, and BiRefNet on CPU is roughly two seconds PER FRAME — ten minutes
-  // for a thirty-second clip — so there is no CPU fallback worth offering.
-  //
-  // To re-enable: get the L4 quota, `bun run deploy:run:job`, restore this one line.
+  // It stays orchestrated rather than worker-side for the same reason as the image
+  // op: the matting is a GPU job in Cloud Run, so the runner's whole job is an
+  // authenticated call and an SSE read. That stream now carries real frame-by-frame
+  // progress from the job, which matters here more than anywhere else in the canvas —
+  // a clip spends its first ~3 minutes on Cloud Run scheduling and an image pull.
+  'video.removeBackground': (args, config) =>
+    import('./removeBackgroundOp').then((m) => m.runRemoveVideoBackground(args, config)),
 };
 
 /**
