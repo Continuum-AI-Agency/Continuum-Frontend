@@ -33,6 +33,9 @@ interface InstagramMediaBrowserProps {
 
 const ERROR_COPY: Record<InstagramLookupErrorKind, string> = {
   account_required: 'Connect an Instagram business account to this brand to import from Instagram.',
+  permission_denied:
+    'Instagram refused this lookup for want of a permission on the connected account — reconnecting will not fix it. The Meta app\'s Instagram permissions have to be approved for this account.',
+  rate_limited: 'Instagram is rate-limiting your account — nothing needs reconnecting, try again in a few minutes.',
   lookup_unavailable:
     'Instagram lookup is temporarily unavailable — reconnect the Instagram business account or try again shortly.',
   not_found: 'No public business or creator account was found for that username.',

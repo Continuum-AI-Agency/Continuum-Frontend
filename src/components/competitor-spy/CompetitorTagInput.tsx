@@ -14,10 +14,18 @@ const TAG_LIMIT = 5;
 // has no connected Instagram" (409) and "reconnect Instagram" (503) from a genuine
 // "handle isn't a public business account" so the user fixes the right thing. The
 // "Track by name" fallback below stays available in every case.
+const PERM_SHORT =
+  'Instagram Business Discovery is not permitted for your connected account — competitor lookups read other profiles through your own Instagram Business account and need a permission your own analytics do not. Reconnecting will not fix it.';
+const RATE = 'Instagram is rate-limiting your account — nothing needs reconnecting, try again in a few minutes.';
+
 function competitorSearchErrorCopy(error: unknown): string {
   switch (instagramLookupErrorKind(error)) {
     case 'account_required':
       return 'Instagram account required — connect your Instagram business account to research competitors. You can still track by name below.';
+    case 'permission_denied':
+      return `${PERM_SHORT} You can still track by name below.`;
+    case 'rate_limited':
+      return `${RATE} You can still track by name below.`;
     case 'lookup_unavailable':
       return 'Instagram lookup is temporarily unavailable — reconnect your Instagram business account or try again shortly. You can still track by name below.';
     default:
