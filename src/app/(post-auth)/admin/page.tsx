@@ -144,11 +144,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           transfers.
         </p>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <Card className="glass-panel border-subtle shadow-brand-glow py-0">
-          <CardContent className="p-[var(--card-pad)]">
+      <div className="min-h-0 flex-1 overflow-hidden overscroll-contain">
+        <Card className="glass-panel border-subtle shadow-brand-glow h-full py-0">
+          <CardContent className="flex h-full min-h-0 flex-col p-[var(--card-pad)]">
             {loadError ? (
-              <Alert variant="destructive" className="mb-4">
+              <Alert variant="destructive" className="mb-4 shrink-0">
                 <AlertTitle>Unable to load admin data</AlertTitle>
                 <AlertDescription>{loadError}</AlertDescription>
               </Alert>
