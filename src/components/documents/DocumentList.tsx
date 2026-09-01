@@ -69,7 +69,7 @@ export function DocumentManager({
 }: DocumentManagerProps) {
   const { show } = useToast();
   const reduceMotion = useReducedMotion();
-  const documents = useDocuments(brandId, seed);
+  const { documents } = useDocuments(brandId, seed);
   const mutations = useDocumentMutations(brandId);
   const inputRef = useRef<HTMLInputElement>(null);
   const [pinnedId, setPinnedId] = useState<string | null>(null);

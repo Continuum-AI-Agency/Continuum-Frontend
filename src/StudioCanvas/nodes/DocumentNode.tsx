@@ -8,9 +8,9 @@ import {
 } from '@xyflow/react';
 import { Copy, FileText, Library, Loader2, Trash2, Unlink, Upload, X } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import type { DocumentView } from '@/components/documents/types';
+import { describeError, type DocumentView } from '@/components/documents/types';
 import { useDocuments } from '@/components/documents/useDocuments';
 import { Button } from '@/components/ui/button';
 import {
@@ -60,6 +60,15 @@ type PlatformDocRow = {
 // Per-doc upload state — only held in memory; not persisted to canvas.
 type DocUploadState = 'processing' | 'ready' | 'error';
 
+// What a chip can say. `missing` is the fact the node used to be unable to express:
+// this canvas references a document the brand library does not have.
+type DocChipState = DocUploadState | 'missing';
+
+// The canvas node never seeds a document list — every entry is looked up live — so the
+// empty seed must be a stable reference. A fresh `[]` per render re-fired useDocuments'
+// seed effect on every render, which set state, which rendered again.
+const NO_SEED: DocumentView[] = [];
+
 function inferDocType(name: string, kind: string | null): 'pdf' | 'txt' {
   if (kind === 'pdf') return 'pdf';
   const ext = name.split('.').pop()?.toLowerCase();
@@ -72,13 +81,23 @@ function resolveDocStatus(
   doc: CanvasDocument,
   uploadStates: Map<string, DocUploadState>,
   liveDocById: Map<string, DocumentView>,
-): { status: DocUploadState; step?: string } {
+  libraryLoading: boolean,
+): { status: DocChipState; step?: string } {
   if (doc.sourceDocumentId) {
     const live = liveDocById.get(doc.sourceDocumentId);
-    if (!live) return { status: 'processing' };
-    if (live.status === 'ready') return { status: 'ready' };
-    if (live.status === 'error') return { status: 'error' };
-    return { status: 'processing', step: live.progressStep ?? undefined };
+    if (live) {
+      if (live.status === 'ready') return { status: 'ready' };
+      if (live.status === 'error') {
+        return { status: 'error', step: describeError(live.errorCode, live.errorMessage) };
+      }
+      return { status: 'processing', step: live.progressStep ?? undefined };
+    }
+    // Not having heard of a document is not the same fact as the document processing.
+    // While the library read is in flight we genuinely do not know; once it has
+    // settled, a document that is not in it is gone — and a spinner would be a lie.
+    if (libraryLoading) return { status: 'processing' };
+    const pending = uploadStates.get(doc.name);
+    return { status: pending === 'processing' ? 'processing' : 'missing' };
   }
   const state = uploadStates.get(doc.name);
   return { status: state ?? 'ready' };
@@ -125,13 +144,17 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
   // Realtime status subscription for all documents in this node that have a
   // sourceDocumentId — covers both local uploads (assigned after ingest returns)
   // and platform picks.
-  const liveDocuments = useDocuments(brandId ?? '', []);
-  const liveDocById = useRef<Map<string, DocumentView>>(new Map());
-  useEffect(() => {
-    const map = new Map<string, DocumentView>();
-    for (const doc of liveDocuments) map.set(doc.id, doc);
-    liveDocById.current = map;
-  }, [liveDocuments]);
+  const { documents: liveDocuments, loading: libraryLoading } = useDocuments(
+    brandId ?? '',
+    NO_SEED,
+  );
+  // Derived during render, not parked in a ref by an effect: a ref written after commit
+  // left every chip rendering the PREVIOUS map and never re-rendering to catch up, so a
+  // status update that did arrive was still one step behind on screen.
+  const liveDocById = useMemo(
+    () => new Map(liveDocuments.map((doc) => [doc.id, doc])),
+    [liveDocuments],
+  );
 
   const addDocuments = useCallback(
     (newDocs: CanvasDocument[]) => {
@@ -174,11 +197,9 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
         }
         updateNodeData(id, { documents: next });
         triggerSave();
-        setUploadStates((prev) => {
-          const m = new Map(prev);
-          m.delete(docName);
-          return m;
-        });
+        // The upload state deliberately stays 'processing'. The live row supersedes it
+        // the moment the library read or the realtime INSERT reports it; clearing it
+        // here left a just-ingested document reading as missing in that gap.
       } catch (err) {
         const msg = err instanceof Error ? err.message : `Failed to ingest ${file.name}`;
         show({ title: 'Upload failed', description: msg, variant: 'error' });
@@ -468,7 +489,8 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                         const { status, step } = resolveDocStatus(
                           doc,
                           uploadStates,
-                          liveDocById.current,
+                          liveDocById,
+                          libraryLoading,
                         );
                         return (
                           <div
@@ -486,14 +508,24 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                               <p className="truncate text-xs font-medium text-foreground">
                                 {doc.name}
                               </p>
-                              <p className="text-3xs uppercase text-muted-foreground">
+                              <p
+                                title={step}
+                                className={cn(
+                                  'truncate text-3xs uppercase',
+                                  status === 'error' || status === 'missing'
+                                    ? 'text-destructive'
+                                    : 'text-muted-foreground',
+                                )}
+                              >
                                 {status === 'processing'
                                   ? (step ?? 'processing…')
                                   : status === 'error'
-                                    ? 'error'
-                                    : doc.sourceDocumentId
-                                      ? `${doc.type} · ready`
-                                      : doc.type}
+                                    ? (step ?? 'error')
+                                    : status === 'missing'
+                                      ? 'unavailable'
+                                      : doc.sourceDocumentId
+                                        ? `${doc.type} · ready`
+                                        : doc.type}
                               </p>
                             </div>
                             <button
