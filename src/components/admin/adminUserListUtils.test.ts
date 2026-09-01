@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   auditActorLabel,
+  brandsWithWorkflows,
   buildAdminAuditRequestBody,
   buildAdminTabParams,
   buildAdminUserListSearchParams,
@@ -9,6 +10,7 @@ import {
   describeWorkflowNames,
   formatAuditActionLabel,
   formatBrandDisambiguationLabel,
+  formatBrandDisambiguationLines,
   membershipLabel,
   resolveAdminTab,
 } from '@/components/admin/adminUserListUtils';
@@ -173,6 +175,20 @@ describe('formatBrandDisambiguationLabel', () => {
   });
 });
 
+describe('formatBrandDisambiguationLines', () => {
+  it('splits into a name line and a detail line the single-line label re-joins', () => {
+    const brand = buildBrand({ ownerEmail: 'mkt@easyfit.mx' });
+    const lines = formatBrandDisambiguationLines(brand);
+    expect(lines).toEqual({ name: 'easyfit', detail: 'mkt@easyfit.mx — …5b80344e' });
+    expect(`${lines.name} — ${lines.detail}`).toBe(formatBrandDisambiguationLabel(brand));
+  });
+
+  it('keeps the id suffix as the detail line when no owner is known', () => {
+    const lines = formatBrandDisambiguationLines(buildBrand({ ownerEmail: null }));
+    expect(lines).toEqual({ name: 'easyfit', detail: '…5b80344e' });
+  });
+});
+
 describe('describeWorkflowNames', () => {
   it('joins names as-is when within the limit', () => {
     expect(describeWorkflowNames(['Post', 'Contenido Organico'])).toBe('Post, Contenido Organico');
@@ -226,5 +242,46 @@ describe('canBulkTransfer', () => {
     const result = canBulkTransfer(workflows);
     expect(result.allowed).toBe(false);
     expect(result.reason).toMatch(/single scope/);
+  });
+});
+
+// Airtable #277. The transfer picker listed every brand alphabetically, most of which
+// have never had a Creative Studio, so the destination list was mostly noise.
+describe('#277 brandsWithWorkflows', () => {
+  const brand = (overrides: Partial<AdminBrandOption>): AdminBrandOption => ({
+    id: '00000000-0000-0000-0000-0000000000aa',
+    brand_name: 'Aaron Test Brand',
+    tier: 1,
+    active: true,
+    ownerEmail: null,
+    ...overrides,
+  });
+
+  it('drops brands that have no workflows', () => {
+    const brands = [
+      brand({ id: 'empty-1', brand_name: 'AgeGateway', workflowCount: 0 }),
+      brand({ id: 'has-3', brand_name: 'VIVO 47 Center', workflowCount: 3 }),
+    ];
+
+    expect(brandsWithWorkflows(brands).map((entry) => entry.id)).toEqual(['has-3']);
+  });
+
+  it('treats a missing count as empty, so a synthetic row is never a destination', () => {
+    // The global-library and audit "All brands" rows carry no count and are not
+    // brands anyone can transfer INTO.
+    expect(brandsWithWorkflows([brand({ id: 'global' })])).toEqual([]);
+  });
+
+  it('keeps the order it was handed, so the list stays alphabetical', () => {
+    const brands = [
+      brand({ id: 'a', brand_name: 'ALA Applied Technologies', workflowCount: 2 }),
+      brand({ id: 'b', brand_name: 'Bellweather', workflowCount: 0 }),
+      brand({ id: 'c', brand_name: 'Cortado', workflowCount: 1 }),
+    ];
+
+    expect(brandsWithWorkflows(brands).map((entry) => entry.brand_name)).toEqual([
+      'ALA Applied Technologies',
+      'Cortado',
+    ]);
   });
 });

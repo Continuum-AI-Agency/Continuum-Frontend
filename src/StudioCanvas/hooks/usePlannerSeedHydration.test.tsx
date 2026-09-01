@@ -154,29 +154,83 @@ describe('usePlannerSeedHydration', () => {
     });
   });
 
-  it('never overwrites a canvas that already has nodes', () => {
+  // Airtable #307. These two used to assert the opposite — that a non-empty canvas
+  // is never seeded — which is precisely the defect: the planner link resolves the
+  // user's last-viewed room, realtime fills the store from it, and the seed was
+  // dropped in silence. The canvas the user already had open is KEPT, and the seed
+  // lands beside it.
+  it('appends the seed to a canvas that already has nodes, keeping the existing ones', () => {
+    const existing = {
+      id: 'existing',
+      type: 'string',
+      position: { x: 0, y: 0 },
+      data: {},
+    } as unknown as StudioNode;
+    store.nodes = [existing];
+    const seed = makeSeed();
+    renderHydration({ organicPlannerSeed: seed, activeRoomId: 'room-1', isLoading: false });
+
+    expect(setNodes).toHaveBeenCalledTimes(1);
+    const written = setNodes.mock.calls[0]?.[0] as StudioNode[];
+    expect(written[0]).toBe(existing);
+    const writtenIds = written.map((node) => node.id);
+    for (const seeded of buildStarterFlow(seed).nodes) {
+      expect(writtenIds).toContain(seeded.id);
+    }
+    expect(takeSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('appends the seed to a canvas that already has edges, keeping the existing ones', () => {
+    const existingEdge = { id: 'existing-edge', source: 'a', target: 'b' };
+    store.edges = [existingEdge];
+    const seed = makeSeed();
+    renderHydration({ organicPlannerSeed: seed, activeRoomId: 'room-1', isLoading: false });
+
+    expect(setEdges).toHaveBeenCalledTimes(1);
+    const written = setEdges.mock.calls[0]?.[0] as { id: string }[];
+    expect(written[0]).toBe(existingEdge);
+    for (const seeded of buildStarterFlow(seed).edges) {
+      expect(written.map((edge) => edge.id)).toContain(seeded.id);
+    }
+  });
+
+  // The whole safety argument for dropping the empty-canvas guard: seed ids are
+  // deterministic and draft-scoped, so a room that already holds this draft's flow
+  // takes no second copy — and writes nothing, so the persisted row is untouched.
+  it('adds nothing when the room already holds this draft — no duplicate, no write', () => {
+    const seed = makeSeed();
+    const starter = buildStarterFlow(seed);
+    store.nodes = [...starter.nodes];
+    store.edges = [...starter.edges];
+
+    renderHydration({ organicPlannerSeed: seed, activeRoomId: 'room-1', isLoading: false });
+
+    expect(setNodes).not.toHaveBeenCalled();
+    expect(setEdges).not.toHaveBeenCalled();
+    expect(takeSnapshot).not.toHaveBeenCalled();
+    expect(triggerSave).not.toHaveBeenCalled();
+  });
+
+  it('drops the seeded block clear of the existing graph instead of on top of it', () => {
     store.nodes = [
       {
         id: 'existing',
         type: 'string',
         position: { x: 0, y: 0 },
+        style: { width: 400, height: 900 },
         data: {},
       } as unknown as StudioNode,
     ];
-    renderHydration({ organicPlannerSeed: makeSeed(), activeRoomId: 'room-1', isLoading: false });
+    const seed = makeSeed();
+    renderHydration({ organicPlannerSeed: seed, activeRoomId: 'room-1', isLoading: false });
 
-    expect(setNodes).not.toHaveBeenCalled();
-    expect(setEdges).not.toHaveBeenCalled();
-    expect(takeSnapshot).not.toHaveBeenCalled();
-  });
-
-  it('never overwrites a canvas that already has edges', () => {
-    store.edges = [{ id: 'existing-edge', source: 'a', target: 'b' }];
-    renderHydration({ organicPlannerSeed: makeSeed(), activeRoomId: 'room-1', isLoading: false });
-
-    expect(setNodes).not.toHaveBeenCalled();
-    expect(setEdges).not.toHaveBeenCalled();
-    expect(takeSnapshot).not.toHaveBeenCalled();
+    const written = setNodes.mock.calls[0]?.[0] as StudioNode[];
+    const seededIds = new Set(buildStarterFlow(seed).nodes.map((node) => node.id));
+    const seededTop = Math.min(
+      ...written.filter((node) => seededIds.has(node.id)).map((node) => node.position.y),
+    );
+    // Existing node spans y 0..900; nothing seeded may start inside that band.
+    expect(seededTop).toBeGreaterThan(900);
   });
 
   it('seeds the starter flow into an empty, loaded canvas', () => {

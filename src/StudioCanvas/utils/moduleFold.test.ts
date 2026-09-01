@@ -365,7 +365,12 @@ describe('resolveFoldedConnection', () => {
 
   it('leaves a connection between two real nodes alone', () => {
     const { nodes, edges } = scene();
-    const connection = { source: 'ref', sourceHandle: 'image', target: 'sink', targetHandle: 'image' };
+    const connection = {
+      source: 'ref',
+      sourceHandle: 'image',
+      target: 'sink',
+      targetHandle: 'image',
+    };
 
     expect(resolveFoldedConnection(connection, nodes, edges, collapsed())).toBe(connection);
   });
@@ -380,13 +385,23 @@ describe('resolveFoldedConnection', () => {
     const outbound = ports.outputPorts.find((p) => p.handleId === 'image');
 
     const intoModule = resolveFoldedConnection(
-      { source: 'ref', sourceHandle: 'image', target: collapsedNodeId(MODULE_A), targetHandle: inbound?.id },
+      {
+        source: 'ref',
+        sourceHandle: 'image',
+        target: collapsedNodeId(MODULE_A),
+        targetHandle: inbound?.id,
+      },
       nodes,
       edges,
       collapsed(),
     );
     const outOfModule = resolveFoldedConnection(
-      { source: collapsedNodeId(MODULE_A), sourceHandle: outbound?.id, target: 'sink', targetHandle: 'image' },
+      {
+        source: collapsedNodeId(MODULE_A),
+        sourceHandle: outbound?.id,
+        target: 'sink',
+        targetHandle: 'image',
+      },
       nodes,
       edges,
       collapsed(),

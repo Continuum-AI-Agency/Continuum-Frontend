@@ -13,7 +13,11 @@ import type { BrandBookPieceKind, BrandDirectionPiece, DesignSection } from '@co
 import { SECTION_AUTO_APPLY, suppressedDesignSections } from '@continuum/contracts';
 import { ChevronDown, Gem } from 'lucide-react';
 import React from 'react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
@@ -111,9 +115,7 @@ export function GroundingChip({
 
   const tooltip = (
     <div className="flex max-w-xs flex-col gap-2 text-xs">
-      {inherited ? (
-        <p className="font-medium">Applied when enriching this prompt</p>
-      ) : null}
+      {inherited ? <p className="font-medium">Applied when enriching this prompt</p> : null}
       <div>
         <p className="font-medium">Brand book</p>
         {!enforced ? (

@@ -68,11 +68,31 @@ export function planFrameTimestamps(durationSec: number): number[] {
 // The wire shape
 // ---------------------------------------------------------------------------
 
-// Deliberately the same per-frame shape and the same budget as
-// `canvasEditorEvidenceFrameSchema`: that path is already proven through the Video
-// Editor, and a second, subtly different frame envelope is how the two drift.
+// Deliberately the same per-frame shape as `canvasEditorEvidenceFrameSchema`: that
+// path is already proven through the Video Editor, and a second, subtly different
+// frame envelope is how the two drift. The BUDGETS differ because the two samplers
+// do — this one encodes at 512px, the editor's at 320px — and each is sized from
+// what its own encoder actually emits.
+//
+// Measured 2026-09-01 over 30 real production canvas images, re-encoded exactly as
+// `collectVisualEvidence` does (longest edge <= 512px, JPEG quality 0.7). Base64
+// bytes per frame: min 11,280, p50 28,892, p90 50,900, max 54,428. Twelve frames
+// therefore cost ~339 KB at the median and ~638 KB at the observed worst case.
+//
+// The previous pair — 160,000 per frame, 1,200,000 in total — was written from a
+// guess, not a measurement: three times what the encoder can emit per frame, and
+// roughly twice what a full sample weighs. It also disagreed with the route that
+// guards it by a factor of twenty, so every turn that sampled even two frames was
+// rejected with a 413 before Zod ever ran (Airtable #306). The route now derives its
+// bodyLimit from these constants — see CANVAS_COMPOSE_MAX_BODY_BYTES — so the two
+// numbers cannot drift apart again.
 export const VISUAL_EVIDENCE_MAX_FRAMES = 12;
-export const VISUAL_EVIDENCE_MAX_BASE64_BYTES = 1_200_000;
+
+/** One frame. ~1.5x the measured worst case, so a denser frame than any observed still fits. */
+export const VISUAL_EVIDENCE_MAX_FRAME_BASE64_BYTES = 80_000;
+
+/** Every frame in one turn. Above 12x the measured p90, and above the measured 12-frame worst case. */
+export const VISUAL_EVIDENCE_MAX_BASE64_BYTES = 720_000;
 
 export const visualEvidenceFrameSchema = z
   .object({
@@ -85,7 +105,7 @@ export const visualEvidenceFrameSchema = z
     durationSec: z.number().nonnegative().optional(),
     label: z.string().min(1).max(160).optional(),
     mediaType: z.enum(['image/webp', 'image/jpeg']),
-    base64: z.string().min(1).max(160_000),
+    base64: z.string().min(1).max(VISUAL_EVIDENCE_MAX_FRAME_BASE64_BYTES),
   })
   .strict();
 export type VisualEvidenceFrame = z.infer<typeof visualEvidenceFrameSchema>;

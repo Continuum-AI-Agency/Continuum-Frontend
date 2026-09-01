@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
+import { brandTechniquesQueryKey } from '@/lib/ai-studio/techniques';
 
 global.getComputedStyle = global.window.getComputedStyle.bind(global.window);
 (global as { MutationObserver?: unknown }).MutationObserver = window.MutationObserver;
@@ -38,14 +39,49 @@ const node = (id: string, type: string, x = 0): StoreNode =>
 
 const BRAND = '868a01f9-101b-4e0e-8392-6358a127ad97';
 
-const renderDialog = (nodes: StoreNode[], edges: StoreEdge[]) => {
+/**
+ * The Add Node → Techniques list is mounted for the whole canvas session
+ * (StudioCanvas calls useTechniques), so the save's cache invalidation ALWAYS has an
+ * active observer to refetch. `listening` reproduces that, with a queryFn the test
+ * controls — a refetch that never settles is exactly the shape of Airtable #282.
+ */
+function TechniquesListener({ queryFn }: { queryFn: () => Promise<unknown[]> }) {
+  useQuery({ queryKey: brandTechniquesQueryKey(BRAND), queryFn });
+  return null;
+}
+
+const renderDialog = (
+  nodes: StoreNode[],
+  edges: StoreEdge[],
+  options: {
+    onOpenChange?: (open: boolean) => void;
+    listening?: () => Promise<unknown[]>;
+    saveTimeoutMs?: number;
+  } = {},
+) => {
   useStudioStore.setState({ brandId: BRAND, edges, nodes });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <SaveTechniqueDialog open onOpenChange={() => {}} brandProfileId={BRAND} nodes={nodes} />
+      {options.listening ? <TechniquesListener queryFn={options.listening} /> : null}
+      <SaveTechniqueDialog
+        open
+        onOpenChange={options.onOpenChange ?? (() => {})}
+        brandProfileId={BRAND}
+        nodes={nodes}
+        {...(options.saveTimeoutMs === undefined ? {} : { saveTimeoutMs: options.saveTimeoutMs })}
+      />
     </QueryClientProvider>,
   );
+};
+
+const typeNameAndSave = (name: string) => {
+  act(() => {
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: name } });
+  });
+  act(() => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save technique' }));
+  });
 };
 
 beforeEach(() => {
@@ -129,5 +165,48 @@ describe('SaveTechniqueDialog', () => {
 
     expect(screen.getByText(/Select the nodes you want to reuse/)).toBeTruthy();
     expect(screen.queryByTestId('technique-ports')).toBeNull();
+  });
+
+  // Airtable #282. The insert had already landed; the dialog was waiting on the
+  // techniques list to come back before it would close, and that list is fetched by
+  // a component that lives as long as the canvas does. A refetch that never settles
+  // therefore parked the button on "Saving…" with nothing to show for it.
+  it('closes as soon as the row is saved, even while the techniques list is still refetching', async () => {
+    const onOpenChange = mock(() => {});
+    renderDialog([node('gen', 'nanoGen')], [], {
+      onOpenChange,
+      listening: () => new Promise<unknown[]>(() => {}),
+    });
+
+    typeNameAndSave('Palette smash-up');
+
+    await waitFor(() => expect(createWorkflow).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(screen.queryByRole('button', { name: 'Saving…' })).toBeNull();
+  });
+
+  it('shows the error and gives the button back when the save fails', async () => {
+    createWorkflow.mockImplementationOnce(async () => {
+      throw new Error('Workflow request failed');
+    });
+    const onOpenChange = mock(() => {});
+    renderDialog([node('gen', 'nanoGen')], [], { onOpenChange });
+
+    typeNameAndSave('Palette smash-up');
+
+    await waitFor(() => expect(screen.getByText('Workflow request failed')).toBeTruthy());
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Save technique' })).toBeTruthy();
+  });
+
+  it('stops waiting on a save that never comes back, instead of spinning forever', async () => {
+    createWorkflow.mockImplementationOnce(() => new Promise(() => {}));
+    renderDialog([node('gen', 'nanoGen')], [], { saveTimeoutMs: 300 });
+
+    typeNameAndSave('Palette smash-up');
+
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/never came back/)).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Save technique' })).toBeTruthy();
   });
 });

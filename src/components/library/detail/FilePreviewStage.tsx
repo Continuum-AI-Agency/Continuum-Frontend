@@ -2,15 +2,16 @@
 
 // Stage for kind === 'file' assets (source files, no renderable preview):
 // file identity + metadata and a signed-URL download, minted on demand
-// through the same /api/library/sign route the grid uses.
+// through `downloadLibraryAsset` — the one sign-and-save every Library
+// surface shares.
 
 import type { MediaAsset } from '@continuum/contracts';
 import { Download, FileIcon, ImagePlus, Loader2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import { uploadCompanionPreview } from '@/lib/library/assetPreview';
 import { ensureAssetHeadVersion } from '@/lib/library/creativeOperations';
-import { withForcedDownload } from '@/lib/media/downloadUrl';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { fileExtension, formatBytes } from './assetFileMeta';
 
@@ -32,19 +33,7 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
     setDownloading(true);
     setError(null);
     try {
-      const response = await fetch('/api/library/sign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, assetId: asset.id }),
-      });
-      if (!response.ok) throw new Error(`Sign failed (${response.status})`);
-      const { signedUrl } = (await response.json()) as { signedUrl?: string };
-      if (!signedUrl) throw new Error('Sign failed');
-      const anchor = document.createElement('a');
-      anchor.href = withForcedDownload(signedUrl, asset.fileName);
-      anchor.download = asset.fileName;
-      anchor.rel = 'noopener';
-      anchor.click();
+      await downloadLibraryAsset({ brandId, assetId: asset.id, fileName: asset.fileName });
     } catch (err: unknown) {
       console.error('[FilePreviewStage] download failed', err);
       setError('Could not mint a download link.');

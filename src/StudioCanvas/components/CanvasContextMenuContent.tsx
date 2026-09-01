@@ -23,8 +23,8 @@ import {
 import type { InteractionMode } from '../stores/useStudioStore';
 import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
 import {
-  type AddNodeHandler,
   AddNodeCommandPalette,
+  type AddNodeHandler,
   type ApplyTechniqueHandler,
   type PaletteTechniques,
 } from './AddNodeCommandPalette';

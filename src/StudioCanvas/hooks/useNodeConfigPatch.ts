@@ -18,8 +18,8 @@ import {
   type GeneratorNodeBounds,
   IMAGE_GENERATOR_NODE_BOUNDS,
   OMNI_GENERATOR_NODE_BOUNDS,
-  snapNodeDimensionsToAspectRatio,
   type StudioNodeType,
+  snapNodeDimensionsToAspectRatio,
   VIDEO_GENERATOR_NODE_BOUNDS,
 } from '@continuum/contracts';
 import { useCallback } from 'react';

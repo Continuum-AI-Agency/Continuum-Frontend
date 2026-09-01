@@ -18,6 +18,7 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { FrameExtractNodeData } from '../types';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { NodeOverlayNote, NodeTitleBar } from './NodeChrome';
+import { NodeDownloadButton } from './NodeDownloadButton';
 
 export function FrameExtractBlock({
   id,
@@ -105,6 +106,12 @@ export function FrameExtractBlock({
             {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
             Extract
           </Button>
+          <NodeDownloadButton
+            nodeType="frameExtract"
+            data={data}
+            baseName={`frame-${selector}`}
+            label="Download extracted frame"
+          />
           {data.error ? <NodeOverlayNote tone="destructive">{data.error}</NodeOverlayNote> : null}
         </NodeContent>
       </CanvasNode>

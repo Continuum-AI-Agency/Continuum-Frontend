@@ -663,6 +663,11 @@ export interface ActionNodeData extends BaseNodeData {
   generatedVideoUrl?: string;
   /** A text op's output. Same field a `string` node uses, so consumers need no new case. */
   value?: string;
+  /** How many items the last `collection` output carried. */
+  collectionCount?: number;
+  collectionItemType?: 'text' | 'image' | 'video';
+  /** Every item of that collection as a renderable src — see `collectionPreviewSrcs`. */
+  collectionItems?: string[];
 }
 
 /** A list of inputs the nodes downstream of it run once per item. Capped at 100. */
@@ -682,6 +687,9 @@ export interface RouterNodeData extends BaseNodeData {
   generatedVideo?: string | Blob;
   generatedVideoUrl?: string;
   value?: string;
+  collectionCount?: number;
+  collectionItemType?: 'text' | 'image' | 'video';
+  collectionItems?: string[];
 }
 
 /** Terminal writer. The runtime lands in Wave 3; the shape is declared here. */

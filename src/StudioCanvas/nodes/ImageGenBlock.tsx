@@ -568,6 +568,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                         className="relative overflow-hidden bg-muted group/variation"
                       >
                         <img
+                          loading="lazy"
                           src={variation.preview}
                           alt={`Generated variation ${index + 1}`}
                           className="h-full w-full object-cover"
@@ -596,6 +597,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                 ) : previewImage ? (
                   <div className="relative w-full h-full flex items-center justify-center bg-muted">
                     <img
+                      loading="lazy"
                       src={previewImage as string}
                       alt="Generated result"
                       className="h-full w-full object-contain"

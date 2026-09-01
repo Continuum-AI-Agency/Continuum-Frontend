@@ -307,7 +307,13 @@ const videoGreenscreen: ActionEngine = async (args) => {
 
 const videoStitch: ActionEngine = async (args) => {
   const blobs = allInputs(args, 'in');
-  if (blobs.length < 2) throw new Error('Stitch needs at least two clips connected');
+  // Says what it GOT, not what the user must do. "Connect at least two clips" was the
+  // whole of #304: it fired on a node with two clips connected, because the resolver
+  // above had handed this engine one of them, and the message sent the reporter to
+  // check their wiring — the one thing that was not wrong.
+  if (blobs.length < 2) {
+    throw new Error(`Stitch received ${blobs.length} clip — it needs at least two to join`);
+  }
   const result = await composeTimeline({
     items: stitchItems(blobs, args.config),
     videoBitrate: args.videoBitrate,

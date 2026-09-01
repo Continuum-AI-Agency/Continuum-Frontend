@@ -171,20 +171,18 @@ describe('getTargetHandleCandidatesForNodeType — reference-mode aware image dr
 
 describe('Canvas V3 handle resolution', () => {
   it('lands an image on an action whose op takes one', () => {
-    expect(
-      getTargetHandleForNodeType('action', 'image', { actionId: 'image.rotate' }),
-    ).toBe('in');
+    expect(getTargetHandleForNodeType('action', 'image', { actionId: 'image.rotate' })).toBe('in');
   });
 
   it('lands a clip on the base input of a two-port op, not the overlay', () => {
     // `video.watermark` declares `in` (video) and `overlay-in` (image). Resolving to
     // the first ALLOWED handle would be right by luck here and wrong for the image.
-    expect(
-      getTargetHandleForNodeType('action', 'video', { actionId: 'video.watermark' }),
-    ).toBe('in');
-    expect(
-      getTargetHandleForNodeType('action', 'image', { actionId: 'video.watermark' }),
-    ).toBe('overlay-in');
+    expect(getTargetHandleForNodeType('action', 'video', { actionId: 'video.watermark' })).toBe(
+      'in',
+    );
+    expect(getTargetHandleForNodeType('action', 'image', { actionId: 'video.watermark' })).toBe(
+      'overlay-in',
+    );
   });
 
   it('offers nothing for an action with no op chosen', () => {

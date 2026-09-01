@@ -114,9 +114,10 @@ describe('ActionNode', () => {
     }
   });
 
-  it('has a runner for every catalog op, so no real id renders the disabled state', () => {
+  it('has a runner for every catalog op', () => {
     // The Wave-3 landing implemented the whole catalog; a real id regressing to
     // unimplemented should fail loudly here rather than silently greying a node.
+    //
     const unimplemented = ACTION_IDS.filter((id) => !runActionModule.isImplementedAction(id));
     expect(unimplemented).toEqual([]);
   });

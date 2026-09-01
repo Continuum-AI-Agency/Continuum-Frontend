@@ -11,7 +11,11 @@ const edge = (source: string, targetHandle: string | null = 'image-in'): Edge =>
 
 describe('layerSourcesFromGraph', () => {
   const nodes = [
-    { id: 'gen', type: 'nanoGen', data: { generatedImageUrl: 'https://cdn/one.png', label: 'Hero' } },
+    {
+      id: 'gen',
+      type: 'nanoGen',
+      data: { generatedImageUrl: 'https://cdn/one.png', label: 'Hero' },
+    },
     { id: 'img', type: 'image', data: { sourceUrl: 'https://cdn/two.png' } },
     { id: 'clip', type: 'videoGen', data: { generatedVideoUrl: 'https://cdn/three.mp4' } },
     { id: 'empty', type: 'nanoGen', data: {} },

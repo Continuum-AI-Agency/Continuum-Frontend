@@ -1,5 +1,12 @@
 // base-nova (Base UI) button. `brand` and `success` are Continuum variants with no upstream
 // equivalent; everything else tracks the shadcn base-nova registry so future `shadcn add` diffs stay small.
+//
+// The disabled fade is gated on `not-aria-busy`. Element-wide opacity dims a filled button's
+// label and its fill together, so their contrast with each other collapses toward 1:1 — at 40%
+// the brand button's white-on-violet label measured 1.96:1 (light) / 2.67:1 (dark) against a
+// 4.5:1 floor. That is acceptable for an inactive control (WCAG 1.4.3 exempts them) and wrong
+// for a BUSY one, whose label is live status the user has to read. A busy button therefore keeps
+// full opacity and signals its state with its spinner and `aria-busy`, not by fading out.
 
 import { Button as ButtonPrimitive } from '@base-ui/react/button';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -7,7 +14,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:not-aria-busy:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {

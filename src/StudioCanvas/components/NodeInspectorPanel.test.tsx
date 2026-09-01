@@ -53,6 +53,11 @@ mock.module('@/lib/brands/useBrandBook.client', () => ({
     isLoading: false,
     isError: false,
   }),
+  // brandTypeInputs.client.ts imports this from the same module. mock.module replaces
+  // the WHOLE module, so an export left out here is missing for every consumer in the
+  // render tree, not just for this test — which surfaces as a SyntaxError at import.
+  brandBookQueryKey: (brandId?: string) => ['brand-book', brandId],
+  fetchBrandBookClient: async () => null,
 }));
 mock.module('@/lib/brands/useBrandDirectionPieces.client', () => ({
   useBrandDirectionPieces: () => ({ pieces: [], isLoading: false }),
@@ -74,14 +79,12 @@ const seed = (...nodes: Array<Partial<StoreNode> & { id: string; type: string }>
     brandId: 'brand-1',
     saveTrigger: 0,
     nodes: nodes.map(
-      (node) =>
-        ({ position: { x: 0, y: 0 }, data: {}, selected: true, ...node }) as StoreNode,
+      (node) => ({ position: { x: 0, y: 0 }, data: {}, selected: true, ...node }) as StoreNode,
     ),
   });
 };
 
-const data = (index = 0) =>
-  useStudioStore.getState().nodes[index].data as Record<string, unknown>;
+const data = (index = 0) => useStudioStore.getState().nodes[index].data as Record<string, unknown>;
 
 describe('NodeInspectorPanel', () => {
   beforeEach(() => {
@@ -270,13 +273,8 @@ describe('NodeInspectorPanel', () => {
   it('fires the bulk actions with the selected ids', () => {
     const runSelection = mock((_ids: string[]) => {});
     const enforce = mock(() => {});
-    seed(
-      { id: 'v1', type: 'videoGen', data: {} },
-      { id: 'i1', type: 'nanoGen', data: {} },
-    );
-    render(
-      <NodeInspectorPanel onRunSelection={runSelection} onEnforceBrandBook={enforce} />,
-    );
+    seed({ id: 'v1', type: 'videoGen', data: {} }, { id: 'i1', type: 'nanoGen', data: {} });
+    render(<NodeInspectorPanel onRunSelection={runSelection} onEnforceBrandBook={enforce} />);
 
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: /Run selection/ }));
@@ -289,10 +287,7 @@ describe('NodeInspectorPanel', () => {
   });
 
   it('hides a bulk action the shell did not wire', () => {
-    seed(
-      { id: 'v1', type: 'videoGen', data: {} },
-      { id: 'i1', type: 'nanoGen', data: {} },
-    );
+    seed({ id: 'v1', type: 'videoGen', data: {} }, { id: 'i1', type: 'nanoGen', data: {} });
     render(<NodeInspectorPanel />);
 
     expect(screen.queryByRole('button', { name: /Run selection/ })).toBeNull();

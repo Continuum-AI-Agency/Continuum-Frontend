@@ -7,6 +7,7 @@ import {
   editorProjectV2Schema,
   type MediaAssetVersion,
 } from '@continuum/contracts';
+import type { TimelineInputSource } from '../../types';
 import {
   type EditorAssemblyOperation,
   editorProjectV2CommentPlacements,
@@ -14,6 +15,7 @@ import {
   orderedVideoClips,
   patchAudioOperation,
   placeAudioOperation,
+  placeVideoOperation,
   primaryVideoTrack,
   removeClipOperation,
   removeTransitionOperation,
@@ -29,6 +31,8 @@ import {
   buildEditorProjectV2AudioPreviewPlan,
   editorProjectV2AudioClipIds,
 } from './useEditorProjectV2AudioPreview';
+
+const binSource = (source: TimelineInputSource): TimelineInputSource => source;
 
 function videoClip(id: string, timelineStartSec: number) {
   return {
@@ -143,6 +147,55 @@ describe('canonical EditorProjectV2 assembly operations', () => {
     ]);
   });
 
+  test('places a connected media bin source on an empty timeline, and takes it back off', () => {
+    // #294: the source has no Library pin — a clip wired into the Canvas node and
+    // nothing more. It must still land on the timeline, as the canvas node it is.
+    const empty = createEditorProjectV2({
+      projectId: 'project-2',
+      title: 'Fresh production',
+      width: 1080,
+      height: 1920,
+      now: '2026-08-02T00:00:00.000Z',
+    });
+    const wired = binSource({ nodeId: 'clip-node', kind: 'video', label: 'bench-clip.mp4' });
+    const place = placeVideoOperation(empty, { source: wired, durationSec: 6 });
+    const placed = applyDrafts(empty, place.forward);
+    const track = primaryVideoTrack(placed);
+    expect(track?.id).toBe('production-masters');
+    expect(orderedVideoClips(track)).toHaveLength(1);
+    expect(orderedVideoClips(track)[0]?.source).toMatchObject({
+      sourceType: 'canvas_node',
+      nodeId: 'clip-node',
+    });
+    expect(placed.durationSec).toBe(6);
+
+    // A second source appends flush against the first, which is what the reducer's
+    // canonical-geometry rule requires of the primary video track.
+    const pinned = binSource({
+      nodeId: 'pinned-node',
+      kind: 'video',
+      label: 'Pinned take',
+      sourceAssetId: 'take-asset',
+      sourceVersionId: 'take-version-1',
+    });
+    const appended = applyDrafts(
+      placed,
+      placeVideoOperation(placed, { source: pinned, durationSec: 4 }).forward,
+    );
+    expect(
+      orderedVideoClips(primaryVideoTrack(appended)).map((clip) => clip.timelineStartSec),
+    ).toEqual([0, 6]);
+    expect(orderedVideoClips(primaryVideoTrack(appended))[1]?.source).toMatchObject({
+      sourceType: 'library_asset',
+      assetId: 'take-asset',
+      renditionId: 'take-version-1',
+    });
+
+    const undone = applyDrafts(placed, place.inverse);
+    expect(primaryVideoTrack(undone)).toBeUndefined();
+    expect(undone.durationSec).toBe(0);
+  });
+
   test('trims, splits, and deletes through atomic, reversible command sets', () => {
     const initial = projectFixture();
     const trim = trimClipOperation(initial, 'production-masters', 'clip-a', {
@@ -219,9 +272,13 @@ describe('canonical EditorProjectV2 assembly operations', () => {
     const withAudio = applyDrafts(
       withOverlay,
       placeAudioOperation(withOverlay, {
-        assetId: 'score-asset',
-        versionId: 'score-version-7',
-        label: 'Score',
+        source: binSource({
+          nodeId: 'score-node',
+          kind: 'audio',
+          label: 'Score',
+          sourceAssetId: 'score-asset',
+          sourceVersionId: 'score-version-7',
+        }),
         timelineStartSec: 4,
         sourceDurationSec: 20,
       }).forward,
@@ -277,9 +334,13 @@ describe('canonical EditorProjectV2 assembly operations', () => {
     const withAudio = applyDrafts(
       initial,
       placeAudioOperation(initial, {
-        assetId: 'score-asset',
-        versionId: 'score-version-7',
-        label: 'Score',
+        source: binSource({
+          nodeId: 'score-node',
+          kind: 'audio',
+          label: 'Score',
+          sourceAssetId: 'score-asset',
+          sourceVersionId: 'score-version-7',
+        }),
         timelineStartSec: 4,
         sourceDurationSec: 6,
       }).forward,

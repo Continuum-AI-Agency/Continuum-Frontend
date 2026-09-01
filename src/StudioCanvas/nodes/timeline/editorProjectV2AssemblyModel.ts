@@ -2,6 +2,7 @@ import type {
   EditorAudioClip,
   EditorClip,
   EditorCommand,
+  EditorMediaSourceRef,
   EditorOverlayClip,
   EditorProjectV2,
   EditorTextClip,
@@ -10,7 +11,7 @@ import type {
   EditorVideoClip,
   MediaAssetVersion,
 } from '@continuum/contracts';
-import type { TimelineItem } from '../../types';
+import type { TimelineInputSource, TimelineItem } from '../../types';
 import {
   type ClipTransition,
   computeOutputPlacements,
@@ -32,6 +33,22 @@ export interface EditorAssemblyOperation {
 }
 
 export const MIN_ASSEMBLY_CLIP_SEC = 0.1;
+/** What a placed source gets when nothing knows its real length (a still, an unprobeable URL). */
+export const DEFAULT_PLACED_CLIP_SEC = 3;
+
+// A media bin source pinned to a Library version is placed as that exact version; one
+// that is only a wire on the canvas is placed as the canvas node it came from. Both are
+// durable references, but only the pinned one can reach the final render — the render
+// job builder refuses anything else, by name (video-projects/store.ts).
+export function editorSourceRef(source: TimelineInputSource): EditorMediaSourceRef {
+  return source.sourceAssetId && source.sourceVersionId
+    ? {
+        sourceType: 'library_asset',
+        assetId: source.sourceAssetId,
+        renditionId: source.sourceVersionId,
+      }
+    : { sourceType: 'canvas_node', nodeId: source.nodeId };
+}
 
 function placementStart(project: EditorProjectV2, requested: number): number {
   if (project.durationSec < MIN_ASSEMBLY_CLIP_SEC) {
@@ -397,6 +414,79 @@ function nextTrackOrder(project: EditorProjectV2): number {
   return Math.max(-1, ...project.tracks.map((track) => track.order)) + 1;
 }
 
+// Append a media bin source to the end of the primary video track. Appending — rather
+// than dropping at the playhead — is what keeps the sequence canonical: the reducer
+// requires every primary clip to start where the one before it ends, and reordering
+// afterwards is already a drag away.
+export function placeVideoOperation(
+  project: EditorProjectV2,
+  input: { source: TimelineInputSource; durationSec?: number },
+): EditorAssemblyOperation {
+  const existingTrack = primaryVideoTrack(project);
+  const trackId = existingTrack?.id ?? 'production-masters';
+  const clipId = crypto.randomUUID();
+  const timelineStartSec = orderedVideoClips(existingTrack).reduce(
+    (end, clip) => Math.max(end, clip.timelineStartSec + clip.durationSec),
+    0,
+  );
+  const clip: EditorVideoClip = {
+    id: clipId,
+    name: input.source.label,
+    timelineStartSec,
+    durationSec: Math.max(MIN_ASSEMBLY_CLIP_SEC, input.durationSec || DEFAULT_PLACED_CLIP_SEC),
+    enabled: true,
+    locked: false,
+    tags: [],
+    kind: 'video',
+    source: editorSourceRef(input.source),
+    sourceInSec: 0,
+    playbackRate: 1,
+    reverse: false,
+    transform: {
+      position: { x: 0.5, y: 0.5, unit: 'normalized' },
+      scaleX: 1,
+      scaleY: 1,
+      rotationDeg: 0,
+      anchorX: 0.5,
+      anchorY: 0.5,
+      opacity: 1,
+    },
+    crop: { left: 0, top: 0, right: 0, bottom: 0 },
+    blendMode: 'normal',
+    audioEnabled: true,
+    effects: [],
+    keyframes: [],
+  };
+  const forward: EditorCommandDraft[] = [];
+  if (!existingTrack) {
+    forward.push({
+      commandType: 'add_track',
+      track: {
+        id: trackId,
+        name: 'Timeline',
+        order: nextTrackOrder(project),
+        enabled: true,
+        locked: false,
+        muted: false,
+        solo: false,
+        kind: 'video',
+        clips: [],
+      },
+    });
+  }
+  forward.push({ commandType: 'upsert_clip', trackId, clip });
+  return {
+    label: 'Add clip',
+    forward,
+    inverse: [
+      { commandType: 'remove_clip', trackId, clipId },
+      ...(!existingTrack
+        ? ([{ commandType: 'remove_track', trackId, deleteClips: true }] as EditorCommandDraft[])
+        : []),
+    ],
+  };
+}
+
 export function upsertTextOperation(
   project: EditorProjectV2,
   input: {
@@ -698,9 +788,7 @@ export function removeTransitionOperation(
 export function placeAudioOperation(
   project: EditorProjectV2,
   input: {
-    assetId: string;
-    versionId: string;
-    label: string;
+    source: TimelineInputSource;
     timelineStartSec: number;
     sourceDurationSec?: number;
   },
@@ -719,18 +807,14 @@ export function placeAudioOperation(
   );
   const clip: EditorAudioClip = {
     id: clipId,
-    name: input.label,
+    name: input.source.label,
     timelineStartSec: start,
     durationSec,
     enabled: true,
     locked: false,
     tags: [],
     kind: 'audio',
-    source: {
-      sourceType: 'library_asset',
-      assetId: input.assetId,
-      renditionId: input.versionId,
-    },
+    source: editorSourceRef(input.source),
     sourceInSec: 0,
     playbackRate: 1,
     reverse: false,

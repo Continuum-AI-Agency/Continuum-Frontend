@@ -19,11 +19,26 @@ export function formatDate(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
+/**
+ * The same disambiguation split into the two lines the brand picker renders, so a long
+ * owner email wraps instead of being clipped mid-word. `formatBrandDisambiguationLabel`
+ * is derived from this rather than duplicating it — one source of truth means the
+ * one-line and two-line renderings cannot drift apart.
+ */
+export function formatBrandDisambiguationLines(brand: AdminBrandOption): {
+  name: string;
+  detail: string;
+} {
+  const idSuffix = `…${brand.id.slice(-8)}`;
+  return {
+    name: brand.brand_name,
+    detail: brand.ownerEmail ? `${brand.ownerEmail} — ${idSuffix}` : idSuffix,
+  };
+}
+
 export function formatBrandDisambiguationLabel(brand: AdminBrandOption): string {
-  const idSuffix = brand.id.slice(-8);
-  return brand.ownerEmail
-    ? `${brand.brand_name} — ${brand.ownerEmail} — …${idSuffix}`
-    : `${brand.brand_name} — …${idSuffix}`;
+  const { name, detail } = formatBrandDisambiguationLines(brand);
+  return `${name} — ${detail}`;
 }
 
 export function describeWorkflowNames(names: string[], maxNames = 5): string {
@@ -245,4 +260,17 @@ type AuditActor = Pick<AdminAuditLogEntry, 'actor_name' | 'actor_email' | 'actor
 // automated actions. Whitespace-only names/emails are treated as absent.
 export function auditActorLabel(actor: AuditActor): string {
   return actor.actor_name?.trim() || actor.actor_email?.trim() || actor.actor_user_id || 'System';
+}
+
+// Workflow transfer ---------------------------------------------------------
+
+// Airtable #277. The transfer picker enumerated all 321 brands alphabetically —
+// "Aaron Test Brand, AgeGateway, ALA Applied Technologies…" — most of which have
+// never had a Creative Studio, so the destination list was mostly noise.
+// `workflowCount` already rides on every `list_brands` row, so narrowing the list
+// is a filter over what we already fetched, not a second round trip. The synthetic
+// rows (global library, audit "All brands") carry no count and are not transfer
+// destinations, so an absent count reads as zero.
+export function brandsWithWorkflows(brands: AdminBrandOption[]): AdminBrandOption[] {
+  return brands.filter((brand) => (brand.workflowCount ?? 0) > 0);
 }

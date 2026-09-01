@@ -35,6 +35,8 @@ const queryString = (input: Record<string, unknown>): string => {
 export type OrganicPublishIntent = {
   publishable: boolean;
   blockers: { reason: string; message: string }[];
+  /** Non-blocking gaps the confirmation dialog shows alongside the blockers. */
+  warnings: { reason: string; message: string }[];
   platform: string;
   format: string;
   account: { id: string | null; source: string };

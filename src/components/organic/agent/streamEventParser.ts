@@ -426,6 +426,15 @@ function parseCheckpoint(raw: unknown): CheckpointState | undefined {
   };
 }
 
+/** Non-empty strings only: an empty issue renders as a blank bullet the user cannot act on. */
+function readStringList(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const items = raw.filter(
+    (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
+  );
+  return items.length > 0 ? items : undefined;
+}
+
 function parsePipelineQuality(raw: unknown): PipelineQuality | null {
   if (!isRecord(raw)) return null;
   const num = (v: unknown): number | undefined =>
@@ -437,6 +446,10 @@ function parsePipelineQuality(raw: unknown): PipelineQuality | null {
     platformFitScore: num(raw.platformFitScore),
     noveltyScore: num(raw.noveltyScore),
     complianceScore: num(raw.complianceScore),
+    // WHY the draft was flagged. A bare percentage tells the user something is wrong and
+    // nothing about what to do; these two are the reviewer's own answer to that.
+    blockingIssues: readStringList(raw.blockingIssues),
+    requiredFixes: readStringList(raw.requiredFixes),
     summary: readNonEmptyString(raw.summary) ?? undefined,
   };
 }

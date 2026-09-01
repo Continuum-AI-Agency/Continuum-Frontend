@@ -1,14 +1,33 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { EXPORT_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { ExportNodeData } from '../../types';
+import * as runExportModule from '../../utils/export/runExport';
 import { ExportNode } from './ExportNode';
 
 const updateNodeData = mock(() => {});
+
+// Airtable #302 is a CALL COUNT, so the two calls a press can make are counted here.
+// Wall-clock cannot tell a cache hit from a re-run; these can.
+const executeWorkflowSpy = mock(async () => {});
+const runExportSpy = mock(async () => ({
+  files: [{ name: 'out.png', blob: new Blob() }],
+  zipped: false,
+  fellBackToH264: false,
+  format: 'png' as const,
+}));
+
+mock.module('../../utils/executeWorkflow', () => ({ executeWorkflow: executeWorkflowSpy }));
+// Spread the real module: the node also reads `exportSourcesFromGraph` and the format
+// helpers from here, and a bare stub would make it render "nothing is connected".
+mock.module('../../utils/export/runExport', () => ({
+  ...runExportModule,
+  runExport: runExportSpy,
+}));
 
 const EXPORT_ID = 'export-1';
 
@@ -56,6 +75,8 @@ describe('ExportNode', () => {
   beforeEach(() => {
     useStudioStore.setState({ nodes: [], edges: [], brandId: 'brand-1', updateNodeData });
     updateNodeData.mockClear();
+    executeWorkflowSpy.mockClear();
+    runExportSpy.mockClear();
   });
 
   afterEach(cleanup);
@@ -109,5 +130,39 @@ describe('ExportNode', () => {
     wire([{ id: 'clip', type: 'videoGen', data: { generatedVideoUrl: 'https://cdn/a.mp4' } }]);
     const { getByText } = renderNode({ format: 'gif' });
     expect(getByText(/15fps and 480px/)).toBeTruthy();
+  });
+
+  // ── Airtable #302 — exporting what exists must not re-derive it ──────────────
+
+  it('makes ZERO workflow runs when every input already holds its artifact', async () => {
+    wire([{ id: 'gen', type: 'nanoGen', data: { generatedImageUrl: 'https://cdn/a.png' } }]);
+    const { getByTestId, findByTestId } = renderNode({ format: 'png' });
+
+    fireEvent.click(getByTestId('studio-export-download'));
+    await findByTestId('studio-export-wrote');
+
+    expect(executeWorkflowSpy).toHaveBeenCalledTimes(0);
+    // And it still wrote the file — the skip is a skip of the RUN, not of the export.
+    expect(runExportSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('still runs an upstream that has produced nothing yet', async () => {
+    wire([{ id: 'gen', type: 'nanoGen', data: { prompt: 'a red car' } }]);
+    // Un-produced upstream: the node cannot offer a format, so the run is reached
+    // through the same button once anything at all is on the pool.
+    wire([
+      { id: 'ready', type: 'nanoGen', data: { generatedImageUrl: 'https://cdn/a.png' } },
+      { id: 'pending', type: 'nanoGen', data: { prompt: 'a red car' } },
+    ]);
+    const { getByTestId } = renderNode({ format: 'png' });
+
+    fireEvent.click(getByTestId('studio-export-download'));
+
+    await waitFor(() => expect(executeWorkflowSpy).toHaveBeenCalledTimes(2));
+  });
+
+  it('runs nothing at all when the pool is empty — there is no upstream to blame', async () => {
+    renderNode({ format: null });
+    expect(executeWorkflowSpy).toHaveBeenCalledTimes(0);
   });
 });

@@ -65,7 +65,9 @@ export const VERNE_ORPHAN_PENALTY = 6;
 export const VERNE_TITLE_MIN_CONTRAST = 3.2;
 
 /**
- * The escalation ladder's veil floors, in order. CUMULATIVE — see {@link resolveTreatment}.
+ * The escalation ladder's candidate veil floors, in order. EXACTLY ONE of these is ever
+ * applied — a higher floor replaces the lower one rather than stacking on top of it. See
+ * {@link resolveTreatment}.
  */
 export const VERNE_VEIL_FLOORS: readonly number[] = [0.15, 0.28, 0.42, 0.58, 0.75, 0.9];
 
@@ -127,12 +129,11 @@ export type TreatmentStep = z.infer<typeof treatmentStepSchema>;
 /**
  * What the probe is being asked to measure.
  *
- * `treatments` is the ORDERED, CUMULATIVE stack applied so far, not the single step being
- * considered. It has to be, because veiling is not idempotent: compositing white at mask
- * value `m1` and then again at `m2` leaves effective coverage `m1 + m2 − m1·m2`, which is not
- * `max(m1, m2)`. A caller that re-derives each rung from the original image produces numbers
- * that diverge from the reference — and diverge in the safe-looking direction, so nobody
- * notices until a headline ships unreadable.
+ * `treatments` is the treatment AS IT CURRENTLY STANDS — at most `[harmonise, veil]` — always
+ * composited from the PRISTINE photo. It is not a growing stack. Escalating changes the veil's
+ * floor; it never adds a second veil, because two whites at `m1` then `m2` leave effective
+ * coverage `m1 + m2 − m1·m2`, and a photo that needed 0.42 would end up under ~64 % white
+ * (the reference's `_velo_marca` raises ONE veil's floor: `v = max(v, piso)`).
  */
 export interface PlacementProbeState {
   readonly framing: FramingCandidate;
@@ -158,12 +159,12 @@ const placementBoxSchema = z.object({
 const placementInkSchema = z.tuple([z.number(), z.number(), z.number()]);
 
 const treatmentCommon = {
-  /** 0 = untouched photo, 1 = harmonised, 2+ = harmonised plus that many veils. */
+  /** Which rung stopped it: 0 untouched, 1 harmonised, 2+ harmonised plus ONE veil at `floors[rung-2]`. */
   rung: z.number().int().nonnegative(),
   /** The ratio this rung actually reached. Carried even when it fails to clear. */
   ratio: z.number(),
   cleared: z.boolean(),
-  /** Everything applied, in order, so a renderer can reproduce the stack. */
+  /** Everything applied, in order, so a renderer can reproduce it. At most two steps. */
   steps: z.array(treatmentStepSchema),
   /** Unchanged from the input, always. The ladder escalates the background, never the ink. */
   ink: placementInkSchema,
@@ -590,10 +591,14 @@ export interface TreatmentOptions {
  *     it fell short instead of inferring success from the absence of an error.
  *
  * The rungs: measure the untouched crop; harmonise (lift the shadows into the brand pastel);
- * then raise the floor of the brand's white gradient through the calibrated floors, stopping
- * the moment the box reads. The floors are CUMULATIVE — each veil composites over an
- * already-veiled image — which is why `steps` carries the whole stack rather than one number.
- * A caller who re-derives from the original at each rung gets different, wrong answers.
+ * then raise the floor of ONE veil through the calibrated floors, stopping the moment the box
+ * reads.
+ *
+ * ESCALATION CHANGES A PARAMETER, IT DOES NOT ADD A LAYER — `_velo_marca`'s `v = max(v, piso)`.
+ * The veil is recomputed from the pristine photo at each floor and there is never more than one
+ * of it, so `steps` is at most `[harmonise, veil]`. Pushing a step per floor tried is the bug
+ * this replaced: a photo needing 0.42 shipped under 0.15, 0.28 AND 0.42 white — 1 − (0.85 · 0.72
+ * · 0.58) ≈ 64 % coverage — which is what "it always washes out the image" looked like.
  */
 export function resolveTreatment(probe: ProbeContrast, opts: TreatmentOptions): PlacementTreatment {
   const ink = opts.ink ?? VERNE_NAVY;
@@ -625,10 +630,11 @@ export function resolveTreatment(probe: ProbeContrast, opts: TreatmentOptions): 
 
   let rung = 1;
   let veilFloor = floors[0];
-  for (const floor of floors) {
-    steps.push({ kind: 'veil', floor });
-    rung += 1;
-    veilFloor = floor;
+  for (let i = 0; i < floors.length; i += 1) {
+    // REPLACE, never append: `steps[1]` is THE veil, and a higher floor raises its floor.
+    steps[1] = { kind: 'veil', floor: floors[i] };
+    rung = 2 + i;
+    veilFloor = floors[i];
     ratio = measure();
     if (ratio >= minContrast) break;
   }

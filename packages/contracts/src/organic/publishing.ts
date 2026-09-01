@@ -10,7 +10,77 @@
  */
 import { z } from 'zod';
 
-export const publishPlatformSchema = z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']);
+/**
+ * The organic platform vocabulary — defined ONCE, here.
+ *
+ * Every organic surface narrows a platform string against this enum: the calendar and
+ * planner (`App/organic/schemas.ts`), the MCP tool surface (`App/mcp/shared/platformEnums.ts`),
+ * and the legacy weekly-grid path. Those are derivations, not second opinions; the vocabulary
+ * had drifted into four disagreeing member lists before this became the single source.
+ *
+ * It answers "can this platform appear on a calendar", which is a strictly WIDER question
+ * than "can we publish to it" — see `publishPlatformSchema`.
+ */
+export const organicPlatformSchema = z.enum([
+  'instagram',
+  'facebook',
+  'linkedin',
+  'tiktok',
+  'youtube',
+  'threads',
+  'x',
+]);
+export type OrganicPlatform = z.infer<typeof organicPlatformSchema>;
+
+/**
+ * The GENERATABLE subset: the platforms the calendar and planner can actually write for.
+ *
+ * Narrower than the canonical vocabulary because content generation is per-platform prompt
+ * work, not a loop — `App/organic/creation/agents/platformRegistry.ts` carries a strategist /
+ * creative / copywriter / hashtag / visual / audio prompt set for exactly these five, and a
+ * placement on a platform with no prompt set has nothing to generate from.
+ *
+ * X and Threads sit outside it: a brand can CONNECT them (one X integration exists in
+ * production today, which is why they stay in the canonical vocabulary and the MCP read
+ * surface keeps serving them) but nothing can compose a post for them. Widen this only
+ * together with a prompt set in `platformRegistry.ts`.
+ */
+export const organicGeneratablePlatformSchema = organicPlatformSchema.extract([
+  'instagram',
+  'facebook',
+  'linkedin',
+  'tiktok',
+  'youtube',
+]);
+export type OrganicGeneratablePlatform = z.infer<typeof organicGeneratablePlatformSchema>;
+
+/**
+ * The PUBLISHABLE subset: the platforms with a working publisher behind them.
+ *
+ * The narrowest of the three, and derived with `.extract` so a member leaving the canonical
+ * vocabulary breaks this line at compile time instead of drifting into a rival definition.
+ *
+ * The nesting is `publishable ⊆ generatable ⊆ canonical`, and each step is a different
+ * capability with a different owner:
+ *
+ *   canonical    — the platform has a name the system understands and can hold an integration
+ *   generatable  — …and `platformRegistry.ts` can compose a post for it
+ *   publishable  — …and `publisherRegistry.ts` can send that post
+ *
+ * YouTube generates but does not publish: the calendar plans a YouTube post and the generator
+ * writes one, but nothing under `App/organic/publishing/` can send it, so the publish boundary
+ * refuses rather than pretending. Flattening these would break in one direction or the other —
+ * widening this enum makes an unpublishable platform look publishable, narrowing the canonical
+ * one erases platforms that already hold live integrations.
+ *
+ * Widen this ONLY by shipping a publisher and registering it in `publisherRegistry.ts`.
+ */
+export const publishPlatformSchema = organicPlatformSchema.extract([
+  'instagram',
+  'facebook',
+  'linkedin',
+  'tiktok',
+]);
 export type PublishPlatform = z.infer<typeof publishPlatformSchema>;
 
 export const publishFormatSchema = z.enum(['POST', 'REEL', 'CAROUSEL']);
@@ -20,7 +90,9 @@ export type PublishFormat = z.infer<typeof publishFormatSchema>;
 /**
  * How a platform ingests media.
  *
- * `url`   — the platform fetches a publicly reachable URL we hand it (Instagram, Facebook).
+ * `url`   — the platform fetches a publicly reachable URL we hand it (Instagram, Facebook,
+ *           TikTok). TikTok additionally rejects URLs on domains the developer app has not
+ *           verified, so ours are served through `mediaProxy.ts`.
  * `bytes` — the platform refuses URLs and requires us to upload the raw file (LinkedIn).
  */
 export type PublishMediaTransport = 'url' | 'bytes';
@@ -38,16 +110,7 @@ export interface CaptionCapability {
 export interface PlatformCapability {
   readonly formats: Readonly<Record<PublishFormat, boolean>>;
   readonly carousel: { readonly min: number; readonly max: number };
-  /** The platform's transport for formats not named in `mediaTransportByFormat`. */
   readonly mediaTransport: PublishMediaTransport;
-  /**
-   * Per-format overrides, for platforms whose transport is not uniform.
-   *
-   * TikTok is the reason this exists: its video endpoint accepts a FILE_UPLOAD of raw bytes,
-   * but its photo endpoint is PULL_FROM_URL only — and it rejects URLs on domains the developer
-   * has not verified, so photo posts must be served from a domain we own.
-   */
-  readonly mediaTransportByFormat?: Readonly<Partial<Record<PublishFormat, PublishMediaTransport>>>;
   readonly caption: CaptionCapability;
 }
 
@@ -80,24 +143,28 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     formats: { POST: true, REEL: true, CAROUSEL: true },
     // TikTok photo posts accept up to 35 images.
     carousel: { min: 2, max: 35 },
-    // Video uploads push raw bytes (FILE_UPLOAD): PULL_FROM_URL would need TikTok to fetch our
-    // Supabase signed URL, and TikTok rejects unverified domains with url_ownership_unverified.
-    mediaTransport: 'bytes',
-    // Photo posts have no FILE_UPLOAD option at all — they are PULL_FROM_URL only, which is why
-    // they must be served through a domain verified with TikTok.
-    mediaTransportByFormat: { POST: 'url', CAROUSEL: 'url' },
+    // URL-pull for EVERY format. The Business Organic API (business-api.tiktok.com/open_api/v1.3,
+    // the client we actually ship) has no FILE_UPLOAD route and no chunking on either endpoint —
+    // `video_url` and `photo_images` are both fetched by TikTok. See the header of
+    // `App/organic/publishing/tiktok/client.ts`. TikTok rejects URLs on unverified domains with
+    // `url_ownership_unverified`, so every format goes out through `mediaProxy.ts`.
+    mediaTransport: 'url',
     // TikTok caps the video caption ("title") at 2,200 UTF-16 runes.
     caption: { maxLength: 2200, maxHashtags: 30 },
   },
 };
 
-/** The transport a specific platform+format pair uses. */
+/**
+ * The transport a specific platform+format pair uses. Every platform is currently uniform
+ * across formats, so `format` is accepted and ignored — it stays in the signature because a
+ * per-format split is a real possibility (TikTok had one until its client moved to the
+ * Business Organic API) and callers should not have to change shape to get it back.
+ */
 export function mediaTransportFor(
   platform: PublishPlatform,
-  format: PublishFormat,
+  _format: PublishFormat,
 ): PublishMediaTransport {
-  const capability = PLATFORM_CAPABILITIES[platform];
-  return capability.mediaTransportByFormat?.[format] ?? capability.mediaTransport;
+  return PLATFORM_CAPABILITIES[platform].mediaTransport;
 }
 
 export function supportsFormat(platform: PublishPlatform, format: PublishFormat): boolean {

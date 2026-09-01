@@ -33,7 +33,10 @@ export function NodeTitleBar({
       )}
     >
       <Icon className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-      <span className="min-w-0 flex-1 truncate" title={title}>
+      {/* `data-slot` so a geometry bench can find the node's own title and prove nothing is
+          painted over it — a floating pill parked at `top-2` ate the first characters of
+          this label on the HyperFrames node (Airtable #295). */}
+      <span data-slot="node-title" className="min-w-0 flex-1 truncate" title={title}>
         {label}
       </span>
       {children}

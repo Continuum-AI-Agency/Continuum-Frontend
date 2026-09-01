@@ -49,6 +49,7 @@ import { OMNI_GENERATOR_NODE_BOUNDS } from '../utils/aspectRatioSizing';
 import { toggleBrandPiece, toggleDesignSection, toggleSkillId } from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
+import { NodeDownloadButton } from './NodeDownloadButton';
 import { OmniGenDialog } from './omni/OmniGenDialog';
 
 const LimitedHandle = ({
@@ -439,20 +440,31 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                       </div>
                     )}
 
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="nodrag absolute right-2 top-2 z-20 h-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100"
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setEditorOpen(true);
-                      }}
-                      title="Open the Omni editor"
-                    >
-                      <SquarePen className="mr-1 h-3.5 w-3.5" />
-                      Open
-                    </Button>
+                    {/* Download used to be reachable only from the right-click menu and
+                        the editor dialog, which is not the same affordance the sibling
+                        generators show on the card itself (Airtable #288). */}
+                    <div className="absolute right-2 top-2 z-20 flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="nodrag h-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setEditorOpen(true);
+                        }}
+                        title="Open the Omni editor"
+                      >
+                        <SquarePen className="mr-1 h-3.5 w-3.5" />
+                        Open
+                      </Button>
+                      <NodeDownloadButton
+                        nodeType="omniGen"
+                        data={data}
+                        baseName={`omni-${id}`}
+                        className="static h-7 w-7"
+                      />
+                    </div>
 
                     {hasChain ? (
                       <span className="pointer-events-none absolute bottom-2 left-2 z-20 rounded bg-background/85 px-1.5 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm">

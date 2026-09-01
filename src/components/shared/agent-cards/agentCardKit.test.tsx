@@ -72,4 +72,24 @@ describe('agentCardKit', () => {
       'true',
     );
   });
+
+  // #274 — element opacity fades a filled button's label and its fill TOGETHER, so their
+  // contrast with each OTHER collapses: the brand button's white-on-violet label measured
+  // 1.96:1 in light and 2.67:1 in dark against a 4.5:1 floor. An inactive control may fade
+  // (WCAG 1.4.3 exempts it); a BUSY one may not, because its label is live status.
+  it('keeps a busy button unfaded so its own label stays legible', () => {
+    render(
+      <div>
+        <AgentButton loading={true}>Start</AgentButton>
+        <AgentButton disabled={true}>Idle</AgentButton>
+      </div>,
+    );
+
+    const busy = screen.getByRole('button', { name: 'Starting…' });
+
+    expect(busy.getAttribute('aria-busy')).toBe('true');
+    expect(busy.className).not.toContain('disabled:opacity-');
+    expect(busy.className).toContain('disabled:not-aria-busy:opacity-50');
+    expect(screen.getByRole('button', { name: 'Idle' }).getAttribute('aria-busy')).toBeNull();
+  });
 });

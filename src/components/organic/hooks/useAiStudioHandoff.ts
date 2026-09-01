@@ -134,6 +134,10 @@ export function useAiStudioHandoff({
           ? deriveCarouselSlideSeeds({
               assets: draft.mediaSuggestion?.assets,
               assetHints: draft.assetHints,
+              // The headless realize writes every slide into publishingAssets and
+              // mirrors only the PRIMARY onto mediaSuggestion.assetUrl, so reading
+              // that alone carried slide 1 across and left slides 2..N blank (#307).
+              realized: draft.publishingAssets,
             })
           : [];
 

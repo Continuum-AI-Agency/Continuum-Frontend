@@ -122,7 +122,12 @@ export function matrixFromRunRecord(record: BatchRunRecord): MatrixLayout {
       item.status === 'completed'
         ? item.text !== undefined
           ? { type: 'text', value: item.text }
-          : { type: 'image', mimeType: item.mimeType ?? 'image/png', url: item.url, assetId: item.assetId }
+          : {
+              type: 'image',
+              mimeType: item.mimeType ?? 'image/png',
+              url: item.url,
+              assetId: item.assetId,
+            }
         : null;
   }
 

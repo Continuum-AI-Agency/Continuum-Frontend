@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { Edge } from '@xyflow/react';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
+import * as spliceWorkerClientModule from '../workers/spliceWorkerClient';
 import {
   collectDownstreamLeafIds,
   collectPublisherHandoffs,
@@ -10,6 +11,15 @@ import {
 import { computeGenerationSignature } from './generationSignature';
 
 const rehydrateWorkflowMediaNodes = mock(async (input: StudioNode[]) => input);
+
+/**
+ * Snapshotted at load. `mock.module` REPLACES the live namespace, so spreading the
+ * namespace itself to "restore" it would hand back whatever mock is currently installed.
+ */
+const realSpliceWorkerClient = { ...spliceWorkerClientModule };
+
+/** The one field of the worker's start frame these tests read. */
+type WorkerActionCall = { inputs: { handle: string; blob: Blob }[] };
 
 describe('executeWorkflow', () => {
   const originalFetch = globalThis.fetch;
@@ -461,7 +471,11 @@ describe('executeWorkflow', () => {
 
     const finalNodes = useStudioStore.getState().nodes;
     const node = finalNodes.find((n) => n.id === 'nano');
-    expect(node?.data.error).toBe('Missing connected input for ref-image');
+    // Still blocked — but it may never call an input the user WIRED "missing" (#290).
+    // The message names the port and what is on the other end of it instead.
+    expect(String(node?.data.error)).not.toMatch(/missing|not connected/i);
+    expect(String(node?.data.error)).toContain('ref-image');
+    expect(executeGeneration).toHaveBeenCalledTimes(0);
   });
 
   it('should respect concurrency limit', async () => {
@@ -867,7 +881,7 @@ describe('executeWorkflow', () => {
 
     expect(executeVideoExtension).toHaveBeenCalledTimes(1);
     const payload = executeVideoExtension.mock.calls[0][1];
-    expect(payload.video?.data).toBe('base64_video');
+    expect(payload.reference_video?.data).toBe('base64_video');
 
     const finalNodes = useStudioStore.getState().nodes;
     const updatedNode = finalNodes.find((n) => n.id === 'extend-1');
@@ -915,7 +929,7 @@ describe('executeWorkflow', () => {
 
     expect(executeVideoExtension).toHaveBeenCalledTimes(1);
     const payload = executeVideoExtension.mock.calls[0][1];
-    expect(payload.video?.data).toBe('veo_output_base64');
+    expect(payload.reference_video?.data).toBe('veo_output_base64');
   });
 
   it('should execute extend video nodes from upstream veo url output', async () => {
@@ -954,12 +968,22 @@ describe('executeWorkflow', () => {
       output: { type: 'video', url: 'data:video/mp4;base64,extended_from_veo_uri' },
     }));
     const controls = buildControls(executeGeneration, executeVideoExtension);
+    // The endpoint takes BYTES on `reference_video` and has no URL field, so a clip
+    // that only exists as a signed URL is read here before the request goes out. This
+    // used to send `{ video: { uri } }` and 400 (#291).
+    const fetched: string[] = [];
+    globalThis.fetch = mock(async (url: string) => {
+      fetched.push(String(url));
+      return new Response(new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'video/mp4' }));
+    }) as unknown as typeof fetch;
 
     await executeWorkflow(controls as any, { targetNodeId: 'extend-1', clearDownstream: false });
 
     expect(executeVideoExtension).toHaveBeenCalledTimes(1);
+    expect(fetched).toContain('https://cdn.continuum.test/videos/veo-output.mp4');
     const payload = executeVideoExtension.mock.calls[0][1];
-    expect(payload.video?.uri).toBe('https://cdn.continuum.test/videos/veo-output.mp4');
+    expect(payload.reference_video?.mime_type).toBe('video/mp4');
+    expect(typeof payload.reference_video?.data).toBe('string');
   });
 
   it('routes text-box enrichment through executeEnrichment with the inherited grounding data piece', async () => {
@@ -1511,12 +1535,22 @@ describe('executeWorkflow', () => {
       output: { type: 'video', url: 'data:video/mp4;base64,extended' },
     }));
     const controls = buildControls(executeGeneration, executeVideoExtension);
+    // The editor's persisted clip is a signed URL; the endpoint takes bytes on
+    // `reference_video`, so the executor reads it before sending (#291).
+    const fetched: string[] = [];
+    globalThis.fetch = mock(async (url: string) => {
+      fetched.push(String(url));
+      return new Response(new Blob([new Uint8Array([9, 9, 9, 9])], { type: 'video/mp4' }));
+    }) as unknown as typeof fetch;
 
     await executeWorkflow(controls as any);
 
     expect(executeVideoExtension).toHaveBeenCalledTimes(1);
-    const payload = executeVideoExtension.mock.calls[0][1] as { video?: { uri?: string } };
-    expect(payload.video?.uri).toBe(editedUrl);
+    expect(fetched).toContain(editedUrl);
+    const payload = executeVideoExtension.mock.calls[0][1] as {
+      reference_video?: { data?: string };
+    };
+    expect(typeof payload.reference_video?.data).toBe('string');
     const editNode = useStudioStore.getState().nodes.find((n) => n.id === 'edit');
     expect(editNode?.data.isComplete).toBe(true);
   });
@@ -2499,15 +2533,10 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
     expect(reported).toContain('could not be loaded');
     expect(reported).not.toContain('Missing connected input');
   });
-
-
 });
 
 describe('executeWorkflow — omniGen payload', () => {
-  const runOmni = async (
-    nodes: StudioNode[],
-    edges: Edge[],
-  ): Promise<Record<string, unknown>> => {
+  const runOmni = async (nodes: StudioNode[], edges: Edge[]): Promise<Record<string, unknown>> => {
     useStudioStore.getState().setNodes(nodes);
     useStudioStore.getState().setEdges(edges);
 
@@ -2652,5 +2681,334 @@ describe('executeWorkflow — omniGen payload', () => {
       ],
     );
     expect(payload.turn).toBe('edit');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The connected-but-"missing" cluster — #290, #291, #300, #301, #304, #305.
+//
+// Six Airtable reports, one defect: an edge visibly lands on a node's input
+// handle and the node still says the input is missing. Each case below builds
+// the reporter's graph and asserts the node reaches its REAL output, because a
+// readiness assertion alone is what let #291 past the gate and into a 400.
+// ---------------------------------------------------------------------------
+describe('an edge that exists is never reported as missing', () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    useStudioStore.setState({
+      nodes: [],
+      edges: [],
+      defaultEdgeType: 'bezier',
+      brandId: 'brand-test',
+    });
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    // The stub is a module mock, which is process-wide in Bun: put the real client back
+    // so `spliceWorkerClient.test.ts` still tests the real client.
+    mock.module('../workers/spliceWorkerClient', () => realSpliceWorkerClient);
+  });
+
+  /**
+   * The splicer worker never boots in a test process, so a run that reaches it fails on
+   * the worker itself and every message-shaped assertion downstream reads green for the
+   * wrong reason. Stubbing the client makes the WORKER PAYLOAD observable — which is the
+   * only place the clip count is a fact rather than a hope.
+   */
+  const stubSpliceWorker = () => {
+    const runActionInWorker = mock(async () => ({
+      blob: new Blob([new Uint8Array(8)], { type: 'video/mp4' }),
+      objectUrl: 'blob:stitched',
+      width: 2,
+      height: 2,
+      durationSec: 2,
+    }));
+    mock.module('../workers/spliceWorkerClient', () => ({
+      ...realSpliceWorkerClient,
+      runActionInWorker,
+    }));
+    return runActionInWorker;
+  };
+
+  /** How many blobs the worker was handed on one handle — 0 when it was never called. */
+  const clipsOnHandle = (runActionInWorker: ReturnType<typeof stubSpliceWorker>, handle: string) =>
+    (
+      (runActionInWorker.mock.calls[0]?.[0] as unknown as WorkerActionCall | undefined)?.inputs ??
+      []
+    ).filter((input) => input.handle === handle).length;
+
+  const controls = () => ({
+    executeGeneration: mock(async () => ({
+      success: true,
+      output: { type: 'image', base64: 'gen', mimeType: 'image/png' },
+    })),
+    executeVideoExtension: mock(async () => ({
+      success: true,
+      output: { type: 'video', url: 'https://cdn.example.com/extended.mp4' },
+    })),
+    executeEnrichment: mock(async () => ({ success: true, output: { type: 'text', value: '' } })),
+    registerController: () => new AbortController(),
+    releaseController: () => {},
+    show: () => {},
+    cancel: () => {},
+    reset: () => {},
+  });
+
+  const nodeById = (id: string) => useStudioStore.getState().nodes.find((n) => n.id === id);
+
+  // Bug #290: a Product/Element node wired to a generator's ref-image port read as
+  // `Missing connected input for ref-image` — `element` is a source type the
+  // resolvers had never been taught, so an obviously-connected wire looked empty.
+  it('generates from an Element wired to ref-image (#290)', async () => {
+    useStudioStore.getState().setNodes([
+      {
+        id: 'el',
+        position: { x: 0, y: 0 },
+        type: 'element',
+        data: { elementId: 'element-1', previewUrl: 'https://cdn.example.com/coke.png' },
+      },
+      { id: 'txt', position: { x: 0, y: 0 }, type: 'string', data: { value: 'make a person' } },
+      { id: 'gen', position: { x: 0, y: 0 }, type: 'nanoGen', data: { model: 'nano-banana' } },
+    ] as unknown as StudioNode[]);
+    useStudioStore.getState().setEdges([
+      { id: 'e1', source: 'el', target: 'gen', sourceHandle: 'image', targetHandle: 'ref-image' },
+      { id: 'e2', source: 'txt', target: 'gen', sourceHandle: 'text', targetHandle: 'prompt' },
+    ]);
+
+    const c = controls();
+    await executeWorkflow(c as never, { targetNodeId: 'gen' });
+
+    expect(String(nodeById('gen')?.data.error ?? '')).not.toMatch(/missing|not connected/i);
+    expect(c.executeGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  // Bug #291: readiness passed and the request 400'd on
+  // path:["reference_video"] — the payload mapper named the field `video`, which
+  // the deployed extend-video schema does not have.
+  it('puts the connected clip in the extend-video request (#291)', async () => {
+    globalThis.fetch = mock(
+      async () => new Response(new Blob([new Uint8Array(64)], { type: 'video/mp4' })),
+    ) as unknown as typeof fetch;
+
+    useStudioStore.getState().setNodes([
+      {
+        id: 'clip',
+        position: { x: 0, y: 0 },
+        type: 'video',
+        data: { video: 'https://cdn.example.com/clip.mp4', fileName: 'clip.mp4' },
+      },
+      {
+        id: 'ext',
+        position: { x: 0, y: 0 },
+        type: 'extendVideo',
+        data: { prompt: 'keep it going' },
+      },
+    ] as unknown as StudioNode[]);
+    useStudioStore
+      .getState()
+      .setEdges([
+        { id: 'e1', source: 'clip', target: 'ext', sourceHandle: 'video', targetHandle: 'video' },
+      ]);
+
+    const c = controls();
+    await executeWorkflow(c as never, { targetNodeId: 'ext' });
+
+    expect(c.executeVideoExtension).toHaveBeenCalledTimes(1);
+    const payload = c.executeVideoExtension.mock.calls[0][1] as Record<string, unknown>;
+    const referenceVideo = payload.reference_video as { data?: string } | undefined;
+    expect(referenceVideo).toBeDefined();
+    expect(typeof referenceVideo?.data).toBe('string');
+    expect((referenceVideo?.data ?? '').length).toBeGreaterThan(10);
+  });
+
+  // Bug #300: a Batch of prompt rows wired to a generator's prompt port said
+  // `Missing prompt input`. The prompt path never learned what the ref-image path
+  // already knew: a collection is unwrapped one item per run by the fan-out.
+  it('fans a generator out over a Batch wired to its prompt port (#300)', async () => {
+    useStudioStore.getState().setNodes([
+      {
+        id: 'bat',
+        position: { x: 0, y: 0 },
+        type: 'batch',
+        data: {
+          itemType: 'text',
+          combine: 'zip',
+          items: [
+            { id: 'a', kind: 'text', value: 'a red car' },
+            { id: 'b', kind: 'text', value: 'a blue car' },
+          ],
+        },
+      },
+      { id: 'gen', position: { x: 0, y: 0 }, type: 'nanoGen', data: { model: 'nano-banana' } },
+    ] as unknown as StudioNode[]);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e1',
+        source: 'bat',
+        target: 'gen',
+        sourceHandle: 'collection',
+        targetHandle: 'prompt',
+      },
+    ]);
+
+    const c = controls();
+    await executeWorkflow(c as never, { targetNodeId: 'gen' });
+
+    expect(String(nodeById('gen')?.data.error ?? '')).not.toMatch(/missing|not connected/i);
+    expect(c.executeGeneration).toHaveBeenCalledTimes(2);
+    // One generation PER ROW, each carrying its own row's prompt — not the same picture
+    // twice, which is what a fan-out that lost the per-item prompt would produce.
+    expect(
+      c.executeGeneration.mock.calls.map((call) => (call[1] as { prompt?: string }).prompt).sort(),
+    ).toEqual(['a blue car', 'a red car']);
+  });
+
+  // Bug #301: a Router with a Text Block wired in showed the badge `Unset` and the
+  // body `Connect a source`. `lockedType` was stamped only by a RUN, so a connected
+  // router that had never been run described itself as unconnected.
+  it('routes a Text Block through and drives the node downstream (#301)', async () => {
+    useStudioStore.getState().setNodes([
+      { id: 'txt', position: { x: 0, y: 0 }, type: 'string', data: { value: 'a hero shot' } },
+      { id: 'route', position: { x: 0, y: 0 }, type: 'router', data: { lockedType: null } },
+      { id: 'gen', position: { x: 0, y: 0 }, type: 'nanoGen', data: { model: 'nano-banana' } },
+    ] as unknown as StudioNode[]);
+    useStudioStore.getState().setEdges([
+      { id: 'e1', source: 'txt', target: 'route', sourceHandle: 'text', targetHandle: 'in' },
+      { id: 'e2', source: 'route', target: 'gen', sourceHandle: 'out', targetHandle: 'prompt' },
+    ]);
+
+    const c = controls();
+    await executeWorkflow(c as never, { targetNodeId: 'gen' });
+
+    expect(nodeById('route')?.data.lockedType).toBe('text');
+    expect(c.executeGeneration).toHaveBeenCalledTimes(1);
+    expect(c.executeGeneration.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ prompt: 'a hero shot' }),
+    );
+  });
+
+  // Bug #304: Stitch with two clips connected said it needed two clips. A collection on
+  // a MANY-input port was fanned out — one run per clip — so every run saw a single blob
+  // and the engine's own guard fired on a node with two clips visibly wired. A port that
+  // takes twenty inputs takes the collection's items AS its inputs.
+  it('stitches every clip in a collection wired to one port (#304)', async () => {
+    globalThis.fetch = mock(
+      async () => new Response(new Blob([new Uint8Array(64)], { type: 'video/mp4' })),
+    ) as unknown as typeof fetch;
+
+    useStudioStore.getState().setNodes([
+      {
+        id: 'bat',
+        position: { x: 0, y: 0 },
+        type: 'batch',
+        data: {
+          itemType: 'video',
+          combine: 'zip',
+          items: [
+            { id: 'a', kind: 'video', url: 'https://cdn.example.com/a.mp4' },
+            { id: 'b', kind: 'video', url: 'https://cdn.example.com/b.mp4' },
+          ],
+        },
+      },
+      {
+        id: 'act',
+        position: { x: 0, y: 0 },
+        type: 'action',
+        data: { actionId: 'video.stitch', config: {} },
+      },
+    ] as unknown as StudioNode[]);
+    useStudioStore
+      .getState()
+      .setEdges([
+        { id: 'e1', source: 'bat', target: 'act', sourceHandle: 'collection', targetHandle: 'in' },
+      ]);
+
+    const runInWorker = stubSpliceWorker();
+    const c = controls();
+    await executeWorkflow(c as never, { targetNodeId: 'act' });
+
+    // The COUNT the worker was handed, not the absence of one error message. The old
+    // assertion was `not.toMatch(/at least two clips|…/)` on the node's error, which the
+    // worker's own "not defined in this process" failure satisfied just as well as a
+    // working stitch — green while the live canvas read "received 1 clip" (#304).
+    expect(clipsOnHandle(runInWorker, 'in')).toBe(2);
+  });
+
+  // The same port, wired the other way: two separate clip edges. Guards the shape the
+  // report was filed against, which the collection fix must not regress.
+  it('waits for every clip wired to Stitch before it runs (#304)', async () => {
+    globalThis.fetch = mock(
+      async () => new Response(new Blob([new Uint8Array(64)], { type: 'video/mp4' })),
+    ) as unknown as typeof fetch;
+
+    useStudioStore.getState().setNodes([
+      {
+        id: 'clip-a',
+        position: { x: 0, y: 0 },
+        type: 'video',
+        data: { video: 'https://cdn.example.com/a.mp4' },
+      },
+      {
+        id: 'clip-b',
+        position: { x: 0, y: 0 },
+        type: 'video',
+        data: { video: 'https://cdn.example.com/b.mp4' },
+      },
+      {
+        id: 'act',
+        position: { x: 0, y: 0 },
+        type: 'action',
+        data: { actionId: 'video.stitch', config: {} },
+      },
+    ] as unknown as StudioNode[]);
+    useStudioStore.getState().setEdges([
+      { id: 'e1', source: 'clip-a', target: 'act', sourceHandle: 'video', targetHandle: 'in' },
+      { id: 'e2', source: 'clip-b', target: 'act', sourceHandle: 'video', targetHandle: 'in' },
+    ]);
+
+    const runInWorker = stubSpliceWorker();
+    const c = controls();
+    await executeWorkflow(c as never, { targetNodeId: 'act' });
+
+    // Both wires, all the way to the worker payload. `runAction` used to build that
+    // payload from `def.inputs` — the PORT list — so a `max: 20` port arrived carrying
+    // exactly one blob however many clips the resolver had put on it.
+    expect(clipsOnHandle(runInWorker, 'in')).toBe(2);
+  });
+
+  // Bug #305: Join Text with two text edges failed on
+  // `The text feeding "in" is not ready`. Same single-edge readiness as #304: the
+  // action was scheduled on the strength of its first wire while the second was
+  // still unresolved.
+  it('joins every text edge wired to one port (#305)', async () => {
+    useStudioStore.getState().setNodes([
+      { id: 'txt-a', position: { x: 0, y: 0 }, type: 'string', data: { value: 'hello' } },
+      {
+        id: 'upper',
+        position: { x: 0, y: 0 },
+        type: 'action',
+        data: { actionId: 'text.findReplace', config: { find: 'world', replace: 'canvas' } },
+      },
+      { id: 'txt-b', position: { x: 0, y: 0 }, type: 'string', data: { value: 'world' } },
+      {
+        id: 'join',
+        position: { x: 0, y: 0 },
+        type: 'action',
+        data: { actionId: 'text.concat', config: { separator: ' ' } },
+      },
+    ] as unknown as StudioNode[]);
+    useStudioStore.getState().setEdges([
+      { id: 'e1', source: 'txt-a', target: 'join', sourceHandle: 'text', targetHandle: 'in' },
+      { id: 'e2', source: 'txt-b', target: 'upper', sourceHandle: 'text', targetHandle: 'in' },
+      { id: 'e3', source: 'upper', target: 'join', sourceHandle: 'out', targetHandle: 'in' },
+    ]);
+
+    const c = controls();
+    await executeWorkflow(c as never, { targetNodeId: 'join' });
+
+    expect(String(nodeById('join')?.data.error ?? '')).not.toMatch(/not ready|missing/i);
+    expect(nodeById('join')?.data.value).toBe('hello canvas');
   });
 });

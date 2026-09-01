@@ -217,4 +217,40 @@ describe('AdminUserList search', () => {
 
     expect(input.value).toBe('back');
   });
+
+  // Airtable #263 — the Brands column truncates at 360px, and the screenshots showed
+  // "No brand m…" with no way to read the rest. Truncation is fine; unreadable is not.
+  it('keeps a truncated Brands summary readable through its title attribute', async () => {
+    searchParamsValue = 'page=1&pageSize=50';
+    const memberships: PermissionRow[] = [
+      {
+        user_id: 'user-1',
+        brand_profile_id: 'brand-1',
+        brand_name: 'Starbucks Coffee Company',
+        role: 'operator',
+        brand_tier: 3,
+      },
+      {
+        user_id: 'user-1',
+        brand_profile_id: 'brand-2',
+        brand_name: 'Knowledge Navigator 2.0',
+        role: 'owner',
+        brand_tier: 3,
+      },
+    ];
+    render(
+      <AdminUserList
+        users={visibleUsers}
+        permissions={memberships}
+        pagination={{ ...pagination, totalCount: 1, totalPages: 1, lastPage: 1 }}
+        searchQuery=""
+      />,
+    );
+    await settleRenderedEffects();
+
+    const summary = screen.getAllByTitle(/Starbucks Coffee Company/)[0];
+    expect(summary).toBeDefined();
+    expect(summary?.getAttribute('title')).toContain('Knowledge Navigator 2.0');
+    expect(summary?.textContent).toBe(summary?.getAttribute('title'));
+  });
 });

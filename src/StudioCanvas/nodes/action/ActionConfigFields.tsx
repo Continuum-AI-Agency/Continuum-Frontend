@@ -198,6 +198,44 @@ function NumericField({
 }
 
 /**
+ * Config keys a mode does not read, per op.
+ *
+ * `video.extractFrames` is a discriminated union in all but name: `mode: 'single'` takes
+ * ONE frame at `atSec` and ignores `count` entirely, which is how a request for 5 frames
+ * came back with 1 (Airtable #292). The contract is right — the panel was wrong to offer a
+ * knob the runner never reads. The lists mirror `planFrameTimes` in
+ * `utils/actions/extractFrames.ts`; that function is the authority on what a mode consumes.
+ */
+const CONFIG_MODE_GATES: Partial<
+  Record<ActionId, { discriminator: string; reads: Readonly<Record<string, readonly string[]>> }>
+> = {
+  'video.extractFrames': {
+    discriminator: 'mode',
+    reads: {
+      single: ['atSec'],
+      evenly: ['count'],
+      interval: ['intervalSec'],
+      sceneChange: ['threshold'],
+    },
+  },
+};
+
+/** Drops the fields the current mode ignores. The discriminator itself always stays, and
+ *  an op with no gate — or a mode the map does not know — keeps every field. */
+function fieldsForMode(
+  actionId: ActionId,
+  fields: ConfigField[],
+  config: Record<string, unknown>,
+): ConfigField[] {
+  const gate = CONFIG_MODE_GATES[actionId];
+  if (!gate) return fields;
+  const mode = config[gate.discriminator];
+  const reads = typeof mode === 'string' ? gate.reads[mode] : undefined;
+  if (!reads) return fields;
+  return fields.filter((field) => field.key === gate.discriminator || reads.includes(field.key));
+}
+
+/**
  * The op's knobs, with no surface of their own.
  *
  * Rendered BOTH inside the on-node popover and inside the selection inspector's
@@ -215,10 +253,10 @@ export function ActionConfigFields({
   config: Record<string, unknown>;
 }) {
   const patch = useNodeConfigPatch();
-  const fields = configFieldsFor(actionId);
   // The op's defaults merged over what is stored, so an unconfigured node shows the
   // values the runner will actually use rather than empty controls.
   const current = parseActionConfig(actionId, config);
+  const fields = fieldsForMode(actionId, configFieldsFor(actionId), current);
 
   const write = (key: string, value: unknown) => {
     patch(nodeId, 'action', { config: { ...current, [key]: value } });

@@ -17,6 +17,13 @@
 // Generation runs through `executeGeneration` directly rather than the graph executor:
 // a designRef is not `runnable`, and filling its own specimen is a node-local action, not
 // a step in a canvas run.
+//
+// WHAT IT PROMISES (Airtable #289). A Design Reference INFORMS the generation it is wired
+// into and the critique of the result; it does not constrain either. A palette reference
+// on a generator that came back black-and-white was read as a broken promise, because
+// nothing on the node said which of the two it was. So the node states it, and
+// `executeWorkflow` holds the other half of the same rule: a designRef never makes a run
+// fail for want of what it did not have.
 
 import {
   DESIGN_REF_IMAGE_OUTPUT_HANDLE,
@@ -181,15 +188,18 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
         className="size-full overflow-hidden border-border/60 bg-background"
       >
         <NodeTitleBar icon={Gem} label="Design Reference">
+          {/* A native select is as wide as its widest option, and "Specimen + tokens" left
+              the node's own title with 90px to render "Design Reference" in (Airtable #283). */}
           <select
             className="nodrag h-5 rounded-sm border border-border/60 bg-background px-1 text-[10px]"
             value={mode}
             aria-label="What this reference emits"
+            title="What this reference emits"
             onChange={(event) => updateNodeData(id, { mode: event.target.value as DesignRefMode })}
           >
-            <option value="both">Specimen + tokens</option>
-            <option value="image">Specimen only</option>
-            <option value="tokens">Tokens only</option>
+            <option value="both">Both</option>
+            <option value="image">Specimen</option>
+            <option value="tokens">Tokens</option>
           </select>
         </NodeTitleBar>
 
@@ -229,65 +239,90 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
           </select>
         </div>
 
-        <NodeContent className="group/preview relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/30 p-0">
+        {/* Two BOUNDED panes stacked, never two flex siblings sharing one row: the tokens
+            are prose and need their own scroll pane, and the Generate button belongs to the
+            specimen — floated over the summary it clipped the text it sat on (Airtable #283,
+            docs/styleguide.md §4). */}
+        <NodeContent className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/30 p-0">
           {wantsImage ? (
-            data.specimenUrl ? (
-              // biome-ignore lint/performance/noImgElement: signed storage URLs and data URLs are valid here.
-              <img
-                src={data.specimenUrl}
-                alt={section ? `${DESIGN_SECTION_LABELS[section]} specimen` : 'Section specimen'}
-                className="max-h-full max-w-full object-contain"
-              />
-            ) : (
-              <span className="px-3 text-center text-2xs text-muted-foreground">
-                {!section
-                  ? 'Choose a section'
-                  : isLoading
-                    ? 'Reading the design system…'
-                    : !snapshot
-                      ? 'This brand has no design system yet'
-                      : 'No image in your system for this section — generate one'}
-              </span>
-            )
+            <div className="group/preview relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+              {data.specimenUrl ? (
+                // biome-ignore lint/performance/noImgElement: signed storage URLs and data URLs are valid here.
+                <img
+                  loading="lazy"
+                  src={data.specimenUrl}
+                  alt={section ? `${DESIGN_SECTION_LABELS[section]} specimen` : 'Section specimen'}
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <span className="max-h-full overflow-y-auto px-3 pb-7 text-center text-2xs text-muted-foreground">
+                  {!section
+                    ? 'Choose a section'
+                    : isLoading
+                      ? 'Reading the design system…'
+                      : !snapshot
+                        ? 'This brand has no design system yet'
+                        : 'No image in your system for this section — generate one'}
+                </span>
+              )}
+
+              {data.specimenSource !== 'exemplar' ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-[10px] opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
+                  disabled={!section || !brandId || isGenerating}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={() => void generateSpecimen()}
+                >
+                  {isGenerating ? (
+                    <Loader2 className="mr-1 size-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-1 size-3" />
+                  )}
+                  {data.specimenUrl ? 'Regenerate' : 'Generate'}
+                </Button>
+              ) : null}
+
+              {error ? <NodeOverlayNote tone="destructive">{error}</NodeOverlayNote> : null}
+              {!error && provenance ? (
+                <NodeOverlayNote
+                  className={cn(
+                    'right-auto max-w-[60%] truncate',
+                    data.specimenSource === 'exemplar' && 'text-brand-primary',
+                  )}
+                >
+                  {provenance}
+                </NodeOverlayNote>
+              ) : null}
+            </div>
           ) : null}
 
           {wantsText && data.tokenSummary ? (
-            <p className="nodrag nowheel size-full overflow-y-auto p-1.5 text-left text-2xs text-muted-foreground">
+            <p
+              data-testid="design-ref-tokens"
+              className={cn(
+                'nodrag nowheel min-h-0 flex-1 overflow-y-auto p-1.5 text-left text-2xs text-muted-foreground',
+                wantsImage && 'border-t border-border/60',
+              )}
+            >
               {data.tokenSummary.replace(/<\/?design_system>/g, '').trim()}
             </p>
           ) : null}
 
-          {wantsImage && data.specimenSource !== 'exemplar' ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-[10px] opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
-              disabled={!section || !brandId || isGenerating}
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={() => void generateSpecimen()}
-            >
-              {isGenerating ? (
-                <Loader2 className="mr-1 size-3 animate-spin" />
-              ) : (
-                <Sparkles className="mr-1 size-3" />
-              )}
-              {data.specimenUrl ? 'Regenerate' : 'Generate'}
-            </Button>
-          ) : null}
-
-          {error ? <NodeOverlayNote tone="destructive">{error}</NodeOverlayNote> : null}
-          {!error && provenance ? (
-            <NodeOverlayNote
-              className={cn(
-                'right-auto max-w-[60%] truncate',
-                data.specimenSource === 'exemplar' && 'text-brand-primary',
-              )}
-            >
-              {provenance}
-            </NodeOverlayNote>
+          {!wantsImage && error ? (
+            <NodeOverlayNote tone="destructive">{error}</NodeOverlayNote>
           ) : null}
         </NodeContent>
+
+        {/* Airtable #289. Stated only once a section is chosen, because an unconfigured
+            node promises nothing yet. */}
+        {section ? (
+          <p className="shrink-0 border-t border-border/60 px-1.5 py-1 text-left text-[10px] leading-tight text-muted-foreground">
+            Informs the generation and its critique. Not enforced on the result.
+          </p>
+        ) : null}
       </CanvasNode>
 
       <Handle

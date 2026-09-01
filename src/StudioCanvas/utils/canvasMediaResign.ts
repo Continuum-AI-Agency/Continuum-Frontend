@@ -28,19 +28,27 @@ function decodeJwtExpSeconds(token: string): number | null {
   }
 }
 
+// Epoch-ms expiry carried by a Supabase signed URL's `token` JWT, or null when the
+// URL has no token or an unreadable one. Callers that CACHE a signed URL need the
+// instant it dies, not just whether it is dead yet.
+export function signedUrlExpiresAtMs(url: string): number | null {
+  try {
+    const token = new URL(url).searchParams.get('token');
+    if (!token) return null;
+    const exp = decodeJwtExpSeconds(token);
+    return exp === null ? null : exp * 1000;
+  } catch {
+    return null;
+  }
+}
+
 // True when a Supabase signed URL's `token` JWT has an `exp` in the past. A small
 // skew refreshes URLs about to lapse. Unknown shapes (no token, unparseable) are
 // treated as NOT expired so this never triggers a needless re-sign storm.
 export function isSignedUrlExpired(url: string, skewSeconds = 30): boolean {
-  try {
-    const token = new URL(url).searchParams.get('token');
-    if (!token) return false;
-    const exp = decodeJwtExpSeconds(token);
-    if (exp === null) return false;
-    return exp * 1000 <= Date.now() + skewSeconds * 1000;
-  } catch {
-    return false;
-  }
+  const expiresAt = signedUrlExpiresAtMs(url);
+  if (expiresAt === null) return false;
+  return expiresAt <= Date.now() + skewSeconds * 1000;
 }
 
 // True when a node has a durable pointer (generated output or uploaded reference)

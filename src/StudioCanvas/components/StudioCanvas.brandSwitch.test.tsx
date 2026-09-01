@@ -4,6 +4,7 @@
 // the canvas_active_view heartbeat that writes it to the database. This spec records the
 // arguments those consumers are actually called with, before and after a mounted switch.
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render } from '@testing-library/react';
 
 type ConsumerCall = { brandProfileId?: string; roomId?: string };
@@ -28,7 +29,9 @@ let rooms: TestRoom[] = ROOMS_A;
 // the namespace itself would call the mock again and never return.
 const actualRealtime = { ...(await import('@/components/ai-studio/hooks/useCanvasRealtime')) };
 const actualRooms = { ...(await import('@/components/ai-studio/hooks/useCanvasRooms')) };
-const actualRunRequests = { ...(await import('@/components/ai-studio/hooks/useCanvasRunRequests')) };
+const actualRunRequests = {
+  ...(await import('@/components/ai-studio/hooks/useCanvasRunRequests')),
+};
 const actualContinuations = { ...(await import('../hooks/useTimelineRenderContinuations')) };
 const actualNavigation = { ...(await import('next/navigation')) };
 const actualToast = { ...(await import('@/components/ui/ToastProvider')) };
@@ -111,12 +114,30 @@ mock.module('@/components/ui/ToastProvider', () => ({
   ...actualToast,
   useToast: () =>
     fenceSpecsRunning
-      ? ({ show: () => {}, dismiss: () => {} } as unknown as ReturnType<typeof actualToast.useToast>)
+      ? ({ show: () => {}, dismiss: () => {} } as unknown as ReturnType<
+          typeof actualToast.useToast
+        >)
       : actualToast.useToast(),
 }));
 
 const { StudioCanvas } = await import('./StudioCanvas');
 const { useStudioStore } = await import('../stores/useStudioStore');
+
+// StudioCanvas reads brand type inputs through React Query, so its tree needs a client.
+// `rerender` replaces the WHOLE tree, so the provider has to be re-applied with it — a
+// bare `view.rerender(<StudioCanvas …/>)` drops the provider and throws on the next hook.
+const renderCanvas = (props: { brandProfileId: string; initialRoomId: string }) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  const wrap = (next: typeof props) => (
+    <QueryClientProvider client={queryClient}>
+      <StudioCanvas embedded {...next} />
+    </QueryClientProvider>
+  );
+  const view = render(wrap(props));
+  return { ...view, rerender: (next: typeof props) => view.rerender(wrap(next)) };
+};
 
 // A call is cross-brand when it names a room this brand does not own. A room-less call is
 // fine: that is the fence holding while the new brand's rooms are still loading.
@@ -145,18 +166,18 @@ afterAll(() => {
 
 describe('StudioCanvas brand/room fence', () => {
   it('connects the server-resolved room on first paint', () => {
-    render(<StudioCanvas embedded brandProfileId="brand-a" initialRoomId="room-a1" />);
+    renderCanvas({ brandProfileId: 'brand-a', initialRoomId: 'room-a1' });
 
     expect(realtimeCalls[0]).toEqual({ brandProfileId: 'brand-a', roomId: 'room-a1' });
   });
 
   it('never pairs the new brand with the previous brand’s room across a mounted switch', async () => {
-    const view = render(<StudioCanvas embedded brandProfileId="brand-a" initialRoomId="room-a1" />);
+    const view = renderCanvas({ brandProfileId: 'brand-a', initialRoomId: 'room-a1' });
 
     // The real refetch window: useCanvasRooms still reports the previous brand's rooms when
     // the new brandProfileId arrives.
     await act(async () => {
-      view.rerender(<StudioCanvas embedded brandProfileId="brand-b" initialRoomId="room-b1" />);
+      view.rerender({ brandProfileId: 'brand-b', initialRoomId: 'room-b1' });
     });
 
     expect(crossBrandCalls(realtimeCalls)).toEqual([]);
@@ -166,15 +187,15 @@ describe('StudioCanvas brand/room fence', () => {
   });
 
   it('selects the new brand’s first room once its rooms arrive, and puts it in the URL', async () => {
-    const view = render(<StudioCanvas embedded brandProfileId="brand-a" initialRoomId="room-a1" />);
+    const view = renderCanvas({ brandProfileId: 'brand-a', initialRoomId: 'room-a1' });
 
     await act(async () => {
-      view.rerender(<StudioCanvas embedded brandProfileId="brand-b" initialRoomId="room-b1" />);
+      view.rerender({ brandProfileId: 'brand-b', initialRoomId: 'room-b1' });
     });
 
     rooms = ROOMS_B;
     await act(async () => {
-      view.rerender(<StudioCanvas embedded brandProfileId="brand-b" initialRoomId="room-b1" />);
+      view.rerender({ brandProfileId: 'brand-b', initialRoomId: 'room-b1' });
     });
 
     expect(realtimeCalls.at(-1)).toEqual({ brandProfileId: 'brand-b', roomId: 'room-b1' });

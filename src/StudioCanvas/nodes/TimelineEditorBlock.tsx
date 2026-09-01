@@ -450,10 +450,19 @@ export function TimelineEditorBlock({
                 >
                   <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
                     <span>Video Editor</span>
+                    {/*
+                      What is WIRED IN always leads. A production summary used to replace
+                      this readout entirely, so a node with a clip connected and no shots
+                      yet read "0/0 masters" — the count of a workflow the user had not
+                      started, in place of the one thing they had actually done (#294).
+                    */}
                     <span>
-                      {production
-                        ? `${production.approvedMasters}/${production.shotCount} masters`
-                        : `${inputCount} input${inputCount === 1 ? '' : 's'} · ${clipCount} clip${clipCount === 1 ? '' : 's'}`}
+                      {`${inputCount} input${inputCount === 1 ? '' : 's'}`}
+                      {production && production.shotCount > 0
+                        ? ` · ${production.approvedMasters}/${production.shotCount} masters`
+                        : clipCount > 0
+                          ? ` · ${clipCount} clip${clipCount === 1 ? '' : 's'}`
+                          : ''}
                     </span>
                   </div>
 
@@ -492,6 +501,7 @@ export function TimelineEditorBlock({
                       <>
                         {/* biome-ignore lint/a11y/useMediaCaption: user-rendered edited clip has no caption track */}
                         <video
+                          preload="none"
                           src={displayVideo}
                           controls
                           className="h-full w-full object-contain"

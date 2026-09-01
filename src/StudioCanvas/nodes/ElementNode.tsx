@@ -143,7 +143,10 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                 selected={selected}
                 className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm"
               >
-                <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30">
+                {/* `nodrag` belongs on the CONTROLS, never on the body — the same defect the
+                    layer editor and the video reference carried (Airtable #284/#297). The
+                    Element picker below keeps it, because that one really is a control. */}
+                <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30">
                   {unbound && !isLoading ? (
                     <ElementNodeSetup brandId={brandId} elements={elements} onBind={bindElement} />
                   ) : unavailable ? (
@@ -162,6 +165,7 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                     // biome-ignore lint/performance/noImgElement: canvas nodes paint signed
                     // storage URLs that next/image cannot resolve at build time.
                     <img
+                      loading="lazy"
                       src={preview}
                       alt={`${name} reference`}
                       className="h-full w-full object-contain"
@@ -288,7 +292,7 @@ function ElementNodeSetup({
   return (
     <>
       {elements.length > 0 ? (
-        <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto p-3">
+        <div className="nodrag nowheel flex h-full w-full flex-col gap-1.5 overflow-y-auto p-3">
           <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             Choose an Element
           </p>

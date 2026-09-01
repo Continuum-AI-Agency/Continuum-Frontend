@@ -67,8 +67,6 @@ import {
 import { type KeyboardEvent, useMemo, useState } from 'react';
 
 import { GoogleIcon, type IconComponent } from '@/components/shared/icons';
-import type { TechniqueItem } from '@/lib/ai-studio/techniques';
-
 import {
   Command,
   CommandEmpty,
@@ -88,14 +86,15 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
 } from '@/components/ui/context-menu';
+import type { TechniqueItem } from '@/lib/ai-studio/techniques';
 
 import {
   ACTION_FAMILY_LABELS,
   ADD_NODE_GROUPS,
   type AddNodeGroup,
   type AddNodeGroupSection,
-  type AddNodeRow,
   type AddNodeOpGroup,
+  type AddNodeRow,
   type AddNodeSubGroup,
   addNodeRowKey,
   addNodeSearchValue,

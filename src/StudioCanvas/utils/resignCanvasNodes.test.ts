@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { CANVAS_MEDIA_SIGN_ROUTE } from '@continuum/contracts';
+import { clearSignedUrlCache } from './signedUrlCache';
 
 const BRAND_ID = '00000000-0000-4000-8000-0000000000b1';
 const ASSET_A = '11111111-1111-4111-8111-11111111111a';
@@ -34,6 +35,11 @@ const originalFetch = globalThis.fetch;
 const versionUrl = (versionId: string) => `https://supabase.example/signed/${versionId}.png?fresh`;
 
 beforeEach(() => {
+  // resignCanvasNodes now shares one signed-URL cache across callers, and that cache
+  // is module-scoped. Without this reset a later case is served the previous case's
+  // URL and the backend route is never called, which is the cache behaving correctly
+  // but tells this test nothing.
+  clearSignedUrlCache();
   backendCalls = [];
   backendItems = [];
   backendThrows = false;

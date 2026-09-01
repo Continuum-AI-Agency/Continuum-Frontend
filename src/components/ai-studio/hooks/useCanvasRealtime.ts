@@ -94,6 +94,11 @@ const reconcileStaleExecutingNodes = (nodes: StudioNode[]): StudioNode[] =>
     } as StudioNode;
   });
 
+// Coalescing window for the full-document autosave. Matches the 1000ms the three
+// text-editing nodes already used via useDebouncedSave, so typing behaves as before —
+// what changes is that drag, connect, delete, undo and inspector edits coalesce too.
+const SAVE_COALESCE_MS = 1000;
+
 const buildCanvasSessionId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -813,12 +818,39 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
     };
   }, [saveCanvasToDatabase]);
 
+  // Every mutation path in the studio converges on `saveTrigger`, and each save
+  // re-serializes and rewrites the WHOLE nodes+edges document. Firing on every bump
+  // meant a drag-heavy session sent one full-graph round-trip per node release; the
+  // busiest canvas in production sits at revision 2900 for a graph of 264 nodes.
+  //
+  // The debounce belongs HERE rather than at the call sites: this is the one place all
+  // ~23 of them route through, and the three that opted into `useDebouncedSave` were
+  // the only ones protected. The timer lives in a ref because the coalescing window has
+  // to span renders — a timer scoped to the effect would be cleared and restarted by
+  // the very re-render the trigger causes, which is not a debounce.
   const saveTrigger = useStudioStore((state) => state.saveTrigger);
+  const coalesceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
-    if (saveTrigger > 0) {
-      void saveCanvasToDatabase();
-    }
-  }, [saveTrigger, saveCanvasToDatabase]);
+    if (saveTrigger <= 0) return;
+    if (coalesceTimerRef.current) clearTimeout(coalesceTimerRef.current);
+    coalesceTimerRef.current = setTimeout(() => {
+      coalesceTimerRef.current = null;
+      void saveCanvasToDatabaseRef.current?.();
+    }, SAVE_COALESCE_MS);
+  }, [saveTrigger]);
+
+  // Unmount only — leaving the room or closing the tab is exactly when the user expects
+  // their last edit to have landed, so a coalescing window in flight is flushed, never
+  // dropped. Empty deps: this must not re-run when the save closure changes identity.
+  useEffect(() => {
+    return () => {
+      if (!coalesceTimerRef.current) return;
+      clearTimeout(coalesceTimerRef.current);
+      coalesceTimerRef.current = null;
+      void saveCanvasToDatabaseRef.current?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (

@@ -242,7 +242,13 @@ async function prepareOverlays(
     const trimEnd =
       overlay.trimEndSec !== undefined ? Math.min(overlay.trimEndSec, fullDuration) : fullDuration;
     const speed = speedFor(overlay.effects);
-    const sink = new mb.CanvasSink(track);
+    // `alpha: true` on the OVERLAY decode specifically. A CanvasSink defaults to
+    // flattening onto black, which is the right answer for a base track and exactly
+    // the wrong one for a layer that is supposed to reveal what is beneath it — a
+    // transparent cutout composited this way would paint a black rectangle. Harmless
+    // for an opaque overlay, whose every pixel is already alpha 255.
+    // Pinned by `matte:alpha:bench`, which decodes the same clip both ways.
+    const sink = new mb.CanvasSink(track, { alpha: true });
     prepared.push({
       kind: 'video',
       frameAt: async (sourceSec) => {

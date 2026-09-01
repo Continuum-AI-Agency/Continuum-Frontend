@@ -115,7 +115,9 @@ describe('inverse + hit testing', () => {
 describe('preview == export', () => {
   test('the CSS is the same four ops, in the same order, as the canvas transform', () => {
     const css = layerTransformCss(layer({ rotation: 90, scale: { x: -1, y: 2 } }));
-    expect(css).toBe('translate(1024px, 1024px) rotate(90deg) scale(-1, 2) translate(-200px, -100px)');
+    expect(css).toBe(
+      'translate(1024px, 1024px) rotate(90deg) scale(-1, 2) translate(-200px, -100px)',
+    );
   });
 
   test('the CSS matrix agrees with sourceToComposition on the corners', () => {

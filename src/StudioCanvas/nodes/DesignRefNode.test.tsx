@@ -128,7 +128,13 @@ const written = (): Record<string, unknown> =>
   );
 
 describe('DesignRefNode', () => {
+  // `useStudioStore` is a module singleton and bun runs every test file in one process, so
+  // a mocked store ACTION left in place leaks into the next file: ElementNode.test.tsx's
+  // writes landed in this file's `updateNodeData` mock and its assertions timed out.
+  let originalUpdateNodeData: typeof updateNodeData | undefined;
+
   beforeEach(() => {
+    originalUpdateNodeData = useStudioStore.getState().updateNodeData as typeof updateNodeData;
     useStudioStore.setState({ nodes: [], edges: [], brandId: 'brand-1', updateNodeData });
     updateNodeData.mockClear();
     executeGenerationMock.mockClear();
@@ -136,7 +142,10 @@ describe('DesignRefNode', () => {
     noSystem();
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    if (originalUpdateNodeData) useStudioStore.setState({ updateNodeData: originalUpdateNodeData });
+    cleanup();
+  });
 
   it('offers the three presets and seeds section + mode from one click', () => {
     systemOf([card('palette')]);
@@ -263,6 +272,27 @@ describe('DesignRefNode', () => {
     expect(screen.queryByRole('button', { name: /Generate/ })).toBeNull();
   });
 
+  // Airtable #289. A Palette reference wired into a generator produced a black-and-white
+  // frame and the reporter read that as a broken promise. The owner's ruling is that the
+  // palette informs the generation and its critique and never constrains it — so the node
+  // has to SAY which of the two it is. The other half of the rule (a designRef never
+  // blocks a run) is held in `executeWorkflow.designref.test.ts`.
+  it('says the reference informs the generation rather than constraining it', () => {
+    systemOf([card('palette')]);
+    renderNode({ section: 'palette', mode: 'both', specimenSource: 'generated' });
+
+    expect(
+      screen.getByText('Informs the generation and its critique. Not enforced on the result.'),
+    ).toBeDefined();
+  });
+
+  it('promises nothing until a section is chosen', () => {
+    systemOf([card('palette')]);
+    renderNode({ section: null, mode: 'both' });
+
+    expect(screen.queryByText(/Informs the generation/)).toBeNull();
+  });
+
   it('draws both source handles, and no targets', () => {
     systemOf([card('palette')]);
     const { container } = renderNode({ section: 'palette', mode: 'both' });
@@ -273,6 +303,44 @@ describe('DesignRefNode', () => {
       'text',
     ]);
     expect(container.querySelectorAll('.react-flow__handle-left').length).toBe(0);
+  });
+
+  // Airtable #283. Three defects on one node: the title truncated to "Design Referen…",
+  // the token summary clipped mid-word, and the blue Generate button floated on top of
+  // that text. The geometry is asserted in `studio:node-chrome:bench`; what a DOM test can
+  // hold is the structure that produced it.
+  it('keeps the mode select narrow enough to leave the title its width', () => {
+    systemOf([card('palette')]);
+    renderNode({ section: 'palette', mode: 'both' });
+
+    // A native select is as wide as its widest option, and it sits in the same 240px bar as
+    // the node's own title. "Specimen + tokens" is what ate "Design Reference".
+    const options = [
+      ...screen.getByLabelText('What this reference emits').querySelectorAll('option'),
+    ];
+    expect(options.map((option) => option.textContent)).toEqual(['Both', 'Specimen', 'Tokens']);
+  });
+
+  it('gives the token summary its own bounded scroll pane, clear of Generate', async () => {
+    systemOf([card('typography', [], ['Playfair Display for display, Instrument Sans for body.'])]);
+    renderNode({
+      section: 'typography',
+      mode: 'both',
+      tokenSummary:
+        '<design_system>Playfair Display for display, Instrument Sans for body.</design_system>',
+    });
+
+    const tokens = await screen.findByTestId('design-ref-tokens');
+    // styleguide.md §4: bound the frame, put the overflow in an inner pane. Clipping is a bug.
+    expect(tokens.className).toContain('min-h-0');
+    expect(tokens.className).toContain('flex-1');
+    expect(tokens.className).toContain('overflow-y-auto');
+
+    // Generate belongs to the specimen pane; floated over the summary it covered the text.
+    const generate = screen.getByRole('button', { name: /Generate/ });
+    expect(tokens.contains(generate)).toBe(false);
+    expect(generate.closest('[data-testid="design-ref-tokens"]')).toBeNull();
+    expect(generate.parentElement?.contains(tokens)).toBe(false);
   });
 
   it('says plainly that the brand has no design system', () => {

@@ -1,3 +1,4 @@
+import { routerLockedType } from '@continuum/contracts';
 import {
   addEdge,
   applyEdgeChanges,
@@ -303,6 +304,35 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
   return nextEdges;
 };
 
+/**
+ * A router pins its modality to whatever is wired into it, and `data.lockedType` is only
+ * the CACHED answer — `RouterNode` reads that field and nothing else, so an unstamped
+ * router draws "Unset / Connect a source" with a source plainly connected (#301).
+ *
+ * Wave 1 stamped it in `onConnect`, which fires only for a router a human wires by hand
+ * on a mounted canvas. Every other way a wired graph arrives — rehydrated from
+ * `canvas_sessions`, applied from a template, written by `studio_workflow` — arrives
+ * through `setNodes`/`setEdges` with its edges ALREADY there, so onConnect never runs
+ * and the badge stayed Unset until somebody pressed Run. Both entry points normalize
+ * here, so the stamp belongs here alongside `normalizeEdges`.
+ *
+ * Idempotent: a stamped router is left alone, and an unstamped one with nothing
+ * resolvable upstream keeps its identity, so this cannot churn the node list.
+ */
+const stampRouterLocks = (nodes: StudioNode[], edges: Edge[]): StudioNode[] => {
+  if (!nodes.some((node) => node.type === 'router' && !node.data?.lockedType)) return nodes;
+
+  let stamped = false;
+  const next = nodes.map((node) => {
+    if (node.type !== 'router' || node.data?.lockedType) return node;
+    const locked = routerLockedType(node, edges, nodes);
+    if (!locked) return node;
+    stamped = true;
+    return { ...node, data: { ...node.data, lockedType: locked } } as StudioNode;
+  });
+  return stamped ? next : nodes;
+};
+
 export const useStudioStore = create<StudioState>((set, get) => ({
   nodes: [],
   edges: [],
@@ -397,21 +427,28 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       },
     };
 
-    set((state) => ({
-      edges: addEdge(newEdge as Edge, state.edges),
-      saveTrigger: state.saveTrigger + 1,
-    }));
+    set((state) => {
+      const edges = addEdge(newEdge as Edge, state.edges);
+      return {
+        edges,
+        nodes: stampRouterLocks(state.nodes, edges),
+        saveTrigger: state.saveTrigger + 1,
+      };
+    });
   },
 
   setNodes: (nodes: StudioNode[]) => {
     set((state) => {
       const normalizedEdges = normalizeEdges(state.edges, nodes);
-      return { nodes, edges: normalizedEdges };
+      return { nodes: stampRouterLocks(nodes, normalizedEdges), edges: normalizedEdges };
     });
   },
 
   setEdges: (edges: Edge[]) => {
-    set((state) => ({ edges: normalizeEdges(edges, state.nodes) }));
+    set((state) => {
+      const normalizedEdges = normalizeEdges(edges, state.nodes);
+      return { edges: normalizedEdges, nodes: stampRouterLocks(state.nodes, normalizedEdges) };
+    });
   },
 
   updateNodeData: (id: string, data: Partial<StudioNode['data']>) => {

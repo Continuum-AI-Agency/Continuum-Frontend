@@ -65,7 +65,11 @@ describe('paint order', () => {
   test('is the ARRAY order, bottom first — index 0 paints first', () => {
     const { ctx, calls } = recordingCtx();
     // biome-ignore lint/suspicious/noExplicitAny: a recording double, not a real context
-    drawLayers(ctx as any, [layer('bottom'), layer('middle'), layer('top')], images('bottom', 'middle', 'top'));
+    drawLayers(
+      ctx as any,
+      [layer('bottom'), layer('middle'), layer('top')],
+      images('bottom', 'middle', 'top'),
+    );
     expect(drawOrder(calls)).toEqual(['bottom', 'middle', 'top']);
   });
 
@@ -158,7 +162,11 @@ describe('opacity and blend', () => {
   test('opacity rides globalAlpha, 0..1, per layer', () => {
     const { ctx, calls } = recordingCtx();
     // biome-ignore lint/suspicious/noExplicitAny: a recording double, not a real context
-    drawLayers(ctx as any, [layer('a', { opacity: 0.5 }), layer('b', { opacity: 1 })], images('a', 'b'));
+    drawLayers(
+      ctx as any,
+      [layer('a', { opacity: 0.5 }), layer('b', { opacity: 1 })],
+      images('a', 'b'),
+    );
     expect(calls.filter((call) => call.startsWith('globalAlpha'))).toEqual([
       'globalAlpha=0.5',
       'globalAlpha=1',

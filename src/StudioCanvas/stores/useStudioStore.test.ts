@@ -76,6 +76,49 @@ describe('useStudioStore', () => {
     expect(useStudioStore.getState().edges).toHaveLength(1);
   });
 
+  // Bug #301: a Router with a Text Block wired in showed the badge `Unset` and the body
+  // `Connect a source`. `lockedType` was stamped only by a RUN, so a router the user had
+  // plainly connected described itself as unconnected until somebody pressed Run.
+  it('stamps a router modality when the wire lands, not when a run reaches it', () => {
+    useStudioStore.getState().setNodes([
+      { id: 'text1', position: { x: 0, y: 0 }, data: { value: 'hello' }, type: 'string' },
+      { id: 'route', position: { x: 0, y: 0 }, data: { lockedType: null }, type: 'router' },
+    ] as StudioNode[]);
+
+    useStudioStore.getState().onConnect({
+      source: 'text1',
+      sourceHandle: 'text',
+      target: 'route',
+      targetHandle: 'in',
+    });
+
+    expect(useStudioStore.getState().edges).toHaveLength(1);
+    expect(useStudioStore.getState().nodes.find((n) => n.id === 'route')?.data.lockedType).toBe(
+      'text',
+    );
+  });
+
+  // #301 again, on the path the LIVE canvas actually takes. The test above wires the
+  // router by hand, so it only ever exercised `onConnect`; a graph rehydrated from
+  // canvas_sessions, applied from a template, or written by studio_workflow arrives
+  // through setNodes/setEdges with its edges ALREADY there and fires no connection at
+  // all. That router mounted reading "Unset" while its unit test stayed green.
+  it('stamps a router modality on a graph that arrives already wired', () => {
+    useStudioStore.getState().setNodes([
+      { id: 'text1', position: { x: 0, y: 0 }, data: { value: 'hello' }, type: 'string' },
+      { id: 'route', position: { x: 0, y: 0 }, data: { lockedType: null }, type: 'router' },
+    ] as StudioNode[]);
+    useStudioStore
+      .getState()
+      .setEdges([
+        { id: 'e1', source: 'text1', sourceHandle: 'text', target: 'route', targetHandle: 'in' },
+      ]);
+
+    expect(useStudioStore.getState().nodes.find((n) => n.id === 'route')?.data.lockedType).toBe(
+      'text',
+    );
+  });
+
   it('should allow valid NanoGenNode connections', () => {
     const nodes: StudioNode[] = [
       { id: 'text1', position: { x: 0, y: 0 }, data: {}, type: 'string' },

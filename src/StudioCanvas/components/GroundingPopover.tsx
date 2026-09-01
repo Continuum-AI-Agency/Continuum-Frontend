@@ -11,10 +11,13 @@
 // semantics can never drift between them; the pure toggle helpers stay in
 // `utils/brandEnforcement`, shared with the node payload builder.
 //
-// The flat panel's scroller is a plain overflow div, NOT shadcn ScrollArea:
-// ScrollArea's viewport is `size-full`, so a `max-h` on its root resolves to
-// `height: auto` and the content spills instead of scrolling. Its viewport also
-// wraps children in a `display: table` div, which breaks the sticky headers.
+// The flat panel owns NO scroller: the inspector's bounded pane
+// (CanvasFloatingPanel) is the one scrollport, and the section headers stick to it.
+// It must not be given one back — not a plain overflow div (a second scrollport
+// steals sticky from the pane above it) and not shadcn ScrollArea, whose viewport is
+// `size-full` (a `max-h` on its root resolves to `height: auto`, so content spills
+// instead of scrolling) and wraps children in a `display: table` div that breaks
+// sticky outright.
 
 import type { BrandBookPieceKind, BrandDirectionPiece, DesignSection } from '@continuum/contracts';
 import { Check, Wand2 } from 'lucide-react';
@@ -428,9 +431,12 @@ export function GroundingMenuSections(props: GroundingEditorProps) {
 
 // ————— The inspector's flat inline panel —————
 
+// `mt-3` is the group spacing the flat column no longer gets from a `gap`, and `min-h-6`
+// keeps every header the same height: they all pin to `top-0` in one containing block, so
+// the one arriving covers the one already there — a taller header underneath would peek.
 function SectionHeader({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
-    <div className="sticky top-0 z-10 mb-1 flex items-center justify-between gap-2 bg-popover px-0.5 py-1">
+    <div className="sticky top-0 z-10 mb-1 mt-3 flex min-h-6 items-center justify-between gap-2 bg-background px-0.5 py-1">
       <p className="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </p>
@@ -490,38 +496,50 @@ export function GroundingPopover(props: GroundingEditorProps) {
 
   return (
     <TooltipProvider delay={250}>
-      <div className="max-h-[min(32rem,var(--available-height))] overflow-y-auto overscroll-contain p-2">
-        <div className="flex flex-col gap-3">
+      {/* No scroll container of its own. This surface is only ever mounted INSIDE the
+          inspector's bounded pane, and `--available-height` is set by a Base UI
+          Positioner — which is not in this tree, so the max-h was invalid at
+          computed-value time and resolved to `none` (verified in Chromium). What the
+          dead `overflow-y-auto` still did was claim the scrollport, so every
+          `sticky top-0` header below stuck to a box that never scrolls and slid out of
+          view instead of holding the top of the list (Airtable #281). */}
+      <div className="p-2">
+        {/* One flat column, not a <section> per group. A sticky header resolves against
+            its nearest block ancestor, so a wrapper that ends where its group ends
+            carries its own header out of the scrollport the moment the group does —
+            measured at full scroll as -1445 for the first group's header against 0 for
+            the last one's. Sharing one containing block that runs the length of the
+            list makes every header hold the top until the next one covers it. The
+            spacing the column's `gap-3` used to give now rides on the headers' `mt-3`,
+            so the groups still read apart. */}
+        <div className="flex flex-col">
           <p className="px-1.5 pt-0.5 font-medium text-foreground text-xs">Style</p>
-          <p className="-mt-2 px-1.5 text-[0.65rem] text-muted-foreground">{STYLE_CAPTION}</p>
-          <section>
-            <SectionHeader title="Brand book">
-              {model.brandEnforced ? (
-                <span className="text-[0.65rem] text-muted-foreground">
-                  {model.enforcedCount} on
-                </span>
-              ) : null}
-            </SectionHeader>
-            <ToggleRow row={model.enforceRow} />
-            <Separator className="my-1" />
-            {model.bookRows ? (
-              model.bookRows.map((row) => <ToggleRow key={row.key} row={row} />)
-            ) : (
-              <p className="px-1.5 py-1 text-xs text-muted-foreground">
-                No brand book yet —{' '}
-                <Link
-                  href="/settings?section=brand"
-                  className="underline underline-offset-2 transition-colors hover:text-foreground"
-                >
-                  finish it in Settings
-                </Link>
-                .
-              </p>
-            )}
-          </section>
+          <p className="mt-1 px-1.5 text-[0.65rem] text-muted-foreground">{STYLE_CAPTION}</p>
+
+          <SectionHeader title="Brand book">
+            {model.brandEnforced ? (
+              <span className="text-[0.65rem] text-muted-foreground">{model.enforcedCount} on</span>
+            ) : null}
+          </SectionHeader>
+          <ToggleRow row={model.enforceRow} />
+          <Separator className="my-1" />
+          {model.bookRows ? (
+            model.bookRows.map((row) => <ToggleRow key={row.key} row={row} />)
+          ) : (
+            <p className="px-1.5 py-1 text-xs text-muted-foreground">
+              No brand book yet —{' '}
+              <Link
+                href="/settings?section=brand"
+                className="underline underline-offset-2 transition-colors hover:text-foreground"
+              >
+                finish it in Settings
+              </Link>
+              .
+            </p>
+          )}
 
           {model.directionRows ? (
-            <section>
+            <>
               <SectionHeader title="Creative direction">
                 <span className="text-[0.65rem] text-muted-foreground">{model.directionCount}</span>
               </SectionHeader>
@@ -531,11 +549,11 @@ export function GroundingPopover(props: GroundingEditorProps) {
               {model.directionRows.map((row) => (
                 <ToggleRow key={row.key} row={row} />
               ))}
-            </section>
+            </>
           ) : null}
 
           {model.designRows ? (
-            <section>
+            <>
               <SectionHeader title="Design system">
                 <span className="text-[0.65rem] text-muted-foreground">{model.designCount}</span>
               </SectionHeader>
@@ -545,36 +563,32 @@ export function GroundingPopover(props: GroundingEditorProps) {
               {model.designRows.map((row) => (
                 <ToggleRow key={row.key} row={row} />
               ))}
-            </section>
+            </>
           ) : null}
 
-          <section>
-            <SectionHeader title="Creative skills">
-              <div className="flex items-center gap-2">
-                {model.skillCount > 0 ? (
-                  <span className="text-[0.65rem] text-muted-foreground">
-                    {model.skillCount} on
-                  </span>
-                ) : null}
-                <Link
-                  href="/settings?section=skills"
-                  className="inline-flex items-center gap-1 text-[0.65rem] text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <Wand2 className="h-3 w-3" />
-                  Manage
-                </Link>
-              </div>
-            </SectionHeader>
-            {model.skillsLoading ? (
-              <p className="px-1.5 py-1 text-xs text-muted-foreground">Loading…</p>
-            ) : model.skillRows.length === 0 ? (
-              <p className="px-1.5 py-1 text-xs text-muted-foreground">
-                No creative skills yet — create one from Manage.
-              </p>
-            ) : (
-              model.skillRows.map((row) => <ToggleRow key={row.key} row={row} />)
-            )}
-          </section>
+          <SectionHeader title="Creative skills">
+            <div className="flex items-center gap-2">
+              {model.skillCount > 0 ? (
+                <span className="text-[0.65rem] text-muted-foreground">{model.skillCount} on</span>
+              ) : null}
+              <Link
+                href="/settings?section=skills"
+                className="inline-flex items-center gap-1 text-[0.65rem] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Wand2 className="h-3 w-3" />
+                Manage
+              </Link>
+            </div>
+          </SectionHeader>
+          {model.skillsLoading ? (
+            <p className="px-1.5 py-1 text-xs text-muted-foreground">Loading…</p>
+          ) : model.skillRows.length === 0 ? (
+            <p className="px-1.5 py-1 text-xs text-muted-foreground">
+              No creative skills yet — create one from Manage.
+            </p>
+          ) : (
+            model.skillRows.map((row) => <ToggleRow key={row.key} row={row} />)
+          )}
         </div>
       </div>
     </TooltipProvider>

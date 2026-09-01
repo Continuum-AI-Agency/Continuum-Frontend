@@ -87,7 +87,10 @@ export function SaveStarterDialog({ open, onOpenChange, brandProfileId, nodes }:
         edges: snapshot.edges,
         metadata: { starter: true },
       });
-      await queryClient.invalidateQueries({ queryKey: brandStartersQueryKey(brandProfileId) });
+      // Not awaited, for the same reason as SaveTechniqueDialog (Airtable #282): the
+      // starter is saved, and making the dialog's closure wait on a list refetch is
+      // how a finished save reads as a stuck one.
+      void queryClient.invalidateQueries({ queryKey: brandStartersQueryKey(brandProfileId) });
       show({
         title: 'Starter saved',
         description: `"${name.trim()}" is ready to re-run from the composer.`,

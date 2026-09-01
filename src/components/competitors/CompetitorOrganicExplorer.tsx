@@ -18,6 +18,9 @@ import {
 // lookup_unavailable — common for mega-accounts Graph refuses to enumerate.
 const SEARCH_ERROR_COPY: Record<InstagramLookupErrorKind, string> = {
   account_required: 'Connect an Instagram business account to this brand to look up competitors.',
+  permission_denied:
+    'Instagram Business Discovery is not permitted for your connected account — competitor lookups read other profiles through your own Instagram Business account and need a permission your own analytics do not. Reconnecting will not fix it.',
+  rate_limited: 'Instagram is rate-limiting your account — nothing needs reconnecting, try again in a few minutes.',
   lookup_unavailable:
     'That account is too large or temporarily unavailable — try again or pick another handle.',
   not_found: 'No public business or creator account was found for that username.',

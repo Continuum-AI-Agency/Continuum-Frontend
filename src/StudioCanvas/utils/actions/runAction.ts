@@ -1,9 +1,4 @@
-import {
-  ACTION_DEFS,
-  type ActionId,
-  actionDef,
-  type BrandTypeInputs,
-} from '@continuum/contracts';
+import { ACTION_DEFS, type ActionId, actionDef, type BrandTypeInputs } from '@continuum/contracts';
 import type { NodeOutput } from '../../types/execution';
 import { runActionInWorker } from '../../workers/spliceWorkerClient';
 import { parseDataUrl } from '../dataUrl';
@@ -52,6 +47,14 @@ export interface ResolvedActionInput {
   blob?: Blob;
   /** Set for text inputs. */
   text?: string;
+  /**
+   * `media.assets` id of whatever produced this input, when it has one.
+   *
+   * Only the ops that hand work to the BACKEND need it, and they need it for one
+   * reason: it is what lets the result be registered as a derivative OF something
+   * rather than as an orphan. A pixel op ignores it entirely.
+   */
+  assetId?: string;
 }
 
 export interface RunActionArgs {
@@ -387,6 +390,24 @@ const WORKER_OPS_WITH_ENGINES = new Set<ActionId>([
 const ORCHESTRATED_OPS: Partial<Record<ActionId, SyncOp>> = {
   'video.subtitles': (args, config) =>
     import('./subtitlesOp').then((m) => m.runSubtitlesAction(args, config)),
+  // Both cutout ops sit here rather than in SYNC_OPS/WORKER_OPS because the matting
+  // runs on a GPU in Cloud Run: the runner's whole job is an authenticated call and
+  // an SSE read. Note `image.removeBackground` declares `execution: 'sync'` to satisfy
+  // the registry's worker⟺video invariant — this map is consulted first, so the
+  // declaration never decides where it actually runs.
+  'image.removeBackground': (args, config) =>
+    import('./removeBackgroundOp').then((m) => m.runRemoveImageBackground(args, config)),
+  // Live since 2026-08-31: the L4 quota landed and `continuum-matte-video` is
+  // deployed in us-central1 running BiRefNet-portrait at stride 3 — the operating
+  // point `matte:video:matrix` picked, at $0.0096 and 32s of task life for a 4s clip.
+  //
+  // It stays orchestrated rather than worker-side for the same reason as the image
+  // op: the matting is a GPU job in Cloud Run, so the runner's whole job is an
+  // authenticated call and an SSE read. That stream now carries real frame-by-frame
+  // progress from the job, which matters here more than anywhere else in the canvas —
+  // a clip spends its first ~3 minutes on Cloud Run scheduling and an image pull.
+  'video.removeBackground': (args, config) =>
+    import('./removeBackgroundOp').then((m) => m.runRemoveVideoBackground(args, config)),
 };
 
 /**
@@ -424,10 +445,19 @@ export async function runAction(args: RunActionArgs): Promise<NodeOutput> {
   if (isOverlayActionId(args.actionId)) return runOverlayAction(args, config);
 
   if (def.execution === 'worker') {
-    const inputs = def.inputs.map((port) => {
-      const resolved = inputFor(args, port.handle);
-      if (!resolved.blob) throw new Error(`The input on "${port.handle}" has no readable bytes`);
-      return { handle: port.handle, blob: resolved.blob };
+    // ONE ENTRY PER WIRE, not per port. `def.inputs` is the PORT list, so mapping it
+    // handed a `max: 20` port exactly one blob however many clips the resolver had
+    // already put on that handle — and `video.stitch` died on "received 1 clip" with
+    // two clips visibly connected (#304). The resolver was fixed in wave 1; this is the
+    // bridge that threw its work away on the way to the worker.
+    const inputs = def.inputs.flatMap((port) => {
+      const wired = inputsFor(args, port.handle);
+      if (wired.length === 0)
+        throw new Error(`Nothing is connected to this action's "${port.handle}" input`);
+      return wired.map((resolved) => {
+        if (!resolved.blob) throw new Error(`The input on "${port.handle}" has no readable bytes`);
+        return { handle: port.handle, blob: resolved.blob };
+      });
     });
     const result = await runActionInWorker({
       actionId: args.actionId,

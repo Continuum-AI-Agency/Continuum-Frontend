@@ -115,6 +115,19 @@ describe('LayerEditorBlock', () => {
     expect(container.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,AAAA');
   });
 
+  // Airtable #284: the whole NodeContent carried `nodrag`, which is React Flow's own
+  // "never start a drag here" class — so the node could not be moved once placed. The class
+  // belongs on the controls, and only on the controls.
+  it('leaves the body draggable and keeps nodrag on the Edit control', () => {
+    const { container, getByRole } = renderNode({ layers: [layer('a')] });
+
+    const body = container.querySelector('[data-slot="card-content"]');
+    expect(body).toBeTruthy();
+    expect(body?.closest('.nodrag')).toBeNull();
+
+    expect(getByRole('button', { name: /Edit/ }).closest('.nodrag')).toBeTruthy();
+  });
+
   it('opens the editor from the node', () => {
     const { getByRole, queryByRole } = renderNode({ layers: [layer('a')] });
     expect(queryByRole('dialog')).toBeNull();

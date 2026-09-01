@@ -27,6 +27,7 @@ import { AdminActionConfirmation } from '@/components/admin/AdminActionConfirmat
 import {
   ADMIN_AUDIT_ACTIONS,
   auditActorLabel,
+  brandsWithWorkflows,
   buildAdminAuditRequestBody,
   buildAdminPaginationRange,
   buildAdminTabParams,
@@ -307,6 +308,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     checkedWorkflows.length > 0 &&
     checkedWorkflows.every((workflow) => workflow.visibility === 'global');
   const brandFilterOptions = useMemo(() => [GLOBAL_LIBRARY_BRAND_OPTION, ...brands], [brands]);
+  // Airtable #277 — a transfer DESTINATION has to be a brand with a Creative Studio.
+  // Scoped to the destination picker on purpose: the two filter pickers above and below
+  // it are for finding existing rows, where an empty brand is a legitimate thing to look
+  // at and finding nothing is the answer.
+  const transferTargetBrands = useMemo(() => brandsWithWorkflows(brands), [brands]);
   const auditBrandFilterOptions = useMemo(() => [AUDIT_ALL_BRANDS_OPTION, ...brands], [brands]);
   const debouncedAuditSearch = useDebounce(auditSearch);
   const debouncedAuditActor = useDebounce(auditActorQuery);
@@ -949,9 +955,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   }
 
   return (
-    <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-5">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <TabsList className="w-full justify-start overflow-x-auto rounded-md bg-surface p-1 xl:w-auto">
+    <Tabs value={activeTab} onValueChange={handleTabChange} className="min-h-0 flex-1 space-y-5">
+      <div className="flex shrink-0 flex-col gap-3">
+        <TabsList className="w-full justify-start overflow-x-auto rounded-md bg-surface p-1">
           <TabsTrigger value="users" className="gap-2">
             <UserCog className="size-4" />
             Users
@@ -973,7 +979,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
             Reports
           </TabsTrigger>
         </TabsList>
-        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-4 xl:min-w-[560px]">
+        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-4">
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
             <span className="block text-xs uppercase tracking-[0.16em]">Users</span>
             <strong className="text-base text-primary">{users.length}</strong> / {totalCountLabel}
@@ -993,9 +999,16 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         </div>
       </div>
 
-      <TabsContent value="users" className="space-y-4">
-        <div className="grid min-h-[640px] gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="min-w-0 space-y-4">
+      {/*
+        Airtable #279 — at >=xl the directory budgets the panel height it actually has:
+        the table takes what is left after the header, the alert and the pagination row,
+        so pagination can never fall below the fold. Its old `max-h-[64vh]` cap was a
+        fraction of the VIEWPORT, which is always more than the panel had left. Below xl
+        the aside stacks under the table, so the panel scrolls as a whole instead.
+      */}
+      <TabsContent value="users" className="min-h-0 overflow-y-auto xl:overflow-hidden">
+        <div className="grid min-h-[640px] gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="flex min-w-0 flex-col gap-4 xl:min-h-0">
             <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-base font-semibold text-primary">User Directory</h2>
@@ -1057,11 +1070,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
             <div
               data-testid="admin-user-directory-results"
               aria-busy={isDirectoryUpdating}
-              className={`rounded-lg border border-subtle bg-surface transition-opacity ${
+              className={`rounded-lg border border-subtle bg-surface transition-opacity xl:flex xl:min-h-0 xl:flex-1 xl:flex-col ${
                 isDirectoryUpdating ? 'opacity-70' : ''
               }`}
             >
-              <div className="max-h-[64vh] overflow-auto">
+              <div className="max-h-[64vh] overflow-auto xl:max-h-none xl:min-h-0 xl:flex-1">
                 <div className="min-w-[900px]">
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-surface">
@@ -1126,7 +1139,10 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                 <div className="text-sm text-primary">
                                   {membershipLabel(memberships.length)}
                                 </div>
-                                <p className="max-w-[360px] truncate text-xs text-muted-foreground">
+                                <p
+                                  title={brandSummary}
+                                  className="max-w-[360px] truncate text-xs text-muted-foreground"
+                                >
                                   {brandSummary}
                                 </p>
                               </TableCell>
@@ -1170,7 +1186,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground">
                 Page {safePage} of {totalPages}
               </p>
@@ -1237,7 +1253,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
             </div>
           </div>
 
-          <aside className="min-w-0 rounded-lg border border-subtle bg-surface">
+          <aside className="min-w-0 rounded-lg border border-subtle bg-surface xl:min-h-0 xl:overflow-y-auto">
             {selectedUser ? (
               <div className="flex h-full flex-col">
                 <div className="border-b border-subtle p-4">
@@ -1398,7 +1414,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         </div>
       </TabsContent>
 
-      <TabsContent value="brands" className="space-y-4">
+      <TabsContent value="brands" className="min-h-0 space-y-4 overflow-y-auto">
         <BrandsTab
           brands={brands}
           isLoading={isBrandLoading}
@@ -1407,7 +1423,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         />
       </TabsContent>
 
-      <TabsContent value="workflows" className="space-y-4">
+      <TabsContent value="workflows" className="min-h-0 space-y-4 overflow-y-auto">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0 space-y-3">
             <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1628,7 +1644,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                   <div className="w-full sm:w-[300px]">
                     <BrandTransferCombobox
                       id="workflow-target-brand"
-                      brands={brands}
+                      brands={transferTargetBrands}
                       value={targetBrandId}
                       onChange={setTargetBrandId}
                       placeholder="Choose destination brand"
@@ -1727,7 +1743,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         ) : null}
       </TabsContent>
 
-      <TabsContent value="audit" className="space-y-3" data-testid="admin-audit-panel">
+      <TabsContent
+        value="audit"
+        className="min-h-0 space-y-3 overflow-y-auto"
+        data-testid="admin-audit-panel"
+      >
         <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-primary">Admin Audit Log</h2>
@@ -1989,7 +2009,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         </div>
       </TabsContent>
 
-      <TabsContent value="reports" className="space-y-4">
+      <TabsContent value="reports" className="min-h-0 space-y-4 overflow-y-auto">
         <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
           <Card className="border-subtle bg-surface shadow-sm">
             <CardContent className="space-y-4 p-4">

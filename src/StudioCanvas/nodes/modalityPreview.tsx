@@ -44,6 +44,8 @@ export interface ModalityPreviewData {
   generatedVideo?: string | Blob;
   generatedVideoUrl?: string;
   value?: string;
+  /** Every item of a `collection` output, in order — see `collectionPreviewSrcs`. */
+  collectionItems?: string[];
 }
 
 /**
@@ -68,10 +70,39 @@ export function ModalityPreview({
     data.generatedVideoUrl ??
     (typeof data.generatedVideo === 'string' ? data.generatedVideo : undefined);
 
+  // A collection shows EVERY item. Falling through to the single-preview branches below
+  // is what made "Extract Frames" look like it only extracted one still (#292) and left
+  // a two-part "Split" with nothing on screen at all (#303).
+  const collection = data.collectionItems;
+  if (collection && collection.length > 1 && (modality === 'image' || modality === 'video')) {
+    return (
+      <div
+        className="nodrag nowheel grid h-full w-full auto-rows-[minmax(0,1fr)] grid-cols-3 gap-0.5 overflow-y-auto p-0.5"
+        data-testid="studio-collection-preview"
+      >
+        {collection.map((src, index) =>
+          modality === 'video' ? (
+            <NodeVideoPreview key={`${index}:${src}`} src={src} className="rounded-sm" />
+          ) : (
+            // biome-ignore lint/performance/noImgElement: data URLs and signed rendition URLs are valid here.
+            <img
+              key={`${index}:${src}`}
+              loading="lazy"
+              src={src}
+              alt={`Output ${index + 1} of ${collection.length}`}
+              className="h-full w-full rounded-sm object-contain"
+            />
+          ),
+        )}
+      </div>
+    );
+  }
+
   if (modality === 'image' && data.generatedImage) {
     return (
       // biome-ignore lint/performance/noImgElement: data URLs and signed rendition URLs are valid here.
       <img
+        loading="lazy"
         src={data.generatedImage}
         alt="Action output"
         className="max-h-full max-w-full object-contain"

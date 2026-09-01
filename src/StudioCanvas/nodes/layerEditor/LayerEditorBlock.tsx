@@ -40,6 +40,7 @@ import { readFrame } from '../../utils/layers/frameModel';
 import type { LayerDoc } from '../../utils/layers/layerDocReducer';
 import { layerSourcesFromGraph } from '../../utils/layers/layerSources';
 import { persistLayerComposite } from '../../utils/layers/persistLayerComposite';
+import { NodeDownloadButton } from '../NodeDownloadButton';
 import { type ComposeResult, LayerEditorDialog } from './LayerEditorDialog';
 
 /**
@@ -161,7 +162,9 @@ export function LayerEditorBlock({
                 selected={selected}
                 className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm"
               >
-                <NodeContent className="nodrag relative min-h-0 flex-1 bg-muted/30 p-0">
+                {/* `nodrag` belongs on the CONTROLS, never on the body: a node whose whole
+                    NodeContent carries it can never be dragged at all (Airtable #284). */}
+                <NodeContent className="relative min-h-0 flex-1 bg-muted/30 p-0">
                   {preview ? (
                     // biome-ignore lint/performance/noImgElement: canvas nodes paint signed
                     // storage URLs that next/image cannot resolve at build time.
@@ -189,15 +192,28 @@ export function LayerEditorBlock({
                     {`${layers.length} ${layers.length === 1 ? 'layer' : 'layers'}`}
                   </Badge>
 
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="absolute right-2 top-2 z-20 h-6 px-2 text-2xs"
-                    onClick={() => setOpen(true)}
-                  >
-                    <SquarePen className="mr-1 h-3 w-3" /> Edit
-                  </Button>
+                  {/* Edit and Download share the corner. Download renders only once a
+                      composite exists, and is the same control every producing node
+                      carries (Airtable #288). */}
+                  <div className="absolute right-2 top-2 z-20 flex items-center gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="nodrag h-6 px-2 text-2xs"
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={() => setOpen(true)}
+                    >
+                      <SquarePen className="mr-1 h-3 w-3" /> Edit
+                    </Button>
+                    <NodeDownloadButton
+                      nodeType="layerEditor"
+                      data={data}
+                      baseName="layer-composite"
+                      label="Download composed layers"
+                      className="static h-6 w-6"
+                    />
+                  </div>
 
                   <div className="absolute bottom-0 left-0 right-0 truncate border-t border-subtle bg-surface/90 px-2 py-1 text-3xs text-secondary backdrop-blur">
                     {`${frame.width} × ${frame.height}`}

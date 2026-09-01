@@ -73,24 +73,39 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
     setError(null);
     setWrote(null);
     try {
-      // Resolve the inputs before writing anything. The executor's OWN run-skip decides
-      // whether an upstream actually re-runs — which is exactly what lets two export
-      // nodes hanging off one source share ONE upstream execution instead of two.
-      const upstreamIds = Array.from(
-        new Set(
-          useStudioStore
-            .getState()
-            .edges.filter((edge) => edge.target === id)
-            .map((edge) => edge.source),
-        ),
-      );
-      for (const upstreamId of upstreamIds) {
-        await executeWorkflow(executionControls, {
-          targetNodeId: upstreamId,
-          clearDownstream: false,
-          brandId,
-          roomId,
-        });
+      // EXPORTING AN ARTIFACT THAT EXISTS COSTS NOTHING (Airtable #302: "when you want
+      // to download something it re-does the video or imagen").
+      //
+      // This used to run every upstream unconditionally and leave the skip decision to
+      // `executeWorkflow`. That reads fine for an upstream holding a file it uploaded —
+      // #304's screenshot, where Export worked — and is a regeneration for an upstream
+      // that GENERATES, which re-derives bytes the node already has and bills a provider
+      // for the privilege. `exportSourcesFromGraph` maps at most one source per wired
+      // edge, so "as many sources as edges" is exactly "every input already produced".
+      // Only what has NOT produced is worth running.
+      const wired = useStudioStore
+        .getState()
+        .edges.filter(
+          (edge) =>
+            edge.target === id &&
+            (edge.targetHandle ?? EXPORT_MEDIA_INPUT_HANDLE) === EXPORT_MEDIA_INPUT_HANDLE,
+        );
+      const before = useStudioStore.getState();
+      const alreadyRendered =
+        wired.length > 0 &&
+        exportSourcesFromGraph(id, before.edges, before.nodes).length === wired.length;
+
+      if (!alreadyRendered) {
+        // The executor's OWN run-skip still decides whether an upstream re-runs, which
+        // is what lets two export nodes hanging off one source share ONE execution.
+        for (const upstreamId of Array.from(new Set(wired.map((edge) => edge.source)))) {
+          await executeWorkflow(executionControls, {
+            targetNodeId: upstreamId,
+            clearDownstream: false,
+            brandId,
+            roomId,
+          });
+        }
       }
 
       // Re-read after the run: the outputs it produced were mirrored into node data.
@@ -117,7 +132,8 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
   }, [brandId, data.format, executionControls, id, roomId, updateNodeData]);
 
   return (
-    <div className="relative h-[160px] w-[240px]">
+    // `size-full`, never a hardcoded box — see RouterNode. The node is created 280x200.
+    <div className="relative size-full min-h-[160px] min-w-[240px]">
       <CanvasNode
         handles={{ target: false, source: false }}
         selected={selected}

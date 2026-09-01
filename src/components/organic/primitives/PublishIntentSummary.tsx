@@ -11,6 +11,12 @@
 
 export type PublishIntentSummaryData = {
   blockers: { reason: string; message: string }[];
+  /**
+   * Gaps that do NOT stop the post — an unverified claim is the live example. They belong
+   * in front of the person confirming it: the backend has always produced them, and until
+   * they were rendered here nobody ever saw one.
+   */
+  warnings?: { reason: string; message: string }[];
   format: string;
   account: { id: string | null };
   caption: { length: number; preview: string | null };
@@ -45,6 +51,16 @@ export function PublishIntentSummary({ intent }: { intent: PublishIntentSummaryD
           {intent.blockers.map((blocker) => (
             <li key={blocker.reason} className="text-destructive text-xs">
               {blocker.message}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {intent.warnings && intent.warnings.length > 0 ? (
+        <ul className="space-y-1">
+          {intent.warnings.map((warning) => (
+            <li key={warning.reason} className="text-xs text-amber-600 dark:text-amber-500">
+              {warning.message}
             </li>
           ))}
         </ul>

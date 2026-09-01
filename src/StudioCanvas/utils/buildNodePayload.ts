@@ -1022,17 +1022,20 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
   };
 }
 
+/**
+ * The extension request as the endpoint reads it.
+ *
+ * Takes the clip's BYTES, because `videoExtensionRequestSchema` declares
+ * `reference_video.data` as required base64 and has no URL field. The caller resolves a
+ * signed URL to bytes before getting here; a payload that still carries only a URI is a
+ * caller bug and is refused by name rather than sent to be 400'd (#291).
+ */
 export function toBackendExtendVideoPayload(
   payload: ExtendVideoPayload,
 ): BackendExtendVideoRequestPayload {
-  const videoPayload =
-    'data' in payload.video
-      ? {
-          data: payload.video.data,
-          mime_type: payload.video.mimeType,
-          filename: payload.video.filename,
-        }
-      : { uri: payload.video.uri };
+  if (!('data' in payload.video)) {
+    throw new Error('The clip wired to this node was never read into bytes');
+  }
 
   return {
     service: payload.service,
@@ -1041,6 +1044,10 @@ export function toBackendExtendVideoPayload(
     brand_id: payload.brandId,
     aspect_ratio: payload.aspectRatio,
     resolution: payload.resolution,
-    video: videoPayload,
+    reference_video: {
+      data: payload.video.data,
+      mime_type: payload.video.mimeType,
+      filename: payload.video.filename,
+    },
   };
 }

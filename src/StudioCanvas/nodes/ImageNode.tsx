@@ -81,6 +81,7 @@ import { resolveCollisions } from '../utils/nodeCollisions';
 import { resolveCanvasDropBase64 } from '../utils/resolveCanvasDropBase64';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { stageAndUploadReferenceFile, uploadReferenceFile } from '../utils/uploadReferenceFile';
+import { NodeDownloadButton } from './NodeDownloadButton';
 import { referenceStatusBadge } from './referenceStatusBadge';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
@@ -564,6 +565,13 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                     >
                       <Upload className="h-3 w-3" />
                     </Button>
+                    <NodeDownloadButton
+                      nodeType="image"
+                      data={data}
+                      baseName="canvas-image"
+                      label="Download image"
+                      className="static h-6 w-6 opacity-100"
+                    />
                     {preview && (
                       <QuickReformatMenu
                         asset={{
@@ -642,6 +650,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                   {preview ? (
                     <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-default">
                       <img
+                        loading="lazy"
                         src={data.originalImage ?? preview}
                         alt="Preview"
                         className="h-full w-full select-none object-contain"
@@ -649,6 +658,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                       />
                       {data.markupLayer && (
                         <img
+                          loading="lazy"
                           src={data.markupLayer}
                           alt="Markup overlay"
                           className="absolute inset-0 h-full w-full select-none object-contain pointer-events-none"

@@ -186,7 +186,6 @@ export function NodeInspectorPanel({
       // that already owns this corner.
       position="top-right"
       className="mr-1 w-[320px]"
-      bodyClassName="nowheel max-h-[calc(100vh-12rem)] overflow-y-auto overscroll-contain"
     >
       <div className="flex flex-col gap-4 p-3" data-testid="node-inspector">
         {/* First, not last: the panel body scrolls, and an action at its bottom

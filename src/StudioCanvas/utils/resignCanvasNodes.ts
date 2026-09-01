@@ -7,6 +7,7 @@ import {
 } from '@continuum/contracts';
 import { request } from '@/lib/api/http';
 import type { CanvasDocument, StudioNode } from '../types';
+import { resolveSignedUrls } from './signedUrlCache';
 
 // Same-origin Next route (NOT the Backend `request` helper): it is what mints from an
 // exact `media.asset_versions` row.
@@ -144,24 +145,45 @@ async function signCoordinates(
   brandProfileId: string,
 ): Promise<Map<string, string>> {
   if (items.length === 0) return new Map();
-  try {
-    const results: CanvasMediaSignResponse['items'] = [];
-    for (let index = 0; index < items.length; index += CANVAS_MEDIA_SIGN_MAX_ITEMS) {
-      const response = await request<CanvasMediaSignResponse>({
-        path: CANVAS_MEDIA_SIGN_ROUTE,
-        method: 'POST',
-        body: {
-          brandProfileId,
-          items: items.slice(index, index + CANVAS_MEDIA_SIGN_MAX_ITEMS),
-        },
-      });
-      results.push(...response.items);
+
+  // Through the cache, not straight to the network. Signing the same object twice
+  // mints two different tokens, so the two URLs are different strings and every
+  // <img>/<video> that swaps between them re-downloads the bytes. The canvas signs
+  // from several places that overlap on a cold open, so those callers have to share
+  // one fetch per pointer rather than each minting their own.
+  return resolveSignedUrls(items, async (pending) => {
+    try {
+      const chunks: CanvasMediaCoordinate[][] = [];
+      for (let index = 0; index < pending.length; index += CANVAS_MEDIA_SIGN_MAX_ITEMS) {
+        chunks.push(pending.slice(index, index + CANVAS_MEDIA_SIGN_MAX_ITEMS));
+      }
+
+      // Parallel, not sequential: the chunks are independent, and awaiting them in
+      // turn put every round-trip after the first on the critical path before any
+      // media could paint.
+      const responses = await Promise.all(
+        chunks.map((chunk) =>
+          request<CanvasMediaSignResponse>({
+            path: CANVAS_MEDIA_SIGN_ROUTE,
+            method: 'POST',
+            // Node previews are painted into boxes a few hundred pixels wide, so ask for
+            // a derivative rather than the stored original (mean 2.1 MB, tail to 32 MB).
+            // The client renderer signs through this same route and must NOT set this.
+            body: { brandProfileId, items: chunk, preview: true },
+          }),
+        ),
+      );
+
+      return new Map(
+        responses
+          .flatMap((response) => response.items)
+          .map((result) => [signKey(result.bucket, result.path), result.signedUrl]),
+      );
+    } catch (err) {
+      console.warn('[studio] resignCanvasNodes: failed to re-sign, using stale URLs', err);
+      return new Map();
     }
-    return new Map(results.map((result) => [signKey(result.bucket, result.path), result.signedUrl]));
-  } catch (err) {
-    console.warn('[studio] resignCanvasNodes: failed to re-sign, using stale URLs', err);
-    return new Map();
-  }
+  });
 }
 
 function applySignedUrls(

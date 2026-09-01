@@ -38,11 +38,7 @@ export function GenericSection({
   onPatch: (patch: Record<string, unknown>) => void;
 }) {
   const data = node.data as Record<string, unknown>;
-  const { data: effective } = coerceNodeConfig(
-    (node.type ?? '') as StudioNodeType,
-    data,
-    data,
-  );
+  const { data: effective } = coerceNodeConfig((node.type ?? '') as StudioNodeType, data, data);
 
   const fields = Object.entries(effective)
     .filter(

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { act, cleanup, fireEvent, renderHook, waitFor } from '@testing-library/react';
 import { useStudioStore } from '../stores/useStudioStore';
 import { VIDEO_GENERATOR_NODE_BOUNDS } from '../utils/aspectRatioSizing';
-import { useSnapToVideoAspect } from './useSnapToVideoAspect';
+import { clearVideoAspectCache, useSnapToVideoAspect } from './useSnapToVideoAspect';
 
 // The gap: a generator asked for 16:9, Veo handed back a 9:16 clip, and the node box
 // stayed landscape — the clip letterboxed inside it until someone dragged the corner.
@@ -36,6 +36,9 @@ const resolveMetadata = async (width: number, height: number) => {
 
 describe('useSnapToVideoAspect', () => {
   beforeEach(() => {
+    // The probe is memoized per clip across the module, so a case that reuses a src
+    // would be answered from cache and never create the element this suite waits on.
+    clearVideoAspectCache();
     detectionVideos = [];
     originalCreateElement = document.createElement.bind(document);
     document.createElement = ((tagName: string, options?: ElementCreationOptions) => {
@@ -111,7 +114,10 @@ describe('useSnapToVideoAspect', () => {
     });
   });
 
-  it('does not dirty the canvas when the box is already the right shape', async () => {
+  // Probing costs real bytes — `preload="metadata"` against storage answers in 206
+  // ranges of over a megabyte — so the measurement is recorded on the node the first
+  // time and never taken again for that clip. The box is left exactly as it was.
+  it('records the measurement once without resizing a box that already fits', async () => {
     seedNode({ aspectRatio: '16:9' }, { width: 512, height: 288 });
     let saves = 0;
     useStudioStore.setState({
@@ -120,7 +126,7 @@ describe('useSnapToVideoAspect', () => {
       },
     });
 
-    renderHook(() =>
+    const first = renderHook(() =>
       useSnapToVideoAspect({
         nodeId: NODE_ID,
         src: 'https://example.com/landscape.mp4',
@@ -131,7 +137,23 @@ describe('useSnapToVideoAspect', () => {
     await resolveMetadata(1920, 1080);
 
     expect(nodeNow()?.style).toEqual({ width: 512, height: 288 });
-    expect(saves).toBe(0);
+    expect(saves).toBe(1);
+    first.unmount();
+
+    // The property that actually protects the canvas: re-mounting the node — which
+    // viewport culling does on every pan — neither probes again nor saves again.
+    const probesAfterFirst = detectionVideos.length;
+    renderHook(() =>
+      useSnapToVideoAspect({
+        nodeId: NODE_ID,
+        src: 'https://example.com/landscape.mp4',
+        bounds: VIDEO_GENERATOR_NODE_BOUNDS,
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(detectionVideos.length).toBe(probesAfterFirst);
+    expect(saves).toBe(1);
   });
 
   it('does nothing without a source', async () => {

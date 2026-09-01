@@ -15,7 +15,7 @@ import { type ActionId, type UnsplashPhoto, validateWorkflowGraph } from '@conti
 import { AtSign, Camera, FolderOpen } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-
+import { useShallow } from 'zustand/react/shallow';
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Connection as ConnectionLine } from '@/components/ai-elements/connection';
 import { Controls } from '@/components/ai-elements/controls';
@@ -60,6 +60,7 @@ import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
 import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
 import { isValidConnection } from '../utils/isValidConnection';
 import { layoutInRow } from '../utils/layoutImportedNodes';
+import { seedFocusNodeId } from '../utils/seedStarterFlow';
 import type { VideoGeneratorModel } from '../utils/videoModel';
 import type { StudioCanvasNodeType } from './addNodeCatalog';
 import { CanvasContextMenuContent } from './CanvasContextMenuContent';
@@ -89,6 +90,9 @@ function Flow({
   focusNodeId?: string;
   organicPlannerSeed?: PlannerAiStudioHandoff | null;
 }) {
+  // A bare useStudioStore() subscribes to the WHOLE store, so this 800-line component
+  // re-rendered on every unrelated field change — clipboard, history, saveTrigger. The
+  // shallow selector narrows that to the fields actually read here.
   const {
     nodes,
     edges,
@@ -105,7 +109,25 @@ function Flow({
     setBrandId,
     setActiveRoomId,
     updateNodeData,
-  } = useStudioStore();
+  } = useStudioStore(
+    useShallow((state) => ({
+      nodes: state.nodes,
+      edges: state.edges,
+      onNodesChange: state.onNodesChange,
+      onEdgesChange: state.onEdgesChange,
+      onConnect: state.onConnect,
+      setNodes: state.setNodes,
+      setEdges: state.setEdges,
+      takeSnapshot: state.takeSnapshot,
+      interactionMode: state.interactionMode,
+      setInteractionMode: state.setInteractionMode,
+      keyboardScope: state.keyboardScope,
+      triggerSave: state.triggerSave,
+      setBrandId: state.setBrandId,
+      setActiveRoomId: state.setActiveRoomId,
+      updateNodeData: state.updateNodeData,
+    })),
+  );
 
   const { remoteCursors, updateCursor, isLoading } = realtime;
 
@@ -130,18 +152,26 @@ function Flow({
     setActiveRoomId(activeRoomId);
   }, [activeRoomId, setActiveRoomId]);
 
+  // A planner handoff now appends into a room that may already be full, so the
+  // seeded flow can land well outside the current viewport. Framing it is what makes
+  // the handoff visible: seeded-but-off-screen looks identical to not seeded at all,
+  // which is the report this change answers (#307). An explicit ?focusNodeId= still
+  // wins — that one names a specific node the caller already chose.
+  const seedFocus = organicPlannerSeed ? seedFocusNodeId(organicPlannerSeed) : undefined;
+  const targetNodeId = focusNodeId ?? seedFocus;
+
   const focusedNodeRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!focusNodeId || isLoading || focusedNodeRef.current === focusNodeId) return;
-    const target = nodes.find((node) => node.id === focusNodeId);
+    if (!targetNodeId || isLoading || focusedNodeRef.current === targetNodeId) return;
+    const target = nodes.find((node) => node.id === targetNodeId);
     if (!target) return;
-    focusedNodeRef.current = focusNodeId;
-    setNodes(nodes.map((node) => ({ ...node, selected: node.id === focusNodeId })));
+    focusedNodeRef.current = targetNodeId;
+    setNodes(nodes.map((node) => ({ ...node, selected: node.id === targetNodeId })));
     const handle = requestAnimationFrame(() => {
       fitView({ nodes: [target], padding: 0.65, duration: 350 });
     });
     return () => cancelAnimationFrame(handle);
-  }, [fitView, focusNodeId, isLoading, nodes, setNodes]);
+  }, [fitView, targetNodeId, isLoading, nodes, setNodes]);
 
   // When the walkthrough seeds starter nodes, frame them so the tour's node
   // steps always have an on-screen target. Runs once per Flow instance.
@@ -486,6 +516,12 @@ function Flow({
       >
         <ContextMenuTrigger className="block h-full w-full">
           <Canvas
+            // React Flow mounts every node in the graph unless told otherwise, so a
+            // 300-node canvas rendered 300 nodes to show the ~20 that fit on screen —
+            // and pulled 440 MB of full-resolution media to do it. Culling to the
+            // viewport is the difference between work that is seen and work that is not.
+            // Off-screen nodes unmount, which is why useDebouncedSave flushes on unmount.
+            onlyRenderVisibleElements
             nodes={folded.nodes}
             edges={folded.edges}
             onNodesChange={folded.onNodesChange}

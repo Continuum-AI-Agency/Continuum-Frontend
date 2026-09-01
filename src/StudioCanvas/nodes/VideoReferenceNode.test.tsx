@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { clearVideoAspectCache } from '../hooks/useSnapToVideoAspect';
 import { useStudioStore } from '../stores/useStudioStore';
 import { VideoReferenceNode } from './VideoReferenceNode';
 
@@ -15,6 +16,9 @@ let originalTriggerSave: any;
 
 describe('VideoReferenceNode', () => {
   beforeEach(() => {
+    // The video aspect probe is memoized across the module; a stale entry from another
+    // suite would answer instantly and this file's detached-element assertions never fire.
+    clearVideoAspectCache();
     originalUpdateNodeData = useStudioStore.getState().updateNodeData;
     originalUpdateNode = useStudioStore.getState().updateNode;
     originalTriggerSave = useStudioStore.getState().triggerSave;
@@ -72,6 +76,27 @@ describe('VideoReferenceNode', () => {
     });
 
     expect(screen.getByText('Upload Video')).toBeTruthy();
+  });
+
+  // Airtable #297: the whole NodeContent carried `nodrag`, React Flow's own "never start a
+  // drag here" class, so the Upload Video block could not be moved once placed.
+  it('leaves the body draggable', async () => {
+    let renderResult: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      renderResult = render(
+        <ToastProvider>
+          <ReactFlowProvider>
+            <VideoReferenceNode {...defaultProps} />
+          </ReactFlowProvider>
+        </ToastProvider>,
+      );
+    });
+    const container = renderResult?.container;
+    const body = container?.querySelector('[data-slot="card-content"]');
+    expect(body).toBeTruthy();
+    expect(body?.closest('.nodrag')).toBeNull();
+    // The drop target is still the whole body — dragging the node did not cost the affordance.
+    expect(body?.querySelector('label[for="video-file-1"]')).toBeTruthy();
   });
 
   it('should accept dropped video data URLs', async () => {
@@ -141,9 +166,12 @@ describe('VideoReferenceNode', () => {
       if (!renderResult) throw new Error('Render failed');
       const { container } = renderResult;
 
-      const renderedVideo = container.querySelector('video');
-      const detectionVideo = createdVideoElements.find((video) => video !== renderedVideo);
-      if (!detectionVideo) throw new Error('Detached detection video element was not created');
+      // Measured from the element ALREADY showing the clip. A second, detached element
+      // downloaded the same bytes twice, both requests issued in the same instant under
+      // the same token, so neither could use the other's cache entry.
+      const detectionVideo = container.querySelector('video');
+      if (!detectionVideo) throw new Error('the node rendered no video to measure');
+      expect(createdVideoElements.filter((video) => video !== detectionVideo)).toHaveLength(0);
 
       Object.defineProperty(detectionVideo, 'videoWidth', { configurable: true, value: 1080 });
       Object.defineProperty(detectionVideo, 'videoHeight', { configurable: true, value: 1920 });
