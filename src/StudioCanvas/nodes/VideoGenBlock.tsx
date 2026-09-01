@@ -70,11 +70,11 @@ import {
   getVideoGeneratorTargetHandles,
   resolveVideoGeneratorModel,
   resolveVideoGeneratorReferenceMode,
-  VIDEO_GENERATOR_MODEL_GROUPS,
   VIDEO_GENERATOR_MODEL_LABELS,
   VIDEO_GENERATOR_REFERENCE_MODE_LABELS,
   type VideoGeneratorModel,
   type VideoGeneratorReferenceMode,
+  videoModelOptionGroups,
 } from '../utils/videoModel';
 import { BatchMatrixButton } from './batch/BatchMatrixButton';
 
@@ -109,6 +109,9 @@ const getResolutionOptions = (
   if (model === 'veo-3.1' || model === 'veo-3.1-fast') return ['720p', '1080p', '4k'];
   return ['720p', '1080p'];
 };
+
+// Computed once: the catalog is static, so re-deriving it per render buys nothing.
+const MODEL_GROUPS = videoModelOptionGroups();
 
 export function VideoGenBlock({
   id,
@@ -777,16 +780,26 @@ export function VideoGenBlock({
           <ContextMenuSub>
             <ContextMenuSubTrigger>Model</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-52">
-              {VIDEO_GENERATOR_MODEL_GROUPS.map((group) => (
+              {MODEL_GROUPS.map((group) => (
                 <Fragment key={group.provider}>
                   <ContextMenuLabel>{group.label}</ContextMenuLabel>
-                  {group.models.map((option) => (
+                  {/* The note column and the disabled state are the image picker's, not a
+                      second dialect of the same idea (#293): a Fal model that is out of
+                      reach reads "Returning soon" here instead of turning the node red
+                      with "Generation failed" after the fact. */}
+                  {group.options.map((option) => (
                     <ContextMenuCheckboxItem
-                      key={option}
-                      checked={model === option}
-                      onClick={() => handleModelChange(option)}
+                      key={option.model}
+                      checked={model === option.model}
+                      disabled={!option.selectable}
+                      onClick={() => handleModelChange(option.model)}
                     >
-                      {VIDEO_GENERATOR_MODEL_LABELS[option]}
+                      {option.label}
+                      {option.note ? (
+                        <span className="ml-auto pl-2 text-2xs text-muted-foreground">
+                          {option.note}
+                        </span>
+                      ) : null}
                     </ContextMenuCheckboxItem>
                   ))}
                 </Fragment>

@@ -10,6 +10,8 @@ export type {
   VideoGeneratorNodeType,
   VideoGeneratorProvider,
   VideoGeneratorReferenceMode,
+  VideoModelOption,
+  VideoModelOptionGroup,
 } from '@continuum/contracts';
 export {
   DEFAULT_VIDEO_GENERATOR_MODEL,
@@ -33,5 +35,8 @@ export {
   VIDEO_GENERATOR_PROVIDER_LABELS,
   VIDEO_GENERATOR_REFERENCE_MODE_LABELS,
   VIDEO_IMAGE_REFERENCE_HANDLES,
+  VIDEO_MODEL_INFO,
   VIDEO_REFERENCE_VIDEO_HANDLE,
+  videoModelOptionGroups,
+  videoModelOptions,
 } from '@continuum/contracts';

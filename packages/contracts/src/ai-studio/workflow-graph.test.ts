@@ -5,6 +5,7 @@ import {
   batchLockedType,
   coerceNodeConfig,
   createNodeData,
+  DEFAULT_VIDEO_GENERATOR_MODEL,
   DRAFT_INPUT_HANDLE,
   DRAFT_OUTPUT_HANDLE,
   getAllowedSourceHandles,
@@ -39,6 +40,8 @@ import {
   VIDEO_GENERATOR_REFERENCE_MODE_LABELS,
   validateConnection,
   variationIndexFromHandle,
+  videoModelOptionGroups,
+  videoModelOptions,
 } from './workflow-graph';
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) => ({
@@ -1485,5 +1488,38 @@ describe('Canvas V3 connection rules', () => {
     const nodes = [node('n', 'note', { content: 'why' }), node('gen', 'nanoGen')];
     expect(connect(nodes, 'n', 'text', 'gen', 'prompt')).toBe(false);
     expect(connect(nodes, 'gen', 'image', 'n', 'in')).toBe(false);
+  });
+});
+
+// Airtable #293. The video list carried provider and nothing else while the image list
+// one node over already said "Needs fal credits" / "1024px only". These hold the two
+// facts the picker renders: a Fal model is out of reach and says why, a Google model is
+// reachable and says nothing.
+describe('#293 videoModelOptions', () => {
+  it('marks every Fal-routed model as returning soon and unselectable', () => {
+    for (const model of ['kling-omni', 'pixverse-v6', 'seedance-2.0'] as const) {
+      const option = videoModelOptions().find((entry) => entry.model === model);
+      expect(getVideoGeneratorProvider(model)).toBe('fal');
+      expect(option?.selectable).toBe(false);
+      expect(option?.note).toBe('Returning soon');
+    }
+  });
+
+  it('leaves the reachable models selectable and unannotated', () => {
+    for (const model of ['veo-3.1', 'veo-3.1-fast', 'veo-3.1-lite'] as const) {
+      const option = videoModelOptions().find((entry) => entry.model === model);
+      expect(option?.selectable).toBe(true);
+      expect(option?.note).toBeUndefined();
+    }
+  });
+
+  it('covers the whole vocabulary, grouped exactly as the picker draws it', () => {
+    expect(videoModelOptions().map((option) => option.model)).toEqual([...VIDEO_GENERATOR_MODELS]);
+    expect(videoModelOptionGroups().map((group) => group.provider)).toEqual(['google', 'fal']);
+    // The default must never be a model nobody can pick.
+    const fallback = videoModelOptions().find(
+      (option) => option.model === DEFAULT_VIDEO_GENERATOR_MODEL,
+    );
+    expect(fallback?.selectable).toBe(true);
   });
 });

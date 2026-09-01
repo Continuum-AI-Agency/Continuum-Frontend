@@ -8,6 +8,7 @@ import {
   DEFAULT_IMAGE_SIZE,
   isImageGeneratorModel,
 } from './image-size';
+import { isModelSelectable, type ModelStatus } from './model-catalog';
 import {
   type GeneratorNodeBounds,
   generatorNodeStyle,
@@ -224,6 +225,72 @@ export const VIDEO_GENERATOR_MODEL_GROUPS: readonly VideoGeneratorModelGroup[] =
       (model) => VIDEO_GENERATOR_PROVIDER_BY_MODEL[model] === provider,
     ),
   }));
+
+/**
+ * What the video picker says about each generator, and whether it can be picked at all.
+ *
+ * The video list showed provider and nothing else — "Kling Omni · Fal", "Pixverse V6 ·
+ * Fal", "Seedance 2.0 · Fal" — while the image list one node over already carried
+ * "FLUX.2 Pro — Needs fal credits" and "Nano Banana — 1024px only" (Airtable #293, the
+ * fourth filing of the theme after #139 and #248). Two pickers over the same idea should
+ * not read as two products, so this mirrors `IMAGE_MODEL_INFO` exactly.
+ *
+ * DELIBERATELY STATIC, and deliberately not `imageModelOptions`' session-learned set. The
+ * image path can learn: `fal-image/service.ts` raises a typed `model_unavailable` the node
+ * records for the session. The video path throws a plain `Error('Missing Fal.ai API key')`
+ * instead, so there is no runtime signal to read and the Backend is out of scope for this
+ * pass. When a Fal video model comes back, flip its entry here and it is selectable again.
+ */
+export const VIDEO_MODEL_INFO: Record<VideoGeneratorModel, { status: ModelStatus; note?: string }> =
+  {
+    'veo-3.1': { status: 'available' },
+    'veo-3.1-fast': { status: 'available' },
+    'veo-3.1-lite': { status: 'available' },
+    'kling-omni': { status: 'unavailable' },
+    'pixverse-v6': { status: 'unavailable' },
+    'seedance-2.0': { status: 'unavailable' },
+  };
+
+/** The one clause under a video model's label: its ceiling, or why it cannot be picked. */
+const VIDEO_MODEL_UNAVAILABLE_NOTE = 'Returning soon';
+
+export type VideoModelOption = {
+  model: VideoGeneratorModel;
+  label: string;
+  status: ModelStatus;
+  note?: string;
+  selectable: boolean;
+};
+
+/** Every video model the picker offers, in the status it should be drawn in. */
+export function videoModelOptions(): readonly VideoModelOption[] {
+  return VIDEO_GENERATOR_MODELS.map((model) => {
+    const info = VIDEO_MODEL_INFO[model];
+    return {
+      model,
+      label: VIDEO_GENERATOR_MODEL_LABELS[model],
+      status: info.status,
+      note: info.status === 'unavailable' ? VIDEO_MODEL_UNAVAILABLE_NOTE : info.note,
+      selectable: isModelSelectable(info.status),
+    };
+  });
+}
+
+/** The same options, grouped by host — the shape every video picker renders. */
+export type VideoModelOptionGroup = {
+  provider: VideoGeneratorProvider;
+  label: string;
+  options: readonly VideoModelOption[];
+};
+
+export function videoModelOptionGroups(): readonly VideoModelOptionGroup[] {
+  const options = videoModelOptions();
+  return VIDEO_GENERATOR_MODEL_GROUPS.map((group) => ({
+    provider: group.provider,
+    label: group.label,
+    options: options.filter((option) => group.models.includes(option.model)),
+  }));
+}
 
 /**
  * Clip length, in seconds. Veo renders 4, 6 or 8 and nothing else, and it renders
