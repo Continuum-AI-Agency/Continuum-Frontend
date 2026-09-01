@@ -272,7 +272,7 @@ export function AgentButton({
       className={cn(
         'min-h-9 gap-1.5 rounded-lg px-3.5 text-sm',
         'transition-[transform,opacity,background-color,color] duration-150 ease-out',
-        'active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40',
+        'active:scale-[0.96]',
         variant === 'ghost' && 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
         className,
       )}
