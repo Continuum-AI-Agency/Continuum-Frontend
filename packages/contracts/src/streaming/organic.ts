@@ -1094,7 +1094,15 @@ const pipelineStageSchema = z.object({
     .loose(),
 });
 
-const pipelineQualitySchema = z
+/**
+ * The quality reviewer's verdict as it crosses the wire, defined ONCE for both sides.
+ *
+ * `blockingIssues` and `requiredFixes` are the WHY behind the score. The worker already
+ * ships the whole `quality` object; omitting them here left the Frontend holding a bare
+ * percentage with nothing to tell the user about — a flagged draft the user cannot act on
+ * is the same as a silently dropped one.
+ */
+export const pipelineQualitySchema = z
   .object({
     passed: z.boolean(),
     overallScore: z.number(),
@@ -1102,9 +1110,12 @@ const pipelineQualitySchema = z
     platformFitScore: z.number().optional(),
     noveltyScore: z.number().optional(),
     complianceScore: z.number().optional(),
+    blockingIssues: z.array(z.string()).optional(),
+    requiredFixes: z.array(z.string()).optional(),
     summary: z.string().optional(),
   })
   .loose();
+export type PipelineQuality = z.infer<typeof pipelineQualitySchema>;
 
 /**
  * Three-step checkpoint state for the run-progress steppers: step 1 (text) =

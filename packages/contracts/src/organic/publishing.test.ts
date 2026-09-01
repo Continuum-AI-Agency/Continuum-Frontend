@@ -8,6 +8,8 @@ import {
   publishEventSchema,
   publishResultSchema,
   mediaTransportFor,
+  organicPlatformSchema,
+  publishPlatformSchema,
   supportsFormat,
   toPublishPlatform,
 } from './publishing';
@@ -24,14 +26,30 @@ describe('publish platform capabilities', () => {
     expect(PLATFORM_CAPABILITIES.instagram.mediaTransport).toBe('url');
     expect(PLATFORM_CAPABILITIES.facebook.mediaTransport).toBe('url');
     expect(PLATFORM_CAPABILITIES.linkedin.mediaTransport).toBe('bytes');
-    // TikTok's transport is per-format: video pushes bytes (FILE_UPLOAD), photos are
-    // PULL_FROM_URL only, so a single platform-wide value cannot describe it.
-    expect(mediaTransportFor('tiktok', 'REEL')).toBe('bytes');
+    // TikTok's Business Organic API client is URL-pull on BOTH endpoints — no FILE_UPLOAD,
+    // no chunking — so its transport is uniform across formats.
+    expect(mediaTransportFor('tiktok', 'REEL')).toBe('url');
     expect(mediaTransportFor('tiktok', 'POST')).toBe('url');
     expect(mediaTransportFor('tiktok', 'CAROUSEL')).toBe('url');
-    // Platforms without overrides fall back to the platform-wide value.
     expect(mediaTransportFor('instagram', 'REEL')).toBe('url');
     expect(mediaTransportFor('linkedin', 'POST')).toBe('bytes');
+  });
+
+  it('derives the publishable set as a strict subset of the organic vocabulary', () => {
+    const canonical = new Set<string>(organicPlatformSchema.options);
+    for (const platform of publishPlatformSchema.options) {
+      expect(canonical.has(platform)).toBe(true);
+    }
+    expect(publishPlatformSchema.options.length).toBeLessThan(canonical.size);
+    // The gap is the point: these plan but do not publish.
+    for (const unpublishable of ['youtube', 'x', 'threads'] as const) {
+      expect(canonical.has(unpublishable)).toBe(true);
+      expect(publishPlatformSchema.safeParse(unpublishable).success).toBe(false);
+    }
+    // Every publishable platform has capabilities declared for it.
+    for (const platform of publishPlatformSchema.options) {
+      expect(PLATFORM_CAPABILITIES[platform]).toBeDefined();
+    }
   });
 
   it('supports all three formats on every platform', () => {

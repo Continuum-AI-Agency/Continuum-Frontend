@@ -2,14 +2,14 @@ import { z } from 'zod';
 import { imageSizeSchema } from '../ai-studio/image-size';
 import { artDirectionSchema } from '../creative/art-direction';
 import { organicUgcSpecSchema } from '../media/reel-video';
+import { organicGeneratablePlatformSchema } from '../organic/publishing';
 
-export const organicPipelinePlatformSchema = z.enum([
-  'instagram',
-  'facebook',
-  'tiktok',
-  'linkedin',
-  'youtube',
-]);
+/**
+ * The organic pipeline's platform vocabulary. Derived, not re-declared: this pipeline IS the
+ * generation path, so it can only carry platforms `platformRegistry.ts` has prompts for.
+ * See `organicGeneratablePlatformSchema` in `../organic/publishing` for the nesting.
+ */
+export const organicPipelinePlatformSchema = organicGeneratablePlatformSchema;
 
 export const organicPipelineSeedSourceSchema = z.enum(['trend', 'question', 'event', 'manual']);
 
@@ -525,6 +525,15 @@ export const numericClaimSchema = z.object({
     .nullable()
     .default(null)
     .describe("null iff status === 'data_needed'"),
+  // Deterministic strength of the backing evidence, 0-100 (claimStrength.ts:
+  // provenance + recency + effect size). Nullable and computed POST-HOC on purpose:
+  // the copywriter model emits claims against this schema, and asking it for the
+  // number would be the model opinion this replaces.
+  evidenceStrength: z
+    .number()
+    .nullable()
+    .default(null)
+    .describe('0-100; null when the claim is ungrounded or the evidence is unscored'),
 });
 export type NumericClaim = z.infer<typeof numericClaimSchema>;
 
