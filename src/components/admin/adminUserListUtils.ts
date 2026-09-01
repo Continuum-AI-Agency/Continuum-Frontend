@@ -19,11 +19,26 @@ export function formatDate(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
+/**
+ * The same disambiguation split into the two lines the brand picker renders, so a long
+ * owner email wraps instead of being clipped mid-word. `formatBrandDisambiguationLabel`
+ * is derived from this rather than duplicating it — one source of truth means the
+ * one-line and two-line renderings cannot drift apart.
+ */
+export function formatBrandDisambiguationLines(brand: AdminBrandOption): {
+  name: string;
+  detail: string;
+} {
+  const idSuffix = `…${brand.id.slice(-8)}`;
+  return {
+    name: brand.brand_name,
+    detail: brand.ownerEmail ? `${brand.ownerEmail} — ${idSuffix}` : idSuffix,
+  };
+}
+
 export function formatBrandDisambiguationLabel(brand: AdminBrandOption): string {
-  const idSuffix = brand.id.slice(-8);
-  return brand.ownerEmail
-    ? `${brand.brand_name} — ${brand.ownerEmail} — …${idSuffix}`
-    : `${brand.brand_name} — …${idSuffix}`;
+  const { name, detail } = formatBrandDisambiguationLines(brand);
+  return `${name} — ${detail}`;
 }
 
 export function describeWorkflowNames(names: string[], maxNames = 5): string {

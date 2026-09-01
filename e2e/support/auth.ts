@@ -133,10 +133,10 @@ export async function mintSessionForEmail(email: string): Promise<PlaywrightStor
   const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const anonKey = resolveAnonKey();
 
-  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-    type: 'magiclink',
-    email,
-  });
+  const { data: linkData, error: linkError } = await retryTransient(
+    () => admin.auth.admin.generateLink({ type: 'magiclink', email }),
+    `generateLink(${email})`,
+  );
   if (linkError) {
     throw new Error(`[e2e/auth] generateLink failed for ${email}: ${linkError.message}`);
   }
@@ -290,11 +290,18 @@ export async function mintSession({
   const admin = createAdminClient();
   const email = `e2e-${isAdmin ? 'admin' : 'user'}-${crypto.randomUUID()}@continuum-e2e.test`;
 
-  const { error: createError } = await admin.auth.admin.createUser({
-    email,
-    email_confirm: true,
-    app_metadata: { is_admin: isAdmin },
-  });
+  // Same transient class retryTransient was written for: under machine load the local
+  // GoTrue's dial to Postgres times out and the SDK surfaces a 5xx with an EMPTY message,
+  // which reads as a broken fixture rather than as load.
+  const { error: createError } = await retryTransient(
+    () =>
+      admin.auth.admin.createUser({
+        email,
+        email_confirm: true,
+        app_metadata: { is_admin: isAdmin },
+      }),
+    `createUser(${email})`,
+  );
   if (createError) {
     throw new Error(`[e2e/auth] createUser failed for ${email}: ${createError.message}`);
   }

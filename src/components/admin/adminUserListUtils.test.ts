@@ -10,6 +10,7 @@ import {
   describeWorkflowNames,
   formatAuditActionLabel,
   formatBrandDisambiguationLabel,
+  formatBrandDisambiguationLines,
   membershipLabel,
   resolveAdminTab,
 } from '@/components/admin/adminUserListUtils';
@@ -171,6 +172,20 @@ describe('formatBrandDisambiguationLabel', () => {
     expect(formatBrandDisambiguationLabel(agencyRow)).not.toBe(
       formatBrandDisambiguationLabel(directRow),
     );
+  });
+});
+
+describe('formatBrandDisambiguationLines', () => {
+  it('splits into a name line and a detail line the single-line label re-joins', () => {
+    const brand = buildBrand({ ownerEmail: 'mkt@easyfit.mx' });
+    const lines = formatBrandDisambiguationLines(brand);
+    expect(lines).toEqual({ name: 'easyfit', detail: 'mkt@easyfit.mx — …5b80344e' });
+    expect(`${lines.name} — ${lines.detail}`).toBe(formatBrandDisambiguationLabel(brand));
+  });
+
+  it('keeps the id suffix as the detail line when no owner is known', () => {
+    const lines = formatBrandDisambiguationLines(buildBrand({ ownerEmail: null }));
+    expect(lines).toEqual({ name: 'easyfit', detail: '…5b80344e' });
   });
 });
 
