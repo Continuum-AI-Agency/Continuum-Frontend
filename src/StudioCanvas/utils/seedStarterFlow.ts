@@ -243,6 +243,7 @@ export function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
     const count = Math.max(1, Math.min(seed.authoritativeCount ?? 1, CAROUSEL_MAX_SLIDES));
     const nodes: StudioNode[] = [];
     const edges: Edge[] = [];
+    const seededSlideGenerators: string[] = [];
     let seedNodeId: string | null = null;
 
     if (seedImage) {
@@ -274,6 +275,12 @@ export function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
         style: { width: 380, height: 300 },
       } as StudioNode);
 
+      // Slide N opens on the generation that IS slide N, the same way a single
+      // image post already does — otherwise a realized carousel hands back ten
+      // empty generators and the user cannot "continue from the base" (#307).
+      const slideImage = seed.slides?.find((slide) => slide.index === index)?.assetUrl?.trim();
+      if (slideImage) seededSlideGenerators.push(nodeId);
+
       nodes.push({
         id: nodeId,
         type: 'nanoGen',
@@ -284,6 +291,7 @@ export function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
           aspectRatio: '1:1',
           imageSize: '512px',
           maxReferenceImages: workflowSpec.maxReferenceImages,
+          ...(slideImage ? buildSeedGeneratedImageData(slideImage) : {}),
         },
         style: seedGeneratorStyle('1:1', 340),
       } as StudioNode);
@@ -308,6 +316,21 @@ export function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
           type: 'dataType',
           data: { dataType: 'image', pathType: 'bezier' },
         });
+      }
+    }
+
+    // Same reason as the single-image branch: without a signature a node holding a
+    // seeded output reads as "not stale", so Run would hand back the seeded image
+    // instead of regenerating from the edited prompt. Computed after the loop
+    // because a signature covers the node's INCOMING edges, which the loop is still
+    // pushing while it runs.
+    if (seededSlideGenerators.length > 0) {
+      const nodeById = new Map(nodes.map((node): [string, StudioNode] => [node.id, node]));
+      for (const generatorId of seededSlideGenerators) {
+        const generator = nodeById.get(generatorId);
+        if (!generator) continue;
+        (generator.data as Record<string, unknown>).generationSignature =
+          computeGenerationSignature(generator, edges, nodeById);
       }
     }
 
@@ -358,4 +381,55 @@ export function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
   }
 
   return { nodes, edges };
+}
+
+// The node the viewport should land on: the generator carrying the produced
+// creative, which is the thing the handoff exists to let the user edit. Derived
+// from the same deterministic ids buildStarterFlow mints, so the caller never has
+// to re-derive the node-id scheme.
+export function seedFocusNodeId(seed: PlannerAiStudioHandoff): string {
+  const workflowSpec = resolveWorkflowConceptSpec({
+    platform: seed.platform,
+    postType: seed.postType,
+    workflowConcept: seed.workflowConcept,
+  });
+  if (workflowSpec.outputKind === 'video') return `organic-seed-reel-${seed.draftId}`;
+  if (workflowSpec.outputMode === 'ordered') return `organic-seed-carousel-${seed.draftId}-1`;
+  return `organic-seed-image-${seed.draftId}`;
+}
+
+// A handoff into a room that already holds work must land BESIDE it, not on top of
+// it. Seed positions are absolute, so they are shifted below the existing graph's
+// lowest edge.
+//
+// ponytail: heights come from the node's own `style`, falling back to a nominal box
+// for nodes that carry none (xyflow's measured size is not in the persisted graph).
+// A seed that lands slightly low is a scroll away; one that lands on top of the
+// user's work is the bug this whole change is about. Swap in measured heights if
+// the gap ever reads wrong.
+const SEED_CLEARANCE = 160;
+const NOMINAL_NODE_HEIGHT = 240;
+
+function nodeHeight(node: StudioNode): number {
+  const height = (node.style as { height?: unknown } | undefined)?.height;
+  return typeof height === 'number' ? height : NOMINAL_NODE_HEIGHT;
+}
+
+export function offsetSeedBelow(seed: SeedNodeBuild, existing: StudioNode[]): SeedNodeBuild {
+  if (existing.length === 0 || seed.nodes.length === 0) return seed;
+
+  const existingBottom = Math.max(
+    ...existing.map((node) => (node.position?.y ?? 0) + nodeHeight(node)),
+  );
+  const seedTop = Math.min(...seed.nodes.map((node) => node.position?.y ?? 0));
+  const shift = existingBottom + SEED_CLEARANCE - seedTop;
+  if (!Number.isFinite(shift) || shift <= 0) return seed;
+
+  return {
+    nodes: seed.nodes.map((node) => ({
+      ...node,
+      position: { ...node.position, y: (node.position?.y ?? 0) + shift },
+    })),
+    edges: seed.edges,
+  };
 }

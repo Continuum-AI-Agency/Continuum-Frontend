@@ -79,15 +79,28 @@ describe('useAiStudioHandoff — carousel handoff', () => {
     });
   });
 
-  it('carries each slide its own direction so AI Studio can seed distinct prompts', async () => {
+  // A slide now carries its REALIZED image alongside its direction (#307). The
+  // headless realize writes every slide into publishingAssets and mirrors only the
+  // primary onto mediaSuggestion.assetUrl, so a carousel used to open in AI Studio
+  // with ten empty generators and slide 1's picture wired to all of them as a shared
+  // reference — nothing to "continue from the base" with, per slide.
+  it('carries each slide its own direction AND its own realized image', async () => {
     window.localStorage.clear();
     renderHandoff(agentCarouselDraft({ id: 'draft-2' }));
 
     await waitFor(() => {
       const handoff = readPersistedHandoff('draft-2');
       expect(handoff.slides).toHaveLength(10);
-      expect(handoff.slides?.[0]).toEqual({ index: 0, prompt: 'Slide 1 visual direction' });
-      expect(handoff.slides?.[9]).toEqual({ index: 9, prompt: 'Slide 10 visual direction' });
+      expect(handoff.slides?.[0]).toEqual({
+        index: 0,
+        prompt: 'Slide 1 visual direction',
+        assetUrl: 'https://example.com/slide-1.png',
+      });
+      expect(handoff.slides?.[9]).toEqual({
+        index: 9,
+        prompt: 'Slide 10 visual direction',
+        assetUrl: 'https://example.com/slide-10.png',
+      });
     });
   });
 

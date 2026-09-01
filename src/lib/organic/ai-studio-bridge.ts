@@ -43,9 +43,17 @@ export const plannerHandoffAssetHintSchema = z.object({
 // folded into a single blob) because AI Studio seeds one text node per slide: a
 // wired prompt REPLACES a generator's positivePrompt, so N generators fed by one
 // shared text node render N identical images.
+// `prompt` is no longer min(1): a realized slide can carry an image with no
+// per-slide copy to draw on, and dropping it would throw away the very generation
+// the user opened AI Studio to build from (#307). A slide earns its place with a
+// prompt OR a realized image — see deriveCarouselSlideSeeds.
 export const plannerHandoffSlideSchema = z.object({
   index: z.number().int().nonnegative(),
-  prompt: z.string().min(1),
+  prompt: z.string(),
+  /** The headless generation already produced for this slide, seeded as that
+   *  slide's generator output so the user edits from it instead of a blank node.
+   *  A URL only — never base64, which the storage quota ladder would drop first. */
+  assetUrl: z.string().optional(),
 });
 
 export type PlannerHandoffSlide = z.infer<typeof plannerHandoffSlideSchema>;
@@ -224,8 +232,21 @@ export function buildAiStudioHandoffStorageCandidates(
 // visual direction; assetHints is the pre-blueprint fallback. Each slide keeps
 // its own index so one slide with no direction cannot shift the rest.
 export function deriveCarouselSlideSeeds(input: {
-  assets?: ReadonlyArray<{ order?: number | null; prompt?: string | null }> | null;
+  assets?: ReadonlyArray<{
+    order?: number | null;
+    prompt?: string | null;
+    assetUrl?: string | null;
+    url?: string | null;
+    signedUrl?: string | null;
+  }> | null;
   assetHints?: ReadonlyArray<{ suggestion?: string | null }> | null;
+  /** What the headless realize actually produced, the shape every card resolver
+   *  reads. `slideIndex` is authoritative when present; position is the fallback. */
+  realized?: ReadonlyArray<{
+    kind?: string | null;
+    slideIndex?: number | null;
+    storageUrl?: string | null;
+  }> | null;
 }): PlannerHandoffSlide[] {
   // `order` is 1-based when the blueprint writes it; an asset without one keeps
   // its position rather than collapsing to the front of the list.
@@ -234,11 +255,35 @@ export function deriveCarouselSlideSeeds(input: {
     .sort((left, right) => left.sortKey - right.sortKey)
     .map((entry) => entry.asset);
   const hints = input.assetHints ?? [];
-  const slides: PlannerHandoffSlide[] = [];
 
-  for (let index = 0; index < Math.max(assets.length, hints.length); index += 1) {
+  // Realized images by slide, so slide N opens on the generation that IS slide N.
+  // Videos are skipped: a carousel slide's base is an image node.
+  const realizedBySlide = new Map<number, string>();
+  (input.realized ?? []).forEach((asset, position) => {
+    if (asset.kind && asset.kind !== 'image') return;
+    const url = asset.storageUrl?.trim();
+    if (!url) return;
+    const slide = typeof asset.slideIndex === 'number' ? asset.slideIndex : position;
+    if (slide >= 0 && !realizedBySlide.has(slide)) realizedBySlide.set(slide, url);
+  });
+
+  const slides: PlannerHandoffSlide[] = [];
+  const count = Math.max(
+    assets.length,
+    hints.length,
+    realizedBySlide.size > 0 ? Math.max(...realizedBySlide.keys()) + 1 : 0,
+  );
+
+  for (let index = 0; index < count; index += 1) {
     const prompt = assets[index]?.prompt?.trim() || hints[index]?.suggestion?.trim() || '';
-    if (prompt) slides.push({ index, prompt });
+    const assetUrl =
+      realizedBySlide.get(index) ??
+      assets[index]?.assetUrl?.trim() ??
+      assets[index]?.url?.trim() ??
+      assets[index]?.signedUrl?.trim() ??
+      undefined;
+    // A slide with neither copy nor an image has nothing to carry across.
+    if (prompt || assetUrl) slides.push({ index, prompt, ...(assetUrl ? { assetUrl } : {}) });
   }
 
   return slides;

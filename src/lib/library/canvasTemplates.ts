@@ -225,31 +225,13 @@ export function buildLibraryCanvasTemplate(input: BuildTemplateInput): CanvasTem
 // ---------------------------------------------------------------------------
 // Additive merge — the half of the CAS write that must be pure, because a lost
 // revision race replays it against the graph that won.
-
-export type PersistedGraph = {
-  nodes: unknown[];
-  edges: unknown[];
-};
-
-function idsOf(items: unknown[]): Set<string> {
-  const ids = new Set<string>();
-  for (const item of items) {
-    const id = (item as { id?: unknown })?.id;
-    if (typeof id === 'string') ids.add(id);
-  }
-  return ids;
-}
-
+//
 // Append-only: existing nodes and edges are never dropped, reordered, or rewritten,
-// and a seed whose ids already landed (a replayed retry) is idempotent.
-export function mergeSeedIntoGraph(
-  current: PersistedGraph,
-  seed: CanvasTemplateGraph,
-): PersistedGraph {
-  const nodeIds = idsOf(current.nodes);
-  const edgeIds = idsOf(current.edges);
-  return {
-    nodes: [...current.nodes, ...seed.nodes.filter((node) => !nodeIds.has(node.id))],
-    edges: [...current.edges, ...seed.edges.filter((edge) => !edgeIds.has(edge.id))],
-  };
-}
+// and a seed whose ids already landed (a replayed retry) is idempotent. It now lives
+// in the canvas layer because the planner handoff needs the same guarantee — see
+// `@/StudioCanvas/utils/mergeSeedIntoGraph` for why it could not be imported from
+// here. Re-exported so this module's own consumers are unchanged.
+export {
+  mergeSeedIntoGraph,
+  type PersistedGraph,
+} from '@/StudioCanvas/utils/mergeSeedIntoGraph';

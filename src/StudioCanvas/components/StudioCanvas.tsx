@@ -60,6 +60,7 @@ import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
 import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
 import { isValidConnection } from '../utils/isValidConnection';
 import { layoutInRow } from '../utils/layoutImportedNodes';
+import { seedFocusNodeId } from '../utils/seedStarterFlow';
 import type { VideoGeneratorModel } from '../utils/videoModel';
 import type { StudioCanvasNodeType } from './addNodeCatalog';
 import { CanvasContextMenuContent } from './CanvasContextMenuContent';
@@ -151,18 +152,26 @@ function Flow({
     setActiveRoomId(activeRoomId);
   }, [activeRoomId, setActiveRoomId]);
 
+  // A planner handoff now appends into a room that may already be full, so the
+  // seeded flow can land well outside the current viewport. Framing it is what makes
+  // the handoff visible: seeded-but-off-screen looks identical to not seeded at all,
+  // which is the report this change answers (#307). An explicit ?focusNodeId= still
+  // wins — that one names a specific node the caller already chose.
+  const seedFocus = organicPlannerSeed ? seedFocusNodeId(organicPlannerSeed) : undefined;
+  const targetNodeId = focusNodeId ?? seedFocus;
+
   const focusedNodeRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!focusNodeId || isLoading || focusedNodeRef.current === focusNodeId) return;
-    const target = nodes.find((node) => node.id === focusNodeId);
+    if (!targetNodeId || isLoading || focusedNodeRef.current === targetNodeId) return;
+    const target = nodes.find((node) => node.id === targetNodeId);
     if (!target) return;
-    focusedNodeRef.current = focusNodeId;
-    setNodes(nodes.map((node) => ({ ...node, selected: node.id === focusNodeId })));
+    focusedNodeRef.current = targetNodeId;
+    setNodes(nodes.map((node) => ({ ...node, selected: node.id === targetNodeId })));
     const handle = requestAnimationFrame(() => {
       fitView({ nodes: [target], padding: 0.65, duration: 350 });
     });
     return () => cancelAnimationFrame(handle);
-  }, [fitView, focusNodeId, isLoading, nodes, setNodes]);
+  }, [fitView, targetNodeId, isLoading, nodes, setNodes]);
 
   // When the walkthrough seeds starter nodes, frame them so the tour's node
   // steps always have an on-screen target. Runs once per Flow instance.

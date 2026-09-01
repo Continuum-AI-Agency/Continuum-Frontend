@@ -4,7 +4,7 @@ import { Toast as ToastPrimitive } from '@base-ui/react/toast';
 import { CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type React from 'react';
-import { createContext, useCallback, useContext, useMemo } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef } from 'react';
 
 export const TOAST_VARIANTS = ['success', 'info', 'warning', 'error'] as const;
 
@@ -122,22 +122,30 @@ type ToastData = {
 function ToastBridge({ children }: { children: React.ReactNode }) {
   const manager = ToastPrimitive.useToastManager();
 
-  const show = useCallback(
-    (options: ToastOptions) => {
-      const durationMs = options.durationMs ?? 5000;
-      manager.add<ToastData>({
-        // Adding with an existing id updates that toast in place, which is what dedupeKey asked
-        // for. NOTE: Radix's version dropped the duplicate outright; this one also refreshes the
-        // dismiss timer.
-        id: options.dedupeKey,
-        title: options.title,
-        description: options.description,
-        timeout: durationMs === Number.POSITIVE_INFINITY ? 0 : durationMs,
-        data: { variant: options.variant ?? 'success', action: options.action, durationMs },
-      });
-    },
-    [manager],
-  );
+  // `show` must keep ONE identity for the life of the provider. It is the dependency
+  // of every caller's effect, and `useToastManager()` hands back a fresh object on
+  // each render of this bridge — so a `useCallback([manager])` changed identity every
+  // render, re-ran those effects, and they called `show` again. Adding a duplicate id
+  // updates the toast in place (Radix used to drop it outright), which re-renders the
+  // bridge, which is what closed the cycle: React bailed out with "Maximum update
+  // depth exceeded" and the organic planner's error boundary swallowed the page. The
+  // ref keeps the callback stable while still writing to the current manager.
+  const managerRef = useRef(manager);
+  managerRef.current = manager;
+
+  const show = useCallback((options: ToastOptions) => {
+    const durationMs = options.durationMs ?? 5000;
+    managerRef.current.add<ToastData>({
+      // Adding with an existing id updates that toast in place, which is what dedupeKey asked
+      // for. NOTE: Radix's version dropped the duplicate outright; this one also refreshes the
+      // dismiss timer.
+      id: options.dedupeKey,
+      title: options.title,
+      description: options.description,
+      timeout: durationMs === Number.POSITIVE_INFINITY ? 0 : durationMs,
+      data: { variant: options.variant ?? 'success', action: options.action, durationMs },
+    });
+  }, []);
 
   const value = useMemo<ToastContextValue>(() => ({ show }), [show]);
   return <ToastContext.Provider value={value}>{children}</ToastContext.Provider>;
