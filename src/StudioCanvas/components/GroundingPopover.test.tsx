@@ -284,6 +284,14 @@ describe('GroundingChip — hover menu wiring', () => {
   );
 });
 
+/** Source with comments stripped — a guard must read the classes, not the prose about them. */
+function codeOf(file: string): string {
+  return readFileSync(join(import.meta.dir, file), 'utf8')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+}
+
 describe('grounding chip + menu styling', () => {
   // Base UI's Positioner sets --available-height; the Radix variable no longer exists, so a
   // max-h built on it was dropped wholesale and the popup ran past the viewport. Submenu
@@ -294,6 +302,34 @@ describe('grounding chip + menu styling', () => {
     expect(source).not.toContain('--radix-');
     expect(source).toContain('var(--available-height)');
     expect(source).toContain('nowheel');
+  });
+
+  // Airtable #281. The flat panel is mounted inside the inspector's bounded pane, where
+  // `--available-height` is undefined — a Base UI Positioner sets it, and there is none
+  // in that tree. `max-h-[min(32rem,var(--available-height))]` is therefore invalid at
+  // computed-value time and resolves to `max-height: none` (measured in Chromium), so
+  // the `overflow-y-auto` beside it made a scrollport that could never scroll. It still
+  // CLAIMED the scrollport, which is what `position: sticky` resolves against, so every
+  // section header slid out of the list instead of holding its top. The frame owns the
+  // one scroller; this surface must not declare a second.
+  it('declares no scroller of its own for the inspector surface', () => {
+    const flatPanel = codeOf('GroundingPopover.tsx');
+    const surface = flatPanel.slice(flatPanel.indexOf('export function GroundingPopover'));
+    expect(surface).not.toContain('overflow-y-auto');
+    expect(surface).not.toContain('var(--available-height)');
+  });
+
+  // The frame, not the caller, bounds the panel and owns the pane — docs/styleguide.md §4.
+  // A viewport-based bound is what let it run into the canvas's bottom-right chat
+  // launcher, which covered the list and swallowed the wheel.
+  it('bounds the floating panel against its container, never the viewport', () => {
+    const frame = codeOf('CanvasFloatingPanel.tsx');
+    expect(frame).toContain('max-h-[calc(100%-8.5rem)]');
+    expect(frame).toContain(
+      "cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', bodyClassName)",
+    );
+    expect(frame).not.toContain('100vh');
+    expect(codeOf('NodeInspectorPanel.tsx')).not.toContain('100vh');
   });
 
   // TooltipContent is inverted (bg-foreground text-background): any light-theme text colour
