@@ -4,6 +4,7 @@ import {
   canvasVisualEvidenceSchema,
   planFrameTimestamps,
   VISUAL_EVIDENCE_MAX_BASE64_BYTES,
+  VISUAL_EVIDENCE_MAX_FRAME_BASE64_BYTES,
   VISUAL_EVIDENCE_MAX_FRAMES,
   type VisualEvidenceFrame,
 } from '@continuum/contracts';
@@ -174,8 +175,13 @@ export async function collectVisualEvidence(params: {
   const collected: VisualEvidenceFrame[] = [];
   let bytes = 0;
 
+  // Per frame as well as in total. The per-frame cap is the tighter of the two now that
+  // both are sized from what this encoder actually emits, and the final safeParse below
+  // is all-or-nothing — so one unusually dense frame slipping through here would cost
+  // the turn every other frame it had already collected.
   const fits = (frame: VisualEvidenceFrame): boolean =>
     collected.length < VISUAL_EVIDENCE_MAX_FRAMES &&
+    frame.base64.length <= VISUAL_EVIDENCE_MAX_FRAME_BASE64_BYTES &&
     bytes + frame.base64.length <= VISUAL_EVIDENCE_MAX_BASE64_BYTES;
 
   for (const node of candidates) {

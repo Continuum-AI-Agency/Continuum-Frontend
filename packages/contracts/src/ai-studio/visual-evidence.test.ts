@@ -7,6 +7,9 @@ import {
   planFrameTimestamps,
   resolveFrameIntervalSec,
   VISUAL_EVIDENCE_MAX_BASE64_BYTES,
+  VISUAL_EVIDENCE_MAX_FRAME_BASE64_BYTES,
+  VISUAL_EVIDENCE_MAX_FRAMES,
+  visualEvidenceFrameSchema,
   type VisualEvidenceFrame,
 } from './visual-evidence';
 
@@ -72,13 +75,26 @@ describe('planFrameTimestamps', () => {
 });
 
 describe('canvasVisualEvidenceSchema', () => {
+  // Each frame is legal on its own — this has to fail on the TOTAL, or it would be
+  // testing the per-frame cap and would still pass if the total budget disappeared.
   it('refuses a payload past the request budget', () => {
-    const fat = frame({ base64: 'x'.repeat(150_000) });
-    const many = Array.from({ length: 10 }, () => fat);
+    const fat = frame({ base64: 'x'.repeat(VISUAL_EVIDENCE_MAX_FRAME_BASE64_BYTES) });
+    expect(visualEvidenceFrameSchema.safeParse(fat).success).toBe(true);
+    const many = Array.from({ length: VISUAL_EVIDENCE_MAX_FRAMES }, () => fat);
     expect(many.reduce((n, f) => n + f.base64.length, 0)).toBeGreaterThan(
       VISUAL_EVIDENCE_MAX_BASE64_BYTES,
     );
     expect(canvasVisualEvidenceSchema.safeParse(many).success).toBe(false);
+  });
+
+  // The budgets exist to keep a real sample under the route's body limit. Twelve
+  // frames at the measured p90 (50,900 base64 bytes) is what a media-heavy canvas
+  // actually sends; if that no longer fits, the composer 413s again (#306).
+  it('accepts a full twelve-frame sample at the measured p90 frame size', () => {
+    const realistic = Array.from({ length: VISUAL_EVIDENCE_MAX_FRAMES }, (_, index) =>
+      frame({ timestampSec: index, base64: 'x'.repeat(50_900) }),
+    );
+    expect(canvasVisualEvidenceSchema.safeParse(realistic).success).toBe(true);
   });
 
   it('accepts a normal sampling', () => {

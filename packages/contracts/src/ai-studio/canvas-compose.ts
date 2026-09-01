@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { crossAgentProvenanceSchema } from '../agents/cross-agent';
-import { canvasVisualEvidenceSchema } from './visual-evidence';
+import { canvasVisualEvidenceSchema, VISUAL_EVIDENCE_MAX_BASE64_BYTES } from './visual-evidence';
 
 // Request envelope for the in-app Canvas Composer — POST /api/ai-studio/canvas/compose.
 // The response is an NDJSON stream of aiStudioComposerFrameSchema frames.
@@ -60,13 +60,34 @@ export const canvasComposerReferenceSchema = z
 
 export type CanvasComposerReference = z.infer<typeof canvasComposerReferenceSchema>;
 
+/**
+ * The Video Editor's inline command budget, measured rather than guessed.
+ *
+ * `TimelineEditorDialog` samples at most three videos, three frames each (sliced to
+ * eight), at 320px and quality 0.68 — a markedly smaller encode than the canvas-wide
+ * sampler's 512px/0.7. Measured 2026-09-01 through that encode over the same 30 real
+ * production assets: base64 bytes per frame min 5,804, p50 14,016, p90 22,144, max
+ * 23,948. Eight frames therefore cost ~110 KB at the median and ~187 KB at the
+ * observed worst case.
+ *
+ * The previous pair — 120,000 per frame, 750,000 in total — was five times what the
+ * extractor emits per frame and four times what a full editor turn weighs.
+ */
+export const CANVAS_EDITOR_EVIDENCE_MAX_FRAMES = 8;
+
+/** One frame. 2x the measured worst case: video frames carry more high-frequency detail than stills. */
+export const CANVAS_EDITOR_EVIDENCE_MAX_FRAME_BASE64_BYTES = 48_000;
+
+/** Every editor frame in one turn. Above 8x the measured p90, and well above the observed worst case. */
+export const CANVAS_EDITOR_EVIDENCE_MAX_BASE64_BYTES = 288_000;
+
 export const canvasEditorEvidenceFrameSchema = z
   .object({
     sourceNodeId: z.string().min(1),
     timestampSec: z.number().nonnegative(),
     label: z.string().min(1).max(160).optional(),
     mediaType: z.enum(['image/webp', 'image/jpeg']),
-    base64: z.string().min(1).max(120_000),
+    base64: z.string().min(1).max(CANVAS_EDITOR_EVIDENCE_MAX_FRAME_BASE64_BYTES),
   })
   .strict();
 export type CanvasEditorEvidenceFrame = z.infer<typeof canvasEditorEvidenceFrameSchema>;
@@ -75,16 +96,18 @@ export const canvasEditorContextSchema = z
   .object({
     nodeId: z.string().min(1),
     fingerprint: z.string().min(1),
-    frames: z.array(canvasEditorEvidenceFrameSchema).max(8),
+    frames: z.array(canvasEditorEvidenceFrameSchema).max(CANVAS_EDITOR_EVIDENCE_MAX_FRAMES),
   })
   .strict()
   .superRefine((value, ctx) => {
     const totalBase64Bytes = value.frames.reduce((sum, frame) => sum + frame.base64.length, 0);
-    if (totalBase64Bytes > 750_000) {
+    if (totalBase64Bytes > CANVAS_EDITOR_EVIDENCE_MAX_BASE64_BYTES) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['frames'],
-        message: 'Editor visual evidence exceeds the 750 KB request budget.',
+        message: `Editor visual evidence exceeds the ${Math.round(
+          CANVAS_EDITOR_EVIDENCE_MAX_BASE64_BYTES / 1000,
+        )} KB request budget.`,
       });
     }
   });
@@ -122,6 +145,29 @@ export const canvasComposeRequestSchema = z
   .strict();
 
 export type CanvasComposeRequest = z.infer<typeof canvasComposeRequestSchema>;
+
+/**
+ * Room for everything in a request that is NOT a base64 frame.
+ *
+ * The prompt (4,000), a full remembered transcript (12 x 2,000), the reference and
+ * selection arrays, and the per-frame metadata keys come to roughly 40 KB. 64 KB
+ * leaves half again as much for JSON escaping in user-authored text.
+ */
+const CANVAS_COMPOSE_ENVELOPE_BYTES = 64 * 1024;
+
+/**
+ * The route's body limit, DERIVED from the budgets above rather than written beside them.
+ *
+ * Airtable #306: the route carried its own `64 * 1024` while the schema it guards
+ * permitted nearly two megabytes, so Fastify answered 413 on any turn that sampled
+ * frames — before Zod, before auth, before the handler. Two hand-maintained numbers
+ * for one contract is the defect; this makes the route's number a consequence of the
+ * contract's, so raising a budget raises the limit that admits it in the same edit.
+ */
+export const CANVAS_COMPOSE_MAX_BODY_BYTES =
+  VISUAL_EVIDENCE_MAX_BASE64_BYTES +
+  CANVAS_EDITOR_EVIDENCE_MAX_BASE64_BYTES +
+  CANVAS_COMPOSE_ENVELOPE_BYTES;
 
 const canvasComposerModelCallSchema = z.object({
   agent: z.string().nullable(),
