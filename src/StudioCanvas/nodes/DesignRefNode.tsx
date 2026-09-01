@@ -17,6 +17,13 @@
 // Generation runs through `executeGeneration` directly rather than the graph executor:
 // a designRef is not `runnable`, and filling its own specimen is a node-local action, not
 // a step in a canvas run.
+//
+// WHAT IT PROMISES (Airtable #289). A Design Reference INFORMS the generation it is wired
+// into and the critique of the result; it does not constrain either. A palette reference
+// on a generator that came back black-and-white was read as a broken promise, because
+// nothing on the node said which of the two it was. So the node states it, and
+// `executeWorkflow` holds the other half of the same rule: a designRef never makes a run
+// fail for want of what it did not have.
 
 import {
   DESIGN_REF_IMAGE_OUTPUT_HANDLE,
@@ -308,6 +315,14 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
             <NodeOverlayNote tone="destructive">{error}</NodeOverlayNote>
           ) : null}
         </NodeContent>
+
+        {/* Airtable #289. Stated only once a section is chosen, because an unconfigured
+            node promises nothing yet. */}
+        {section ? (
+          <p className="shrink-0 border-t border-border/60 px-1.5 py-1 text-left text-[10px] leading-tight text-muted-foreground">
+            Informs the generation and its critique. Not enforced on the result.
+          </p>
+        ) : null}
       </CanvasNode>
 
       <Handle

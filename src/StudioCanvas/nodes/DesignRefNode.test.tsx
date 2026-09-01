@@ -272,6 +272,27 @@ describe('DesignRefNode', () => {
     expect(screen.queryByRole('button', { name: /Generate/ })).toBeNull();
   });
 
+  // Airtable #289. A Palette reference wired into a generator produced a black-and-white
+  // frame and the reporter read that as a broken promise. The owner's ruling is that the
+  // palette informs the generation and its critique and never constrains it — so the node
+  // has to SAY which of the two it is. The other half of the rule (a designRef never
+  // blocks a run) is held in `executeWorkflow.designref.test.ts`.
+  it('says the reference informs the generation rather than constraining it', () => {
+    systemOf([card('palette')]);
+    renderNode({ section: 'palette', mode: 'both', specimenSource: 'generated' });
+
+    expect(
+      screen.getByText('Informs the generation and its critique. Not enforced on the result.'),
+    ).toBeDefined();
+  });
+
+  it('promises nothing until a section is chosen', () => {
+    systemOf([card('palette')]);
+    renderNode({ section: null, mode: 'both' });
+
+    expect(screen.queryByText(/Informs the generation/)).toBeNull();
+  });
+
   it('draws both source handles, and no targets', () => {
     systemOf([card('palette')]);
     const { container } = renderNode({ section: 'palette', mode: 'both' });
