@@ -45,6 +45,35 @@ import { serializeWorkflowSnapshot } from '../utils/workflowSerialization';
 
 const TECHNIQUE_PAYLOAD_MAX_BYTES = 200 * 1024 * 1024;
 
+/**
+ * How long a save may hang before the dialog stops waiting on it. The save is ONE
+ * insert of one row — nothing legitimate takes half a minute — so a request still
+ * unanswered here is a request that is not coming back, and a button reading
+ * "Saving…" forever is what that looked like from the outside (Airtable #282).
+ *
+ * ponytail: a client-side deadline cannot cancel the server, so a save that times
+ * out may still have landed. The message says so rather than pretending otherwise;
+ * an idempotency key on the insert is the upgrade if duplicates ever show up.
+ */
+export const TECHNIQUE_SAVE_TIMEOUT_MS = 30_000;
+
+const TIMED_OUT_MESSAGE =
+  'The save never came back. It may still have gone through — check Add Node → Techniques before saving again.';
+
+async function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(TIMED_OUT_MESSAGE)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const KIND_LABELS: Record<WorkflowFragmentKind, string> = {
   reference: 'Reference — material another step consumes',
   generation: 'Generation — makes new media',
@@ -58,6 +87,8 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   brandProfileId?: string;
   nodes: StudioNode[];
+  /** Test seam for the deadline above; production always takes the default. */
+  saveTimeoutMs?: number;
 };
 
 const portSummary = (ports: { label?: string; dataType?: string }[]): string =>
@@ -65,7 +96,13 @@ const portSummary = (ports: { label?: string; dataType?: string }[]): string =>
     ? 'none'
     : ports.map((port) => `${port.label ?? 'Port'} (${port.dataType ?? 'any'})`).join(' · ');
 
-export function SaveTechniqueDialog({ open, onOpenChange, brandProfileId, nodes }: Props) {
+export function SaveTechniqueDialog({
+  open,
+  onOpenChange,
+  brandProfileId,
+  nodes,
+  saveTimeoutMs = TECHNIQUE_SAVE_TIMEOUT_MS,
+}: Props) {
   const { edges, defaultEdgeType } = useStudioStore();
   const { show } = useToast();
   const queryClient = useQueryClient();
@@ -123,15 +160,24 @@ export function SaveTechniqueDialog({ open, onOpenChange, brandProfileId, nodes 
         outputPorts: inference.outputPorts,
       });
 
-      await createAiStudioWorkflowAction({
-        brandProfileId,
-        name: name.trim(),
-        description: description.trim() || undefined,
-        nodes: snapshot.nodes,
-        edges: snapshot.edges,
-        metadata: { technique },
-      });
-      await queryClient.invalidateQueries({ queryKey: brandTechniquesQueryKey(brandProfileId) });
+      await withDeadline(
+        createAiStudioWorkflowAction({
+          brandProfileId,
+          name: name.trim(),
+          description: description.trim() || undefined,
+          nodes: snapshot.nodes,
+          edges: snapshot.edges,
+          metadata: { technique },
+        }),
+        saveTimeoutMs,
+      );
+
+      // The row is saved; the dialog is done. Refreshing the Add Node → Techniques
+      // list is the canvas's housekeeping, and AWAITING it here is what left the
+      // button on "Saving…" (Airtable #282): StudioCanvas keeps useTechniques mounted
+      // for the whole session, so the invalidation always has an active observer and
+      // always refetches every workflow the brand owns before resolving.
+      void queryClient.invalidateQueries({ queryKey: brandTechniquesQueryKey(brandProfileId) });
       show({
         title: 'Technique saved',
         description: `"${name.trim()}" can be dropped onto any canvas.`,
@@ -154,6 +200,7 @@ export function SaveTechniqueDialog({ open, onOpenChange, brandProfileId, nodes 
     name,
     description,
     queryClient,
+    saveTimeoutMs,
     show,
     onOpenChange,
   ]);
