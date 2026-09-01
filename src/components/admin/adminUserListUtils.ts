@@ -246,3 +246,16 @@ type AuditActor = Pick<AdminAuditLogEntry, 'actor_name' | 'actor_email' | 'actor
 export function auditActorLabel(actor: AuditActor): string {
   return actor.actor_name?.trim() || actor.actor_email?.trim() || actor.actor_user_id || 'System';
 }
+
+// Workflow transfer ---------------------------------------------------------
+
+// Airtable #277. The transfer picker enumerated all 321 brands alphabetically —
+// "Aaron Test Brand, AgeGateway, ALA Applied Technologies…" — most of which have
+// never had a Creative Studio, so the destination list was mostly noise.
+// `workflowCount` already rides on every `list_brands` row, so narrowing the list
+// is a filter over what we already fetched, not a second round trip. The synthetic
+// rows (global library, audit "All brands") carry no count and are not transfer
+// destinations, so an absent count reads as zero.
+export function brandsWithWorkflows(brands: AdminBrandOption[]): AdminBrandOption[] {
+  return brands.filter((brand) => (brand.workflowCount ?? 0) > 0);
+}

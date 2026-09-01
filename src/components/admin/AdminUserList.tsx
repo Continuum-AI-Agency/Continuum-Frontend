@@ -27,6 +27,7 @@ import { AdminActionConfirmation } from '@/components/admin/AdminActionConfirmat
 import {
   ADMIN_AUDIT_ACTIONS,
   auditActorLabel,
+  brandsWithWorkflows,
   buildAdminAuditRequestBody,
   buildAdminPaginationRange,
   buildAdminTabParams,
@@ -307,6 +308,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     checkedWorkflows.length > 0 &&
     checkedWorkflows.every((workflow) => workflow.visibility === 'global');
   const brandFilterOptions = useMemo(() => [GLOBAL_LIBRARY_BRAND_OPTION, ...brands], [brands]);
+  // Airtable #277 — a transfer DESTINATION has to be a brand with a Creative Studio.
+  // Scoped to the destination picker on purpose: the two filter pickers above and below
+  // it are for finding existing rows, where an empty brand is a legitimate thing to look
+  // at and finding nothing is the answer.
+  const transferTargetBrands = useMemo(() => brandsWithWorkflows(brands), [brands]);
   const auditBrandFilterOptions = useMemo(() => [AUDIT_ALL_BRANDS_OPTION, ...brands], [brands]);
   const debouncedAuditSearch = useDebounce(auditSearch);
   const debouncedAuditActor = useDebounce(auditActorQuery);
@@ -1628,7 +1634,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                   <div className="w-full sm:w-[300px]">
                     <BrandTransferCombobox
                       id="workflow-target-brand"
-                      brands={brands}
+                      brands={transferTargetBrands}
                       value={targetBrandId}
                       onChange={setTargetBrandId}
                       placeholder="Choose destination brand"
