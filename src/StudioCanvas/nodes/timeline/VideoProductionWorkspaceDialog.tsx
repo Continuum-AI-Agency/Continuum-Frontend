@@ -635,7 +635,10 @@ export function VideoProductionWorkspaceDialog({
             <EditorProjectV2Assembly
               project={project}
               brandId={brandId}
-              pool={pinnedPool}
+              // The WHOLE connected pool, not just the Library-pinned part: the media bin
+              // is where a wired clip has to become visible, and filtering it to pinned
+              // sources is what made a connected video invisible in Assembly (#294).
+              pool={pool}
               busy={Boolean(busy)}
               canUndo={undoStack.at(-1)?.appliedFingerprint === project.fingerprint}
               canRedo={redoStack.at(-1)?.redoFingerprint === project.fingerprint}

@@ -25,10 +25,11 @@ import { ColorField } from '@/components/ui/color-field';
 import { Input } from '@/components/ui/input';
 import { NumberScrubField } from '@/components/ui/number-field';
 import { SliderField } from '@/components/ui/slider-field';
+import { useToast } from '@/components/ui/ToastProvider';
 import { listAssetVersions } from '@/lib/library/versions';
 import type { TimelineInputSource, TimelineItem } from '../../types';
 import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
-import { AudioTracks } from './AudioTracks';
+import { AUDIO_DROP_ID, AudioTracks } from './AudioTracks';
 import {
   type EditorAssemblyOperation,
   editorProjectV2CommentPlacements,
@@ -36,6 +37,7 @@ import {
   orderedVideoClips,
   patchAudioOperation,
   placeAudioOperation,
+  placeVideoOperation,
   primaryVideoTrack,
   removeClipOperation,
   removeTransitionOperation,
@@ -47,11 +49,13 @@ import {
   upsertTransitionOperation,
   videoLayout,
 } from './editorProjectV2AssemblyModel';
+import { BIN_DRAG_PREFIX, MediaBin } from './MediaBin';
+import { probeAudioDuration, probeVideoDuration } from './mediaProbe';
 import type { OverlayPreviewLayer } from './overlayPreview';
 import { CLIP_DRAG_PREFIX } from './TimelineClipBlock';
 import { TimelineCommentLayer } from './TimelineCommentLayer';
 import { TimelinePreview } from './TimelinePreview';
-import { TimelineTrack } from './TimelineTrack';
+import { TIMELINE_DROP_ID, TimelineTrack } from './TimelineTrack';
 import { useEditorProjectV2AudioPreview } from './useEditorProjectV2AudioPreview';
 import { type ClipMedia, usePlayheadPlayback } from './usePlayheadPlayback';
 
@@ -65,6 +69,25 @@ function sourceCoordinates(clip: EditorVideoClip | EditorAudioClip | EditorOverl
   const source = clip.source;
   if (source.sourceType !== 'library_asset' || !source.renditionId) return null;
   return { assetId: source.assetId, versionId: source.renditionId };
+}
+
+const probeSourceDuration = (
+  kind: TimelineInputSource['kind'],
+  url: string,
+): Promise<number | undefined> =>
+  (kind === 'audio' ? probeAudioDuration(url) : probeVideoDuration(url))
+    .then((seconds) => (seconds > 0 ? seconds : undefined))
+    .catch(() => undefined);
+
+/** Clips placed straight off the canvas preview through the media bin's own URL. */
+function canvasNodeClipIds(project: EditorProjectV2): Array<{ clipId: string; nodeId: string }> {
+  return project.tracks.flatMap((track) =>
+    track.clips.flatMap((clip) =>
+      'source' in clip && clip.source.sourceType === 'canvas_node'
+        ? [{ clipId: clip.id, nodeId: clip.source.nodeId }]
+        : [],
+    ),
+  );
 }
 
 function useExactPreviewUrls(
@@ -83,10 +106,15 @@ function useExactPreviewUrls(
     );
     return values;
   }, [project.tracks]);
+  const canvasClips = useMemo(() => canvasNodeClipIds(project), [project]);
 
   useEffect(() => {
     let cancelled = false;
     const poolUrls = new Map<string, string>();
+    for (const canvasClip of canvasClips) {
+      const url = pool.find((candidate) => candidate.nodeId === canvasClip.nodeId)?.previewUrl;
+      if (url) poolUrls.set(canvasClip.clipId, url);
+    }
     for (const coordinate of coordinates) {
       const source = pool.find(
         (candidate) =>
@@ -126,7 +154,7 @@ function useExactPreviewUrls(
     return () => {
       cancelled = true;
     };
-  }, [brandId, coordinates, pool]);
+  }, [brandId, canvasClips, coordinates, pool]);
 
   return urls;
 }
@@ -650,6 +678,7 @@ export function EditorProjectV2Assembly({
   onRedo: () => void;
   onRender: () => void;
 }) {
+  const { show } = useToast();
   const [pxPerSec, setPxPerSec] = useState(PX_PER_SEC);
   const [selectedVideoId, setSelectedVideoId] = useState<string>();
   const [selectedAudioId, setSelectedAudioId] = useState<string>();
@@ -767,11 +796,54 @@ export function EditorProjectV2Assembly({
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor),
   );
+  // A media bin tile becomes a durable clip. The source's length is probed off its own
+  // preview when the host does not already know it, so a dropped clip is as long as the
+  // media actually is rather than a placeholder everyone then has to trim.
+  const place = useCallback(
+    async (source: TimelineInputSource) => {
+      const durationSec =
+        source.durationSec ??
+        (source.kind !== 'image' && source.previewUrl
+          ? await probeSourceDuration(source.kind, source.previewUrl)
+          : undefined);
+      try {
+        onApply(
+          source.kind === 'audio'
+            ? placeAudioOperation(project, {
+                source,
+                timelineStartSec: playback.playheadSec,
+                sourceDurationSec: durationSec,
+              })
+            : placeVideoOperation(project, { source, durationSec }),
+        );
+      } catch (error) {
+        show({
+          title: 'Could not place that clip',
+          description:
+            error instanceof Error ? error.message : 'The assembly could not take this source.',
+          variant: 'warning',
+        });
+      }
+    },
+    [onApply, playback.playheadSec, project, show],
+  );
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
-      if (!videoTrack || !event.over) return;
+      if (!event.over) return;
       const activeId = String(event.active.id);
       const overId = String(event.over.id);
+      if (activeId.startsWith(BIN_DRAG_PREFIX)) {
+        const nodeId = (event.active.data.current as { sourceNodeId?: string } | undefined)
+          ?.sourceNodeId;
+        const source = pool.find((candidate) => candidate.nodeId === nodeId);
+        const onTimeline = overId === TIMELINE_DROP_ID || overId.startsWith(CLIP_DRAG_PREFIX);
+        const onAudio = overId === AUDIO_DROP_ID && source?.kind === 'audio';
+        if (!source || !(onTimeline || onAudio)) return;
+        void place(source);
+        return;
+      }
+      if (!videoTrack) return;
       if (!activeId.startsWith(CLIP_DRAG_PREFIX) || !overId.startsWith(CLIP_DRAG_PREFIX)) return;
       const operation = reorderVideoOperation(
         project,
@@ -781,7 +853,7 @@ export function EditorProjectV2Assembly({
       );
       if (operation) onApply(operation);
     },
-    [onApply, project, videoTrack],
+    [onApply, place, pool, project, videoTrack],
   );
 
   const audioPool = pool.filter(
@@ -829,6 +901,9 @@ export function EditorProjectV2Assembly({
             snapshots with optimistic concurrency.
           </p>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-3">
+            <section className="min-h-[9rem]">
+              <MediaBin pool={pool} onPlace={(source) => void place(source)} />
+            </section>
             <section>
               <div className="mb-2 text-xs font-semibold text-muted-foreground">
                 Pinned overlays
@@ -878,9 +953,7 @@ export function EditorProjectV2Assembly({
                       onClick={() =>
                         onApply(
                           placeAudioOperation(project, {
-                            assetId: source.sourceAssetId as string,
-                            versionId: source.sourceVersionId as string,
-                            label: source.label,
+                            source,
                             timelineStartSec: playback.playheadSec,
                             sourceDurationSec: source.durationSec,
                           }),
