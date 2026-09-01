@@ -319,6 +319,21 @@ describe('grounding chip + menu styling', () => {
     expect(surface).not.toContain('var(--available-height)');
   });
 
+  // The other half of #281. `position: sticky` resolves against the nearest block
+  // ancestor, so a <section> per group made each header stick only for as long as its own
+  // group — at full scroll the first group's header was measured 1445px above the pane
+  // while the last group's held at 0. One flat column is one containing block for every
+  // header, so each holds the top of the scrollport until the next covers it.
+  it('lays the flat surface out as one column, with no per-group wrapper', () => {
+    const surface = codeOf('GroundingPopover.tsx');
+    const flat = surface.slice(surface.indexOf('export function GroundingPopover'));
+    expect(flat).not.toContain('<section>');
+    // The column carries no `gap`: the spacing rides on the sticky headers' own margin,
+    // which a `gap` would double and a flattened column would apply between every row.
+    expect(flat).toContain('<div className="flex flex-col">');
+    expect(surface).toContain('sticky top-0 z-10 mb-1 mt-3 flex min-h-6');
+  });
+
   // The frame, not the caller, bounds the panel and owns the pane — docs/styleguide.md §4.
   // A viewport-based bound is what let it run into the canvas's bottom-right chat
   // launcher, which covered the list and swallowed the wheel.
