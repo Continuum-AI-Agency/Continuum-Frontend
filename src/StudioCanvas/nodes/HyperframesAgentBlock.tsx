@@ -28,6 +28,7 @@ import type { HyperframesAgentNodeData } from '../types';
 import { toggleBrandPiece, toggleSkillId } from '../utils/brandEnforcement';
 import { startHyperframesAgentNode } from '../utils/startHyperframesAgent';
 import { NodeBadge, NodeTitleBar } from './NodeChrome';
+import { NodeDownloadButton } from './NodeDownloadButton';
 
 const labelForStatus = (status: HyperframesAgentNodeData['status']): string => {
   switch (status) {
@@ -203,6 +204,12 @@ export function HyperframesAgentBlock({
           </div>
 
           <div className="relative flex min-h-28 flex-1 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-black/90">
+            <NodeDownloadButton
+              nodeType="hyperframesAgent"
+              data={data}
+              baseName="hyperframes"
+              label="Download rendered clip"
+            />
             {video ? (
               <NodeVideoPreview src={video} className="bg-transparent" />
             ) : running ? (
