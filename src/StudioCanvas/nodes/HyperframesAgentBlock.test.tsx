@@ -4,6 +4,12 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { ClientRenderContext } from '@/lib/client-render/ClientRenderProvider';
+import {
+  markRenderStartedHere,
+  resetRendersStartedHere,
+  shouldAutoRunClientRenderJob,
+} from '@/lib/client-render/ownedRuns';
 import { clearVideoAspectCache } from '../hooks/useSnapToVideoAspect';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { HyperframesAgentNodeData } from '../types';
@@ -39,7 +45,9 @@ const hyperData = (overrides: Partial<HyperframesAgentNodeData> = {}): Hyperfram
 let originalCreateElement: typeof document.createElement;
 let videosCreated: HTMLVideoElement[] = [];
 
-const renderNode = (data: HyperframesAgentNodeData) => {
+type Queue = NonNullable<ComponentProps<typeof ClientRenderContext.Provider>['value']>;
+
+const renderNode = (data: HyperframesAgentNodeData, queue: Queue | null = null) => {
   useStudioStore.setState({
     brandId: undefined,
     edges: [],
@@ -58,15 +66,50 @@ const renderNode = (data: HyperframesAgentNodeData) => {
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <ToastProvider>
-        <ReactFlowProvider>
-          <HyperframesAgentBlock {...baseProps} data={data} />
-        </ReactFlowProvider>
+        <ClientRenderContext.Provider value={queue}>
+          <ReactFlowProvider>
+            <HyperframesAgentBlock {...baseProps} data={data} />
+          </ReactFlowProvider>
+        </ClientRenderContext.Provider>
       </ToastProvider>
     </QueryClientProvider>,
   );
 };
 
 const node = () => useStudioStore.getState().nodes.find((n) => n.id === NODE_ID);
+
+const RENDER_JOB = {
+  id: 'de3e6121-89d0-49ed-ade8-733e68773003',
+  brandId: '1d1eac52-2955-42bd-81b5-a47808214ae2',
+  kind: 'hyperframes_agent',
+  state: 'ready',
+  sourceId: '2b0d1647-fce9-46db-a1ce-49b18973cd96',
+  executionSpec: {
+    kind: 'hyperframes_agent',
+    runId: '2b0d1647-fce9-46db-a1ce-49b18973cd96',
+    canvasId: 'e08281d4-a740-497f-b4b2-260f32991379',
+    nodeId: NODE_ID,
+    origin: { label: 'HyperFrames Agent', viewHref: '/ai-studio' },
+  },
+} as unknown as Queue['jobs'][number];
+
+const queueWith = (jobs: Queue['jobs'], overrides: Partial<Queue> = {}): Queue =>
+  ({
+    jobs,
+    readyCount: jobs.length,
+    inboxOpen: false,
+    setInboxOpen: () => undefined,
+    run: async () => undefined,
+    retry: async () => undefined,
+    stop: async () => undefined,
+    refresh: async () => undefined,
+    canExecute: () => true,
+    isRunningLocally: () => false,
+    // The real provider answers this with the viewer bound in; the fixture keeps the
+    // same predicate so `markRenderStartedHere` still means what it means in the app.
+    willAutoRun: (job: Queue['jobs'][number]) => shouldAutoRunClientRenderJob(job),
+    ...overrides,
+  }) as Queue;
 
 describe('HyperframesAgentBlock rendered-composition preview', () => {
   beforeEach(() => {
@@ -81,6 +124,7 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
       return element;
     }) as typeof document.createElement;
     useStudioStore.setState({ brandId: undefined, nodes: [], edges: [] });
+    resetRendersStartedHere();
   });
 
   afterEach(() => {
@@ -155,5 +199,39 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
     expect(video.getAttribute('preload')).toBe('metadata');
     expect(video.getAttribute('playsinline')).not.toBeNull();
     expect(video.className).toContain('object-contain');
+  });
+  // Airtable #296. The node promised "rendering continues in this tab" over a job that
+  // nothing was running: three sat `ready` for days, giving no feedback and offering no
+  // way out. A waiting job must say so and be one click from rendering.
+  it('offers to render here when the job is waiting for a device', () => {
+    const ran: unknown[] = [];
+    const { getByText, queryByText } = renderNode(
+      hyperData({ status: 'queued', isExecuting: true }),
+      queueWith([RENDER_JOB], { run: async (target: unknown) => void ran.push(target) }),
+    );
+
+    expect(queryByText(/rendering continues in this tab/i)).toBeNull();
+    expect(getByText(/Waiting for a device to render/i)).not.toBeNull();
+    fireEvent.click(getByText('Render here'));
+    expect(ran).toEqual([RENDER_JOB]);
+  });
+
+  it('does not flash "waiting" over a run this tab is about to claim', () => {
+    markRenderStartedHere(RENDER_JOB.sourceId as string);
+    const { getByText, queryByText } = renderNode(
+      hyperData({ status: 'queued', isExecuting: true }),
+      queueWith([RENDER_JOB]),
+    );
+
+    expect(queryByText('Render here')).toBeNull();
+    expect(getByText(/rendering continues in this tab/i)).not.toBeNull();
+  });
+
+  it('keeps the in-tab promise while the job is actually being rendered here', () => {
+    const { getByText } = renderNode(
+      hyperData({ status: 'rendering', isExecuting: true }),
+      queueWith([RENDER_JOB], { isRunningLocally: () => true }),
+    );
+    expect(getByText(/rendering continues in this tab/i)).not.toBeNull();
   });
 });

@@ -18,9 +18,16 @@ const base = (jobId?: string): string =>
     ? `/api/media/client-render-jobs/${encodeURIComponent(jobId)}`
     : '/api/media/client-render-jobs';
 
-export function listClientRenderJobs(brandId: string): Promise<{ jobs: ClientRenderJob[] }> {
+/**
+ * The whole account's render queue, not the selected brand's.
+ *
+ * The bell badge counts every brand the caller can operate; omitting `brandId` is what
+ * asks the route for that. Pass one only to inspect a single brand deliberately.
+ */
+export function listClientRenderJobs(brandId?: string): Promise<{ jobs: ClientRenderJob[] }> {
+  const query = brandId ? `?${new URLSearchParams({ brandId })}` : '';
   return http.request({
-    path: `${base()}?${new URLSearchParams({ brandId })}`,
+    path: `${base()}${query}`,
     schema: listClientRenderJobsResponseSchema,
     cache: 'no-store',
   });

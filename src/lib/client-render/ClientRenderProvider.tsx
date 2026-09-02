@@ -11,8 +11,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useSession } from '@/hooks/useSession';
 import {
   claimClientRenderJob,
   completeClientRenderJob,
@@ -53,12 +53,24 @@ type ClientRenderContextValue = {
   refresh(): Promise<void>;
   canExecute(job: ClientRenderJob): boolean;
   isRunningLocally(job: ClientRenderJob): boolean;
+  /** Whether this tab will claim the job on its own, without the inbox's consent step. */
+  willAutoRun(job: ClientRenderJob): boolean;
 };
 
-const ClientRenderContext = createContext<ClientRenderContextValue | null>(null);
+/** Exported as the test seam for surfaces that read the queue, e.g. the HyperFrames node. */
+export const ClientRenderContext = createContext<ClientRenderContextValue | null>(null);
+
+/**
+ * The queue when it is mounted, null when it is not. A canvas node also renders outside
+ * the authenticated shell (tests, previews), and a node must not crash a whole canvas
+ * because the render inbox happens not to be above it.
+ */
+export function useClientRenderQueueIfMounted(): ClientRenderContextValue | null {
+  return useContext(ClientRenderContext);
+}
 
 export function useClientRenderQueue(): ClientRenderContextValue {
-  const value = useContext(ClientRenderContext);
+  const value = useClientRenderQueueIfMounted();
   if (!value) throw new Error('useClientRenderQueue must be used within ClientRenderProvider');
   return value;
 }
@@ -84,7 +96,8 @@ const isAbort = (error: unknown): boolean =>
 
 export function ClientRenderProvider({ children }: { children: ReactNode }) {
   registerDefaultClientRenderExecutors();
-  const { activeBrandId } = useActiveBrandContext();
+  const { user } = useSession();
+  const viewerId = user?.id;
   const studioQueue = useStudioRenderQueue();
   const { show } = useToast();
   const [jobs, setJobs] = useState<ClientRenderJob[]>([]);
@@ -99,16 +112,19 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(OPEN_INBOX_EVENT, openInbox);
   }, []);
 
+  // Account-scoped on purpose: every stuck job in production was enqueued under a brand
+  // that was not the selected one, so a queue filtered by the brand chip could neither
+  // show them nor count them (Airtable #296).
   const refresh = useCallback(async () => {
     try {
-      const result = await listClientRenderJobs(activeBrandId);
+      const result = await listClientRenderJobs();
       setJobs(result.jobs);
     } catch {
       // Viewers intentionally cannot inspect the operator queue. The route is
       // fail-closed; keeping the chrome quiet avoids presenting a broken bell.
       setJobs([]);
     }
-  }, [activeBrandId]);
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -122,40 +138,41 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
       show({
         title: `${readyCount} ready to render`,
         description: 'Open the render inbox to choose which jobs may use this device.',
-        dedupeKey: `client-render-ready:${activeBrandId}:${readyCount}`,
+        dedupeKey: `client-render-ready:${readyCount}`,
         action: { label: 'Review jobs', onClick: () => setInboxOpen(true) },
       });
     }
     previousReadyCount.current = readyCount;
-  }, [activeBrandId, readyCount, show]);
+  }, [readyCount, show]);
 
-  const replaceJob = useCallback(
-    (next: ClientRenderJob) => {
-      if (next.brandId !== activeBrandId) return;
-      setJobs((current) => {
-        const exists = current.some((job) => job.id === next.id);
-        return exists
-          ? current.map((job) => (job.id === next.id ? next : job))
-          : [...current, next];
-      });
-    },
-    [activeBrandId],
-  );
+  // No brand filter: the queue spans every brand this person operates, and dropping an
+  // update because it belongs to another brand would strand the job it describes.
+  const replaceJob = useCallback((next: ClientRenderJob) => {
+    setJobs((current) => {
+      const exists = current.some((job) => job.id === next.id);
+      return exists ? current.map((job) => (job.id === next.id ? next : job)) : [...current, next];
+    });
+  }, []);
 
   const run = useCallback(
     async (job: ClientRenderJob) => {
+      // Both of these THROW rather than return. An auto-run job that returns quietly
+      // stays in `autoRun` forever — never retried, and invisible on the canvas that
+      // is still promising a render. Throwing releases it for the next poll, on a
+      // device or surface that may well be able to take it (Airtable #296).
       const executor = getClientRenderExecutor(job.kind);
       if (!executor) {
         show({
           title: 'Open the source to render',
           description: 'This render adapter is not available on the current surface yet.',
           variant: 'warning',
+          dedupeKey: `client-render-unsupported:${job.id}`,
           action: {
             label: 'View source',
             onClick: () => window.location.assign(job.executionSpec.origin.viewHref),
           },
         });
-        return;
+        throw new Error('No render adapter is available on this surface.');
       }
 
       const capabilities = await probeClientRenderCapabilities();
@@ -164,8 +181,9 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
           title: "This browser can't render video",
           description: 'Use Chrome or Edge on a desktop with WebCodecs enabled.',
           variant: 'error',
+          dedupeKey: `client-render-unsupported:${job.id}`,
         });
-        return;
+        throw new Error('This browser cannot encode video.');
       }
 
       let claimed: Awaited<ReturnType<typeof claimClientRenderJob>>;
@@ -293,18 +311,22 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
     [replaceJob, studioQueue],
   );
 
-  // A run started in THIS tab renders here, without waiting for a click on an inbox the
-  // person has no reason to open — the node that started it already promised as much.
-  // Every other job keeps the consent step: this is not a background worker for the
-  // whole brand's queue.
+  // A render this person asked for runs here without waiting for a click on an inbox they
+  // have no reason to open — the node that started it already promised as much, and a
+  // reload no longer forgets that. Everyone else's jobs keep the consent step: this is
+  // still not a background worker for the whole brand's queue.
+  const willAutoRun = useCallback(
+    (job: ClientRenderJob) => shouldAutoRunClientRenderJob(job, viewerId),
+    [viewerId],
+  );
   const autoRun = useRef(new Set<string>());
   useEffect(() => {
     for (const job of jobs) {
-      if (!shouldAutoRunClientRenderJob(job) || autoRun.current.has(job.id)) continue;
+      if (!willAutoRun(job) || autoRun.current.has(job.id)) continue;
       autoRun.current.add(job.id);
       void run(job).catch(() => autoRun.current.delete(job.id));
     }
-  }, [jobs, run]);
+  }, [jobs, run, willAutoRun]);
 
   const value = useMemo<ClientRenderContextValue>(
     () => ({
@@ -318,8 +340,9 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
       refresh,
       canExecute: (job) => hasClientRenderExecutor(job.kind),
       isRunningLocally: (job) => localJobIds.current.has(job.id),
+      willAutoRun,
     }),
-    [inboxOpen, jobs, readyCount, refresh, retry, run, stop],
+    [inboxOpen, jobs, readyCount, refresh, retry, run, stop, willAutoRun],
   );
 
   return <ClientRenderContext.Provider value={value}>{children}</ClientRenderContext.Provider>;

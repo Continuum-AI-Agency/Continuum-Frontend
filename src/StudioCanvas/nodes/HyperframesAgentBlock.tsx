@@ -13,12 +13,13 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
-import { Film, Play, Sparkles } from 'lucide-react';
+import { Clock, Film, Play, Sparkles } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useClientRenderQueueIfMounted } from '@/lib/client-render/ClientRenderProvider';
 import { GroundingChip } from '../components/GroundingChip';
 import { NodeVideoPreview } from '../components/NodeVideoPreview';
 import { useCanvasRuntime } from '../contexts/CanvasRuntimeContext';
@@ -66,6 +67,23 @@ export function HyperframesAgentBlock({
   const [starting, setStarting] = useState(false);
   const running = starting || Boolean(data.isExecuting);
   const video = data.generatedVideoUrl;
+
+  // The render happens in a browser, and only a tab that opted in claims the job. A tab
+  // that reloaded no longer has, so the node has to SHOW that it is waiting instead of
+  // repeating "rendering continues in this tab" over a job nothing is running — three
+  // jobs sat `ready` for days under that copy (Airtable #296).
+  const queue = useClientRenderQueueIfMounted();
+  const renderJob = queue?.jobs.find(
+    (job) => job.executionSpec.kind === 'hyperframes_agent' && job.executionSpec.nodeId === id,
+  );
+  // `willAutoRun` is literally the question the provider asks on its next poll — asked
+  // THROUGH the provider because the answer now depends on who is signed in, so a render
+  // this person started never flashes "waiting" in the gap before the claim.
+  const waitingForDevice =
+    renderJob?.state === 'ready' &&
+    !queue?.willAutoRun(renderJob) &&
+    !queue?.isRunningLocally(renderJob) &&
+    !starting;
 
   // Box re-snaps to the composition the agent actually rendered. `data.aspectRatio`
   // is the request the next run sends and is left alone.
@@ -138,7 +156,9 @@ export function HyperframesAgentBlock({
               className="h-5 px-1.5"
             />
           </div>
-          <NodeBadge>{labelForStatus(data.status)}</NodeBadge>
+          <NodeBadge>
+            {waitingForDevice ? 'Waiting for a device' : labelForStatus(data.status)}
+          </NodeBadge>
         </NodeTitleBar>
         <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
           <textarea
@@ -212,6 +232,20 @@ export function HyperframesAgentBlock({
             />
             {video ? (
               <NodeVideoPreview src={video} className="bg-transparent" />
+            ) : waitingForDevice && renderJob ? (
+              <div className="flex w-3/4 flex-col items-center gap-3 text-center">
+                <Clock className="h-6 w-6 text-amber-400" />
+                <span className="text-2xs text-muted-foreground">
+                  Waiting for a device to render this composition.
+                </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void queue?.run(renderJob).catch(() => undefined)}
+                >
+                  Render here
+                </Button>
+              </div>
             ) : running ? (
               <div className="flex w-3/4 flex-col items-center gap-3 text-center">
                 <Film className="h-6 w-6 animate-pulse text-violet-400" />
