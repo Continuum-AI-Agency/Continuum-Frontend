@@ -7,6 +7,7 @@ import {
   hasVisualEffects,
   opacityFor,
   resolveAdjustments,
+  warmthAdjustments,
   resolveTextOverlays,
   resolveTransformAt,
   speedFor,
@@ -120,6 +121,27 @@ describe('resolveAdjustments', () => {
   it('merges a preset under the manual adjustments (manual wins)', () => {
     const resolved = resolveAdjustments({ filterPreset: 'bw', adjustments: { contrast: 2 } });
     expect(resolved).toEqual({ ...FILTER_PRESETS.bw, contrast: 2 });
+  });
+
+  it('leaves an untouched spec resolving to nothing rather than an empty object', () => {
+    expect(resolveAdjustments({})).toBeUndefined();
+    expect(resolveAdjustments({ warmth: 0 })).toBeUndefined();
+  });
+
+  it('lays warmth down as the base, under both the preset and the manual adjustments', () => {
+    expect(resolveAdjustments({ warmth: 1 })).toEqual(warmthAdjustments(1));
+    // The preset is the whole point of a one-tap look: it must beat the temperature.
+    expect(resolveAdjustments({ warmth: 1, filterPreset: 'bw' })).toEqual({
+      ...warmthAdjustments(1),
+      ...FILTER_PRESETS.bw,
+    });
+    // And a slider the author actually moved beats both.
+    expect(resolveAdjustments({ warmth: 1, adjustments: { sepia: 0 } })?.sepia).toBe(0);
+  });
+
+  it('carries warmth into the filter string both hosts render from', () => {
+    expect(filterString(resolveAdjustments({ warmth: 1 }))).toContain('sepia(0.5)');
+    expect(filterString(resolveAdjustments({ warmth: -1 }))).toContain('hue-rotate(18deg)');
   });
 });
 

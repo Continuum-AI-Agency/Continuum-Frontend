@@ -81,6 +81,15 @@ export interface ClipEffectSpec {
   adjustments?: ClipAdjustments;
   /** A named look, applied under the manual adjustments. */
   filterPreset?: FilterPreset;
+  /**
+   * Colour temperature, −1 (cold) … +1 (warm).
+   *
+   * Not a `ClipAdjustments` field because CSS has no warmth primitive: it compiles to a
+   * sepia + hue-rotate pair in `warmthAdjustments`, which `resolveAdjustments` lays down
+   * UNDER the preset and the manual adjustments. That is what keeps it free: both the
+   * preview and the export read the resolved adjustments, so neither needs to know.
+   */
+  warmth?: number;
   transform?: ClipTransform;
   /** Mirror horizontally / vertically. */
   flipH?: boolean;
@@ -169,16 +178,40 @@ export type BlendMode =
   | 'darken'
   | 'difference';
 
-// Merge a filter preset's base adjustments with the clip's manual adjustments
-// (manual wins). The single source of truth for both CSS and canvas filters.
+/**
+ * Warmth as a filter pair. Positive warmth leans on `sepia` (which pushes the whole
+ * frame toward amber) and nudges the hue clockwise; negative warmth rotates the other
+ * way and desaturates the amber cast instead of adding one.
+ *
+ * Honest about what it is not: a real temperature shift moves the white point per
+ * channel. This approximates it inside the filter chain so the grade stays previewable
+ * in CSS — the whole reason this file exists.
+ *
+ * Lives here, not in `utils/actions/imageOps.ts` where it was born, because the clip
+ * spec now carries a `warmth` too and two copies of this scale would drift.
+ */
+export function warmthAdjustments(warmth: number): ClipAdjustments {
+  const amount = Math.max(-1, Math.min(1, Number.isFinite(warmth) ? warmth : 0));
+  if (amount === 0) return {};
+  if (amount > 0)
+    return { sepia: amount * 0.5, hueRotate: -amount * 8, saturation: 1 + amount * 0.2 };
+  return { hueRotate: -amount * 18, saturation: 1 + amount * 0.1, brightness: 1 - amount * 0.02 };
+}
+
+// Merge the clip's warmth, its filter preset's base adjustments, and its manual
+// adjustments — later wins. The single source of truth for both CSS and canvas filters.
 export function resolveAdjustments(spec: ClipEffectSpec | undefined): ClipAdjustments | undefined {
   if (!spec) return undefined;
+  const warmth = warmthAdjustments(spec.warmth ?? 0);
   const preset =
     spec.filterPreset && spec.filterPreset !== 'none'
       ? FILTER_PRESETS[spec.filterPreset]
       : undefined;
-  if (!preset) return spec.adjustments;
-  return { ...preset, ...spec.adjustments };
+  const base = preset ? { ...warmth, ...preset } : warmth;
+  // An untouched clip must still resolve to `undefined`, not `{}` — `hasVisualEffects`
+  // and the preview both read "no adjustments" off that.
+  if (Object.keys(base).length === 0) return spec.adjustments;
+  return { ...base, ...spec.adjustments };
 }
 
 const IDENTITY_TRANSFORM: Required<ClipTransform> = { scale: 1, offsetX: 0, offsetY: 0, rotate: 0 };

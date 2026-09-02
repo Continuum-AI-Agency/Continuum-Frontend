@@ -1,7 +1,7 @@
 import { buildDataUrl } from '../dataUrl';
 import { parseHexColor, type RgbColor } from '../pixel/chromaKey';
 import { planCropToAspect, planPadToAspect } from '../pixel/cropPad';
-import { type ClipAdjustments, filterString } from '../render/effectSpec';
+import { type ClipAdjustments, filterString, warmthAdjustments } from '../render/effectSpec';
 
 // Canvas-backed still operations behind the `image.*` action ops. Everything here
 // draws through OffscreenCanvas so a runner can use it off the main thread later
@@ -142,22 +142,9 @@ export interface ColorGradeConfig {
   readonly warmth?: number;
 }
 
-/**
- * Warmth as a filter pair. Positive warmth leans on `sepia` (which pushes the whole
- * frame toward amber) and nudges the hue clockwise; negative warmth rotates the other
- * way and desaturates the amber cast instead of adding one.
- *
- * Honest about what it is not: a real temperature shift moves the white point per
- * channel. This approximates it inside the filter chain so the grade stays previewable
- * in CSS — the whole reason `effectSpec` exists.
- */
-export function warmthAdjustments(warmth: number): ClipAdjustments {
-  const amount = Math.max(-1, Math.min(1, Number.isFinite(warmth) ? warmth : 0));
-  if (amount === 0) return {};
-  if (amount > 0)
-    return { sepia: amount * 0.5, hueRotate: -amount * 8, saturation: 1 + amount * 0.2 };
-  return { hueRotate: -amount * 18, saturation: 1 + amount * 0.1, brightness: 1 - amount * 0.02 };
-}
+// Moved to `effectSpec` when `ClipEffectSpec` grew its own `warmth`: one scale, one
+// place. Re-exported so the `image.grade` call sites here keep their import.
+export { warmthAdjustments };
 
 /** Merge two adjustment sets, `over` winning per key. */
 function mergeAdjustments(base: ClipAdjustments, over: ClipAdjustments): ClipAdjustments {

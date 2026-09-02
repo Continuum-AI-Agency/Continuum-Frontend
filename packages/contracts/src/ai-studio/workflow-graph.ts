@@ -629,6 +629,31 @@ export const TIMELINE_MEDIA_POOL_LIMIT = 20;
 export const isTimelineMediaHandle = (handleId?: string | null): boolean =>
   handleId === TIMELINE_MEDIA_INPUT_HANDLE;
 
+/** What a `media-in` pool entry holds. Audio beds are placeable, so this is wider
+ *  than `StudioEmittedModality`. */
+export type TimelineMediaKind = 'video' | 'image' | 'audio';
+
+/**
+ * What this source contributes to a Video Editor's `media-in` pool, or `undefined`
+ * when it produces nothing placeable.
+ *
+ * THE definition — `isConnectionCompatible` decides the connection with it and the
+ * canvas resolver reads the tile's kind from it, so "connectable" and "resolvable"
+ * are the same set by construction. They were two hand-maintained node-type lists
+ * before, and the action catalog drifted them apart: every `action`, `router`,
+ * `batch`, `element`, `layerEditor`, `designRef`, `hyperframesAgent`, `omniGen` and
+ * `frameExtract` connected, then rendered as "upstream produced no media".
+ */
+export function timelineMediaKind(
+  node: GraphNodeLike,
+  sourceHandle?: string | null,
+): TimelineMediaKind | undefined {
+  if (node.type === 'audio') return 'audio';
+  if (isVideoProducingSource(node, sourceHandle)) return 'video';
+  if (isImageProducingSource(node, sourceHandle)) return 'image';
+  return undefined;
+}
+
 export const HYPERFRAMES_PROMPT_INPUT_HANDLE = 'prompt-in';
 export const HYPERFRAMES_IMAGE_INPUT_HANDLE = 'image-in';
 export const HYPERFRAMES_VIDEO_INPUT_HANDLE = 'video-in';
@@ -1205,10 +1230,7 @@ function isConnectionCompatible(
     }
   } else if (targetNode.type === 'timelineEditor') {
     if (!isTimelineMediaHandle(targetHandle)) return false;
-    const isImageSource = isImageProducingSource(sourceNode, sourceHandle);
-    const isAudioSource = sourceNode.type === 'audio';
-    if (!isVideoProducingSource(sourceNode, sourceHandle) && !isImageSource && !isAudioSource)
-      return false;
+    if (!timelineMediaKind(sourceNode, sourceHandle)) return false;
   } else if (targetNode.type === 'hyperframesAgent') {
     if (targetHandle === HYPERFRAMES_PROMPT_INPUT_HANDLE) {
       if (!isTextProducingSource(sourceNode, sourceHandle)) return false;

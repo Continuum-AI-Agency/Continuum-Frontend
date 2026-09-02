@@ -1,5 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { TIMELINE_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
+import {
+  isValidConnection,
+  STUDIO_NODE_TYPES,
+  TIMELINE_MEDIA_INPUT_HANDLE,
+} from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import type { StudioNode, TimelineItem } from '../../types';
 import type { NodeOutput } from '../../types/execution';
@@ -120,6 +124,174 @@ describe('resolveTimelineSources — Video Editor (timelineEditor) as a source',
       volume: 0.6,
     });
     expect(resolved[0].blob.type).toBe('audio/wav');
+  });
+});
+
+// The connection validator admits every media-producing node onto `media-in`
+// (contracts `timelineMediaKind`), and the resolver used to enumerate a much
+// shorter hand-written list. Everything in the gap connected, showed a blank
+// mis-kinded bin tile, and then threw "upstream produced no media" on render.
+describe('resolveTimelineInputPool — every source the validator admits', () => {
+  const targetId = 'timeline-1';
+  const clip = `data:video/mp4;base64,${TINY_PNG_BASE64}`;
+  const still = `data:image/png;base64,${TINY_PNG_BASE64}`;
+  const target = {
+    id: targetId,
+    type: 'timelineEditor',
+    position: { x: 0, y: 0 },
+    data: {},
+  } as StudioNode;
+  const mediaInEdge = (source: string, sourceHandle?: string): Edge => ({
+    id: `e-${source}`,
+    source,
+    target: targetId,
+    targetHandle: TIMELINE_MEDIA_INPUT_HANDLE,
+    ...(sourceHandle ? { sourceHandle } : {}),
+  });
+
+  it.each([
+    [
+      'a sourceModality node (action)',
+      { id: 'act', type: 'action', data: { actionId: 'video.reverse', generatedVideoUrl: clip } },
+      { kind: 'video', label: 'Reverse', previewUrl: clip },
+    ],
+    [
+      'hyperframesAgent',
+      { id: 'hf', type: 'hyperframesAgent', data: { generatedVideoUrl: clip } },
+      { kind: 'video', label: 'HyperFrames Agent', previewUrl: clip },
+    ],
+    [
+      'frameExtract',
+      { id: 'frame', type: 'frameExtract', data: { generatedImageUrl: still } },
+      { kind: 'image', label: 'Continuity Frame', previewUrl: still },
+    ],
+    [
+      'omniGen',
+      { id: 'omni', type: 'omniGen', data: { generatedVideo: clip } },
+      { kind: 'video', label: 'Omni 1.1 Flash (Edit)', previewUrl: clip },
+    ],
+  ])('lists %s with its real kind, label and preview', (_name, source, expected) => {
+    const node = { ...source, position: { x: 0, y: 0 } } as unknown as StudioNode;
+    const pool = resolveTimelineInputPool(targetId, [mediaInEdge(node.id)], [node, target]);
+    expect(pool).toEqual([expect.objectContaining({ nodeId: node.id, ...expected })]);
+  });
+
+  // A designRef emits a specimen on `image` and a token summary on `text`; only the
+  // edge's sourceHandle tells them apart.
+  it('reads a designRef specimen from the handle the edge left on', () => {
+    const node = {
+      id: 'design',
+      type: 'designRef',
+      position: { x: 0, y: 0 },
+      data: { section: 'palette', mode: 'both', specimenUrl: still },
+    } as unknown as StudioNode;
+
+    expect(
+      resolveTimelineInputPool(targetId, [mediaInEdge('design', 'image')], [node, target]),
+    ).toEqual([
+      expect.objectContaining({ kind: 'image', label: 'Design Reference', previewUrl: still }),
+    ]);
+  });
+
+  it('prefers a just-executed run output over the node data behind it', () => {
+    const node = {
+      id: 'act',
+      type: 'action',
+      position: { x: 0, y: 0 },
+      data: { actionId: 'video.reverse' },
+    } as unknown as StudioNode;
+    const outputs = new Map<string, NodeOutput>([
+      ['act', { type: 'video', url: 'https://cdn/reversed.mp4' }],
+    ]);
+
+    expect(
+      resolveTimelineInputPool(targetId, [mediaInEdge('act')], [node, target], outputs),
+    ).toEqual([expect.objectContaining({ kind: 'video', previewUrl: 'https://cdn/reversed.mp4' })]);
+  });
+
+  it('places an action clip as real bytes instead of throwing "upstream produced no media"', async () => {
+    const node = {
+      id: 'act',
+      type: 'action',
+      position: { x: 0, y: 0 },
+      data: { actionId: 'video.reverse', generatedVideoUrl: clip },
+    } as unknown as StudioNode;
+    const items = [{ id: 'i1', order: 0, sourceNodeId: 'act' }] as unknown as TimelineItem[];
+
+    const resolved = await resolveTimelineSources(
+      items,
+      [mediaInEdge('act')],
+      [node, target],
+      new Map<string, NodeOutput>(),
+      targetId,
+    );
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].kind).toBe('video');
+    expect(resolved[0].blob.type).toBe('video/mp4');
+  });
+});
+
+// The drift guard. A node type the canvas lets you WIRE into `media-in` but cannot
+// RESOLVE is a blank tile followed by "upstream produced no media" — which is exactly
+// what every action/agent/frame type became when the action catalog landed. The two
+// sets are one contracts predicate now; this fails if they ever come apart again.
+describe('the connectable set and the resolvable set are the same set', () => {
+  const targetId = 'timeline-1';
+  const clip = `data:video/mp4;base64,${TINY_PNG_BASE64}`;
+  const still = `data:image/png;base64,${TINY_PNG_BASE64}`;
+  const bed = `data:audio/wav;base64,${TINY_PNG_BASE64}`;
+  // Everything a configured node of ANY type could carry, so admission is decided by
+  // the node type and not by a missing fixture field.
+  const configured = {
+    actionId: 'video.reverse',
+    lockedType: 'video',
+    itemType: 'video',
+    items: [],
+    generatedVideo: clip,
+    generatedImage: still,
+    audio: bed,
+  };
+  const target = {
+    id: targetId,
+    type: 'timelineEditor',
+    position: { x: 0, y: 0 },
+    data: {},
+  } as StudioNode;
+
+  it('resolves a real kind and preview for every admitted source type', () => {
+    const admitted: string[] = [];
+
+    for (const type of STUDIO_NODE_TYPES) {
+      const source = {
+        id: 'src',
+        type,
+        position: { x: 0, y: 0 },
+        data: configured,
+      } as unknown as StudioNode;
+      const edge: Edge = {
+        id: 'e1',
+        source: 'src',
+        target: targetId,
+        targetHandle: TIMELINE_MEDIA_INPUT_HANDLE,
+      };
+      if (!isValidConnection({ source: 'src', target: targetId, targetHandle: TIMELINE_MEDIA_INPUT_HANDLE }, [], [source, target]))
+        continue;
+      admitted.push(type);
+
+      const [entry] = resolveTimelineInputPool(targetId, [edge], [source, target]);
+      expect(entry, `${type} is connectable but produced no pool entry`).toBeDefined();
+      expect(entry.previewUrl, `${type} resolves to a blank bin tile`).toBeTruthy();
+      expect(
+        { type, url: entry.previewUrl },
+        `${type} resolved to the wrong modality (${entry.kind})`,
+      ).toEqual({ type, url: { video: clip, image: still, audio: bed }[entry.kind] });
+    }
+
+    // Guards the guard: an empty admitted set would make every assertion above vacuous.
+    expect(admitted).toEqual(
+      expect.arrayContaining(['action', 'hyperframesAgent', 'frameExtract', 'omniGen', 'audio']),
+    );
   });
 });
 

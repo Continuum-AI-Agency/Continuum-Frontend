@@ -63,7 +63,9 @@ import {
   resolveAudioPlacements,
 } from './audioTrackModel';
 import { CaptionEditor } from './CaptionEditor';
+import type { ClipBackgroundRemoval } from './ClipInspector';
 import { ClipInspector } from './ClipInspector';
+import { removeClipBackground, repointClipSource } from './clipBackgroundRemoval';
 import { buildClipPlacements } from './commentMapping';
 import { BIN_DRAG_PREFIX, MediaBin } from './MediaBin';
 import { probeAudioDuration, probeVideoDuration } from './mediaProbe';
@@ -514,6 +516,57 @@ export function TimelineEditorDialog({
     ? overlayModel.sourceDurationOf(selectedOverlay)
     : selectedSourceDuration;
   const inspectorLabel = inspectorItem ? labelFor(inspectorItem.sourceNodeId) : '';
+  const inspectorSource = inspectorItem ? poolById.get(inspectorItem.sourceNodeId) : undefined;
+
+  const [backgroundRemovalState, setBackgroundRemovalState] = useState<{
+    pending: boolean;
+    progress: number;
+    error?: string;
+  }>({ pending: false, progress: 0 });
+
+  // The cutout is a NEW bin member, so the control only exists on hosts whose bin can
+  // grow. On the canvas the bin IS the node graph's incoming edges — nothing can be
+  // added from in here, and a Remove Background action node is the affordance instead.
+  const addPoolSources = adapter.addPoolSources;
+  const runBackgroundRemoval = useCallback(() => {
+    const item = inspectorItem;
+    const sourceAssetId = inspectorSource?.sourceAssetId;
+    if (!item || !sourceAssetId || !addPoolSources) return;
+    setBackgroundRemovalState({ pending: true, progress: 0 });
+    removeClipBackground({
+      item,
+      sourceAssetId,
+      label: `${inspectorLabel} (cutout)`,
+      brandId: adapter.brandId,
+      durationSec: inspectorSourceDuration,
+      onProgress: (progress) => setBackgroundRemovalState((current) => ({ ...current, progress })),
+    })
+      .then((source) => {
+        addPoolSources([source]);
+        patchDocument((current) => repointClipSource(current, item.id, source.nodeId));
+        setBackgroundRemovalState({ pending: false, progress: 1 });
+      })
+      .catch((error: unknown) => {
+        setBackgroundRemovalState({
+          pending: false,
+          progress: 0,
+          error: error instanceof Error ? error.message : 'Background removal failed',
+        });
+      });
+  }, [
+    addPoolSources,
+    adapter.brandId,
+    inspectorItem,
+    inspectorLabel,
+    inspectorSource,
+    inspectorSourceDuration,
+    patchDocument,
+  ]);
+
+  const backgroundRemoval: ClipBackgroundRemoval | undefined =
+    addPoolSources && inspectorItem && inspectorItem.kind !== 'audio'
+      ? { run: runBackgroundRemoval, ...backgroundRemovalState }
+      : undefined;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -998,6 +1051,8 @@ export function TimelineEditorDialog({
                     durationSec={inspectorDuration}
                     sourceDurationSec={inspectorSourceDuration}
                     label={inspectorLabel}
+                    sourceAssetId={inspectorSource?.sourceAssetId}
+                    backgroundRemoval={backgroundRemoval}
                     onTrim={(range) => {
                       if (inspectingOverlay) {
                         if (selectedOverlayId) overlayModel.trim(selectedOverlayId, range);

@@ -1,9 +1,15 @@
-import { TIMELINE_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
+import {
+  actionDef,
+  type GraphNodeLike,
+  STUDIO_NODE_REGISTRY,
+  TIMELINE_MEDIA_INPUT_HANDLE,
+  type TimelineMediaKind,
+  timelineMediaKind,
+} from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import type { StudioNode, TimelineInputSource, TimelineItem, TimelineTrack } from '../../types';
 import type { NodeOutput } from '../../types/execution';
 import { parseDataUrl } from '../dataUrl';
-import { isVideoGeneratorNodeType } from '../videoModel';
 import type {
   TimelineAudioRenderItem,
   TimelineOverlayRenderItem,
@@ -31,39 +37,6 @@ async function uriToBlob(uri: string): Promise<Blob> {
   return response.blob();
 }
 
-function readVideoFromSourceNode(node: StudioNode | undefined): string | undefined {
-  if (!node) return undefined;
-
-  if (node.type === 'video') {
-    const value = (node.data as { video?: unknown }).video;
-    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-  }
-
-  // Mirror the contracts' isVideoProducingSource (workflow-graph.ts). The editor
-  // emits generatedVideo/generatedVideoUrl. Omitting timelineEditor here
-  // let the canvas connect + place a Video Editor's output but then fail the render
-  // with "upstream produced no media".
-  if (
-    isVideoGeneratorNodeType(node.type) ||
-    node.type === 'extendVideo' ||
-    node.type === 'timelineEditor'
-  ) {
-    const data = node.data as { generatedVideo?: unknown; generatedVideoUrl?: unknown };
-    const generated =
-      typeof data.generatedVideo === 'string' && data.generatedVideo.trim()
-        ? data.generatedVideo.trim()
-        : undefined;
-    if (generated) return generated;
-    const url =
-      typeof data.generatedVideoUrl === 'string' && data.generatedVideoUrl.trim()
-        ? data.generatedVideoUrl.trim()
-        : undefined;
-    return url;
-  }
-
-  return undefined;
-}
-
 async function resolveSource(source: string): Promise<Blob> {
   if (source.startsWith('data:')) {
     return dataUrlToBlob(source);
@@ -74,61 +47,58 @@ async function resolveSource(source: string): Promise<Blob> {
 const isUsableUrl = (value?: string | null): value is string =>
   typeof value === 'string' && (value.startsWith('data:') || /^(https?|blob):/i.test(value.trim()));
 
-function readImageFromSourceNode(node: StudioNode | undefined): string | undefined {
-  if (!node) return undefined;
+// Every canvas node stamps whatever came out of it under the same few keys — the
+// generators, the Canvas V3 `action`/`router`, the editors and the reference nodes
+// (see ModalityPreview and the node data types). So the media is read by KIND, and
+// the kind comes from contracts. A per-node-type list here is precisely what drifted
+// away from the connection validator when the action catalog landed.
+const MEDIA_KEYS: Readonly<Record<TimelineMediaKind, readonly string[]>> = {
+  video: ['generatedVideo', 'generatedVideoUrl', 'video', 'sourceUrl'],
+  image: [
+    'generatedImage',
+    'generatedImageUrl',
+    'image',
+    // `element` previews under previewUrl, `designRef` under specimenUrl.
+    'previewUrl',
+    'specimenUrl',
+    'sourceUrl',
+  ],
+  audio: ['audio', 'sourceUrl'],
+};
 
-  if (node.type === 'image') {
-    const value = (node.data as { image?: unknown }).image;
-    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+function readMediaUrl(node: StudioNode, kind: TimelineMediaKind): string | undefined {
+  const data = node.data as Record<string, unknown>;
+  for (const key of MEDIA_KEYS[kind]) {
+    const value = data[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
   }
-
-  if (node.type === 'nanoGen') {
-    const data = node.data as { generatedImage?: unknown; generatedImageUrl?: unknown };
-    const generated =
-      typeof data.generatedImage === 'string' && data.generatedImage.trim()
-        ? data.generatedImage.trim()
-        : undefined;
-    if (generated) return generated;
-    const url =
-      typeof data.generatedImageUrl === 'string' && data.generatedImageUrl.trim()
-        ? data.generatedImageUrl.trim()
-        : undefined;
-    return url;
+  // A collection output (batch, or a fan-out op) previews and places its first item;
+  // one pool tile is one clip.
+  const items = data.collectionItems;
+  if (Array.isArray(items)) {
+    const first = items.find((item) => typeof item === 'string' && item.trim());
+    if (typeof first === 'string') return first.trim();
   }
-
   return undefined;
 }
 
-function readAudioFromSourceNode(node: StudioNode | undefined): string | undefined {
-  if (node?.type !== 'audio') return undefined;
-  const data = node.data as { audio?: unknown; sourceUrl?: unknown };
-  const audio = typeof data.audio === 'string' && data.audio.trim() ? data.audio.trim() : undefined;
-  if (audio) return audio;
-  return typeof data.sourceUrl === 'string' && data.sourceUrl.trim()
-    ? data.sourceUrl.trim()
-    : undefined;
-}
+const asGraphNode = (node: StudioNode): GraphNodeLike => ({
+  id: node.id,
+  type: node.type,
+  data: node.data as Record<string, unknown>,
+});
 
+// The bin tile's name. An `action` is named by its OP — "Colour Grade", not "Action" —
+// and every other type takes the one menu label contracts already carries, so a node
+// type added later is named here for free instead of falling through to "Clip".
 function deriveSourceLabel(node: StudioNode): string {
-  const data = node.data as { label?: unknown; fileName?: unknown };
+  const data = node.data as { label?: unknown; fileName?: unknown; actionId?: unknown };
   if (typeof data.label === 'string' && data.label.trim()) return data.label.trim();
   if (typeof data.fileName === 'string' && data.fileName.trim()) return data.fileName.trim();
-  switch (node.type) {
-    case 'image':
-      return 'Image';
-    case 'nanoGen':
-      return 'Generated image';
-    case 'video':
-      return 'Video';
-    case 'audio':
-      return 'Audio';
-    case 'extendVideo':
-      return 'Extended video';
-    case 'timelineEditor':
-      return 'Edited video';
-    default:
-      return 'Clip';
-  }
+  const action = actionDef(data.actionId);
+  if (action) return action.label;
+  const type = node.type as keyof typeof STUDIO_NODE_REGISTRY | undefined;
+  return (type && STUDIO_NODE_REGISTRY[type]?.label) || 'Clip';
 }
 
 function sourceAssetId(node: StudioNode): string | undefined {
@@ -143,41 +113,74 @@ function sourceVersionId(node: StudioNode): string | undefined {
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined;
 }
 
-function readSourceKindAndUrl(node: StudioNode | undefined): {
-  kind: 'video' | 'image' | 'audio';
-  url?: string;
-} {
-  if (node?.type === 'audio') {
-    return { kind: 'audio', url: readAudioFromSourceNode(node) };
+type ResolvedMedia = { kind: TimelineMediaKind; url?: string };
+
+// What a node handed downstream while the run is still in memory. Preferred over the
+// node's stamped data: it is the fresher of the two.
+function readMediaFromOutput(output: NodeOutput | undefined): ResolvedMedia | undefined {
+  if (output?.type === 'video' && output.url) return { kind: 'video', url: output.url };
+  if (output?.type === 'image' && (isUsableUrl(output.url) || output.base64)) {
+    return {
+      kind: 'image',
+      url: isUsableUrl(output.url)
+        ? output.url
+        : `data:${output.mimeType || 'image/png'};base64,${output.base64}`,
+    };
   }
-  if (node?.type === 'image' || node?.type === 'nanoGen') {
-    return { kind: 'image', url: readImageFromSourceNode(node) };
-  }
-  return { kind: 'video', url: readVideoFromSourceNode(node) };
+  return undefined;
 }
 
-// Enumerate the Video Editor (timelineEditor) input pool: the image/video source
-// nodes connected to the node's single `media-in` handle. Each becomes a
-// placeable tile in the editor's media bin. De-duplicated by source node id.
+// The kind is contracts' `timelineMediaKind` — THE predicate `isConnectionCompatible`
+// admits a source onto `media-in` with — so every node the canvas lets you connect
+// resolves here instead of falling through to a blank `video` tile.
+function readSourceKindAndUrl(
+  node: StudioNode | undefined,
+  sourceHandle?: string | null,
+  resolvedOutputs?: Map<string, NodeOutput>,
+): ResolvedMedia {
+  if (!node) return { kind: 'video' };
+  const fromOutput = readMediaFromOutput(resolvedOutputs?.get(node.id));
+  if (fromOutput) return fromOutput;
+  const kind = timelineMediaKind(asGraphNode(node), sourceHandle) ?? 'video';
+  return { kind, url: readMediaUrl(node, kind) };
+}
+
+// The `media-in` pool as source node id → the handle it left its source on. The
+// handle disambiguates the multi-output types (a `designRef` emits a specimen on
+// `image` and a token summary on `text`).
+function mediaInSourceHandles(edges: Edge[], targetNodeId: string): Map<string, string | null> {
+  const handleBySource = new Map<string, string | null>();
+  for (const edge of edges) {
+    if (edge.target !== targetNodeId || (edge.targetHandle ?? '') !== TIMELINE_MEDIA_INPUT_HANDLE)
+      continue;
+    if (handleBySource.has(edge.source)) continue;
+    handleBySource.set(edge.source, edge.sourceHandle ?? null);
+  }
+  return handleBySource;
+}
+
+// Enumerate the Video Editor (timelineEditor) input pool: the source nodes connected
+// to the node's single `media-in` handle. Each becomes a placeable tile in the
+// editor's media bin. De-duplicated by source node id.
+//
+// `resolvedOutputs` is the same in-memory run map the placement resolvers read, so a
+// node that has just executed shows its REAL preview and its real kind in the bin
+// rather than a blank tile that only comes right after the graph is reloaded.
 export function resolveTimelineInputPool(
   targetNodeId: string,
   edges: Edge[],
   nodes: StudioNode[],
+  resolvedOutputs?: Map<string, NodeOutput>,
 ): TimelineInputSource[] {
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
-  const seen = new Set<string>();
   const pool: TimelineInputSource[] = [];
 
-  for (const edge of edges) {
-    if (edge.target !== targetNodeId || (edge.targetHandle ?? '') !== TIMELINE_MEDIA_INPUT_HANDLE)
-      continue;
-    if (seen.has(edge.source)) continue;
-    const node = nodeById.get(edge.source);
+  for (const [sourceId, sourceHandle] of mediaInSourceHandles(edges, targetNodeId)) {
+    const node = nodeById.get(sourceId);
     if (!node) continue;
-    seen.add(edge.source);
-    const { kind, url } = readSourceKindAndUrl(node);
+    const { kind, url } = readSourceKindAndUrl(node, sourceHandle, resolvedOutputs);
     pool.push({
-      nodeId: edge.source,
+      nodeId: sourceId,
       kind,
       label: deriveSourceLabel(node),
       ...(sourceAssetId(node) ? { sourceAssetId: sourceAssetId(node) } : {}),
@@ -195,32 +198,22 @@ export function resolveTimelineInputPool(
 function createTimelineSourceResolver(
   nodeById: Map<string, StudioNode>,
   resolvedOutputs: Map<string, NodeOutput>,
-): (sourceId: string) => Promise<{ kind: 'video' | 'image' | 'audio'; blob: Blob }> {
-  const cache = new Map<string, Promise<{ kind: 'video' | 'image' | 'audio'; blob: Blob }>>();
+  handleBySource: Map<string, string | null>,
+): (sourceId: string) => Promise<{ kind: TimelineMediaKind; blob: Blob }> {
+  const cache = new Map<string, Promise<{ kind: TimelineMediaKind; blob: Blob }>>();
   return (sourceId: string) => {
     const cached = cache.get(sourceId);
     if (cached) return cached;
     const promise = (async () => {
-      const upstream = resolvedOutputs.get(sourceId);
-      let kind: 'video' | 'image' | 'audio';
-      let source: string | undefined;
-      if (upstream?.type === 'video' && upstream.url) {
-        kind = 'video';
-        source = upstream.url;
-      } else if (upstream?.type === 'image' && (isUsableUrl(upstream.url) || upstream.base64)) {
-        kind = 'image';
-        source = isUsableUrl(upstream.url)
-          ? upstream.url
-          : `data:${upstream.mimeType || 'image/png'};base64,${upstream.base64}`;
-      } else {
-        const resolved = readSourceKindAndUrl(nodeById.get(sourceId));
-        kind = resolved.kind;
-        source = resolved.url;
-      }
-      if (!source) {
+      const { kind, url } = readSourceKindAndUrl(
+        nodeById.get(sourceId),
+        handleBySource.get(sourceId),
+        resolvedOutputs,
+      );
+      if (!url) {
         throw new Error(`Timeline source ${sourceId}: upstream produced no media`);
       }
-      const blob = await resolveSource(source);
+      const blob = await resolveSource(url);
       return { kind, blob };
     })();
     cache.set(sourceId, promise);
@@ -240,18 +233,12 @@ export async function resolveTimelineOverlays(
   const overlayItems = tracks.flatMap((track) => track.items);
   if (overlayItems.length === 0) return [];
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
-  const poolSourceIds = new Set(
-    edges
-      .filter(
-        (e) => e.target === targetNodeId && (e.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE,
-      )
-      .map((e) => e.source),
-  );
-  const resolveSourceNode = createTimelineSourceResolver(nodeById, resolvedOutputs);
+  const handleBySource = mediaInSourceHandles(edges, targetNodeId);
+  const resolveSourceNode = createTimelineSourceResolver(nodeById, resolvedOutputs, handleBySource);
 
   return Promise.all(
     overlayItems.map(async (item) => {
-      if (!item.sourceNodeId || !poolSourceIds.has(item.sourceNodeId)) {
+      if (!item.sourceNodeId || !handleBySource.has(item.sourceNodeId)) {
         throw new Error(`Overlay item ${item.id}: no connected source`);
       }
       const { kind, blob } = await resolveSourceNode(item.sourceNodeId);
@@ -289,19 +276,13 @@ export async function resolveTimelineSources(
   targetNodeId: string,
 ): Promise<TimelineRenderItem[]> {
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
-  const poolSourceIds = new Set(
-    edges
-      .filter(
-        (e) => e.target === targetNodeId && (e.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE,
-      )
-      .map((e) => e.source),
-  );
+  const handleBySource = mediaInSourceHandles(edges, targetNodeId);
   const ordered = [...items].sort((a, b) => a.order - b.order);
-  const resolveSourceNode = createTimelineSourceResolver(nodeById, resolvedOutputs);
+  const resolveSourceNode = createTimelineSourceResolver(nodeById, resolvedOutputs, handleBySource);
 
   return Promise.all(
     ordered.map(async (item) => {
-      if (!item.sourceNodeId || !poolSourceIds.has(item.sourceNodeId)) {
+      if (!item.sourceNodeId || !handleBySource.has(item.sourceNodeId)) {
         throw new Error(`Timeline item ${item.order + 1}: no connected source`);
       }
       const { kind, blob } = await resolveSourceNode(item.sourceNodeId);
@@ -338,19 +319,12 @@ export async function resolveTimelineAudioTracks(
     .flatMap((track) => track.items);
   if (audioItems.length === 0) return [];
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const poolSourceIds = new Set(
-    edges
-      .filter(
-        (edge) =>
-          edge.target === targetNodeId && (edge.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE,
-      )
-      .map((edge) => edge.source),
-  );
-  const resolveSourceNode = createTimelineSourceResolver(nodeById, resolvedOutputs);
+  const handleBySource = mediaInSourceHandles(edges, targetNodeId);
+  const resolveSourceNode = createTimelineSourceResolver(nodeById, resolvedOutputs, handleBySource);
 
   return Promise.all(
     audioItems.map(async (item) => {
-      if (!item.sourceNodeId || !poolSourceIds.has(item.sourceNodeId)) {
+      if (!item.sourceNodeId || !handleBySource.has(item.sourceNodeId)) {
         throw new Error(`Audio item ${item.id}: no connected source`);
       }
       const { kind, blob } = await resolveSourceNode(item.sourceNodeId);
