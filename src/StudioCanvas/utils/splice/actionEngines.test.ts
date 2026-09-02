@@ -55,14 +55,17 @@ const PENDING_RUN_ACTION_WIRING: ActionId[] = [];
  * Worker ops implemented WITHOUT an entry in `ACTION_ENGINES`. `video.overlay` and
  * `video.watermark` build their plan on the main thread and post `start_timeline`;
  * `video.subtitles` orchestrates an authenticated transcribe round trip and then posts
- * `start_single_source`. All three have a runner and an enabled Run button but no
- * engine here. Named rather than loosened, so a FOURTH op arriving this way has to
- * say so.
+ * `start_single_source`; `video.removeBackground` is the fourth — its matting runs on a
+ * Cloud Run GPU, so its runner is an authenticated call and an SSE read rather than a
+ * frame loop (`ORCHESTRATED_OPS` in runAction.ts). All four have a runner and an enabled
+ * Run button but no engine here. Named rather than loosened, so a FIFTH op arriving this
+ * way has to say so.
  */
 const IMPLEMENTED_OUTSIDE_THE_ENGINE_TABLE: ActionId[] = [
   'video.overlay',
   'video.watermark',
   'video.subtitles',
+  'video.removeBackground',
 ];
 
 describe('ACTION_ENGINES', () => {
