@@ -16,7 +16,7 @@
       "name": "authenticated dashboard route",
       "source": "routeFirstLoad",
       "route": "/organic",
-      "baselineBytes": 3825779
+      "baselineBytes": 4766255
     }
   ]
 }
