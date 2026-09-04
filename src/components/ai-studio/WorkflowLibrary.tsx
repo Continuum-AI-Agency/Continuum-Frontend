@@ -185,7 +185,7 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
 
 // ─── WorkflowCard ─────────────────────────────────────────────────────────────
 
-function WorkflowCard({
+export function WorkflowCard({
   item,
   onUse,
 }: {
@@ -229,6 +229,41 @@ function WorkflowCard({
   );
 }
 
+/**
+ * Load a library workflow onto the canvas.
+ *
+ * Extracted so the Templates popover and the pre-mades tab of My Workflows apply a workflow
+ * the same way — media rehydration, snapshot for undo, and the fit-view included. Two copies
+ * of "how a template lands" is how one of them quietly stops rehydrating media.
+ */
+export function useApplyLibraryWorkflow(): (item: WorkflowLibraryItem) => Promise<void> {
+  const { setNodes, setEdges, takeSnapshot, defaultEdgeType, brandId } = useStudioStore();
+  const { fitView } = useReactFlow();
+  const { show } = useToast();
+
+  return React.useCallback(
+    async (item: WorkflowLibraryItem) => {
+      const snapshot = normalizeWorkflowSnapshot(
+        {
+          nodes: item.content.nodes as unknown as StudioNode[],
+          edges: item.content.edges as unknown as Edge[],
+        },
+        defaultEdgeType,
+      );
+      const hydratedNodes = await rehydrateWorkflowMediaNodes(snapshot.nodes, undefined, brandId);
+
+      takeSnapshot();
+      setNodes(hydratedNodes);
+      setEdges(snapshot.edges);
+      requestAnimationFrame(() => {
+        fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 300 });
+      });
+      show({ title: 'Template applied', description: item.name, variant: 'success' });
+    },
+    [brandId, defaultEdgeType, fitView, setEdges, setNodes, show, takeSnapshot],
+  );
+}
+
 // ─── WorkflowLibrary ─────────────────────────────────────────────────────────
 
 export function WorkflowLibrary() {
@@ -254,24 +289,10 @@ export function WorkflowLibrary() {
     return matchesQuery && matchesTag;
   });
 
+  const applyLibraryWorkflow = useApplyLibraryWorkflow();
+
   async function handleLoad(item: WorkflowLibraryItem) {
-    const snapshot = normalizeWorkflowSnapshot(
-      {
-        nodes: item.content.nodes as unknown as StudioNode[],
-        edges: item.content.edges as unknown as Edge[],
-      },
-      defaultEdgeType,
-    );
-    const hydratedNodes = await rehydrateWorkflowMediaNodes(snapshot.nodes, undefined, brandId);
-
-    takeSnapshot();
-    setNodes(hydratedNodes);
-    setEdges(snapshot.edges);
-    requestAnimationFrame(() => {
-      fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 300 });
-    });
-
-    show({ title: 'Template applied', description: item.name, variant: 'success' });
+    await applyLibraryWorkflow(item);
     setIsOpen(false);
   }
 

@@ -1,7 +1,6 @@
 import { CanvasRoomsTabs } from '@/components/ai-studio/CanvasRoomsTabs';
 import { CanvasSyncStatus } from '@/components/ai-studio/CanvasSyncStatus';
 import type { useCanvasRealtime } from '@/components/ai-studio/hooks/useCanvasRealtime';
-import { WorkflowLibrary } from '@/components/ai-studio/WorkflowLibrary';
 import { ActiveUsersStack } from '@/components/presence/ActiveUsersStack';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -141,9 +140,12 @@ export function StudioCanvasHeader({
             </Button>
           </>
         ) : null}
+        {/* The Templates popover folded into My Workflows as its Pre-mades tab: three
+            buttons for three lists meant comparing a template against your own work was a
+            close-open-close. `WorkflowLibrary` still exports the card and the apply hook
+            that tab renders. */}
         <LoadWorkflowDialog brandProfileId={brandProfileId} />
         <SaveWorkflowDialog brandProfileId={brandProfileId} roomId={activeRoomId} />
-        <WorkflowLibrary />
         <Toolbar />
       </div>
     </div>

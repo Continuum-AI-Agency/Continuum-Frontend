@@ -1,3 +1,4 @@
+import { PIPELINE_METADATA_FLAG } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Upload, X } from 'lucide-react';
 import React from 'react';
@@ -10,9 +11,11 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { coerceToastOptions, throwToastError, useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { formatMiB } from '@/lib/ai-studio/referenceDrop';
 import { createAiStudioWorkflowAction } from '@/lib/ai-studio/workflowActions';
 import { useStudioStore } from '../stores/useStudioStore';
+import { inferTechniquePorts } from '../utils/techniqueFragment';
 import { serializeWorkflowSnapshot } from '../utils/workflowSerialization';
 
 const WORKFLOW_PAYLOAD_MAX_BYTES = 200 * 1024 * 1024;
@@ -21,6 +24,18 @@ const saveWorkflowSchema = z.object({
   name: z.string().min(1, 'Workflow name is required'),
   description: z.string().optional(),
 });
+
+/**
+ * Saving and PUBLISHING are different acts, so they are one deliberate choice rather than
+ * two buttons that look alike.
+ *
+ * A workflow is for you: load it, wire it up, change your mind. A pipeline is a promise to
+ * a machine — its declared ports are the whole contract, and the DCO may run it unattended
+ * against a live ad account. That is why publishing writes its own metadata flag and why
+ * `readPipeline` refuses anything without one: every saved subgraph being silently eligible
+ * is exactly the accident this choice exists to prevent.
+ */
+type SaveKind = 'workflow' | 'pipeline';
 
 type SaveWorkflowFormValues = z.infer<typeof saveWorkflowSchema>;
 
@@ -35,6 +50,15 @@ export function SaveWorkflowDialog({ brandProfileId, roomId }: SaveWorkflowDialo
   const [open, setOpen] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [kind, setKind] = React.useState<SaveKind>('workflow');
+
+  // Inferred from the WHOLE canvas: publishing is a statement about this graph, not about
+  // whatever happens to be selected. Recomputed only while the panel is open — the pass
+  // walks every node and edge, and the header re-renders on every canvas change.
+  const ports = React.useMemo(
+    () => (open && kind === 'pipeline' ? inferTechniquePorts(nodes, edges) : null),
+    [open, kind, nodes, edges],
+  );
 
   const form = useForm<SaveWorkflowFormValues>({
     resolver: zodResolver(saveWorkflowSchema),
@@ -49,6 +73,7 @@ export function SaveWorkflowDialog({ brandProfileId, roomId }: SaveWorkflowDialo
     setOpen(false);
     form.reset();
     setError(null);
+    setKind('workflow');
   }, [form]);
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -78,9 +103,24 @@ export function SaveWorkflowDialog({ brandProfileId, roomId }: SaveWorkflowDialo
         metadata: {
           created_via: 'canvas_ui',
           ...(roomId ? { source_room_id: roomId } : {}),
+          ...(kind === 'pipeline' && ports
+            ? {
+                [PIPELINE_METADATA_FLAG]: {
+                  version: 1,
+                  kind: 'generation',
+                  inputPorts: ports.inputPorts,
+                  outputPorts: ports.outputPorts,
+                  publishedAt: new Date().toISOString(),
+                },
+              }
+            : {}),
         },
       });
-      show({ title: 'Workflow saved', description: values.name, variant: 'success' });
+      show({
+        title: kind === 'pipeline' ? 'Pipeline published' : 'Workflow saved',
+        description: values.name,
+        variant: 'success',
+      });
       closePanel();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to save workflow';
@@ -109,9 +149,13 @@ export function SaveWorkflowDialog({ brandProfileId, roomId }: SaveWorkflowDialo
         <form onSubmit={onSubmit} className="grid gap-3 p-3">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-sm font-semibold text-primary">Save workflow</p>
+              <p className="text-sm font-semibold text-primary">
+                {kind === 'pipeline' ? 'Publish pipeline' : 'Save workflow'}
+              </p>
               <p className="text-xs text-muted-foreground">
-                Store this canvas as a reusable template for your brand.
+                {kind === 'pipeline'
+                  ? 'Publish this canvas for the optimizer to run on its own.'
+                  : 'Store this canvas as a reusable template for your brand.'}
               </p>
             </div>
             <Button
@@ -128,6 +172,64 @@ export function SaveWorkflowDialog({ brandProfileId, roomId }: SaveWorkflowDialo
 
           <div className="grid gap-2">
             <Label htmlFor="workflow-name">Name</Label>
+            <ToggleGroup
+              value={[kind]}
+              onValueChange={(value) => {
+                const next = (value as SaveKind[])[0];
+                if (next) setKind(next);
+              }}
+              className="grid grid-cols-2"
+              aria-label="Save as"
+            >
+              <ToggleGroupItem value="workflow" className="text-xs">
+                Workflow
+              </ToggleGroupItem>
+              <ToggleGroupItem value="pipeline" className="text-xs">
+                Pipeline
+              </ToggleGroupItem>
+            </ToggleGroup>
+
+            {kind === 'pipeline' ? (
+              <div className="rounded-md border border-subtle bg-surface p-2 text-xs">
+                {ports && ports.inputPorts.length + ports.outputPorts.length > 0 ? (
+                  <>
+                    <p className="text-secondary">
+                      <span className="font-medium text-primary">
+                        {ports.inputPorts.length} input
+                        {ports.inputPorts.length === 1 ? '' : 's'}
+                      </span>{' '}
+                      and{' '}
+                      <span className="font-medium text-primary">
+                        {ports.outputPorts.length} output
+                        {ports.outputPorts.length === 1 ? '' : 's'}
+                      </span>{' '}
+                      — the whole contract. Everything else is fixed.
+                    </p>
+                    {ports.inputPorts.length > 0 && (
+                      <p className="mt-1 text-muted-foreground">
+                        Takes:{' '}
+                        {ports.inputPorts.map((port) => port.label ?? port.handleId).join(', ')}
+                      </p>
+                    )}
+                    {ports.truncated && (
+                      <p className="mt-1 text-warning">
+                        More ports than a pipeline can declare — only the first 12 a side are kept.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  // Publishing this would hand the optimizer a graph it can run but never
+                  // steer, which is a worse outcome than refusing: it looks configurable and
+                  // produces the same creative every time.
+                  <p className="text-danger">
+                    This canvas declares no ports, so a pipeline could not be given anything or read
+                    anything back. Leave a required input unwired — a reference image or a prompt —
+                    then publish.
+                  </p>
+                )}
+              </div>
+            ) : null}
+
             <Input
               id="workflow-name"
               placeholder="Launch creative flow"
@@ -165,7 +267,13 @@ export function SaveWorkflowDialog({ brandProfileId, roomId }: SaveWorkflowDialo
               disabled={!brandProfileId || isSaving}
               title={!brandProfileId ? 'Select a brand before saving a workflow.' : undefined}
             >
-              {isSaving ? 'Saving...' : 'Save workflow'}
+              {isSaving
+                ? kind === 'pipeline'
+                  ? 'Publishing...'
+                  : 'Saving...'
+                : kind === 'pipeline'
+                  ? 'Publish pipeline'
+                  : 'Save workflow'}
             </Button>
           </div>
         </form>

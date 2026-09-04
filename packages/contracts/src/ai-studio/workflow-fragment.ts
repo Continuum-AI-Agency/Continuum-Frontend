@@ -113,6 +113,48 @@ export function parseTechniqueMetadata(
   return parsed.success ? parsed.data : undefined;
 }
 
+// ---------------------------------------------------------------------------
+// Pipelines — a workflow PUBLISHED for an automated caller to drive
+// ---------------------------------------------------------------------------
+//
+// A Pipeline is not a Technique with a different name. A Technique is a saved piece of
+// canvas a PERSON drops into their work and wires up by hand; publishing one as a Pipeline
+// is a separate, deliberate act that says something stronger: this shape is finished, its
+// declared ports are the whole contract, and a machine may run it unattended.
+//
+// The distinction is load-bearing in exactly one place, and it is the place that matters:
+// `readPipeline` refuses a row that is merely a Technique. Without the separate flag, every
+// saved subgraph on the account would be silently eligible for the DCO to run against a live
+// ad account — including the three shipped Techniques, which are demonstrations, not
+// contracts. A flag that means "somebody published this on purpose" is the whole guard.
+//
+// The PORT shape is deliberately shared: a published contract and a hand-wired one answer
+// the same question about the same graph, and the inference that derives them is one pass.
+// What differs is the promise, not the shape.
+
+export const canvasPipelineMetadataSchema = canvasTechniqueMetadataSchema.extend({
+  /** When it was published, so a reader can tell a fresh contract from a stale one. */
+  publishedAt: z.string().min(1).optional(),
+});
+export type CanvasPipelineMetadata = z.infer<typeof canvasPipelineMetadataSchema>;
+
+/** The metadata key. Distinct from `technique`, and a row may legitimately carry both. */
+export const PIPELINE_METADATA_FLAG = 'pipeline';
+
+/**
+ * Reads the pipeline block off a workflow row's metadata bag.
+ *
+ * Returns undefined for every row that has not been published — which today is all of them —
+ * so callers use it as both the predicate and the parse, exactly like the technique reader.
+ */
+export function parsePipelineMetadata(
+  metadata?: Record<string, unknown> | null,
+): CanvasPipelineMetadata | undefined {
+  if (!metadata) return undefined;
+  const parsed = canvasPipelineMetadataSchema.safeParse(metadata[PIPELINE_METADATA_FLAG]);
+  return parsed.success ? parsed.data : undefined;
+}
+
 const workflowFragmentInputRequestSchema = z
   .object({
     id: fragmentPortIdSchema,
