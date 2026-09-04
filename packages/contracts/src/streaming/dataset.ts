@@ -112,6 +112,16 @@ export const tableDatasetSchema = z.object({
   ...datasetHeaderShape,
   columns: z.array(datasetTableColumnSchema).default([]),
   rows: z.array(datasetTableRowSchema).default([]),
+  /**
+   * True row count of the underlying source when `rows` holds only a preview of it.
+   *
+   * Null for tool-produced datasets, whose `rows` are complete. A user upload can carry
+   * far more rows than belong in run state, so it registers a capped preview — and then
+   * `rows.length` alone would report the preview as the whole file. Anything reading a
+   * row count for the model MUST prefer this when set, or it restates a truncation as a
+   * total.
+   */
+  row_count_total: z.number().nullable().default(null),
 });
 export type TableDataset = z.infer<typeof tableDatasetSchema>;
 
@@ -211,5 +221,7 @@ export const datasetCatalogEntrySchema = z.object({
   currency: datasetCurrencySchema.nullable().default(null),
   point_count: z.number().nullable().default(null),
   row_count: z.number().nullable().default(null),
+  /** True source row count when `row_count` is only a preview. See tableDatasetSchema. */
+  row_count_total: z.number().nullable().default(null),
 });
 export type DatasetCatalogEntry = z.infer<typeof datasetCatalogEntrySchema>;
