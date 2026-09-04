@@ -24,6 +24,7 @@ import {
 } from '@/lib/api/clientRenderJobs.client';
 import { useStudioRenderQueue } from '@/lib/studio-render/StudioRenderProvider';
 import { probeClientRenderCapabilities } from './capabilities';
+import { getClientId } from './clientId';
 import { getClientRenderExecutor, hasClientRenderExecutor } from './executorRegistry';
 import { shouldAutoRunClientRenderJob } from './ownedRuns';
 import { registerDefaultClientRenderExecutors } from './registerDefaultExecutors';
@@ -39,7 +40,6 @@ const POLL_MS = 12_000;
  */
 const IDLE_POLL_MS = 60_000;
 const HEARTBEAT_MS = 20_000;
-const CLIENT_ID_KEY = 'continuum:client-render:device';
 const OPEN_INBOX_EVENT = 'continuum:client-render:open-inbox';
 
 type ClientRenderContextValue = {
@@ -79,18 +79,6 @@ export function openClientRenderInbox(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_INBOX_EVENT));
 }
 
-const getClientId = (): string => {
-  try {
-    const existing = window.localStorage.getItem(CLIENT_ID_KEY);
-    if (existing) return existing;
-    const created = `browser-${crypto.randomUUID()}`;
-    window.localStorage.setItem(CLIENT_ID_KEY, created);
-    return created;
-  } catch {
-    return `session-${crypto.randomUUID()}`;
-  }
-};
-
 const isAbort = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError';
 
@@ -117,7 +105,7 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
   // show them nor count them (Airtable #296).
   const refresh = useCallback(async () => {
     try {
-      const result = await listClientRenderJobs();
+      const result = await listClientRenderJobs(undefined, getClientId());
       setJobs(result.jobs);
     } catch {
       // Viewers intentionally cannot inspect the operator queue. The route is
@@ -316,7 +304,7 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
   // reload no longer forgets that. Everyone else's jobs keep the consent step: this is
   // still not a background worker for the whole brand's queue.
   const willAutoRun = useCallback(
-    (job: ClientRenderJob) => shouldAutoRunClientRenderJob(job, viewerId),
+    (job: ClientRenderJob) => shouldAutoRunClientRenderJob(job, viewerId, getClientId()),
     [viewerId],
   );
   const autoRun = useRef(new Set<string>());

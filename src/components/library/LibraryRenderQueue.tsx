@@ -29,6 +29,7 @@ const KIND_LABEL: Record<ClientRenderJob['kind'], string> = {
   planner_reel: 'Planner reel',
   mcp_clip_batch: 'UGC clip batch',
   timeline_editor: 'Video Editor master',
+  creative_ops: 'Creative edit',
 };
 
 export function LibraryRenderQueue() {
@@ -50,6 +51,8 @@ export function LibraryRenderQueue() {
       await queue.run(consentJob);
       setConsentJob(null);
       router.refresh();
+    } catch {
+      // `run` reports its own reason through a toast; the panel just stays open.
     } finally {
       setStarting(false);
     }

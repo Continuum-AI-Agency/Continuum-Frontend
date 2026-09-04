@@ -22,6 +22,7 @@ const KIND_LABEL: Record<ClientRenderJob['kind'], string> = {
   planner_reel: 'Planner reel',
   mcp_clip_batch: 'UGC clip batch',
   timeline_editor: 'Video Editor master',
+  creative_ops: 'Creative edit',
 };
 
 export function ClientRenderInbox() {
@@ -35,6 +36,8 @@ export function ClientRenderInbox() {
     try {
       await queue.run(consentJob);
       setConsentJob(null);
+    } catch {
+      // `run` reports its own reason through a toast; the dialog just stays open.
     } finally {
       setStarting(false);
     }

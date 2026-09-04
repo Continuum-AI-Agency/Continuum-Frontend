@@ -45,8 +45,16 @@ export function markRenderStartedHere(sourceId: string): void {
  * DIFFERENT person's tab adopt a render nobody is watching; this only ever matches the
  * viewer's own jobs, and the claim is atomic, so two of their tabs cannot both run it.
  */
-export function shouldAutoRunClientRenderJob(job: ClientRenderJob, viewerId?: string): boolean {
+export function shouldAutoRunClientRenderJob(
+  job: ClientRenderJob,
+  viewerId?: string,
+  clientId?: string,
+): boolean {
   if (job.state !== 'ready') return false;
+  // A job ADDRESSED to this browser is the strongest signal of the three, and the only
+  // one that survives a reload: `startedHere` dies with the tab and `createdBy` matches
+  // every one of that person's jobs, not the one this session asked for.
+  if (clientId && job.targetClientId === clientId) return true;
   return startedHere.has(job.sourceId) || (Boolean(viewerId) && job.createdBy === viewerId);
 }
 

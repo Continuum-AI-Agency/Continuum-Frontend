@@ -189,6 +189,9 @@ export const executeHyperframesClientRender: ClientRenderExecutor = async (conte
       isComplete: true,
       progress: 1,
       renderOutputAssetId: persisted.assetId,
+      // `persistTimelineRender` returns both; stamping only the asset id left a finished
+      // HyperFrames video unable to feed an API Render.
+      renderOutputAssetVersionId: persisted.versionId,
     });
     return {
       resultAssetIds: [persisted.assetId],

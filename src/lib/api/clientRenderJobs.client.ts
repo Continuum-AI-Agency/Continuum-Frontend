@@ -24,8 +24,16 @@ const base = (jobId?: string): string =>
  * The bell badge counts every brand the caller can operate; omitting `brandId` is what
  * asks the route for that. Pass one only to inspect a single brand deliberately.
  */
-export function listClientRenderJobs(brandId?: string): Promise<{ jobs: ClientRenderJob[] }> {
-  const query = brandId ? `?${new URLSearchParams({ brandId })}` : '';
+export function listClientRenderJobs(
+  brandId?: string,
+  clientId?: string,
+): Promise<{ jobs: ClientRenderJob[] }> {
+  // The client id is what lets the server hide a job ADDRESSED to another session.
+  // Filtering there rather than here keeps one reader of the rule.
+  const params = new URLSearchParams();
+  if (brandId) params.set('brandId', brandId);
+  if (clientId) params.set('clientId', clientId);
+  const query = params.size > 0 ? `?${params}` : '';
   return http.request({
     path: `${base()}${query}`,
     schema: listClientRenderJobsResponseSchema,

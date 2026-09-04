@@ -110,3 +110,18 @@ describe('shouldAutoRunClientRenderJob', () => {
     ).toBe(false);
   });
 });
+
+describe('a render addressed to this browser', () => {
+  it('auto-runs on the addressed client, and only there', () => {
+    const job = hyperframesJob({ targetClientId: 'browser-abc' });
+    expect(shouldAutoRunClientRenderJob(job, undefined, 'browser-abc')).toBe(true);
+    // The whole point of an address: a colleague's tab does not adopt it, even though
+    // the row is in a queue they can read.
+    expect(shouldAutoRunClientRenderJob(job, undefined, 'browser-xyz')).toBe(false);
+  });
+
+  it('still refuses a job that is no longer ready', () => {
+    const job = hyperframesJob({ state: 'completed', targetClientId: 'browser-abc' });
+    expect(shouldAutoRunClientRenderJob(job, undefined, 'browser-abc')).toBe(false);
+  });
+});
