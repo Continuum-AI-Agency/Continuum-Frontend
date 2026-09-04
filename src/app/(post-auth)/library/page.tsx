@@ -25,6 +25,7 @@ import {
 } from '@/lib/media/fetchers.server';
 import { kindToMediaType, parseTagsParam } from '@/lib/media/filters';
 import { fetchLibrarySavedViews } from '@/lib/media/saved-views.server';
+import { parseLibrarySection } from '@/lib/media/sections';
 import { isPaidTier } from '@/lib/media/tier';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -116,6 +117,9 @@ function parseBrowseQuery(brandId: string, params: LibrarySearchParams) {
     used: optionalBoolean(first(params.used)),
     shared: optionalBoolean(first(params.shared)),
     leadingOnly: optionalBoolean(first(params.leadingOnly)),
+    templateOnly: optionalBoolean(first(params.templateOnly)),
+    ratios: parseTagsParam(first(params.ratios)),
+    fonts: parseTagsParam(first(params.fonts)),
     search: first(params.search),
     sort: sort.success ? sort.data : undefined,
     performanceWindow: performanceWindow.success ? performanceWindow.data : undefined,
@@ -181,6 +185,7 @@ async function LibraryContent({ searchParams }: { searchParams: LibrarySearchPar
       initialSavedViews={savedViews}
       storageUsedBytes={storageUsedBytes}
       captionStyle={buildCaptionStyle(brandStyle)}
+      section={parseLibrarySection(first(searchParams.section))}
       initialBrowseQuery={browseQuery}
       initialDetailAsset={requestedAssets[0] ?? null}
     />

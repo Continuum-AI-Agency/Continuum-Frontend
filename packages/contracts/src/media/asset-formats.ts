@@ -4,13 +4,21 @@ export type LibraryFormatFamily =
   | 'design_source'
   | 'document'
   | 'after_effects'
-  | 'after_effects_package';
+  | 'after_effects_package'
+  | 'font';
 
 export type LibraryPreviewStrategy =
   | 'native'
   | 'browser_video'
   | 'browser_raster'
-  | 'companion';
+  | 'companion'
+  /**
+   * Nothing is ever drawn. A brand face is licensed to the brand and the font store never
+   * mints a URL for one, so a browser cannot have the file — `fontFamily` would silently
+   * fall through to the app's own typeface under a label carrying the brand's name. See
+   * `components/brand/typefaceHonesty.tsx`.
+   */
+  | 'none';
 
 export type LibraryFormatDefinition = {
   family: LibraryFormatFamily;
@@ -91,6 +99,26 @@ export const LIBRARY_FORMATS: readonly LibraryFormatDefinition[] = [
     originalKind: 'file',
     previewStrategy: 'companion',
   },
+  {
+    // Accepted by the Library so a designer can drop a template and the faces it needs in one
+    // gesture — but NOT stored like one. A font never becomes a media.assets row: that would
+    // hand it search, share links and signed-URL minting, every one of which publishes a
+    // licensed file. `isLibraryFontFile` routes it to the private brand font store instead.
+    family: 'font',
+    extensions: ['ttf', 'otf', 'woff', 'woff2'],
+    mimeTypes: [
+      'font/ttf',
+      'font/otf',
+      'font/woff',
+      'font/woff2',
+      'application/font-sfnt',
+      'application/x-font-ttf',
+      'application/x-font-otf',
+      'application/vnd.ms-opentype',
+    ],
+    originalKind: 'file',
+    previewStrategy: 'none',
+  },
 ] as const;
 
 export type LibraryFileClassification =
@@ -117,6 +145,19 @@ export function classifyLibraryFile(input: {
     : { accepted: false, reason: 'unsupported_extension_and_mime' };
 }
 
+/**
+ * Does this file belong in the brand font store rather than the media library?
+ *
+ * The one branch that keeps licensed faces out of `media.assets`. Callers that upload must
+ * check it BEFORE `uploadMediaAsset`, not after.
+ */
+export function isLibraryFontFile(input: { fileName: string; mimeType?: string | null }): boolean {
+  const format = classifyLibraryFile(input);
+  return format.accepted && format.family === 'font';
+}
+
 export const LIBRARY_ACCEPT_ATTRIBUTE = Array.from(
-  new Set(LIBRARY_FORMATS.flatMap((format) => format.extensions.map((extension) => `.${extension}`))),
+  new Set(
+    LIBRARY_FORMATS.flatMap((format) => format.extensions.map((extension) => `.${extension}`)),
+  ),
 ).join(',');

@@ -11,14 +11,15 @@ import type {
   MediaAsset,
   MediaCollection,
   MediaSearchResultItem,
+  TemplateSource,
 } from '@continuum/contracts';
 import { LIBRARY_ACCEPT_ATTRIBUTE } from '@continuum/contracts';
 import { Columns3, LayoutGrid, ScanSearch, Upload } from 'lucide-react';
-import { FigmaIcon } from '@/components/shared/icons';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
 import { CompetitorInspirationPanel } from '@/components/competitor-spy/CompetitorInspirationPanel';
+import { FigmaIcon } from '@/components/shared/icons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { fetchTemplateSources } from '@/lib/library/templateSources';
 import {
   buildLibraryBrowseParams,
   KIND_FILTERS,
@@ -39,6 +41,7 @@ import {
   mediaTypeToKind,
   type SourceFilterValue,
 } from '@/lib/media/filters';
+import type { LibrarySection } from '@/lib/media/sections';
 import { cn } from '@/lib/utils';
 import { LibraryBoardView } from './board/LibraryBoardView';
 import { AssetDetailModal } from './detail/AssetDetailModal';
@@ -51,6 +54,8 @@ import { LibraryTagManager } from './LibraryTagManager';
 import { McpUploadIntentPanel } from './McpUploadIntentPanel';
 import { MediaGrid } from './MediaGrid';
 import { MediaSearchBar } from './MediaSearchBar';
+import { TemplateGrid } from './TemplateGrid';
+import { TypographyPanel } from './TypographyPanel';
 import { UploadStrip } from './UploadStrip';
 import { useMediaLibrary } from './useMediaLibrary';
 import { useMediaUpload } from './useMediaUpload';
@@ -66,6 +71,7 @@ type Props = {
   initialSavedViews: LibrarySavedView[];
   storageUsedBytes: number;
   captionStyle: CaptionStyle;
+  section: LibrarySection;
 };
 
 export function LibraryViewer({
@@ -79,6 +85,7 @@ export function LibraryViewer({
   initialSavedViews,
   storageUsedBytes,
   captionStyle,
+  section,
 }: Props) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
@@ -146,6 +153,10 @@ export function LibraryViewer({
   const [view, setView] = useState<'media' | 'inspiration'>('media');
   const [detailAsset, setDetailAsset] = useState<MediaAsset | null>(initialDetailAsset);
   const [assetRevision, setAssetRevision] = useState(0);
+  // Loaded for the Templates and Typography panels. Typography needs them too: "which
+  // families do your templates ask for" is the whole reason the two sections sit together.
+  const [templateSources, setTemplateSources] = useState<TemplateSource[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<MediaSearchResultItem[] | null>(null);
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(() => new Set());
@@ -162,6 +173,33 @@ export function LibraryViewer({
     optimisticMediaType === 'carousel'
       ? 'Carousels'
       : KIND_FILTERS.find((option) => option.value === optimisticKind)?.label;
+
+  const showTemplates = initialBrowseQuery.templateOnly;
+  const showTypography = section === 'typography';
+  // Only fetched for the two panels that read it — the creative grid must not pay for a
+  // template list nobody asked for.
+  const needsTemplateSources = showTemplates || showTypography;
+  // assetRevision is intentional: a Forge hand-off or a new upload bumps it, and that bump
+  // IS the signal to re-read the template list.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: assetRevision re-fetches after a write
+  useEffect(() => {
+    if (!needsTemplateSources) return;
+    let cancelled = false;
+    setTemplatesLoading(true);
+    fetchTemplateSources(brandId)
+      .then((items) => {
+        if (!cancelled) setTemplateSources(items);
+      })
+      .catch((error: unknown) => {
+        console.error('[LibraryViewer] template source fetch failed', error);
+      })
+      .finally(() => {
+        if (!cancelled) setTemplatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, needsTemplateSources, assetRevision]);
 
   // All library navigation is URL-driven (shareable + RSC refetch). Pagination
   // params (offset/limit) are intentionally omitted here so the chip/collection
@@ -184,6 +222,9 @@ export function LibraryViewer({
       used?: boolean | null;
       shared?: boolean | null;
       leadingOnly?: boolean;
+      templateOnly?: boolean;
+      ratios?: string[];
+      fonts?: string[];
       performanceWindow?: LibraryBrowseQuery['performanceWindow'];
       boardGroupBy?: string;
     }) => {
@@ -220,6 +261,9 @@ export function LibraryViewer({
         used: next.used !== undefined ? next.used : initialBrowseQuery.used,
         shared: next.shared !== undefined ? next.shared : initialBrowseQuery.shared,
         leadingOnly: next.leadingOnly ?? initialBrowseQuery.leadingOnly,
+        templateOnly: next.templateOnly ?? false,
+        ratios: next.ratios ?? initialBrowseQuery.ratios,
+        fonts: next.fonts ?? initialBrowseQuery.fonts,
         performanceWindow: next.performanceWindow ?? initialBrowseQuery.performanceWindow,
         sort: nextSort,
         layout: nextLayout,
@@ -292,8 +336,23 @@ export function LibraryViewer({
         case 'videos':
           pushFilters({ ...common, mediaType: 'video', sort: 'created_desc' });
           return;
+        case 'templates':
+          // Still mediaType 'project_file' underneath — a template IS a project file — plus
+          // the templateOnly flag, which is what excludes the ones nothing has read yet.
+          pushFilters({
+            ...common,
+            mediaType: 'project_file',
+            templateOnly: true,
+            sort: 'created_desc',
+          });
+          return;
         case 'project_files':
           pushFilters({ ...common, mediaType: 'project_file', sort: 'created_desc' });
+          return;
+        case 'typography':
+          // Not a browse query: fonts are not media.assets rows. Section lives in the URL so
+          // a refresh and a shared link land on the same panel.
+          startFilterTransition(() => router.push('/library?section=typography'));
           return;
         case 'needs_review':
           pushFilters({
@@ -307,7 +366,7 @@ export function LibraryViewer({
           pushFilters({ ...common, mediaType: 'all', sort: 'created_desc' });
       }
     },
-    [pushFilters],
+    [pushFilters, router],
   );
 
   const onSelectSavedView = useCallback(
@@ -382,6 +441,8 @@ export function LibraryViewer({
             selectedMediaType={optimisticMediaType}
             selectedSort={optimisticSort}
             selectedReviewStatuses={optimisticReviewStatuses}
+            selectedTemplateOnly={showTemplates}
+            section={section}
             onSelectDestination={onSelectDestination}
             storageUsedBytes={storageUsedBytes}
           />
@@ -401,7 +462,13 @@ export function LibraryViewer({
             onDrop={handleDrop}
           >
             <PageHeader
-              title={activeCollection?.name ?? browseTitle ?? 'All Media'}
+              title={
+                showTypography
+                  ? 'Typography'
+                  : showTemplates
+                    ? 'Templates'
+                    : (activeCollection?.name ?? browseTitle ?? 'All Media')
+              }
               action={
                 <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <div className="min-w-0 flex-1 sm:w-64">
@@ -416,6 +483,13 @@ export function LibraryViewer({
                     />
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {/* Still disabled, and deliberately. The dialog and the whole importer
+                        are written, but POST /figma/import answers 501 by design until its
+                        live bench and product review are accepted
+                        (integrations-ts/src/figma.ts). Rendering the dialog over that would
+                        trade an honest "not yet" for a button that fails on click. The
+                        structural parse behind it is wired and tested, so parity ships the
+                        day that route opens. */}
                     <Button
                       type="button"
                       variant="outline"
@@ -628,7 +702,17 @@ export function LibraryViewer({
               className={`transition-opacity ${isFiltering ? 'pointer-events-none opacity-60' : ''}`}
               aria-busy={isFiltering}
             >
-              {optimisticLayout === 'board' ? (
+              {showTypography ? (
+                <TypographyPanel brandId={brandId} templateSources={templateSources} />
+              ) : showTemplates ? (
+                <TemplateGrid
+                  brandId={brandId}
+                  sources={templateSources}
+                  assets={displayedAssets}
+                  loading={templatesLoading}
+                  onChanged={() => setAssetRevision((revision) => revision + 1)}
+                />
+              ) : optimisticLayout === 'board' ? (
                 <LibraryBoardView
                   brandId={brandId}
                   filters={{

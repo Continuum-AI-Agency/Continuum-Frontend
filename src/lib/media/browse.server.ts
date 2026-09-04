@@ -43,6 +43,9 @@ function queryRpcArgs(query: LibraryBrowseQuery) {
     p_used: query.used ?? null,
     p_shared: query.shared ?? null,
     p_leading_only: query.leadingOnly,
+    p_template_only: query.templateOnly,
+    p_ratios: query.ratios.length > 0 ? query.ratios : null,
+    p_fonts: query.fonts.length > 0 ? query.fonts : null,
     p_search: query.search || null,
     p_performance_window: query.performanceWindow,
   };

@@ -1,8 +1,9 @@
 'use client';
 
-import { classifyLibraryFile } from '@continuum/contracts';
+import { classifyLibraryFile, isLibraryFontFile } from '@continuum/contracts';
 import { useCallback, useRef, useState } from 'react';
 
+import { uploadBrandFont } from '@/lib/library/templateSources';
 import { type UploadResumeState, uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 
 const MAX_CONCURRENCY = 3;
@@ -21,6 +22,16 @@ type UploadJob = {
   controller: AbortController | null;
   cancelled: boolean;
 };
+
+/** `HeadingNow-36CompBold.otf` -> `HeadingNow 36CompBold`. Editable afterwards in Typography. */
+function familyFromFontFileName(fileName: string): string {
+  return (
+    fileName
+      .replace(/\.[^.]+$/, '')
+      .replace(/[_-]+/g, ' ')
+      .trim() || fileName
+  );
+}
 
 export function isAcceptedUploadFile(file: File): boolean {
   return classifyLibraryFile({ fileName: file.name, mimeType: file.type }).accepted;
@@ -47,6 +58,19 @@ export function useMediaUpload(brandId: string) {
       job.controller = controller;
       patch(id, { status: 'uploading', error: undefined });
       try {
+        // A font takes the other road entirely: the private brand-docs store, no
+        // media.assets row, no signed URL, no share link. Same drop target, because a
+        // designer hands over a template and the faces it needs in one gesture — and
+        // asking them to remember which panel each file belongs in is how a template
+        // arrives without its typography.
+        if (isLibraryFontFile({ fileName: file.name, mimeType: file.type })) {
+          await uploadBrandFont({ brandId, family: familyFromFontFileName(file.name), file });
+          if (job.cancelled) return;
+          patch(id, { status: 'done', progress: 100 });
+          jobs.current.delete(id);
+          setTimeout(() => setUploads((prev) => prev.filter((u) => u.id !== id)), 2500);
+          return;
+        }
         await uploadMediaAsset({
           file,
           brandId,

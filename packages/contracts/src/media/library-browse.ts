@@ -47,6 +47,18 @@ export const libraryBrowseQuerySchema = z
     used: z.boolean().nullable().optional(),
     shared: z.boolean().nullable().optional(),
     leadingOnly: z.boolean().default(false),
+    /**
+     * Restrict to assets we have opened and understood — the Templates section.
+     *
+     * Not the same as `mediaType: 'project_file'`, and the difference is the point: an .aep
+     * whose parse has not landed is still just bytes and belongs in Source files. A template
+     * is a project file plus what is inside it.
+     */
+    templateOnly: z.boolean().default(false),
+    /** Aspect-ratio labels a template must carry ('9:16'), matched as overlap. */
+    ratios: z.array(z.string().min(1)).default([]),
+    /** Font families a template uses, matched as overlap. */
+    fonts: z.array(z.string().min(1)).default([]),
     search: z.string().max(500).default(''),
     sort: librarySortSchema.default(DEFAULT_LIBRARY_SORT),
     performanceWindow: libraryPerformanceWindowSchema.default('d30'),

@@ -19,12 +19,14 @@ import {
   HardDrive,
   ImageIcon,
   LayoutGrid,
+  LayoutTemplate,
   Loader2,
   PackageOpen,
   Pencil,
   ShieldAlert,
   Sparkles,
   Trash2,
+  Type,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
@@ -37,6 +39,7 @@ import {
   deleteLibrarySavedViewOperation,
   updateLibraryCollectionOperation,
 } from '@/lib/library/creativeOperations';
+import type { LibrarySection } from '@/lib/media/sections';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 
@@ -45,7 +48,9 @@ export type LibraryBrowseDestination =
   | 'recent'
   | 'images'
   | 'videos'
+  | 'templates'
   | 'project_files'
+  | 'typography'
   | 'needs_review';
 
 type Props = {
@@ -59,6 +64,8 @@ type Props = {
   selectedMediaType: LibraryMediaType;
   selectedSort: LibrarySort;
   selectedReviewStatuses: readonly MediaReviewStatus[];
+  selectedTemplateOnly: boolean;
+  section: LibrarySection;
   onSelectDestination: (destination: LibraryBrowseDestination) => void;
   storageUsedBytes: number;
 };
@@ -75,7 +82,13 @@ const BROWSE_FOLDERS: {
   { value: 'recent', label: 'Recent', icon: Clock3 },
   { value: 'images', label: 'Images', icon: ImageIcon },
   { value: 'videos', label: 'Videos', icon: Film },
-  { value: 'project_files', label: 'Project files', icon: PackageOpen },
+  // Templates and Source files are the same rows seen two ways, and the split is the point.
+  // Templates shows what a file IS — ratios, slots, fonts — and is where you work. Source
+  // files shows the upload itself: bytes, checksum, versions, download. Without the split an
+  // .aep is a blank card in the middle of the creative grid.
+  { value: 'templates', label: 'Templates', icon: LayoutTemplate },
+  { value: 'project_files', label: 'Source files', icon: PackageOpen },
+  { value: 'typography', label: 'Typography', icon: Type },
   { value: 'needs_review', label: 'Needs review', icon: ShieldAlert },
 ];
 
@@ -83,10 +96,18 @@ function activeDestination(
   mediaType: LibraryMediaType,
   sort: LibrarySort,
   reviewStatuses: readonly MediaReviewStatus[],
+  templateOnly: boolean,
+  section: LibrarySection,
 ): LibraryBrowseDestination | null {
+  // Typography is not a browse query at all — brand faces are licensed and never become
+  // media.assets rows — so it wins before any filter is read.
+  if (section === 'typography') return 'typography';
   if (reviewStatuses.includes('in_review') || reviewStatuses.includes('needs_changes')) {
     return 'needs_review';
   }
+  // Before the media-type tests: a template IS a project file, so checking mediaType first
+  // would light up Source files whenever Templates is selected.
+  if (templateOnly) return 'templates';
   if (mediaType === 'image') return 'images';
   if (mediaType === 'video') return 'videos';
   if (mediaType === 'project_file') return 'project_files';
@@ -201,6 +222,8 @@ export function LibrarySidebar({
   selectedMediaType,
   selectedSort,
   selectedReviewStatuses,
+  selectedTemplateOnly,
+  section,
   onSelectDestination,
   storageUsedBytes,
 }: Props) {
@@ -218,6 +241,8 @@ export function LibrarySidebar({
     selectedMediaType,
     selectedSort,
     selectedReviewStatuses,
+    selectedTemplateOnly,
+    section,
   );
 
   async function submitCreate() {

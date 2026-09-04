@@ -162,6 +162,9 @@ export function buildLibraryBrowseParams(
     params.set('shared', String(query.shared));
   }
   if (query.leadingOnly) params.set('leadingOnly', 'true');
+  if (query.templateOnly) params.set('templateOnly', 'true');
+  setList(params, 'ratios', query.ratios);
+  setList(params, 'fonts', query.fonts);
   if (query.search) params.set('search', query.search);
   if (query.sort !== DEFAULT_LIBRARY_SORT) params.set('sort', query.sort);
   if (query.performanceWindow !== 'd30') {
