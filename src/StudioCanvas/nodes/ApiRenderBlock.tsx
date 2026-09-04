@@ -591,11 +591,19 @@ export function ApiRenderBlock({
           <RenderVariableFields
             definitions={data.variableDefinitions ?? []}
             values={data.variables}
+            brandId={brandId}
             connectedKeys={connectedKeys}
             mediaStatus={mediaStatus}
             onChange={(key, value) =>
               patchData({ variables: { ...data.variables, [key]: value }, inputSetId: null })
             }
+            // DELETE the key rather than blanking it. `resolveApiRenderVariables` treats an
+            // empty string as an answered scalar, so a cleared media slot that kept its key
+            // would read as filled with nothing instead of as unfilled.
+            onClear={(key) => {
+              const { [key]: _cleared, ...rest } = data.variables ?? {};
+              patchData({ variables: rest, inputSetId: null });
+            }}
           />
           {error ? (
             <p className="rounded bg-destructive/10 px-2 py-1 text-2xs text-destructive">{error}</p>

@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
-import type { RunActionArgs } from './runAction';
 import { __testing, runRemoveImageBackground } from './removeBackgroundOp';
+import type { RunActionArgs } from './runAction';
 
 const BRAND_ID = '11111111-1111-4111-8111-111111111111';
 const ASSET_ID = '22222222-2222-4222-8222-222222222222';
@@ -119,7 +119,8 @@ describe('runRemoveImageBackground', () => {
   });
 
   // The cutout is registered as a derivative OF the source, so an input with no
-  // Library asset has nothing to derive from. Better a sentence than a 400.
+  // Library asset has nothing to derive from. Better a sentence than a 400 — but only
+  // once the ladder has failed to mint one.
   it('asks for the source to be saved rather than sending a request that cannot work', async () => {
     const fetchImpl = mock(async () => sseResponse([])) as unknown as typeof fetch;
     await expect(
@@ -128,6 +129,77 @@ describe('runRemoveImageBackground', () => {
         {},
         'image',
         deps(fetchImpl),
+      ),
+    ).rejects.toThrow(/Save this media to the Library first/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  // Held back in the registry because the clip lane's GPU job is unreachable in
+  // production. The refusal is here, below both entry points, so the Video Editor's
+  // clip inspector cannot reach the service by a different door.
+  it('refuses the video lane while it is held back, before any request goes out', async () => {
+    const fetchImpl = mock(async () => sseResponse([])) as unknown as typeof fetch;
+    await expect(__testing.requestRemoval(args(), {}, 'video', deps(fetchImpl))).rejects.toThrow(
+      /Coming soon/,
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  // The still lane is a DIFFERENT service and is not held back — the whole point of
+  // holding one lane rather than the feature.
+  it('leaves the image lane running', async () => {
+    const fetchImpl = mock(async () =>
+      sseResponse([{ type: 'background_removal.completed', data: completedData }]),
+    ) as unknown as typeof fetch;
+    await __testing.requestRemoval(args(), {}, 'image', deps(fetchImpl));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  // The complaint this exists for: media that IS in the Library, on a node whose
+  // pointer the resolver could not read. The op mints it and runs rather than telling
+  // the user to save something they already saved.
+  it('mints the missing Library pointer from the source node instead of refusing', async () => {
+    const fetchImpl = mock(async () =>
+      sseResponse([{ type: 'background_removal.completed', data: completedData }]),
+    ) as unknown as typeof fetch;
+    const ensureAssetRef = mock(async () => ({ assetId: ASSET_ID, versionId: VERSION_ID }));
+
+    const done = await __testing.requestRemoval(
+      args({
+        inputs: [
+          { handle: 'in', imageUrl: 'https://storage.test/hero.png', sourceNodeId: 'node-1' },
+        ],
+      }),
+      {},
+      'image',
+      { ...deps(fetchImpl), ensureAssetRef },
+    );
+
+    expect(done.assetId).toBe(ASSET_ID);
+    expect(ensureAssetRef).toHaveBeenCalledWith({
+      nodeId: 'node-1',
+      brandId: BRAND_ID,
+      kind: 'image',
+    });
+    const body = JSON.parse((fetchImpl.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(body.sourceAssetId).toBe(ASSET_ID);
+  });
+
+  // A node the ladder cannot resolve either — no bytes, no coordinates. Still the
+  // sentence, and still no wasted request.
+  it('keeps the message when the source node has nothing a Library asset can be made from', async () => {
+    const fetchImpl = mock(async () => sseResponse([])) as unknown as typeof fetch;
+    const ensureAssetRef = mock(async () => null);
+    await expect(
+      __testing.requestRemoval(
+        args({
+          inputs: [
+            { handle: 'in', imageUrl: 'https://storage.test/hero.png', sourceNodeId: 'node-1' },
+          ],
+        }),
+        {},
+        'image',
+        { ...deps(fetchImpl), ensureAssetRef },
       ),
     ).rejects.toThrow(/Save this media to the Library first/);
     expect(fetchImpl).not.toHaveBeenCalled();

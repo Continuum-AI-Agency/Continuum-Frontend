@@ -18,11 +18,15 @@
 import {
   buildElementReferenceLabel,
   type CreateElementRequest,
+  defaultElementUseIntent,
   ELEMENT_CATEGORIES,
   ELEMENT_MEMBER_LIMIT,
   ELEMENT_PERSON_FALLBACK_LIMIT,
+  ELEMENT_USE_INTENTS,
   type ElementCategory,
+  type ElementFact,
   type ElementRecord,
+  type ElementUseIntent,
   elementRecordSchema,
   type GenerateElementReferenceResponse,
   generateElementReferenceResponseSchema,
@@ -41,11 +45,13 @@ import { z } from 'zod';
 import { http } from '@/lib/api/http';
 import type { ImageReferenceType } from '@/StudioCanvas/types';
 
-export type { ElementCategory, ElementRecord };
+export type { ElementCategory, ElementFact, ElementRecord, ElementUseIntent };
 export {
+  defaultElementUseIntent,
   ELEMENT_CATEGORIES,
   ELEMENT_MEMBER_LIMIT,
   ELEMENT_PERSON_FALLBACK_LIMIT,
+  ELEMENT_USE_INTENTS,
   isElementPersonCategory,
 };
 
@@ -65,6 +71,21 @@ export function listElements(brandId: string, signal?: AbortSignal): Promise<Ele
       signal,
     })
     .then((response) => response.elements);
+}
+
+export function getElement(
+  brandId: string,
+  elementId: string,
+  signal?: AbortSignal,
+): Promise<ElementRecord> {
+  return http
+    .request<ElementResponse>({
+      path: `${elementRoute(elementId)}?brandId=${encodeURIComponent(brandId)}`,
+      schema: elementResponseSchema,
+      cache: 'no-store',
+      signal,
+    })
+    .then((response) => response.element);
 }
 
 export function createElement(input: CreateElementRequest): Promise<ElementRecord> {
@@ -111,9 +132,8 @@ export function updateElement(
     .then((response) => response.element);
 }
 
-/** ~14s — one paid image call. Always re-derived from the MEMBERS, never from the
- *  previous reference. The result appends to history and only becomes the default when
- *  there wasn't one, so a regeneration never silently changes what nodes point at. */
+/** ~14s — one paid image call. Always re-derived from the members, never from the
+ * previous reference. The result stays a candidate until explicit confirmation. */
 export function generateElementReference(
   elementId: string,
   brandId: string,
@@ -132,12 +152,46 @@ export function setElementDefaultReference(
   elementId: string,
   brandId: string,
   assetId: string | null,
+  expectedUpdatedAt: string,
 ): Promise<ElementRecord> {
   return http
     .request<ElementResponse>({
       path: `${elementRoute(elementId)}/default-reference`,
       method: 'PUT',
+      body: { brandId, assetId, expectedUpdatedAt },
+      schema: elementResponseSchema,
+      cache: 'no-store',
+    })
+    .then((response) => response.element);
+}
+
+export function addElementReference(
+  elementId: string,
+  brandId: string,
+  assetId: string,
+): Promise<ElementRecord> {
+  return http
+    .request<ElementResponse>({
+      path: `${elementRoute(elementId)}/references`,
+      method: 'POST',
       body: { brandId, assetId },
+      schema: elementResponseSchema,
+      cache: 'no-store',
+    })
+    .then((response) => response.element);
+}
+
+export function restoreElement(
+  elementId: string,
+  brandId: string,
+  revisionIndex: number,
+  expectedUpdatedAt: string,
+): Promise<ElementRecord> {
+  return http
+    .request<ElementResponse>({
+      path: `${elementRoute(elementId)}/restore`,
+      method: 'POST',
+      body: { brandId, revisionIndex, expectedUpdatedAt },
       schema: elementResponseSchema,
       cache: 'no-store',
     })
@@ -184,8 +238,32 @@ export function useElementMutations(brandId: string | undefined) {
       onSuccess: invalidate,
     }),
     setDefaultReference: useMutation({
-      mutationFn: (vars: { elementId: string; assetId: string | null }) =>
-        setElementDefaultReference(vars.elementId, brandId as string, vars.assetId),
+      mutationFn: (vars: {
+        elementId: string;
+        assetId: string | null;
+        expectedUpdatedAt: string;
+      }) =>
+        setElementDefaultReference(
+          vars.elementId,
+          brandId as string,
+          vars.assetId,
+          vars.expectedUpdatedAt,
+        ),
+      onSuccess: invalidate,
+    }),
+    addReference: useMutation({
+      mutationFn: (vars: { elementId: string; assetId: string }) =>
+        addElementReference(vars.elementId, brandId as string, vars.assetId),
+      onSuccess: invalidate,
+    }),
+    restore: useMutation({
+      mutationFn: (vars: { elementId: string; revisionIndex: number; expectedUpdatedAt: string }) =>
+        restoreElement(
+          vars.elementId,
+          brandId as string,
+          vars.revisionIndex,
+          vars.expectedUpdatedAt,
+        ),
       onSuccess: invalidate,
     }),
   };
@@ -264,13 +342,34 @@ const CATEGORY_REFERENCE_TYPE: Record<ElementCategory, ImageReferenceType> = {
   object: 'product',
   material: 'default',
   setting: 'default',
+  location: 'default',
+  landscape: 'default',
   style: 'default',
   moodboard: 'default',
+  palette: 'color',
+  animation: 'default',
+  effect: 'default',
   general: 'default',
 };
 
 export function elementReferenceTypeFor(category: ElementCategory): ImageReferenceType {
   return CATEGORY_REFERENCE_TYPE[category] ?? 'default';
+}
+
+export function elementReferenceTypeForUse(
+  category: ElementCategory,
+  intent: ElementUseIntent,
+): ImageReferenceType {
+  if (intent === 'palette') return 'color';
+  return intent === 'subject' ? elementReferenceTypeFor(category) : 'default';
+}
+
+export function elementSourceAssetId(
+  element: ElementRecord,
+  intent: ElementUseIntent,
+): string | undefined {
+  if (intent === 'motion') return element.motionAssetId ?? undefined;
+  return resolveElementRefs(element)[0]?.asset_id;
 }
 
 export function elementRequiresRightsNote(category: ElementCategory): boolean {
@@ -322,8 +421,13 @@ export const ELEMENT_CATEGORY_LABEL: Record<ElementCategory, string> = {
   object: 'Object',
   material: 'Material',
   setting: 'Setting',
+  location: 'Location',
+  landscape: 'Landscape',
   style: 'Style',
   moodboard: 'Moodboard',
+  palette: 'Palette',
+  animation: 'Animation',
+  effect: 'Effect',
   general: 'General',
 };
 
@@ -363,12 +467,29 @@ export const ELEMENT_CATEGORY_GUIDANCE: Record<ElementCategory, ElementCategoryG
     vary: 'vantage point; time of day only if the place still reads the same',
     constant: 'the place',
   },
+  location: {
+    count: '3–5',
+    vary: 'vantage point and distance',
+    constant: 'the spatial landmarks and materials',
+  },
+  landscape: {
+    count: '3–5',
+    vary: 'vantage point and scale',
+    constant: 'the terrain, vegetation and atmosphere',
+  },
   style: {
     count: '6–8',
     vary: 'the subject — deliberately different things',
     constant: 'the treatment',
   },
   moodboard: { count: '5–8', vary: 'everything except the feeling', constant: '—' },
+  palette: { count: '3–6', vary: 'where the colours appear', constant: 'the colour relationships' },
+  animation: {
+    count: '4–8',
+    vary: 'time through the motion',
+    constant: 'the subject and motion path',
+  },
+  effect: { count: '4–8', vary: 'onset through dissipation', constant: 'the effect identity' },
   general: { count: '3–5', vary: 'framing and setting', constant: 'the subject' },
 };
 
@@ -384,7 +505,15 @@ export const ELEMENT_GUIDELINES_COPY =
 export const ELEMENT_RIGHTS_COPY =
   'Required for people. Where do these images come from? (e.g. “own employee, consent on file”, “licensed stock, Getty #12345”)';
 
-export const ELEMENT_PREVIEW_COPY = 'This image is what gets sent to the model.';
+export const ELEMENT_PREVIEW_COPY = 'The approved sheet is what gets sent to the model.';
 
 export const ELEMENT_CEILING_COPY =
   'Expect “clearly the same person” rather than a pixel-identical face — Elements improve consistency, they don’t guarantee it.';
+
+export const ELEMENT_USE_INTENT_LABEL: Record<ElementUseIntent, string> = {
+  subject: 'Subject',
+  environment: 'Environment',
+  treatment: 'Treatment',
+  palette: 'Palette',
+  motion: 'Motion',
+};

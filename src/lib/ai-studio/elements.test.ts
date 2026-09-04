@@ -16,7 +16,9 @@ import {
   elementDefaultReferenceAssetId,
   elementNodeEmission,
   elementReferenceTypeFor,
+  elementReferenceTypeForUse,
   elementRequiresRightsNote,
+  elementSourceAssetId,
   generateElementReference,
   listElements,
   setElementDefaultReference,
@@ -104,7 +106,7 @@ describe('elements api', () => {
     requestMock.mockResolvedValueOnce({
       element: buildElement(),
       referenceAssetId: 'ref-1',
-      becameDefault: true,
+      becameDefault: false,
     } as never);
 
     const result = await generateElementReference('element-1', 'brand-1');
@@ -118,19 +120,19 @@ describe('elements api', () => {
         body: { brandId: 'brand-1' },
       }),
     );
-    expect(result.becameDefault).toBe(true);
+    expect(result.becameDefault).toBe(false);
   });
 
   it('pins a reference as the default with PUT', async () => {
     requestMock.mockResolvedValueOnce({ element: buildElement() } as never);
 
-    await setElementDefaultReference('element-1', 'brand-1', 'asset-2');
+    await setElementDefaultReference('element-1', 'brand-1', 'asset-2', 'updated-1');
 
     expect(requestMock).toHaveBeenCalledWith(
       expect.objectContaining({
         path: '/api/media/elements/element-1/default-reference',
         method: 'PUT',
-        body: { brandId: 'brand-1', assetId: 'asset-2' },
+        body: { brandId: 'brand-1', assetId: 'asset-2', expectedUpdatedAt: 'updated-1' },
       }),
     );
   });
@@ -138,10 +140,10 @@ describe('elements api', () => {
   it('clears the default through the same endpoint', async () => {
     requestMock.mockResolvedValueOnce({ element: buildElement() } as never);
 
-    await setElementDefaultReference('element-1', 'brand-1', null);
+    await setElementDefaultReference('element-1', 'brand-1', null, 'updated-1');
 
     expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
-      body: { brandId: 'brand-1', assetId: null },
+      body: { brandId: 'brand-1', assetId: null, expectedUpdatedAt: 'updated-1' },
     });
   });
 });
@@ -183,13 +185,24 @@ describe('element category rules', () => {
       object: 'product',
       material: 'default',
       setting: 'default',
+      location: 'default',
+      landscape: 'default',
       style: 'default',
       moodboard: 'default',
+      palette: 'color',
+      animation: 'default',
+      effect: 'default',
       general: 'default',
     };
     for (const category of ELEMENT_CATEGORIES) {
       expect(elementReferenceTypeFor(category)).toBe(expected[category] as never);
     }
+  });
+
+  it('lets each placement choose how the same sheet is interpreted', () => {
+    expect(elementReferenceTypeForUse('product', 'subject')).toBe('product');
+    expect(elementReferenceTypeForUse('product', 'environment')).toBe('default');
+    expect(elementReferenceTypeForUse('product', 'palette')).toBe('color');
   });
 
   it('requires a rights basis for the person categories only', () => {
@@ -206,6 +219,26 @@ describe('element category rules', () => {
     expect(
       elementNodeEmission(buildElement({ category: 'product', members: members(8) }))?.refs,
     ).toHaveLength(ELEMENT_MEMBER_LIMIT);
+  });
+});
+
+describe('elementSourceAssetId', () => {
+  it('resolves the current approved sheet, never an unapproved candidate', () => {
+    const element = buildElement({
+      members: members(1),
+      referenceHistory: ['candidate'],
+      defaultReferenceAssetId: null,
+    });
+    expect(elementSourceAssetId(element, 'subject')).toBe('member-1');
+    expect(
+      elementSourceAssetId({ ...element, defaultReferenceAssetId: 'approved' }, 'subject'),
+    ).toBe('approved');
+  });
+
+  it('resolves the canonical clip for a motion placement', () => {
+    expect(elementSourceAssetId(buildElement({ motionAssetId: 'clip-1' }), 'motion')).toBe(
+      'clip-1',
+    );
   });
 });
 

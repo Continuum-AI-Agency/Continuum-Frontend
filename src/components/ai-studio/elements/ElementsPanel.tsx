@@ -87,7 +87,7 @@ export function ElementsPanel({
       {/* z-[110] beats the canvas header's `relative z-[100]`: the header's parent
             establishes no stacking context, so a body-portalled z-50 sheet would paint
             UNDER the toolbar it was opened from. */}
-      <SheetContent side="right" className="z-[110] w-[26rem] max-w-full gap-0 px-4 py-5">
+      <SheetContent side="right" className="z-[110] w-[52rem] max-w-full gap-0 px-4 py-5">
         <SheetHeader className="px-0">
           <SheetTitle>Elements</SheetTitle>
           <SheetDescription>{ELEMENT_CEILING_COPY}</SheetDescription>
@@ -103,9 +103,12 @@ export function ElementsPanel({
               isSaving={mutations.create.isPending}
               onCancel={() => setView({ kind: 'list' })}
               onSubmit={(input) =>
-                mutations.create.mutate(input, {
-                  onSuccess: (created) => setView({ kind: 'detail', elementId: created.id }),
-                })
+                mutations.create.mutate(
+                  { ...input, facts: [] },
+                  {
+                    onSuccess: (created) => setView({ kind: 'detail', elementId: created.id }),
+                  },
+                )
               }
             />
           ) : selected ? (
@@ -115,6 +118,7 @@ export function ElementsPanel({
               key={selected.id}
               element={selected}
               brandId={brandId}
+              uploadAsset={uploadAsset}
               isGenerating={mutations.generateReference.isPending}
               isSaving={mutations.update.isPending}
               // react-query already holds the in-flight variables and the last error;
@@ -141,7 +145,21 @@ export function ElementsPanel({
               onBack={() => setView({ kind: 'list' })}
               onGenerateReference={() => mutations.generateReference.mutate(selected.id)}
               onSetDefaultReference={(assetId) =>
-                mutations.setDefaultReference.mutate({ elementId: selected.id, assetId })
+                mutations.setDefaultReference.mutate({
+                  elementId: selected.id,
+                  assetId,
+                  expectedUpdatedAt: selected.updatedAt,
+                })
+              }
+              onAddReference={(assetId) =>
+                mutations.addReference.mutate({ elementId: selected.id, assetId })
+              }
+              onRestore={(revisionIndex) =>
+                mutations.restore.mutate({
+                  elementId: selected.id,
+                  revisionIndex,
+                  expectedUpdatedAt: selected.updatedAt,
+                })
               }
               onSave={(input) => mutations.update.mutate({ elementId: selected.id, input })}
             />
@@ -268,7 +286,7 @@ function ElementCard({
       }}
       className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-background text-left transition-shadow hover:shadow-md"
     >
-      <div className="flex aspect-square w-full items-center justify-center bg-muted/30">
+      <div className="flex aspect-video w-full items-center justify-center bg-muted/30">
         {previewUrl ? (
           // biome-ignore lint/performance/noImgElement: signed storage URL, not a build-time asset.
           <img src={previewUrl} alt={element.name} className="h-full w-full object-cover" />
@@ -280,7 +298,7 @@ function ElementCard({
         <span className="truncate text-xs">{element.name}</span>
         {element.defaultReferenceAssetId ? null : (
           <Badge variant="outline" className="h-4 shrink-0 px-1 text-3xs">
-            no ref
+            Needs sheet
           </Badge>
         )}
       </div>

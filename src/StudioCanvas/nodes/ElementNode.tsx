@@ -1,13 +1,14 @@
 // The canvas face of a saved Element. It binds to the Element by id and re-reads it,
 // so regenerating a reference reaches every canvas already using it — the node stores
-// a pointer, never a copy. It has ONE source handle (`image`) and no inputs.
+// a pointer, never a copy. Its placement intent decides whether it emits the sheet or
+// the canonical motion clip.
 //
 // What it emits is decided by `elementNodeEmission` in lib/ai-studio/elements: the
 // pinned reference when one is set, otherwise the members up to the category's
 // fallback ceiling, and NOTHING at all when the Element is gone. The node paints the
 // same three states so what the user sees is what the model gets.
 
-import { ELEMENT_IMAGE_OUTPUT_HANDLE } from '@continuum/contracts';
+import { ELEMENT_IMAGE_OUTPUT_HANDLE, ELEMENT_VIDEO_OUTPUT_HANDLE } from '@continuum/contracts';
 import {
   Handle,
   type NodeProps,
@@ -42,34 +43,33 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
+  defaultElementUseIntent,
   ELEMENT_CATEGORY_LABEL,
+  ELEMENT_USE_INTENT_LABEL,
+  ELEMENT_USE_INTENTS,
   type ElementCategory,
   type ElementRecord,
   elementDefaultReferenceAssetId,
   elementNodeEmission,
+  elementReferenceTypeForUse,
   useElements,
   useSignedAssetUrls,
 } from '@/lib/ai-studio/elements';
 import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
-import type { ElementNodeData as CanvasElementNodeData } from '../types';
+import type { ElementNodeData } from '../types';
 
-/**
- * The canvas type plus what the drop stamps on the node.
- *
- * HANDOFF (f-runtime owns types/index.ts): fold these three optional fields into
- * `ElementNodeData` there and this extension deletes itself. They are last-known
- * values, not a cache of the Element: the node paints before the Elements query
- * resolves, and a DELETED Element can still say which one it was.
- */
-export interface ElementNodeData extends CanvasElementNodeData {
-  elementName?: string;
-  elementCategory?: string;
-  previewUrl?: string;
-}
+export type { ElementNodeData } from '../types';
 
 export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<ElementNodeData>>) {
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
@@ -88,11 +88,18 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
     : undefined;
 
   const emission = elementNodeEmission(element);
+  const intent =
+    data.useIntent ?? (element ? defaultElementUseIntent(element.category) : 'subject');
   const previewAssetId = element
     ? (elementDefaultReferenceAssetId(element) ?? element.members[0]?.assetId)
     : undefined;
-  const signedUrls = useSignedAssetUrls(brandId, previewAssetId ? [previewAssetId] : []);
+  const signedUrls = useSignedAssetUrls(
+    brandId,
+    [previewAssetId, element?.motionAssetId].filter((value): value is string => Boolean(value)),
+  );
   const preview = (previewAssetId ? signedUrls[previewAssetId] : undefined) ?? data.previewUrl;
+  const motionUrl =
+    (element?.motionAssetId ? signedUrls[element.motionAssetId] : undefined) ?? data.motionUrl;
 
   // Three distinct absences. "Never bound" is a node placed from the palette without an
   // Element chosen — that user needs a way IN (pick one, or create the brand's first),
@@ -106,6 +113,11 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
       elementId: chosen.id,
       elementName: chosen.name,
       elementCategory: chosen.category,
+      useIntent: defaultElementUseIntent(chosen.category),
+      referenceType: elementReferenceTypeForUse(
+        chosen.category,
+        defaultElementUseIntent(chosen.category),
+      ),
     });
     triggerSave();
   };
@@ -113,8 +125,10 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
   const category = (element?.category ?? data.elementCategory) as ElementCategory | undefined;
   const categoryLabel = category ? (ELEMENT_CATEGORY_LABEL[category] ?? category) : undefined;
 
-  const imageConnections = edges.filter(
-    (edge) => edge.source === id && edge.sourceHandle === ELEMENT_IMAGE_OUTPUT_HANDLE,
+  const outputHandle =
+    intent === 'motion' ? ELEMENT_VIDEO_OUTPUT_HANDLE : ELEMENT_IMAGE_OUTPUT_HANDLE;
+  const outputConnections = edges.filter(
+    (edge) => edge.source === id && edge.sourceHandle === outputHandle,
   ).length;
 
   return (
@@ -161,7 +175,15 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                         </EmptyDescription>
                       </EmptyHeader>
                     </Empty>
-                  ) : preview ? (
+                  ) : intent === 'motion' && motionUrl ? (
+                    <video
+                      src={motionUrl}
+                      muted
+                      loop
+                      playsInline
+                      className="h-full w-full object-contain"
+                    />
+                  ) : intent !== 'motion' && preview ? (
                     // biome-ignore lint/performance/noImgElement: canvas nodes paint signed
                     // storage URLs that next/image cannot resolve at build time.
                     <img
@@ -176,7 +198,7 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                         <EmptyMedia variant="icon">
                           <Layers />
                         </EmptyMedia>
-                        <EmptyTitle>{name}</EmptyTitle>
+                        <EmptyTitle>{intent === 'motion' ? 'No motion clip' : name}</EmptyTitle>
                         <EmptyDescription>
                           {isLoading ? 'Loading…' : 'No reference yet'}
                         </EmptyDescription>
@@ -193,7 +215,7 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                     </Badge>
                   ) : null}
 
-                  {emission?.mode === 'fallback' ? (
+                  {intent !== 'motion' && emission?.mode === 'fallback' ? (
                     <Badge
                       variant="outline"
                       className="absolute right-2 top-2 z-20 h-5 bg-background/90 px-2 text-2xs"
@@ -204,7 +226,7 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                     </Badge>
                   ) : null}
 
-                  {emission && emission.droppedCount > 0 ? (
+                  {intent !== 'motion' && emission && emission.droppedCount > 0 ? (
                     <Badge
                       variant="destructive"
                       className="absolute bottom-7 right-2 z-20 h-5 px-2 text-2xs"
@@ -220,6 +242,36 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                       {name}
                     </div>
                   )}
+
+                  {!unbound && !unavailable ? (
+                    <Select
+                      value={intent}
+                      onValueChange={(value) => {
+                        const useIntent = value as ElementNodeData['useIntent'];
+                        updateNodeData(id, {
+                          useIntent,
+                          referenceType: element
+                            ? elementReferenceTypeForUse(element.category, useIntent ?? 'subject')
+                            : 'default',
+                        });
+                        triggerSave();
+                      }}
+                    >
+                      <SelectTrigger
+                        aria-label="Element use"
+                        className="nodrag absolute bottom-7 left-2 z-20 h-6 w-28 bg-background/90 px-2 text-3xs"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ELEMENT_USE_INTENTS.map((value) => (
+                          <SelectItem key={value} value={value}>
+                            {ELEMENT_USE_INTENT_LABEL[value]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
                 </NodeContent>
               </CanvasNode>
 
@@ -229,14 +281,20 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                     <Handle
                       type="source"
                       position={Position.Right}
-                      id={ELEMENT_IMAGE_OUTPUT_HANDLE}
-                      style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+                      id={outputHandle}
+                      style={{
+                        ['--edge-color' as keyof React.CSSProperties]:
+                          intent === 'motion' ? 'var(--edge-video)' : 'var(--edge-image)',
+                      }}
                       className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
                     />
                   }
                 />
                 <TooltipContent>
-                  <p>Image Output: {imageConnections} connections</p>
+                  <p>
+                    {intent === 'motion' ? 'Video' : 'Image'} Output: {outputConnections}{' '}
+                    connections
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </div>

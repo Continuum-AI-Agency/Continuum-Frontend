@@ -27,6 +27,13 @@ import {
   variationIndexFromHandle,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
+import {
+  defaultElementUseIntent,
+  elementReferenceTypeForUse,
+  elementSourceAssetId,
+  getElement,
+  signLibraryAsset,
+} from '@/lib/ai-studio/elements';
 import { loadBrandTypeInputs } from '@/lib/brands/brandTypeInputs.client';
 import { registerCanvasOutput } from '@/lib/creative-assets/registerCanvasAsset';
 import { persistAssetRendition } from '@/lib/library/assetPreview';
@@ -35,6 +42,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type {
+  ElementNodeData,
   FrameExtractNodeData,
   GeneratedImageVariation,
   HyperframesAgentNodeData,
@@ -72,6 +80,7 @@ import {
 } from './export/runExport';
 import { extractVideoFrame } from './extractVideoFrame';
 import { computeGenerationSignature, isSignatureTracked, nodeIsStale } from './generationSignature';
+import { readNodeAssetRef } from './nodeAssetRef';
 import { hasHydratableMediaReference, rehydrateWorkflowMediaNodes } from './rehydrateWorkflowMedia';
 import { startHyperframesAgentNode } from './startHyperframesAgent';
 import { isVideoGeneratorNodeType, resolveVideoGeneratorModel } from './videoModel';
@@ -127,6 +136,31 @@ export interface PublisherHandoff {
   nodeId: string;
   kind: 'organic' | 'paid' | 'render';
   state: string;
+}
+
+async function refreshElementSources(nodes: StudioNode[], brandId?: string): Promise<void> {
+  if (!brandId) return;
+  const elementNodes = nodes.filter(
+    (node): node is StudioNode & { data: ElementNodeData } =>
+      node.type === 'element' && Boolean((node.data as ElementNodeData).elementId),
+  );
+  await Promise.all(
+    elementNodes.map(async (node) => {
+      const element = await getElement(brandId, node.data.elementId as string);
+      const useIntent = node.data.useIntent ?? defaultElementUseIntent(element.category);
+      const assetId = elementSourceAssetId(element, useIntent);
+      const url = assetId ? await signLibraryAsset(brandId, assetId) : undefined;
+      useStudioStore.getState().updateNodeData(node.id, {
+        elementName: element.name,
+        elementCategory: element.category,
+        useIntent,
+        referenceType: elementReferenceTypeForUse(element.category, useIntent),
+        assetId,
+        previewUrl: useIntent === 'motion' ? undefined : url,
+        motionUrl: useIntent === 'motion' ? url : undefined,
+      });
+    }),
+  );
 }
 
 /**
@@ -672,7 +706,13 @@ const actionInputFromItem = async (
 ): Promise<ResolvedActionInput> => {
   const resolved = actionInputFromOutput(item, handle);
   if (modality !== 'video') return resolved;
-  return { handle, blob: await fetchBlob(resolved.imageUrl, handle) };
+  // The bytes replace the URL, but the Library pointer has to survive the swap — an
+  // op that records its result as a derivative needs it whatever the modality.
+  return {
+    handle,
+    blob: await fetchBlob(resolved.imageUrl, handle),
+    ...(resolved.assetId ? { assetId: resolved.assetId } : {}),
+  };
 };
 
 /** Everything an action's declared ports resolve to, fetched into readable form. */
@@ -721,10 +761,18 @@ const resolveActionInputsFor = async (
 
       const output = resolvedOutputs.get(edge.source);
       if (output) {
-        const resolved = actionInputFromOutput(output, port.handle);
+        const resolved = {
+          ...actionInputFromOutput(output, port.handle),
+          sourceNodeId: edge.source,
+        };
         inputs.push(
           port.modality === 'video'
-            ? { handle: port.handle, blob: await fetchBlob(resolved.imageUrl, port.handle) }
+            ? {
+                handle: port.handle,
+                blob: await fetchBlob(resolved.imageUrl, port.handle),
+                ...(resolved.assetId ? { assetId: resolved.assetId } : {}),
+                sourceNodeId: edge.source,
+              }
             : resolved,
         );
         continue;
@@ -743,14 +791,23 @@ const resolveActionInputsFor = async (
       }
       // A reference node already knows which Library asset it holds, and that id is
       // the only way a backend op can register its result as a DERIVATIVE of this.
-      const assetId =
-        typeof sourceData.assetId === 'string' && sourceData.assetId.length > 0
-          ? { assetId: sourceData.assetId }
-          : {};
+      // Read through `readNodeAssetRef`: the pointer lands under a different key
+      // depending on how the media reached the canvas, and reading only `assetId`
+      // reported "not saved to the Library" about assets that were already there.
+      const ref = readNodeAssetRef(sourceData);
+      const assetId = ref ? { assetId: ref.assetId } : {};
+      // The node id travels with the input so an op that REQUIRES a Library asset can
+      // mint the missing pointer itself instead of refusing the run.
+      const sourceNodeId = { sourceNodeId: edge.source };
       inputs.push(
         port.modality === 'video'
-          ? { handle: port.handle, blob: await fetchBlob(url, port.handle), ...assetId }
-          : { handle: port.handle, imageUrl: url, ...assetId },
+          ? {
+              handle: port.handle,
+              blob: await fetchBlob(url, port.handle),
+              ...assetId,
+              ...sourceNodeId,
+            }
+          : { handle: port.handle, imageUrl: url, ...assetId, ...sourceNodeId },
       );
     }
   }
@@ -1304,8 +1361,15 @@ const buildOptimisticPreflightOutputs = (
     // Sources that never run, and so never appear in `executableNodes` above. Without
     // them preflight refuses a graph the run itself would have completed.
     if (node.type === 'element') {
-      const previewUrl = asTrimmedString((node.data as Record<string, unknown>).previewUrl);
-      if (isHttpUrl(previewUrl)) {
+      const data = node.data as ElementNodeData;
+      const sourceUrl = asTrimmedString(
+        data.useIntent === 'motion' ? data.motionUrl : data.previewUrl,
+      );
+      if (isHttpUrl(sourceUrl)) {
+        if (data.useIntent === 'motion') {
+          outputs.set(node.id, { type: 'video', url: sourceUrl });
+          continue;
+        }
         outputs.set(node.id, { type: 'image', base64: 'preflight-ready', mimeType: 'image/png' });
       }
       continue;
@@ -1512,7 +1576,7 @@ export async function executeWorkflow(
   // expired URL the Backend cannot fetch (the generation fails) or no reference at
   // all. This mirrors the load path so the hot path is equally robust.
   {
-    const snapshot = useStudioStore.getState();
+    let snapshot = useStudioStore.getState();
     const scopeNodeIds = resolveExecutableNodes(
       snapshot.nodes,
       snapshot.edges,
@@ -1528,6 +1592,15 @@ export async function executeWorkflow(
       });
       return;
     }
+    const scope = new Set(scopeNodeIds);
+    const elementSourceIds = new Set(
+      snapshot.edges.filter((edge) => scope.has(edge.target)).map((edge) => edge.source),
+    );
+    await refreshElementSources(
+      snapshot.nodes.filter((node) => elementSourceIds.has(node.id)),
+      workflowBrandId,
+    );
+    snapshot = useStudioStore.getState();
     const executableNodes = resolveExecutableNodes(
       snapshot.nodes,
       snapshot.edges,
@@ -1664,13 +1737,23 @@ export async function executeWorkflow(
     // it here — rather than teaching each resolver about a fifth node type — is what
     // makes readiness and the payload builder agree, because both read this map.
     if (node.type === 'element') {
-      const previewUrl = asTrimmedString((node.data as Record<string, unknown>).previewUrl);
-      if (isHttpUrl(previewUrl)) {
+      const data = node.data as ElementNodeData;
+      const sourceUrl = asTrimmedString(
+        data.useIntent === 'motion' ? data.motionUrl : data.previewUrl,
+      );
+      if (isHttpUrl(sourceUrl) && data.useIntent === 'motion') {
+        resolvedOutputs.set(node.id, {
+          type: 'video',
+          url: sourceUrl,
+          ...(data.assetId ? { assetId: data.assetId } : {}),
+        });
+      } else if (isHttpUrl(sourceUrl)) {
         resolvedOutputs.set(node.id, {
           type: 'image',
           base64: '',
           mimeType: 'image/png',
-          url: previewUrl,
+          url: sourceUrl,
+          ...(data.assetId ? { assetId: data.assetId } : {}),
         });
       }
     }
@@ -2011,7 +2094,12 @@ export async function executeWorkflow(
       });
       useStudioStore.getState().triggerSave();
       output.items.forEach((item, index) => {
-        if (item.assetId || !variations[index]) return;
+        // BOTH ids, not just the asset id. `registerCanvasIfDurable` is the only thing on
+        // this path that ever learns a version id, and registration is idempotent on
+        // (bucket, storage_path) — a second call returns the same pair rather than a
+        // second asset. Skipping on a half-identified item leaves the node unable to feed
+        // an API Render, reported as "needs a Library asset" about an asset already there.
+        if ((item.assetId && item.assetVersionId) || !variations[index]) return;
         registerCanvasIfDurable(
           nodeId,
           {
@@ -2065,7 +2153,7 @@ export async function executeWorkflow(
             ? (updatedNode?.data as any).generatedImage.slice(0, 48)
             : undefined,
       });
-      if (!output.assetId) {
+      if (!output.assetId || !output.assetVersionId) {
         registerCanvasIfDurable(nodeId, {
           kind: 'image',
           bucket: output.storageBucket,

@@ -4,9 +4,9 @@
 // only the HTTP call is stubbed, because the matte runs on a GPU in Cloud Run.
 
 import { describe, expect, it } from 'bun:test';
+import type { TimelineItem } from '../../types';
 import type { TimelineDocument } from './adapter';
 import { removeClipBackground, repointClipSource } from './clipBackgroundRemoval';
-import type { TimelineItem } from '../../types';
 
 const SOURCE_ASSET_ID = '11111111-1111-4111-8111-111111111111';
 const CUTOUT_ASSET_ID = '22222222-2222-4222-8222-222222222222';
@@ -22,6 +22,11 @@ const clip = (over: Partial<TimelineItem> = {}): TimelineItem => ({
   ...over,
 });
 
+/** A still. The two lanes are separate services and the CLIP one is held back, so the
+ *  plumbing tests below drive the still lane — same op, same stream reader, same
+ *  contract, and the only one a request can currently reach. */
+const still = () => clip({ kind: 'image' });
+
 const sse = (events: unknown[]): string =>
   `${events.map((event) => `data: ${JSON.stringify(event)}`).join('\n\n')}\n\n`;
 
@@ -32,21 +37,24 @@ const completed = {
     assetId: CUTOUT_ASSET_ID,
     versionId: CUTOUT_VERSION_ID,
     sourceVersionId: SOURCE_ASSET_ID,
-    kind: 'video',
+    kind: 'image',
     mode: 'remove',
-    signedUrl: 'https://storage.example/cutout.webm?sig=1',
+    signedUrl: 'https://storage.example/cutout.png?sig=1',
     bucket: 'media',
-    storagePath: 'brand/cutout.webm',
-    fileName: 'cutout.webm',
-    mimeType: 'video/webm',
+    storagePath: 'brand/cutout.png',
+    fileName: 'cutout.png',
+    mimeType: 'image/png',
     width: 1080,
     height: 1920,
-    durationMs: 4000,
+    durationMs: null,
     hasAlpha: true,
   },
 };
 
-function stubFetch(body: string, init: ResponseInit = {}): {
+function stubFetch(
+  body: string,
+  init: ResponseInit = {},
+): {
   fetchImpl: typeof fetch;
   requests: Array<Record<string, unknown>>;
 } {
@@ -79,7 +87,7 @@ describe('removeClipBackground', () => {
     const progress: number[] = [];
 
     const source = await removeClipBackground({
-      item: clip(),
+      item: still(),
       sourceAssetId: SOURCE_ASSET_ID,
       label: 'Hero (cutout)',
       brandId: BRAND_ID,
@@ -90,37 +98,40 @@ describe('removeClipBackground', () => {
 
     expect(source).toEqual({
       nodeId: CUTOUT_ASSET_ID,
-      kind: 'video',
+      kind: 'image',
       label: 'Hero (cutout)',
       sourceAssetId: CUTOUT_ASSET_ID,
       sourceVersionId: CUTOUT_VERSION_ID,
-      previewUrl: 'https://storage.example/cutout.webm?sig=1',
+      previewUrl: 'https://storage.example/cutout.png?sig=1',
       durationSec: 4,
     });
     expect(progress).toEqual([0.4, 1]);
-    // A plain cutout, never `replace`: the inspector has no plate to composite.
+    // A plain cutout, never `replace`: the inspector has no plate to composite. The
+    // lane is read off the clip's own kind, which is what keeps a still off the GPU job.
     expect(requests[0]).toMatchObject({
       brandId: BRAND_ID,
       sourceAssetId: SOURCE_ASSET_ID,
-      kind: 'video',
+      kind: 'image',
       mode: 'remove',
       featherPx: 0,
     });
   });
 
-  it('takes the image lane for a still', async () => {
-    const { fetchImpl, requests } = stubFetch(
-      sse([{ ...completed, data: { ...completed.data, kind: 'image', mimeType: 'image/png' } }]),
-    );
-    const source = await removeClipBackground({
-      item: clip({ kind: 'image' }),
-      sourceAssetId: SOURCE_ASSET_ID,
-      label: 'Logo (cutout)',
-      brandId: BRAND_ID,
-      deps: deps(fetchImpl),
-    });
-    expect(source.kind).toBe('image');
-    expect(requests[0]).toMatchObject({ kind: 'image' });
+  // The clip lane's GPU job is unreachable in production. Refusing here — before the
+  // request — is what keeps a user from waiting out a matte that always fails, and it
+  // has to live below the inspector too: the timeline is not the only caller.
+  it('refuses a clip while the video lane is held back, before any request goes out', async () => {
+    const { fetchImpl, requests } = stubFetch(sse([completed]));
+    await expect(
+      removeClipBackground({
+        item: clip(),
+        sourceAssetId: SOURCE_ASSET_ID,
+        label: 'Hero',
+        brandId: BRAND_ID,
+        deps: deps(fetchImpl),
+      }),
+    ).rejects.toThrow(/Coming soon/);
+    expect(requests).toHaveLength(0);
   });
 
   it('surfaces the service failure message rather than a generic one', async () => {
@@ -139,7 +150,7 @@ describe('removeClipBackground', () => {
     );
     await expect(
       removeClipBackground({
-        item: clip(),
+        item: still(),
         sourceAssetId: SOURCE_ASSET_ID,
         label: 'Hero',
         brandId: BRAND_ID,
@@ -152,7 +163,7 @@ describe('removeClipBackground', () => {
     const { fetchImpl, requests } = stubFetch(sse([completed]));
     await expect(
       removeClipBackground({
-        item: clip(),
+        item: still(),
         sourceAssetId: SOURCE_ASSET_ID,
         label: 'Hero',
         brandId: null,
@@ -186,7 +197,13 @@ describe('repointClipSource', () => {
 
   it('keeps the edit — trim, effects and transition are not properties of the bytes', () => {
     const edited: TimelineDocument = {
-      items: [clip({ trimStartSec: 1, effects: { warmth: 0.5 }, transition: { type: 'fade', durationSec: 0.5 } })],
+      items: [
+        clip({
+          trimStartSec: 1,
+          effects: { warmth: 0.5 },
+          transition: { type: 'fade', durationSec: 0.5 },
+        }),
+      ],
     };
     expect(repointClipSource(edited, 'clip-1', CUTOUT_ASSET_ID).items[0]).toMatchObject({
       sourceNodeId: CUTOUT_ASSET_ID,

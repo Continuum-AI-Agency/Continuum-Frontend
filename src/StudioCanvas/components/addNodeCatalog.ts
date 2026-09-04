@@ -12,6 +12,7 @@
 import {
   ACTION_DEFS,
   ACTION_IDS,
+  type ActionDef,
   type ActionId,
   type ActionModality,
   DEFAULT_VIDEO_GENERATOR_MODEL,
@@ -128,6 +129,13 @@ export type AddNodeRow = {
    * `Blur` stays the thing you type and the row still says which `Blur` it is.
    */
   family?: ActionModality;
+  /**
+   * Set on `action` rows the registry is holding back. The row stays LISTED and keeps
+   * its op id — the palette bench counts rows, and a user looking for an op that exists
+   * should find it saying "coming soon" rather than find nothing — but it cannot be
+   * added.
+   */
+  comingSoon?: string;
 };
 
 /** What an op works on, for the row's tag. */
@@ -206,24 +214,29 @@ const ACTION_GROUP_ORDER: readonly string[] = [
  */
 const actionOpRows = (): readonly PlacedRow[] => {
   const definition = studioNodeDefinition('action');
-  return ACTION_IDS.filter(isImplementedAction)
-    .map((id) => ACTION_DEFS[id])
-    .sort(
-      (a, b) =>
-        ACTION_GROUP_ORDER.indexOf(a.group) - ACTION_GROUP_ORDER.indexOf(b.group) ||
-        a.label.localeCompare(b.label),
-    )
-    .map((def) => ({
-      type: 'action' as const,
-      label: def.label,
-      desc: def.description,
-      tag: PROVIDER_LABELS[definition.provider],
-      actionId: def.id,
-      family: def.family,
-      group: def.group,
-      category: definition.category,
-      provider: definition.provider,
-    }));
+  return (
+    ACTION_IDS.filter(isImplementedAction)
+      // Widened to `ActionDef`: `ACTION_DEFS[id]` infers a union of the literal entries, so
+      // a field only one op sets (`comingSoon`) is not on the union.
+      .map((id): ActionDef => ACTION_DEFS[id])
+      .sort(
+        (a, b) =>
+          ACTION_GROUP_ORDER.indexOf(a.group) - ACTION_GROUP_ORDER.indexOf(b.group) ||
+          a.label.localeCompare(b.label),
+      )
+      .map((def) => ({
+        type: 'action' as const,
+        label: def.label,
+        desc: def.description,
+        tag: PROVIDER_LABELS[definition.provider],
+        actionId: def.id,
+        family: def.family,
+        group: def.group,
+        category: definition.category,
+        provider: definition.provider,
+        ...(def.comingSoon ? { comingSoon: def.comingSoon } : {}),
+      }))
+  );
 };
 
 /** Registry key order, not the mountable-list order: the registry is where the reading

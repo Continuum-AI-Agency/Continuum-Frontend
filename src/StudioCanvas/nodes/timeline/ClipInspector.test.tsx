@@ -4,8 +4,8 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render } from '@testing-library/react';
-import type { ClipEffectSpec } from '../../utils/render/effectSpec';
 import type { TimelineItem } from '../../types';
+import type { ClipEffectSpec } from '../../utils/render/effectSpec';
 import { type ClipBackgroundRemoval, ClipInspector } from './ClipInspector';
 
 afterEach(cleanup);
@@ -42,6 +42,15 @@ const item = (effects?: TimelineItem['effects']): TimelineItem => ({
   sourceNodeId: 'src-1',
   kind: 'video',
   effects,
+});
+
+/** A still. The background remover's two lanes are separate services, and only the
+ *  clip one is held back — so a test about the CONTROL uses the lane that is live. */
+const stillItem = (): TimelineItem => ({
+  id: 'still-1',
+  order: 0,
+  sourceNodeId: 'src-1',
+  kind: 'image',
 });
 
 describe('ClipInspector unpreviewable-effects badge', () => {
@@ -100,9 +109,12 @@ describe('ClipInspector effect controls', () => {
     });
 
     cleanup();
-    const keyed = renderInspector(item({ chromaKey: { color: '#00ff00', tolerance: 0.35, softness: 0.1 } }), {
-      onSetEffects,
-    });
+    const keyed = renderInspector(
+      item({ chromaKey: { color: '#00ff00', tolerance: 0.35, softness: 0.1 } }),
+      {
+        onSetEffects,
+      },
+    );
     fireEvent.click(keyed.getByRole('switch', { name: 'Chroma key' }));
     expect(onSetEffects.mock.calls[1][0]).toEqual({ chromaKey: undefined });
   });
@@ -111,7 +123,9 @@ describe('ClipInspector effect controls', () => {
     const off = renderInspector(item());
     expect(off.queryByLabelText('Key colour')).toBeNull();
     cleanup();
-    const on = renderInspector(item({ chromaKey: { color: '#00ff00', tolerance: 0.2, softness: 0 } }));
+    const on = renderInspector(
+      item({ chromaKey: { color: '#00ff00', tolerance: 0.2, softness: 0 } }),
+    );
     expect(on.getByLabelText('Key colour')).toBeTruthy();
     expect(on.getByLabelText('Tolerance')).toBeTruthy();
     expect(on.getByLabelText('Softness')).toBeTruthy();
@@ -141,14 +155,16 @@ describe('ClipInspector background removal', () => {
   });
 
   it('refuses, and says why, when the clip has no Library asset behind it', () => {
-    const { getByRole, container } = renderInspector(item(), { backgroundRemoval: removal() });
+    const { getByRole, container } = renderInspector(stillItem(), {
+      backgroundRemoval: removal(),
+    });
     expect(getByRole('button', { name: /Remove background/ }).hasAttribute('disabled')).toBe(true);
     expect(container.textContent).toContain('Save this clip to the Library first');
   });
 
   it('runs once the clip has one', () => {
     const run = mock(() => {});
-    const { getByRole, container } = renderInspector(item(), {
+    const { getByRole, container } = renderInspector(stillItem(), {
       sourceAssetId: 'asset-1',
       backgroundRemoval: removal({ run }),
     });
@@ -157,6 +173,22 @@ describe('ClipInspector background removal', () => {
     expect(container.textContent).not.toContain('Save this clip to the Library first');
     fireEvent.click(button);
     expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  // The clip lane's GPU job is unreachable in production, so the control says so up
+  // front rather than spending the user's wait on a request that always fails. The
+  // still lane above is a different service and stays live — the point of testing both.
+  it('holds the control back on a clip while the video lane is not live', () => {
+    const run = mock(() => {});
+    const { getByRole, container } = renderInspector(item(), {
+      sourceAssetId: 'asset-1',
+      backgroundRemoval: removal({ run }),
+    });
+    const button = getByRole('button', { name: /Remove background/ });
+    expect(button.hasAttribute('disabled')).toBe(true);
+    expect(container.textContent).toContain('Coming soon');
+    fireEvent.click(button);
+    expect(run).not.toHaveBeenCalled();
   });
 
   it('shows the service progress while it runs, and its error after', () => {

@@ -126,6 +126,25 @@ describe('ElementNode', () => {
     expect(await screen.findByText('No reference — sending 2 images')).toBeTruthy();
   });
 
+  it('emits the canonical clip from the video handle for a motion placement', async () => {
+    requestMock.mockResolvedValue({
+      elements: [
+        buildElement({
+          category: 'animation',
+          motionAssetId: 'clip-1',
+          members: [{ assetId: 'frame-1', position: 0 }],
+        }),
+      ],
+    } as never);
+
+    const { container } = renderNode({ elementId: 'element-1', useIntent: 'motion' });
+
+    await waitFor(() => expect(container.querySelector('video')).toBeTruthy());
+    expect(container.querySelector('.react-flow__handle')?.getAttribute('data-handleid')).toBe(
+      'video',
+    );
+  });
+
   it('surfaces the dropped members when a person fallback is over the four-slot budget', async () => {
     requestMock.mockResolvedValue({
       elements: [

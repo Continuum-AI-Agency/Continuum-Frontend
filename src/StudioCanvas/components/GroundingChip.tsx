@@ -14,16 +14,24 @@ import { SECTION_AUTO_APPLY, suppressedDesignSections } from '@continuum/contrac
 import { ChevronDown, Gem } from 'lucide-react';
 import React from 'react';
 import {
+  BrandBookPiecePreview,
+  SkillConfigPreview,
+} from '@/components/brand/GenerationConfigPreview';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  describeSkillForGeneration,
+  presentBrandBookPiece,
+} from '@/lib/brands/generationConfigPresentation';
+import { useBrandBook } from '@/lib/brands/useBrandBook.client';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import { useStudioStore } from '../stores/useStudioStore';
 import {
-  BRAND_BOOK_PIECE_LABELS,
   enforcedConcretePieces,
   groundingChipLabel,
   isBrandEnforced,
@@ -103,6 +111,7 @@ export function GroundingChip({
     };
   }, [nodeType, wiredKey]);
   const effectiveSections = effectiveDesignSections(designSystemSections, contextual);
+  const { brandTokens } = useBrandBook(brandId);
   const { all } = useBrandSkills(brandId);
   const selectedSkills = all.filter((skill) => ids.includes(skill.id));
   const label = groundingChipLabel(
@@ -112,6 +121,9 @@ export function GroundingChip({
   );
   const enforced = isBrandEnforced(brandBookPieces);
   const pieces = enforcedConcretePieces(brandBookPieces);
+  const brandPresentations = (isEntireBookEnforced(brandBookPieces) ? ['full' as const] : pieces)
+    .map((piece) => presentBrandBookPiece(brandTokens, piece))
+    .filter((piece) => piece !== null);
 
   const tooltip = (
     <div className="flex max-w-xs flex-col gap-2 text-xs">
@@ -120,12 +132,16 @@ export function GroundingChip({
         <p className="font-medium">Brand book</p>
         {!enforced ? (
           <p className="opacity-70">Off</p>
-        ) : isEntireBookEnforced(brandBookPieces) ? (
-          <p className="opacity-70">Entire brand book</p>
         ) : (
-          <ul className="opacity-70">
-            {pieces.map((piece) => (
-              <li key={piece}>· {BRAND_BOOK_PIECE_LABELS[piece]}</li>
+          <ul className="mt-1 flex flex-col gap-1.5">
+            {brandPresentations.map((piece) => (
+              <li key={piece.kind} className="flex items-center gap-2">
+                <BrandBookPiecePreview presentation={piece} />
+                <span className="min-w-0">
+                  <span className="block font-medium">{piece.label}</span>
+                  <span className="line-clamp-2 block opacity-70">{piece.description}</span>
+                </span>
+              </li>
             ))}
           </ul>
         )}
@@ -162,11 +178,16 @@ export function GroundingChip({
         {selectedSkills.length === 0 ? (
           <p className="opacity-70">None</p>
         ) : (
-          <ul className="flex flex-col gap-0.5 opacity-70">
+          <ul className="mt-1 flex flex-col gap-1.5">
             {selectedSkills.map((skill) => (
-              <li key={skill.id}>
-                · <span className="font-medium">{skill.name}</span>
-                {skill.description ? ` — ${skill.description}` : ''}
+              <li key={skill.id} className="flex items-center gap-2">
+                <SkillConfigPreview skill={skill} />
+                <span className="min-w-0">
+                  <span className="block font-medium">{skill.name}</span>
+                  <span className="line-clamp-2 block opacity-70">
+                    {describeSkillForGeneration(skill)}
+                  </span>
+                </span>
               </li>
             ))}
           </ul>

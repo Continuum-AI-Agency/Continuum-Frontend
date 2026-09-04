@@ -108,6 +108,25 @@ export function elementToCanvasMentionSuggestion(
   };
 }
 
+/** Replace the mention's cached assets with the Element's current approved assets. */
+export async function refreshElementMentions(
+  references: readonly AgentMentionReference[],
+  loadElement: (elementId: string) => Promise<ElementRecord>,
+): Promise<AgentMentionReference[]> {
+  const loads = new Map<string, Promise<ElementRecord>>();
+  return Promise.all(
+    references.map(async (reference) => {
+      const elementId = reference.metadata?.elementId;
+      if (typeof elementId !== 'string') return reference;
+      const current = loads.get(elementId) ?? loadElement(elementId);
+      loads.set(elementId, current);
+      const refreshed = elementToCanvasMentionSuggestion(await current)?.reference;
+      if (!refreshed) throw new Error(`Element ${elementId} has no usable reference assets.`);
+      return { ...refreshed, source: reference.source };
+    }),
+  );
+}
+
 /** Groups the brand's Elements by category, in the canonical category order. */
 export function elementSuggestionsByCategory(
   elements: readonly ElementRecord[],

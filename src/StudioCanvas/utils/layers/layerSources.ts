@@ -1,6 +1,7 @@
 import { LAYER_EDITOR_IMAGE_INPUT_HANDLE } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { exportSourceFromNodeData } from '../export/runExport';
+import { readNodeAssetRef } from '../nodeAssetRef';
 
 /**
  * What is wired into a Layer Editor's `image-in` pool.
@@ -68,15 +69,13 @@ export function layerSourcesFromGraph(
       // and `exportSourceFromNodeData` answers "video" for it — which is right for the
       // Export node and wrong for a stills compositor.
       if (!source || source.kind !== 'image' || typeof source.ref !== 'string') return null;
-      const data = asRecord(node.data);
+      const assetRef = readNodeAssetRef(node.data);
       return {
         nodeId: node.id,
         ref: source.ref,
         name: nameFor(node, index),
-        assetId: stringOrUndefined(data.renderOutputAssetId) ?? stringOrUndefined(data.assetId),
-        assetVersionId:
-          stringOrUndefined(data.renderOutputAssetVersionId) ??
-          stringOrUndefined(data.assetVersionId),
+        assetId: assetRef?.assetId,
+        assetVersionId: assetRef?.versionId,
       };
     })
     .filter((source): source is LayerSource => source !== null);

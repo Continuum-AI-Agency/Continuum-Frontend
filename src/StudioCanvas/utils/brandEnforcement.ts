@@ -12,6 +12,9 @@ import {
   type DesignSection,
   expandBrandBookPieces,
 } from '@continuum/contracts';
+import { presentBrandBookPiece } from '@/lib/brands/generationConfigPresentation';
+
+export { BRAND_BOOK_PIECE_LABELS } from '@/lib/brands/generationConfigPresentation';
 
 // Default-ON: a generation node with no explicit selection enforces the whole
 // brand book. An explicit empty array means the user turned enforcement off.
@@ -20,63 +23,6 @@ export const DEFAULT_BRAND_BOOK_PIECES: BrandBookPieceKind[] = ['full'];
 // The concrete pieces in canonical order (no "full"). Sourced from the contract so
 // FE and BE agree on the set.
 export const CONCRETE_BRAND_BOOK_PIECES = expandBrandBookPieces(['full']);
-
-// Menu rows for the individual pieces, in the order they render. Each carries a
-// short description — what the piece forces into the generation — shown as the
-// hover tooltip in the skill/brand menus and in the grounding chip.
-export const BRAND_BOOK_PIECE_OPTIONS: {
-  kind: BrandBookPieceKind;
-  label: string;
-  description: string;
-}[] = [
-  {
-    kind: 'colors',
-    label: 'Colors',
-    description: 'Force the exact brand palette (hex values) into the generation.',
-  },
-  {
-    kind: 'typography',
-    label: 'Typography',
-    description: 'Reference the brand typefaces so any lettering stays on-brand.',
-  },
-  {
-    kind: 'voice',
-    label: 'Voice',
-    description: 'Apply the brand tone, style, and power/banned words to any copy.',
-  },
-  {
-    kind: 'imagery',
-    label: 'Vision / Imagery',
-    description: 'Enforce the visual direction, mood, and things to avoid.',
-  },
-  {
-    kind: 'personality',
-    label: 'Personality',
-    description: 'Carry the brand archetype, traits, and descriptors.',
-  },
-  {
-    kind: 'audience',
-    label: 'Audience',
-    description: 'Ground the output in the primary audience and anchors.',
-  },
-  {
-    kind: 'logo',
-    label: 'Logo',
-    description: 'Attach the brand logo as a reference image for the generation.',
-  },
-];
-
-// Label for a piece kind (including the "full" sentinel), for badges and tooltips.
-export const BRAND_BOOK_PIECE_LABELS: Record<BrandBookPieceKind, string> = {
-  full: 'Entire brand book',
-  colors: 'Colors',
-  typography: 'Typography',
-  voice: 'Voice',
-  imagery: 'Vision / Imagery',
-  personality: 'Personality',
-  audience: 'Audience',
-  logo: 'Logo',
-};
 
 // Compact one-line summary of a node's grounding for the chip label, e.g.
 // "Brand · Skills 2" (entire book), "Brand 3 · Skills 2" (partial), "Skills 2"
@@ -152,16 +98,16 @@ export type BrandPieceAvailability = Record<BrandBookPieceKind, boolean>;
 export function brandBookAvailability(
   tokens: BrandMdTokens | null | undefined,
 ): BrandPieceAvailability {
-  const concrete = {
-    colors: !!tokens && tokens.colors.length > 0,
-    typography: !!tokens && tokens.typography.length > 0,
-    voice: !!tokens?.voice,
-    imagery: !!tokens?.imagery,
-    personality: !!tokens?.personality,
-    audience: !!tokens?.audience,
-    logo: !!tokens?.logo?.storage_path,
+  return {
+    full: presentBrandBookPiece(tokens, 'full') !== null,
+    colors: presentBrandBookPiece(tokens, 'colors') !== null,
+    typography: presentBrandBookPiece(tokens, 'typography') !== null,
+    voice: presentBrandBookPiece(tokens, 'voice') !== null,
+    imagery: presentBrandBookPiece(tokens, 'imagery') !== null,
+    personality: presentBrandBookPiece(tokens, 'personality') !== null,
+    audience: presentBrandBookPiece(tokens, 'audience') !== null,
+    logo: presentBrandBookPiece(tokens, 'logo') !== null,
   };
-  return { full: Object.values(concrete).some(Boolean), ...concrete };
 }
 
 // Pure toggle used by the grounding popover. "full" is the master switch —

@@ -1,5 +1,6 @@
 'use client';
 
+import { actionDef } from '@continuum/contracts';
 import { Image, Loader2, Plus, Scissors, Type, Video, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from '@/components/ui/button';
@@ -171,6 +172,11 @@ export function ClipInspector({
   }
 
   const isVideo = item.kind !== 'image';
+  // The clip lane and the still lane are separate services, and only one of them can be
+  // held back — so this asks the registry about THIS clip's lane, not about the feature.
+  const heldBack = actionDef(
+    isVideo ? 'video.removeBackground' : 'image.removeBackground',
+  )?.comingSoon;
   const effects = item.effects ?? {};
   const adjustments = effects.adjustments ?? {};
   const transform = effects.transform ?? {};
@@ -651,7 +657,7 @@ export function ClipInspector({
               variant="secondary"
               size="sm"
               className="h-7 gap-1.5 text-2xs"
-              disabled={!sourceAssetId || backgroundRemoval.pending}
+              disabled={!sourceAssetId || backgroundRemoval.pending || Boolean(heldBack)}
               onClick={backgroundRemoval.run}
             >
               {backgroundRemoval.pending ? (
@@ -663,7 +669,9 @@ export function ClipInspector({
                 ? `Removing background… ${Math.round(backgroundRemoval.progress * 100)}%`
                 : 'Remove background'}
             </Button>
-            {sourceAssetId ? null : (
+            {heldBack ? (
+              <p className="text-2xs text-muted-foreground">{heldBack}</p>
+            ) : sourceAssetId ? null : (
               <p className="text-2xs text-muted-foreground">
                 Save this clip to the Library first — the background remover records the cutout
                 against its source.

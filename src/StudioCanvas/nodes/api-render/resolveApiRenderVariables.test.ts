@@ -77,7 +77,116 @@ describe('API render Canvas inputs', () => {
     ] as Edge[];
 
     const result = resolveApiRenderVariables({ nodeId: 'render', data: renderData, nodes, edges });
-    expect(result.errors).toEqual(['Hero image needs a Library asset']);
+    expect(result.errors).toEqual([
+      'Hero image is connected to something that is not saved in the Library yet',
+    ]);
+  });
+
+  // The bug this file exists to keep fixed: the backend registers a generated image and
+  // streams back its asset id, and for a long time nothing carried the VERSION id — so the
+  // node held a real Library asset and was told it needed a Library asset.
+  test('accepts a node that knows its asset but not its version', () => {
+    const nodes = [
+      { id: 'render', type: 'apiRender', data: renderData },
+      {
+        id: 'image',
+        type: 'image',
+        data: { image: 'https://example.test/a.png', assetId: 'asset-1' },
+      },
+    ] as StudioNode[];
+    const edges = [
+      {
+        id: 'edge',
+        source: 'image',
+        sourceHandle: 'image',
+        target: 'render',
+        targetHandle: 'variable-hero_image',
+      },
+    ] as Edge[];
+
+    const result = resolveApiRenderVariables({ nodeId: 'render', data: renderData, nodes, edges });
+    expect(result.errors).toEqual([]);
+    expect(result.variables.hero_image).toEqual({ assetId: 'asset-1' });
+  });
+
+  test('fills a media slot from the Library picker with nothing wired', () => {
+    const data: ApiRenderNodeData = {
+      ...renderData,
+      variables: {
+        ...renderData.variables,
+        hero_image: { assetId: 'picked-1', versionId: 'picked-v1' },
+      },
+    };
+    const nodes = [{ id: 'render', type: 'apiRender', data }] as StudioNode[];
+
+    const result = resolveApiRenderVariables({ nodeId: 'render', data, nodes, edges: [] });
+    expect(result.errors).toEqual([]);
+    expect(result.variables.hero_image).toEqual({ assetId: 'picked-1', versionId: 'picked-v1' });
+  });
+
+  test('a wired media source wins over the picked one', () => {
+    const data: ApiRenderNodeData = {
+      ...renderData,
+      variables: {
+        ...renderData.variables,
+        hero_image: { assetId: 'picked-1', versionId: 'picked-v1' },
+      },
+    };
+    const nodes = [
+      { id: 'render', type: 'apiRender', data },
+      {
+        id: 'image',
+        type: 'image',
+        data: {
+          image: 'https://example.test/a.png',
+          assetId: 'wired-1',
+          assetVersionId: 'wired-v1',
+        },
+      },
+    ] as StudioNode[];
+    const edges = [
+      {
+        id: 'edge',
+        source: 'image',
+        sourceHandle: 'image',
+        target: 'render',
+        targetHandle: 'variable-hero_image',
+      },
+    ] as Edge[];
+
+    const result = resolveApiRenderVariables({ nodeId: 'render', data, nodes, edges });
+    expect(result.errors).toEqual([]);
+    expect(result.variables.hero_image).toEqual({ assetId: 'wired-1', versionId: 'wired-v1' });
+  });
+
+  // A wire that carries nothing durable stays an error even with a pick behind it: the
+  // canvas depicts media flowing in, and rendering the pick would show something else.
+  test('a wired source with no Library identity is refused, pick or no pick', () => {
+    const data: ApiRenderNodeData = {
+      ...renderData,
+      variables: {
+        ...renderData.variables,
+        hero_image: { assetId: 'picked-1', versionId: 'picked-v1' },
+      },
+    };
+    const nodes = [
+      { id: 'render', type: 'apiRender', data },
+      { id: 'image', type: 'image', data: { image: 'data:image/png;base64,preview' } },
+    ] as StudioNode[];
+    const edges = [
+      {
+        id: 'edge',
+        source: 'image',
+        sourceHandle: 'image',
+        target: 'render',
+        targetHandle: 'variable-hero_image',
+      },
+    ] as Edge[];
+
+    const result = resolveApiRenderVariables({ nodeId: 'render', data, nodes, edges });
+    expect(result.errors).toEqual([
+      'Hero image is connected to something that is not saved in the Library yet',
+    ]);
   });
 
   test('serializes every scalar media input into a labeled variation', () => {
@@ -119,6 +228,54 @@ describe('API render Canvas inputs', () => {
       ],
       errors: [],
     });
+  });
+
+  // A picked asset is one value, so it BROADCASTS across a fan-out driven by another
+  // slot's wires — the same way a typed headline does. Fanning it out per variation would
+  // mean N renders of the same asset described as if they differed.
+  test('a picked asset broadcasts across a fan-out another slot drives', () => {
+    const logo = {
+      key: 'logo',
+      label: 'Logo',
+      kind: 'image' as const,
+      required: false,
+      multiple: false,
+      accept: ['image/*'],
+      options: [],
+      description: null,
+    };
+    const data: ApiRenderNodeData = {
+      ...renderData,
+      variableDefinitions: [...(renderData.variableDefinitions ?? []), logo],
+      variables: { ...renderData.variables, logo: { assetId: 'picked-logo' } },
+    };
+    const nodes = [
+      { id: 'render', type: 'apiRender', data },
+      { id: 'image-1', type: 'image', data: { assetId: 'asset-1', assetVersionId: 'version-1' } },
+      { id: 'image-2', type: 'image', data: { assetId: 'asset-2', assetVersionId: 'version-2' } },
+    ] as StudioNode[];
+    const edges = [1, 2].map(
+      (index) =>
+        ({
+          id: `edge-${index}`,
+          source: `image-${index}`,
+          sourceHandle: 'image',
+          target: 'render',
+          targetHandle: 'variable-hero_image',
+        }) as Edge,
+    );
+
+    const result = resolveApiRenderVariations({ nodeId: 'render', data, nodes, edges });
+    expect(result.errors).toEqual([]);
+    expect(result.count).toBe(2);
+    expect(result.records.map((record) => record.variables.logo)).toEqual([
+      { assetId: 'picked-logo' },
+      { assetId: 'picked-logo' },
+    ]);
+    expect(result.records.map((record) => record.variables.hero_image)).toEqual([
+      { assetId: 'asset-1', versionId: 'version-1' },
+      { assetId: 'asset-2', versionId: 'version-2' },
+    ]);
   });
 });
 
@@ -291,7 +448,9 @@ describe('API render Canvas inputs — a multiple media variable', () => {
       edges,
     });
 
-    expect(result.errors).toEqual(['Gallery needs a Library asset']);
+    expect(result.errors).toEqual([
+      'Gallery is connected to something that is not saved in the Library yet',
+    ]);
     expect(result.variables.gallery).toBeUndefined();
   });
 
@@ -325,7 +484,7 @@ describe('API render Canvas inputs — a multiple media variable', () => {
       edges: indexes.map(galleryEdge),
     });
 
-    expect(result.errors).toEqual(['Gallery needs a Library asset']);
+    expect(result.errors).toEqual(['Gallery takes at most 20 inputs — 21 are connected']);
   });
 
   test('a single-value variable still resolves to one bare pin, not a list', () => {

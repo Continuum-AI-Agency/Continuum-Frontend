@@ -38,6 +38,8 @@ export type LibrarySeedAsset = {
   bucket: string;
   storagePath: string;
   fileName: string;
+  /** `media.assets.head_version_id`, when the row has one. Pins the reference. */
+  headVersionId?: string | null;
 };
 
 export type CanvasTemplateNode = {
@@ -100,6 +102,11 @@ export function genNodeId(seedId: string, suffix: string): string {
 // Durable-only: no `image` / `sourceUrl`. The canvas re-signs from bucket+sourcePath
 // on load (resignCanvasNodes) and inlines the bytes at run (rehydrateWorkflowMedia).
 // `libraryAssetId` is the breadcrumb the round-trip reads back.
+//
+// `assetId`/`assetVersionId` carry the SAME pointer under the names every canvas
+// reader uses (drag-from-Library writes these). Seeding only `libraryAssetId` is what
+// made Remove Background say "save this to the Library first" about an asset that had
+// come straight out of it, and greyed out the node's Reformat button with it.
 function buildReferenceNode(asset: LibrarySeedAsset, seedId: string): CanvasTemplateNode {
   return {
     id: referenceNodeId(seedId),
@@ -110,6 +117,8 @@ function buildReferenceNode(asset: LibrarySeedAsset, seedId: string): CanvasTemp
       bucket: asset.bucket,
       sourcePath: asset.storagePath,
       libraryAssetId: asset.id,
+      assetId: asset.id,
+      ...(asset.headVersionId ? { assetVersionId: asset.headVersionId } : {}),
       ...(asset.kind === 'image' ? { referenceType: 'default' } : {}),
     },
     style: { width: REFERENCE_NODE_SIZE, height: REFERENCE_NODE_SIZE },

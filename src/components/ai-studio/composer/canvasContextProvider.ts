@@ -15,6 +15,7 @@ import {
 import type { AgentMentionProvider, AgentMentionSuggestion } from '@/lib/agent-references';
 import { ELEMENT_CATEGORY_LABEL } from '@/lib/ai-studio/elements';
 import { fetchBrandInsightsWeek } from '@/lib/api/brandInsights.client';
+import { describeSkillForGeneration } from '@/lib/brands/generationConfigPresentation';
 import {
   ELEMENTS_ROOT_KEY,
   elementCategoryFolderKey,
@@ -160,9 +161,7 @@ export function skillToCanvasMentionSuggestion(skill: Skill): AgentMentionSugges
     type: 'skill',
     source: 'canvas',
     group: skill.isTemplate ? 'Skill library' : 'Brand skills',
-    description: [skill.surface === 'both' ? 'copy + visual' : 'visual', skill.description]
-      .filter(Boolean)
-      .join(' · '),
+    description: describeSkillForGeneration(skill),
     badge: 'skill',
     reference: {
       id: skill.id,

@@ -6,6 +6,11 @@ import type React from 'react';
 import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/components/ui/ToastProvider';
+import {
+  defaultElementUseIntent,
+  type ElementCategory,
+  elementReferenceTypeForUse,
+} from '@/lib/ai-studio/elements';
 import { ELEMENT_DRAG_TYPE, parseElementDragPayload } from '@/lib/ai-studio/referenceDrop';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { STUDIO_ASSET_DROP_EFFECT } from '@/lib/creative-assets/studioAssetDrop';
@@ -81,6 +86,8 @@ export function useCanvasDnD() {
       const elementPayload = parseElementDragPayload(event.dataTransfer.getData(ELEMENT_DRAG_TYPE));
       if (elementPayload) {
         const { data, style } = createNodeData('element');
+        const category = elementPayload.category as ElementCategory;
+        const useIntent = defaultElementUseIntent(category);
         const elementNode: StudioNode = {
           id: uuidv4(),
           type: 'element',
@@ -91,6 +98,8 @@ export function useCanvasDnD() {
             elementName: elementPayload.name,
             elementCategory: elementPayload.category,
             previewUrl: elementPayload.previewUrl,
+            useIntent,
+            referenceType: elementReferenceTypeForUse(category, useIntent),
           },
           style,
         } as StudioNode;

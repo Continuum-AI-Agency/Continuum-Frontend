@@ -15,7 +15,8 @@ import {
   effectiveRigorTier,
   isGateableSection,
 } from '@continuum/contracts';
-import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { fetchDesignSystem } from '@/lib/brands/designSystem.client';
 
@@ -46,13 +47,12 @@ export type BrandDesignSectionsState = {
   readonly error: string | null;
 };
 
-const EMPTY: BrandDesignSectionsState = {
-  sections: [],
-  snapshot: null,
-  designSystemId: null,
-  isLoading: false,
-  error: null,
-};
+/** Module-level so the empty answer keeps one identity: callers put `sections` straight into
+ *  `useCallback` deps, and a fresh `[]` per render would rebuild those on every render. */
+const NO_SECTIONS: readonly BrandDesignSectionRow[] = [];
+
+export const brandDesignSectionsQueryKey = (brandId?: string) =>
+  ['brand-design-sections', brandId] as const;
 
 /**
  * Only the sections the brand left enabled.
@@ -76,40 +76,29 @@ export const designSectionRows = (
 };
 
 export function useBrandDesignSections(brandId?: string): BrandDesignSectionsState {
-  const [state, setState] = React.useState<BrandDesignSectionsState>(EMPTY);
+  const query = useQuery({
+    queryKey: brandDesignSectionsQueryKey(brandId),
+    queryFn: () => fetchDesignSystem(brandId as string),
+    enabled: Boolean(brandId),
+    staleTime: 5 * 60_000,
+  });
 
-  React.useEffect(() => {
-    if (!brandId) {
-      setState(EMPTY);
-      return;
-    }
+  const snapshot = query.data?.design_system ?? null;
+  // Derived per snapshot, not per render: `sections` lands in caller `useCallback` deps.
+  const sections = useMemo(
+    () => (snapshot ? designSectionRows(snapshot) : NO_SECTIONS),
+    [snapshot],
+  );
 
-    let cancelled = false;
-    setState({ ...EMPTY, isLoading: true });
-
-    fetchDesignSystem(brandId)
-      .then((response) => {
-        if (cancelled) return;
-        setState({
-          sections: response.design_system ? designSectionRows(response.design_system) : [],
-          snapshot: response.design_system,
-          designSystemId: response.design_system_id ?? null,
-          isLoading: false,
-          error: null,
-        });
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setState({
-          ...EMPTY,
-          error: error instanceof Error ? error.message : 'Could not read the design system.',
-        });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId]);
-
-  return state;
+  return {
+    sections,
+    snapshot,
+    designSystemId: query.data?.design_system_id ?? null,
+    isLoading: query.isLoading,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : 'Could not read the design system.'
+      : null,
+  };
 }

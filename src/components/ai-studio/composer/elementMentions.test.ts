@@ -9,6 +9,7 @@ import {
   expandElementMentions,
   parseElementCategoryFolderKey,
   readElementMention,
+  refreshElementMentions,
 } from './elementMentions';
 import { toCanvasComposerReferences } from './useCanvasComposer';
 
@@ -140,6 +141,19 @@ describe('readElementMention', () => {
         metadata: { kind: 'image' },
       }),
     ).toBeNull();
+  });
+});
+
+describe('refreshElementMentions', () => {
+  it('replaces cached mention assets with the current approved sheet', async () => {
+    const refreshed = await refreshElementMentions([mention(element())], async () =>
+      element({
+        defaultReferenceAssetId: asset(9),
+        referenceHistory: [asset(9)],
+      }),
+    );
+    expect(refreshed[0]?.id).toBe(asset(9));
+    expect(refreshed[0]?.metadata?.elementAssetIds).toEqual([asset(9)]);
   });
 });
 

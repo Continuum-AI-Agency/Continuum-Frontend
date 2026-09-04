@@ -45,6 +45,8 @@ const renderDetail = (
     onBack: mock(() => {}),
     onGenerateReference: mock(() => {}),
     onSetDefaultReference: mock((_assetId: string) => {}),
+    onAddReference: mock((_assetId: string) => {}),
+    onRestore: mock((_revisionIndex: number) => {}),
     onSave: mock(() => {}),
     ...overrides,
   };
@@ -66,6 +68,7 @@ describe('ElementDetail', () => {
     fetchMock.mockClear();
     originalFetch = globalThis.fetch;
     globalThis.fetch = fetchMock as never;
+    window.confirm = mock(() => true);
   });
 
   afterEach(() => {
@@ -76,9 +79,9 @@ describe('ElementDetail', () => {
   it('offers to generate the first reference and says what happens meanwhile', () => {
     renderDetail(buildElement());
 
-    expect(screen.getByRole('button', { name: /Generate reference/ })).toBeTruthy();
-    expect(screen.getByText(/No reference yet/)).toBeTruthy();
-    expect(screen.getByText('This image is what gets sent to the model.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Generate candidate sheet/ })).toBeTruthy();
+    expect(screen.getByText(/No reference sheet yet/)).toBeTruthy();
+    expect(screen.getByText('The approved sheet is what gets sent to the model.')).toBeTruthy();
   });
 
   it('reads the history strip off the reference ASSET list, newest FIRST', async () => {
@@ -95,12 +98,14 @@ describe('ElementDetail', () => {
     // Newest first, but the version NUMBER stays the stored position, so an entry keeps
     // its name when a newer one lands above it.
     expect(thumbs[0]?.getAttribute('aria-label')).toBe('Reference 2 — current default');
-    expect(thumbs[1]?.getAttribute('aria-label')).toBe('Use reference 1 as default');
+    expect(thumbs[1]?.getAttribute('aria-label')).toBe('Review and approve reference 1');
     expect(thumbs[0]?.getAttribute('aria-pressed')).toBe('true');
     expect(thumbs[1]?.getAttribute('aria-pressed')).toBe('false');
     // The big preview is the PINNED entry, not simply the newest.
     await waitFor(() => {
-      expect(screen.getByAltText('Aria reference').getAttribute('src')).toBe(signedUrlFor('ref-2'));
+      expect(screen.getByAltText('Aria reference sheet').getAttribute('src')).toBe(
+        signedUrlFor('ref-2'),
+      );
     });
   });
 
@@ -112,7 +117,7 @@ describe('ElementDetail', () => {
       }),
     );
 
-    fireEvent.click(screen.getByLabelText('Use reference 1 as default'));
+    fireEvent.click(screen.getByLabelText('Review and approve reference 1'));
 
     expect(props.onSetDefaultReference).toHaveBeenCalledWith('ref-1');
   });
@@ -131,7 +136,7 @@ describe('ElementDetail', () => {
     expect(props.onSetDefaultReference).not.toHaveBeenCalled();
   });
 
-  it('does not claim a cleared default is what gets sent to the model', () => {
+  it('shows an unapproved sheet as a candidate, not as what gets sent', async () => {
     // `resolveElementRefs` emits the raw MEMBERS when nothing is pinned, so showing the
     // newest history entry here would print a picture the model never sees directly
     // above the words "this image is what gets sent".
@@ -139,8 +144,8 @@ describe('ElementDetail', () => {
       buildElement({ referenceHistory: ['ref-1', 'ref-2'], defaultReferenceAssetId: null }),
     );
 
-    expect(screen.queryByAltText('Aria reference')).toBeNull();
-    expect(screen.getByText(/No reference pinned/)).toBeTruthy();
+    expect(await screen.findByAltText('Aria reference sheet')).toBeTruthy();
+    expect(screen.getByText(/Candidate sheet/)).toBeTruthy();
     // The history itself is still there to pin from.
     expect(screen.getByTestId('element-history-strip').querySelectorAll('button')).toHaveLength(2);
   });
@@ -169,7 +174,7 @@ describe('ElementDetail', () => {
       isGenerating: true,
     });
 
-    expect(screen.getByRole('button', { name: /Generating reference… 0s/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Generating sheet… 0s/ })).toBeTruthy();
     expect(screen.getByText('One paid image call, usually 15–20 seconds.')).toBeTruthy();
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
@@ -181,7 +186,7 @@ describe('ElementDetail', () => {
     );
 
     expect(
-      (screen.getByLabelText('Use reference 1 as default') as HTMLButtonElement).disabled,
+      (screen.getByLabelText('Review and approve reference 1') as HTMLButtonElement).disabled,
     ).toBe(true);
   });
 
@@ -190,7 +195,7 @@ describe('ElementDetail', () => {
       buildElement({ referenceHistory: ['ref-1'], defaultReferenceAssetId: 'ref-1' }),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Regenerate/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Generate candidate sheet/ }));
 
     expect(props.onGenerateReference).toHaveBeenCalled();
   });
@@ -199,7 +204,8 @@ describe('ElementDetail', () => {
     renderDetail(buildElement({ members: [] }));
 
     expect(
-      (screen.getByRole('button', { name: /Generate reference/ }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: /Generate candidate sheet/ }) as HTMLButtonElement)
+        .disabled,
     ).toBe(true);
   });
 
@@ -225,7 +231,7 @@ describe('ElementDetail', () => {
 
     fireEvent.change(screen.getByLabelText('Rights basis'), { target: { value: '  ' } });
 
-    const save = screen.getByRole('button', { name: 'Save changes' }) as HTMLButtonElement;
+    const save = screen.getByRole('button', { name: 'Replace Element' }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     expect(screen.getByText('A Character Element needs a rights basis.')).toBeTruthy();
     fireEvent.click(save);
@@ -238,11 +244,17 @@ describe('ElementDetail', () => {
     fireEvent.change(screen.getByLabelText('Guidelines'), {
       target: { value: 'the matte finish, not the glossy one' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace Element' }));
 
     expect(props.onSave).toHaveBeenCalledWith({
+      name: 'Aria',
+      category: 'product',
       guidelines: 'the matte finish, not the glossy one',
       rightsNote: null,
+      facts: [],
+      memberAssetIds: ['member-1'],
+      motionAssetId: null,
+      expectedUpdatedAt: '2026-08-24T00:00:00.000Z',
     });
   });
 });

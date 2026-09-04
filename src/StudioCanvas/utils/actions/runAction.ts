@@ -23,7 +23,7 @@ import {
   type TintBlend,
 } from './imageOps';
 import { setImageText } from './imageText';
-import { isOverlayActionId, runOverlayAction } from './overlayOp';
+import { isOverlayActionId, runImageOverlayAction, runOverlayAction } from './overlayOp';
 import { concatText, findReplace, type SplitTextMode, splitText } from './textOps';
 import { runLongExposureAction } from './videoOps';
 
@@ -55,6 +55,12 @@ export interface ResolvedActionInput {
    * rather than as an orphan. A pixel op ignores it entirely.
    */
   assetId?: string;
+  /**
+   * The node that produced this input. Carried so an op that REQUIRES `assetId` can
+   * mint the missing pointer against that node — registering the bytes it already
+   * holds — instead of refusing a run over media the Library can absorb.
+   */
+  sourceNodeId?: string;
 }
 
 export interface RunActionArgs {
@@ -260,6 +266,7 @@ const SYNC_OPS: Partial<Record<ActionId, SyncOp>> = {
   // The one image op that reads the BRAND, not just the pixels: where the lines break and
   // what has to happen to the photo are measured by `planPlacement` against this very image,
   // and the ink comes from a design-system token that is never re-derived in the draw path.
+  'image.overlay': (args, config) => runImageOverlayAction(args, config),
   'image.text': async (args, config) =>
     imageOutput(
       await setImageText({

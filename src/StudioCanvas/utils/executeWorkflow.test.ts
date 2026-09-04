@@ -2762,12 +2762,36 @@ describe('an edge that exists is never reported as missing', () => {
   // `Missing connected input for ref-image` — `element` is a source type the
   // resolvers had never been taught, so an obviously-connected wire looked empty.
   it('generates from an Element wired to ref-image (#290)', async () => {
+    const elementId = '11111111-1111-4111-8111-111111111111';
+    const assetId = '22222222-2222-4222-8222-222222222222';
+    globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/library/sign')) {
+        return Response.json({ signedUrl: 'https://cdn.example.com/current-sheet.png' });
+      }
+      return Response.json({
+        element: {
+          id: elementId,
+          brandId: '33333333-3333-4333-8333-333333333333',
+          name: 'Coke',
+          slug: 'coke',
+          category: 'product',
+          guidelines: null,
+          rightsNote: null,
+          members: [{ assetId, position: 0 }],
+          referenceHistory: [],
+          defaultReferenceAssetId: null,
+          createdAt: '2026-09-04T00:00:00.000Z',
+          updatedAt: '2026-09-04T00:00:00.000Z',
+        },
+      });
+    }) as typeof fetch;
     useStudioStore.getState().setNodes([
       {
         id: 'el',
         position: { x: 0, y: 0 },
         type: 'element',
-        data: { elementId: 'element-1', previewUrl: 'https://cdn.example.com/coke.png' },
+        data: { elementId, previewUrl: 'https://cdn.example.com/stale.png' },
       },
       { id: 'txt', position: { x: 0, y: 0 }, type: 'string', data: { value: 'make a person' } },
       { id: 'gen', position: { x: 0, y: 0 }, type: 'nanoGen', data: { model: 'nano-banana' } },
@@ -2782,6 +2806,9 @@ describe('an edge that exists is never reported as missing', () => {
 
     expect(String(nodeById('gen')?.data.error ?? '')).not.toMatch(/missing|not connected/i);
     expect(c.executeGeneration).toHaveBeenCalledTimes(1);
+    expect(c.executeGeneration.mock.calls[0]?.[1]).toMatchObject({
+      reference_images: [{ image_url: 'https://cdn.example.com/current-sheet.png' }],
+    });
   });
 
   // Bug #291: readiness passed and the request 400'd on

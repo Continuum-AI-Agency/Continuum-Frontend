@@ -8,7 +8,7 @@
  */
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import type { ApiRenderVariable } from '@continuum/contracts';
+import type { ApiRenderInputValue, ApiRenderVariable } from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
@@ -30,9 +30,12 @@ const variable = (overrides: Partial<ApiRenderVariable> = {}): ApiRenderVariable
 function renderFields(
   definitions: ApiRenderVariable[],
   extra: {
-    values?: Record<string, string | number | boolean>;
+    values?: Record<string, ApiRenderInputValue>;
+    brandId?: string | null;
     connectedKeys?: ReadonlySet<string>;
-    onChange?: (key: string, value: string | number | boolean) => void;
+    mediaStatus?: ReadonlyMap<string, { connected: number; ready: number; picked: number }>;
+    onChange?: (key: string, value: ApiRenderInputValue) => void;
+    onClear?: (key: string) => void;
   } = {},
 ) {
   return render(
@@ -40,8 +43,11 @@ function renderFields(
       <RenderVariableFields
         definitions={definitions}
         values={extra.values}
+        brandId={extra.brandId}
         connectedKeys={extra.connectedKeys}
+        mediaStatus={extra.mediaStatus}
         onChange={extra.onChange ?? (() => undefined)}
+        onClear={extra.onClear ?? (() => undefined)}
       />
     </ReactFlowProvider>,
   );
@@ -183,5 +189,67 @@ describe('RenderVariableFields — media and reserved geometry', () => {
     expect(screen.getByText('Brand logo')).toBeTruthy();
     expect(handleFor('watermark_logo')).toBeNull();
     expect(screen.queryByRole('textbox')).toBeNull();
+  });
+});
+
+// A media slot fills two ways. Both have to be reachable from the node, and the slot has
+// to say which one is winning — a picked asset silently overridden by a wire is the kind
+// of quiet disagreement that makes a render look like it ignored the user.
+describe('RenderVariableFields — a media slot fills by wire OR by pick', () => {
+  const hero = variable({ key: 'hero_image', label: 'Hero image', kind: 'image' });
+  const pin = { assetId: 'asset-1', versionId: 'version-1' };
+
+  test('offers the Library as well as the handle, in every state', () => {
+    renderFields([hero], { brandId: 'brand-1' });
+
+    expect(handleFor('hero_image')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /Choose from Library/ })).toBeTruthy();
+    expect(screen.getByText('Connect media or choose')).toBeTruthy();
+  });
+
+  test('a picked asset reads as filled, and can be taken back off', () => {
+    const cleared: string[] = [];
+    renderFields([hero], {
+      brandId: 'brand-1',
+      values: { hero_image: pin },
+      mediaStatus: new Map([['hero_image', { connected: 0, ready: 0, picked: 1 }]]),
+      onClear: (key) => cleared.push(key),
+    });
+
+    expect(screen.getByText('1 from Library')).toBeTruthy();
+    // The handle stays: picking must never take wiring away.
+    expect(handleFor('hero_image')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Hero image' }));
+    expect(cleared).toEqual(['hero_image']);
+  });
+
+  test('a wire over a pick says so rather than silently winning', () => {
+    renderFields([hero], {
+      brandId: 'brand-1',
+      values: { hero_image: pin },
+      mediaStatus: new Map([['hero_image', { connected: 1, ready: 1, picked: 1 }]]),
+    });
+
+    expect(screen.getByText('1 ready')).toBeTruthy();
+    expect(
+      screen.getByText('Connected — the wired media is used instead of this selection.'),
+    ).toBeTruthy();
+  });
+
+  test('several wires on a scalar slot still announce the fan-out', () => {
+    renderFields([hero], {
+      brandId: 'brand-1',
+      mediaStatus: new Map([['hero_image', { connected: 3, ready: 3, picked: 0 }]]),
+    });
+
+    expect(screen.getByText('3 ready · variations')).toBeTruthy();
+  });
+
+  test('without a brand the slot is wire-only, never a dead picker', () => {
+    renderFields([hero], { brandId: null });
+
+    expect(handleFor('hero_image')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /Choose from Library/ })).toBeNull();
   });
 });

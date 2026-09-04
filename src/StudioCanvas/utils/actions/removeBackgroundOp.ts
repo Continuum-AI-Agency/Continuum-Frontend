@@ -1,4 +1,5 @@
 import {
+  actionDef,
   type BackgroundRemovalCompletedData,
   type BackgroundRemovalEvent,
   backgroundRemovalEventSchema,
@@ -8,6 +9,7 @@ import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { NodeOutput } from '../../types/execution';
 import { runTimelineInWorker } from '../../workers/spliceWorkerClient';
+import { ensureNodeAssetRef } from '../nodeAssetRef';
 import type { ResolvedActionInput, RunActionArgs } from './runAction';
 
 /**
@@ -37,6 +39,8 @@ export interface RemoveBackgroundDeps {
   getToken?: () => Promise<string | null>;
   fetchImpl?: typeof fetch;
   newRequestId?: () => string;
+  /** Injected so the pointer ladder can be driven without the store or the network. */
+  ensureAssetRef?: typeof ensureNodeAssetRef;
 }
 
 const REQUEST_TIMEOUT_MS = 50 * 60 * 1_000;
@@ -88,18 +92,39 @@ async function requestRemoval(
   kind: 'image' | 'video',
   deps: RemoveBackgroundDeps,
 ): Promise<BackgroundRemovalCompletedData> {
+  // Both entry points funnel through here — the action node via `runAction`, and the
+  // Video Editor's clip inspector via `removeClipBackground` — so a lane held back in
+  // the registry is refused once, for both, rather than in each caller.
+  const heldBack = actionDef(`${kind}.removeBackground`)?.comingSoon;
+  if (heldBack) throw new Error(heldBack);
+
   const source: ResolvedActionInput | undefined = args.inputs.find((i) => i.handle === 'in');
   if (!source) throw new Error('Nothing is connected to this action\'s "in" input');
-  if (!source.assetId) {
-    // The cutout is registered as a DERIVATIVE of its source, so an input with no
-    // Library asset behind it has nothing to derive from. Saying so beats a 400.
+
+  const brandId = (deps.resolveBrandId ?? (() => useStudioStore.getState().brandId))();
+  if (!brandId) throw new Error('Select a brand before removing a background');
+
+  // The cutout is registered as a DERIVATIVE of its source, so this needs a Library
+  // asset. Most inputs already carry one; a node that does not — media pulled in from
+  // stock, or an older graph — gets one minted from the bytes it holds rather than a
+  // refusal, because "it came out of the Library" and "the canvas knows its id" turned
+  // out to be different things.
+  const sourceAssetId =
+    source.assetId ??
+    (source.sourceNodeId
+      ? (
+          await (deps.ensureAssetRef ?? ensureNodeAssetRef)({
+            nodeId: source.sourceNodeId,
+            brandId,
+            kind,
+          })
+        )?.assetId
+      : undefined);
+  if (!sourceAssetId) {
     throw new Error(
       'Save this media to the Library first — the background remover records the cutout against its source.',
     );
   }
-
-  const brandId = (deps.resolveBrandId ?? (() => useStudioStore.getState().brandId))();
-  if (!brandId) throw new Error('Select a brand before removing a background');
 
   const mode = config.mode === 'replace' ? 'replace' : 'remove';
   const requestId = (deps.newRequestId ?? (() => crypto.randomUUID()))();
@@ -114,7 +139,7 @@ async function requestRemoval(
     },
     body: JSON.stringify({
       brandId,
-      sourceAssetId: source.assetId,
+      sourceAssetId,
       requestId,
       kind,
       mode,

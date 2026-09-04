@@ -60,7 +60,10 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
   const sourceHandles = getAllowedSourceHandles(graphNode);
   const outputModality = actionOutputModality(data.actionId);
 
-  const implemented = actionId ? isImplementedAction(actionId) : false;
+  // Two different "cannot run": no runner has shipped, or the runner is fine and the
+  // service behind it is not live. The second one is temporary and says so.
+  const heldBack = def?.comingSoon;
+  const implemented = actionId ? isImplementedAction(actionId) && !heldBack : false;
   const hasConfig = actionId ? configFieldsFor(actionId).length > 0 : false;
 
   return (
@@ -99,7 +102,8 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
                 emptyLabel={
                   implemented
                     ? 'Ready to run'
-                    : `${def.label} is not available yet — no runner has shipped for it.`
+                    : (heldBack ??
+                      `${def.label} is not available yet — no runner has shipped for it.`)
                 }
               />
               <Button

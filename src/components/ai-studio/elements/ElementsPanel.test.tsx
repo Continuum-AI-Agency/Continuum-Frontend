@@ -113,7 +113,7 @@ describe('ElementsPanel', () => {
 
     renderPanel();
 
-    expect(await screen.findByText('no ref')).toBeTruthy();
+    expect(await screen.findByText('Needs sheet')).toBeTruthy();
   });
 
   it('drags an Element out as an element-drop payload, not as an image', async () => {

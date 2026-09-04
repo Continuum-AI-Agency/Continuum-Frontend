@@ -23,11 +23,20 @@ import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
-import { ELEMENT_CATEGORY_LABEL, type ElementRecord, useElements } from '@/lib/ai-studio/elements';
+import {
+  ELEMENT_CATEGORY_LABEL,
+  type ElementRecord,
+  getElement,
+  useElements,
+} from '@/lib/ai-studio/elements';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import { createCanvasComposerMentionProvider } from './canvasContextProvider';
-import { expandElementMentions, readElementMention } from './elementMentions';
+import {
+  expandElementMentions,
+  readElementMention,
+  refreshElementMentions,
+} from './elementMentions';
 import { StarterPickerButton } from './StarterPickerButton';
 import {
   type CanvasComposerState,
@@ -132,7 +141,7 @@ export function CanvasComposer({
       attachmentOnlyPrompt="Use the attached media as a visual reference."
       queuedText={queuedText}
       onQueuedTextConsumed={() => setQueuedText(null)}
-      onSubmit={(value, submittedAttachments, references) => {
+      onSubmit={async (value, submittedAttachments, references) => {
         const attachmentContext = buildAgentAttachmentContext(submittedAttachments, 'canvas');
         const resolvedReferences = mergeAttachmentReferences(
           references,
@@ -142,8 +151,12 @@ export function CanvasComposer({
         // An Element mention arrives holding ONE ref; a fallback Element still owes
         // the rest of its members, and every Element owes the model a line saying
         // what its image is.
-        const grounded = expandElementMentions(resolvedReferences);
-        void submit(value, selectedNodeIds, {
+        const grounded = expandElementMentions(
+          await refreshElementMentions(resolvedReferences, (elementId) =>
+            getElement(brandProfileId as string, elementId),
+          ),
+        );
+        await submit(value, selectedNodeIds, {
           remember: expanded,
           attachments: attachmentContext.attachments,
           references: grounded.references,

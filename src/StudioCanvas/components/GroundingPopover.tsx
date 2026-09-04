@@ -24,6 +24,10 @@ import { Check, Wand2 } from 'lucide-react';
 import Link from 'next/link';
 import React from 'react';
 import {
+  BrandBookPiecePreview,
+  SkillConfigPreview,
+} from '@/components/brand/GenerationConfigPreview';
+import {
   DropdownMenuCheckboxItem,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -35,14 +39,19 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  BRAND_BOOK_PIECE_LABELS,
+  describeSkillForGeneration,
+  presentBrandBookPiece,
+} from '@/lib/brands/generationConfigPresentation';
 import { useBrandBook } from '@/lib/brands/useBrandBook.client';
 import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
 import { useBrandDirectionPieces } from '@/lib/brands/useBrandDirectionPieces.client';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import {
-  BRAND_BOOK_PIECE_OPTIONS,
   brandBookAvailability,
+  CONCRETE_BRAND_BOOK_PIECES,
   enforcedConcretePieces,
   isBrandEnforced,
   isPieceEnforced,
@@ -134,6 +143,7 @@ type GroundingRow = {
   disabled?: boolean;
   label: string;
   description?: string | null;
+  preview?: React.ReactNode;
   hint?: string;
   onToggle: () => void;
 };
@@ -179,6 +189,7 @@ function useGroundingModel({
     [designSystemSections, contextual],
   );
   const wiredSections = React.useMemo(() => new Set(contextual?.wired ?? []), [contextual]);
+  const fullBook = presentBrandBookPiece(brandTokens, 'full');
 
   const enforceRow: GroundingRow = {
     key: 'full',
@@ -188,19 +199,25 @@ function useGroundingModel({
     disabled: !availability.full && !brandEnforced,
     onToggle: () => onTogglePiece('full'),
     label: 'Enforce brand book',
-    description: 'Force every piece of the brand book into the generation.',
+    description: fullBook?.description,
+    ...(fullBook ? { preview: <BrandBookPiecePreview presentation={fullBook} /> } : {}),
   };
 
   const bookRows: GroundingRow[] | null = availability.full
-    ? BRAND_BOOK_PIECE_OPTIONS.map(({ kind, label, description }) => ({
-        key: kind,
-        checked: isPieceEnforced(brandBookPieces, kind),
-        disabled: !availability[kind],
-        onToggle: () => onTogglePiece(kind),
-        label,
-        description,
-        ...(!availability[kind] ? { hint: 'not in brand book' } : {}),
-      }))
+    ? CONCRETE_BRAND_BOOK_PIECES.map((kind) => {
+        const presentation = presentBrandBookPiece(brandTokens, kind);
+        return {
+          key: kind,
+          checked: isPieceEnforced(brandBookPieces, kind),
+          disabled: !presentation,
+          onToggle: () => onTogglePiece(kind),
+          label: presentation?.label ?? BRAND_BOOK_PIECE_LABELS[kind],
+          description: presentation?.description,
+          ...(presentation
+            ? { preview: <BrandBookPiecePreview presentation={presentation} /> }
+            : { hint: 'not in brand book' }),
+        };
+      })
     : null;
 
   const directionRows: GroundingRow[] | null =
@@ -267,7 +284,8 @@ function useGroundingModel({
     checked: skillIds.includes(skill.id),
     onToggle: () => onToggleSkill(skill.id),
     label: `${skill.name}${skill.isTemplate ? ' · Library' : ''}`,
-    description: skill.description,
+    description: describeSkillForGeneration(skill),
+    preview: <SkillConfigPreview skill={skill} />,
   }));
 
   return {
@@ -296,9 +314,12 @@ const SUB_CONTENT_CLASS =
 
 function GroundingCheckboxRow({ row }: { row: GroundingRow }) {
   const rowLabel = (
-    <span className="min-w-0 flex-1 truncate">
-      {row.label}
-      {row.hint ? <span className="text-muted-foreground"> · {row.hint}</span> : null}
+    <span className="flex min-w-0 flex-1 items-center gap-2">
+      {row.preview}
+      <span className="min-w-0 flex-1 truncate">
+        {row.label}
+        {row.hint ? <span className="text-muted-foreground"> · {row.hint}</span> : null}
+      </span>
     </span>
   );
   return (
@@ -461,6 +482,7 @@ function ToggleRow({ row }: { row: GroundingRow }) {
       >
         {row.checked && <Check className="h-3 w-3" />}
       </span>
+      {row.preview}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">
           {row.label}

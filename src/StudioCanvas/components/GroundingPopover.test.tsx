@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { brandMdTokensSchema, type DesignSection } from '@continuum/contracts';
+
+let brandTokens: ReturnType<typeof brandMdTokensSchema.parse> | null = null;
 
 // The menu reads the BRAND's system, its book, its direction and its skills. Only the
 // first two shape what this file asserts; the rest are stubbed so the sections render.
@@ -19,7 +22,7 @@ mock.module('@/lib/brands/useBrandDesignSections.client', () => ({
   }),
 }));
 mock.module('@/lib/brands/useBrandBook.client', () => ({
-  useBrandBook: () => ({ brandTokens: null }),
+  useBrandBook: () => ({ brandTokens }),
 }));
 mock.module('@/lib/brands/useBrandDirectionPieces.client', () => ({
   useBrandDirectionPieces: () => ({ pieces: [] }),
@@ -28,7 +31,6 @@ mock.module('@/lib/organic/skills', () => ({
   useBrandSkills: () => ({ all: [], isLoading: false }),
 }));
 
-import type { DesignSection } from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
   DropdownMenu,
@@ -36,7 +38,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { GroundingChip } from './GroundingChip';
-import { effectiveDesignSections, GroundingMenuSections } from './GroundingPopover';
+import {
+  effectiveDesignSections,
+  GroundingMenuSections,
+  GroundingPopover,
+} from './GroundingPopover';
 
 const IMAGE_ROW: DesignSection[] = ['palette', 'imagery', 'logo'];
 
@@ -104,7 +110,29 @@ const rowFor = (label: string) =>
   screen.getAllByRole('menuitemcheckbox').find((item) => item.textContent?.startsWith(label));
 
 describe('GroundingMenuSections — structure', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    brandTokens = null;
+    cleanup();
+  });
+
+  it('renders the exact Brand Book token values in the generation controls', () => {
+    brandTokens = brandMdTokensSchema.parse({
+      brand_name: 'Bench Brand',
+      colors: [{ name: 'Signal red', role: 'primary', value: '#d7263d' }],
+    });
+    render(
+      <GroundingPopover
+        brandId="brand-1"
+        skillIds={[]}
+        brandBookPieces={['colors']}
+        onToggleSkill={() => {}}
+        onTogglePiece={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Signal red (primary) #d7263d')).toBeDefined();
+    expect(screen.getByLabelText('Brand colors: #d7263d')).toBeDefined();
+  });
 
   it(
     'renders one hover submenu trigger per section when the menu is open',

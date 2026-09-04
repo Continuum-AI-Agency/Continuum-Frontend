@@ -32,11 +32,27 @@ describe('buildLibraryCanvasTemplate — reference node', () => {
     expect(reference?.data.bucket).toBe('media-library');
     expect(reference?.data.sourcePath).toBe('brand/abc/hero-olive-oil-pour.png');
     expect(reference?.data.libraryAssetId).toBe(asset.id);
+    // Same pointer under the name every canvas reader uses. Seeding only
+    // `libraryAssetId` made Remove Background ask for a Library save on an asset that
+    // had just come out of the Library, and greyed out Reformat with it.
+    expect(reference?.data.assetId).toBe(asset.id);
     expect(reference?.data.fileName).toBe('hero-olive-oil-pour.png');
     // A stored signed URL would be dead by the time the canvas re-opened; the canvas
     // re-signs from bucket + sourcePath instead.
     expect(reference?.data.image).toBeUndefined();
     expect(reference?.data.sourceUrl).toBeUndefined();
+  });
+
+  it('pins the head version when the Library row has one', () => {
+    const graph = buildLibraryCanvasTemplate({
+      template: 'blank',
+      asset: { ...asset, headVersionId: 'version-9' },
+      seedId: SEED,
+    });
+    expect(refNode(graph)?.data.assetVersionId).toBe('version-9');
+    // A row with no head version pins nothing rather than pinning a null.
+    const unpinned = buildLibraryCanvasTemplate({ template: 'blank', asset, seedId: SEED });
+    expect(refNode(unpinned)?.data.assetVersionId).toBeUndefined();
   });
 
   it('uses a video reference node for a video asset on a blank canvas', () => {

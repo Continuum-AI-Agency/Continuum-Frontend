@@ -215,9 +215,15 @@ const TechniqueBody = ({ item }: { item: TechniqueItem }) => (
   </div>
 );
 
-/** What rides at the end of the row: who runs it, and for an op, what it runs on. */
+/** What rides at the end of the row: who runs it, and for an op, what it runs on.
+ *  A held-back op says so there instead — which lane it is matters less than the fact
+ *  that clicking it will not do anything. */
 const rowTag = (row: AddNodeRow): string =>
-  row.family ? `${ACTION_FAMILY_LABELS[row.family]} · ${row.tag}` : row.tag;
+  row.comingSoon
+    ? 'Coming soon'
+    : row.family
+      ? `${ACTION_FAMILY_LABELS[row.family]} · ${row.tag}`
+      : row.tag;
 
 /** What a row pre-configures on the node it creates — a video model, or an action's op. */
 const addOptionsFor = (
@@ -234,7 +240,13 @@ const RowLeadingIcon = ({ row, className }: { row: AddNodeRow; className?: strin
 const RowBody = ({ row }: { row: AddNodeRow }) => (
   <div className="flex min-w-0 flex-col">
     <span>{row.label}</span>
-    {row.desc ? <span className="text-xs text-muted-foreground">{row.desc}</span> : null}
+    {/* The held-back sentence REPLACES the description: two lines of prose on a row the
+        user cannot click is one line too many, and the reason is what they need. */}
+    {row.comingSoon ? (
+      <span className="text-xs text-muted-foreground">{row.comingSoon}</span>
+    ) : row.desc ? (
+      <span className="text-xs text-muted-foreground">{row.desc}</span>
+    ) : null}
   </div>
 );
 
@@ -309,7 +321,12 @@ export function AddNodeCommandPalette({
       // bundle. A pinned row keeps the value of the section it really belongs to.
       data-action-id={row.actionId}
       data-action-family={row.family}
-      onSelect={() => onAdd(row.type, addOptionsFor(row))}
+      data-coming-soon={row.comingSoon ? '' : undefined}
+      disabled={Boolean(row.comingSoon)}
+      onSelect={() => {
+        if (row.comingSoon) return;
+        onAdd(row.type, addOptionsFor(row));
+      }}
     >
       <RowLeadingIcon row={row} />
       <RowBody row={row} />
@@ -377,7 +394,12 @@ export function AddNodeCommandPalette({
       key={addNodeRowKey(row)}
       data-action-id={row.actionId}
       data-action-family={row.family}
-      onClick={() => onAdd(row.type, addOptionsFor(row))}
+      data-coming-soon={row.comingSoon ? '' : undefined}
+      disabled={Boolean(row.comingSoon)}
+      onClick={() => {
+        if (row.comingSoon) return;
+        onAdd(row.type, addOptionsFor(row));
+      }}
     >
       <RowLeadingIcon row={row} className="mr-2 h-4 w-4" />
       <RowBody row={row} />

@@ -817,7 +817,11 @@ describe('ApiRenderBlock — a multiple media variable', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
-    expect(await screen.findByText('Gallery needs a Library asset')).toBeTruthy();
+    expect(
+      await screen.findByText(
+        'Gallery is connected to something that is not saved in the Library yet',
+      ),
+    ).toBeTruthy();
     expect(calls.preflight.length).toBe(0);
   });
 
@@ -832,7 +836,7 @@ describe('ApiRenderBlock — a multiple media variable', () => {
     });
 
     expect((await screen.findAllByText('Images')).length).toBe(2);
-    expect((await screen.findAllByText('Connect media')).length).toBe(2);
+    expect((await screen.findAllByText('Connect media or choose')).length).toBe(2);
   });
 });
 

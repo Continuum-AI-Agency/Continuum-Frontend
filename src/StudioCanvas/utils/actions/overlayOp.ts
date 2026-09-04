@@ -5,7 +5,14 @@ import type {
   TimelineOverlayWorkerItem,
   TimelineWorkerItem,
 } from '../../workers/spliceWorkerProtocol';
-import { isOverlayPosition, type OverlayPosition, overlayTransform } from './overlayPresets';
+import { parseDataUrl } from '../dataUrl';
+import { canvasToDataUrl } from './imageOps';
+import {
+  isOverlayPosition,
+  type OverlayPosition,
+  overlayRect,
+  overlayTransform,
+} from './overlayPresets';
 import type { RunActionArgs } from './runAction';
 
 // `video.overlay` and `video.watermark` — burning an image into a clip's frames.
@@ -29,6 +36,9 @@ import type { RunActionArgs } from './runAction';
 // `endSec` to the clip's full duration. One placement implementation, one set of tests.
 
 export const OVERLAY_ACTION_IDS = ['video.overlay', 'video.watermark'] as const;
+
+/** The still burn-in. Separate list because it takes the CANVAS path, not the worker. */
+export const IMAGE_OVERLAY_ACTION_ID = 'image.overlay' as const;
 
 export const isOverlayActionId = (actionId: ActionId): boolean =>
   (OVERLAY_ACTION_IDS as readonly string[]).includes(actionId);
@@ -285,4 +295,87 @@ export async function runOverlayAction(
     onProgress: ({ progress }) => args.onProgress?.(progress),
   });
   return { type: 'video', url: result.objectUrl, sizeBytes: result.blob.size };
+}
+
+/**
+ * `image.overlay` — the same burn-in against a still.
+ *
+ * It shares `overlayRect` with the clip path deliberately: a logo an agent places on a
+ * static ad and the same logo watermarked onto that ad's video cut must land in the
+ * same spot, and two placement implementations would drift by a few percent that
+ * nobody notices until they sit side by side in one campaign.
+ *
+ * No worker and no timeline — a still has no time, so this is a draw onto a canvas.
+ */
+export async function runImageOverlayAction(
+  args: RunActionArgs,
+  config: Record<string, unknown>,
+): Promise<NodeOutput> {
+  const baseInput = args.inputs.find((input) => input.handle === 'in');
+  const baseSource =
+    baseInput?.imageUrl ?? (baseInput?.blob && URL.createObjectURL(baseInput.blob));
+  if (!baseSource) throw new Error('Connect an image to burn into');
+
+  const overlayInputs = args.inputs.filter((input) => input.handle === 'overlay-in');
+  if (overlayInputs.length === 0) throw new Error('Connect an image to burn in');
+
+  const base = await createImageBitmap(await fetchBlob(baseSource, 'the base image'));
+  const canvas = new OffscreenCanvas(base.width, base.height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not open a canvas to composite on');
+  ctx.drawImage(base, 0, 0);
+
+  const placement = readPlacement(config);
+  const targetAspect = base.width / base.height;
+
+  for (const input of overlayInputs) {
+    const source = input.imageUrl ?? (input.blob && URL.createObjectURL(input.blob));
+    if (!source) throw new Error('The connected image has no readable source');
+    const mark = await createImageBitmap(await fetchBlob(source, 'the overlay image'));
+    try {
+      const rect = overlayRect(
+        { ...placement, sourceAspect: mark.width / mark.height, targetAspect },
+        base.width,
+        base.height,
+      );
+      // Saved and restored per mark: an opacity left on the context would tint every
+      // overlay after this one, and the bug would look like "the second logo is faint".
+      ctx.save();
+      ctx.globalAlpha = placement.opacity;
+      ctx.drawImage(mark, rect.x, rect.y, rect.width, rect.height);
+      ctx.restore();
+    } finally {
+      mark.close();
+    }
+  }
+  base.close();
+
+  const parsed = parseDataUrl(await canvasToDataUrl(canvas));
+  return {
+    type: 'image',
+    base64: parsed?.base64 ?? '',
+    mimeType: parsed?.mimeType ?? 'image/png',
+  };
+}
+
+async function fetchBlob(source: string, what: string): Promise<Blob> {
+  const response = await fetch(source);
+  if (!response.ok) throw new Error(`Could not read ${what} (${response.status})`);
+  return response.blob();
+}
+
+/** The four placement fields, already parsed against the op's schema by `runAction`. */
+function readPlacement(config: Record<string, unknown>): {
+  position: OverlayPosition;
+  scale: number;
+  marginFrac: number;
+  opacity: number;
+} {
+  const position = isOverlayPosition(config.position) ? config.position : 'top-right';
+  return {
+    position,
+    scale: number(config.scale, 0.15),
+    marginFrac: number(config.marginFrac, 0.04),
+    opacity: number(config.opacity, 1),
+  };
 }

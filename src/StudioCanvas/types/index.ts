@@ -1,5 +1,6 @@
 import type {
   ActionId,
+  ApiRenderInputValue,
   ApiRenderOutput,
   ApiRenderVariable,
   BatchCombine,
@@ -14,6 +15,7 @@ import type {
   HyperframesAgentNodeData as ContractHyperframesAgentNodeData,
   DesignSection,
   EditorProductionSummary,
+  ElementUseIntent,
   ImageGeneratorModel,
   ImageSize,
   StudioEmittedModality,
@@ -526,7 +528,15 @@ export interface ApiRenderNodeData extends BaseNodeData {
   templateName?: string | null;
   contractHash?: string | null;
   variableDefinitions?: ApiRenderVariable[];
-  variables: Record<string, string | number | boolean>;
+  /**
+   * What the node itself holds for each variable — the typed field for a scalar, and for
+   * a media slot the Library asset picked directly into it.
+   *
+   * Media slots can be filled two ways, wire OR pick, so this carries pins as well as
+   * scalars. `ApiRenderInputValue` is the wire type verbatim rather than a narrower local
+   * one: a value that cannot be sent is a value that should never have been stored.
+   */
+  variables: Record<string, ApiRenderInputValue>;
   delivery?: {
     action: 'create';
     adAccountId?: string;
@@ -701,6 +711,13 @@ export interface ExportNodeData extends BaseNodeData {
 /** A saved brand Element, as a reusable reference. Runtime lands with the elements shell. */
 export interface ElementNodeData extends BaseNodeData {
   elementId: string | null;
+  elementName?: string;
+  elementCategory?: string;
+  useIntent?: ElementUseIntent;
+  previewUrl?: string;
+  motionUrl?: string;
+  assetId?: string;
+  referenceType?: ImageReferenceType;
 }
 
 /** One section of the brand design system, emitted as a reference. */

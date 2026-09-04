@@ -188,6 +188,7 @@ export function useWorkflowExecution() {
                 delta?: string;
                 progress?: number;
                 asset_id?: string;
+                asset_version_id?: string;
                 variation_index?: number;
                 delivery?: 'durable' | 'fallback';
               };
@@ -257,6 +258,10 @@ export function useWorkflowExecution() {
                     storageBucket: typeof parsed.bucket === 'string' ? parsed.bucket : undefined,
                     sizeBytes,
                     assetId: typeof parsed.asset_id === 'string' ? parsed.asset_id : undefined,
+                    assetVersionId:
+                      typeof parsed.asset_version_id === 'string'
+                        ? parsed.asset_version_id
+                        : undefined,
                   };
                   // A num_images run emits one event per variation, each tagged
                   // with its index. Absent means a plain single-image generation.
@@ -347,6 +352,10 @@ export function useWorkflowExecution() {
                     storageBucket: typeof parsed.bucket === 'string' ? parsed.bucket : undefined,
                     sizeBytes,
                     assetId: typeof parsed.asset_id === 'string' ? parsed.asset_id : undefined,
+                    assetVersionId:
+                      typeof parsed.asset_version_id === 'string'
+                        ? parsed.asset_version_id
+                        : undefined,
                   };
                 } else if (expectedMedium === 'video' && videoUrl) {
                   finalOutput = {
@@ -362,7 +371,14 @@ export function useWorkflowExecution() {
                 finalOutput?.type === 'image' &&
                 typeof parsed.asset_id === 'string'
               ) {
-                finalOutput = { ...finalOutput, assetId: parsed.asset_id };
+                // Both halves, or the node holds a Library identity it cannot pin with.
+                finalOutput = {
+                  ...finalOutput,
+                  assetId: parsed.asset_id,
+                  ...(typeof parsed.asset_version_id === 'string'
+                    ? { assetVersionId: parsed.asset_version_id }
+                    : {}),
+                };
               }
 
               if (eventName === 'complete' && expectedMedium === 'image') {

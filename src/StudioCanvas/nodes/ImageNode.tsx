@@ -77,6 +77,7 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { ImageNodeData, ImageReferenceType, StudioNode } from '../types';
 import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import { parseDataUrl } from '../utils/dataUrl';
+import { readNodeAssetRef } from '../utils/nodeAssetRef';
 import { resolveCollisions } from '../utils/nodeCollisions';
 import { resolveCanvasDropBase64 } from '../utils/resolveCanvasDropBase64';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
@@ -484,6 +485,9 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
           originalImage: result.signedUrl,
           fileName: result.fileName,
           assetId: result.assetId,
+          // Both halves. A derived node holding only an asset id cannot be wired into an
+          // API Render, and the reformat response already carries the exact version.
+          assetVersionId: result.versionId,
           sourcePath: result.storagePath,
           bucket: result.bucket,
           sourceUrl: result.signedUrl,
@@ -497,12 +501,16 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
     },
     [id, show],
   );
+  // Not `data.assetId`: a node seeded by "Open in Canvas" carries its Library pointer
+  // under `libraryAssetId`, and reading only one key greyed this out on an asset that
+  // was already in the Library.
+  const libraryAssetId = readNodeAssetRef(data)?.assetId;
   const quickReformat = useQuickReformat({
     brandId,
     asset:
-      preview && data.assetId
+      preview && libraryAssetId
         ? {
-            id: data.assetId,
+            id: libraryAssetId,
             kind: 'image',
             signedUrl: data.sourceUrl ?? preview,
           }
@@ -575,7 +583,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                     {preview && (
                       <QuickReformatMenu
                         asset={{
-                          id: data.assetId ?? '',
+                          id: libraryAssetId ?? '',
                           kind: 'image',
                           signedUrl: data.sourceUrl ?? preview,
                         }}
@@ -587,7 +595,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                             size="icon"
                             variant="secondary"
                             className="h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground"
-                            disabled={!data.assetId || !brandId}
+                            disabled={!libraryAssetId || !brandId}
                             onMouseDown={(event) => event.stopPropagation()}
                             title="Reformat image"
                             aria-label="Reformat image"

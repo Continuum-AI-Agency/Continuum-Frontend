@@ -6,6 +6,7 @@ import {
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import type { GeneratedImageVariation, PlannerDraftNodeData, StudioNode } from '../../types';
+import { readNodeAssetRef } from '../../utils/nodeAssetRef';
 
 /**
  * The Library asset a wired source actually produced — the exact one, version pinned.
@@ -26,14 +27,15 @@ const assetFromNode = (
     ? (data.generatedImages as GeneratedImageVariation[])
     : [];
   const variation = variations[variationIndexFromHandle(sourceHandle)];
-  const assetId = variation?.assetId ?? data.renderOutputAssetId ?? data.assetId;
-  if (typeof assetId !== 'string' || !assetId.trim()) return null;
-  const versionId =
-    variation?.assetVersionId ?? data.renderOutputAssetVersionId ?? data.assetVersionId;
-  return {
-    assetId: assetId.trim(),
-    ...(typeof versionId === 'string' && versionId.trim() ? { versionId: versionId.trim() } : {}),
-  };
+  if (variation?.assetId) {
+    return {
+      assetId: variation.assetId,
+      ...(variation.assetVersionId ? { versionId: variation.assetVersionId } : {}),
+    };
+  }
+  // Then whichever key this node's own Library pointer was written under —
+  // `readNodeAssetRef` is the one place that list of keys lives.
+  return readNodeAssetRef(data);
 };
 
 const IMAGE_SOURCE_TYPES = new Set(['image', 'nanoGen', 'frameExtract']);

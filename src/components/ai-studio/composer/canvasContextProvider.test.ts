@@ -92,6 +92,7 @@ describe('canvas composer context provider', () => {
       source: 'canvas',
       metadata: { skillId: 'skill-1', kind: 'creative_direction', slug: 'bold-product-lighting' },
     });
+    expect(suggestion.description).toBe('Hard light and crisp shadows.');
     expect(JSON.stringify(suggestion)).not.toContain('Use hard light.');
   });
 
