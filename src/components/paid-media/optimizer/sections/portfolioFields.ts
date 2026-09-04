@@ -152,6 +152,7 @@ export type PortfolioCurrentValues = Record<NumericFieldKey, number | null | und
   apply_mode: string;
   budget_source: string | null | undefined;
   lookback_window: string | null | undefined;
+  creative_analysis: string | null | undefined;
   period_start: string | null | undefined;
   period_end: string | null | undefined;
 };
@@ -170,6 +171,7 @@ export function createPortfolioFormSchema(
       apply_mode: PATCH_SHAPE.apply_mode.unwrap(),
       budget_source: PATCH_SHAPE.budget_source.unwrap(),
       lookback_window: PATCH_SHAPE.lookback_window.unwrap(),
+      creative_analysis: PATCH_SHAPE.creative_analysis.unwrap(),
       period_start: PATCH_SHAPE.period_start.unwrap(),
       period_end: PATCH_SHAPE.period_end.unwrap(),
       daily_total: numericField('daily_total', getUnit, current.daily_total),
@@ -228,6 +230,8 @@ export function toFormValues(
     apply_mode: current.apply_mode,
     budget_source: current.budget_source ?? 'observed',
     lookback_window: current.lookback_window ?? 'd14',
+    // Fails closed to match the service: an unknown/absent value is OFF, never on.
+    creative_analysis: current.creative_analysis ?? 'off',
     period_start: current.period_start ?? null,
     period_end: current.period_end ?? null,
     daily_total: toInput('daily_total', current.daily_total, unit),

@@ -656,9 +656,15 @@ export function CampaignAdSetWorkspace({
 
   const isMeta = platform === 'meta';
   const isLinkedIn = platform === 'linkedin';
-  const supportsNestedPaidSurfaces = isMeta || isLinkedIn;
-  const segmentLabel = isLinkedIn ? 'Segments' : 'Ad Sets';
-  const segmentLabelSingular = isLinkedIn ? 'segment' : 'ad set';
+  const isGoogleAds = platform === 'google-ads';
+  // Google reaches the same adsets/ads routes as Meta and LinkedIn now that
+  // paid-media-reporting dispatches google-ads to its own handlers instead of
+  // falling through to the Meta ones.
+  const supportsNestedPaidSurfaces = isMeta || isLinkedIn || isGoogleAds;
+  // Each platform's own word for the level between campaign and ad. Calling a
+  // Google ad group an "ad set" is wrong in the product's own UI.
+  const segmentLabel = isLinkedIn ? 'Segments' : isGoogleAds ? 'Ad Groups' : 'Ad Sets';
+  const segmentLabelSingular = isLinkedIn ? 'segment' : isGoogleAds ? 'ad group' : 'ad set';
   const creativeLabel = isLinkedIn ? 'Creatives' : 'Ads';
   const creativeLabelSingular = isLinkedIn ? 'creative' : 'ad';
 

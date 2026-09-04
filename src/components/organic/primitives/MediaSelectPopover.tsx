@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
+import type { KindFilterValue } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
 
 function SkeletonGrid() {
@@ -114,6 +115,8 @@ export function MediaSelectPopover({
   onEnrich,
   canEnrich = false,
   isEnriching = false,
+  initialKind,
+  maxSelectable,
 }: {
   brandProfileId: string;
   open: boolean;
@@ -127,9 +130,19 @@ export function MediaSelectPopover({
   onEnrich?: () => void;
   canEnrich?: boolean;
   isEnriching?: boolean;
+  /** Opens the browser on one media kind. The user can still widen it from the bar. */
+  initialKind?: KindFilterValue;
+  /** Hard cap on the selection, for a caller whose target accepts a fixed number. */
+  maxSelectable?: number;
 }) {
   const { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters } =
-    useStudioLibraryBrowser(brandProfileId);
+    useStudioLibraryBrowser(brandProfileId, {
+      ...(initialKind ? { initialFilters: { kind: initialKind } } : {}),
+      // Nothing is fetched until the surface opens. A canvas can hold one of these per
+      // media slot, and listing the whole Library once per closed popover on load is a
+      // cost nobody asked for.
+      enabled: open,
+    });
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
 
   // Reset the selection whenever the surface closes so a re-open starts clean.
@@ -151,8 +164,15 @@ export function MediaSelectPopover({
     return () => observer.disconnect();
   }, [hasMore, loadMore, assets.length, open]);
 
+  // A capped picker DROPS THE OLDEST rather than refusing the click. Refusing reads as a
+  // broken tile — the user clicked something and nothing happened — whereas rolling the
+  // window keeps the last N clicked, which is what "pick one" means on a one-slot target.
   const toggleAsset = (id: string) =>
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      const next = [...prev, id];
+      return maxSelectable && next.length > maxSelectable ? next.slice(-maxSelectable) : next;
+    });
 
   const selectedAssets = React.useMemo(() => {
     const byId = new Map(assets.map((a) => [a.id, a]));

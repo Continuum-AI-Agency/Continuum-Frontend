@@ -455,6 +455,21 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     };
   }, [commitSearch, trimmedQuery]);
 
+  // A FunctionsHttpError's `.message` is the constant "Edge Function returned a
+  // non-2xx status code"; the reason the function actually wrote is in the body.
+  // A 403 means this browser session is no longer an admin session — an
+  // impersonation link replaces the session in place (auth/impersonate/page.tsx),
+  // and an already-open /admin tab keeps its stale RSC state — so bounce the tab
+  // back through the server guard on this route.
+  async function adminEdgeError(error: unknown, fallback: string): Promise<string> {
+    const message = await readEdgeErrorMessage(error, fallback);
+    if (message === 'Forbidden') {
+      router.refresh();
+      return 'Your session is no longer an admin session (an impersonation link replaces it). Reload and sign in as yourself.';
+    }
+    return message;
+  }
+
   async function copyImpersonationLinkToClipboard(url: string): Promise<boolean> {
     try {
       await navigator.clipboard.writeText(url);
@@ -471,7 +486,8 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
       const { data, error } = await supabase.functions.invoke('impersonate-user', {
         body: { target_id: user.id },
       });
-      if (error || !data?.signInLink) throw new Error(error?.message ?? 'Failed to generate link');
+      if (error) throw new Error(await adminEdgeError(error, 'Unable to generate link.'));
+      if (!data?.signInLink) throw new Error('Failed to generate link');
       const copied = await copyImpersonationLinkToClipboard(data.signInLink);
       if (!copied) setImpersonationDialog({ email: user.email, link: data.signInLink });
       show({
@@ -500,7 +516,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         method: 'POST',
         body: { userId: user.id, isAdmin: !user.isAdmin },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await adminEdgeError(error, 'Unable to update admin flag.'));
       show({ title: user.isAdmin ? 'Admin revoked' : 'Admin granted', variant: 'success' });
       router.refresh();
     } catch (error) {
@@ -529,7 +545,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         method: 'POST',
         body: { brandProfileId: input.membership.brand_profile_id, tier: nextTierValue },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await adminEdgeError(error, 'Unable to save brand tier.'));
       show({ title: 'Brand tier updated', variant: 'success' });
       router.refresh();
     } catch (error) {
@@ -557,7 +573,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
           userId: membership.user_id,
         },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await adminEdgeError(error, 'Unable to remove member.'));
       show({ title: 'Member removed', variant: 'success' });
       router.refresh();
     } catch (error) {
@@ -585,7 +601,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         },
       );
       if (error) {
-        show({ title: 'Unable to load brands', description: error.message, variant: 'error' });
+        show({
+          title: 'Unable to load brands',
+          description: await adminEdgeError(error, 'Brand list request failed.'),
+          variant: 'error',
+        });
         return;
       }
       setBrands(data?.brands ?? []);
@@ -607,7 +627,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
           },
         },
       );
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await adminEdgeError(error, 'Workflow library request failed.'));
       const nextWorkflows = data?.workflows ?? [];
       setWorkflows(nextWorkflows);
       const nextIds = new Set(nextWorkflows.map((workflow) => workflow.id));
@@ -648,7 +668,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
           }),
         },
       );
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await adminEdgeError(error, 'Audit request failed.'));
       if (!isCurrent()) return;
       setAuditEntries(data?.entries ?? []);
       setAuditPagination(data?.pagination ?? null);
@@ -807,7 +827,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                 workflowId,
                 workflowName: nameById.get(workflowId) ?? workflowId,
                 status: 'failed' as const,
-                message: await readEdgeErrorMessage(error, 'Workflow transfer failed.'),
+                message: await adminEdgeError(error, 'Workflow transfer failed.'),
               };
             }
             const copiedAssets = data?.copiedAssets ?? 0;
@@ -847,7 +867,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
             },
           },
         );
-        if (error) throw new Error(error.message);
+        if (error) throw new Error(await adminEdgeError(error, 'Workflow transfer failed.'));
         return (data?.results ?? []).map((result) => ({
           workflowId: result.workflowId,
           workflowName: nameById.get(result.workflowId) ?? result.workflowId,
@@ -928,7 +948,8 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
           },
         },
       );
-      if (error) throw new Error(error.message);
+      if (error)
+        throw new Error(await adminEdgeError(error, 'Unable to run first value report smoke test.'));
       const result = data ?? { status: 'unknown' };
       setReportSmokeResult(result);
       show({

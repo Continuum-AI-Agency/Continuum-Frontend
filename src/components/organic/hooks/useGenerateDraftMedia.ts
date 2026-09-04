@@ -19,6 +19,7 @@ import { createClientRenderJob } from '@/lib/api/clientRenderJobs.client';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { openClientRenderInbox } from '@/lib/client-render/ClientRenderProvider';
+import { markRenderStartedHere } from '@/lib/client-render/ownedRuns';
 import { useCalendarStore } from '@/lib/organic/store';
 import { parseNdjson } from '@/lib/streaming/parseNdjson';
 import { patchUnlessUserSupplied } from './attachWinsGuard';
@@ -436,6 +437,11 @@ async function realizeReels(
               },
             },
           });
+          // This tab asked for the reel, so it may render it without an inbox click.
+          // Keyed by the job's sourceId, which every planner_reel enqueue sets to the
+          // draft id — four of these sat `ready` from July waiting for a click nobody
+          // knew to make (Airtable #296).
+          markRenderStartedHere(frame.draftId);
           patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
             ...draft,
             generationStage: undefined,

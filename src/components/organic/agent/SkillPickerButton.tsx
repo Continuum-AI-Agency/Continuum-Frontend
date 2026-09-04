@@ -4,6 +4,7 @@ import type { Skill } from '@continuum/contracts';
 import { Sparkles, Wand2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { SkillConfigPreview } from '@/components/brand/GenerationConfigPreview';
 import {
   Command,
   CommandEmpty,
@@ -13,6 +14,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { describeSkillForGeneration } from '@/lib/brands/generationConfigPresentation';
 
 // Authoring lives in Settings, not here — this popover applies skills. The same
 // deep-link backs the canvas grounding popover, so the two never drift.
@@ -70,17 +72,18 @@ export function SkillPickerButton({
               {copySkills.map((skill) => (
                 <CommandItem
                   key={skill.id}
-                  value={`${skill.name} ${skill.description ?? ''}`}
+                  value={`${skill.name} ${describeSkillForGeneration(skill)}`}
                   onSelect={() => {
                     onPickAction(skill);
                     setOpen(false);
                   }}
                 >
-                  <div className="flex flex-col">
+                  <SkillConfigPreview skill={skill} />
+                  <div className="min-w-0 flex flex-col">
                     <span className="text-sm font-medium">{skill.name}</span>
-                    {skill.description && (
-                      <span className="text-xs text-muted-foreground">{skill.description}</span>
-                    )}
+                    <span className="line-clamp-2 text-xs text-muted-foreground">
+                      {describeSkillForGeneration(skill)}
+                    </span>
                   </div>
                 </CommandItem>
               ))}
@@ -90,17 +93,18 @@ export function SkillPickerButton({
                 {copyTemplates.map((skill) => (
                   <CommandItem
                     key={skill.id}
-                    value={`${skill.name} ${skill.description ?? ''}`}
+                    value={`${skill.name} ${describeSkillForGeneration(skill)}`}
                     onSelect={() => {
                       onPickAction(skill);
                       setOpen(false);
                     }}
                   >
-                    <div className="flex flex-col">
+                    <SkillConfigPreview skill={skill} />
+                    <div className="min-w-0 flex flex-col">
                       <span className="text-sm font-medium">{skill.name}</span>
-                      {skill.description && (
-                        <span className="text-xs text-muted-foreground">{skill.description}</span>
-                      )}
+                      <span className="line-clamp-2 text-xs text-muted-foreground">
+                        {describeSkillForGeneration(skill)}
+                      </span>
                     </div>
                   </CommandItem>
                 ))}

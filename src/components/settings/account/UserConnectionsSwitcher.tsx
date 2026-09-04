@@ -11,6 +11,7 @@ import {
   type IntegrationSwitcherTab,
 } from '@/components/shadcn-studio/card/integration-switcher';
 import { Button } from '@/components/ui/button';
+import { formatGoogleCustomerId } from '@/lib/integrations/assetLabel';
 import type {
   ProviderReconnectPrompt,
   UserIntegrationSummary,
@@ -45,12 +46,27 @@ export function UserConnectionsSwitcher({
         icon: PLATFORM_ICONS[platformKey] ?? Plug,
       });
 
-      data[platformKey] = accounts.map<IntegrationSwitcherItem>((account) => ({
-        id: account.externalAccountId ?? account.id.slice(0, 6),
-        title: account.name || 'Unnamed account',
-        icon: PLATFORM_ICONS[platformKey] ?? Plug,
-        status: statusFor(account.status),
-      }));
+      data[platformKey] = accounts.map<IntegrationSwitcherItem>((account) => {
+        const externalId = account.externalAccountId;
+        // The row already prints the external id in its own column, so a name
+        // that fell back to that id would render twice. Google Ads customers
+        // arrive unnamed whenever Google refuses the descriptive_name lookup.
+        const isFallbackName =
+          !account.name ||
+          (!!externalId &&
+            (account.name === externalId || account.name === formatGoogleCustomerId(externalId)));
+        return {
+          id: account.id,
+          code: externalId
+            ? platformKey === 'googleAds'
+              ? formatGoogleCustomerId(externalId)
+              : externalId
+            : account.id.slice(0, 6),
+          title: isFallbackName ? 'Unnamed account' : account.name,
+          icon: PLATFORM_ICONS[platformKey] ?? Plug,
+          status: statusFor(account.status),
+        };
+      });
     });
 
     return { tabs, data, hasAny: tabs.length > 0 };

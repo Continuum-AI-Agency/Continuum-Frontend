@@ -70,6 +70,7 @@ import {
 } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { describeSkillForGeneration } from '@/lib/brands/generationConfigPresentation';
 import { requestOrganicJobRetry } from '@/lib/organic/agent-retry';
 import {
   fetchOrganicSessionMessagePage,
@@ -311,12 +312,7 @@ function skillToMentionSuggestion(skill: Skill, group = 'Skills'): AgentMentionS
     {
       key: `skill:${skill.id}`,
       group,
-      description: [
-        skill.surface === 'visual' ? 'visual' : skill.surface === 'both' ? 'copy + visual' : 'copy',
-        skill.description,
-      ]
-        .filter(Boolean)
-        .join(' · '),
+      description: describeSkillForGeneration(skill),
       badge: 'skill',
     },
   );

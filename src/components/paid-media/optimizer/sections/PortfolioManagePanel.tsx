@@ -27,6 +27,7 @@ import {
   type AdSetSnapshot,
   type ApplyMode,
   type BudgetSource,
+  type CreativeAnalysis,
   type CycleItemRow,
   type CyclePreviewItem,
   getOptimizationMetricDefinition,
@@ -236,6 +237,9 @@ export function PortfolioManagePanel({
       lookback_window: LOOKBACK_WINDOWS.includes(portfolio.lookback_window as LookbackWindow)
         ? portfolio.lookback_window
         : 'd14',
+      // Anything other than a literal 'on' is off. Same fail-closed rule the service
+      // applies when it parses this column.
+      creative_analysis: portfolio.creative_analysis === 'on' ? 'on' : 'off',
       period_start: portfolio.period_start,
       period_end: portfolio.period_end,
       daily_total: portfolio.daily_total,
@@ -288,6 +292,7 @@ export function PortfolioManagePanel({
   const applyMode = values.apply_mode as ApplyMode;
   const budgetSource = values.budget_source as BudgetSource;
   const lookbackWindow = values.lookback_window as LookbackWindow;
+  const creativeAnalysis = (values.creative_analysis as CreativeAnalysis) ?? 'off';
   // Metric follows the SELECTED objective so the target label + its unit conversion track it.
   const metric = getOptimizationMetricDefinition(objective);
   const formUnit = useMemo<UnitContext>(
@@ -695,6 +700,34 @@ export function PortfolioManagePanel({
               />
             ) : null}
           </div>
+        </div>
+      </Section>
+
+      <Section
+        description="Off, the optimizer compares each creative against the others in its ad set — it can tell you one costs more than its neighbour. On, it also reads each creative's own 14-day trend, which is the only way to see a creative wearing out rather than simply losing. Recommendations still need your approval either way."
+        title="Creative analysis"
+      >
+        <div className="space-y-1.5 sm:max-w-sm">
+          <Label htmlFor={`manage-creative-analysis-${portfolio.id}`}>Ad-level analysis</Label>
+          <Select
+            onValueChange={(value) =>
+              form.setValue('creative_analysis', value as CreativeAnalysis, { shouldDirty: true })
+            }
+            value={creativeAnalysis}
+          >
+            <SelectTrigger id={`manage-creative-analysis-${portfolio.id}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="off">Off — ad-set level only</SelectItem>
+              <SelectItem value="on">On — read each creative's own trend</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-2xs text-muted-foreground">
+            {creativeAnalysis === 'on'
+              ? 'This portfolio can flag a creative that is decaying, including in ad sets running a single creative — where there is nothing to compare against.'
+              : 'Turn on to see which creatives are wearing out. Reversible at any time; nothing else about this portfolio changes.'}
+          </p>
         </div>
       </Section>
 
