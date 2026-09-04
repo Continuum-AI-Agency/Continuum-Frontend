@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { cleanup, render, screen } from '@testing-library/react';
 
 // The node badge is the surface a user sees WITHOUT opening the config, so its whole job is to
@@ -29,7 +31,7 @@ describe('ActionBrandNote', () => {
     render(<ActionBrandNote actionId="image.text" />);
     const badge = screen.getByText('Canela');
     expect(badge.getAttribute('data-type-source')).toBe('brand-kit');
-    expect(badge.getAttribute('title')).toContain('the brand kit');
+    expect(badge.getAttribute('title')).toBeNull();
   });
 
   it('says plainly that no brand face was found rather than showing a bare family', () => {
@@ -37,7 +39,14 @@ describe('ActionBrandNote', () => {
     render(<ActionBrandNote actionId="image.text" />);
     const badge = screen.getByText(/no brand face/);
     expect(badge.getAttribute('data-type-source')).toBe('fallback');
-    expect(badge.getAttribute('title')).toContain('no brand face found');
+    expect(badge.getAttribute('title')).toBeNull();
+  });
+
+  it('routes badge and title-bar hover text through the themed tooltip', () => {
+    const chrome = readFileSync(join(import.meta.dir, '../NodeChrome.tsx'), 'utf8');
+    expect(chrome).toContain('<TooltipContent>{content}</TooltipContent>');
+    expect(chrome.match(/<ThemedHoverText content={title}>/g)).toHaveLength(2);
+    expect(chrome).not.toContain('title={title}');
   });
 
   it('says nothing at all for an op that resolves no brand value', () => {

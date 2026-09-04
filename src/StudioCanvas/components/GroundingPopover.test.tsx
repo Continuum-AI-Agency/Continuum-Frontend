@@ -347,16 +347,19 @@ describe('grounding chip + menu styling', () => {
     expect(codeOf('NodeInspectorPanel.tsx')).not.toContain('100vh');
   });
 
-  // TooltipContent is inverted (bg-foreground text-background): any light-theme text colour
-  // inside it renders dark-on-dark. Muted reads as opacity, and the canvas must not zoom
-  // when the wheel scrolls the menu. The editable chip's surface must open on hover, not
-  // only on click.
-  it('inherits the inverted tooltip colours, stops wheel events, and hover-opens', () => {
+  it('uses the themed popover surface for brand hover details', () => {
     const source = readFileSync(join(import.meta.dir, 'GroundingChip.tsx'), 'utf8');
+    const tooltip = codeOf('../../components/ui/tooltip.tsx');
+
     expect(source).toContain('nowheel');
     expect(source).toContain('openOnHover');
     expect(source).toContain('var(--available-height)');
     expect(source).not.toContain('text-muted-foreground');
     expect(source).not.toContain('text-foreground');
+    expect(tooltip).toContain('border bg-popover');
+    expect(tooltip).toContain('text-popover-foreground');
+    expect(tooltip).toContain('bg-popover fill-popover');
+    expect(tooltip).not.toContain('bg-foreground');
+    expect(tooltip).not.toContain('text-background');
   });
 });

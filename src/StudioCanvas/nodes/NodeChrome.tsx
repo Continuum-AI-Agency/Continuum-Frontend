@@ -9,7 +9,26 @@
 import type { LucideIcon } from 'lucide-react';
 import type React from 'react';
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+
+function ThemedHoverText({
+  content,
+  children,
+}: {
+  content?: string;
+  children: React.ReactElement;
+}) {
+  if (!content) return children;
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger render={children} />
+        <TooltipContent>{content}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 export function NodeTitleBar({
   icon: Icon,
@@ -36,26 +55,30 @@ export function NodeTitleBar({
       {/* `data-slot` so a geometry bench can find the node's own title and prove nothing is
           painted over it — a floating pill parked at `top-2` ate the first characters of
           this label on the HyperFrames node (Airtable #295). */}
-      <span data-slot="node-title" className="min-w-0 flex-1 truncate" title={title}>
-        {label}
-      </span>
+      <ThemedHoverText content={title}>
+        <span data-slot="node-title" className="min-w-0 flex-1 truncate">
+          {label}
+        </span>
+      </ThemedHoverText>
       {children}
     </div>
   );
 }
 
 /** The `Image`/`Video`/`Text`/count pill that sits at the right of a title bar. */
-export function NodeBadge({ className, children, ...props }: React.ComponentProps<'span'>) {
+export function NodeBadge({ className, children, title, ...props }: React.ComponentProps<'span'>) {
   return (
-    <span
-      className={cn(
-        'shrink-0 rounded-sm bg-muted px-1 text-[10px] font-medium text-muted-foreground',
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </span>
+    <ThemedHoverText content={title}>
+      <span
+        className={cn(
+          'shrink-0 rounded-sm bg-muted px-1 text-[10px] font-medium text-muted-foreground',
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </span>
+    </ThemedHoverText>
   );
 }
 
