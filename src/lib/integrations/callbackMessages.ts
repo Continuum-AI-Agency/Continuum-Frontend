@@ -9,6 +9,15 @@ export function successMessage(reason?: string | null): string {
   if (reason === 'no_ads_accounts' || reason === 'ads_enrichment_failed') {
     return 'Connected, but no Google Ads accounts were found.';
   }
+  // `mine: true` only sees channels the Google account owns directly, so a
+  // channel held as a Brand Account syncs nothing. Naming the fix is the whole
+  // point — the old silent success left YouTube simply absent.
+  if (reason === 'no_youtube_channels') {
+    return 'Connected, but no YouTube channel is owned by this Google account. If your channel is a Brand Account, reconnect and pick it at the Google account chooser.';
+  }
+  if (reason === 'youtube_enrichment_failed') {
+    return "Connected, but we could not load your YouTube channels. We'll retry on the next sync.";
+  }
   if (reason === 'meta_partial_sync') {
     return "Connected, but some Meta accounts may be missing. We'll keep trying to load them.";
   }

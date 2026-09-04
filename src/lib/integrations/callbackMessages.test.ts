@@ -45,3 +45,19 @@ describe('errorMessage', () => {
     expect(errorMessage('')).toBe('Connection failed.');
   });
 });
+
+describe('successMessage — YouTube outcomes', () => {
+  it('tells a Brand Account user how to actually get their channel', () => {
+    const message = successMessage('no_youtube_channels');
+    expect(message).toContain('Brand Account');
+    expect(message).toContain('reconnect');
+  });
+
+  it('distinguishes a failed channel load from an empty account', () => {
+    expect(successMessage('youtube_enrichment_failed')).toContain('could not load');
+  });
+
+  it('still reports a clean connect when nothing is wrong', () => {
+    expect(successMessage(null)).toBe('Integration connected.');
+  });
+});

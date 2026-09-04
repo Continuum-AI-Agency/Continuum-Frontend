@@ -39,15 +39,34 @@ export type UseStudioLibraryBrowserResult = {
 // GET /api/library/assets (paginated) and switches to POST /api/library/search
 // (text mode) when a query is present. Both honor the source/type chips. The
 // endpoints already return signed MediaAsset[], so there is no client mapping.
-export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowserResult {
+export function useStudioLibraryBrowser(
+  brandId: string,
+  options?: {
+    /**
+     * Where the browser STARTS, not where it is pinned — the user can still widen it from
+     * the filter bar. A caller that only accepts one kind (a render slot typed `image`)
+     * opens on that kind so the first screen cannot offer media the slot would refuse.
+     */
+    initialFilters?: Partial<StudioLibraryFilters>;
+    /**
+     * Whether to fetch at all. Default true, so every existing caller is unchanged.
+     *
+     * A caller that mounts this behind a closed surface passes the open state: a canvas
+     * holding several pickers would otherwise list the whole Library once per picker on
+     * load, for a panel nobody has opened.
+     */
+    enabled?: boolean;
+  },
+): UseStudioLibraryBrowserResult {
+  const enabled = options?.enabled ?? true;
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQueryState] = useState('');
   const [filters, setFiltersState] = useState<StudioLibraryFilters>({
-    source: 'all',
-    kind: 'all',
+    source: options?.initialFilters?.source ?? 'all',
+    kind: options?.initialFilters?.kind ?? 'all',
   });
 
   const offsetRef = useRef(0);
@@ -141,7 +160,7 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
 
   // Re-run whenever brand, filters, or the (debounced) query changes.
   useEffect(() => {
-    if (!brandId) return;
+    if (!brandId || !enabled) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const trimmed = query.trim();
     if (!trimmed) {
@@ -153,7 +172,9 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [brandId, query, runListPage, runSearch]);
+    // `enabled` is a dependency, not just a guard: a gated caller flips it on when its
+    // surface opens, and that transition IS the trigger for the first list.
+  }, [brandId, enabled, query, runListPage, runSearch]);
 
   const loadMore = useCallback(() => {
     if (loading || !hasMore || query.trim()) return;

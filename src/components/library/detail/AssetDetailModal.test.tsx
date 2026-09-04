@@ -1,7 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import type { MediaAsset } from '@continuum/contracts';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { brandMdTokensSchema, type MediaAsset } from '@continuum/contracts';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+
+let brandTokens: ReturnType<typeof brandMdTokensSchema.parse> | null = null;
+
+mock.module('@/lib/brands/useBrandBook.client', () => ({
+  useBrandBook: () => ({ brandTokens, isLoading: false }),
+}));
+
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { AssetDetailModal } from './AssetDetailModal';
 
@@ -24,6 +31,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  brandTokens = null;
   cleanup();
   globalThis.fetch = realFetch;
 });
@@ -57,6 +65,19 @@ describe('AssetDetailModal download affordance', () => {
   it('offers a download for an image', async () => {
     mount(<AssetDetailModal brandId="brand-1" asset={libraryAsset()} onClose={() => {}} />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Download' })).toBeDefined());
+  });
+
+  it('shows the exact Brand Book token in Brand quick look', async () => {
+    brandTokens = brandMdTokensSchema.parse({
+      brand_name: 'Bench Brand',
+      colors: [{ name: 'Signal red', role: 'primary', value: '#d7263d' }],
+    });
+    mount(<AssetDetailModal brandId="brand-1" asset={libraryAsset()} onClose={() => {}} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Brand quick look' }));
+
+    expect(await screen.findByText('Signal red (primary) #d7263d')).toBeDefined();
+    expect(screen.getAllByLabelText('Brand colors: #d7263d').length).toBeGreaterThan(0);
   });
 
   it('offers the same download for a video — the kind the record was filed against', async () => {

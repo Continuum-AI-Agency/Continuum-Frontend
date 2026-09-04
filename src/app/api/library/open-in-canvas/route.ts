@@ -28,6 +28,7 @@ type SeedAssetRow = {
   bucket: string;
   storage_path: string;
   file_name: string;
+  head_version_id: string | null;
 };
 
 // Service-role writes, exactly as the Backend canvas tools do: a canvas the user has
@@ -92,7 +93,7 @@ async function loadSeedAsset(
 ): Promise<LibrarySeedAsset | null> {
   const { data } = await mediaSchema(admin)
     .from('assets')
-    .select('id, kind, bucket, storage_path, file_name')
+    .select('id, kind, bucket, storage_path, file_name, head_version_id')
     .eq('id', assetId)
     .eq('brand_id', brandId)
     .is('deleted_at', null)
@@ -107,6 +108,7 @@ async function loadSeedAsset(
     bucket: row.bucket,
     storagePath: row.storage_path,
     fileName: row.file_name,
+    headVersionId: row.head_version_id,
   };
 }
 

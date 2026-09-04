@@ -10,6 +10,7 @@
 import type { BrandBookPieceKind, MediaAsset } from '@continuum/contracts';
 import { Loader2, Sparkles } from 'lucide-react';
 import { useCallback, useState } from 'react';
+import { BrandBookPiecePreview } from '@/components/brand/GenerationConfigPreview';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -22,7 +23,11 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
-  BRAND_BOOK_PIECE_OPTIONS,
+  BRAND_BOOK_PIECE_KINDS,
+  presentBrandBookPiece,
+} from '@/lib/brands/generationConfigPresentation';
+import { useBrandBook } from '@/lib/brands/useBrandBook.client';
+import {
   buildQuickLookRequest,
   generateStudioImage,
   type StudioImageResult,
@@ -36,17 +41,6 @@ export type QuickLookButtonProps = {
   brandId: string;
   asset: MediaAsset;
   onAssetChanged?: () => void;
-};
-
-const PIECE_LABELS: Record<BrandBookPieceKind, string> = {
-  full: 'Full brand book',
-  colors: 'Colors',
-  typography: 'Typography',
-  voice: 'Voice',
-  imagery: 'Imagery',
-  personality: 'Personality',
-  audience: 'Audience',
-  logo: 'Logo',
 };
 
 // 'full' expands to every piece server-side, so it is mutually exclusive with
@@ -81,6 +75,10 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
   const [saving, setSaving] = useState<'version' | 'asset' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { brandTokens, isLoading: isBrandBookLoading } = useBrandBook(brandId);
+  const brandPieces = BRAND_BOOK_PIECE_KINDS.map((kind) =>
+    presentBrandBookPiece(brandTokens, kind),
+  ).filter((piece) => piece !== null);
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
@@ -173,21 +171,32 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-wrap gap-1.5">
-            {BRAND_BOOK_PIECE_OPTIONS.map((piece) => {
-              const active = pieces.includes(piece);
+          <div className="grid gap-2 sm:grid-cols-2">
+            {isBrandBookLoading ? (
+              <p className="text-xs text-muted-foreground">Loading Brand Book…</p>
+            ) : null}
+            {!isBrandBookLoading && brandPieces.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No Brand Book tokens available.</p>
+            ) : null}
+            {brandPieces.map((piece) => {
+              const active = pieces.includes(piece.kind);
               return (
                 <Button
-                  key={piece}
+                  key={piece.kind}
                   type="button"
                   variant={active ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-7 rounded-full px-3 text-xs"
+                  className="h-auto justify-start gap-2 p-2 text-left"
                   aria-pressed={active}
                   disabled={generating}
-                  onClick={() => setPieces((prev) => togglePiece(prev, piece))}
+                  onClick={() => setPieces((prev) => togglePiece(prev, piece.kind))}
                 >
-                  {PIECE_LABELS[piece]}
+                  <BrandBookPiecePreview presentation={piece} size="card" />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-medium">{piece.label}</span>
+                    <span className="line-clamp-2 block text-[0.65rem] font-normal opacity-75">
+                      {piece.description}
+                    </span>
+                  </span>
                 </Button>
               );
             })}
@@ -263,7 +272,7 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
             <Button
               size="sm"
               onClick={() => void handleGenerate()}
-              disabled={generating || saving !== null}
+              disabled={generating || saving !== null || brandPieces.length === 0}
             >
               {generating ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
               {generating ? 'Generating…' : result ? 'Regenerate' : 'Generate'}

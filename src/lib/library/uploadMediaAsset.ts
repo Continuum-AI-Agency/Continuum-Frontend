@@ -26,7 +26,7 @@ import { attachAssetPreview } from './assetPreview';
 import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
 import { type attachVideoPoster, isVideoMimeType, probeVideoDurationSec } from './videoPoster';
 
-type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
+export type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
 export const MEDIA_LIBRARY_BUCKET = 'media-library';
 
@@ -137,7 +137,10 @@ async function invokeLibraryUpload(
   throw new Error(serverMessage ?? error.message ?? 'library-upload request failed');
 }
 
-async function signUpload(
+/** A service-role signed upload ticket for a new library object. Exported so
+ *  generated media (canvas composites, creative-ops results) can take the same
+ *  route to storage without also inheriting `register`'s `source:"upload"` row. */
+export async function signLibraryUpload(
   supabase: SupabaseBrowserClient,
   body: { brandId: string; fileName: string; mimeType: string },
 ): Promise<LibraryUploadTicket> {
@@ -147,7 +150,8 @@ async function signUpload(
   return parsed.data;
 }
 
-async function uploadToTicket(
+/** PUT the bytes straight to storage against a signed ticket. */
+export async function uploadToLibraryTicket(
   supabase: SupabaseBrowserClient,
   ticket: LibraryUploadTicket,
   file: File,
@@ -205,12 +209,12 @@ export async function uploadMediaAsset(
 
   const ticket =
     params.resume?.ticket ??
-    (await signUpload(supabase, { brandId, fileName: file.name, mimeType }));
+    (await signLibraryUpload(supabase, { brandId, fileName: file.name, mimeType }));
   params.onResumeState?.({ ticket, uploadUrl: params.resume?.uploadUrl ?? null });
   if (isProjectFile(file)) {
     await uploadProjectFile(supabase, ticket, params, deps);
   } else {
-    await uploadToTicket(supabase, ticket, file);
+    await uploadToLibraryTicket(supabase, ticket, file);
     params.onProgress?.({ uploadedBytes: file.size, totalBytes: file.size, percentage: 100 });
   }
 

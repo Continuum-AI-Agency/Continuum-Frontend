@@ -1,4 +1,5 @@
 import type { PlatformKey } from '@/components/onboarding/platforms';
+import { resolveAssetLabel } from '@/lib/integrations/assetLabel';
 import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import { isHigherPrivilegeRole } from '@/lib/integrations/metaRole';
 import type { SelectableAsset, SelectableAssetsResponse } from '@/lib/schemas/integrations';
@@ -341,9 +342,9 @@ export function filterSelectableAssetsByAccountIds(
 }
 
 export function getSelectableAssetLabel(
-  asset: Pick<SelectableAsset, 'name' | 'external_id'>,
+  asset: Pick<SelectableAsset, 'name' | 'external_id' | 'type'>,
 ): string {
-  return asset.name?.trim() || asset.external_id;
+  return resolveAssetLabel(asset);
 }
 
 export function getSelectableAssetsFlatList(response: SelectableAssetsResponse): SelectableAsset[] {

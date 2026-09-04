@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
+import { assetFallbackLabel } from '@/lib/integrations/assetLabel';
 import { mapIntegrationTypeToPlatformKey } from '@/lib/integrations/platform';
 import {
   type GoogleIntegrationMetadata,
@@ -95,7 +96,12 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
 
       summary[platformKey].accounts.push({
         id: row.asset_id as string,
-        name: (row.asset_name as string) ?? 'Account',
+        name:
+          (row.asset_name as string | null)?.trim() ||
+          assetFallbackLabel(
+            row.asset_type as string | null,
+            row.external_account_id as string | null,
+          ),
         status: (row.asset_status as string | null) ?? null,
         externalAccountId: (row.external_account_id as string | null) ?? null,
         provider: row.provider as string,
@@ -155,7 +161,7 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
 
       summary[platformKey].accounts.push({
         id: asset.id,
-        name: asset.name ?? integration.provider ?? 'Account',
+        name: asset.name?.trim() || assetFallbackLabel(asset.type, asset.external_account_id),
         status: asset.status ?? integration.status ?? null,
         externalAccountId: asset.external_account_id ?? null,
         provider: integration.provider,
