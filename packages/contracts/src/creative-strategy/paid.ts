@@ -18,6 +18,7 @@
 
 import { z } from 'zod';
 import { firstPartyCreativeAnalysisSchema } from './analysis';
+import { GLOBAL_ANGLE_DEFINITIONS, type GlobalAngleId, globalAngleIdSchema } from './angles';
 import { creativeAssetTypeSchema, creativeFunnelStageSchema } from './taxonomy';
 
 // Funnel-stage and asset-type vocabularies live in the shared cross-side
@@ -374,6 +375,14 @@ export const creativeRequestBriefSchema = paidIterationBriefSchema.extend({
   /** True when Meta's quality rankings say the EXECUTION is what's penalized: keep
    *  the angle that is working, rebuild the craft around it. */
   rebuildCraft: z.boolean().default(false),
+  /** The strategic selling angle this creative must run, drawn from the CLOSED global
+   *  vocabulary and agreed on the portfolio BEFORE anything was generated
+   *  (`portfolios.autogen.allowedAngles`). Null means no angle was agreed — which reads as
+   *  "unknown", never as "pick one". */
+  angleId: globalAngleIdSchema.nullable().default(null),
+  /** The saved Canvas workflow this brief should be produced through, when the portfolio
+   *  named one. Null keeps the one-shot prompt path. */
+  pipelineId: z.string().nullable().default(null),
 });
 export type CreativeRequestBrief = z.infer<typeof creativeRequestBriefSchema>;
 
@@ -389,6 +398,19 @@ export type CreativeVariationSeedInput = {
   posterUrl?: string | null;
   rebuildCraft?: boolean;
   groundedOn?: string[];
+  /** The recommendation's own reason — the decay/standing numbers that motivated the
+   *  swap, rendered as prose by the engine. Stamped onto the seed by the approval
+   *  fan-out (migration 20260903182800) because it lives on optimizer.recommendations
+   *  and the generate branch forwarded only the seed. This is what makes the brief say
+   *  WHY, not just WHAT. */
+  reason?: string | null;
+  /** The recommendation kind the seed came from, carried so a consumer does not have to
+   *  guess 'variate_creative' and silently title a seed_experiment as a variation. */
+  kind?: string | null;
+  /** The pre-agreed angle for this portfolio, chosen from `autogen.allowedAngles`. */
+  angleId?: GlobalAngleId | null;
+  /** The pipeline the portfolio nominated, if any. */
+  pipelineId?: string | null;
 };
 
 const CREATIVE_REQUEST_TITLES: Record<string, string> = {
@@ -429,6 +451,15 @@ export function buildCreativeRequestBrief(
     lines.push(`Keep close to the winning combination: ${labels}.`);
   }
 
+  // Stated before the references, because it is the instruction the rest qualifies. Quoted
+  // from the vocabulary rather than paraphrased: the label is what a human approved, and a
+  // rephrasing is where an agreed angle quietly becomes a different one.
+  if (seed.angleId) {
+    lines.push(
+      `Angle (pre-approved for this portfolio): ${GLOBAL_ANGLE_DEFINITIONS[seed.angleId]}`,
+    );
+  }
+
   if (seed.winnerAdId) lines.push(`Reference ad: ${seed.winnerAdId}.`);
   if (seed.winnerAssetId) {
     lines.push(`The winning creative is in the Library as asset ${seed.winnerAssetId}.`);
@@ -453,6 +484,8 @@ export function buildCreativeRequestBrief(
     winnerAssetId: seed.winnerAssetId ?? null,
     posterUrl: seed.posterUrl ?? null,
     rebuildCraft: seed.rebuildCraft ?? false,
+    angleId: seed.angleId ?? null,
+    pipelineId: seed.pipelineId ?? null,
   });
 }
 

@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 import { competitorAdHookArchetypeSchema } from '../competitor-spy/analysis';
+import { globalAngleIdSchema } from '../creative-strategy/angles';
 import {
   AdSetSnapshotSchema,
   FreezeReasonSchema,
@@ -195,6 +196,18 @@ export type BudgetSource = z.infer<typeof BudgetSourceSchema>;
 export const LookbackWindowSchema = z.enum(['d7', 'd14', 'd30']);
 export type LookbackWindow = z.infer<typeof LookbackWindowSchema>;
 
+/** Opt-in to creative/ad-level analysis on one portfolio.
+ *
+ *  'on' folds the per-ad attribution series (paid_media.ad_breakdown_daily, already pulled
+ *  every cycle) onto each snapshot, which is what lets the engine distinguish a creative
+ *  that is DECAYING from one that is merely worse than the creative beside it. Off is
+ *  today's behaviour exactly.
+ *
+ *  Deliberately not a `level` value: `level` picks the ingest scope and the applier's write
+ *  field and is fixed at enrollment, whereas this is reversible on a live portfolio. */
+export const CreativeAnalysisSchema = z.enum(['off', 'on']);
+export type CreativeAnalysis = z.infer<typeof CreativeAnalysisSchema>;
+
 /** One ABO campaign's observable daily pool: the sum of its ACTIVE ad sets that own a
  * daily_budget. Read-only metadata; it is deliberately not part of AdSetSnapshotSchema so
  * the optimization engine cannot accidentally treat it as an allocation input. */
@@ -330,6 +343,42 @@ export const UpdatePortfolioPatchSchema = z
     period_budget: z.number().nonnegative().nullable().optional(),
     budget_source: BudgetSourceSchema.optional(),
     lookback_window: LookbackWindowSchema.optional(),
+    creative_analysis: CreativeAnalysisSchema.optional(),
+    /** Route approved creative recommendations to the MACHINE instead of a human task.
+     *
+     *  Read the consequence before exposing this: with `enabled: true`,
+     *  optimizer_set_recommendation_status stops writing a renewal_tasks row and enqueues
+     *  an optimizer.creative_swap_jobs row instead, which the swap worker produces an
+     *  asset for and publishes as a NEW PAUSED ad beside the reference ad. Paused, never
+     *  live — activation stays a human verdict — but an object IS created on the ad
+     *  account. Default off, and it had no writer at all before this: every one of 153
+     *  portfolios read `{}`, which is why 5 real human approvals produced 0 swap jobs. */
+    autogen: z
+      .object({
+        enabled: z.boolean(),
+        /**
+         * The angles a human has already agreed this portfolio may sell on. The DCO picks
+         * WITHIN this list and may never step outside it.
+         *
+         * This is the "not fake autonomous" line. The alternative — let the machine choose
+         * an angle per creative and put an accept button under the finished design — asks a
+         * person to judge a strategy from a picture, after the money to make it was already
+         * spent. Approving the angle list once, up front, is the same consent taken at the
+         * point where it is cheap and where it is actually about strategy.
+         *
+         * Drawn from the CLOSED global vocabulary, so an off-list value is a hard reject
+         * rather than a coerce — a coerce would launder a hallucinated strategy into the
+         * store as a legitimate-looking row. An empty or absent list means no angle has been
+         * agreed, which is not the same as "any angle is fine".
+         */
+        allowedAngles: z.array(globalAngleIdSchema).max(29).optional(),
+        /**
+         * The saved Canvas workflow (a Technique — declared input and output ports) the DCO
+         * runs to make the creative. Absent keeps the one-shot prompt path.
+         */
+        pipelineId: z.string().uuid().optional(),
+      })
+      .optional(),
     // Flight window — null clears the date, returning the portfolio to unpaced.
     period_start: z.string().date().nullable().optional(),
     period_end: z.string().date().nullable().optional(),
@@ -706,6 +755,10 @@ export const PortfolioListItemSchema = z.object({
   // render as a fixed target the user never set.
   budget_source: z.string().nullable().optional(),
   lookback_window: z.string().nullable().optional(),
+  // Declared for the same reason as budget_source above: optimizer_list_portfolios returns
+  // it, and an UNDECLARED field is stripped by this parse — after which the Manage panel
+  // would render the opt-in as 'off' on a portfolio that is actually 'on'.
+  creative_analysis: z.string().nullable().optional(),
   period_start: z.string().nullable().optional(),
   period_end: z.string().nullable().optional(),
   status: z.string(),

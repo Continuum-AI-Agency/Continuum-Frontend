@@ -1,5 +1,6 @@
 export * from './action-registry';
 export * from './agent-vocabulary';
+export * from './api-render-variables';
 export * from './api-renders';
 export * from './batch-node';
 export * from './brand-direction-pieces';
