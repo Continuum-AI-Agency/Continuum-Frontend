@@ -12,16 +12,25 @@ import type { EngineConfig } from './config';
 import { kpiEvents } from './scoring';
 import type { AdSetSnapshot, CpaInterval, WindowMetrics } from './types';
 
-/** CI on CPA = spend / events. The uncertainty is in the event count: events are
- *  ~Poisson, so a count of N has SD ~sqrt(N). Few events => wide CPA interval. */
-export function cpaInterval(m: WindowMetrics, cfg: EngineConfig, z = 1.96): CpaInterval {
-  const events = kpiEvents(m, cfg);
-  if (events <= 0 || m.spend <= 0) return { cpa: 0, lo: 0, hi: 0, events: 0 };
-  const cpa = m.spend / events;
+/** CI on cost-per-event from raw spend and event counts. The uncertainty is in the
+ *  event count: events are ~Poisson, so a count of N has SD ~sqrt(N). Few events =>
+ *  wide interval.
+ *
+ *  Split out from cpaInterval so anything holding a (spend, events) pair — a creative
+ *  bucket, a label cluster, an ad — prices its uncertainty with the SAME arithmetic an
+ *  ad set does. Two Poisson intervals in one codebase is one too many. */
+export function costInterval(spend: number, events: number, z = 1.96): CpaInterval {
+  if (events <= 0 || spend <= 0) return { cpa: 0, lo: 0, hi: 0, events: 0 };
+  const cpa = spend / events;
   const se = Math.sqrt(events);
   const eLo = Math.max(events - z * se, 1e-6); // clamp so the upper CPA bound stays finite
   const eHi = events + z * se;
-  return { cpa, lo: m.spend / eHi, hi: m.spend / eLo, events };
+  return { cpa, lo: spend / eHi, hi: spend / eLo, events };
+}
+
+/** CI on CPA = spend / events for one window, using the config's KPI currency. */
+export function cpaInterval(m: WindowMetrics, cfg: EngineConfig, z = 1.96): CpaInterval {
+  return costInterval(m.spend, kpiEvents(m, cfg), z);
 }
 
 /** Ad-set CPA interval over the widest (most stable) window. */

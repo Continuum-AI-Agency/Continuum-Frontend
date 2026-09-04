@@ -118,10 +118,24 @@ export const apiRenderTemplateListResponseSchema = z
   .strict();
 export type ApiRenderTemplateListResponse = z.infer<typeof apiRenderTemplateListResponseSchema>;
 
+/**
+ * A durable Library coordinate for a media variable.
+ *
+ * `versionId` is OPTIONAL because a caller frequently holds an asset id without the
+ * exact version: a node stamped by a producer that only carried the asset id, a
+ * Library asset whose `head_version_id` was never materialized, or a slot filled
+ * straight from the Library picker. Refusing those made the canvas say "needs a
+ * Library asset" about an asset that was already in the Library.
+ *
+ * Omitting it is not a loosening of the version pin. Preflight resolves the head
+ * version server-side and freezes the exact `{assetId, versionId}` into the signed
+ * confirmation, so a render is still reproducible against one immutable version —
+ * the same way the reserved `watermark_logo` pin has always been resolved.
+ */
 export const pinnedRenderAssetSchema = z
   .object({
     assetId: z.string().uuid(),
-    versionId: z.string().uuid(),
+    versionId: z.string().uuid().optional(),
   })
   .strict();
 export type PinnedRenderAsset = z.infer<typeof pinnedRenderAssetSchema>;

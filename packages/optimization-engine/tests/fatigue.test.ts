@@ -210,3 +210,34 @@ test('F1 needs the 3d CTR below 0.75x the 14d baseline — at the threshold it d
   }); // 3d CTR 1.9% > 1.875%
   expect(evaluateFatigue([held], DEFAULT_CONFIG).length).toBe(0);
 });
+
+test('F1 fires when CTR collapses to exactly zero on real delivery', () => {
+  // The worst case there is: still serving 10k impressions in d3, still converting,
+  // CPA rising — and not one click. `ctrRecent > 0` used to discard it.
+  const collapsed = decaying({
+    windows: {
+      d3: w(600, 10, 0, 10_000),
+      d7: w(1800, 35, 250, 25_000),
+      d14: w(4000, 100, 500, 50_000),
+    },
+  });
+  const recs = evaluateFatigue([collapsed], DEFAULT_CONFIG);
+  expect(recs.map((r) => r.trigger)).toContain('F1_creative_fatigue');
+});
+
+test('an ad set that did not deliver at all in d3 is not called fatigued', () => {
+  // Zero impressions is missing data, not worn-out creative — the distinction the
+  // old `ctrRecent > 0` guard was reaching for and got wrong in both directions.
+  const undelivered = decaying({
+    windows: {
+      d3: w(600, 10, 0, 0),
+      d7: w(1800, 35, 250, 25_000),
+      d14: w(4000, 100, 500, 50_000),
+    },
+  });
+  expect(
+    evaluateFatigue([undelivered], DEFAULT_CONFIG).some(
+      (r) => r.trigger === 'F1_creative_fatigue',
+    ),
+  ).toBe(false);
+});

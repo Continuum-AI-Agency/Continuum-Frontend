@@ -187,6 +187,16 @@ export type AdSetSnapshot = {
   archivalWindows?: {
     d30: WindowMetrics; // CUMULATIVE 0-30d
   };
+  /** Per-AD trends for the creatives that delivered in this ad set, one entry per ad.
+   *
+   *  Present only when ad-level attribution landed this cycle AND the portfolio opted in
+   *  (`optimizer.portfolios.creative_analysis = 'on'`). Absent means UNKNOWN — never that
+   *  the creatives held steady. Nothing reading this may treat a missing entry as zero.
+   *
+   *  This is the difference between creative RANKING and creative FATIGUE: `creative` above
+   *  is a d14 snapshot and can only say one creative beats another; only a series can say a
+   *  creative is decaying. */
+  creativeSeries?: CreativeAdSeries[];
   /** Per-day raw counts (up to 30d, oldest-first) the windows are rolled up from —
    *  the score system's daily grain + FE charts + archival. Every scoring window
    *  (d3 ⊆ d7 ⊆ d14) is derived from this one series, so 30 days covers all of them.
@@ -241,12 +251,77 @@ export type CreativeStandingAd = {
    *  and did any of it beat it?" is answerable later. Null ⇒ never imported, nothing to
    *  generate from (see `winner_not_in_library`). */
   assetId?: string | null;
-  /** The winning creative's semantic labels — hook, angle, visual style, value props.
-   *  This is what a variation brief is built FROM. */
+  /** The creative's semantic labels — hook, angle, visual style, value props.
+   *  This is what a variation brief is built FROM. Carried for the winner AND the
+   *  laggards: "what is winning vs what is live" needs both sides, and until
+   *  20260903182537 only the winner had them. */
   labels?: Record<string, unknown> | null;
   /** Where the creative's media can be read (poster or image). Needed to actually make a
    *  variation of it rather than a description of it. */
   posterUrl?: string | null;
+  /** Meta's delivery frequency for this creative in the window. The one fatigue signal at
+   *  CREATIVE grain. Projected for the winner only today. */
+  frequency?: number | null;
+};
+
+/** One creative's OWN trend, cumulative exactly like AdSetSnapshot.windows (d3 ⊆ d7 ⊆ d14).
+ *
+ *  Deliberately NOT a field on CreativeStandingAd. A standing is a COMPARISON: its `winner`
+ *  is withheld unless at least two creatives competed, and `laggards` holds only ranks below
+ *  first — so an ad set running one creative has an empty winner AND an empty laggards list.
+ *  That is 37 of 53 live ad sets, and it is precisely where a per-ad trend is the only signal
+ *  there is. Hanging the series off the comparison would make it unavailable in exactly the
+ *  case it exists for.
+ *
+ *  So the series is a ROSTER, keyed by ad id, sourced from `paid_media.ad_breakdown_daily`,
+ *  which enumerates every ad that delivered regardless of how it ranks. */
+/** Video retention counts for one window. Deliberately NOT part of WindowMetrics:
+ *  that type is indexed by `kpiField: keyof WindowMetrics` (config.ts), so every field
+ *  in it is a currency an ad set can DECLARE it is buying. A retention curve is a
+ *  diagnostic SHAPE, never a conversion currency — putting it there would make
+ *  `kpiField: 'videoP25'` type-legal and price creatives in quartile views.
+ *
+ *  Read the derived rates off `retentionRates`, not these raw counts. */
+export type RetentionMetrics = {
+  impressions: number;
+  videoP25: number;
+  videoP50: number;
+  videoP75: number;
+  thruplays: number;
+};
+
+/** The three ratios a creative team can act on, derived from RetentionMetrics.
+ *  Null means the denominator was zero — unknown, never "bad".
+ *
+ *  NOTE ON `hook`: the industry hook rate is 3-second-views / impressions. Meta's
+ *  `video_3s` is requested by nobody in this pipeline and is 0% populated in
+ *  `paid_media.ad_breakdown_daily`, so hook here is p25/impressions — a STRICTER
+ *  bar (quarter-watched, not three seconds). It is comparable across our own ads
+ *  but is NOT the same number a media buyer quotes. */
+export type RetentionRates = {
+  /** Reached 25% ÷ impressions. Did the opening earn a quarter of the view? */
+  hook: number | null;
+  /** Reached 50% ÷ reached 25%. Of those it caught, how many did it hold? */
+  hold: number | null;
+  /** Reached 75% ÷ reached 50%. Did the back half survive? */
+  finish: number | null;
+};
+
+export type CreativeAdSeries = {
+  adId: string;
+  adName?: string;
+  windows: {
+    d3: WindowMetrics;
+    d7: WindowMetrics;
+    d14: WindowMetrics;
+  };
+  /** Absent when the ad ran no video, or when Meta reported no quartile rows at all.
+   *  Absent is UNKNOWN — never "this creative was not watched". */
+  retention?: {
+    d3: RetentionMetrics;
+    d7: RetentionMetrics;
+    d14: RetentionMetrics;
+  };
 };
 
 export type CreativeStanding = {
@@ -352,7 +427,11 @@ export type RecommendationTrigger =
   /** A creative measurably beats its ad-set peers, on the same audience and budget. */
   | 'C2_creative_winner'
   /** Fewer than two creatives ever competed here — nothing to learn from. */
-  | 'C3_no_variance';
+  | 'C3_no_variance'
+  /** ONE creative measured against its OWN past: cost per result rising while CTR falls.
+   *  The only creative trigger that needs no peer, and therefore the only one that can say
+   *  anything at all about an ad set running a single creative. */
+  | 'C4_creative_decay';
 
 export type Recommendation = {
   adSetId: string;

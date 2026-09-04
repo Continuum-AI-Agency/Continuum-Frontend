@@ -723,8 +723,9 @@ export const LAYER_EDITOR_IMAGE_INPUT_HANDLE = 'image-in';
 export const LAYER_EDITOR_IMAGE_OUTPUT_HANDLE = 'image';
 export const LAYER_EDITOR_LAYER_LIMIT = 20;
 
-/** `element` — a saved reference, image out only. */
+/** `element` — its sheet or, for a motion placement, its canonical clip. */
 export const ELEMENT_IMAGE_OUTPUT_HANDLE = 'image';
+export const ELEMENT_VIDEO_OUTPUT_HANDLE = 'video';
 
 /** `designRef` — the section specimen, and the same section as text. */
 export const DESIGN_REF_IMAGE_OUTPUT_HANDLE = 'image';
@@ -762,6 +763,9 @@ function sourceModality(
     case 'batch':
       return batchItemType(node.data);
     case 'element':
+      if (sourceHandle === ELEMENT_VIDEO_OUTPUT_HANDLE) return 'video';
+      if (sourceHandle === ELEMENT_IMAGE_OUTPUT_HANDLE) return 'image';
+      return node.data?.useIntent === 'motion' ? 'video' : 'image';
     case 'layerEditor':
       return 'image';
     case 'designRef':
@@ -1026,7 +1030,9 @@ export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
     case 'layerEditor':
       return [LAYER_EDITOR_IMAGE_OUTPUT_HANDLE];
     case 'element':
-      return [ELEMENT_IMAGE_OUTPUT_HANDLE];
+      return node.data?.useIntent === 'motion'
+        ? [ELEMENT_VIDEO_OUTPUT_HANDLE]
+        : [ELEMENT_IMAGE_OUTPUT_HANDLE];
     case 'designRef':
       return [DESIGN_REF_IMAGE_OUTPUT_HANDLE, DESIGN_REF_TEXT_OUTPUT_HANDLE];
     // `export` is terminal and `note` is an annotation — neither produces anything.
@@ -1868,7 +1874,10 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
         data: { layers: [], frameWidth: 2048, frameHeight: 2048, aspectRatio: '1:1' },
       };
     case 'element':
-      return { data: { elementId: null }, style: { width: 240, height: 240 } };
+      return {
+        data: { elementId: null, useIntent: 'subject' },
+        style: { width: 240, height: 240 },
+      };
     case 'designRef':
       return { data: { section: null, mode: 'both' }, style: { width: 240, height: 200 } };
   }

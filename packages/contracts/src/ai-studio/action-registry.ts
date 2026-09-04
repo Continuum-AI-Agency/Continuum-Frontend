@@ -50,6 +50,15 @@ export interface ActionDef {
   readonly output: ActionModality;
   /** True when the runner emits a collection of `output` rather than a single item. */
   readonly outputsCollection?: boolean;
+  /**
+   * Set when the op is DECLARED and coded but cannot run yet — a service it depends on
+   * is not live. The string is the sentence every surface shows; the op stays in the
+   * catalog (it is coming, not withdrawn) and every entry point refuses it.
+   *
+   * This is a reviewed code change, never an env flag: turning the op back on is
+   * deleting this line, which is the same PR that proves the service works again.
+   */
+  readonly comingSoon?: string;
   /** Schema for `node.data.config`. Every op's defaults must parse from `{}`. */
   readonly config: z.ZodType;
 }
@@ -67,6 +76,7 @@ export const ACTION_IDS = [
   'image.crop',
   'image.pad',
   'image.text',
+  'image.overlay',
   'video.grade',
   'video.filter',
   'video.effect',
@@ -311,13 +321,20 @@ const textPlacementConfig = z.object({
   fallbackInk: z.boolean().default(true),
 });
 
-const overlayTransformConfig = z.object({
+/** WHERE a mark sits and how strongly it reads. Shared by the still and the clip
+ *  burn-ins so one placement means one thing across the catalog. */
+const overlayPlacementConfig = z.object({
   position: z
     .enum(['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'])
     .default('top-right'),
   scale: z.number().min(0.01).max(1).default(0.15),
   marginFrac: z.number().min(0).max(0.5).default(0.04),
   opacity: z.number().min(0).max(1).default(1),
+});
+
+/** The clip burn-ins add a timed window. A still has no time, so `image.overlay`
+ *  takes the placement alone rather than carrying two inert fields. */
+const overlayTransformConfig = overlayPlacementConfig.extend({
   startSec: z.number().min(0).nullable().default(null),
   endSec: z.number().min(0).nullable().default(null),
 });
@@ -471,6 +488,21 @@ export const ACTION_DEFS = {
     ],
     output: 'image',
     config: textPlacementConfig,
+  },
+  'image.overlay': {
+    id: 'image.overlay',
+    family: 'image',
+    label: 'Burn In Image',
+    description:
+      'Composites a logo or mark over a still, at a corner or centred, inset from the edge. Same placement the clip burn-ins use.',
+    group: 'Overlay',
+    execution: 'sync',
+    inputs: [
+      { handle: 'in', modality: 'image', max: 1 },
+      { handle: 'overlay-in', modality: 'image', max: 4 },
+    ],
+    output: 'image',
+    config: overlayPlacementConfig,
   },
   'image.duplicate': {
     id: 'image.duplicate',
@@ -644,6 +676,11 @@ export const ACTION_DEFS = {
     description: 'Cuts the subject out of every frame — no green screen needed.',
     group: 'Overlay',
     execution: 'worker',
+    // The GPU job the clip lane runs on is not reachable in production — every request
+    // dies as MATTE_FAILED after the user has waited. The STILL lane is a different job
+    // and is unaffected, so only this one is held back. Delete this line when the clip
+    // job answers again; `canvas:library-pointer:bench` is the check.
+    comingSoon: 'Coming soon — video background removal is not live yet.',
     inputs: [
       { handle: 'in', modality: 'video', max: 1 },
       { handle: 'background-in', modality: 'image', max: 1 },

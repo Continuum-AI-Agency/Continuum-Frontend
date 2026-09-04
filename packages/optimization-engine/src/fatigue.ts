@@ -9,15 +9,11 @@
 // ad set that is still cheap is NOT flagged.
 // ---------------------------------------------------------------------------
 
+import { isCreativeEvaluable } from './classify';
 import type { EngineConfig } from './config';
-import { costPerEvent, kpiEvents, scoreAdSet } from './scoring';
-import type { AdSetSnapshot, Recommendation, WindowMetrics } from './types';
-
-const isEvaluable = (s: AdSetSnapshot): boolean =>
-  s.status !== 'frozen' && s.status !== 'flagged' && s.status !== 'starved';
-
-const ctr = (m: WindowMetrics): number =>
-  m.impressions && m.impressions > 0 ? (m.clicks ?? 0) / m.impressions : 0;
+import { readDecay } from './decay';
+import { scoreAdSet } from './scoring';
+import type { AdSetSnapshot, Recommendation } from './types';
 
 const isRemarketing = (a: AdSetSnapshot['audienceType']): boolean =>
   a === 'remarketing' || a === 'retargeting';
@@ -30,24 +26,33 @@ export function evaluateFatigue(
   const recs: Recommendation[] = [];
 
   for (const s of snapshots) {
-    if (!isEvaluable(s) || skipIds.has(s.id)) continue; // skip frozen/flagged/already-starved
+    // A budget-authority freeze (CBO / lifetime) does NOT silence fatigue: refreshing a
+    // creative and expanding an audience are suggestions, not budget moves. See
+    // isCreativeEvaluable.
+    if (!isCreativeEvaluable(s) || skipIds.has(s.id)) continue;
     if (s.ageDays <= cfg.newItemProtectDays) continue; // young ad sets are still learning
 
     const d3 = s.windows.d3;
     const d14 = s.windows.d14;
 
-    // Fatigue is for ad sets that STILL convert — a dead one is a pause trigger.
-    if (kpiEvents(d14, cfg) <= 0 || kpiEvents(d3, cfg) <= 0) continue;
+    // Read d3 against d14 once; F1 and F2 both branch off the same numbers. The identical
+    // read runs per-CREATIVE in creative.ts — see decay.ts for why it is not copied.
+    const decay = readDecay(d3, d14, cfg, {
+      cpaDriftPct: cfg.fatigueCpaDriftPct,
+      ctrDropPct: cfg.fatigueCtrDropPct,
+    });
 
-    const cppRecent = costPerEvent(d3, cfg);
-    const cppBase = costPerEvent(d14, cfg);
-    const cpaRising = cppBase > 0 && cppRecent > (1 + cfg.fatigueCpaDriftPct) * cppBase;
-    if (!cpaRising) continue; // efficiency not decaying -> not fatigued
+    // Fatigue is for ad sets that STILL convert — a dead one is a pause trigger.
+    if (!decay.convertsInBothWindows) continue;
+    if (!decay.cpaRising) continue; // efficiency not decaying -> not fatigued
     if (scoreAdSet(s, cfg).trajectoryState === 'positive') continue; // recovering -> not fatigued
 
-    const cpaUpPct = (((cppRecent - cppBase) / cppBase) * 100).toFixed(0);
+    const { cppRecent, cppBase } = decay;
+    const cpaUpPct = decay.cpaUpPct.toFixed(0);
     const freq = s.frequency7d ?? 0;
-    const freqCap = isRemarketing(s.audienceType) ? cfg.fatigueFreqRemarketing : cfg.fatigueFreqProspecting;
+    const freqCap = isRemarketing(s.audienceType)
+      ? cfg.fatigueFreqRemarketing
+      : cfg.fatigueFreqProspecting;
 
     // F2 — audience saturation (frequency over cap takes precedence: expanding the
     // audience is the lever, refreshing creative won't fix an exhausted pool).
@@ -63,12 +68,11 @@ export function evaluateFatigue(
       continue;
     }
 
-    // F1 — creative fatigue (engagement decaying while CPA rises).
-    const ctrRecent = ctr(d3);
-    const ctrBase = ctr(d14);
-    const ctrDrop = ctrBase > 0 && ctrRecent > 0 && ctrRecent < (1 - cfg.fatigueCtrDropPct) * ctrBase;
-    if (ctrDrop) {
-      const ctrDownPct = (((ctrBase - ctrRecent) / ctrBase) * 100).toFixed(0);
+    // F1 — creative fatigue (engagement decaying while CPA rises). The CTR gate is
+    // "did d3 DELIVER", not "did d3 get clicks" — readDecay owns that distinction now.
+    if (decay.ctrDropped) {
+      const { ctrRecent, ctrBase } = decay;
+      const ctrDownPct = decay.ctrDownPct.toFixed(0);
       recs.push({
         adSetId: s.id,
         kind: 'creative_refresh',

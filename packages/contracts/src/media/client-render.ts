@@ -1,13 +1,10 @@
 import { z } from 'zod';
 import { editorProjectV2Schema } from '../ai-studio/editor-project-v2';
+import { creativeOpsRecipeSchema } from './creative-ops';
+import { databaseUuidSchema } from './database-uuid';
 import { pinnedLibraryAssetRefSchema } from './library-reference';
 
-// PostgreSQL's uuid type accepts legacy/non-versioned UUID values used by some
-// of our seeded fixtures. Zod's `uuid()` validator only accepts RFC variant and
-// version bits, which made otherwise valid database rows fail at the API edge.
-export const databaseUuidSchema = z
-  .string()
-  .regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/);
+export { databaseUuidSchema };
 
 export const clientRenderJobKindSchema = z.enum([
   'hyperframes_agent',
@@ -15,6 +12,7 @@ export const clientRenderJobKindSchema = z.enum([
   'planner_reel',
   'mcp_clip_batch',
   'timeline_editor',
+  'creative_ops',
 ]);
 export type ClientRenderJobKind = z.infer<typeof clientRenderJobKindSchema>;
 
@@ -183,12 +181,28 @@ export const timelineEditorClientRenderSpecSchema = z
     }
   });
 
+/**
+ * An ordered run of Canvas action-catalog ops over library assets.
+ *
+ * The recipe carries asset IDS, never signed URLs — the browser re-signs at render
+ * time, and a signature minted when an agent wrote the job is long dead by the time a
+ * tab claims it. Same reason `organic_hyperframe` carries `assets` as ids.
+ */
+export const creativeOpsClientRenderSpecSchema = z
+  .object({
+    kind: z.literal('creative_ops'),
+    recipe: creativeOpsRecipeSchema,
+    origin: renderOriginSchema,
+  })
+  .strict();
+
 export const clientRenderExecutionSpecSchema = z.discriminatedUnion('kind', [
   hyperframesClientRenderSpecSchema,
   organicHyperframeClientRenderSpecSchema,
   plannerReelClientRenderSpecSchema,
   mcpClipBatchClientRenderSpecSchema,
   timelineEditorClientRenderSpecSchema,
+  creativeOpsClientRenderSpecSchema,
 ]);
 export type ClientRenderExecutionSpec = z.infer<typeof clientRenderExecutionSpecSchema>;
 
@@ -217,6 +231,16 @@ export const clientRenderJobSchema = z
     inputs: clientRenderJobInputManifestSchema,
     claimedBy: databaseUuidSchema.nullable(),
     claimedClientId: z.string().nullable(),
+    /**
+     * The browser client this job is ADDRESSED to, so the render happens in the session
+     * that asked for it rather than in whichever tab has the inbox open. Null means the
+     * brand queue, which is how every kind behaved before this existed.
+     */
+    // Defaulted, not required: the Frontend and Backend deploy independently, and a job
+    // payload minted by whichever side ships first must still parse on the other.
+    targetClientId: z.string().nullable().default(null),
+    /** When an addressed job falls back to the brand queue. See the column comment. */
+    targetExpiresAt: z.string().nullable().default(null),
     leaseToken: databaseUuidSchema.nullable(),
     leaseExpiresAt: z.string().nullable(),
     attemptCount: z.number().int().nonnegative(),
@@ -252,6 +276,7 @@ export const createClientRenderJobRequestSchema = z
     title: z.string().min(1).max(180),
     executionSpec: clientRenderExecutionSpecSchema,
     inputs: clientRenderJobInputManifestSchema,
+    targetClientId: z.string().min(8).max(200).optional(),
   })
   .strict();
 

@@ -47,6 +47,20 @@ export type EngineConfig = {
   fatigueCpaDriftPct: number; // recent 3d CPA must be this much over the 14d baseline to count as decaying
   fatigueCtrDropPct: number; // recent 3d CTR this much below the 14d baseline => creative worn out
 
+  // -- Creative DECAY (per-ad, C4) --
+  // The same two thresholds one level down: one creative's own d3 against its own d14.
+  // Separate knobs rather than reused fatigue ones because the grain is different — an ad
+  // set aggregates several creatives and is therefore steadier, so what reads as noise at
+  // ad-set grain and what reads as noise at ad grain are not the same number.
+  creativeDecayCpaDriftPct: number;
+  creativeDecayCtrDropPct: number;
+  /** EVIDENCE FLOOR: KPI events the ad must have earned in its OWN d14 before its trend is
+   *  allowed to say anything. This is the whole difference between a decay signal and
+   *  industrialized noise — 51 of 53 live ad sets are already flagged `low_evidence`, and a
+   *  single ad's 3-day conversion count is routinely 0-2. Below the floor C4 emits NOTHING;
+   *  it does not emit a hedged finding. Raise it from a bench number, never from a hunch. */
+  creativeDecayMinEvents: number;
+
   // -- Grace periods --
   newItemProtectDays: number;
 
@@ -133,6 +147,13 @@ export const DEFAULT_CONFIG: EngineConfig = {
   fatigueFreqRemarketing: 5.0,
   fatigueCpaDriftPct: 0.2,
   fatigueCtrDropPct: 0.25,
+
+  creativeDecayCpaDriftPct: 0.2,
+  creativeDecayCtrDropPct: 0.25,
+  // Deliberately conservative on first ship: better to under-report decay than to hand an
+  // operator a confident number built on three conversions. optimizer:creative:fatigue:bench
+  // prints how many ads clear this, which is the number that should move it.
+  creativeDecayMinEvents: 10,
 
   newItemProtectDays: 7,
 

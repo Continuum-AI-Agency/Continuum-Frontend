@@ -24,6 +24,7 @@ export * from './node-registry';
 export * from './node-sizing';
 export * from './omni-gen';
 export * from './prompt-enrichment';
+export * from './slot-roles';
 export * from './timeline-authoring';
 export * from './ugc-workflow';
 export * from './video-production';

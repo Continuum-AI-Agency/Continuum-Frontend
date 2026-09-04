@@ -7,11 +7,27 @@ export type {
   WindowPredictiveness,
 } from './backtest';
 export { backtestPredictiveness, buildEvalSamples, spearman } from './backtest';
-export { classifyPortfolio, classifyStatus, NEW_ITEM_LOCK_DAYS } from './classify';
+export {
+  classifyPortfolio,
+  classifyStatus,
+  isCreativeEvaluable,
+  NEW_ITEM_LOCK_DAYS,
+} from './classify';
 export { confidenceOf, portfolioConfidence } from './confidence';
 export type { DeepPartial, EngineConfig, WindowWeights } from './config';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
 export { DRAG_SPEND_SHARE, evaluateCreative, LAGGARD_COST_MULTIPLE } from './creative';
+export type {
+  BucketItem,
+  CreativeBucket,
+  RankBucketsOptions,
+} from './creativeBuckets';
+export {
+  bucketCitations,
+  canonicalKey,
+  labelTokens,
+  rankCreativeBuckets,
+} from './creativeBuckets';
 export { reallocate } from './engine';
 export type { BudgetMoveWhy, ExplainDiagnostics } from './explain';
 export {
@@ -32,8 +48,17 @@ export type {
   TreeNodeInput,
 } from './hierarchy/shrinkTree';
 export { ShrinkTreeError, shrinkTree } from './hierarchy/shrinkTree';
-export type { MetaMetricRow } from './ingest';
-export { META_FIELD_MAP, mapMetaRowToWindowMetrics } from './ingest';
+export type { AdAttributionDay, AdDailyRow, MetaMetricRow } from './ingest';
+export {
+  addRetentionMetrics,
+  addWindowMetrics,
+  attachCreativeSeries,
+  META_FIELD_MAP,
+  mapAdDailyRowToRetention,
+  mapAdDailyRowToWindowMetrics,
+  mapMetaRowToWindowMetrics,
+  retentionRates,
+} from './ingest';
 // First wiring of the DCO-salvage miner: paid-creative-intel corroborates its
 // win-rate categories with lift rules (and fires the `confounded` flag).
 export type { AssociationRule, MinableItem, MiningResult } from './mining/apriori';
@@ -80,8 +105,8 @@ export type {
 export { GRANTABLE_ACTION_KINDS } from './rules/types';
 export type { CycleOptions } from './runCycle';
 export { runCycle } from './runCycle';
-export { scoreAdSet, windowScore } from './scoring';
-export { adSetCpaInterval, cpaInterval, shrinkScores } from './significance';
+export { costPerEvent, kpiEvents, scoreAdSet, windowScore } from './scoring';
+export { adSetCpaInterval, costInterval, cpaInterval, shrinkScores } from './significance';
 export type { SolverAllocation, SolverItem, SolverOutput } from './solver';
 export { solve } from './solver';
 export type { TriggerOutput } from './triggers';
@@ -92,6 +117,7 @@ export type {
   AudienceType,
   Confidence,
   CpaInterval,
+  CreativeAdSeries,
   CreativeStanding,
   CreativeStandingAd,
   CreativeStandingFlag,
@@ -105,6 +131,8 @@ export type {
   Recommendation,
   RecommendationKind,
   RecommendationTrigger,
+  RetentionMetrics,
+  RetentionRates,
   TrajectoryState,
   WindowMetrics,
 } from './types';

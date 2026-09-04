@@ -2,12 +2,13 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildElementReferenceLabel,
   buildElementReferencePrompt,
+  defaultElementUseIntent,
+  ELEMENT_CATALOG_ROW_LIMIT,
   ELEMENT_CATEGORIES,
   ELEMENT_MEMBER_LIMIT,
   ELEMENT_PERSON_FALLBACK_LIMIT,
   ELEMENT_REFERENCE_TAG,
   type ElementCategory,
-  ELEMENT_CATALOG_ROW_LIMIT,
   elementExternalKey,
   elementOriginRefSchema,
   elementProductFactsSchema,
@@ -30,27 +31,27 @@ const members = (count: number) =>
   }));
 
 describe('buildElementReferencePrompt', () => {
-  it('covers all nine categories with a non-empty prompt and an explicit aspect ratio', () => {
+  it('covers every category with a wide reference-sheet prompt', () => {
     // The aspect ratio is the assertion that matters: if it is ever omitted, Gemini
     // inherits the ratio of the LAST input image and whichever member happens to sit
     // last silently decides the output shape.
-    expect(ELEMENT_CATEGORIES).toHaveLength(9);
+    expect(ELEMENT_CATEGORIES).toHaveLength(14);
     for (const category of ELEMENT_CATEGORIES) {
       const built = buildElementReferencePrompt(category, 3);
       expect(built.prompt.length).toBeGreaterThan(200);
       expect(built.aspectRatio).toMatch(/^\d+:\d+$/);
       expect(built.aspectRatio).toBe(elementReferenceAspectRatio(category));
-      expect(built.negativePrompt).toContain('collage');
-      expect(built.negativePrompt).toContain('duplicated subject');
+      expect(built.prompt).toContain('multi-panel sheet');
+      expect(built.prompt).toContain('authoritative names and facts');
     }
   });
 
   it('uses the researched aspect ratio per category', () => {
-    expect(elementReferenceAspectRatio('model')).toBe('4:5');
-    expect(elementReferenceAspectRatio('character')).toBe('4:5');
+    expect(elementReferenceAspectRatio('model')).toBe('16:9');
+    expect(elementReferenceAspectRatio('character')).toBe('16:9');
     expect(elementReferenceAspectRatio('setting')).toBe('16:9');
-    expect(elementReferenceAspectRatio('product')).toBe('1:1');
-    expect(elementReferenceAspectRatio('moodboard')).toBe('1:1');
+    expect(elementReferenceAspectRatio('product')).toBe('16:9');
+    expect(elementReferenceAspectRatio('moodboard')).toBe('16:9');
   });
 
   it('opens with one manifest line per member', () => {
@@ -63,14 +64,14 @@ describe('buildElementReferencePrompt', () => {
   });
 
   it('states the member count in the body', () => {
-    expect(buildElementReferencePrompt('model', 5).prompt).toContain('The 5 attached photographs');
-    expect(buildElementReferencePrompt('model', 2).prompt).toContain('The 2 attached photographs');
+    expect(buildElementReferencePrompt('model', 5).prompt).toContain('The 5 attached images');
+    expect(buildElementReferencePrompt('model', 2).prompt).toContain('The 2 attached images');
   });
 
-  it('always closes with the single-output clause', () => {
+  it('keeps all model-rendered text off the sheet', () => {
     for (const category of ELEMENT_CATEGORIES) {
       expect(buildElementReferencePrompt(category, 2).prompt).toContain(
-        'Produce exactly one image — not a composite, not a set, not a copy of any attached photograph.',
+        'Do not render labels or other text',
       );
     }
   });
@@ -91,16 +92,30 @@ describe('buildElementReferencePrompt', () => {
 
   it('keeps the person categories on person-shaped instructions', () => {
     expect(buildElementReferencePrompt('model', 3).prompt).toContain(
-      'free to change and\nshould: clothing',
+      'distinguishing-mark close-ups',
     );
-    // A character IS its wardrobe — the one deliberate divergence from `model`.
-    expect(buildElementReferencePrompt('character', 3).prompt).toContain('and the costume');
+    expect(buildElementReferencePrompt('character', 3).prompt).toContain('exact costume');
   });
 
   it('handles a single member without breaking the manifest', () => {
     const built = buildElementReferencePrompt('general', 1);
     expect(built.prompt.match(/^- Image \d+:/gm)).toHaveLength(1);
     expect(built.prompt).toContain('The 1 attached images');
+  });
+
+  it('uses ordered keyframes for motion Elements', () => {
+    expect(buildElementReferencePrompt('animation', 4).prompt).toContain('ordered keyframes');
+    expect(buildElementReferencePrompt('effect', 4).prompt).toContain('dissipation');
+  });
+});
+
+describe('defaultElementUseIntent', () => {
+  it('derives a useful placement default without fixing how the Element must be used', () => {
+    expect(defaultElementUseIntent('product')).toBe('subject');
+    expect(defaultElementUseIntent('location')).toBe('environment');
+    expect(defaultElementUseIntent('style')).toBe('treatment');
+    expect(defaultElementUseIntent('palette')).toBe('palette');
+    expect(defaultElementUseIntent('animation')).toBe('motion');
   });
 });
 
@@ -226,7 +241,11 @@ describe('elementProductFactsSchema', () => {
       price: { amountMinor: 1999, currency: 'USD' },
       productUrl: 'https://example.com/hero-bottle',
       variants: [
-        { name: '500ml / Matte Black', sku: 'HB-500-MB', price: { amountMinor: 1999, currency: 'USD' } },
+        {
+          name: '500ml / Matte Black',
+          sku: 'HB-500-MB',
+          price: { amountMinor: 1999, currency: 'USD' },
+        },
         { name: '750ml / Steel', sku: 'HB-750-ST', price: { amountMinor: 2499, currency: 'USD' } },
       ],
     };
@@ -267,9 +286,9 @@ describe('elementProductFactsSchema', () => {
     // price to an Element must not change one character of what the model is sent.
     const before = buildElementReferencePrompt('product', 3, 'the matte finish');
     expect(before.prompt).not.toContain('HB-500');
-    expect(before.prompt).toContain('at least eighty-five percent of the frame');
-    expect(before.prompt).toContain('Reproduce the label artwork exactly');
-    expect(before.aspectRatio).toBe('1:1');
+    expect(before.prompt).toContain('label, closure, material and base-marking close-ups');
+    expect(before.prompt).toContain('authoritative names and facts');
+    expect(before.aspectRatio).toBe('16:9');
   });
 });
 

@@ -31,7 +31,10 @@
 // winner and C2 does not fire.
 // ---------------------------------------------------------------------------
 
+import { isCreativeEvaluable } from './classify';
 import type { EngineConfig } from './config';
+import { readDecay } from './decay';
+import { kpiEvents } from './scoring';
 import type {
   AdSetSnapshot,
   CreativeStanding,
@@ -49,9 +52,6 @@ export const LAGGARD_COST_MULTIPLE = 1.25;
  *  a raise. Set at a majority: below half, the ad set is still mostly funding creatives we
  *  have not condemned, and freezing its budget would punish the innocent ones. */
 export const DRAG_SPEND_SHARE = 0.5;
-
-const isEvaluable = (s: AdSetSnapshot): boolean =>
-  s.status !== 'frozen' && s.status !== 'flagged' && !s.freeze;
 
 const money = (v: number): string => `$${v.toFixed(2)}`;
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
@@ -166,6 +166,65 @@ function buildSeed(s: AdSetSnapshot, standing: CreativeStanding): CreativeVariat
   };
 }
 
+/**
+ * Per-ad decay findings for one ad set. Pure: no side effects, no ordering assumptions.
+ *
+ * The evidence floor is the point, not a nicety. A single ad's 3-day conversion count is
+ * routinely 0-2, and 51 of 53 live ad sets already carry `low_evidence`. Below the floor
+ * this returns NOTHING — it does not return a hedged finding, because a hedged finding is
+ * how noise gets industrialized. `optimizer:creative:winrate:bench` makes the same refusal
+ * when it reports 0 of 27 steerable buckets instead of a confident-looking win rate.
+ */
+function readCreativeDecay(
+  s: AdSetSnapshot,
+  standing: CreativeStanding,
+  cfg: EngineConfig,
+  unit: string,
+): Recommendation[] {
+  const series = s.creativeSeries;
+  if (!series || series.length === 0) return []; // no series -> unknown, not flat
+
+  const out: Recommendation[] = [];
+  const thresholds = {
+    cpaDriftPct: cfg.creativeDecayCpaDriftPct,
+    ctrDropPct: cfg.creativeDecayCtrDropPct,
+  };
+  // The standing is enrichment only. It is EMPTY for a single-creative ad set (no winner,
+  // no laggards), which is the case this trigger exists to serve — so nothing here may
+  // depend on finding a match.
+  const named = new Map<string, CreativeStandingAd>();
+  for (const ad of [standing.winner, ...standing.laggards]) if (ad) named.set(ad.adId, ad);
+
+  for (const entry of series) {
+    const { d3, d14 } = entry.windows;
+    if (kpiEvents(d14, cfg) < cfg.creativeDecayMinEvents) continue; // evidence floor
+
+    const decay = readDecay(d3, d14, cfg, thresholds);
+    // Both conditions, exactly as F1 requires them one level up: cost rising AND
+    // engagement falling. Either alone is a bad week, not a worn-out creative.
+    if (!decay.convertsInBothWindows || !decay.cpaRising || !decay.ctrDropped) continue;
+
+    const label = entry.adName ?? named.get(entry.adId)?.adName ?? entry.adId;
+    out.push({
+      adSetId: s.id,
+      adId: entry.adId,
+      kind: 'variate_creative',
+      trigger: 'C4_creative_decay',
+      // A winner going bad is the more urgent fact: it is where the money is.
+      severity: entry.adId === standing.winner?.adId ? 'high' : 'medium',
+      reason:
+        `"${label}" is wearing out against its own history, not against its neighbours: ` +
+        `cost per ${unit} is up ${decay.cpaUpPct.toFixed(0)}% (3d ${money(decay.cppRecent)} vs 14d ${money(decay.cppBase)}) ` +
+        `while CTR is down ${decay.ctrDownPct.toFixed(0)}% (3d ${(decay.ctrRecent * 100).toFixed(2)}% vs 14d ${(decay.ctrBase * 100).toFixed(2)}%), ` +
+        `on ${d14.impressions} impressions over 14 days. The audience has seen it. Refresh it.`,
+      seed: buildSeed(s, standing),
+      needsApproval: true,
+    });
+  }
+
+  return out;
+}
+
 export type CreativeOutput = {
   recommendations: Recommendation[];
   /** Ad sets that must not GROW this cycle: their money is on a creative we have already
@@ -183,12 +242,30 @@ export function evaluateCreative(
   const noRaiseIds = new Set<string>();
 
   for (const s of snapshots) {
-    if (!isEvaluable(s) || skipIds.has(s.id)) continue;
+    // A CBO ad set is frozen for BUDGET, not because its creatives cannot be judged —
+    // and it is the case where a creative swap is the only lever left. See
+    // isCreativeEvaluable.
+    if (!isCreativeEvaluable(s) || skipIds.has(s.id)) continue;
     const standing = s.creative;
     if (!standing) continue; // never labeled / never synced — silence, not a finding
     if (s.ageDays <= cfg.newItemProtectDays) continue; // still learning
 
     const unit = eventLabel(s);
+
+    // --- C4: this creative is DECAYING ---------------------------------------------
+    // Computed here, emitted below, because it answers a DIFFERENT question from C1/C2/C3.
+    // Those three compare creatives to EACH OTHER, which is why one creative alone tells
+    // them nothing. C4 compares a creative to its OWN past, so a lone creative is a
+    // perfectly valid subject — and 37 of 53 live ad sets run exactly one creative, which
+    // makes this the only question answerable there at all.
+    //
+    // Ranking says "this costs 2.2x the one beside it". Decay says "this is dying". They
+    // are not the same finding and the second was not computable at all until the per-ad
+    // series arrived.
+    //
+    // Needs `ad.windows`, present only when ad-level attribution landed this cycle AND the
+    // portfolio opted in. Absent is UNKNOWN, not flat: no windows, no finding, no hedge.
+    const decayFindings = readCreativeDecay(s, standing, cfg, unit);
 
     // --- C3: nothing to learn from -------------------------------------------------
     // Checked FIRST because it is a statement about what we can know, not about what is
@@ -210,6 +287,9 @@ export function evaluateCreative(
           needsApproval: true,
         });
       }
+      // A single creative has no peer, but it does have a past. This is the one trigger
+      // C3's "sample of one" objection does not apply to.
+      recommendations.push(...decayFindings);
       continue;
     }
 
@@ -287,6 +367,14 @@ export function evaluateCreative(
         needsApproval: true,
       });
     }
+
+    // One ad, one recommendation per cycle. Where C1 already says "pause this" or C2
+    // already says "make more of this", adding "and it is decaying" hands an operator two
+    // cards for one decision — and C1's pause is the stronger instruction anyway.
+    const claimed = new Set(
+      recommendations.filter((r) => r.adSetId === s.id && r.adId).map((r) => r.adId),
+    );
+    recommendations.push(...decayFindings.filter((r) => !claimed.has(r.adId)));
   }
 
   return { recommendations, noRaiseIds };

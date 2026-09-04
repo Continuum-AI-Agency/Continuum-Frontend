@@ -114,6 +114,22 @@ const CreativeStandingAdSchema = z.object({
   assetId: z.string().nullable().optional(),
   labels: z.record(z.string(), z.unknown()).nullable().optional(),
   posterUrl: z.string().nullable().optional(),
+  /** Meta's delivery frequency for this creative in the window. The one fatigue signal
+   *  at CREATIVE grain: a winner at frequency 5 is a winner about to stop winning.
+   *  Absent for laggards (the RPC projects it only for the winner today). */
+  frequency: z.number().nullable().optional(),
+});
+
+/** One creative's OWN d3/d7/d14 trend. A roster entry, not part of the comparison —
+ *  see CreativeAdSeries in ./types for why it cannot live on CreativeStandingAd. */
+export const CreativeAdSeriesSchema = z.object({
+  adId: z.string(),
+  adName: z.string().optional(),
+  windows: z.object({
+    d3: WindowMetricsSchema,
+    d7: WindowMetricsSchema,
+    d14: WindowMetricsSchema,
+  }),
 });
 
 /** The standing of an ad set's CREATIVES against each other. Inside one ad set the
@@ -181,6 +197,7 @@ export const AdSetSnapshotSchema = z.object({
     })
     .optional(),
   daily: z.array(DailyMetricsSchema).optional(),
+  creativeSeries: z.array(CreativeAdSeriesSchema).optional(),
 });
 
 export const WindowWeightsSchema = z.object({

@@ -114,6 +114,10 @@ const CreativeStandingAdSchema = z.object({
   assetId: z.string().nullable().optional(),
   labels: z.record(z.string(), z.unknown()).nullable().optional(),
   posterUrl: z.string().nullable().optional(),
+  /** Meta's delivery frequency for this creative in the window. The one fatigue signal
+   *  at CREATIVE grain: a winner at frequency 5 is a winner about to stop winning.
+   *  Absent for laggards (the RPC projects it only for the winner today). */
+  frequency: z.number().nullable().optional(),
 });
 
 /** The standing of an ad set's CREATIVES against each other. Inside one ad set the

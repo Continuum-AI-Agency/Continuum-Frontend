@@ -205,7 +205,10 @@ export const BUILTIN_PARITY_TEMPLATES: RuleTemplate[] = [
         // precedence in the built-in loop; expressed here as a condition so
         // the two data rules stay mutually exclusive).
         { fact: 'frequency_7d', operator: 'lessThan', value: { fact: 'fatigue_freq_cap' } },
-        { fact: 'ctr_d3', operator: 'greaterThan', value: 0 },
+        // Delivery, not clicks: an ad set still serving with ZERO clicks is the most
+        // fatigued state there is. Mirrors the same gate in fatigue.ts — the parity
+        // sweep fails if these two ever drift.
+        { fact: 'impressions_d3', operator: 'greaterThan', value: 0 },
         {
           fact: 'ctr_d3',
           operator: 'isLessThanRatio',

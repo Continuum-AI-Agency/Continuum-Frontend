@@ -9,6 +9,7 @@ export * from './clip';
 export * from './collections';
 export * from './comments';
 export * from './creative-operations';
+export * from './creative-ops';
 export * from './custom-fields';
 export * from './deployments';
 export * from './element';

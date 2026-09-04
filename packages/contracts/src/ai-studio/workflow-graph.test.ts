@@ -1296,6 +1296,9 @@ describe('Canvas V3 handles', () => {
     expect(getAllowedTargetHandles(node('l', 'layerEditor'))).toEqual(['image-in']);
     expect(getAllowedSourceHandles(node('l', 'layerEditor'))).toEqual(['image']);
     expect(getAllowedSourceHandles(node('e', 'element'))).toEqual(['image']);
+    expect(getAllowedSourceHandles(node('m', 'element', { useIntent: 'motion' }))).toEqual([
+      'video',
+    ]);
     expect(getAllowedSourceHandles(node('d', 'designRef'))).toEqual(['image', 'text']);
     expect(getAllowedTargetHandles(node('n', 'note'))).toEqual([]);
     expect(getAllowedSourceHandles(node('n', 'note'))).toEqual([]);
@@ -1379,6 +1382,14 @@ describe('Canvas V3 connection rules', () => {
   it('lets an element stand in for a reference image', () => {
     const nodes = [node('e', 'element', { elementId: 'el-1' }), node('gen', 'nanoGen')];
     expect(connect(nodes, 'e', 'image', 'gen', 'ref-images')).toBe(true);
+  });
+
+  it('lets a motion Element feed a reference-video input', () => {
+    const nodes = [
+      node('e', 'element', { elementId: 'el-1', useIntent: 'motion' }),
+      node('gen', 'omniGen'),
+    ];
+    expect(connect(nodes, 'e', 'video', 'gen', 'ref-video')).toBe(true);
   });
 
   it('locks a batch to one item kind', () => {
