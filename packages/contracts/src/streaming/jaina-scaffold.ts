@@ -215,3 +215,25 @@ export const jainaScaffoldActionSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 export type JainaScaffoldAction = z.infer<typeof jainaScaffoldActionSchema>;
+
+/**
+ * A human's decision on one `tool.approval_required` raised by any OTHER gated tool
+ * (audience-group publish, and every gate registered after it). Same channel as
+ * `scaffold_action`: a typed field on the existing chat stream POST body, never a
+ * natural-language re-prompt.
+ *
+ * SECURITY — this deliberately carries no approval token, no HMAC signature and no
+ * content hash. All three are re-read server-side from the gate row keyed by
+ * `approval_id`. A client that could supply any of them could mint its own approval,
+ * which is precisely what the gate exists to prevent. The gate row is the authority;
+ * the SDK's signature is only a cheap second layer inside `execute`.
+ */
+export const jainaToolActionSchema = z.object({
+  decision: z.enum(['approve', 'deny']),
+  /** The SDK approval id from the `tool.approval_required` frame being answered. */
+  approval_id: z.string().min(1),
+  /** Echoed back for correlation only; never trusted for authorization. */
+  tool_call_id: z.string().min(1).optional(),
+  reason: z.string().max(500).optional(),
+});
+export type JainaToolAction = z.infer<typeof jainaToolActionSchema>;
