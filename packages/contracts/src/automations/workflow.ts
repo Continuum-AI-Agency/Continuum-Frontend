@@ -930,6 +930,21 @@ const studioActionNodeSchema = z
         generator: automationAiStudioGeneratorSchema.optional(),
         instructions: z.string().min(1).max(20_000),
         maxOutputs: z.number().int().min(1).max(4).optional(),
+        /**
+         * A PUBLISHED pipeline (`canvas_workflows.metadata.pipeline`) to run instead of
+         * a bare generator. Null runs the one-shot generator, which is the old shape.
+         *
+         * When set, three things change and the adapter enforces all three:
+         *  - `instructions` is written to EVERY declared text input port — a pipeline names
+         *    its own ports, and an automation has no way to say which sentence goes where.
+         *  - `generator` is ignored: the pipeline's own nodes declare what media it makes.
+         *  - `maxOutputs` must be 1. A pipeline run is already an internally-retried,
+         *    judged unit of work; asking for four of them is four of that.
+         *
+         * A pipeline with a REQUIRED non-text port is refused at preflight, by port id — an
+         * automation has no asset to feed it.
+         */
+        pipelineId: z.string().uuid().nullable().default(null),
       })
       .strict(),
   })
@@ -942,6 +957,7 @@ export type AutomationAiStudioGenerateRequest = {
   generator: AutomationAiStudioGenerator;
   instructions: string;
   maxOutputs: number;
+  pipelineId: string | null;
 };
 
 export const resolveAutomationAiStudioGenerateConfig = (
@@ -951,6 +967,10 @@ export const resolveAutomationAiStudioGenerateConfig = (
   generator: config.generator ?? AUTOMATION_AI_STUDIO_GENERATE_DEFAULTS.generator,
   instructions: config.instructions,
   maxOutputs: config.maxOutputs ?? AUTOMATION_AI_STUDIO_GENERATE_DEFAULTS.maxOutputs,
+  // `?? null`, not a bare read: every other field here defaults, and a stored config
+  // that reached a caller without a Zod parse must not switch execution paths on an
+  // `undefined` that reads as "not null".
+  pipelineId: config.pipelineId ?? null,
 });
 
 /**

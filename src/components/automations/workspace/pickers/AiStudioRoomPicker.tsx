@@ -70,7 +70,15 @@ export function AiStudioRoomPicker({
         onValueChange={(next) => onChange(next === NO_ROOM_VALUE ? null : next)}
       >
         <SelectTrigger id={id} aria-label="AI Studio workspace">
-          <SelectValue placeholder={isLoading ? 'Loading workspaces…' : 'No workspace'} />
+          {/* Base UI's Value paints the raw stored value without this map, so the
+              closed trigger would read "__no_room__". */}
+          <SelectValue
+            placeholder={isLoading ? 'Loading workspaces…' : 'No workspace'}
+            items={{
+              [NO_ROOM_VALUE]: 'No workspace',
+              ...Object.fromEntries(options.map((option) => [option.value, option.label])),
+            }}
+          />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={NO_ROOM_VALUE}>No workspace</SelectItem>

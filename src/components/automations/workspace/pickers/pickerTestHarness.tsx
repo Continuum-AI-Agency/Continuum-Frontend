@@ -44,16 +44,16 @@ export function stubSource<TItem>(state: Partial<PickerSourceState<TItem>>): Pic
   });
 }
 
+/** Base UI's Select opens on `click`, not on the bare `pointerdown` Radix used —
+ *  the migration left every picker spec unable to see its own options. */
 export function openSelect(name: string): void {
-  fireEvent.pointerDown(screen.getByRole('combobox', { name }), {
-    button: 0,
-    ctrlKey: false,
-    pointerType: 'mouse',
-  });
+  fireEvent.click(screen.getByRole('combobox', { name }));
 }
 
+/** Base UI commits a Select item on Enter. Its pointer path needs a real pointer
+ *  capture happy-dom does not synthesize, so a click on the option is inert. */
 export function chooseOption(name: string | RegExp): void {
   const option = screen.getByRole('option', { name });
-  fireEvent.pointerUp(option, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-  fireEvent.click(option);
+  fireEvent.keyDown(option, { key: 'Enter' });
+  fireEvent.keyUp(option, { key: 'Enter' });
 }

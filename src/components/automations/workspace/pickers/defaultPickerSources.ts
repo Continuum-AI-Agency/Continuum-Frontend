@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useOptimizerPortfolios } from '@/components/paid-media/optimizer/useOptimizerData';
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
+import { fetchBrandPipelines, type PipelineItem } from '@/lib/ai-studio/pipelines';
 import { fetchLibraryCollections } from '@/lib/library/collections';
 import {
   deriveOrganicPlatformAccounts,
@@ -98,6 +99,27 @@ export function useAiStudioRoomSource(
       if (error) throw new Error(error.message);
       return data ?? [];
     },
+    enabled: Boolean(brandId),
+    staleTime: 60_000,
+  });
+
+  return {
+    items: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+  };
+}
+
+/** Published pipelines (`canvas_workflows.metadata.pipeline`) an automation may
+ *  run headlessly. Filtered on the publish flag, not on "has ports": a saved
+ *  Technique is a person's building block, and offering one here would let a
+ *  schedule run a canvas nobody promised a machine could run. */
+export function usePipelineSource(
+  brandId: string | undefined,
+): PickerSourceState<PipelineItem> {
+  const query = useQuery({
+    queryKey: ['automation-picker', 'pipelines', brandId],
+    queryFn: () => fetchBrandPipelines(brandId as string),
     enabled: Boolean(brandId),
     staleTime: 60_000,
   });

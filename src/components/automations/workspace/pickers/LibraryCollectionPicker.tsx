@@ -70,7 +70,15 @@ export function LibraryCollectionPicker({
         onValueChange={(next) => onChange(next === LIBRARY_ROOT_VALUE ? null : next)}
       >
         <SelectTrigger id={id} aria-label="Library collection">
-          <SelectValue placeholder={isLoading ? 'Loading collections…' : 'Library root'} />
+          {/* Base UI's Value paints the raw stored value without this map, so the
+              closed trigger would read "__library_root__". */}
+          <SelectValue
+            placeholder={isLoading ? 'Loading collections…' : 'Library root'}
+            items={{
+              [LIBRARY_ROOT_VALUE]: 'Library root',
+              ...Object.fromEntries(options.map((option) => [option.value, option.label])),
+            }}
+          />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={LIBRARY_ROOT_VALUE}>Library root</SelectItem>

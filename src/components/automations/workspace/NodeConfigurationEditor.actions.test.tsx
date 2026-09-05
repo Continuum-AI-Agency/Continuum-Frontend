@@ -14,6 +14,7 @@ import { chooseOption, installPickerDomGlobals, openSelect } from './pickers/pic
 installPickerDomGlobals();
 
 const BRAND_ID = '11111111-1111-4111-8111-111111111111';
+const PIPELINE_ID = '22222222-2222-4222-8222-222222222222';
 const realFetch = globalThis.fetch;
 
 afterEach(() => {
@@ -171,8 +172,43 @@ describe('action.ai_studio_generate editor', () => {
       generator: 'video',
       instructions: 'Generate a creative from the workflow context.',
       maxOutputs: 1,
+      pipelineId: null,
     });
     expectParses(node, onChange.mock.calls.at(-1)?.[0]);
+  });
+
+  test('choosing a published pipeline pins the output count to one', () => {
+    const node = makeNode('action.ai_studio_generate');
+    const onChange = mock();
+    renderEditor(node, onChange);
+
+    // No brand in scope, so the picker degrades to its raw-id field — the same
+    // path an outage takes, and the one place a stored id must stay editable.
+    fireEvent.change(screen.getByLabelText('Published pipeline ID'), {
+      target: { value: PIPELINE_ID },
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      roomId: null,
+      generator: 'image',
+      instructions: 'Generate a creative from the workflow context.',
+      maxOutputs: 1,
+      pipelineId: PIPELINE_ID,
+    });
+    expectParses(node, onChange.mock.calls.at(-1)?.[0]);
+  });
+
+  test('a pipeline hides the generator, the output count and the workspace', () => {
+    const node = makeNode('action.ai_studio_generate');
+    renderEditor(
+      { ...node, config: { ...node.config, pipelineId: PIPELINE_ID } } as AutomationWorkflowNode,
+      mock(),
+    );
+
+    expect(screen.queryByRole('combobox', { name: 'Generator' })).toBeNull();
+    expect(screen.queryByLabelText('Outputs per run')).toBeNull();
+    expect(screen.queryByLabelText('AI Studio workspace ID')).toBeNull();
+    expect(screen.getByLabelText("Text sent to the pipeline's input ports")).toBeTruthy();
   });
 });
 

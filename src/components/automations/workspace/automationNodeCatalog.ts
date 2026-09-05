@@ -507,7 +507,11 @@ export function createAutomationWorkflowNode({
         ...common,
         type,
         label: 'Generate in AI Studio',
-        config: { roomId: null, instructions: 'Generate a creative from the workflow context.' },
+        config: {
+          roomId: null,
+          pipelineId: null,
+          instructions: 'Generate a creative from the workflow context.',
+        },
       };
     case 'action.paid_optimizer':
       return {

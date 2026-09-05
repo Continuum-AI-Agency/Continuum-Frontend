@@ -65,6 +65,7 @@ import { getApiUrl } from '@/lib/api/config';
 import { buildAutomationSourceOptions } from '@/lib/automations/source-options';
 import { cn } from '@/lib/utils';
 import { AiStudioRoomPicker } from './pickers/AiStudioRoomPicker';
+import { PipelinePicker } from './pickers/PipelinePicker';
 import { LibraryCollectionPicker } from './pickers/LibraryCollectionPicker';
 import { OrganicPublishTargetPicker } from './pickers/OrganicPublishTargetPicker';
 import { PaidPortfolioPicker } from './pickers/PaidPortfolioPicker';
@@ -1657,52 +1658,77 @@ export function NodeConfigurationEditor({
     }
     case 'action.ai_studio_generate': {
       const request = resolveAutomationAiStudioGenerateConfig(node.config);
+      // A pipeline declares its own generators, its own media and its own outputs, and it
+      // runs in a throwaway workspace of its own. Leaving Generator, Outputs and the
+      // workspace picker on screen would offer three settings the run ignores.
+      const onPipeline = request.pipelineId !== null;
       return (
         <>
           <ActionCapabilityNotice type={node.type} capabilities={sourceCapabilities} />
-          <Choice
-            label="Generator"
-            value={request.generator}
+          <PipelinePicker
+            brandId={brandId}
+            value={request.pipelineId}
             disabled={disabled}
-            options={automationAiStudioGeneratorSchema.options.map((generator) => ({
-              value: generator,
-              label: generator === 'image' ? 'Image' : 'Video',
-            }))}
-            onChange={(generator) =>
+            onChange={(pipelineId) =>
               onChange({
                 ...request,
-                generator: generator as AutomationAiStudioGenerator,
+                pipelineId,
+                // A pipeline produces its own declared outputs; the adapter refuses any
+                // other count, so switching to one cannot leave a stale 4 behind.
+                ...(pipelineId === null ? {} : { maxOutputs: 1 }),
               })
             }
           />
+          {onPipeline ? null : (
+            <Choice
+              label="Generator"
+              value={request.generator}
+              disabled={disabled}
+              options={automationAiStudioGeneratorSchema.options.map((generator) => ({
+                value: generator,
+                label: generator === 'image' ? 'Image' : 'Video',
+              }))}
+              onChange={(generator) =>
+                onChange({
+                  ...request,
+                  generator: generator as AutomationAiStudioGenerator,
+                })
+              }
+            />
+          )}
           <PromptField
-            label="Generation instructions"
+            label={onPipeline ? "Text sent to the pipeline's input ports" : 'Generation instructions'}
             value={request.instructions}
             disabled={disabled}
             placeholder="Describe the asset to create, including format, composition, and constraints."
             onChange={(instructions) => onChange({ ...request, instructions })}
           />
-          <Field
-            label="Outputs per run"
-            type="number"
-            value={request.maxOutputs}
-            disabled={disabled}
-            onChange={(maxOutputs) =>
-              onChange({
-                ...request,
-                maxOutputs: boundedInteger(maxOutputs, request.maxOutputs, 1, 4),
-              })
-            }
-          />
-          <AiStudioRoomPicker
-            brandId={brandId}
-            value={request.roomId}
-            disabled={disabled}
-            onChange={(roomId) => onChange({ ...request, roomId })}
-          />
+          {onPipeline ? null : (
+            <Field
+              label="Outputs per run"
+              type="number"
+              value={request.maxOutputs}
+              disabled={disabled}
+              onChange={(maxOutputs) =>
+                onChange({
+                  ...request,
+                  maxOutputs: boundedInteger(maxOutputs, request.maxOutputs, 1, 4),
+                })
+              }
+            />
+          )}
+          {onPipeline ? null : (
+            <AiStudioRoomPicker
+              brandId={brandId}
+              value={request.roomId}
+              disabled={disabled}
+              onChange={(roomId) => onChange({ ...request, roomId })}
+            />
+          )}
           <p className="text-[11px] leading-4 text-muted-foreground">
-            An automation runs headless, so it can only reach the image and video generators. A
-            saved Studio workflow is replayed by the canvas in a browser and cannot be scheduled.
+            {onPipeline
+              ? 'This text is written to every text input port the pipeline declares. The pipeline runs in a workspace created for the run and deleted after it, and it decides what it generates.'
+              : 'An automation runs headless, so it can only reach the image and video generators. A saved Studio workflow is replayed by the canvas in a browser and cannot be scheduled — publish it as a pipeline to run it here.'}
           </p>
         </>
       );

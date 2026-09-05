@@ -345,7 +345,30 @@ describe('action config compatibility', () => {
       generator: 'image',
       instructions: 'Generate a creative from the workflow context.',
       maxOutputs: 1,
+      pipelineId: null,
     });
+  });
+
+  test('ai studio generate carries a published pipeline id through the resolver', () => {
+    const pipelineId = '11111111-2222-4333-8444-555555555555';
+    const node = actionNode('action.ai_studio_generate', {
+      roomId: null,
+      instructions: 'A frozen tundra outpost at dusk.',
+      pipelineId,
+    });
+    if (node.type !== 'action.ai_studio_generate') throw new Error('wrong node parsed');
+
+    expect(resolveAutomationAiStudioGenerateConfig(node.config).pipelineId).toBe(pipelineId);
+  });
+
+  test('ai studio generate refuses a pipeline id that is not a uuid', () => {
+    expect(() =>
+      actionNode('action.ai_studio_generate', {
+        roomId: null,
+        instructions: 'Generate a creative.',
+        pipelineId: 'the-starcraft-one',
+      }),
+    ).toThrow();
   });
 
   test('ai studio generate only offers the two server-side generation families', () => {
