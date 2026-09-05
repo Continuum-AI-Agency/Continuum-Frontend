@@ -58,6 +58,7 @@ import { useCollapsibleConversations } from '@/components/chat/collapsibleConver
 import { PromptInput } from '@/components/chat/prompt-input';
 import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { prependUnseen, useEarlierHistory } from '@/components/chat/useEarlierHistory';
+import type { ToolApprovalDecision } from '@/components/paid-media/jaina/components/JainaToolApprovalCard';
 import type { ScaffoldDecision } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -92,6 +93,7 @@ import {
   type JainaObjectiveStatus,
   type JainaPlanAction,
   type JainaScaffoldAction,
+  type JainaToolAction,
   reportAssemblySchema,
 } from '@/lib/jaina/schemas';
 import { createInitialJainaStreamState, type JainaStreamState } from '@/lib/jaina/stream';
@@ -898,6 +900,22 @@ function findPendingPlanId(messages: JainaChatMessage[]): string | null {
   return null;
 }
 
+/**
+ * Human-in-the-loop gate state the persisted snapshot CANNOT rebuild.
+ *
+ * The backend stores an assistant turn's text; it does not store which approval that
+ * turn is waiting on. So a message that reaches this merge holding a pending approval
+ * is the only copy of it, and letting the persisted row win deletes the card the user
+ * has to answer — with no error and no log, on the one turn where silence is the
+ * failure. Observed live: a gate pause persists the deterministic sentence "I need
+ * your approval before I create anything on Meta.", the contents match exactly, and
+ * the local copy carrying the approval is discarded a moment after it renders.
+ */
+const hasGateState = (message: JainaChatMessage): boolean =>
+  Boolean(message.scaffold) ||
+  (message.pendingToolApprovals?.length ?? 0) > 0 ||
+  Object.keys(message.resolvedApprovals ?? {}).length > 0;
+
 export function mergePersistedMessagesWithLocal(
   persistedMessages: JainaChatMessage[],
   localMessages: JainaChatMessage[],
@@ -942,7 +960,8 @@ export function mergePersistedMessagesWithLocal(
           // point of this predicate is that dropping the local copy loses whatever the
           // persisted snapshot cannot rebuild, and the snapshot cannot rebuild a
           // scaffold at all.
-          Boolean(lastPendingAssistant.scaffold)),
+          Boolean(lastPendingAssistant.scaffold) ||
+          hasGateState(lastPendingAssistant)),
     );
     const persistedAssistantHasMeaningfulContent = Boolean(
       lastPersistedAssistant &&
@@ -1011,7 +1030,8 @@ export function mergePersistedMessagesWithLocal(
       (candidate.reasoning?.length ?? 0) > 0 ||
       (candidate.toolCalls?.length ?? 0) > 0 ||
       (candidate.toolResults?.length ?? 0) > 0 ||
-      (candidate.objectives?.length ?? 0) > 0;
+      (candidate.objectives?.length ?? 0) > 0 ||
+      hasGateState(candidate);
     if (candidateHasRichState || !isFallbackCheckpointMessage(candidate.content)) {
       localAssistant = candidate;
       break;
@@ -1053,6 +1073,9 @@ export function mergePersistedMessagesWithLocal(
     (localAssistant.toolResults?.length ?? 0) +
     (localAssistant.objectives?.length ?? 0);
   const shouldPreserveLocalTrace = persistedTraceCount === 0 && localTraceCount > 0;
+  // The persisted row is never authoritative about a gate: the backend does not store
+  // one, so `persistedAssistant` can only ever be missing it.
+  const shouldPreserveLocalGate = hasGateState(localAssistant) && !hasGateState(persistedAssistant);
   const mergedObjectives = mergeMessageObjectives(
     persistedAssistant.objectives,
     localAssistant.objectives,
@@ -1065,7 +1088,8 @@ export function mergePersistedMessagesWithLocal(
     !(persistedLacksReport && localHasReport) &&
     !localHasRicherReportV2 &&
     !persistedPlanOnly &&
-    !shouldPreserveLocalTrace
+    !shouldPreserveLocalTrace &&
+    !shouldPreserveLocalGate
   ) {
     if (hasObjectiveUpgrade) {
       const mergedMessages = [...persistedMessages];
@@ -1096,6 +1120,11 @@ export function mergePersistedMessagesWithLocal(
     pendingClarification:
       localAssistant.pendingClarification ?? persistedAssistant.pendingClarification,
     objectives: mergedObjectives,
+    // See `hasGateState`: local is the only copy of these.
+    scaffold: localAssistant.scaffold ?? persistedAssistant.scaffold,
+    pendingToolApprovals:
+      localAssistant.pendingToolApprovals ?? persistedAssistant.pendingToolApprovals,
+    resolvedApprovals: localAssistant.resolvedApprovals ?? persistedAssistant.resolvedApprovals,
   };
   return mergedMessages;
 }
@@ -1164,8 +1193,8 @@ export function JainaChatSurface({
   const [pendingReportArtifactResponseId, setPendingReportArtifactResponseId] = React.useState<
     string | null
   >(null);
-  const [optimisticScaffoldDecisions, setOptimisticScaffoldDecisions] = React.useState<
-    Record<string, ScaffoldDecision>
+  const [optimisticApprovalDecisions, setOptimisticApprovalDecisions] = React.useState<
+    Record<string, ToolApprovalDecision>
   >({});
   const [sessionId, setSessionId] = React.useState<string>(() => createJainaSessionId());
   const attachments = useChatAttachments({ brandId: brandProfileId, sessionId });
@@ -2493,6 +2522,7 @@ export function JainaChatSurface({
       references?: AgentMentionReference[];
       planAction?: JainaPlanAction;
       scaffoldAction?: JainaScaffoldAction;
+      toolAction?: JainaToolAction;
       forceReportArtifact?: boolean;
       silentUserMessage?: boolean;
       onDispatchError?: (message: string) => void;
@@ -2506,6 +2536,11 @@ export function JainaChatSurface({
           description: 'Jaina needs an ad account context.',
           variant: 'warning',
         });
+        // Both early returns below tell the caller too. A caller holding optimistic UI
+        // (an approval decision) otherwise keeps rendering "Approved" for a request
+        // that never left the browser — the same silence `onDispatchError` exists for
+        // on the fetch path.
+        input.onDispatchError?.('Jaina needs an ad account context.');
         return false;
       }
 
@@ -2528,6 +2563,7 @@ export function JainaChatSurface({
           description: message,
           variant: 'error',
         });
+        input.onDispatchError?.(message);
         return false;
       }
 
@@ -2603,6 +2639,7 @@ export function JainaChatSurface({
         references: input.references,
         planAction: input.planAction,
         scaffoldAction: input.scaffoldAction,
+        toolAction: input.toolAction,
         forceReportArtifact: input.forceReportArtifact,
         onDispatchError: input.onDispatchError,
       }).then((result) => {
@@ -2997,7 +3034,13 @@ export function JainaChatSurface({
   );
 
   /**
-   * A human's answer to a paid-scaffold gate.
+   * A human's answer to ANY approval gate — the three paid-scaffold gates, which
+   * carry their own ordered table, and every other gated tool, which does not.
+   *
+   * The two differ only in which typed field the answer travels on: a scaffold names
+   * its version and gate row, everything else is keyed by `approval_id` alone. The
+   * channel, the optimistic layer and the rollback are shared, because they are what
+   * makes a dropped decision visible rather than silent.
    *
    * The optimistic layer lives HERE and not in the reducer: `JainaStreamState` is
    * owned by useJainaChatStream and is reset wholesale by the very `start()` call
@@ -3006,15 +3049,37 @@ export function JainaChatSurface({
    * request leaves a card reading "Approved" while nothing happened, which is exactly
    * the silence the gate exists to prevent.
    */
-  const handleScaffoldDecision = React.useCallback(
-    (approval: JainaToolApprovalRequiredPayload, decision: ScaffoldDecision) => {
+  const handleApprovalDecision = React.useCallback(
+    (approval: JainaToolApprovalRequiredPayload, decision: ToolApprovalDecision) => {
       const gate = SCAFFOLD_GATE_BY_TOOL_NAME[approval.toolName];
       const input = approval.input as { scaffold_version_id?: unknown } | null;
       const scaffoldVersionId =
         input && typeof input.scaffold_version_id === 'string' ? input.scaffold_version_id : null;
-      if (!gate || !scaffoldVersionId) return;
 
-      setOptimisticScaffoldDecisions((prev) => ({ ...prev, [approval.approvalId]: decision }));
+      let action: { scaffoldAction: JainaScaffoldAction } | { toolAction: JainaToolAction };
+      if (gate) {
+        // A scaffold gate with no version id cannot name the row it would spend.
+        if (!scaffoldVersionId) return;
+        action = {
+          scaffoldAction: {
+            decision,
+            approval_id: approval.approvalId,
+            scaffold_version_id: scaffoldVersionId,
+            gate,
+            tool_call_id: approval.toolCallId,
+          },
+        };
+      } else {
+        action = {
+          toolAction: {
+            decision,
+            approval_id: approval.approvalId,
+            tool_call_id: approval.toolCallId,
+          },
+        };
+      }
+
+      setOptimisticApprovalDecisions((prev) => ({ ...prev, [approval.approvalId]: decision }));
 
       void dispatchMessage({
         // The backend reads the typed field; this string exists only because the
@@ -3022,22 +3087,16 @@ export function JainaChatSurface({
         query: decision === 'approve' ? 'Approved.' : 'Declined.',
         canvas: false,
         silentUserMessage: true,
-        scaffoldAction: {
-          decision,
-          approval_id: approval.approvalId,
-          scaffold_version_id: scaffoldVersionId,
-          gate,
-          tool_call_id: approval.toolCallId,
-        },
+        ...action,
         onDispatchError: () => {
-          setOptimisticScaffoldDecisions((prev) => {
+          setOptimisticApprovalDecisions((prev) => {
             const next = { ...prev };
             delete next[approval.approvalId];
             return next;
           });
           show({
             title: decision === 'approve' ? 'Approval not delivered' : 'Decision not delivered',
-            description: 'Jaina did not receive it. Nothing was created — please answer again.',
+            description: 'Jaina did not receive it. Nothing ran — please answer again.',
             variant: 'error',
           });
         },
@@ -3247,8 +3306,8 @@ export function JainaChatSurface({
                     onSuggestionClick={handleSubmit}
                     onPlanFeedback={handlePlanFeedback}
                     onFocusInput={handleFocusInput}
-                    onScaffoldDecision={handleScaffoldDecision}
-                    optimisticScaffoldDecisions={optimisticScaffoldDecisions}
+                    onApprovalDecision={handleApprovalDecision}
+                    optimisticApprovalDecisions={optimisticApprovalDecisions}
                     onRegenerate={handleSubmit}
                     regeneratePrompt={regeneratePromptByMessageId.get(message.id)}
                   />

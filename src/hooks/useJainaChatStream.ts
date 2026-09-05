@@ -10,6 +10,7 @@ import {
   type JainaChatStreamRequest,
   type JainaPlanAction,
   type JainaScaffoldAction,
+  type JainaToolAction,
   jainaChatRequestSchema,
 } from '@/lib/jaina/schemas';
 import {
@@ -40,6 +41,8 @@ type JainaChatInput = {
   references?: AgentMentionReference[];
   planAction?: JainaPlanAction;
   scaffoldAction?: JainaScaffoldAction;
+  /** A human's answer to any gated tool that is not a paid scaffold. */
+  toolAction?: JainaToolAction;
   forceReportArtifact?: boolean;
   /**
    * Invoked when the request fails to reach the backend.
@@ -272,6 +275,7 @@ export function useJainaChatStream() {
           clarification: input.clarificationId ? { id: input.clarificationId } : undefined,
           ...(input.planAction ? { plan_action: input.planAction } : {}),
           ...(input.scaffoldAction ? { scaffold_action: input.scaffoldAction } : {}),
+          ...(input.toolAction ? { tool_action: input.toolAction } : {}),
           context: {
             adAccountId: input.adAccountId,
             brandId: input.brandId,

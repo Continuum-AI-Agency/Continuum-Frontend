@@ -298,19 +298,22 @@ export function ApproveRejectActions({
   locked,
   loading,
   approveLabel,
+  rejectLabel = 'Dismiss',
   onApprove,
   onReject,
 }: {
   locked: boolean;
   loading?: boolean;
   approveLabel: string;
+  /** 'Dismiss' reads as "not now"; a gate that RECORDS a refusal should say Deny. */
+  rejectLabel?: string;
   onApprove: () => void;
   onReject: () => void;
 }) {
   return (
     <AgentActions>
       <AgentButton variant="ghost" disabled={locked || loading} onClick={onReject}>
-        Dismiss
+        {rejectLabel}
       </AgentButton>
       <AgentButton variant="primary" disabled={locked} loading={loading} onClick={onApprove}>
         {approveLabel}

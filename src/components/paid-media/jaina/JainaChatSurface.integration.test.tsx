@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
@@ -9,6 +10,12 @@ Object.assign(global.window, {
   Error: globalThis.Error,
   TypeError: globalThis.TypeError,
 });
+
+const withQueryClient = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    {children}
+  </QueryClientProvider>
+);
 
 let streamState: JainaStreamState = createInitialJainaStreamState();
 
@@ -102,7 +109,9 @@ mock.module('@/components/ai-elements/queue', () => ({
   QueueSectionLabel: ({ label }: { label: string }) => <div>{label}</div>,
   QueueSectionTrigger: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   QueueItemAction: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-    <button onClick={onClick}>{children}</button>
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
   ),
 }));
 
@@ -119,7 +128,15 @@ mock.module('./components/JainaConversationSidebar', () => ({
 }));
 
 mock.module('./components/JainaMessageItem', () => ({
-  JainaMessageItem: ({ message }: { message: Record<string, unknown> }) => {
+  JainaMessageItem: ({
+    message,
+    state,
+    onApprovalDecision,
+  }: {
+    message: Record<string, unknown>;
+    state: JainaStreamState;
+    onApprovalDecision?: (approval: Record<string, unknown>, decision: 'approve' | 'deny') => void;
+  }) => {
     const plan = message.plan as { id?: string; title?: string } | undefined;
     const reasoning = (message.reasoning as unknown[] | undefined) ?? [];
     const report = message.report as { blocks?: unknown[] } | undefined;
@@ -138,6 +155,18 @@ mock.module('./components/JainaMessageItem', () => ({
         <span data-testid={`${String(message.role)}-report-kind`}>
           {reportV2 ? 'v2' : report ? 'legacy' : 'none'}
         </span>
+        {/* Stands in for the two approval cards: the real ones derive their pending
+            list from this same `state` and call back with the untouched frame. */}
+        {state.pendingToolApprovals.map((approval) => (
+          <button
+            key={approval.approvalId}
+            type="button"
+            data-testid={`approve-${approval.approvalId}`}
+            onClick={() => onApprovalDecision?.(approval, 'approve')}
+          >
+            approve
+          </button>
+        ))}
       </div>
     );
   },
@@ -310,6 +339,7 @@ describe('JainaChatSurface integration', () => {
         campaignId={null}
         userId="user-1"
       />,
+      { wrapper: withQueryClient },
     );
 
     await waitFor(() => {
@@ -331,6 +361,178 @@ describe('JainaChatSurface integration', () => {
       query: 'Recommend budget reallocations for this week by campaign',
       forceReportArtifact: true,
       canvas: false,
+    });
+  });
+
+  /**
+   * The bug this catches was invisible on every gate: the Backend persists an assistant
+   * turn's TEXT and nothing about the approval it is waiting on, and a gate pause
+   * persists a deterministic sentence. So the contents match, the snapshot refresh wins,
+   * and the only copy of the approval — the card the user has to answer — is dropped a
+   * moment after it renders. Observed live against a real audience_group_publish pause.
+   */
+  it('keeps a pending tool approval when the snapshot refresh brings back the same text', () => {
+    const PAUSE_TEXT = 'I need your approval before I create anything on Meta.';
+    const approval = {
+      approvalId: 'appr_aud_1',
+      toolCallId: 'call_1',
+      toolName: 'audience_group_publish',
+      input: { group_version_id: 'agv_1' },
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    };
+
+    const merged = mergePersistedMessagesWithLocal(
+      [
+        {
+          id: 'persisted-1',
+          role: 'user',
+          content: 'Publish the audience group',
+          createdAt: '2026-09-05T09:30:00.000Z',
+        },
+        {
+          id: 'persisted-2',
+          role: 'assistant',
+          content: PAUSE_TEXT,
+          createdAt: '2026-09-05T09:30:10.000Z',
+          status: 'done',
+        },
+      ],
+      [
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'Publish the audience group',
+          createdAt: '2026-09-05T09:30:00.000Z',
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: PAUSE_TEXT,
+          createdAt: '2026-09-05T09:30:10.000Z',
+          status: 'done',
+          pendingToolApprovals: [approval as never],
+        },
+      ],
+    );
+
+    const assistant = merged.filter((message) => message.role === 'assistant').at(-1);
+    expect(assistant?.pendingToolApprovals).toHaveLength(1);
+    expect(assistant?.pendingToolApprovals?.[0]?.approvalId).toBe('appr_aud_1');
+  });
+
+  /**
+   * The gate's routing fork. Both decisions ride the SAME chat POST; they differ only
+   * in which typed field carries them, and getting that wrong is silent — the backend
+   * reads the field it expects, finds nothing, and the paused turn simply never
+   * resumes. A scaffold answered as a tool_action would also skip the ordered gate row
+   * the database enforces.
+   */
+  describe('approval decisions route by tool', () => {
+    const chatFetch = () =>
+      mock((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const method = init?.method ?? 'GET';
+
+        if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
+          return Promise.resolve(jsonResponse({ sessions: [], messages: [] }));
+        }
+        if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
+          return Promise.resolve(
+            jsonResponse({
+              session_id: 'session-1',
+              brand_id: 'brand-1',
+              ad_account_id: 'act-1',
+              conversation_title: null,
+            }),
+          );
+        }
+        return Promise.resolve({
+          ok: false,
+          text: () => Promise.resolve('Unhandled fetch route'),
+        } as MockFetchResponse);
+      }) as typeof fetch;
+
+    const decide = async (approval: Record<string, unknown>) => {
+      global.fetch = chatFetch();
+      streamState = {
+        ...createInitialJainaStreamState(),
+        pendingToolApprovals: [approval as never],
+      };
+
+      render(
+        <JainaChatSurface
+          brandProfileId="brand-1"
+          brandName="Test Brand"
+          adAccountId="act-1"
+          campaignId={null}
+          userId="user-1"
+        />,
+        { wrapper: withQueryClient },
+      );
+
+      await waitFor(() => {
+        expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false);
+      });
+      // A message has to exist before any card can hang off it.
+      fireEvent.click(screen.getByTestId('prompt-submit'));
+      await waitFor(() => {
+        expect(startMock).toHaveBeenCalledTimes(1);
+      });
+
+      fireEvent.click(
+        await screen.findByTestId(`approve-${String(approval.approvalId)}`, undefined, {
+          timeout: 2000,
+        }),
+      );
+      await waitFor(() => {
+        expect(startMock).toHaveBeenCalledTimes(2);
+      });
+      return startMock.mock.calls[1]?.[0] as Record<string, unknown>;
+    };
+
+    it('posts tool_action for a gated tool that is not a scaffold', async () => {
+      const sent = await decide({
+        approvalId: 'appr_aud_1',
+        toolCallId: 'call_1',
+        toolName: 'audience_group_publish',
+        input: { group_version_id: 'agv_1' },
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      });
+
+      expect(sent).toMatchObject({
+        // The typed field is the whole channel; the query string exists only because
+        // the request schema requires a non-empty one.
+        toolAction: {
+          decision: 'approve',
+          approval_id: 'appr_aud_1',
+          tool_call_id: 'call_1',
+        },
+        query: 'Approved.',
+      });
+      expect(sent.scaffoldAction).toBeUndefined();
+      // The decision is silent: it must not post a second user turn into the transcript.
+      expect(screen.getAllByTestId('user-message')).toHaveLength(1);
+    });
+
+    it('posts scaffold_action, with its gate and version, for a scaffold', async () => {
+      const sent = await decide({
+        approvalId: 'appr_scaffold_1',
+        toolCallId: 'call_2',
+        toolName: 'paid_scaffold_build',
+        input: { scaffold_version_id: '11111111-1111-4111-8111-111111111111' },
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      });
+
+      expect(sent).toMatchObject({
+        scaffoldAction: {
+          decision: 'approve',
+          approval_id: 'appr_scaffold_1',
+          scaffold_version_id: '11111111-1111-4111-8111-111111111111',
+          gate: 'build',
+          tool_call_id: 'call_2',
+        },
+      });
+      expect(sent.toolAction).toBeUndefined();
     });
   });
 
@@ -429,6 +631,7 @@ describe('JainaChatSurface integration', () => {
         campaignId={null}
         userId="user-1"
       />,
+      { wrapper: withQueryClient },
     );
 
     await waitFor(() => {
@@ -612,6 +815,7 @@ describe('JainaChatSurface integration', () => {
         campaignId={null}
         userId="user-1"
       />,
+      { wrapper: withQueryClient },
     );
 
     await waitFor(() => {

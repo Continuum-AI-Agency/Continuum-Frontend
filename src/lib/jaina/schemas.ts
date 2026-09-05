@@ -19,6 +19,7 @@ import {
   narrativeBlockSchema as contractNarrativeBlockSchema,
   tableColumnSchema as contractTableColumnSchema,
   jainaScaffoldActionSchema,
+  jainaToolActionSchema,
   jainaToolApprovalRequiredPayloadSchema,
   jainaToolApprovalResolvedPayloadSchema,
   jainaToolOutputDeniedPayloadSchema,
@@ -66,6 +67,10 @@ export type JainaPlanAction = z.infer<typeof jainaPlanActionSchema>;
 export type JainaScaffoldAction = z.infer<typeof jainaScaffoldActionSchema>;
 export { jainaScaffoldActionSchema };
 
+/** The same, for every gated tool that is not a paid scaffold. */
+export type JainaToolAction = z.infer<typeof jainaToolActionSchema>;
+export { jainaToolActionSchema };
+
 export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
   include_thoughts: z.boolean().optional(),
@@ -88,6 +93,12 @@ export const jainaChatRequestSchema = z.object({
    * the Next route is a pure passthrough that would not catch it either.
    */
   scaffold_action: jainaScaffoldActionSchema.optional(),
+  /**
+   * A human's answer to any OTHER gated tool's approval — audience publish, a pipeline
+   * run, the optimizer's acts. Same stripping-schema hazard as `scaffold_action` above:
+   * an undeclared field vanishes silently and the approval never arrives.
+   */
+  tool_action: jainaToolActionSchema.optional(),
   context: z.object({
     adAccountId: z.string().min(1),
     brandId: z.string().min(1),

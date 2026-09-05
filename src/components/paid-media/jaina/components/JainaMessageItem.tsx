@@ -8,10 +8,7 @@ import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
-import {
-  PaidScaffoldCard,
-  type ScaffoldDecision,
-} from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
+import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import {
   type CreativeArtifact,
@@ -31,6 +28,7 @@ import { ClarificationBanner } from './ClarificationBanner';
 import { CreativesSection } from './CreativesSection';
 import { JainaInlineReport } from './JainaInlineReport';
 import { JainaReportV2 } from './JainaReportV2';
+import { JainaToolApprovalCard, type ToolApprovalDecision } from './JainaToolApprovalCard';
 import { MessageActionBar } from './MessageActionBar';
 import { ObjectivesQueue } from './ObjectivesQueue';
 import { type PlanFeedbackPayload, PlanSection } from './PlanSection';
@@ -114,12 +112,12 @@ type JainaMessageItemProps = {
   onRegenerate?: (prompt: string) => void;
   regeneratePrompt?: string;
   onFocusInput?: () => void;
-  onScaffoldDecision?: (
+  onApprovalDecision?: (
     approval: JainaToolApprovalRequiredPayload,
-    decision: ScaffoldDecision,
+    decision: ToolApprovalDecision,
   ) => void;
   /** Decisions submitted but not yet echoed back by a tool.approval_resolved frame. */
-  optimisticScaffoldDecisions?: Record<string, ScaffoldDecision>;
+  optimisticApprovalDecisions?: Record<string, ToolApprovalDecision>;
 };
 
 function JainaMessageItemImpl({
@@ -131,8 +129,8 @@ function JainaMessageItemImpl({
   onRegenerate,
   regeneratePrompt,
   onFocusInput,
-  onScaffoldDecision,
-  optimisticScaffoldDecisions,
+  onApprovalDecision,
+  optimisticApprovalDecisions,
 }: JainaMessageItemProps) {
   const isStreaming = message.id === activeResponseId;
 
@@ -155,6 +153,11 @@ function JainaMessageItemImpl({
     : (message.resolvedApprovals ?? {});
   const scaffoldApproval =
     pendingApprovals.find((entry) => entry.toolName.startsWith('paid_scaffold_')) ?? null;
+  // Every OTHER gated tool. The scaffold keeps its own card because it has a tree to
+  // render; these are answered from the proposed arguments alone.
+  const toolApprovals = pendingApprovals.filter(
+    (entry) => !entry.toolName.startsWith('paid_scaffold_'),
+  );
   const scaffoldResolution = scaffoldApproval
     ? (resolvedApprovals[scaffoldApproval.approvalId] ?? null)
     : null;
@@ -303,13 +306,23 @@ function JainaMessageItemImpl({
                 denial={scaffoldDenial}
                 optimisticDecision={
                   scaffoldApproval
-                    ? (optimisticScaffoldDecisions?.[scaffoldApproval.approvalId] ?? null)
+                    ? (optimisticApprovalDecisions?.[scaffoldApproval.approvalId] ?? null)
                     : null
                 }
                 isStreaming={isStreaming}
-                {...(onScaffoldDecision ? { onDecide: onScaffoldDecision } : {})}
+                {...(onApprovalDecision ? { onDecide: onApprovalDecision } : {})}
               />
             ) : null}
+
+            {toolApprovals.map((approval) => (
+              <JainaToolApprovalCard
+                key={approval.approvalId}
+                approval={approval}
+                optimisticDecision={optimisticApprovalDecisions?.[approval.approvalId] ?? null}
+                isStreaming={isStreaming}
+                {...(onApprovalDecision ? { onDecide: onApprovalDecision } : {})}
+              />
+            ))}
 
             <ThinkingWindow
               reasoning={reasoning ?? []}
