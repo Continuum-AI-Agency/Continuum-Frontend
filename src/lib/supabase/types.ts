@@ -7467,6 +7467,84 @@ export type Database = {
         }
         Relationships: []
       }
+      jaina_tool_gate_approvals: {
+        Row: {
+          approval_expires_at: string
+          approval_token_hash: string
+          approved_at: string | null
+          approved_by: string | null
+          brand_id: string
+          content_hash: string
+          created_at: string
+          created_by: string
+          id: string
+          resume_expires_at: string
+          resume_messages: Json
+          sdk_approval_id: string
+          sdk_tool_call_id: string
+          status: string
+          subject_id: string
+          subject_kind: string
+          tool_name: string
+          updated_at: string
+        }
+        Insert: {
+          approval_expires_at: string
+          approval_token_hash: string
+          approved_at?: string | null
+          approved_by?: string | null
+          brand_id: string
+          content_hash: string
+          created_at?: string
+          created_by: string
+          id?: string
+          resume_expires_at: string
+          resume_messages: Json
+          sdk_approval_id: string
+          sdk_tool_call_id: string
+          status?: string
+          subject_id: string
+          subject_kind: string
+          tool_name: string
+          updated_at?: string
+        }
+        Update: {
+          approval_expires_at?: string
+          approval_token_hash?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          brand_id?: string
+          content_hash?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          resume_expires_at?: string
+          resume_messages?: Json
+          sdk_approval_id?: string
+          sdk_tool_call_id?: string
+          status?: string
+          subject_id?: string
+          subject_kind?: string
+          tool_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jaina_tool_gate_approvals_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "jaina_tool_gate_approvals_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       media_insight_snapshots: {
         Row: {
           account_id: string
@@ -7958,6 +8036,7 @@ export type Database = {
           created_status: string
           creative_asset_id: string | null
           creative_media: Json | null
+          daily_budget_minor_units: number | null
           error_message: string | null
           id: string
           inherit_angle_key: string | null
@@ -7987,6 +8066,7 @@ export type Database = {
           created_status?: string
           creative_asset_id?: string | null
           creative_media?: Json | null
+          daily_budget_minor_units?: number | null
           error_message?: string | null
           id?: string
           inherit_angle_key?: string | null
@@ -8016,6 +8096,7 @@ export type Database = {
           created_status?: string
           creative_asset_id?: string | null
           creative_media?: Json | null
+          daily_budget_minor_units?: number | null
           error_message?: string | null
           id?: string
           inherit_angle_key?: string | null
@@ -10461,6 +10542,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      claim_jaina_tool_gate: {
+        Args: {
+          p_approval_token_hash: string
+          p_content_hash: string
+          p_subject_id: string
+          p_subject_kind: string
+          p_tool_name: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       claim_next_automation_run: {
         Args: { p_env?: string; p_lease_ttl_sec: number; p_worker_id: string }
         Returns: {
@@ -11135,6 +11227,23 @@ export type Database = {
           tags: string[]
         }[]
       }
+      open_jaina_tool_gate: {
+        Args: {
+          p_approval_expires_at: string
+          p_approval_token_hash: string
+          p_brand_id: string
+          p_content_hash: string
+          p_resume_expires_at: string
+          p_resume_messages: Json
+          p_sdk_approval_id: string
+          p_sdk_tool_call_id: string
+          p_subject_id: string
+          p_subject_kind: string
+          p_tool_name: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       open_paid_scaffold_gate: {
         Args: {
           p_approval_expires_at: string
@@ -11337,6 +11446,15 @@ export type Database = {
           refresh_token: string
         }[]
       }
+      resolve_jaina_tool_gate: {
+        Args: {
+          p_approval_token_hash?: string
+          p_decision: string
+          p_sdk_approval_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       resolve_paid_scaffold_gate: {
         Args: {
           p_approval_token_hash?: string
@@ -11351,6 +11469,15 @@ export type Database = {
       revoke_integration_from_brand: {
         Args: { p_grant_id: string }
         Returns: undefined
+      }
+      rotate_audience_group_approval: {
+        Args: {
+          p_approval_expires_at: string
+          p_approval_token_hash: string
+          p_user_id?: string
+          p_version_id: string
+        }
+        Returns: Json
       }
       search_admin_user_directory: {
         Args: { p_limit?: number; p_offset?: number; p_query: string }
@@ -14747,6 +14874,7 @@ export type Database = {
           task_uid: string | null
           template_key: string
           template_name: string
+          template_source_id: string | null
           updated_at: string
         }
         Insert: {
@@ -14767,6 +14895,7 @@ export type Database = {
           task_uid?: string | null
           template_key: string
           template_name: string
+          template_source_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -14787,6 +14916,7 @@ export type Database = {
           task_uid?: string | null
           template_key?: string
           template_name?: string
+          template_source_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -14796,6 +14926,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "render_workspace_bindings"
             referencedColumns: ["id", "brand_id"]
+          },
+          {
+            foreignKeyName: "ad_render_jobs_template_source_id_fkey"
+            columns: ["template_source_id"]
+            isOneToOne: false
+            referencedRelation: "template_sources"
+            referencedColumns: ["asset_id"]
           },
         ]
       }
@@ -15657,6 +15794,8 @@ export type Database = {
           source_id: string
           source_revision: string
           state: string
+          target_client_id: string | null
+          target_expires_at: string | null
           title: string
           updated_at: string
         }
@@ -15684,6 +15823,8 @@ export type Database = {
           source_id: string
           source_revision: string
           state?: string
+          target_client_id?: string | null
+          target_expires_at?: string | null
           title: string
           updated_at?: string
         }
@@ -15711,6 +15852,8 @@ export type Database = {
           source_id?: string
           source_revision?: string
           state?: string
+          target_client_id?: string | null
+          target_expires_at?: string | null
           title?: string
           updated_at?: string
         }
@@ -16976,6 +17119,112 @@ export type Database = {
         }
         Relationships: []
       }
+      template_sources: {
+        Row: {
+          aep_sha256: string | null
+          asset_id: string
+          brand_id: string
+          content_hash: string | null
+          contract_version: string | null
+          created_at: string
+          family: string
+          fonts: string[]
+          forge_run_id: string | null
+          forge_state: string | null
+          parse: Json
+          parse_error: string | null
+          parse_state: string
+          parsed_at: string | null
+          parser: string | null
+          promoted_at: string | null
+          ratios: string[]
+          render_binding_id: string | null
+          render_template_id: number | null
+          render_workspace: string | null
+          slot_count: number | null
+          slot_roles: Json
+          template_key: string | null
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          aep_sha256?: string | null
+          asset_id: string
+          brand_id: string
+          content_hash?: string | null
+          contract_version?: string | null
+          created_at?: string
+          family: string
+          fonts?: string[]
+          forge_run_id?: string | null
+          forge_state?: string | null
+          parse?: Json
+          parse_error?: string | null
+          parse_state?: string
+          parsed_at?: string | null
+          parser?: string | null
+          promoted_at?: string | null
+          ratios?: string[]
+          render_binding_id?: string | null
+          render_template_id?: number | null
+          render_workspace?: string | null
+          slot_count?: number | null
+          slot_roles?: Json
+          template_key?: string | null
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          aep_sha256?: string | null
+          asset_id?: string
+          brand_id?: string
+          content_hash?: string | null
+          contract_version?: string | null
+          created_at?: string
+          family?: string
+          fonts?: string[]
+          forge_run_id?: string | null
+          forge_state?: string | null
+          parse?: Json
+          parse_error?: string | null
+          parse_state?: string
+          parsed_at?: string | null
+          parser?: string | null
+          promoted_at?: string | null
+          ratios?: string[]
+          render_binding_id?: string | null
+          render_template_id?: number | null
+          render_workspace?: string | null
+          slot_count?: number | null
+          slot_roles?: Json
+          template_key?: string | null
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_sources_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: true
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_sources_render_binding_id_fkey"
+            columns: ["render_binding_id"]
+            isOneToOne: false
+            referencedRelation: "render_workspace_bindings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_sources_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       timeline_drafts: {
         Row: {
           asset_id: string
@@ -17133,6 +17382,8 @@ export type Database = {
           source_id: string
           source_revision: string
           state: string
+          target_client_id: string | null
+          target_expires_at: string | null
           title: string
           updated_at: string
         }[]
@@ -17210,6 +17461,8 @@ export type Database = {
           source_id: string
           source_revision: string
           state: string
+          target_client_id: string | null
+          target_expires_at: string | null
           title: string
           updated_at: string
         }[]
@@ -17250,6 +17503,8 @@ export type Database = {
           source_id: string
           source_revision: string
           state: string
+          target_client_id: string | null
+          target_expires_at: string | null
           title: string
           updated_at: string
         }[]
@@ -17327,6 +17582,8 @@ export type Database = {
           source_id: string
           source_revision: string
           state: string
+          target_client_id: string | null
+          target_expires_at: string | null
           title: string
           updated_at: string
         }[]
@@ -17368,6 +17625,8 @@ export type Database = {
           source_id: string
           source_revision: string
           state: string
+          target_client_id: string | null
+          target_expires_at: string | null
           title: string
           updated_at: string
         }[]
@@ -17409,6 +17668,8 @@ export type Database = {
           source_id: string
           source_revision: string
           state: string
+          target_client_id: string | null
+          target_expires_at: string | null
           title: string
           updated_at: string
         }[]
@@ -17517,6 +17778,8 @@ export type Database = {
           source_id: string
           source_revision: string
           state: string
+          target_client_id: string | null
+          target_expires_at: string | null
           title: string
           updated_at: string
         }[]
@@ -17559,6 +17822,8 @@ export type Database = {
           source_id: string
           source_revision: string
           state: string
+          target_client_id: string | null
+          target_expires_at: string | null
           title: string
           updated_at: string
         }[]
@@ -17604,6 +17869,8 @@ export type Database = {
           source_id: string
           source_revision: string
           state: string
+          target_client_id: string | null
+          target_expires_at: string | null
           title: string
           updated_at: string
         }[]
@@ -17619,16 +17886,19 @@ export type Database = {
           p_brand_id: string
           p_campaign_ids?: string[]
           p_collection_id?: string
+          p_fonts?: string[]
           p_leading_only?: boolean
           p_media_type?: string
           p_owner_ids?: string[]
           p_performance_window?: string
           p_placements?: string[]
+          p_ratios?: string[]
           p_review_statuses?: string[]
           p_search?: string
           p_shared?: boolean
           p_sources?: string[]
           p_tags?: string[]
+          p_template_only?: boolean
           p_usage_rights?: string[]
           p_used?: boolean
         }
@@ -17644,18 +17914,21 @@ export type Database = {
           p_campaign_ids?: string[]
           p_collection_id?: string
           p_cursor?: Json
+          p_fonts?: string[]
           p_leading_only?: boolean
           p_limit?: number
           p_media_type?: string
           p_owner_ids?: string[]
           p_performance_window?: string
           p_placements?: string[]
+          p_ratios?: string[]
           p_review_statuses?: string[]
           p_search?: string
           p_shared?: boolean
           p_sort?: string
           p_sources?: string[]
           p_tags?: string[]
+          p_template_only?: boolean
           p_usage_rights?: string[]
           p_used?: boolean
         }
@@ -17743,6 +18016,17 @@ export type Database = {
       reap_expired_client_render_leases: { Args: never; Returns: number }
       reap_expired_service_render_jobs: { Args: never; Returns: number }
       reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
+      replace_element: {
+        Args: {
+          p_brand_id: string
+          p_element_id: string
+          p_expected_updated_at: string
+          p_member_asset_ids: string[]
+          p_origin_ref: Json
+          p_title: string
+        }
+        Returns: undefined
+      }
       search_assets_ranked: {
         Args: {
           filter_asset_ids?: string[]
@@ -24165,6 +24449,10 @@ export type Database = {
       }
       optimizer_action_count: { Args: { p_since?: string }; Returns: number }
       optimizer_append_logs: { Args: { p_rows: Json }; Returns: number }
+      optimizer_approve_creative_swap_publish: {
+        Args: { p_job_id: string }
+        Returns: undefined
+      }
       optimizer_archive_portfolio: {
         Args: { p_portfolio_id: string }
         Returns: undefined
@@ -24199,6 +24487,16 @@ export type Database = {
         }[]
       }
       optimizer_claim_next_creative_swap_job: {
+        Args: { p_lease_ttl_sec?: number; p_worker_id: string }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "creative_swap_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      optimizer_claim_next_creative_swap_publish: {
         Args: { p_lease_ttl_sec?: number; p_worker_id: string }
         Returns: unknown[]
         SetofOptions: {
@@ -24355,6 +24653,10 @@ export type Database = {
       }
       optimizer_get_cpa_series: {
         Args: { p_limit?: number; p_portfolio_id: string }
+        Returns: Json
+      }
+      optimizer_get_creative_swap_job_for_target: {
+        Args: { p_ad_id?: string; p_adset_id: string }
         Returns: Json
       }
       optimizer_get_creative_swap_jobs: {
@@ -24580,6 +24882,10 @@ export type Database = {
       optimizer_refresh_decision_outcomes: {
         Args: { p_portfolio_id: string }
         Returns: number
+      }
+      optimizer_reject_creative_swap_publish: {
+        Args: { p_job_id: string; p_reason?: string }
+        Returns: undefined
       }
       optimizer_request_apply_item: {
         Args: { p_adset_id: string; p_run_id: string }
