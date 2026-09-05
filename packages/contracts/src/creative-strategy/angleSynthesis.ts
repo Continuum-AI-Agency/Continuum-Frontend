@@ -95,3 +95,110 @@ export const proposedConceptSchema = z.object({
   mergeCandidateConceptId: z.string().nullable(),
 });
 export type ProposedConcept = z.infer<typeof proposedConceptSchema>;
+
+// ---------------------------------------------------------------------------
+// The review pass — the file header's rules, enforced instead of described.
+// ---------------------------------------------------------------------------
+
+/**
+ * How many concepts this evidence can actually support.
+ *
+ * 3–5 is a RANGE, and the evidence decides where in it you land. An ad set running one
+ * creative has nothing to contrast, so five "distinguished" angles from it are five
+ * guesses wearing the costume of analysis — which is the exact failure this whole line of
+ * work exists to stop. The ceiling is therefore the number of distinct creatives actually
+ * observed, capped at five.
+ */
+export function proposalBudget(context: AngleSynthesisContext): {
+  min: number;
+  max: number;
+  reason: string;
+} {
+  const distinctCreatives = new Set(context.evidence.creatives.map((c) => c.nodeId)).size;
+  if (distinctCreatives <= 1) {
+    return {
+      min: 1,
+      max: 1,
+      reason:
+        distinctCreatives === 0
+          ? 'no creative evidence: nothing to contrast, so nothing may be distinguished'
+          : 'one creative observed: there is no comparison to draw an angle from',
+    };
+  }
+  const max = Math.min(distinctCreatives, 5);
+  return {
+    min: Math.min(3, max),
+    max,
+    reason: `${distinctCreatives} distinct creatives observed`,
+  };
+}
+
+export type RejectedConcept = { concept: ProposedConcept; reason: string };
+
+export type ConceptReview = {
+  accepted: ProposedConcept[];
+  rejected: RejectedConcept[];
+};
+
+/**
+ * Judge what the worker proposed against what it was allowed to see.
+ *
+ * Three rules, each of which has a specific way of going wrong quietly:
+ *
+ *  1. An angle outside `allowedAngles` is REJECTED, never coerced to 'unknown'. A coerce
+ *     launders a hallucinated strategy into the store as a legitimate-looking row.
+ *  2. Every citation in `groundedOn` must name a nodeId that was actually in the evidence.
+ *     A model that cites an id nobody gave it has invented its justification, and an
+ *     invented justification is worse than none: it reads as checked.
+ *  3. `mergeCandidateConceptId` may only point at a concept the caller supplied. The
+ *     worker proposes; the caller resolves and mints.
+ *
+ * Rejections are returned rather than thrown so one bad concept does not discard four good
+ * ones — but a rejected concept never reaches the store.
+ */
+export function reviewProposedConcepts(
+  context: AngleSynthesisContext,
+  concepts: readonly ProposedConcept[],
+): ConceptReview {
+  const allowed = new Set(context.allowedAngles.map((a) => a.angleId));
+  const knownNodes = new Set(
+    Object.values(context.evidence)
+      .flat()
+      .map((citation) => citation.nodeId),
+  );
+  const knownConcepts = new Set(context.existingConcepts.map((c) => c.conceptId));
+
+  const accepted: ProposedConcept[] = [];
+  const rejected: RejectedConcept[] = [];
+
+  for (const concept of concepts) {
+    if (!allowed.has(concept.angleId)) {
+      rejected.push({
+        concept,
+        reason: `angle "${concept.angleId}" is not in this portfolio's allowed list`,
+      });
+      continue;
+    }
+    const uncited = concept.groundedOn.filter((nodeId) => !knownNodes.has(nodeId));
+    if (uncited.length > 0) {
+      rejected.push({
+        concept,
+        reason: `cites evidence it was never given: ${uncited.join(', ')}`,
+      });
+      continue;
+    }
+    if (
+      concept.mergeCandidateConceptId !== null &&
+      !knownConcepts.has(concept.mergeCandidateConceptId)
+    ) {
+      rejected.push({
+        concept,
+        reason: `merge target "${concept.mergeCandidateConceptId}" is not an existing concept`,
+      });
+      continue;
+    }
+    accepted.push(concept);
+  }
+
+  return { accepted, rejected };
+}

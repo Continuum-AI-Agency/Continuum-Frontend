@@ -17,6 +17,7 @@
 // parse — same rule as analysis.ts and competitor-spy.
 
 import { z } from 'zod';
+import type { AdsetAudience } from '../paid/adNaming';
 import { firstPartyCreativeAnalysisSchema } from './analysis';
 import { GLOBAL_ANGLE_DEFINITIONS, type GlobalAngleId, globalAngleIdSchema } from './angles';
 import { creativeAssetTypeSchema, creativeFunnelStageSchema } from './taxonomy';
@@ -383,6 +384,17 @@ export const creativeRequestBriefSchema = paidIterationBriefSchema.extend({
   /** The saved Canvas workflow this brief should be produced through, when the portfolio
    *  named one. Null keeps the one-shot prompt path. */
   pipelineId: z.string().nullable().default(null),
+  /** Who this ad set is for and what it actually sells, read from its own name.
+   *  `matched: false` means UNKNOWN — which the brief states, rather than guessing. */
+  audience: z
+    .object({
+      branch: z.string().nullable(),
+      offerText: z.string().nullable(),
+      strategy: z.string().nullable(),
+      matched: z.boolean(),
+    })
+    .nullable()
+    .default(null),
 });
 export type CreativeRequestBrief = z.infer<typeof creativeRequestBriefSchema>;
 
@@ -411,6 +423,8 @@ export type CreativeVariationSeedInput = {
   angleId?: GlobalAngleId | null;
   /** The pipeline the portfolio nominated, if any. */
   pipelineId?: string | null;
+  /** Parsed from the target ad set's own name — see audienceFromAdName. */
+  audience?: AdsetAudience | null;
 };
 
 const CREATIVE_REQUEST_TITLES: Record<string, string> = {
@@ -460,6 +474,33 @@ export function buildCreativeRequestBrief(
     );
   }
 
+  // The audience read, and the single most important sentence in this brief.
+  //
+  // Nothing told an earlier version of this what the offer was, so the model invented one:
+  // a free-trial claim rendered onto a creative destined for ad sets actually running
+  // "$12 PRIMER MES" and "50% ANUALIDAD". An invented commercial claim is the most
+  // dangerous thing this system can produce, so the offer is QUOTED and an unparsed name
+  // forbids commercial claims outright rather than leaving the model to fill the gap.
+  if (seed.audience?.matched) {
+    const who = [
+      seed.audience.branch ? `Branch: ${seed.audience.branch}` : null,
+      seed.audience.strategy ? `Audience strategy: ${seed.audience.strategy}` : null,
+    ].filter((part): part is string => part !== null);
+    if (who.length > 0) lines.push(`${who.join('. ')}.`);
+    if (seed.audience.offerText) {
+      lines.push(
+        `The offer is exactly "${seed.audience.offerText}", quoted from the ad set's own name. ` +
+          'Use those words. Do not reword it, and do not introduce any other offer, discount, ' +
+          'trial or guarantee.',
+      );
+    }
+  } else if (seed.audience) {
+    lines.push(
+      'The ad set name did not parse, so the audience and the offer are UNKNOWN. ' +
+        'Make no commercial claim of any kind — no price, discount, trial or guarantee.',
+    );
+  }
+
   if (seed.winnerAdId) lines.push(`Reference ad: ${seed.winnerAdId}.`);
   if (seed.winnerAssetId) {
     lines.push(`The winning creative is in the Library as asset ${seed.winnerAssetId}.`);
@@ -486,6 +527,7 @@ export function buildCreativeRequestBrief(
     rebuildCraft: seed.rebuildCraft ?? false,
     angleId: seed.angleId ?? null,
     pipelineId: seed.pipelineId ?? null,
+    audience: seed.audience ?? null,
   });
 }
 

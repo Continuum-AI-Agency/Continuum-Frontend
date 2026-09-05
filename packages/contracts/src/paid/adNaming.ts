@@ -188,3 +188,77 @@ export function formatAdName(
 
   return { name: segments.join(schema.delimiter), missing, sanitized };
 }
+
+// ---------------------------------------------------------------------------
+// audienceFromAdName — the cheapest real audience signal in the system.
+// ---------------------------------------------------------------------------
+
+/**
+ * Who an ad set is for, and what it is actually selling, read from its own name.
+ *
+ * This exists because a creative is not written for a bucket — it is written for the people
+ * in the ad set it will be placed into, selling the offer THAT ad set is running. A DCO
+ * brief with no audience read invents both: on a real account it fabricated a free-trial
+ * offer ("sesión de inicio GRATIS") for ad sets whose real offers were `$12 PRIMER MES` and
+ * `50% ANUALIDAD`. The offer was one string lookup away.
+ *
+ * The name is the only audience source with data today: `adset_targeting_snapshots` holds
+ * zero rows, `ad_breakdown_daily.breakdown_kind` is `none` on every row, and
+ * `audience_personas` is empty — while every brand has a naming schema.
+ *
+ * `offerText` is a VERBATIM segment of the ad set name. It is never paraphrased, because
+ * whatever lands here is what the renderer stamps onto the creative as a commercial claim.
+ */
+export type AdsetAudience = {
+  /** Which location/branch this ad set runs for, when the schema names one. */
+  branch: string | null;
+  /** The offer, quoted verbatim from the name. Never synthesised, never reworded. */
+  offerText: string | null;
+  /** Targeting posture — BAU, lookalike %, interest stack. Changes the hook, not the offer. */
+  strategy: string | null;
+  /** False when the name did not fit the schema. Then every field above is null. */
+  matched: boolean;
+};
+
+// Matched against the brand's own field LABELS, not against segment values: a brand that
+// calls the column "sucursal" means branch, and guessing from the value would be how a
+// month token becomes an offer.
+const BRANCH_LABEL = /branch|location|geo|city|region|store|sucursal|plaza/i;
+const OFFER_LABEL = /offer|promo|deal|price|oferta|precio/i;
+const STRATEGY_LABEL = /strateg|audience|targeting|segment|cohort/i;
+
+const fieldMatching = (parsed: ParsedAdName, pattern: RegExp): string | null => {
+  const label = Object.keys(parsed.fields).find((key) => pattern.test(key));
+  const value = label ? parsed.fields[label] : null;
+  return value && value.length > 0 ? value : null;
+};
+
+/**
+ * Pure, never-throws. A name that does not fit its schema yields `matched: false` and all
+ * nulls — UNKNOWN AUDIENCE, which is a usable answer. The failure mode this refuses is
+ * guessing: a half-parsed name whose segments have shifted by one would otherwise hand the
+ * renderer a month as an offer, and a wrong commercial claim on a live ad is worse than no
+ * claim at all.
+ */
+export function audienceFromAdName(
+  name: string | null | undefined,
+  schema: AdNamingSchemaConfig | null | undefined,
+): AdsetAudience {
+  const unknown: AdsetAudience = {
+    branch: null,
+    offerText: null,
+    strategy: null,
+    matched: false,
+  };
+  if (!name || !schema) return unknown;
+
+  const parsed = parseAdName(name, schema);
+  if (!parsed.matched) return unknown;
+
+  return {
+    branch: fieldMatching(parsed, BRANCH_LABEL),
+    offerText: fieldMatching(parsed, OFFER_LABEL),
+    strategy: fieldMatching(parsed, STRATEGY_LABEL),
+    matched: true,
+  };
+}

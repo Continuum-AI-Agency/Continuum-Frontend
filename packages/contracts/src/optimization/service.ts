@@ -377,6 +377,21 @@ export const UpdatePortfolioPatchSchema = z
          * runs to make the creative. Absent keeps the one-shot prompt path.
          */
         pipelineId: z.string().uuid().optional(),
+        /**
+         * The minimum number of days between AUTO-GENERATED swaps on the same ad. Default 7
+         * when absent; 0 disables the cooldown.
+         *
+         * A minimum interval, not a scheduled swap date — a date needs something to run it,
+         * an interval needs one predicate at enqueue. The floor exists because
+         * `decision_outcomes` grades a swap on a 7-day delivery horizon: replacing a creative
+         * inside that window destroys the measurement the swap was made to produce, and the
+         * open-target unique index cannot express it (it releases the moment a job reaches
+         * `published`).
+         *
+         * Applies to the generate lane only. A human attaching a creative to a renewal task
+         * is a person deciding, and this was never a limit on people.
+         */
+        minSwapIntervalDays: z.number().min(0).max(365).optional(),
       })
       .optional(),
     // Flight window — null clears the date, returning the portfolio to unpaced.
