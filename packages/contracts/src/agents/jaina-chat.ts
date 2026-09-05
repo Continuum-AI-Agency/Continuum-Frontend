@@ -18,7 +18,7 @@ import {
   agentMentionMetadataSchema,
   agentMentionReferenceSchema,
 } from '../streaming/agent-references';
-import { jainaScaffoldActionSchema } from '../streaming/jaina-scaffold';
+import { jainaScaffoldActionSchema, jainaToolActionSchema } from '../streaming/jaina-scaffold';
 import { crossAgentProvenanceSchema } from './cross-agent';
 
 /**
@@ -113,6 +113,13 @@ export const jainaChatRequestSchema = z.object({
    * conversation and must reach the same orchestrator.
    */
   scaffold_action: jainaScaffoldActionSchema.optional(),
+  /**
+   * A human's answer to any OTHER approval gate (audience publish, pipeline runs, the
+   * optimizer's approve / budget-apply / pause acts). Sibling of `scaffold_action`, same
+   * security posture: no token, no hash, no signature travels — the gate row is re-read
+   * server-side by `approval_id`.
+   */
+  tool_action: jainaToolActionSchema.optional(),
   message_metadata: agentMentionMetadataSchema.optional(),
   /**
    * Origin metadata when this turn was initiated from the chat layer (Slack/Teams/WhatsApp).
