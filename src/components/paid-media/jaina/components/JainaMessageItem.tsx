@@ -27,7 +27,6 @@ import {
   normalizeJainaMarkdownTables,
 } from '../jainaUtils';
 import type { JainaChatMessage } from '../types';
-import { AudienceGroupApprovalCard } from './AudienceGroupApprovalCard';
 import { ClarificationBanner } from './ClarificationBanner';
 import { CreativesSection } from './CreativesSection';
 import { JainaInlineReport } from './JainaInlineReport';
@@ -311,12 +310,6 @@ function JainaMessageItemImpl({
                 {...(onScaffoldDecision ? { onDecide: onScaffoldDecision } : {})}
               />
             ) : null}
-
-            <AudienceGroupApprovalCard
-              toolResults={toolResults ?? []}
-              isStreaming={isStreaming}
-              onApprove={onSuggestionClick}
-            />
 
             <ThinkingWindow
               reasoning={reasoning ?? []}
