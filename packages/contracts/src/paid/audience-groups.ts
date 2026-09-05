@@ -264,7 +264,6 @@ export const audienceGroupPreviewSchema = z.object({
   group_version_id: z.string().uuid(),
   version: z.number().int().positive(),
   content_hash: z.string().min(32),
-  approval_token: z.string().min(16),
   expires_at: z.string().datetime(),
   manifest: audienceGroupManifestSchema,
   estimated_reach: z.record(z.string(), z.unknown()).nullable().default(null),
@@ -295,15 +294,18 @@ export const audienceGroupManageInputSchema = z.discriminatedUnion('action', [
     group_version_id: z.string().uuid(),
   }),
   z.object({
-    action: z.literal('publish'),
-    group_version_id: z.string().uuid(),
-    approval_token: z.string().min(16),
-  }),
-  z.object({
     action: z.literal('status'),
     group_version_id: z.string().uuid(),
   }),
 ]);
+
+// The publish tool lives on the strategist behind the human approval gate; the
+// approval token never appears on the wire, so the model passes only the version
+// and the hash it saw at draft time.
+export const audienceGroupPublishInputSchema = z.object({
+  group_version_id: z.string().uuid(),
+  content_hash: z.string().regex(/^[0-9a-f]{64}$/),
+});
 
 export const metaAudienceVerificationInputSchema = z.object({
   audience_id: z.string().trim().min(1).optional(),
@@ -394,6 +396,7 @@ export type AudienceGroupMemberResult = z.infer<typeof audienceGroupMemberResult
 export type AudienceGroupPreview = z.infer<typeof audienceGroupPreviewSchema>;
 export type AudienceGroupPublishStatus = z.infer<typeof audienceGroupPublishStatusSchema>;
 export type AudienceGroupManageInput = z.infer<typeof audienceGroupManageInputSchema>;
+export type AudienceGroupPublishInput = z.infer<typeof audienceGroupPublishInputSchema>;
 export type MetaAudienceVerificationInput = z.infer<typeof metaAudienceVerificationInputSchema>;
 export type MetaAudienceVerificationCheck = z.infer<typeof metaAudienceVerificationCheckSchema>;
 export type MetaAudienceVerificationReport = z.infer<typeof metaAudienceVerificationReportSchema>;

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   audienceGroupManageInputSchema,
   audienceGroupManifestSchema,
+  audienceGroupPublishInputSchema,
   metaAdSetTargetingSpecSchema,
   metaAudienceVerificationInputSchema,
   metaAudienceVerificationReportSchema,
@@ -131,7 +132,7 @@ describe('audienceGroupManifestSchema', () => {
 });
 
 describe('audience group tool contracts', () => {
-  it('accepts draft, preview, publish, and status actions', () => {
+  it('accepts draft, preview, and status actions and has no publish action', () => {
     expect(
       audienceGroupManageInputSchema.parse({ action: 'draft', manifest: validManifest }).action,
     ).toBe('draft');
@@ -143,17 +144,29 @@ describe('audience group tool contracts', () => {
     ).toBe('preview');
     expect(
       audienceGroupManageInputSchema.parse({
-        action: 'publish',
-        group_version_id: '4e7ac4b7-412b-4d76-a2e7-d900c944ea2d',
-        approval_token: 'audience_approval_token_123',
-      }).action,
-    ).toBe('publish');
-    expect(
-      audienceGroupManageInputSchema.parse({
         action: 'status',
         group_version_id: '4e7ac4b7-412b-4d76-a2e7-d900c944ea2d',
       }).action,
     ).toBe('status');
+    expect(
+      audienceGroupManageInputSchema.safeParse({
+        action: 'publish',
+        group_version_id: '4e7ac4b7-412b-4d76-a2e7-d900c944ea2d',
+        approval_token: 'audience_approval_token_123',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('publishes by version and content hash only, never by a token', () => {
+    const input = {
+      group_version_id: '4e7ac4b7-412b-4d76-a2e7-d900c944ea2d',
+      content_hash: 'a'.repeat(64),
+    };
+    expect(audienceGroupPublishInputSchema.parse(input)).toEqual(input);
+    expect(
+      audienceGroupPublishInputSchema.safeParse({ ...input, content_hash: 'not-a-sha256' }).success,
+    ).toBe(false);
+    expect('approval_token' in audienceGroupPublishInputSchema.shape).toBe(false);
   });
 
   it('accepts the compiled Meta ad-set targeting payload', () => {
