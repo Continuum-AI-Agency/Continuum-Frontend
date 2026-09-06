@@ -813,16 +813,17 @@ export function OrganicAgentPanel({
       const currentSessionId = state.sessionId ?? activeSessionId;
       if (!currentSessionId) return;
 
-      if (decision.decision === 'approve') {
-        // Optimistically flip every approved card to executing — the group approve
-        // (itemIds) and the per-card approve (itemId) both land here.
-        const executingIds = decision.itemIds ?? (decision.itemId ? [decision.itemId] : []);
-        for (const itemId of executingIds) {
-          dispatch({
-            type: 'PLAN_STATUS',
-            event: { planId: decision.planId, itemId, status: 'executing' },
-          });
-        }
+      // Optimistically flip every approved card to executing — the group approve
+      // (itemIds) and the per-card approve (itemId) both land here.
+      const executingIds =
+        decision.decision === 'approve'
+          ? (decision.itemIds ?? (decision.itemId ? [decision.itemId] : []))
+          : [];
+      for (const itemId of executingIds) {
+        dispatch({
+          type: 'PLAN_STATUS',
+          event: { planId: decision.planId, itemId, status: 'executing' },
+        });
       }
 
       const decisionContent =
@@ -848,7 +849,22 @@ export function OrganicAgentPanel({
         platformAccountIds,
       })
         .then(() => debouncedRefreshSessions())
-        .catch(() => {});
+        .catch((error: unknown) => {
+          // The Backend refused the decision (a 409 plan_approval_failed when the plan the
+          // card showed was never persisted). Undo the flip: a refused approval must not
+          // keep reading as a run in progress.
+          for (const itemId of executingIds) {
+            dispatch({
+              type: 'PLAN_STATUS',
+              event: { planId: decision.planId, itemId, status: 'pending' },
+            });
+          }
+          show({
+            title: 'Could not apply the plan decision',
+            description: error instanceof Error ? error.message : 'Please try again.',
+            variant: 'error',
+          });
+        });
     },
     [
       state.sessionId,
@@ -857,6 +873,7 @@ export function OrganicAgentPanel({
       startControl,
       activeSessionId,
       debouncedRefreshSessions,
+      show,
     ],
   );
 

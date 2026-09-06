@@ -264,11 +264,26 @@ describe('CalendarToolbar', () => {
 
   // Generation is a per-draft action now (the enrichment ladder), not a whole-week
   // toolbar button that only ever acted on trend-seeded placeholders.
-  it('has no whole-week Generate button', () => {
+  it('has no Generate button without a brand to propose for', () => {
     const { container } = render(<CalendarToolbar {...defaultProps()} />);
 
     const buttons = Array.from(container.querySelectorAll('button'));
     expect(buttons.find((b) => b.textContent?.trim() === 'Generate')).toBeUndefined();
+  });
+
+  it('Generate proposes a plan and waits while the proposal is in flight', () => {
+    const onGeneratePlan = mock();
+    const { getByRole, rerender } = render(
+      <CalendarToolbar {...defaultProps({ onGeneratePlan })} />,
+    );
+
+    fireEvent.click(getByRole('button', { name: 'Generate plan' }));
+    expect(onGeneratePlan).toHaveBeenCalledTimes(1);
+
+    rerender(<CalendarToolbar {...defaultProps({ onGeneratePlan, isProposingPlan: true })} />);
+    const proposing = getByRole('button', { name: 'Generate plan' }) as HTMLButtonElement;
+    expect(proposing.disabled).toBe(true);
+    expect(proposing.textContent).toContain('Proposing');
   });
 
   it('shows the timeframe selector only in list view', () => {

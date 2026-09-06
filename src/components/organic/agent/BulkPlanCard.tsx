@@ -37,7 +37,7 @@ export function BulkPlanCard({ plan, onApproveAction, onRejectAction }: Props) {
   }
 
   return (
-    <AgentDecisionCard className="p-4">
+    <AgentDecisionCard className="p-4" data-testid="bulk-plan-card">
       <AgentCardEyebrow
         label="Bulk plan"
         right={
@@ -87,6 +87,7 @@ export function BulkPlanCard({ plan, onApproveAction, onRejectAction }: Props) {
       <ApproveRejectActions
         locked={decided}
         approveLabel="Approve & generate"
+        approveTestId="bulk-plan-approve"
         onApprove={() => decide(onApproveAction)}
         onReject={() => decide(onRejectAction)}
       />

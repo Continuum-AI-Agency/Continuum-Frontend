@@ -37,6 +37,9 @@ import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { type PlannerAccountOption, useCalendarStore } from '@/lib/organic/store';
 import type { Trend } from '@/lib/organic/trends';
 import { getLocalStorageJSON, setLocalStorageJSON } from '@/lib/storage';
+import { buildCalendarPlanRequest } from '../calendar-plan/buildCalendarPlanRequest';
+import { CalendarPlanCard } from '../calendar-plan/CalendarPlanCard';
+import { useCalendarPlan } from '../calendar-plan/useCalendarPlan';
 import { useAiStudioHandoff } from '../hooks/useAiStudioHandoff';
 import { useApproveScheduleDraft } from '../hooks/useApproveScheduleDraft';
 import { useCalendarDnD } from '../hooks/useCalendarDnD';
@@ -514,6 +517,36 @@ function OrganicCalendarWorkspaceInner({
     () => sliceWeekDays(gridDays, weekStart),
     [gridDays, weekStart],
   );
+
+  // Generate proposes a plan for the visible week; nothing is generated until the plan
+  // card is approved, and the run then reports through BulkRunPanel under the toolbar.
+  // The button waits for the drafts fetch: before hydration the week is a one-day scaffold
+  // and a click proposed two slots for a week that holds a sketched placeholder.
+  const calendarPlan = useCalendarPlan();
+  const proposeCalendarPlan = calendarPlan.propose;
+  const handleGeneratePlan = React.useCallback(() => {
+    if (!brandProfileId) return;
+    void proposeCalendarPlan(
+      buildCalendarPlanRequest({
+        brandId: brandProfileId,
+        weekStart,
+        weekDays: visibleWeekDays,
+        activePlatforms,
+        accountIds:
+          Object.keys(selectedAccountIds).length > 0 ? selectedAccountIds : platformAccountIds,
+        selectedTrendIds,
+      }),
+    );
+  }, [
+    activePlatforms,
+    brandProfileId,
+    platformAccountIds,
+    proposeCalendarPlan,
+    selectedAccountIds,
+    selectedTrendIds,
+    visibleWeekDays,
+    weekStart,
+  ]);
 
   // List VIEW MODEL: the loaded set narrowed to the custom timeframe (null = all).
   // Undated drafts (the "unscheduled" sentinel) bypass the date filter so they are
@@ -1372,6 +1405,10 @@ function OrganicCalendarWorkspaceInner({
                     selectedTrendCount={selectedTrendIds.length}
                     maxTrendSelections={maxTrendSelections}
                     isGenerating={isGenerating}
+                    onGeneratePlan={
+                      brandProfileId && isCalendarHydrated ? handleGeneratePlan : undefined
+                    }
+                    isProposingPlan={calendarPlan.state.phase === 'proposing'}
                     onOpenTrends={() => setTrendsDrawerOpen(true)}
                     onCreatePost={(options) =>
                       handleGoDraft({
@@ -1392,6 +1429,13 @@ function OrganicCalendarWorkspaceInner({
                     isFetchingPostedContent={isFetchingPostedContent}
                     onFetchPostedContent={fetchExternalPosts}
                   />
+                  {brandProfileId ? (
+                    <CalendarPlanCard
+                      state={calendarPlan.state}
+                      brandId={brandProfileId}
+                      onDecide={calendarPlan.decide}
+                    />
+                  ) : null}
                 </div>
 
                 {/* One local Suspense boundary and one keyed crossfade with NO exit.

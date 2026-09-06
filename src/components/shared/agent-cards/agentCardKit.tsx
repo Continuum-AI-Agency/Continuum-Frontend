@@ -301,10 +301,13 @@ export function ApproveRejectActions({
   rejectLabel = 'Dismiss',
   onApprove,
   onReject,
+  approveTestId,
 }: {
   locked: boolean;
   loading?: boolean;
   approveLabel: string;
+  /** Stable hook for browser benches that click the primary action. */
+  approveTestId?: string;
   /** 'Dismiss' reads as "not now"; a gate that RECORDS a refusal should say Deny. */
   rejectLabel?: string;
   onApprove: () => void;
@@ -315,7 +318,13 @@ export function ApproveRejectActions({
       <AgentButton variant="ghost" disabled={locked || loading} onClick={onReject}>
         {rejectLabel}
       </AgentButton>
-      <AgentButton variant="primary" disabled={locked} loading={loading} onClick={onApprove}>
+      <AgentButton
+        variant="primary"
+        disabled={locked}
+        loading={loading}
+        onClick={onApprove}
+        data-testid={approveTestId}
+      >
         {approveLabel}
       </AgentButton>
     </AgentActions>

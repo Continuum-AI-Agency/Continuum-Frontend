@@ -178,6 +178,16 @@ export const bulkPlacementSpecSchema = z
     // HyperFrames composition brief (production method on a reel placement).
     // Null/absent when the reel is not produced via HyperFrames.
     hyperframe: bulkHyperframeBriefSchema.nullable().optional(),
+    // Platform account the slot is assigned to. Calendar-originated plans carry the
+    // account the user picked; agent plans leave it absent and resolve it from the
+    // session's platformAccountIds at approval.
+    accountId: z.string().nullable().optional(),
+    /**
+     * True when pillar/angle/hook are DERIVED placeholders — a calendar slot the user
+     * picked with no creative brief. The run must not forward them as editorial
+     * directives; the batch engine derives the angle per placement instead.
+     */
+    openBrief: z.boolean().optional(),
   })
   .strict();
 

@@ -6,7 +6,7 @@ import { mintSessionForEmail } from './support/auth';
 // The prompt library: a saved prompt is TEXT you insert, not a reference you attach.
 //
 // There were two half-built prompt libraries in the tree and neither was reachable: a
-// localStorage one hanging off the unmounted OrganicExperience, and a DB-backed one whose
+// localStorage one the retired OrganicExperience grid page kept, and a DB-backed one whose
 // picker was only ever rendered by an unmounted ChatSurface. This bench proves the one
 // that now exists actually works, across the whole chain:
 //

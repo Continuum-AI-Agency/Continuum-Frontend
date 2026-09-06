@@ -1,7 +1,17 @@
 'use client';
 
 import { endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOfWeek } from 'date-fns';
-import { CalendarIcon, Check, EyeOff, Plus, RefreshCw, TriangleAlert, X, Zap } from 'lucide-react';
+import {
+  CalendarIcon,
+  Check,
+  EyeOff,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  TriangleAlert,
+  X,
+  Zap,
+} from 'lucide-react';
 import * as React from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Badge } from '@/components/ui/badge';
@@ -194,6 +204,9 @@ type CalendarToolbarProps = {
   gridStatus: string;
   gridError: string | null;
   onRetryGeneration?: () => void;
+  /** Proposes a content plan for the visible week; absent when there is no brand. */
+  onGeneratePlan?: () => void;
+  isProposingPlan?: boolean;
   postedContentCount?: number;
   isFetchingPostedContent?: boolean;
   onFetchPostedContent?: () => void;
@@ -216,6 +229,8 @@ export function CalendarToolbar({
   gridStatus,
   gridError,
   onRetryGeneration,
+  onGeneratePlan,
+  isProposingPlan = false,
   postedContentCount = 0,
   isFetchingPostedContent = false,
   onFetchPostedContent,
@@ -346,6 +361,25 @@ export function CalendarToolbar({
                   Trends
                 </Button>
                 <Separator orientation="vertical" className="h-5" />
+                {onGeneratePlan ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-label="Generate plan"
+                    data-testid="calendar-generate"
+                    disabled={isGenerating || isProposingPlan}
+                    onClick={onGeneratePlan}
+                    title="Propose a content plan for this week. You approve it before anything is generated."
+                  >
+                    <Sparkles
+                      className={
+                        isProposingPlan ? 'mr-1 h-3.5 w-3.5 animate-pulse' : 'mr-1 h-3.5 w-3.5'
+                      }
+                    />
+                    {isProposingPlan ? 'Proposing…' : 'Generate'}
+                  </Button>
+                ) : null}
                 {isGenerating ? (
                   <DisabledControl hint={addHint}>
                     <Button type="button" size="sm" disabled>

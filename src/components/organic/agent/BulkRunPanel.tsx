@@ -133,7 +133,10 @@ export function BulkRunPanel({
   }, [status, requestCalendarRefetch]);
 
   return (
-    <div className="mt-2 rounded-xl border border-border/60 bg-muted/20 p-3">
+    <div
+      className="mt-2 rounded-xl border border-border/60 bg-muted/20 p-3"
+      data-testid="bulk-run-panel"
+    >
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
           Bulk Generation Run

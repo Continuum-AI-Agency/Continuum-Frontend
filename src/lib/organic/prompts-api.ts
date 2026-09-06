@@ -3,7 +3,7 @@
 // — no Next.js proxy route.
 //
 // Named prompts-api.ts, not prompts.ts: `src/lib/organic/prompts.ts` is already taken
-// by the legacy localStorage preset list that hangs off the unmounted OrganicExperience.
+// by the legacy localStorage preset list the retired OrganicExperience grid page kept.
 // That one is dead; this one is the library.
 
 'use client';
