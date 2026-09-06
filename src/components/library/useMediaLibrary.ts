@@ -28,6 +28,15 @@ function rowToPartial(row: MediaAssetRow): Partial<MediaAsset> & { id: string } 
   };
 }
 
+// A delete in this product is an UPDATE that stamps deleted_at, so it arrives on the
+// UPDATE binding rather than DELETE. Merging it would repaint the tile instead of
+// removing it, leaving a deleted asset on screen until the next full fetch.
+export function applyRealtimeUpdate(assets: MediaAsset[], row: MediaAssetRow): MediaAsset[] {
+  if (row.deleted_at) return assets.filter((asset) => asset.id !== row.id);
+  const partial = rowToPartial(row);
+  return assets.map((asset) => (asset.id === partial.id ? { ...asset, ...partial } : asset));
+}
+
 function rowToStub(row: MediaAssetRow): MediaAsset {
   return {
     id: row.id,
@@ -248,8 +257,9 @@ export function useMediaLibrary(params: {
           ...scoped,
           event: 'UPDATE',
           onRow: (row) => {
-            const partial = rowToPartial(row as MediaAssetRow);
-            setAssets((prev) => prev.map((a) => (a.id === partial.id ? { ...a, ...partial } : a)));
+            // Covers deletes from every origin — this grid, another member's session,
+            // the Backend, an agent — not just our own toolbar.
+            setAssets((prev) => applyRealtimeUpdate(prev, row as MediaAssetRow));
           },
         },
         {

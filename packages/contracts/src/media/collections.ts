@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { mediaCollectionSchema } from './asset';
-import { mediaReviewStatusSchema } from './asset';
+import { mediaCollectionSchema, mediaReviewStatusSchema } from './asset';
 import { customFieldValueSchema } from './custom-fields';
 import { libraryBrowseQuerySchema } from './library-browse';
 
@@ -88,6 +87,18 @@ export const bulkSetAssetFieldValueOperationSchema = z
     assetIds: z.array(z.string().uuid()).min(1).max(250),
     fieldId: z.string().uuid(),
     value: customFieldValueSchema,
+  })
+  .strict();
+
+// Deleting a Library asset is a soft delete: it sets media.assets.deleted_at, which every
+// read path already filters on. A carousel is named by its cover row alone, and the server
+// expands the cover to its slide rows — so the ids sent here are what the user selected,
+// and the ids returned are everything that actually went away.
+export const bulkDeleteAssetsOperationSchema = z
+  .object({
+    action: z.literal('bulk_delete_assets'),
+    ...collectionCommandBase,
+    assetIds: z.array(z.string().uuid()).min(1).max(250),
   })
   .strict();
 

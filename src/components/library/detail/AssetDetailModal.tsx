@@ -26,6 +26,7 @@ import { AssetFieldsPanel } from '../fields/AssetFieldsPanel';
 import { fileExtension, formatBytes } from './assetFileMeta';
 import { CommentComposer } from './CommentComposer';
 import { CommentThreads } from './CommentThreads';
+import { DeleteAssetButton } from './DeleteAssetButton';
 import {
   anchorVersionId,
   countThreadCommentsByVersion,
@@ -352,6 +353,14 @@ function AssetDetailDialog({
             <RequestReviewButton brandId={brandId} asset={asset} />
             <ShareLinkMenu brandId={brandId} asset={asset} />
             <AssetDownloadButton brandId={brandId} asset={asset} versionId={viewedVersion?.id} />
+            <DeleteAssetButton
+              brandId={brandId}
+              asset={asset}
+              onDeleted={() => {
+                onAssetChanged?.();
+                onClose();
+              }}
+            />
           </div>
         </header>
 

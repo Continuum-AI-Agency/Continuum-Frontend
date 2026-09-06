@@ -1,8 +1,18 @@
 'use client';
 
 import type { CustomField, CustomFieldValue, MediaCollection } from '@continuum/contracts';
-import { Check, FolderInput, Link2, ListPlus, Loader2, Tag, Workflow, X } from 'lucide-react';
+import { Check, FolderInput, Link2, ListPlus, Loader2, Tag, Trash2, Workflow, X } from 'lucide-react';
 import { useState } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -12,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  bulkDeleteAssetsOperation,
   bulkSetAssetFieldValueOperation,
   bulkTransitionAssetReviewOperation,
   bulkUpdateAssetTagsOperation,
@@ -43,6 +54,7 @@ export function LibraryBulkToolbar({
   const [fieldId, setFieldId] = useState('');
   const [fieldValue, setFieldValue] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const client = () => createSupabaseBrowserClient();
   const selectedField = customFields.find((field) => field.id === fieldId) ?? null;
@@ -290,6 +302,44 @@ export function LibraryBulkToolbar({
         <Link2 className="size-3.5" />
         Share
       </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="text-destructive hover:text-destructive"
+        disabled={Boolean(busy)}
+        onClick={() => setConfirmingDelete(true)}
+      >
+        <Trash2 className="size-3.5" />
+        Delete
+      </Button>
+      <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm">
+              Delete {assetIds.length === 1 ? 'this asset' : `these ${assetIds.length} assets`}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              They leave your library, along with every slide of any carousel you selected.
+              Comments, versions and approvals are kept, and support can still bring them back.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmingDelete(false);
+                void run('Deleted', async () => {
+                  await bulkDeleteAssetsOperation(client(), { brandId, assetIds });
+                  onClear();
+                });
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <span
         className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground"
         role="status"

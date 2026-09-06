@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  bulkDeleteAssetsOperationSchema,
   bulkUpdateAssetTagsOperationSchema,
   bulkSetAssetFieldValueOperationSchema,
   bulkTransitionAssetReviewOperationSchema,
@@ -65,6 +66,41 @@ describe('Library collection commands', () => {
         value: 'r5',
       }).success,
     ).toBe(true);
+  });
+
+  it('deletes a bounded, non-empty selection of assets', () => {
+    expect(
+      bulkDeleteAssetsOperationSchema.safeParse({
+        action: 'bulk_delete_assets',
+        brandId: BRAND,
+        assetIds: [ASSET],
+      }).success,
+    ).toBe(true);
+    // An empty selection would delete nothing but still burn an idempotency receipt.
+    expect(
+      bulkDeleteAssetsOperationSchema.safeParse({
+        action: 'bulk_delete_assets',
+        brandId: BRAND,
+        assetIds: [],
+      }).success,
+    ).toBe(false);
+    // The server caps the batch at 250; the client must not send more.
+    expect(
+      bulkDeleteAssetsOperationSchema.safeParse({
+        action: 'bulk_delete_assets',
+        brandId: BRAND,
+        assetIds: Array.from({ length: 251 }, () => ASSET),
+      }).success,
+    ).toBe(false);
+    // Strict: a stray field must not ride along to an irreversible-looking operation.
+    expect(
+      bulkDeleteAssetsOperationSchema.safeParse({
+        action: 'bulk_delete_assets',
+        brandId: BRAND,
+        assetIds: [ASSET],
+        hard: true,
+      }).success,
+    ).toBe(false);
   });
 
   it('accepts brand-scoped tag rename and merge commands', () => {

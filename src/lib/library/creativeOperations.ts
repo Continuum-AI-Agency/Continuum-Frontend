@@ -1,4 +1,5 @@
 import {
+  bulkDeleteAssetsOperationSchema,
   bulkSetAssetFieldValueOperationSchema,
   bulkTransitionAssetReviewOperationSchema,
   bulkUpdateAssetTagsOperationSchema,
@@ -481,6 +482,25 @@ export async function bulkUpdateAssetTagsOperation(
     supabase,
     bulkUpdateAssetTagsOperationSchema.parse({
       action: 'bulk_update_asset_tags',
+      ...input,
+      idempotencyKey: crypto.randomUUID(),
+    }),
+    libraryBulkCommandResponseSchema,
+  );
+  return result.updatedAssetIds;
+}
+
+// Soft delete: the row keeps its bytes and its history, but every Library read path
+// filters deleted_at, so it leaves the product. Returns everything that went away,
+// which for a carousel cover is the cover plus its slides.
+export async function bulkDeleteAssetsOperation(
+  supabase: SupabaseClient,
+  input: { brandId: string; assetIds: string[] },
+): Promise<string[]> {
+  const result = await invokeCreativeOperation(
+    supabase,
+    bulkDeleteAssetsOperationSchema.parse({
+      action: 'bulk_delete_assets',
       ...input,
       idempotencyKey: crypto.randomUUID(),
     }),
