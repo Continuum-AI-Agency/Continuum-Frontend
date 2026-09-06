@@ -1028,6 +1028,33 @@ describe('PLAN_STATUS + tool approvals', () => {
     expect(state.pendingToolApprovals).toHaveLength(0);
   });
 
+  /**
+   * A live approval card must survive the history hydration that lands on top of it.
+   *
+   * Jaina shipped exactly this bug: a persisted-message merge dropped the gate state
+   * seconds after the card rendered, so the user saw an approval, reached for it, and
+   * it vanished. Organic is safe by construction — a same-session SESSION_SWITCH
+   * spreads `...state` and only a genuine session CHANGE resets — but "safe by
+   * construction" is one refactor away from "was safe", and the failure is invisible
+   * until someone is mid-approval.
+   */
+  it('a same-session hydration keeps a pending approval; a real switch clears it', () => {
+    const approval = { approvalId: 'a1', toolCallId: 'tc1', toolName: 'publishDraft', input: {} };
+    let state = panelReducer(
+      { ...initialPanelState(), sessionId: 's1' },
+      { type: 'TOOL_APPROVAL_ADD', approval },
+    );
+    expect(state.pendingToolApprovals).toHaveLength(1);
+
+    // History for the SAME session lands: the card stays.
+    state = panelReducer(state, { type: 'SESSION_SWITCH', sessionId: 's1', messages: [] });
+    expect(state.pendingToolApprovals).toHaveLength(1);
+
+    // A different session: the card belongs to the one we left.
+    state = panelReducer(state, { type: 'SESSION_SWITCH', sessionId: 's2', messages: [] });
+    expect(state.pendingToolApprovals).toHaveLength(0);
+  });
+
   it('registers a bulk run by runId (idempotent upsert)', () => {
     const run = { runId: 'run_p1', planId: 'p1', total: 80 };
     let state = panelReducer(initialPanelState(), { type: 'BULK_RUN_START', run });
