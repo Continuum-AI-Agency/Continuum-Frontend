@@ -249,6 +249,34 @@ export function partitionHeldItems<T extends { apply_status?: string | null }>(
   };
 }
 
+/** Delivery state → the chip shown beside an ad set's name, or null when there is nothing
+ *  worth saying.
+ *
+ *  `serving` renders NOTHING — a chip on every healthy row is noise, and the absence of a
+ *  chip is the readable default. Unknown renders nothing either, for the opposite reason:
+ *  we did not read delivery this cycle, and a green "delivering" chip would be a claim we
+ *  cannot support. Only the two states that change what the row's numbers MEAN get a chip. */
+export function deliveryLabel(
+  state: string | null | undefined,
+): { label: string; hint: string; tone: 'error' | 'warning' } | null {
+  switch (state) {
+    case 'dark':
+      return {
+        label: 'Not delivering',
+        hint: 'Meta shows this ad set as live, and it has served nothing for days. Every cost and rate on this row is computed from the days before it stopped — treat them as history, not as current performance.',
+        tone: 'error',
+      };
+    case 'throttled':
+      return {
+        label: 'Delivery falling',
+        hint: 'Impressions are down by more than half against the previous week at the same budget. Efficiency figures here are drawn from a much smaller sample than they were.',
+        tone: 'warning',
+      };
+    default:
+      return null;
+  }
+}
+
 /** Recommendation kind → a short human label + glyph for the actions queue. */
 export function recommendationLabel(kind: string): { label: string; glyph: string } {
   switch (kind) {
@@ -267,6 +295,11 @@ export function recommendationLabel(kind: string): { label: string; glyph: strin
       return { label: 'Make variations of the winner', glyph: '✦' };
     case 'seed_experiment':
       return { label: 'Nothing to learn from — add variants', glyph: '⚗' };
+    // --- Delivery. Not a performance finding: nothing is being SERVED, and the answer is
+    // never a creative. The queue used to answer this state with "refresh creative", or
+    // with silence.
+    case 'restore_delivery':
+      return { label: 'Not being delivered', glyph: '📡' };
     default:
       return { label: kind.replace(/_/g, ' '), glyph: '•' };
   }
@@ -341,6 +374,16 @@ export function recommendationActionCopy(kind: string): {
       approveLabel: 'Request creative',
       advisory:
         'Approving opens a creative request with the brief below — a task your team fills, or a generation job when this portfolio has autogen on.',
+    };
+  }
+  // Deliberately NOT an automatic un-pause. An ad set is usually off Meta because somebody
+  // turned it off, and quietly turning it back on is the one autonomy nobody asked for.
+  // Approving tracks the task; the reason says which fix it needs.
+  if (kind === 'restore_delivery') {
+    return {
+      approveLabel: 'Track this',
+      advisory:
+        'The optimizer will not resume an ad set for you — it is usually off because somebody turned it off. Approving keeps it on the list until delivery comes back.',
     };
   }
   return { approveLabel: 'Approve', advisory: null };

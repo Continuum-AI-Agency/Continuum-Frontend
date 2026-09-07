@@ -228,6 +228,45 @@ export const AboBudgetSummarySchema = z.object({
 });
 export type AboBudgetSummary = z.infer<typeof AboBudgetSummarySchema>;
 
+/** One ad set's live Meta targeting spec, carried BESIDE the snapshot fleet rather than on
+ *  each snapshot.
+ *
+ *  Two reasons it does not ride on AdSetSnapshot: the spec is large (it was 53% of every
+ *  row on the ad-set listing path), and exactly one consumer wants it — the
+ *  paid_media.adset_targeting_snapshots writer. Putting it on the snapshot would persist
+ *  it into every cycle row for the benefit of nothing.
+ *
+ *  Defaulted to [] on the envelope so an edge deployed before it existed still parses:
+ *  the service and the edge can be deployed in either order. */
+export const AdsetTargetingSchema = z.object({
+  adsetId: z.string().min(1),
+  spec: z.record(z.string(), z.unknown()),
+});
+export type AdsetTargeting = z.infer<typeof AdsetTargetingSchema>;
+
+/** What a recommendation asks a human to do. Closed, and shared, because the FRONTEND
+ *  switches on it — an action feed groups by kind and renders a label and a control per
+ *  kind, so a kind the engine emits and the FE has never heard of renders as nothing.
+ *  `trigger` stays an open string by contrast: the rules layer mints `rule:<id>` values,
+ *  and the FE only ever displays it.
+ *
+ *  Deliberately NOT used to parse stored rows. A row schema that rejects an unrecognized
+ *  kind would drop real recommendations from a queue the moment the service ran ahead of
+ *  the reader — the failure mode is silent and the data is already written. Parse rows
+ *  permissively; switch on this. */
+export const RecommendationKindSchema = z.enum([
+  'pause',
+  'creative_refresh',
+  'audience_expand',
+  'pause_ad',
+  'variate_creative',
+  'seed_experiment',
+  /** Nothing is being served: un-pause it, un-enrol it, widen the audience, clear Meta's
+   *  blocker. The one kind whose answer is never a creative. */
+  'restore_delivery',
+]);
+export type RecommendationKind = z.infer<typeof RecommendationKindSchema>;
+
 /** The paid-media-metrics snapshot envelope. `snapshots` stays unknown here so each consumer
  * can preserve its existing per-row malformed-data policy. Nullable defaults keep cache rows
  * written before budget summaries/freshness metadata backward compatible. */
@@ -236,6 +275,7 @@ export const OptimizerSnapshotsEnvelopeSchema = z
     snapshots: z.array(z.unknown()).catch([]).default([]),
     fetchedAt: z.string().datetime().nullable().catch(null).default(null),
     budgetSummary: AboBudgetSummarySchema.nullable().catch(null).default(null),
+    targeting: z.array(AdsetTargetingSchema).catch([]).default([]),
   })
   .loose();
 export type OptimizerSnapshotsEnvelope = z.infer<typeof OptimizerSnapshotsEnvelopeSchema>;
@@ -591,6 +631,27 @@ export const CycleItemDiagnosticsSchema = z
         lo: z.number().optional(),
         hi: z.number().optional(),
         events: z.number().optional(),
+      })
+      .loose()
+      .nullable()
+      .optional(),
+    /** Was this ad set being SERVED this cycle, and what did Meta say about it. The engine
+     *  attaches its DeliveryRead to each reallocation item, and cycle_items stores the item
+     *  verbatim, so this arrives with no schema change on the SQL side.
+     *
+     *  Every field is optional AND nullable, deliberately. `state` is not an enum here for
+     *  the reason written above `rawBudget`: these row schemas narrow the whole report at
+     *  once, so one field that rejects a real value empties `latest_items` and nulls
+     *  `latest_run` for every portfolio. A new delivery state added on the service side
+     *  must degrade to "no chip", never to an empty dashboard. */
+    delivery: z
+      .object({
+        state: z.string().optional(),
+        darkDays: z.number().nullable().optional(),
+        impressionsWow: z.number().nullable().optional(),
+        reachExpansion: z.number().nullable().optional(),
+        blockers: z.array(z.string()).optional(),
+        learningStage: z.string().nullable().optional(),
       })
       .loose()
       .nullable()
@@ -1395,6 +1456,29 @@ export const AdDailyTrendsResponseSchema = z.object({
 });
 export type AdDailyTrendsResponse = z.infer<typeof AdDailyTrendsResponseSchema>;
 
+/** The Meta breakdown dimensions `paid_media.ad_breakdown_daily` is keyed on. Callers
+ *  REQUEST from this list; the row's `breakdown_kind` is deliberately a plain string,
+ *  not an enum built from it.
+ *
+ *  That asymmetry is load-bearing. `breakdown_kind` is part of the table's primary key
+ *  and the column carries no CHECK, so the store accepts a dimension this build has
+ *  never heard of. An enum here would be STRICTER than the store, and a single row of a
+ *  newly-added kind would fail the envelope parse and discard the whole page — the exact
+ *  shape of the bug that already cost this repo a silently-dropped win-rate read and a
+ *  rejected action feed. Request from the closed list; parse whatever comes back. */
+export const AD_BREAKDOWN_KINDS = [
+  'none',
+  'age',
+  'gender',
+  'publisher_platform',
+  'platform_position',
+  'device_platform',
+  'impression_device',
+  'country',
+  'region',
+] as const;
+export type AdBreakdownKind = (typeof AD_BREAKDOWN_KINDS)[number];
+
 /** Service-only paid-media-metrics scope used by the Optimizer cycle writer. */
 export const AdAttributionDailyRowSchema = z.object({
   brand_id: z.string().uuid(),
@@ -1403,6 +1487,11 @@ export const AdAttributionDailyRowSchema = z.object({
   ad_name: z.string().nullable(),
   adset_id: z.string(),
   date: z.string(),
+  // Defaulted, not required: an edge deployed BEFORE the service that parses this
+  // omits both keys entirely, and a required field would turn that ordinary deploy
+  // ordering into a total parse failure of every row.
+  breakdown_kind: z.string().default('none'),
+  breakdown_value: z.string().default(''),
   impressions: z.number().int().nonnegative(),
   clicks: z.number().int().nonnegative(),
   link_clicks: z.number().int().nonnegative(),

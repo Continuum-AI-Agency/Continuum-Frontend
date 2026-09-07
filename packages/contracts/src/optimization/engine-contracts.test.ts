@@ -340,3 +340,56 @@ describe('EngineConfigSchema', () => {
     expect(EngineConfigSchema.safeParse({ ...config, overflowMode: 'yolo' }).success).toBe(false);
   });
 });
+
+describe('AdSetSnapshotSchema carries what the engine actually emits', () => {
+  // z.object STRIPS unknown keys. That makes a field missing HERE invisible: the payload
+  // arrives intact, parses without error, and comes out the other side with the field
+  // gone. `creativeSeries` was absent from this copy while the engine had carried it for
+  // months — and it is the only input the per-ad decay and displacement triggers have, so
+  // the loss would have read as "no creative is decaying" rather than as a bug.
+  //
+  // Every field added to the engine's AdSetSnapshotSchema belongs in this list.
+  const base = {
+    id: 'as1',
+    status: 'active' as const,
+    currentBudget: 100,
+    ageDays: 40,
+    windows: {
+      d3: { spend: 1, purchases: 0, addToCarts: 0, clicks: 0, impressions: 10 },
+      d7: { spend: 2, purchases: 0, addToCarts: 0, clicks: 0, impressions: 20 },
+      d14: { spend: 4, purchases: 0, addToCarts: 0, clicks: 0, impressions: 40 },
+    },
+  };
+
+  test('a per-ad series survives the round trip', () => {
+    const parsed = AdSetSnapshotSchema.parse({
+      ...base,
+      creativeSeries: [{ adId: 'ad1', adName: 'One', windows: base.windows }],
+    });
+    expect(parsed.creativeSeries?.[0]?.adId).toBe('ad1');
+  });
+
+  test('provider delivery signals survive the round trip', () => {
+    const parsed = AdSetSnapshotSchema.parse({
+      ...base,
+      delivery: {
+        blockers: ['AD_SET_UNSERVED'],
+        learningStage: 'LEARNING_LIMITED',
+        reach7d: 1000,
+        reach14d: 1050,
+        impressions7d: 4000,
+      },
+    });
+    expect(parsed.delivery?.blockers).toEqual(['AD_SET_UNSERVED']);
+    expect(parsed.delivery?.reach14d).toBe(1050);
+  });
+
+  test('an empty blocker list is preserved, because it is a finding', () => {
+    // "Meta reports no delivery blockers" and "we never asked" are different states and
+    // must not collapse into each other.
+    const parsed = AdSetSnapshotSchema.parse({ ...base, delivery: { blockers: [] } });
+    expect(parsed.delivery?.blockers).toEqual([]);
+    const unknown = AdSetSnapshotSchema.parse(base);
+    expect(unknown.delivery).toBeUndefined();
+  });
+});

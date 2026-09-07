@@ -16,7 +16,30 @@ export {
 export { confidenceOf, portfolioConfidence } from './confidence';
 export type { DeepPartial, EngineConfig, WindowWeights } from './config';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
-export { DRAG_SPEND_SHARE, evaluateCreative, LAGGARD_COST_MULTIPLE } from './creative';
+export {
+  DISPLACEMENT_MIN_BASELINE_SHARE,
+  DISPLACEMENT_SET_DELIVERY_HELD,
+  DISPLACEMENT_SHARE_COLLAPSE,
+  DRAG_SPEND_SHARE,
+  effectiveCreativeCount,
+  evaluateCreative,
+  LAGGARD_COST_MULTIPLE,
+} from './creative';
+// Stage D — is this ad set being SERVED? The question every performance ratio presumes
+// an answer to, and the one nothing here could previously ask.
+export {
+  type AbsentAdset,
+  countDarkDays,
+  DARK_DAYS_THRESHOLD,
+  type DeliveryEvaluation,
+  evaluateDelivery,
+  impressionsWeekOverWeek,
+  OFF_META_FRESH_DAYS,
+  REACH_EXHAUSTED_EXPANSION,
+  reachExpansionOf,
+  readDelivery,
+  THROTTLED_IMPRESSION_RATIO,
+} from './delivery';
 export type {
   BucketItem,
   CreativeBucket,
@@ -127,6 +150,9 @@ export type {
   OptimizationObjective,
   PacingResult,
   PacingState,
+  DeliveryRead,
+  DeliverySignals,
+  DeliveryState,
   ReallocationResult,
   Recommendation,
   RecommendationKind,

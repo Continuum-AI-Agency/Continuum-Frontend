@@ -12,6 +12,7 @@ import { portfolioConfidence } from './confidence';
 import type { DeepPartial, EngineConfig } from './config';
 import { resolveConfig } from './config';
 import { evaluateCreative } from './creative';
+import { type AbsentAdset, evaluateDelivery } from './delivery';
 import { reallocate } from './engine';
 import { evaluateFatigue } from './fatigue';
 import { sum } from './internal/math';
@@ -23,6 +24,7 @@ import { evaluateTriggers } from './triggers';
 import type {
   AdSetSnapshot,
   CycleResult,
+  DeliveryRead,
   OptimizationMode,
   OptimizationObjective,
   PacingResult,
@@ -48,6 +50,15 @@ export type CycleOptions = {
    *  `rules` alone. The seeded parity rules reproduce the built-ins exactly
    *  (tests/rules-parity.test.ts); default false. */
   suppressBuiltinTriggers?: boolean;
+  /** The ISO day (yyyy-mm-dd) this cycle is running for. Delivery reads need an anchor
+   *  the daily series cannot supply: an ad set dark for ten days returns NO rows for
+   *  those days, so "the last date in the series" is exactly the wrong place to start
+   *  counting from. Absent ⇒ the delivery stage degrades to unknown and stays silent. */
+  asOf?: string;
+  /** Enrolled ad sets missing from the account's live ACTIVE fleet this cycle. They have
+   *  no snapshot — the ACTIVE roster filter removed them — so they arrive separately.
+   *  Absent ⇒ no D1 findings, which is the pre-existing behaviour. */
+  absent?: AbsentAdset[];
 };
 
 export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleResult {
@@ -134,12 +145,31 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
   // `suppressBuiltinTriggers` skips the three built-in stages entirely — the
   // future cutover posture where the seeded parity rules are the only trigger
   // source (their equivalence is proven by tests/rules-parity.test.ts).
+  // --- Stage D — DELIVERY, before anything that assumes it -----------------
+  // Every performance trigger below is a ratio of recent to past. A ratio presumes the
+  // thing was served. Where it was not, the ratio is either undefined or well-formed and
+  // meaningless — and the engine had no way to tell those apart, which is how an ad set
+  // Meta had stopped serving arrived at a human as "your creative wore out, refresh it".
+  //
+  // Runs outside `suppressBuiltinTriggers`: that flag is the cutover to the data-driven
+  // rules layer, and the rules layer expresses performance conditions over window
+  // metrics. It cannot express "absent from the ACTIVE roster", because there is no
+  // snapshot for it to read.
+  const delivery = evaluateDelivery(classified, opts.absent ?? [], opts.asOf);
+  const deliveryReads = delivery.reads;
+  recommendations = [...delivery.recommendations];
+
   if (!opts.suppressBuiltinTriggers) {
     const triggers = evaluateTriggers(classified, baseCfg);
     starveIds = triggers.starveIds;
+    // Ad sets that are not being served are excluded from every performance stage below.
+    // Not because their numbers are bad — because their numbers are not about them.
+    // C3_no_variance is the sharpest case: it fired 54 times, and told people to seed
+    // creative experiments into ad sets Meta was showing to nobody.
+    const undelivered = new Set([...starveIds, ...delivery.suppressIds]);
     // Fatigue is independent of pauses: it never starves, and skips ad sets a pause
     // trigger already flagged (avoid double-noise on the same ad set).
-    const fatigueRecs = evaluateFatigue(classified, baseCfg, starveIds);
+    const fatigueRecs = evaluateFatigue(classified, baseCfg, undelivered, deliveryReads);
 
     // Stage C — the creative triggers. An ad set is a budget and an audience; the thing that
     // works or doesn't is the creative inside it. Two creatives in the SAME ad set (same
@@ -147,9 +177,14 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
     // decision can close, because the money was already in the right ad set and on the wrong
     // ad. Skips ad sets a pause trigger already condemned: no point proposing a creative
     // experiment inside a set we are about to shut off.
-    const creative = evaluateCreative(classified, baseCfg, starveIds);
+    const creative = evaluateCreative(classified, baseCfg, undelivered);
     noRaiseIds = creative.noRaiseIds;
-    recommendations = [...triggers.recommendations, ...fatigueRecs, ...creative.recommendations];
+    recommendations = [
+      ...recommendations,
+      ...triggers.recommendations,
+      ...fatigueRecs,
+      ...creative.recommendations,
+    ];
 
     // Tell the rules layer what the built-ins already flagged: built-ins win the
     // per-(adSetId, kind) dedup, and a built-in pause/starve suppresses rule
@@ -256,7 +291,23 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
     opts.priorComposites,
   );
 
+  // Carry the delivery read onto each item. `optimizer.cycle_items.diagnostics` stores the
+  // whole item verbatim, so this makes delivery state queryable per ad set per cycle with
+  // no schema change and no second write — and, more to the point, without a second copy
+  // of the classifier living in SQL or in the Frontend to drift away from this one.
+  const items = reallocation.items.map((item) => {
+    const read = deliveryReads.get(item.id);
+    return read ? { ...item, delivery: read } : item;
+  });
+
   const confidence = portfolioConfidence(prepared, baseCfg);
 
-  return { mode, pacing, reallocation, recommendations, confidence, ruleEvaluations };
+  return {
+    mode,
+    pacing,
+    reallocation: { ...reallocation, items },
+    recommendations,
+    confidence,
+    ruleEvaluations,
+  };
 }

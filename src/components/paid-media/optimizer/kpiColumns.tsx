@@ -30,6 +30,7 @@ import { resolveAdsetName } from './adsetName';
 import { AdSetIdLabel } from './charts/AdSetIdLabel';
 import { pct } from './charts/chartScale';
 import { deriveEfficiency, formatCpa } from './format';
+import { DeliveryPill } from './DeliveryPill';
 import { HeldPill } from './HeldPill';
 import { freezeLabel } from './reportModel';
 
@@ -56,6 +57,9 @@ export type OptimizerAdsetRow = {
   } | null;
   /** Freeze reason → a labeled Held state instead of a cost. */
   freezeReason?: string | null;
+  /** Was it being SERVED (serving | throttled | dark)? Null ⇒ not read this cycle, which
+   *  renders no chip — the row must not claim delivery it never measured. */
+  deliveryState?: string | null;
   currentBudget?: number | null;
   proposedBudget?: number | null;
   changeAbs?: number | null;
@@ -97,6 +101,7 @@ function rowFromItem(
     cost: costFromCi ?? costFromWindow,
     ci,
     freezeReason: item.diagnostics?.freezeReason ?? null,
+    deliveryState: item.diagnostics?.delivery?.state ?? null,
     currentBudget: item.current_budget,
     proposedBudget: item.final_budget,
     changeAbs: item.change_abs,
@@ -167,11 +172,14 @@ export function nameColumn(): InsightColumn<OptimizerAdsetRow> {
     align: 'left',
     sortValue: (row) => (row.name ?? row.adsetId).toLowerCase(),
     cell: (row) => (
-      <AdSetIdLabel
-        className="w-full max-w-[16rem]"
-        id={row.adsetId}
-        name={row.name ?? undefined}
-      />
+      <span className="flex w-full min-w-0 items-center gap-1.5">
+        <AdSetIdLabel
+          className="min-w-0 max-w-[16rem]"
+          id={row.adsetId}
+          name={row.name ?? undefined}
+        />
+        <DeliveryPill state={row.deliveryState} />
+      </span>
     ),
   };
 }

@@ -111,6 +111,68 @@ export type OptimizationObjective =
   | 'post_engagement'
   | 'clicks';
 
+// --- Delivery: is this thing being SERVED at all? ---------------------------
+// Every performance trigger in this engine (F1/F2, C1-C4) is a ratio: recent versus
+// baseline. A ratio presumes delivery. Without that presumption the engine cannot tell
+// "this creative wore out" from "Meta is not serving this ad set", and on live data the
+// second is the more common state — 17 of 85 active ad sets had zero impressions in a
+// week at a mean frequency of 1.45, which no fatigue rule can explain.
+
+/** What Meta reports about delivery for one ad set. Provider facts, not our inference. */
+export type DeliverySignals = {
+  /** Meta's own delivery blockers, verbatim (issues_info[].error_summary). An EMPTY array
+   *  is a real finding — "Meta reports no blockers". The unknown case is the whole
+   *  `delivery` block being absent. */
+  blockers?: string[];
+  /** learning_stage_info.status — LEARNING | LEARNING_LIMITED | SUCCESS. */
+  learningStage?: string;
+  /** learning_stage_info.last_sig_edit_ts (epoch seconds). A significant edit RESTARTS
+   *  learning, and adding a creative to an ad set can be one — the reason "ship a new ad
+   *  so it delivers again" sometimes buys a delivery pause instead. */
+  lastSignificantEditAt?: number;
+  /** Unique people reached over d7. Non-additive across days, so it comes from an
+   *  aggregated read, never from summing the daily series. */
+  reach7d?: number;
+  /** Unique people reached over d14, from a second aggregated read. reach14d/reach7d is
+   *  the saturation test: ~1.0 means the extra week reached no one new. */
+  reach14d?: number;
+  /** Impressions over that same aggregated d7 read. */
+  impressions7d?: number;
+};
+
+/** Where an ad set sits on the delivery ladder. Ordered by how little the engine can say:
+ *  nothing at all about `off_meta`, and everything about `serving`. */
+export type DeliveryState =
+  /** Enrolled, but absent from the account's live ACTIVE roster — paused, deleted, or
+   *  flipped to CBO in Ads Manager. There is no snapshot for it at all. */
+  | 'off_meta'
+  /** In the roster, so Meta considers it live, and yet it delivered nothing for days. */
+  | 'dark'
+  /** Still delivering, but materially less than it was at the same budget. */
+  | 'throttled'
+  /** Delivering normally. Only here do the performance ratios mean what they say. */
+  | 'serving';
+
+/** One ad set's delivery read for this cycle. Every number is nullable BY DESIGN:
+ *  null is "not knowable from what we hold", and no rule may treat it as a zero. */
+export type DeliveryRead = {
+  state: DeliveryState;
+  /** Consecutive most-recent days with zero impressions. Null when the daily series is
+   *  too sparse to tell a delivery stop from an ingest gap — see readDelivery. */
+  darkDays: number | null;
+  /** Recent daily impressions ÷ the prior week's daily impressions. Null without both. */
+  impressionsWow: number | null;
+  /** reach(d14) ÷ reach(d7). A steadily expanding ad set keeps finding new people, so
+   *  doubling the window grows reach well past 1.0; ~1.0 means the second week reached
+   *  nobody the last seven days had not already reached — an exhausted audience.
+   *  Null when either read is missing or zero. */
+  reachExpansion: number | null;
+  /** Meta's blockers, carried through so a finding can quote the provider rather than
+   *  paraphrase it. */
+  blockers: string[];
+  learningStage: string | null;
+};
+
 /** Snapshot of one ad set at the moment a cycle runs. */
 export type AdSetSnapshot = {
   id: string;
@@ -132,6 +194,14 @@ export type AdSetSnapshot = {
   audienceType?: AudienceType;
   /** Avg impressions per user, last 7d — for fatigue/saturation. */
   frequency7d?: number;
+  /** What the PROVIDER says about delivery, as opposed to what the metrics imply about
+   *  performance. Stamped at ingest from Meta's own `issues_info` / `learning_stage_info`
+   *  plus the aggregated 7d reach read.
+   *
+   *  Absent means UNKNOWN — an edge deployed before these fields were asked for. It must
+   *  never be read as "delivery is fine": the delivery triggers stay silent without it,
+   *  which is the same fail-soft contract `creative` and `creativeSeries` carry. */
+  delivery?: DeliverySignals;
   /** Raw Meta optimization_goal (e.g. OFFSITE_CONVERSIONS, CONVERSATIONS, APP_INSTALLS).
    *  The ad set's DECLARED bid target. Kept raw for reporting/grouping; the engine never
    *  parses it — the ingest boundary resolves it into `kpiField` (below), because mapping
@@ -372,6 +442,13 @@ export type ItemDiagnostics = {
   /** Carried from the snapshot when this item was frozen as an ingest-side abstain,
    *  so the FE/agents can render "held — no conversion signal" instead of a $0 change. */
   freezeReason?: FreezeReason;
+  /** Was this ad set being SERVED, and what did Meta say about it. Attached after the
+   *  reallocation so it rides into optimizer.cycle_items.diagnostics, which stores the
+   *  item verbatim — one classifier, one record, no SQL copy of it to drift.
+   *
+   *  Absent ⇒ the delivery read was unavailable this cycle (an edge that predates the
+   *  provider fields). Not "it was delivering". */
+  delivery?: DeliveryRead;
 };
 
 export type ReallocationResult = {
@@ -413,7 +490,11 @@ export type RecommendationKind =
   | 'variate_creative'
   /** This ad set runs one creative, so it cannot tell you which creative works. Make
    *  variants to CREATE the comparison. No budget decision can substitute for this. */
-  | 'seed_experiment';
+  | 'seed_experiment'
+  /** Nothing is being served. The fix is operational — un-enrol it, un-pause it, widen the
+   *  audience, clear Meta's blocker — and a new creative is NOT it. This kind exists
+   *  precisely so the queue stops answering "we are not delivering" with "make an ad". */
+  | 'restore_delivery';
 
 export type RecommendationTrigger =
   | 'P1_zero_upper_funnel'
@@ -431,7 +512,27 @@ export type RecommendationTrigger =
   /** ONE creative measured against its OWN past: cost per result rising while CTR falls.
    *  The only creative trigger that needs no peer, and therefore the only one that can say
    *  anything at all about an ad set running a single creative. */
-  | 'C4_creative_decay';
+  | 'C4_creative_decay'
+  /** ONE creative lost the auction INSIDE its ad set: its impression share collapsed while
+   *  the ad set's own total held up, and its click-through never moved. Nothing wore out —
+   *  a sibling simply took the delivery. Refreshing this creative fixes nothing, which is
+   *  why it must not arrive as a refresh. */
+  | 'C5_auction_displacement'
+  /** Enrolled, and not in the account's live ACTIVE roster: paused, deleted or flipped to
+   *  CBO in Ads Manager. Silent until now — the ad set simply stopped appearing, and its
+   *  last snapshot stayed `active` forever. */
+  | 'D1_off_meta'
+  /** ACTIVE on Meta, carrying budget, and delivering nothing for days. This is the state
+   *  the account manager means by "Meta stopped serving it", and the one no rule here
+   *  could previously express. */
+  | 'D2_dark_with_budget'
+  /** Meta says LEARNING_LIMITED: too few weekly events to leave the learning phase. More
+   *  creatives usually make this worse, by splitting the same scarce signal further. */
+  | 'D3_learning_limited'
+  /** Reach has plateaued while frequency keeps climbing — the audience is used up, not the
+   *  creative. F2 asks the same question through a fixed frequency cap (3.0) that this
+   *  account almost never reaches; the reach curve answers it at any frequency. */
+  | 'F3_audience_exhausted';
 
 export type Recommendation = {
   adSetId: string;

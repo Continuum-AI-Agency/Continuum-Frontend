@@ -75,6 +75,22 @@ export const AdSetStatusSchema = z.enum([
 
 export const AudienceTypeSchema = z.enum(['prospecting', 'retargeting', 'remarketing', 'unknown']);
 
+/** What the PROVIDER reports about delivery, as opposed to what our metrics imply about
+ *  performance. Mirrors DeliverySignals in ./types.
+ *
+ *  Every field is optional and the whole block is optional, on purpose: an edge deployed
+ *  before these fields were requested sends nothing, and that must read as UNKNOWN rather
+ *  than as a clean bill of health. An EMPTY `blockers` array is the opposite — it is Meta
+ *  affirmatively reporting no blockers, which is a finding. */
+export const DeliverySignalsSchema = z.object({
+  blockers: z.array(z.string()).optional(),
+  learningStage: z.string().optional(),
+  lastSignificantEditAt: z.number().nonnegative().optional(),
+  reach7d: z.number().nonnegative().optional(),
+  reach14d: z.number().nonnegative().optional(),
+  impressions7d: z.number().nonnegative().optional(),
+});
+
 /** Why the ingest boundary abstained (froze) an ad set — mirrors FreezeReason in ./types. */
 export const FreezeReasonSchema = z.enum([
   'no_conversions',
@@ -120,6 +136,23 @@ const CreativeStandingAdSchema = z.object({
   frequency: z.number().nullable().optional(),
 });
 
+/** One creative's OWN d3/d7/d14 trend. A roster entry, not part of the comparison —
+ *  see CreativeAdSeries in the engine's ./types for why it cannot live on
+ *  CreativeStandingAd.
+ *
+ *  This had drifted out of the contracts copy while the engine carried it, and `z.object`
+ *  STRIPS unknown keys — so every snapshot parsed through this schema silently lost its
+ *  per-ad series, which is the only input the per-ad decay and displacement triggers have. */
+export const CreativeAdSeriesSchema = z.object({
+  adId: z.string(),
+  adName: z.string().optional(),
+  windows: z.object({
+    d3: WindowMetricsSchema,
+    d7: WindowMetricsSchema,
+    d14: WindowMetricsSchema,
+  }),
+});
+
 /** The standing of an ad set's CREATIVES against each other. Inside one ad set the
  *  audience, budget and goal are constant, so this is the only comparison that isolates
  *  the creative. `winner: null` means no winner is KNOWABLE (nothing ran against it) — it
@@ -146,6 +179,9 @@ export const AdSetSnapshotSchema = z.object({
   ageDays: z.number().nonnegative(),
   audienceType: AudienceTypeSchema.optional(),
   frequency7d: z.number().nonnegative().optional(),
+  /** Provider-side delivery facts (Meta issues_info / learning_stage_info / reach). The
+   *  delivery triggers read these; absent ⇒ they stay silent. */
+  delivery: DeliverySignalsSchema.optional(),
   optimization_goal: z.string().optional(),
   /** Which WindowMetrics field this ad set's events are counted in — resolved at the
    *  ingest boundary from optimization_goal. USED IN SCORING (unlike `angle` below):
@@ -185,6 +221,7 @@ export const AdSetSnapshotSchema = z.object({
     })
     .optional(),
   daily: z.array(DailyMetricsSchema).optional(),
+  creativeSeries: z.array(CreativeAdSeriesSchema).optional(),
 });
 
 export const WindowWeightsSchema = z.object({

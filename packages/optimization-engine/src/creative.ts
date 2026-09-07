@@ -53,6 +53,50 @@ export const LAGGARD_COST_MULTIPLE = 1.25;
  *  have not condemned, and freezing its budget would punish the innocent ones. */
 export const DRAG_SPEND_SHARE = 0.5;
 
+// --- C5: displacement, and the diversity number it depends on ---------------
+// Two creatives in one ad set are not two independent experiments — they are two
+// competitors in the SAME auction, and Meta concentrates delivery on whichever it
+// currently believes in. Measured on live data, the top creative takes ~95% of an ad
+// set's impressions even where four or more creatives are live.
+//
+// That has a consequence the engine used to get wrong in both directions. A creative
+// whose delivery collapses has not necessarily worn out — it may simply have lost, while
+// the ad set beside it is perfectly healthy. And "add another creative so the load is
+// shared" does not follow: if the auction will not spread delivery, a fifth creative
+// changes the count and not the concentration.
+
+/** A creative's recent impression share must fall below this fraction of its own
+ *  baseline share to count as displaced. Not a small drift — a collapse. */
+export const DISPLACEMENT_SHARE_COLLAPSE = 0.4;
+
+/** ...and it must have HAD a real share to lose. An ad that never got delivery was not
+ *  displaced; it was never in the running. */
+export const DISPLACEMENT_MIN_BASELINE_SHARE = 0.15;
+
+/** ...while the AD SET's own daily delivery held up. If the whole set fell away, the
+ *  creative did not lose an auction — everything stopped, and that is stage D's finding. */
+export const DISPLACEMENT_SET_DELIVERY_HELD = 0.7;
+
+/**
+ * Effective number of creatives actually sharing an ad set's delivery — the exponential
+ * of the Shannon entropy of the impression shares.
+ *
+ * Reported instead of a raw count because the raw count is misleading in the exact case
+ * people reach for it: an ad set running five creatives where one takes 95% of the
+ * impressions has an effective count near 1.2, and behaves like an ad set running one.
+ * Null when nothing delivered — never 0, which would read as a measurement.
+ */
+export function effectiveCreativeCount(impressions: number[]): number | null {
+  const total = impressions.reduce((sum, n) => sum + Math.max(0, n), 0);
+  if (total <= 0) return null;
+  let entropy = 0;
+  for (const raw of impressions) {
+    const share = Math.max(0, raw) / total;
+    if (share > 0) entropy -= share * Math.log(share);
+  }
+  return Math.exp(entropy);
+}
+
 const money = (v: number): string => `$${v.toFixed(2)}`;
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 
@@ -225,6 +269,79 @@ function readCreativeDecay(
   return out;
 }
 
+/**
+ * Per-ad displacement findings for one ad set: creatives that stopped being delivered
+ * because a sibling took the auction, NOT because they wore out.
+ *
+ * The two look identical from the ad's own numbers — cost per result gets noisy, results
+ * dry up — and they call for opposite actions. A worn-out creative needs replacing. A
+ * displaced one needs nothing: the ad set is already spending its money on the creative
+ * that beat it, which is the system working. Telling a human to refresh it is asking for
+ * work that changes no outcome.
+ *
+ * The discriminator is share, not level. Every ad in a slowing ad set loses impressions;
+ * only a displaced one loses SHARE while the ad set's own delivery holds.
+ */
+function readDisplacement(
+  s: AdSetSnapshot,
+  standing: CreativeStanding,
+  cfg: EngineConfig,
+): Recommendation[] {
+  const series = s.creativeSeries;
+  if (!series || series.length < 2) return []; // one creative cannot be out-competed
+
+  // Did the AD SET keep delivering? Per-day, because d3 and d14 are different lengths.
+  const setRecentPerDay = s.windows.d3.impressions / 3;
+  const setBasePerDay = s.windows.d14.impressions / 14;
+  if (setBasePerDay <= 0) return [];
+  if (setRecentPerDay / setBasePerDay < DISPLACEMENT_SET_DELIVERY_HELD) return [];
+
+  const recentTotal = series.reduce((sum, e) => sum + e.windows.d3.impressions, 0);
+  const baseTotal = series.reduce((sum, e) => sum + e.windows.d14.impressions, 0);
+  if (recentTotal <= 0 || baseTotal <= 0) return [];
+
+  const named = new Map<string, CreativeStandingAd>();
+  for (const ad of [standing.winner, ...standing.laggards]) if (ad) named.set(ad.adId, ad);
+
+  const effective = effectiveCreativeCount(series.map((e) => e.windows.d14.impressions));
+  const out: Recommendation[] = [];
+
+  for (const entry of series) {
+    const baseShare = entry.windows.d14.impressions / baseTotal;
+    if (baseShare < DISPLACEMENT_MIN_BASELINE_SHARE) continue; // never in the running
+    const recentShare = entry.windows.d3.impressions / recentTotal;
+    if (recentShare >= baseShare * DISPLACEMENT_SHARE_COLLAPSE) continue; // still competing
+
+    // The separation from C4. If engagement fell too, the creative is worn out and C4
+    // owns it — the auction only reflected what the audience already decided.
+    const decay = readDecay(entry.windows.d3, entry.windows.d14, cfg, {
+      cpaDriftPct: cfg.creativeDecayCpaDriftPct,
+      ctrDropPct: cfg.creativeDecayCtrDropPct,
+    });
+    if (decay.ctrDropped) continue;
+
+    const label = entry.adName ?? named.get(entry.adId)?.adName ?? entry.adId;
+    const spread =
+      effective === null
+        ? ''
+        : ` This ad set runs ${series.length} creatives but spreads delivery like ${effective.toFixed(1)} — adding another mostly feeds the same winner.`;
+    out.push({
+      adSetId: s.id,
+      adId: entry.adId,
+      kind: 'pause_ad',
+      trigger: 'C5_auction_displacement',
+      severity: 'low',
+      reason:
+        `"${label}" fell from ${(baseShare * 100).toFixed(0)}% to ${(recentShare * 100).toFixed(0)}% of this ad set's impressions while the ad set itself kept delivering, ` +
+        `and its click-through never dropped. It did not wear out — it lost the auction to a creative beside it. ` +
+        `Refreshing it changes nothing; retire it and put the slot behind the winner.${spread}`,
+      needsApproval: true,
+    });
+  }
+
+  return out;
+}
+
 export type CreativeOutput = {
   recommendations: Recommendation[];
   /** Ad sets that must not GROW this cycle: their money is on a creative we have already
@@ -267,6 +384,11 @@ export function evaluateCreative(
     // portfolio opted in. Absent is UNKNOWN, not flat: no windows, no finding, no hedge.
     const decayFindings = readCreativeDecay(s, standing, cfg, unit);
 
+    // --- C5: this creative was DISPLACED, not worn out -----------------------------
+    // Same inputs as C4, opposite conclusion. See readDisplacement for why the two must
+    // not arrive as the same card: one asks for a new creative, the other asks for none.
+    const displacementFindings = readDisplacement(s, standing, cfg);
+
     // --- C3: nothing to learn from -------------------------------------------------
     // Checked FIRST because it is a statement about what we can know, not about what is
     // true. An ad set with one creative cannot tell you that creative is good; it can only
@@ -275,14 +397,25 @@ export function evaluateCreative(
     if (standing.flags.includes('single_creative')) {
       // Only worth saying about an ad set actually spending money.
       if (standing.winner === null && standing.totalAds > 0) {
+        // Say WHY there is nothing to compare, when we can tell. An ad set with one ad
+        // needs another ad. An ad set with four ads where delivery behaves like 1.2 does
+        // not — it already has the variants, and the auction is refusing to spread across
+        // them. Those two need different work, and "add variants" only fits the first.
+        const effective =
+          s.creativeSeries && s.creativeSeries.length > 1
+            ? effectiveCreativeCount(s.creativeSeries.map((e) => e.windows.d14.impressions))
+            : null;
+        const concentrated = effective !== null && effective < 2;
         recommendations.push({
           adSetId: s.id,
           kind: 'seed_experiment',
           trigger: 'C3_no_variance',
           severity: 'medium',
-          reason:
-            `Only ${standing.eligibleAds} creative has enough delivery to judge in this ad set, so nothing here can tell you which creative works — ` +
-            `there was nothing for it to beat. Add variants to create the comparison.`,
+          reason: concentrated
+            ? `${standing.totalAds} creatives are live here, but delivery is concentrated enough to behave like ${(effective as number).toFixed(1)} — only ${standing.eligibleAds} got enough of it to judge. ` +
+              `Adding another variant will most likely feed the same winner. The constraint is the auction's concentration, not your creative count: split the losing creatives into their own ad set if you need them measured.`
+            : `Only ${standing.eligibleAds} creative has enough delivery to judge in this ad set, so nothing here can tell you which creative works — ` +
+              `there was nothing for it to beat. Add variants to create the comparison.`,
           seed: buildSeed(s, standing),
           needsApproval: true,
         });
@@ -371,10 +504,14 @@ export function evaluateCreative(
     // One ad, one recommendation per cycle. Where C1 already says "pause this" or C2
     // already says "make more of this", adding "and it is decaying" hands an operator two
     // cards for one decision — and C1's pause is the stronger instruction anyway.
+    // C4 (worn out) and C5 (out-competed) are mutually exclusive by construction —
+    // readDisplacement drops any ad whose CTR also fell — but both defer to a pause or a
+    // variate already claimed for the same ad, for the same reason: one ad, one card.
     const claimed = new Set(
       recommendations.filter((r) => r.adSetId === s.id && r.adId).map((r) => r.adId),
     );
-    recommendations.push(...decayFindings.filter((r) => !claimed.has(r.adId)));
+    const perAd = [...decayFindings, ...displacementFindings];
+    recommendations.push(...perAd.filter((r) => !claimed.has(r.adId)));
   }
 
   return { recommendations, noRaiseIds };

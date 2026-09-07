@@ -6,7 +6,10 @@ import {
   actionRoute,
   applyModePill,
   confidenceBand,
+  CREATIVE_RECOMMENDATION_KINDS,
+  CREATIVE_REQUEST_KINDS,
   creativeBriefForRec,
+  deliveryLabel,
   explainConfidence,
   firstCycleState,
   freezeLabel,
@@ -433,5 +436,52 @@ describe('pending work counts BUDGET MOVES, not just recommendations', () => {
   it('treats a payload predating the RPC change as zero moves, never NaN', () => {
     expect(pendingWorkCount(portfolio(3))).toBe(3);
     expect(hasPendingWork(portfolio(0))).toBe(false);
+  });
+});
+
+describe('restore_delivery — the kind whose answer is never a creative', () => {
+  it('has its own label, not the generic underscore fallback', () => {
+    // Without a case here it renders as "restore delivery" with a bullet, in a queue where
+    // every other row names an action.
+    expect(recommendationLabel('restore_delivery').label).toBe('Not being delivered');
+    expect(recommendationLabel('restore_delivery').glyph).not.toBe('•');
+  });
+
+  it('is not a creative-level kind — D1/D2/D3 are about the ad set', () => {
+    expect(CREATIVE_RECOMMENDATION_KINDS.has('restore_delivery')).toBe(false);
+    expect(CREATIVE_REQUEST_KINDS.has('restore_delivery')).toBe(false);
+  });
+
+  it('approving it tracks the task and never resumes an ad set on its own', () => {
+    const copy = recommendationActionCopy('restore_delivery');
+    expect(copy.approveLabel).toBe('Track this');
+    expect(copy.advisory).toContain('will not resume');
+    // It routes to the renewal path (a tracked task), not to a Meta write.
+    expect(actionRoute('restore_delivery')).toBe('fatigue');
+  });
+});
+
+describe('deliveryLabel — a chip only where it changes what the row means', () => {
+  it('says a dark ad set is not delivering, and why its numbers are history', () => {
+    const dark = deliveryLabel('dark');
+    expect(dark?.label).toBe('Not delivering');
+    expect(dark?.tone).toBe('error');
+    expect(dark?.hint).toContain('served nothing');
+  });
+
+  it('flags falling delivery without calling it a failure', () => {
+    expect(deliveryLabel('throttled')?.tone).toBe('warning');
+  });
+
+  it('renders NOTHING for a serving ad set — the absence is the readable default', () => {
+    expect(deliveryLabel('serving')).toBeNull();
+  });
+
+  it('renders nothing when delivery was not read, rather than claiming it was fine', () => {
+    // A green "delivering" chip on an unmeasured row is a claim we cannot support, and
+    // this is the state every row is in until the edge ships the provider fields.
+    expect(deliveryLabel(null)).toBeNull();
+    expect(deliveryLabel(undefined)).toBeNull();
+    expect(deliveryLabel('off_meta')).toBeNull();
   });
 });

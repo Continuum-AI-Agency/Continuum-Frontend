@@ -25033,6 +25033,10 @@ export type Database = {
         Args: { p_portfolio_id: string; p_rows: Json }
         Returns: number
       }
+      paid_media_upsert_adset_targeting: {
+        Args: { p_portfolio_id: string; p_rows: Json }
+        Returns: number
+      }
       process_scheduled_reports: { Args: never; Returns: Json }
       resolve_meta_context_by_brand_id: {
         Args: { p_brand_id: string }
