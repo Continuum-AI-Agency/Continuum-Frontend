@@ -15,17 +15,14 @@ import { z } from 'zod';
  * What can be tagged into a project. Mirrors the check constraint on
  * `brand_profiles.project_memberships.entity_type` exactly — adding a member here without
  * the matching migration produces a row the database rejects at insert time.
+ *
+ * It listed eight values until 2026-09-08; six of them (collection, canvas_workflow,
+ * automation, jaina_session, organic_session, optimizer_portfolio) had no reader and no
+ * writer anywhere in the repo. An enum value with no writer is not a roadmap, it is a
+ * claim the product does not honour, so they were cut here and in the constraint together.
+ * Adding one back means adding it in BOTH places, plus the control that writes it.
  */
-export const projectEntityTypeSchema = z.enum([
-  'asset',
-  'collection',
-  'canvas_workflow',
-  'automation',
-  'jaina_session',
-  'organic_session',
-  'optimizer_portfolio',
-  'brand_document',
-]);
+export const projectEntityTypeSchema = z.enum(['asset', 'brand_document']);
 export type ProjectEntityType = z.infer<typeof projectEntityTypeSchema>;
 
 export const projectStatusSchema = z.enum(['active', 'archived']);
@@ -33,6 +30,9 @@ export type ProjectStatus = z.infer<typeof projectStatusSchema>;
 
 /** Hex, because the chip sets `style={{ backgroundColor }}` — a token name would not render. */
 const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'expected a #rrggbb hex colour');
+
+/** A Postgres `date` as PostgREST returns it. Compared lexically, which is safe for ISO. */
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD');
 
 /**
  * The palette the project picker offers. Kept here rather than in the settings UI so the
@@ -59,12 +59,49 @@ export const projectSchema = z.object({
   status: projectStatusSchema,
   /** Provider ids, text — Meta account ids are text and carry an `act_` prefix. */
   adAccountIds: z.array(z.string().min(1)),
+  /**
+   * Meta campaign ids the project covers. ENFORCED at the Jaina tool boundary, not merely
+   * described to the model. Empty means no campaign restriction — a project that names no
+   * campaigns must not become a project that permits none.
+   */
   campaignIds: z.array(z.string().min(1)),
+  /**
+   * Who runs this. ORGANIZATION, NOT AUTHORIZATION: the brand is the only authz boundary
+   * (`has_brand_access`), and a lead sees no more and no less than any other member.
+   */
+  leadUserId: z.string().uuid().nullable(),
+  startsOn: isoDateSchema.nullable(),
+  /**
+   * Last day the brief is authoritative. See `projectBriefIsAuthoritative` — past this the
+   * brief stops reaching the agent, because a stale brief is not clutter, it is wrong
+   * instructions given to something that can spend money.
+   */
+  endsOn: isoDateSchema.nullable(),
   createdBy: z.string().uuid().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type Project = z.infer<typeof projectSchema>;
+
+/**
+ * Is the project's brief still instructions, or is it history?
+ *
+ * Deliberately a pure function over a supplied `today` rather than a getter that reads the
+ * clock: the Backend guard, the settings badge and the bench all have to agree on the
+ * answer, and a bench cannot assert an expiry it cannot control. Inclusive of `endsOn` —
+ * a campaign that ends today is still running today.
+ */
+export function projectBriefIsAuthoritative(
+  project: Pick<Project, 'endsOn'>,
+  today: string,
+): boolean {
+  return project.endsOn === null || project.endsOn >= today;
+}
+
+/** `YYYY-MM-DD` in UTC — the shape a Postgres `date` column round-trips through PostgREST. */
+export function isoToday(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
 
 export const projectMembershipSchema = z.object({
   projectId: z.string().uuid(),
@@ -94,6 +131,9 @@ export const projectRowSchema = z.object({
   status: z.string(),
   ad_account_ids: z.array(z.string()).nullable(),
   campaign_ids: z.array(z.string()).nullable(),
+  lead_user_id: z.string().nullable().optional(),
+  starts_on: z.string().nullable().optional(),
+  ends_on: z.string().nullable().optional(),
   created_by: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -111,6 +151,9 @@ export function toProject(row: unknown): Project {
     status: parsed.status,
     adAccountIds: parsed.ad_account_ids ?? [],
     campaignIds: parsed.campaign_ids ?? [],
+    leadUserId: parsed.lead_user_id ?? null,
+    startsOn: parsed.starts_on ?? null,
+    endsOn: parsed.ends_on ?? null,
     createdBy: parsed.created_by,
     createdAt: parsed.created_at,
     updatedAt: parsed.updated_at,
@@ -169,6 +212,9 @@ export const projectCreateRequestSchema = z
     color: hexColorSchema.nullable().optional(),
     adAccountIds: z.array(z.string().min(1)).max(200).default([]),
     campaignIds: z.array(z.string().min(1)).max(500).default([]),
+    leadUserId: z.string().uuid().nullable().optional(),
+    startsOn: isoDateSchema.nullable().optional(),
+    endsOn: isoDateSchema.nullable().optional(),
   })
   .strict();
 export type ProjectCreateRequest = z.infer<typeof projectCreateRequestSchema>;
@@ -188,6 +234,9 @@ export const projectUpdateRequestSchema = z
     status: projectStatusSchema.optional(),
     adAccountIds: z.array(z.string().min(1)).max(200).optional(),
     campaignIds: z.array(z.string().min(1)).max(500).optional(),
+    leadUserId: z.string().uuid().nullable().optional(),
+    startsOn: isoDateSchema.nullable().optional(),
+    endsOn: isoDateSchema.nullable().optional(),
   })
   .strict();
 export type ProjectUpdateRequest = z.infer<typeof projectUpdateRequestSchema>;

@@ -91,6 +91,8 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
   const [color, setColor] = useState<string>(initial?.color ?? PROJECT_COLOR_PRESETS[0]);
   const [adAccountIds, setAdAccountIds] = useState<string[]>(initial?.adAccountIds ?? []);
   const [campaignIds, setCampaignIds] = useState<string[]>(initial?.campaignIds ?? []);
+  const [startsOn, setStartsOn] = useState(initial?.startsOn ?? '');
+  const [endsOn, setEndsOn] = useState(initial?.endsOn ?? '');
   const [error, setError] = useState<string | null>(null);
 
   const accounts = useAdAccountOptions(brandId);
@@ -112,6 +114,8 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
       color,
       adAccountIds,
       campaignIds,
+      startsOn: startsOn || null,
+      endsOn: endsOn || null,
     };
     try {
       if (initial) {
@@ -168,6 +172,36 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
             />
           ))}
         </div>
+      </div>
+
+      {/* Native date inputs: the platform already ships a picker, a calendar, keyboard entry
+          and localisation, and it emits exactly the YYYY-MM-DD the column stores. */}
+      <div className="flex flex-wrap items-end gap-4">
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Starts
+          <input
+            type="date"
+            value={startsOn}
+            max={endsOn || undefined}
+            onChange={(event) => setStartsOn(event.target.value)}
+            className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Ends
+          <input
+            type="date"
+            value={endsOn}
+            min={startsOn || undefined}
+            onChange={(event) => setEndsOn(event.target.value)}
+            className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+          />
+        </label>
+        <p className="max-w-sm text-xs text-muted-foreground">
+          Optional. After the end date the project stays selectable and its assets stay
+          scoped, but the agent stops being told the brief — a brief written for a finished
+          campaign is not old advice, it is the wrong advice.
+        </p>
       </div>
 
       <CheckboxList

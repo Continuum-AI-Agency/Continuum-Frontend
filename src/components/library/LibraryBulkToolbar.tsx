@@ -31,6 +31,15 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -47,6 +56,9 @@ import {
 import { createShareLink } from '@/lib/library/share';
 import { useProjectMutations } from '@/lib/projects';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+
+/** Sentinel value for the inline "New project…" row; never a real project id. */
+const NEW_PROJECT = '__new_project__';
 
 export function LibraryBulkToolbar({
   brandId,
@@ -69,6 +81,8 @@ export function LibraryBulkToolbar({
 }) {
   const [collectionId, setCollectionId] = useState('');
   const [projectId, setProjectId] = useState('');
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
   const [tag, setTag] = useState('');
   const [reviewStatus, setReviewStatus] = useState('');
   const [fieldId, setFieldId] = useState('');
@@ -79,7 +93,11 @@ export function LibraryBulkToolbar({
   const client = () => createSupabaseBrowserClient();
   // Tagging is what makes the Library's Project filter mean anything: without it the filter
   // can only ever narrow to nothing.
-  const { tag: tagIntoProject } = useProjectMutations(brandId);
+  const {
+    tag: tagIntoProject,
+    untag: untagFromProject,
+    create: createProject,
+  } = useProjectMutations(brandId);
   const selectedField = customFields.find((field) => field.id === fieldId) ?? null;
   const fieldPayload: CustomFieldValue =
     selectedField?.type === 'multi_select'
@@ -87,6 +105,39 @@ export function LibraryBulkToolbar({
         ? [fieldValue]
         : null
       : fieldValue || null;
+
+  /**
+   * Create the project and tag the selection in ONE gesture.
+   *
+   * The measured cost of a first project was six to eight gestures across two surfaces:
+   * leave the Library, open Settings, find the section, create, come back, re-select the
+   * assets, tag. Every one of those was a chance to abandon, and the selection did not
+   * survive the trip. Both mutations run under a single `run` so a failure in either
+   * reports once, and the toolbar's own busy state covers the pair.
+   */
+  async function createAndTag() {
+    const name = newProjectName.trim();
+    if (!name) return;
+    await run('Created project and tagged', async () => {
+      const project = await createProject.mutateAsync({ name, adAccountIds: [], campaignIds: [] });
+      await tagIntoProject.mutateAsync({
+        projectId: project.id,
+        entityType: 'asset',
+        entityIds: assetIds,
+      });
+      setProjectId(project.id);
+    });
+    setNewProjectOpen(false);
+    setNewProjectName('');
+  }
+
+  const onProjectChange = (value: string) => {
+    if (value === NEW_PROJECT) {
+      setNewProjectOpen(true);
+      return;
+    }
+    setProjectId(value);
+  };
 
   async function run(label: string, operation: () => Promise<unknown>) {
     setBusy(label);
@@ -161,41 +212,95 @@ export function LibraryBulkToolbar({
           Remove here
         </Button>
       ) : null}
-      {projects.length > 0 ? (
-        <div className="flex items-center gap-1 rounded-md border border-border bg-background pl-2">
-          <FolderOpen className="size-3.5 text-muted-foreground" aria-hidden />
-          <Select value={projectId} onValueChange={setProjectId}>
-            <SelectTrigger size="sm" className="h-7 w-32 border-0 shadow-none" aria-label="Project">
-              <SelectValue placeholder="Project" />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-7"
-            disabled={!projectId || Boolean(busy)}
-            onClick={() =>
-              void run('Tagged into project', () =>
-                tagIntoProject.mutateAsync({
-                  projectId,
-                  entityType: 'asset',
-                  entityIds: assetIds,
-                }),
-              )
-            }
-          >
-            Tag
-          </Button>
-        </div>
-      ) : null}
+      {/* Rendered unconditionally, including at zero projects. It used to disappear when the
+          brand had none — which is every brand — so the only way to reach a project from the
+          Library was to leave for Settings, create one, and come back to a lost selection.
+          NEW_PROJECT below turns that round trip into one gesture. */}
+      <div className="flex items-center gap-1 rounded-md border border-border bg-background pl-2">
+        <FolderOpen className="size-3.5 text-muted-foreground" aria-hidden />
+        <Select value={projectId} onValueChange={onProjectChange}>
+          <SelectTrigger size="sm" className="h-7 w-32 border-0 shadow-none" aria-label="Project">
+            <SelectValue placeholder="Project" />
+          </SelectTrigger>
+          <SelectContent>
+            {projects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.name}
+              </SelectItem>
+            ))}
+            <SelectItem value={NEW_PROJECT}>New project…</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7"
+          disabled={!projectId || Boolean(busy)}
+          onClick={() =>
+            void run('Tagged into project', () =>
+              tagIntoProject.mutateAsync({
+                projectId,
+                entityType: 'asset',
+                entityIds: assetIds,
+              }),
+            )
+          }
+        >
+          Tag
+        </Button>
+        {/* Untag had no caller anywhere in the app, so the DELETE route was unreachable and
+            a bulk mis-tag was permanent from the product. Undo belongs next to the action. */}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 text-muted-foreground"
+          disabled={!projectId || Boolean(busy)}
+          onClick={() =>
+            void run('Removed from project', () =>
+              untagFromProject.mutateAsync({
+                projectId,
+                entityType: 'asset',
+                entityIds: assetIds,
+              }),
+            )
+          }
+        >
+          Untag
+        </Button>
+      </div>
+
+      <Dialog open={newProjectOpen} onOpenChange={setNewProjectOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>New project</DialogTitle>
+            <DialogDescription>
+              Creates the project and adds the {assetIds.length} selected{' '}
+              {assetIds.length === 1 ? 'asset' : 'assets'} to it.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={newProjectName}
+            placeholder="Winter challenge"
+            onChange={(event) => setNewProjectName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void createAndTag();
+            }}
+          />
+          <DialogFooter>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!newProjectName.trim() || Boolean(busy)}
+              onClick={() => void createAndTag()}
+            >
+              Create and add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="flex items-center rounded-md border border-border bg-background pl-2">
         <Tag className="size-3.5 text-muted-foreground" aria-hidden />
         <input

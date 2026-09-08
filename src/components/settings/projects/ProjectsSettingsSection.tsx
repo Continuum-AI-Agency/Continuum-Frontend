@@ -12,12 +12,17 @@ import { Archive, ArchiveRestore, ChevronLeft, Pencil, Plus } from 'lucide-react
 import { useState } from 'react';
 import { ProjectChip } from '@/components/projects';
 import { Button } from '@/components/ui/button';
+import { useCurrentUserAvatar } from '@/hooks/useCurrentUserAvatar';
 import { useProjectMutations, useProjects } from '@/lib/projects/hooks';
 import { ProjectForm } from './ProjectForm';
 
 type Screen = { kind: 'list' } | { kind: 'form'; project: Project | null };
 
 export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
+  // Reusing the existing session hook rather than adding a second way to ask who is signed
+  // in. Only `user.id` is read here; the avatar work it also does is already paid for
+  // elsewhere on this page.
+  const { user } = useCurrentUserAvatar();
   // 'all', not 'active': archiving is a soft delete, and a settings surface that hides what it
   // archived leaves the user with no way to see or undo it.
   const { projects, isLoading, isError } = useProjects(brandId, 'all');
@@ -25,8 +30,14 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
   const [screen, setScreen] = useState<Screen>({ kind: 'list' });
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const active = projects.filter((project) => project.status === 'active');
+  const activeProjects = projects.filter((project) => project.status === 'active');
   const archived = projects.filter((project) => project.status === 'archived');
+  // The owner's stated goal was "teams within brands can be more organized", and a list with
+  // no person on it organizes nothing. This is ORGANIZATION, not access control: everyone on
+  // the brand still sees every project — the brand is the permission boundary, and a nested
+  // one across eight entity types in six schemas is a different, much larger feature.
+  const mine = user ? activeProjects.filter((project) => project.leadUserId === user.id) : [];
+  const theirs = activeProjects.filter((project) => !mine.includes(project));
 
   async function setStatus(project: Project, status: 'active' | 'archived') {
     setBusyId(project.id);
@@ -80,10 +91,25 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
         <p className="px-0.5 text-sm text-destructive">Could not load projects.</p>
       ) : (
         <>
+          {mine.length > 0 ? (
+            <ProjectRows
+              heading="Led by you"
+              projects={mine}
+              emptyLabel=""
+              busyId={busyId}
+              onEditAction={(project) => setScreen({ kind: 'form', project })}
+              onStatusAction={(project) => setStatus(project, 'archived')}
+            />
+          ) : null}
           <ProjectRows
-            heading="Projects"
-            projects={active}
-            emptyLabel="No projects yet. Create one to scope a direction — a brief, a colour, and the ad accounts it covers."
+            // Only worth a second heading once there is something to contrast it with.
+            heading={mine.length > 0 ? 'Other projects' : 'Projects'}
+            projects={theirs}
+            emptyLabel={
+              mine.length > 0
+                ? ''
+                : 'No projects yet. Create one to scope a direction — a brief, a colour, and the ad accounts it covers.'
+            }
             busyId={busyId}
             onEditAction={(project) => setScreen({ kind: 'form', project })}
             onStatusAction={(project) => setStatus(project, 'archived')}

@@ -283,6 +283,7 @@ export function DocumentManager({
                     onPinnedChange={(pinned) => setPinnedId(pinned ? doc.id : null)}
                     onOpenInline={(storagePath) => void handleOpenInline(storagePath)}
                     onDownload={handleDownload}
+                    brandId={brandId}
                     onRemove={(id) => void handleRemove(id)}
                     onCategoryChange={(id, category) => void handleCategoryChange(id, category)}
                   />

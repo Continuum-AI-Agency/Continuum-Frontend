@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ACCEPTED_DOCUMENT_EXTENSIONS } from '@/lib/documents/uploadLimits';
 import { cn } from '@/lib/utils';
+import { DocumentProjectSubmenu } from './DocumentProjectSubmenu';
 import { RenameDocumentDialog } from './RenameDocumentDialog';
 import type { DocumentView } from './types';
 import { isArchived, isEphemeral } from './types';
@@ -43,10 +44,13 @@ import type { DocumentRowActionHandlers } from './useDocumentActions';
 export function DocumentRowActions({
   doc,
   actions,
+  brandId,
   className,
 }: {
   doc: DocumentView;
   actions: DocumentRowActionHandlers;
+  /** Needed for the project submenu; absent on the onboarding variant, which has no brand yet. */
+  brandId?: string;
   className?: string;
 }) {
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -93,6 +97,13 @@ export function DocumentRowActions({
                 <Download className="mr-2 h-3.5 w-3.5" />
                 Download
               </DropdownMenuItem>
+            </>
+          ) : null}
+
+          {!archived && brandId ? (
+            <>
+              <DropdownMenuSeparator />
+              <DocumentProjectSubmenu brandId={brandId} doc={doc} />
             </>
           ) : null}
 

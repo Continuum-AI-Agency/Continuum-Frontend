@@ -6,6 +6,7 @@ import {
   projectEntityTypeSchema,
   projectListQuerySchema,
   projectMembershipQuerySchema,
+  projectBriefIsAuthoritative,
   projectSchema,
   projectTagRequestSchema,
   projectUpdateRequestSchema,
@@ -20,17 +21,24 @@ const USER = '33333333-3333-4333-8333-333333333333';
 describe('projectEntityTypeSchema', () => {
   // The migration's check constraint is the other half of this list. A member added on one
   // side only produces a row the database rejects at insert time, so the count is asserted.
-  it('carries exactly the eight taggable entity types', () => {
-    expect(projectEntityTypeSchema.options).toEqual([
-      'asset',
+  it('carries exactly the two taggable entity types', () => {
+    expect(projectEntityTypeSchema.options).toEqual(['asset', 'brand_document']);
+  });
+
+  // The six cut on 2026-09-08 had no reader and no writer. This asserts they stay cut:
+  // re-adding one here without the constraint and the control that writes it is the exact
+  // drift that made the enum a claim the product did not honour.
+  it('rejects the six entity types that had no writer', () => {
+    for (const dead of [
       'collection',
       'canvas_workflow',
       'automation',
       'jaina_session',
       'organic_session',
       'optimizer_portfolio',
-      'brand_document',
-    ]);
+    ]) {
+      expect(projectEntityTypeSchema.safeParse(dead).success).toBe(false);
+    }
   });
 
   it('rejects an entity type the constraint would reject', () => {
@@ -48,6 +56,9 @@ describe('toProject', () => {
     status: 'active',
     ad_account_ids: ['act_123'],
     campaign_ids: ['c1', 'c2'],
+    lead_user_id: USER,
+    starts_on: '2026-09-01',
+    ends_on: '2026-12-31',
     created_by: USER,
     created_at: '2026-09-07T00:00:00Z',
     updated_at: '2026-09-07T00:00:00Z',
@@ -63,6 +74,9 @@ describe('toProject', () => {
       status: 'active',
       adAccountIds: ['act_123'],
       campaignIds: ['c1', 'c2'],
+      leadUserId: USER,
+      startsOn: '2026-09-01',
+      endsOn: '2026-12-31',
       createdBy: USER,
       createdAt: '2026-09-07T00:00:00Z',
       updatedAt: '2026-09-07T00:00:00Z',
@@ -81,6 +95,37 @@ describe('toProject', () => {
   it('refuses a status outside the check constraint', () => {
     expect(() => toProject({ ...row, status: 'deleted' })).toThrow();
   });
+
+  // Every project created before 2026-09-08 predates these columns, and a projection that
+  // omits them hands back undefined. They must land as null, not as undefined, or the
+  // expiry guard reads `undefined >= today` and silently withholds every brief.
+  it('maps missing lead and dates to null', () => {
+    const project = toProject({
+      ...row,
+      lead_user_id: undefined,
+      starts_on: undefined,
+      ends_on: undefined,
+    });
+    expect(project.leadUserId).toBeNull();
+    expect(project.startsOn).toBeNull();
+    expect(project.endsOn).toBeNull();
+  });
+});
+
+describe('projectBriefIsAuthoritative', () => {
+  it('treats a project with no end date as open-ended', () => {
+    expect(projectBriefIsAuthoritative({ endsOn: null }, '2030-01-01')).toBe(true);
+  });
+
+  // Inclusive: a campaign that ends today is still running today. The off-by-one here would
+  // withhold a brief on the last day of the campaign it was written for.
+  it('is authoritative on the end date itself', () => {
+    expect(projectBriefIsAuthoritative({ endsOn: '2026-09-08' }, '2026-09-08')).toBe(true);
+  });
+
+  it('stops being authoritative the day after', () => {
+    expect(projectBriefIsAuthoritative({ endsOn: '2026-09-08' }, '2026-09-09')).toBe(false);
+  });
 });
 
 describe('toProjectMembership', () => {
@@ -89,12 +134,12 @@ describe('toProjectMembership', () => {
       toProjectMembership({
         project_id: PROJECT,
         brand_id: BRAND,
-        entity_type: 'jaina_session',
-        entity_id: 'bench:jaina:abc',
+        entity_type: 'brand_document',
+        entity_id: 'bench:doc:abc',
         added_by: null,
         added_at: '2026-09-07T00:00:00Z',
       }).entityId,
-    ).toBe('bench:jaina:abc');
+    ).toBe('bench:doc:abc');
   });
 });
 

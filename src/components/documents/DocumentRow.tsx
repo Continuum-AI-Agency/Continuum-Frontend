@@ -134,6 +134,7 @@ export function DocumentRow({
   onDownload,
   onRemove,
   onCategoryChange,
+  brandId,
 }: {
   doc: DocumentView;
   isPinned: boolean;
@@ -145,6 +146,8 @@ export function DocumentRow({
   onDownload: (storagePath: string) => Promise<void>;
   onRemove: (documentId: string) => void;
   onCategoryChange?: (documentId: string, category: DocumentCategory) => void;
+  /** Absent in onboarding, where no brand exists yet — the project submenu hides itself. */
+  brandId?: string;
 }) {
   const reduceMotion = useReducedMotion();
   const label = describeStep(doc);
@@ -254,7 +257,7 @@ export function DocumentRow({
               : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
           )}
         >
-          <DocumentRowActions doc={doc} actions={actions} />
+          <DocumentRowActions doc={doc} actions={actions} brandId={brandId} />
         </div>
         {/* Ingestion status badge — independent of preview */}
         <StatusBadge tone={statusTone} icon={statusIcon} spin={label.tone === 'progress'} />

@@ -116,6 +116,13 @@ export function LibraryViewer({
   // The project vocabulary the filter section and the bulk "tag into project" control both
   // read. One fetch for the page: two hooks would be two identical round-trips.
   const { projects } = useProjects(brandId);
+  // A new project filters the Library to zero rows, and the generic "No media yet." reads as
+  // a broken Library rather than as an empty scope — the first thing a user sees after
+  // creating their first project should not look like a bug. Named, so the message can say
+  // WHICH project is empty when exactly one is selected.
+  const filteredProjectNames = initialBrowseQuery.projectIds
+    .map((id) => projects.find((project) => project.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
   const [optimisticSort, setOptimisticSort] = useOptimistic(initialBrowseQuery.sort);
   const [optimisticLayout, setOptimisticLayout] = useOptimistic(initialBrowseQuery.layout);
   const [optimisticReviewStatuses, setOptimisticReviewStatuses] = useOptimistic(
@@ -173,6 +180,13 @@ export function LibraryViewer({
   const dragDepth = useRef(0);
 
   const isSearching = searchResults !== null;
+  const emptyHint = isSearching
+    ? 'No results. Try a different search.'
+    : filteredProjectNames.length === 1
+      ? `Nothing in ${filteredProjectNames[0]} yet. Select assets and use Tag to add them.`
+      : filteredProjectNames.length > 1
+        ? 'Nothing in these projects yet. Select assets and use Tag to add them.'
+        : undefined;
   const displayedAssets = isSearching ? searchResults!.map((r) => r.asset) : assets;
   const activeCollection = selectedCollectionId
     ? initialCollections.find((c) => c.id === selectedCollectionId)
@@ -771,7 +785,7 @@ export function LibraryViewer({
                   assets={displayedAssets}
                   showBoundingBoxes={showBoundingBoxes}
                   captionStyle={captionStyle}
-                  emptyHint={isSearching ? 'No results. Try a different search.' : undefined}
+                  emptyHint={emptyHint}
                   onLoadMore={isSearching ? undefined : loadMore}
                   hasMore={isSearching ? false : hasMore}
                   loadingMore={loadingMore}

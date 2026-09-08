@@ -91,7 +91,8 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 });
   }
-  const { brandId, name, brief, color, adAccountIds, campaignIds } = parsed.data;
+  const { brandId, name, brief, color, adAccountIds, campaignIds, leadUserId, startsOn, endsOn } =
+    parsed.data;
 
   const caller = await authorize(brandId);
   if (caller instanceof NextResponse) return caller;
@@ -106,6 +107,12 @@ export async function POST(request: Request) {
       color: color ?? null,
       ad_account_ids: adAccountIds,
       campaign_ids: campaignIds,
+      // The creator leads unless someone says otherwise. A lead that defaults to nobody is
+      // how a column ends up unused: "my projects" would be empty for everyone on day one,
+      // and nobody would go back and fill it in.
+      lead_user_id: leadUserId ?? caller.userId,
+      starts_on: startsOn ?? null,
+      ends_on: endsOn ?? null,
       created_by: caller.userId,
     })
     .select('*')
@@ -144,6 +151,9 @@ export async function PATCH(request: Request) {
   if ('status' in changes) update['status'] = changes.status;
   if ('adAccountIds' in changes) update['ad_account_ids'] = changes.adAccountIds;
   if ('campaignIds' in changes) update['campaign_ids'] = changes.campaignIds;
+  if ('leadUserId' in changes) update['lead_user_id'] = changes.leadUserId;
+  if ('startsOn' in changes) update['starts_on'] = changes.startsOn;
+  if ('endsOn' in changes) update['ends_on'] = changes.endsOn;
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 422 });
   }
