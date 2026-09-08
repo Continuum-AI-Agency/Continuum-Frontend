@@ -62,6 +62,17 @@ export function useProjectMemberships(
   return {
     memberships: (query.data ?? []) as ProjectMembership[],
     isLoading: query.isLoading,
+    /**
+     * True while the cached list is being revalidated.
+     *
+     * Exposed because a control that TOGGLES on this data cannot safely act while it is
+     * stale. `staleTime` is 30s and the query unmounts whenever the menu closes, so a
+     * reopened menu renders the previous answer instantly and refetches behind it — and a
+     * click in that window reads "not tagged" for something just tagged, and calls the
+     * idempotent upsert again. No error, no console entry, and a toast that says "Added"
+     * where the user expected "Removed".
+     */
+    isFetching: query.isFetching,
     error: query.error as Error | null,
   };
 }

@@ -9,11 +9,17 @@
 //
 // Selection IS persisted, per brand, in localStorage. It deliberately was not, on the
 // argument that a stale scope silently narrowing every read is worse than re-selecting. The
-// argument holds; the conclusion did not follow. The chip sits in the header at all times, so
-// the scope is not silent — and the provider already drops a selection whose project has been
-// archived or deleted, which is the actual staleness this feared. What amnesia bought instead
-// was re-selecting on every page load, which is a per-navigation tax on a feature whose whole
-// promise is that you set a scope once.
+// argument holds; what amnesia bought instead was re-selecting on every page load — a
+// per-navigation tax on a feature whose whole promise is that you set a scope once.
+//
+// What makes persistence safe is the staleness guard below: a selection whose project has
+// been archived or deleted is dropped AND forgotten, so it cannot quietly narrow anything.
+//
+// It is NOT made safe by the chip being visible, and an earlier version of this comment
+// claimed it was. The chip is mounted in one place — JainaHeader — inside a `hidden sm:flex`,
+// so it does not exist on the Library, anywhere in the app shell, or on any viewport under
+// 640px. On a phone the persisted scope narrows the agent's evidence with nothing on screen
+// saying so. That is a real gap; do not re-add the sentence that papers over it.
 //
 // The old state was also incoherent: a BroadcastChannel carried the selection to a DIFFERENT
 // tab while refusing to survive a reload of the SAME one. Both halves now agree.

@@ -23,21 +23,28 @@ import type { DocumentView } from './types';
  *
  * A per-row toggle rather than a bulk toolbar because the document list has no selection
  * model at all, and adding one to gain a second way to do the same thing would be more
- * surface for less clarity. It also gives `untag` its first caller in the codebase: the
- * DELETE handler existed, was tested, and was unreachable, so a mis-tag was permanent.
+ * surface for less clarity. It is also one of the two first callers `untag` has ever had —
+ * the Library toolbar's Untag button is the other — so before them the DELETE handler
+ * existed, was tested, and was unreachable, and a mis-tag was permanent.
  */
 export function DocumentProjectSubmenu({ brandId, doc }: { brandId: string; doc: DocumentView }) {
   const { projects, isLoading } = useProjects(brandId);
-  const { memberships } = useProjectMemberships(brandId, {
+  const { memberships, isFetching: membershipsFetching } = useProjectMemberships(brandId, {
     entityId: doc.id,
     entityType: 'brand_document',
   });
   const { tag, untag } = useProjectMutations(brandId);
 
   const tagged = new Set(memberships.map((membership) => membership.projectId));
-  const busy = tag.isPending || untag.isPending;
+  // A toggle must not act on a list it is in the middle of revalidating. Without this the
+  // second click on a just-tagged project reads a stale "not tagged", calls the idempotent
+  // upsert again, and the row survives — a mis-tag that cannot be undone, reported as
+  // success. It is only visible when someone reopens the menu quickly, which is exactly
+  // what undoing a mistake looks like.
+  const busy = tag.isPending || untag.isPending || membershipsFetching;
 
   const toggle = async (project: Project) => {
+    if (busy) return;
     const isTagged = tagged.has(project.id);
     const mutation = isTagged ? untag : tag;
     try {

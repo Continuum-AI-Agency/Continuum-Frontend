@@ -69,6 +69,7 @@ export function LibraryBulkToolbar({
   currentCollectionId,
   onClear,
   onCompleted,
+  onProjectCreatedAction,
 }: {
   brandId: string;
   assetIds: string[];
@@ -78,6 +79,12 @@ export function LibraryBulkToolbar({
   currentCollectionId: string | null;
   onClear: () => void;
   onCompleted: () => void;
+  /**
+   * Called with the id of a project created inline, so the viewer can point the Library at
+   * it. Without this the whole create-and-tag gesture ends with the screen unchanged: the
+   * project exists, the assets are in it, and nothing on the page shows either.
+   */
+  onProjectCreatedAction?: (projectId: string) => void;
 }) {
   const [collectionId, setCollectionId] = useState('');
   const [projectId, setProjectId] = useState('');
@@ -126,6 +133,9 @@ export function LibraryBulkToolbar({
         entityIds: assetIds,
       });
       setProjectId(project.id);
+      // Show the thing that was just made. Four clicks that leave the page identical read
+      // as "did that work?", and the answer lives two more gestures deep in a popover.
+      onProjectCreatedAction?.(project.id);
     });
     setNewProjectOpen(false);
     setNewProjectName('');

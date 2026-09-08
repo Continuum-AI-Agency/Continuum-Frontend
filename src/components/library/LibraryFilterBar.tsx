@@ -428,18 +428,30 @@ function AdvancedFilterPopover({
             </FilterSection>
           ) : null}
 
-          {onProjectIdsChange && projectOptions.some((project) => matches(project.name)) ? (
+          {/* Two different empties, and only one of them should hide the section. NO PROJECTS
+              AT ALL still renders, with a line saying where they come from: self-hiding at
+              zero is the bug that made this feature invisible in production, and the filter
+              bar had the same one as the bulk toolbar. No project matching the SEARCH text
+              hides, because that is what a search does and every sibling section agrees. */}
+          {onProjectIdsChange &&
+          (projectOptions.length === 0 || projectOptions.some((project) => matches(project.name))) ? (
             <FilterSection label="Project">
-              {projectOptions
-                .filter((project) => matches(project.name))
-                .map((project) => (
-                  <FilterChoice
-                    key={project.id}
-                    label={project.name}
-                    selected={selectedProjectIds.includes(project.id)}
-                    onClick={() => onProjectIdsChange(toggleValue(selectedProjectIds, project.id))}
-                  />
-                ))}
+              {projectOptions.length === 0 ? (
+                <span className="text-xs text-muted-foreground">
+                  No projects yet — select assets and use Tag, or add one in Settings.
+                </span>
+              ) : (
+                projectOptions
+                  .filter((project) => matches(project.name))
+                  .map((project) => (
+                    <FilterChoice
+                      key={project.id}
+                      label={project.name}
+                      selected={selectedProjectIds.includes(project.id)}
+                      onClick={() => onProjectIdsChange(toggleValue(selectedProjectIds, project.id))}
+                    />
+                  ))
+              )}
             </FilterSection>
           ) : null}
 

@@ -722,6 +722,7 @@ export function LibraryViewer({
                 customFields={customFields ?? []}
                 currentCollectionId={selectedCollectionId}
                 onClear={() => setSelectedAssetIds(new Set())}
+                onProjectCreatedAction={(projectId) => pushFilters({ projectIds: [projectId] })}
                 onCompleted={() => {
                   setAssetRevision((revision) => revision + 1);
                   router.refresh();
@@ -754,6 +755,18 @@ export function LibraryViewer({
                   onChanged={() => setAssetRevision((revision) => revision + 1)}
                 />
               ) : optimisticLayout === 'board' ? (
+                <>
+                  {/* Board reads /api/library/assets, which has no project support at all —
+                      it is a different endpoint from the grid's browse RPC. So a project
+                      filter set here changes the URL, renders its chip, and narrows nothing.
+                      Saying so is the honest half of the fix; making it work needs
+                      p_project_ids on the listing route, which is not this change. */}
+                  {initialBrowseQuery.projectIds.length > 0 ? (
+                    <p className="rounded-md border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                      Board view doesn&apos;t filter by project yet — switch to Grid to see
+                      only this project&apos;s assets.
+                    </p>
+                  ) : null}
                 <LibraryBoardView
                   brandId={brandId}
                   filters={{
@@ -779,6 +792,7 @@ export function LibraryViewer({
                   groupBy={initialBrowseQuery.boardGroupBy}
                   onGroupByChange={(boardGroupBy) => pushFilters({ boardGroupBy })}
                 />
+                </>
               ) : (
                 <MediaGrid
                   brandId={brandId}

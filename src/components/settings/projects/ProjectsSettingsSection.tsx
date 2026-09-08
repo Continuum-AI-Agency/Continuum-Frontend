@@ -120,6 +120,9 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
               onLeadAction={setLead}
             />
           ) : null}
+          {/* The solo case is the common one: every project is yours, `theirs` is empty, and
+              rendering "Other projects" over an empty body is a heading pointing at nothing. */}
+          {mine.length === 0 || theirs.length > 0 ? (
           <ProjectRows
             // Only worth a second heading once there is something to contrast it with.
             heading={mine.length > 0 ? 'Other projects' : 'Projects'}
@@ -135,6 +138,7 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
             onStatusAction={(project) => setStatus(project, 'archived')}
             onLeadAction={setLead}
           />
+          ) : null}
           {archived.length > 0 ? (
             <ProjectRows
               heading="Archived"
