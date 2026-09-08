@@ -39,6 +39,23 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
   const mine = user ? activeProjects.filter((project) => project.leadUserId === user.id) : [];
   const theirs = activeProjects.filter((project) => !mine.includes(project));
 
+  /**
+   * Take the lead, or step down.
+   *
+   * The only lead change reachable without a brand-members directory, which this app does
+   * not have. It is enough to make the column mean something `created_by` cannot: you can
+   * lead a project someone else created, and you can hand one back. Assigning a NAMED
+   * colleague still needs a member picker — see the note in the register.
+   */
+  async function setLead(project: Project, lead: string | null) {
+    setBusyId(project.id);
+    try {
+      await update.mutateAsync({ projectId: project.id, leadUserId: lead });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function setStatus(project: Project, status: 'active' | 'archived') {
     setBusyId(project.id);
     try {
@@ -97,8 +114,10 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
               projects={mine}
               emptyLabel=""
               busyId={busyId}
+              currentUserId={user?.id ?? null}
               onEditAction={(project) => setScreen({ kind: 'form', project })}
               onStatusAction={(project) => setStatus(project, 'archived')}
+              onLeadAction={setLead}
             />
           ) : null}
           <ProjectRows
@@ -111,8 +130,10 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
                 : 'No projects yet. Create one to scope a direction — a brief, a colour, and the ad accounts it covers.'
             }
             busyId={busyId}
+            currentUserId={user?.id ?? null}
             onEditAction={(project) => setScreen({ kind: 'form', project })}
             onStatusAction={(project) => setStatus(project, 'archived')}
+            onLeadAction={setLead}
           />
           {archived.length > 0 ? (
             <ProjectRows
@@ -156,15 +177,19 @@ function ProjectRows({
   projects,
   emptyLabel,
   busyId,
+  currentUserId,
   onEditAction,
   onStatusAction,
+  onLeadAction,
 }: {
   heading: string;
   projects: Project[];
   emptyLabel: string;
   busyId: string | null;
+  currentUserId?: string | null;
   onEditAction: (project: Project) => void;
   onStatusAction: (project: Project) => void;
+  onLeadAction?: (project: Project, lead: string | null) => void;
 }) {
   const archivedGroup = heading === 'Archived';
 
@@ -200,6 +225,23 @@ function ProjectRows({
               </span>
             </button>
             <div className="flex shrink-0 items-center gap-0.5">
+              {onLeadAction && currentUserId && !archivedGroup ? (
+                <button
+                  type="button"
+                  disabled={busyId === project.id}
+                  aria-label={
+                    project.leadUserId === currentUserId
+                      ? `Step down as lead of ${project.name}`
+                      : `Take the lead of ${project.name}`
+                  }
+                  onClick={() =>
+                    onLeadAction(project, project.leadUserId === currentUserId ? null : currentUserId)
+                  }
+                  className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                >
+                  {project.leadUserId === currentUserId ? 'You lead' : 'Take lead'}
+                </button>
+              ) : null}
               <button
                 type="button"
                 aria-label={`Edit ${project.name}`}
