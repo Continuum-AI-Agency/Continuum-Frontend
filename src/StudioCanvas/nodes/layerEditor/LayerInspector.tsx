@@ -69,10 +69,23 @@ const ORDER_BUTTONS: { move: LayerMove; label: string; Icon: typeof ChevronsUp }
 export interface LayerInspectorProps {
   frame: Frame;
   onFrameChange: (width: number, height: number) => void;
-  /** The single selected layer, or null when zero or many are selected. */
+  onFrameCommit: (width: number, height: number) => void;
+  /**
+   * The layer whose values are DISPLAYED — the first selected one, not necessarily the
+   * only one. Edits go to the whole selection; `selectionCount` says how many that is.
+   */
   layer: LayerEditorLayer | null;
   selectionCount: number;
+  /**
+   * In-flight value. A scrub or a typed digit fires this per sample.
+   *
+   * Paired with `onLayerCommit` for the same reason the stage has `onBegin`/`onPreview`:
+   * a 40px scrub of X used to push 40 documents and evict the 50-entry history in one
+   * gesture. `ClipInspector` splits them the same way.
+   */
   onLayerChange: (patch: Partial<LayerEditorLayer>) => void;
+  /** Pointer released, or the field blurred: settle the edit. */
+  onLayerCommit: (patch: Partial<LayerEditorLayer>) => void;
   onAlign: (edge: AlignEdge) => void;
   onOrder: (move: LayerMove) => void;
   onFlip: (axis: 'x' | 'y') => void;
@@ -81,9 +94,11 @@ export interface LayerInspectorProps {
 export function LayerInspector({
   frame,
   onFrameChange,
+  onFrameCommit,
   layer,
   selectionCount,
   onLayerChange,
+  onLayerCommit,
   onAlign,
   onOrder,
   onFlip,
@@ -97,8 +112,10 @@ export function LayerInspector({
         <Select
           value={`${frame.width}x${frame.height}`}
           onValueChange={(value) => {
+            // A preset is one discrete choice, so it settles immediately — unlike the
+            // W/H scrubs below, which stream through onChange and settle on release.
             const [width, height] = value.split('x').map(Number);
-            onFrameChange(width, height);
+            onFrameCommit(width, height);
           }}
         >
           <SelectTrigger className="h-7 text-2xs" aria-label="Frame preset">
@@ -122,12 +139,14 @@ export function LayerInspector({
             value={frame.width}
             step={16}
             onChange={(width) => onFrameChange(width, frame.height)}
+            onCommit={(width) => onFrameCommit(width, frame.height)}
           />
           <NumberScrubField
             label="Height"
             value={frame.height}
             step={16}
             onChange={(height) => onFrameChange(frame.width, height)}
+            onCommit={(height) => onFrameCommit(frame.width, height)}
           />
         </div>
         <p className="text-3xs text-muted-foreground">
@@ -163,7 +182,7 @@ export function LayerInspector({
         </div>
       </section>
 
-      {layer ? (
+      {layer && selectionCount === 1 ? (
         <>
           <section className="flex flex-col gap-1.5">
             <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -174,11 +193,13 @@ export function LayerInspector({
                 label="X"
                 value={layer.position.x}
                 onChange={(x) => onLayerChange({ position: { ...layer.position, x } })}
+                onCommit={(x) => onLayerCommit({ position: { ...layer.position, x } })}
               />
               <NumberScrubField
                 label="Y"
                 value={layer.position.y}
                 onChange={(y) => onLayerChange({ position: { ...layer.position, y } })}
+                onCommit={(y) => onLayerCommit({ position: { ...layer.position, y } })}
               />
               <NumberScrubField
                 label="Scale X"
@@ -186,6 +207,9 @@ export function LayerInspector({
                 suffix="%"
                 onChange={(percent) =>
                   onLayerChange({ scale: { ...layer.scale, x: percent / 100 } })
+                }
+                onCommit={(percent) =>
+                  onLayerCommit({ scale: { ...layer.scale, x: percent / 100 } })
                 }
               />
               <NumberScrubField
@@ -195,12 +219,16 @@ export function LayerInspector({
                 onChange={(percent) =>
                   onLayerChange({ scale: { ...layer.scale, y: percent / 100 } })
                 }
+                onCommit={(percent) =>
+                  onLayerCommit({ scale: { ...layer.scale, y: percent / 100 } })
+                }
               />
               <NumberScrubField
                 label="Rotation"
                 value={layer.rotation}
                 suffix="°"
                 onChange={(rotation) => onLayerChange({ rotation })}
+                onCommit={(rotation) => onLayerCommit({ rotation })}
               />
               <div className="flex items-end gap-1">
                 <Tooltip>
@@ -250,11 +278,13 @@ export function LayerInspector({
                 label="Anchor X"
                 value={layer.anchor.x}
                 onChange={(x) => onLayerChange({ anchor: { ...layer.anchor, x } })}
+                onCommit={(x) => onLayerCommit({ anchor: { ...layer.anchor, x } })}
               />
               <NumberScrubField
                 label="Anchor Y"
                 value={layer.anchor.y}
                 onChange={(y) => onLayerChange({ anchor: { ...layer.anchor, y } })}
+                onCommit={(y) => onLayerCommit({ anchor: { ...layer.anchor, y } })}
               />
             </div>
             <div className="flex items-center justify-between gap-1">
@@ -267,7 +297,7 @@ export function LayerInspector({
                 variant="ghost"
                 className="h-6 shrink-0 text-3xs"
                 onClick={() =>
-                  onLayerChange({
+                  onLayerCommit({
                     anchor: { x: layer.sourceWidth / 2, y: layer.sourceHeight / 2 },
                   })
                 }
@@ -276,10 +306,14 @@ export function LayerInspector({
               </Button>
             </div>
           </section>
+        </>
+      ) : null}
 
+      {layer ? (
+        <>
           <section className="flex flex-col gap-1.5">
             <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-              Appearance
+              {selectionCount > 1 ? `Appearance · ${selectionCount} layers` : 'Appearance'}
             </h3>
             <div className="flex items-center gap-2">
               <Label className="w-14 shrink-0 text-3xs text-muted-foreground">Opacity</Label>
@@ -290,6 +324,7 @@ export function LayerInspector({
                 step={1}
                 value={[Math.round(layer.opacity * 100)]}
                 onValueChange={([percent]) => onLayerChange({ opacity: percent / 100 })}
+                onValueCommitted={([percent]) => onLayerCommit({ opacity: percent / 100 })}
               />
               <span className="w-9 shrink-0 text-right text-2xs tabular-nums">
                 {Math.round(layer.opacity * 100)}%
@@ -342,11 +377,7 @@ export function LayerInspector({
           </section>
         </>
       ) : (
-        <p className="px-1 text-2xs text-muted-foreground">
-          {selectionCount > 1
-            ? `${selectionCount} layers selected — alignment and ordering apply to all of them.`
-            : 'Select a layer to edit its transform.'}
-        </p>
+        <p className="px-1 text-2xs text-muted-foreground">Select a layer to edit it.</p>
       )}
     </div>
   );

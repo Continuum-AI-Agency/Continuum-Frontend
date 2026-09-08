@@ -85,6 +85,7 @@ export function LayerEditorBlock({
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const brandId = useStudioStore((state) => state.brandId);
+  const setKeyboardScope = useStudioStore((state) => state.setKeyboardScope);
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   const { getNodes, getEdges } = useReactFlow();
   const edges = useEdges();
@@ -106,6 +107,22 @@ export function LayerEditorBlock({
   const inputConnections = edges.filter(
     (edge) => edge.target === id && (edge.targetHandle ?? null) === LAYER_EDITOR_IMAGE_INPUT_HANDLE,
   ).length;
+
+  /**
+   * Claim the keyboard while the editor is open, as the Video Editor already does.
+   *
+   * Without this the canvas-level handlers never stand down: Delete removed the selected
+   * layer AND deleted this whole node out from under the dialog, Cmd+Z undid the layer
+   * edit and a canvas action together, and a bare `v`/`h` silently flipped the canvas
+   * between select and pan mode while the user was editing.
+   */
+  const onOpenChange = useCallback(
+    (next: boolean) => {
+      setKeyboardScope(next ? 'modal' : 'canvas');
+      setOpen(next);
+    },
+    [setKeyboardScope],
+  );
 
   const onPersist = useCallback(
     (doc: LayerDoc, aspectRatio: string) => {
@@ -202,7 +219,7 @@ export function LayerEditorBlock({
                       variant="secondary"
                       className="nodrag h-6 px-2 text-2xs"
                       onMouseDown={(event) => event.stopPropagation()}
-                      onClick={() => setOpen(true)}
+                      onClick={() => onOpenChange(true)}
                     >
                       <SquarePen className="mr-1 h-3 w-3" /> Edit
                     </Button>
@@ -261,7 +278,7 @@ export function LayerEditorBlock({
         <ContextMenuContent className="w-52">
           <ContextMenuLabel>Layer Editor</ContextMenuLabel>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => setOpen(true)}>
+          <ContextMenuItem onClick={() => onOpenChange(true)}>
             <SquarePen className="mr-2 h-4 w-4" />
             Open editor
           </ContextMenuItem>
@@ -280,7 +297,7 @@ export function LayerEditorBlock({
 
       <LayerEditorDialog
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={onOpenChange}
         frame={frame}
         layers={layers}
         sources={sources}

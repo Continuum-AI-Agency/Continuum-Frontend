@@ -33,6 +33,14 @@ export type LayerDocAction =
   | { type: 'begin' }
   /** Pointer-move: replace `present` only. Never grows `past`. */
   | { type: 'preview'; doc: LayerDoc }
+  /**
+   * Abandon the gesture `begin` opened: restore the banked document and DROP the entry.
+   *
+   * Deliberately not `undo`. Undo leaves the abandoned state on `future`, so Escaping a
+   * drag and then pressing Cmd+Shift+Z would resurrect the move the user just cancelled.
+   * A cancelled gesture must leave no trace in either direction.
+   */
+  | { type: 'cancel' }
   | { type: 'undo' }
   | { type: 'redo' }
   /** Dialog open, or the node's data changed underneath us. Clears the history. */
@@ -66,6 +74,14 @@ export function layerDocReducer(state: LayerHistory, action: LayerDocAction): La
       };
     case 'preview':
       return { ...state, present: action.doc };
+    case 'cancel': {
+      if (state.past.length === 0) return state;
+      return {
+        present: state.past[state.past.length - 1],
+        past: state.past.slice(0, -1),
+        future: state.future,
+      };
+    }
     case 'undo': {
       if (state.past.length === 0) return state;
       const previous = state.past[state.past.length - 1];

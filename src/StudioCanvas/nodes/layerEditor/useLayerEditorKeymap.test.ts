@@ -51,6 +51,8 @@ interface Dispatched {
   deletes: number;
   deselects: number;
   selectAlls: number;
+  duplicates: number;
+  repeats: boolean[];
 }
 
 function mount(enabled = true) {
@@ -62,12 +64,20 @@ function mount(enabled = true) {
     deletes: 0,
     deselects: 0,
     selectAlls: 0,
+    duplicates: 0,
+    repeats: [],
   };
 
   function Harness() {
     useLayerEditorKeymap({
       enabled,
-      onNudge: (dx, dy) => log.nudges.push([dx, dy]),
+      onNudge: (dx, dy, repeat) => {
+        log.nudges.push([dx, dy]);
+        log.repeats.push(repeat);
+      },
+      onDuplicate: () => {
+        log.duplicates += 1;
+      },
       onUndo: () => {
         log.undos += 1;
       },
@@ -159,5 +169,25 @@ describe('useLayerEditorKeymap', () => {
 
     expect(log.nudges).toEqual([]);
     expect(log.undos).toBe(0);
+  });
+});
+
+describe('duplicate and held-key nudges', () => {
+  it('Cmd+D duplicates the selection', () => {
+    const { log } = mount();
+    press({ key: 'd', metaKey: true });
+    expect(log.duplicates).toBe(1);
+  });
+
+  it('a held arrow reports `repeat`, so the caller can coalesce it', () => {
+    const { log } = mount();
+    press({ key: 'ArrowRight' });
+    press({ key: 'ArrowRight', repeat: true });
+    press({ key: 'ArrowRight', repeat: true });
+
+    expect(log.nudges).toHaveLength(3);
+    // The first press commits; the repeats only preview. Without this distinction two
+    // seconds of key-repeat evicted the entire 50-entry history.
+    expect(log.repeats).toEqual([false, true, true]);
   });
 });

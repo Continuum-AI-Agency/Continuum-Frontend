@@ -24,18 +24,20 @@ import {
   loadLayerImages,
   measureSource,
 } from '../../utils/layers/compositeLayers';
-import { DEFAULT_SNAP_GRID, type Frame, writeFrame } from '../../utils/layers/frameModel';
+import { type Frame, writeFrame } from '../../utils/layers/frameModel';
 import {
   canRedo,
   canUndo,
   initialHistory,
   type LayerDoc,
+  type LayerDocAction,
   layerDocReducer,
 } from '../../utils/layers/layerDocReducer';
 import {
   type AlignEdge,
   alignLayers,
   createLayer,
+  duplicateLayer,
   flipLayers,
   type LayerMove,
   moveLayer,
@@ -90,11 +92,23 @@ export function LayerEditorDialog({
   onPersist,
   onCompose,
 }: LayerEditorDialogProps) {
-  const [history, dispatch] = useReducer(
+  const [history, rawDispatch] = useReducer(
     layerDocReducer,
     { frame, layers: [...layers] },
     initialHistory,
   );
+
+  /**
+   * Has anything actually been edited since the document was seeded?
+   *
+   * `reset` produces a fresh `doc` identity, so without this an open-and-close with no
+   * edit still wrote node data and triggered a whole-canvas autosave.
+   */
+  const dirtyRef = useRef(false);
+  const dispatch = useCallback((action: LayerDocAction) => {
+    dirtyRef.current = action.type !== 'reset';
+    rawDispatch(action);
+  }, []);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [composing, setComposing] = useState(false);
@@ -188,23 +202,110 @@ export function LayerEditorDialog({
 
   const onOrder = useCallback(
     (move: LayerMove) => {
-      if (!onlySelected) return;
-      commitLayers(moveLayer(doc.layers, onlySelected.id, move));
+      if (selectedIds.length === 0) return;
+      // Applied one at a time so a multi-selection keeps its internal order: sending
+      // three layers to the back leaves them in the same sequence relative to each other.
+      let next = doc.layers;
+      const ordered = move === 'top' || move === 'up' ? selectedIds : [...selectedIds].reverse();
+      for (const id of ordered) next = moveLayer(next, id, move);
+      commitLayers(next);
     },
-    [commitLayers, doc.layers, onlySelected],
+    [commitLayers, doc.layers, selectedIds],
   );
 
-  const onFrameChange = useCallback(
-    (width: number, height: number) => {
-      const { frame: next } = writeFrame(width, height);
-      commit({ ...doc, frame: next });
+  /**
+   * A scrub is a gesture, not a keystroke.
+   *
+   * `begin` once on the first sample, `preview` per sample, and the release only settles —
+   * exactly the stage's drag shape, so dragging a layer 40px and scrubbing X by 40 cost
+   * the same single undo step. A typed value takes the same path and settles on blur.
+   */
+  const scrubbingRef = useRef(false);
+
+  const previewDoc = useCallback(
+    (next: LayerDoc) => {
+      if (!scrubbingRef.current) {
+        scrubbingRef.current = true;
+        dispatch({ type: 'begin' });
+      }
+      dispatch({ type: 'preview', doc: next });
     },
-    [commit, doc],
+    [dispatch],
+  );
+
+  const settleDoc = useCallback(
+    (next: LayerDoc) => {
+      if (scrubbingRef.current) {
+        scrubbingRef.current = false;
+        dispatch({ type: 'preview', doc: next });
+        return;
+      }
+      dispatch({ type: 'commit', doc: next });
+    },
+    [dispatch],
+  );
+
+  const framed = useCallback(
+    (width: number, height: number): LayerDoc => ({
+      ...doc,
+      frame: writeFrame(width, height).frame,
+    }),
+    [doc],
+  );
+
+  /**
+   * A patch reaches every SELECTED layer, not just the first one.
+   *
+   * Which is what makes opacity and blend mode settable on a multi-selection. The
+   * geometry fields never take this path with more than one selected — the inspector
+   * only renders Transform and Anchor for a single layer, because a shared X is not a
+   * meaningful thing to type. Locked layers are skipped, as in every other geometric op.
+   */
+  const patched = useCallback(
+    (patch: Partial<LayerEditorLayer>): LayerDoc => ({
+      ...doc,
+      layers: doc.layers.map((layer) =>
+        selectedIds.includes(layer.id) && !layer.locked ? { ...layer, ...patch } : layer,
+      ),
+    }),
+    [doc, selectedIds],
+  );
+
+  /**
+   * A held arrow key is ONE gesture.
+   *
+   * The first press banks the document and every repeat only previews, so releasing the
+   * key leaves a single undo step — the same `begin`/`preview` split the stage and the
+   * inspector already use.
+   */
+  const nudgingRef = useRef(false);
+  const onNudge = useCallback(
+    (dx: number, dy: number, repeat: boolean) => {
+      const next = { ...doc, layers: nudgeLayers(doc.layers, selectedIds, dx, dy) };
+      if (repeat) {
+        if (!nudgingRef.current) {
+          nudgingRef.current = true;
+          dispatch({ type: 'begin' });
+        }
+        dispatch({ type: 'preview', doc: next });
+        return;
+      }
+      nudgingRef.current = false;
+      dispatch({ type: 'commit', doc: next });
+    },
+    [dispatch, doc, selectedIds],
   );
 
   useLayerEditorKeymap({
     enabled: open,
-    onNudge: (dx, dy) => commitLayers(nudgeLayers(doc.layers, selectedIds, dx, dy)),
+    onNudge,
+    onDuplicate: () => {
+      if (!onlySelected) return;
+      const next = duplicateLayer(doc.layers, onlySelected.id);
+      const index = doc.layers.findIndex((layer) => layer.id === onlySelected.id);
+      commitLayers(next);
+      setSelectedIds([next[index + 1].id]);
+    },
     onUndo: () => dispatch({ type: 'undo' }),
     onRedo: () => dispatch({ type: 'redo' }),
     onOrder,
@@ -226,15 +327,34 @@ export function LayerEditorDialog({
    * persisting only on commit would lose every drag. Debounced, because the alternative
    * is an `updateNodeData` per pointer sample, which re-renders the canvas node ~60
    * times a second for the length of the drag.
+   *
+   * A pending write is FLUSHED when the editor closes, never cleared. Clearing it is
+   * what silently ate any edit made in the last 150 ms before close — release a drag,
+   * hit Escape, lose the move. Same distinction, and same reason, as `useDebouncedSave`.
    */
+  const pendingRef = useRef(false);
+  const flushRef = useRef<() => void>(() => {});
+  flushRef.current = () => {
+    pendingRef.current = false;
+    onPersist(doc, writeFrame(doc.frame.width, doc.frame.height).aspectRatio);
+  };
+
   useEffect(() => {
-    if (!open) return;
-    const timer = setTimeout(
-      () => onPersist(doc, writeFrame(doc.frame.width, doc.frame.height).aspectRatio),
-      PERSIST_DEBOUNCE_MS,
-    );
+    if (!open || !dirtyRef.current) return;
+    pendingRef.current = true;
+    const timer = setTimeout(() => flushRef.current(), PERSIST_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [doc, open, onPersist]);
+  }, [doc, open]);
+
+  // Close and unmount are the two ways the debounce above stops being re-armed. Both
+  // have to settle it. The effect body covers close; the cleanup covers unmount, which
+  // the canvas causes on its own by culling off-screen nodes.
+  useEffect(() => {
+    if (!open && pendingRef.current) flushRef.current();
+    return () => {
+      if (pendingRef.current) flushRef.current();
+    };
+  }, [open]);
 
   const compose = useCallback(async () => {
     setComposing(true);
@@ -272,7 +392,22 @@ export function LayerEditorDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next, details) => {
+        // Escape with layers selected clears the selection instead of throwing the whole
+        // editor away. Decided here rather than in the keymap because Base UI's dismiss
+        // listens on `document` and the keymap listens on `window` — the keymap is the
+        // last thing to see the key and can never out-vote it. `cancel()` is Base UI's
+        // own supported way to refuse.
+        if (!next && details.reason === 'escape-key' && selectedIds.length > 0) {
+          details.cancel();
+          setSelectedIds([]);
+          return;
+        }
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="flex h-[92vh] max-w-[96vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-[96vw]">
         <TooltipProvider>
           <DialogHeader className="flex flex-row items-center justify-between space-y-0 border-b border-border/60 px-4 py-3 text-left">
@@ -292,9 +427,9 @@ export function LayerEditorDialog({
                 <Switch
                   checked={snapEnabled}
                   onCheckedChange={setSnapEnabled}
-                  aria-label="Snap to grid"
+                  aria-label="Align to the frame and other layers"
                 />
-                Snap {DEFAULT_SNAP_GRID}px
+                Snap
               </span>
               <Button
                 type="button"
@@ -376,18 +511,19 @@ export function LayerEditorDialog({
               onSelectionChange={setSelectedIds}
               onBegin={() => dispatch({ type: 'begin' })}
               onPreview={(next) => dispatch({ type: 'preview', doc: { ...doc, layers: next } })}
-              snapGrid={snapEnabled ? DEFAULT_SNAP_GRID : 0}
+              onCancel={() => dispatch({ type: 'cancel' })}
+              snapEnabled={snapEnabled}
             />
 
             <aside className="w-64 shrink-0 overflow-y-auto border-l border-border/60">
               <LayerInspector
                 frame={doc.frame}
-                onFrameChange={onFrameChange}
-                layer={onlySelected}
+                onFrameChange={(width, height) => previewDoc(framed(width, height))}
+                onFrameCommit={(width, height) => settleDoc(framed(width, height))}
+                layer={selectedLayers[0] ?? null}
                 selectionCount={selectedLayers.length}
-                onLayerChange={(patch) => {
-                  if (onlySelected) commitLayers(setLayer(doc.layers, onlySelected.id, patch));
-                }}
+                onLayerChange={(patch) => previewDoc(patched(patch))}
+                onLayerCommit={(patch) => settleDoc(patched(patch))}
                 onAlign={onAlign}
                 onOrder={onOrder}
                 onFlip={(axis) => commitLayers(flipLayers(doc.layers, selectedIds, axis))}

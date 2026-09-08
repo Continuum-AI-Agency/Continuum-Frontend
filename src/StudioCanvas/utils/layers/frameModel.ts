@@ -89,3 +89,43 @@ export function fitScale(frame: Frame, viewport: { width: number; height: number
   if (viewport.width <= 0 || viewport.height <= 0) return 1;
   return Math.min(1, viewport.width / frame.width, viewport.height / frame.height);
 }
+
+/**
+ * Zoom is a MULTIPLIER on `fitScale`, so 1 always means "the whole frame is visible"
+ * whatever the frame and the pane are, and Fit is a reset to a constant.
+ */
+export const ZOOM_MIN = 0.1;
+export const ZOOM_MAX = 16;
+
+export const clampZoom = (zoom: number): number =>
+  Number.isFinite(zoom) ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom)) : 1;
+
+/**
+ * How far to pan so the composition point under the cursor stays under it while zooming.
+ *
+ * The `- frame.width / 2` term is the part that is easy to miss and impossible to see in
+ * a screenshot: the stage CENTRES the frame, and the frame's own rendered width is
+ * `frame.width * scale`, so changing the scale already moves its left edge by
+ * `-width * (to - from) / 2` before any pan is applied. Compensating only for the cursor
+ * offset — the version every "zoom at pointer" snippet shows — drifts, and drifts further
+ * the further the cursor sits from the middle of the frame.
+ *
+ * Returns a DELTA to add to the current pan, in screen pixels.
+ */
+export function panDeltaForZoom(input: {
+  frame: Frame;
+  /** The point to hold still, in composition pixels. */
+  focus: { x: number; y: number };
+  /** Scale before and after, i.e. `fitScale * zoom`. */
+  from: number;
+  to: number;
+}): { x: number; y: number } {
+  const { frame, focus, from, to } = input;
+  // `+ 0` normalises the -0 that falls out whenever a term is zero — holding the exact
+  // centre, or not changing the scale at all. There is no such thing as a negative-zero
+  // delta, and it would otherwise reach the DOM as `translate(-0px, -0px)`.
+  return {
+    x: (from - to) * (focus.x - frame.width / 2) + 0,
+    y: (from - to) * (focus.y - frame.height / 2) + 0,
+  };
+}

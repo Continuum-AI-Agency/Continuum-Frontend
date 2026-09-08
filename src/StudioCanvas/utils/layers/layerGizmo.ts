@@ -1,5 +1,5 @@
 import type { LayerEditorLayer } from '../../types';
-import { type Point, sourceToComposition, unrotate } from './layerTransform';
+import { type Point, type Rect, sourceToComposition, unrotate } from './layerTransform';
 
 /**
  * The transform gizmo's arithmetic: resize by a handle, rotate about the anchor.
@@ -87,9 +87,18 @@ export function resizeLayer(
   handle: ResizeHandle,
   pointer: Point,
   lockAspect = false,
+  /**
+   * Hold the layer's CENTRE still instead of the opposite handle — alt in every editor.
+   *
+   * Only the fixed point changes; the arithmetic below is untouched, because "resize
+   * about a point" is the same operation whichever point you pin.
+   */
+  fromCentre = false,
 ): LayerEditorLayer {
   const local = handleLocal(start, handle);
-  const oppositeLocal = handleLocal(start, OPPOSITE[handle]);
+  const oppositeLocal = fromCentre
+    ? { x: start.sourceWidth / 2, y: start.sourceHeight / 2 }
+    : handleLocal(start, OPPOSITE[handle]);
   const fixed = sourceToComposition(start, oppositeLocal);
 
   const along = unrotate({ x: pointer.x - fixed.x, y: pointer.y - fixed.y }, start.rotation);
@@ -177,3 +186,112 @@ export function handleCursor(handle: ResizeHandle, rotation: number): string {
   const turned = (((base[handle] + rotation) % 180) + 180) % 180;
   return cursors[Math.round(turned / 45) % 4];
 }
+
+/**
+ * Scale a whole selection about the corner opposite the one being dragged.
+ *
+ * UNIFORM, and offered on the four CORNER handles only. That is a deliberate limit, not
+ * an unfinished one: this model stores rotation plus a per-axis scale, and squashing a
+ * ROTATED layer along the group's axes produces a parallelogram — a shape the model
+ * cannot represent. A non-uniform group resize would therefore have to either silently
+ * distort rotated members or silently ignore their rotation. A single layer has no such
+ * problem, which is why `resizeLayer` keeps all eight handles.
+ *
+ * Each layer's own `scale` is multiplied and its `position` is moved along the same ray
+ * from the fixed corner, so the arrangement scales as one piece.
+ */
+export function scaleGroup(input: {
+  layers: readonly LayerEditorLayer[];
+  ids: readonly string[];
+  handle: 'nw' | 'ne' | 'se' | 'sw';
+  pointer: Point;
+  /** The selection's union bounds when the gesture started. */
+  bounds: Rect;
+  /** Alt: hold the group's centre still instead of the opposite corner. */
+  fromCentre?: boolean;
+}): LayerEditorLayer[] {
+  const { layers, ids, handle, pointer, bounds, fromCentre = false } = input;
+
+  const dragged = {
+    x: handle === 'nw' || handle === 'sw' ? bounds.left : bounds.right,
+    y: handle === 'nw' || handle === 'ne' ? bounds.top : bounds.bottom,
+  };
+  const fixed = fromCentre
+    ? { x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2 }
+    : {
+        x: handle === 'nw' || handle === 'sw' ? bounds.right : bounds.left,
+        y: handle === 'nw' || handle === 'ne' ? bounds.bottom : bounds.top,
+      };
+
+  const spanX = dragged.x - fixed.x;
+  const spanY = dragged.y - fixed.y;
+  if (spanX === 0 || spanY === 0) return [...layers];
+
+  // The dominant axis wins, so the dragged corner tracks the cursor on at least one of
+  // them — the same rule `resizeLayer` uses for a shift-constrained single layer.
+  const ratioX = (pointer.x - fixed.x) / spanX;
+  const ratioY = (pointer.y - fixed.y) / spanY;
+  const magnitude = Math.max(MIN_SCALE, Math.max(Math.abs(ratioX), Math.abs(ratioY)));
+  const factor = magnitude * (Math.sign(ratioX) || 1);
+
+  const wanted = new Set(ids);
+  return layers.map((layer) => {
+    if (!wanted.has(layer.id) || layer.locked) return layer;
+    return {
+      ...layer,
+      position: {
+        x: fixed.x + (layer.position.x - fixed.x) * factor,
+        y: fixed.y + (layer.position.y - fixed.y) * factor,
+      },
+      scale: { x: layer.scale.x * factor, y: layer.scale.y * factor },
+    };
+  });
+}
+
+/**
+ * Rotate a whole selection about its centre.
+ *
+ * Exactly representable, unlike a non-uniform group scale: each layer turns by the same
+ * delta and its anchor swings around the group centre, which is a rotation of the whole
+ * arrangement and nothing else.
+ */
+export function rotateGroup(input: {
+  layers: readonly LayerEditorLayer[];
+  ids: readonly string[];
+  /** The selection's union bounds when the gesture started. */
+  bounds: Rect;
+  startPointer: Point;
+  pointer: Point;
+  snapDegrees?: number;
+}): LayerEditorLayer[] {
+  const { layers, ids, bounds, startPointer, pointer, snapDegrees = 0 } = input;
+  const centre = {
+    x: (bounds.left + bounds.right) / 2,
+    y: (bounds.top + bounds.bottom) / 2,
+  };
+  const angleOf = (point: Point) =>
+    (Math.atan2(point.y - centre.y, point.x - centre.x) * 180) / Math.PI;
+
+  let delta = angleOf(pointer) - angleOf(startPointer);
+  if (snapDegrees > 0) delta = Math.round(delta / snapDegrees) * snapDegrees;
+  const radians = (delta * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+
+  const wanted = new Set(ids);
+  return layers.map((layer) => {
+    if (!wanted.has(layer.id) || layer.locked) return layer;
+    const dx = layer.position.x - centre.x;
+    const dy = layer.position.y - centre.y;
+    const rotation = ((((layer.rotation + delta + 180) % 360) + 360) % 360) - 180;
+    return {
+      ...layer,
+      position: { x: centre.x + dx * cos - dy * sin, y: centre.y + dx * sin + dy * cos },
+      rotation,
+    };
+  });
+}
+
+/** The four corners, which is all a group offers — see `scaleGroup` for why. */
+export type CornerHandle = 'nw' | 'ne' | 'se' | 'sw';
+export const GROUP_HANDLES: readonly CornerHandle[] = ['nw', 'ne', 'se', 'sw'];

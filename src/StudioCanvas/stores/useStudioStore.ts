@@ -23,6 +23,7 @@ import {
   getTargetHandleConnectionLimit,
   validateConnection,
 } from '../utils/isValidConnection';
+import { remapNodeIdsInData } from '../utils/namespaceWorkflowSnapshot';
 import { resolveCollisions } from '../utils/nodeCollisions';
 import {
   getVideoGeneratorImageReferenceHandle,
@@ -706,6 +707,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         selected: true,
       };
     });
+
+    // Edges below are remapped onto the pasted ids, so node ids stored INSIDE data have
+    // to move with them. A Layer Editor pasted with its sources otherwise keeps pointing
+    // at the originals and resolves no pixels — placed, named, invisible.
+    for (const node of pasted) {
+      node.data = remapNodeIdsInData(node.data, pastedIdByOriginalId);
+    }
 
     // Handles are carried verbatim: a copy of a 4-up feeding `image-2` must paste
     // as a copy feeding `image-2`, not collapse onto variation 0.

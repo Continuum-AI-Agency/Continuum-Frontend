@@ -2,13 +2,17 @@ import { describe, expect, test } from 'bun:test';
 import type { LayerEditorLayer } from '../../types';
 import {
   clampFrame,
+  clampZoom,
   DEFAULT_FRAME,
   FRAME_MAX_SIZE,
   FRAME_MIN_SIZE,
   fitScale,
+  panDeltaForZoom,
   readFrame,
   snapToGrid,
   writeFrame,
+  ZOOM_MAX,
+  ZOOM_MIN,
 } from './frameModel';
 import { layerBounds } from './layerTransform';
 
@@ -111,5 +115,58 @@ describe('fitScale', () => {
   test('shrinks to fit and never enlarges past 1:1', () => {
     expect(fitScale({ width: 2048, height: 2048 }, { width: 1024, height: 4000 })).toBe(0.5);
     expect(fitScale({ width: 100, height: 100 }, { width: 1000, height: 1000 })).toBe(1);
+  });
+});
+
+describe('zoom', () => {
+  const frame = { width: 1000, height: 800 };
+
+  test('clamps to the usable range and survives a NaN', () => {
+    expect(clampZoom(1)).toBe(1);
+    expect(clampZoom(0.0001)).toBe(ZOOM_MIN);
+    expect(clampZoom(9999)).toBe(ZOOM_MAX);
+    expect(clampZoom(Number.NaN)).toBe(1);
+  });
+
+  test('holding the frame CENTRE needs no pan at all', () => {
+    const delta = panDeltaForZoom({
+      frame,
+      focus: { x: 500, y: 400 },
+      from: 1,
+      to: 2,
+    });
+    expect(delta).toEqual({ x: 0, y: 0 });
+  });
+
+  test('holding a corner pans by the centring term', () => {
+    // The stage centres the frame, so doubling the scale moves the left edge left by
+    // width/2 on its own. Holding the top-left corner still means undoing exactly that.
+    const delta = panDeltaForZoom({ frame, focus: { x: 0, y: 0 }, from: 1, to: 2 });
+    expect(delta).toEqual({ x: 500, y: 400 });
+  });
+
+  test('FALSIFIER: the naive cursor-offset formula would answer differently', () => {
+    // `(from - to) * focus` — the version every zoom-at-pointer snippet shows — gives
+    // -300 here. It looks right at the centre and drifts everywhere else, which is why
+    // this case is off-centre in BOTH axes and asymmetric between them.
+    const focus = { x: 300, y: 100 };
+    const delta = panDeltaForZoom({ frame, focus, from: 1, to: 2 });
+    expect(delta).toEqual({ x: 200, y: 300 });
+    expect(delta.x).not.toBe((1 - 2) * focus.x);
+  });
+
+  test('zooming out is the exact inverse of zooming in', () => {
+    const focus = { x: 120, y: 640 };
+    const out = panDeltaForZoom({ frame, focus, from: 1, to: 2 });
+    const back = panDeltaForZoom({ frame, focus, from: 2, to: 1 });
+    expect(out.x + back.x).toBe(0);
+    expect(out.y + back.y).toBe(0);
+  });
+
+  test('no scale change is no movement', () => {
+    expect(panDeltaForZoom({ frame, focus: { x: 10, y: 10 }, from: 3, to: 3 })).toEqual({
+      x: 0,
+      y: 0,
+    });
   });
 });

@@ -55,6 +55,11 @@ export function drawLayers(
   const drawn: string[] = [];
   const missing: string[] = [];
 
+  // The stage downscales through the browser's mip chain; canvas defaults to 'low'
+  // bilinear. Without this a 3000px logo placed at 12% is smooth in the preview and
+  // visibly aliased in the export — the one real preview/export drift left.
+  ctx.imageSmoothingQuality = 'high';
+
   // Index 0 -> n-1: array order IS paint order, bottom first (aep-interop §4.2.6).
   for (const layer of layers) {
     if (!layer.visible) continue;

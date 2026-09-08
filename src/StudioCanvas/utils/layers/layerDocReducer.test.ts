@@ -116,3 +116,47 @@ describe('a drag is ONE history entry', () => {
     expect(at(state)).toBe(5);
   });
 });
+
+describe('cancel abandons a gesture without a trace', () => {
+  test('restores the document `begin` banked and drops the entry', () => {
+    let state = initialHistory(doc(0));
+    state = layerDocReducer(state, { type: 'begin' });
+    state = layerDocReducer(state, { type: 'preview', doc: doc(400) });
+    expect(at(state)).toBe(400);
+
+    state = layerDocReducer(state, { type: 'cancel' });
+    expect(at(state)).toBe(0);
+    // The entry `begin` pushed is GONE, not merely stepped over — an Undo button lit up
+    // by a cancelled drag is the "undo does nothing" bug wearing a different hat.
+    expect(state.past).toHaveLength(0);
+    expect(canUndo(state)).toBe(false);
+  });
+
+  test('FALSIFIER: is not `undo` — a cancelled drag must not be redoable', () => {
+    let state = initialHistory(doc(0));
+    state = layerDocReducer(state, { type: 'begin' });
+    state = layerDocReducer(state, { type: 'preview', doc: doc(400) });
+    state = layerDocReducer(state, { type: 'cancel' });
+
+    expect(canRedo(state)).toBe(false);
+    // Spelled out, because reusing `undo` here would pass every assertion above and
+    // still resurrect the abandoned move on Cmd+Shift+Z.
+    expect(at(layerDocReducer(state, { type: 'redo' }))).toBe(0);
+  });
+
+  test('leaves earlier history alone', () => {
+    let state = initialHistory(doc(0));
+    state = layerDocReducer(state, { type: 'commit', doc: doc(100) });
+    state = layerDocReducer(state, { type: 'begin' });
+    state = layerDocReducer(state, { type: 'preview', doc: doc(999) });
+    state = layerDocReducer(state, { type: 'cancel' });
+
+    expect(at(state)).toBe(100);
+    expect(at(layerDocReducer(state, { type: 'undo' }))).toBe(0);
+  });
+
+  test('with nothing banked it is a no-op', () => {
+    const state = initialHistory(doc(7));
+    expect(layerDocReducer(state, { type: 'cancel' })).toBe(state);
+  });
+});

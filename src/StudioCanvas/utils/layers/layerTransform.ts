@@ -152,6 +152,11 @@ export function unionBounds(rects: readonly Rect[]): Rect {
   };
 }
 
+/** Do two axis-aligned rects overlap at all? Marquee selection is exactly this. */
+export function rectsIntersect(a: Rect, b: Rect): boolean {
+  return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+}
+
 /** Is this composition point inside the layer's placed quad? */
 export function hitTestLayer(layer: LayerEditorLayer, point: Point): boolean {
   const local = compositionToSource(layer, point);
