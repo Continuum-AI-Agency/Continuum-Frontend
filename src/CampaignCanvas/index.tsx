@@ -2,16 +2,74 @@
 import { ReactFlowProvider } from '@xyflow/react';
 import { Bot, GripHorizontal, Maximize2, MessageSquareText, Minimize2, X } from 'lucide-react';
 import { AnimatePresence, motion, useDragControls } from 'motion/react';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { JainaChatSurface } from '@/components/paid-media/jaina/JainaChatSurface';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Button } from '@/components/ui/button';
+import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { CampaignCanvas } from './components/CampaignCanvas';
+import { ScaffoldRecordBar } from './components/ScaffoldRecordBar';
+import { useCampaignStore } from './stores/useCampaignStore';
+
+/**
+ * The ask that "Propose via Jaina" puts in the composer.
+ *
+ * It is PRE-FILLED, not auto-sent. The canvas is a human's edit of a record, and the
+ * turn it produces is the one thing that can reach Meta — so the person doing it reads
+ * the request before it leaves, and can say more about what changed.
+ */
+const PROPOSE_PROMPT =
+  'Propose the campaign on my canvas as a new paid scaffold. Use the structure and names in the canvas block below exactly as given.';
 
 const CampaignFlowCanvasPage = () => {
   const [isJainaOpen, setIsJainaOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
+  const [adAccountId, setAdAccountId] = useState<string | null>(null);
   const dragControls = useDragControls();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+
+  const { activeBrandId, brandSummaries, user } = useActiveBrandContext();
+  const brandName = useMemo(
+    () => brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? 'Untitled brand',
+    [activeBrandId, brandSummaries],
+  );
+
+  const nodes = useCampaignStore((store) => store.nodes);
+  const edges = useCampaignStore((store) => store.edges);
+  const hydration = useCampaignStore((store) => store.hydration);
+
+  /**
+   * The canvas rides along with every turn from THIS chat — it is the canvas page's
+   * assistant, and a question about the graph is unanswerable without the graph. The
+   * try/catch is not decoration: `buildCampaignCanvasPayload` parses its own output, and
+   * a graph it refuses must degrade to a normal chat, never to a blank page.
+   */
+  const campaignCanvasPayload = useMemo(() => {
+    try {
+      return buildCampaignCanvasPayload(nodes, edges, {
+        source: 'propose',
+        brandProfileId: activeBrandId,
+        adAccountId,
+      });
+    } catch {
+      return null;
+    }
+  }, [nodes, edges, activeBrandId, adAccountId]);
+
+  const handlePropose = useCallback(() => {
+    setIsJainaOpen(true);
+    // Maximized, because this flow ENDS in a decision. A propose turn finishes on an
+    // approval card whose Approve/Deny footer sits behind the conversations sidebar at
+    // the default 420px floating width — the buttons render, and the pointer never
+    // reaches them. Opening at the wide size is what makes the gate answerable.
+    setIsMaximized(true);
+    setInitialPrompt(
+      hydration
+        ? `${PROPOSE_PROMPT} It started as "${hydration.scaffoldName}" v${hydration.version}.`
+        : PROPOSE_PROMPT,
+    );
+  }, [hydration]);
 
   const chatDimensions = useMemo(
     () => ({
@@ -27,6 +85,15 @@ const CampaignFlowCanvasPage = () => {
         {/* Main Canvas Area */}
         <div ref={canvasContainerRef} className="relative flex-1 h-full w-full">
           <CampaignCanvas />
+
+          {/* The record this canvas is showing, and the one way forward from it. */}
+          <div className="pointer-events-none absolute top-3 left-1/2 z-40 -translate-x-1/2">
+            <ScaffoldRecordBar
+              brandId={activeBrandId}
+              onAdAccountChange={setAdAccountId}
+              onPropose={handlePropose}
+            />
+          </div>
 
           {/* Jaina Floating Chat */}
           <AnimatePresence initial={false}>
@@ -91,9 +158,13 @@ const CampaignFlowCanvasPage = () => {
 
                 <div className="flex-1 overflow-hidden p-1">
                   <JainaChatSurface
-                    brandProfileId="campaign-canvas-preview"
-                    brandName="Continuum"
-                    adAccountId={null}
+                    brandProfileId={activeBrandId}
+                    brandName={brandName}
+                    adAccountId={adAccountId}
+                    userId={user?.id ?? null}
+                    campaignCanvasPayload={campaignCanvasPayload}
+                    initialPrompt={initialPrompt}
+                    onInitialPromptConsumed={() => setInitialPrompt(null)}
                   />
                 </div>
               </motion.div>

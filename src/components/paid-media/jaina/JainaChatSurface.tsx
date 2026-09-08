@@ -77,7 +77,10 @@ import type {
 import { isSessionStreaming, selectRunForSession, useAgentRunStore } from '@/lib/agents/runStore';
 import { http } from '@/lib/api/http';
 import { extractCampaignCanvasActionsEnvelope } from '@/lib/campaign-canvas/agent-actions';
-import type { CampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
+import {
+  buildCampaignCanvasProposalBlock,
+  type CampaignCanvasPayload,
+} from '@/lib/campaign-canvas/payload';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
 import {
   createConversationSessionResponseSchema,
@@ -2625,8 +2628,20 @@ export function JainaChatSurface({
       processedToolResultIdsRef.current.clear();
       processedCanvasEnvelopeKeysRef.current.clear();
 
+      // The canvas rides in the QUERY, not beside it: there is no Backend field for it,
+      // and `paid_scaffold_propose` takes named string inputs with no free-form payload,
+      // so the only way Jaina can act on the graph is to READ it. Folded in here rather
+      // than at the call site so `userMessage.content` above stays the sentence the
+      // human typed — the transcript shows a request, not a wall of nodes.
+      const wireQuery = campaignCanvasPayload
+        ? `${query}\n\n${buildCampaignCanvasProposalBlock(
+            campaignCanvasPayload,
+            'This canvas is the human-reviewed graph. Propose it with paid_scaffold_propose, naming each node with the path_key shown.',
+          )}`
+        : query;
+
       void start({
-        query,
+        query: wireQuery,
         canvas: input.canvas || Boolean(campaignCanvasPayload),
         adAccountId,
         brandId: brandProfileId,

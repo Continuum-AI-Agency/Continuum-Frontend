@@ -53,6 +53,19 @@ function parseEnvFile(path: string): Record<string, string> {
 }
 
 /**
+ * One value out of `Continuum-Backend/.env`, without evaluating the file.
+ *
+ * Bench IDENTITY (`CONTINUUM_BENCH_OWNER_EMAIL` and friends) lives there and nowhere
+ * else — not in `.env.local`, not in the Frontend `.env`. A real process env var still
+ * wins, so a CI run can override without touching the file. Exported rather than
+ * re-parsed per bench for the reason stated at the top of this module: `set -a; . .env`
+ * on this particular file tries to EXECUTE an unquoted multi-word value.
+ */
+export function readBackendEnv(key: string): string | undefined {
+  return process.env[key] ?? parseEnvFile(BACKEND_ENV)[key];
+}
+
+/**
  * Overwrites the Supabase-facing environment with the PRODUCTION values and returns
  * the service-role credentials the bench needs for its own out-of-band reads.
  *

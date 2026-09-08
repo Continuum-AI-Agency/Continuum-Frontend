@@ -20,6 +20,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
+import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type {
   AdFormat,
@@ -146,6 +147,11 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
                 </div>
               )}
             </AspectRatio>
+            {data.provenance ? (
+              <div className="px-3 pb-2">
+                <NodeProvenance data={data} />
+              </div>
+            ) : null}
           </Node>
         }
       />

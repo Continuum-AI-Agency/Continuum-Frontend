@@ -30,6 +30,7 @@ import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { EditableLabel } from '../components/EditableLabel';
+import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type {
   AdData,
@@ -222,6 +223,7 @@ export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => 
                 </Badge>
               )}
             </div>
+            <NodeProvenance data={data} />
           </NodeContent>
         </Node>
       </ContextMenuTrigger>

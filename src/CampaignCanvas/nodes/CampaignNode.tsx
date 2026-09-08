@@ -37,6 +37,7 @@ import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { EditableLabel } from '../components/EditableLabel';
+import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type { CampaignData, CampaignNodeProps } from '../types';
 
@@ -216,16 +217,7 @@ export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'cam
               </div>
             </div>
 
-            {data.metaId && (
-              <>
-                <Separator className="my-2" />
-                <div className="pt-1">
-                  <span className="text-2xs font-mono text-muted-foreground uppercase">
-                    Meta ID: {data.metaId}
-                  </span>
-                </div>
-              </>
-            )}
+            <NodeProvenance data={data} />
           </NodeContent>
         </Node>
       </ContextMenuTrigger>

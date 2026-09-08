@@ -1,9 +1,27 @@
 import type { Edge, Node, NodeProps } from '@xyflow/react';
+import type { CanvasGate } from '@/lib/paid-media/jaina-activity-client';
 
 export type CampaignNodeType = 'campaign' | 'ad-set' | 'ad' | 'audience' | 'creative';
 
 export type AdFormat = 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'COLLECTION';
 export type CreativeAssetType = 'image' | 'video';
+
+/**
+ * Present only on a node hydrated from a real row — a RECORD of something Jaina
+ * proposed, not a draft someone drew. Its presence is the one thing that distinguishes
+ * the two on screen, and the reason an edit to such a node marks the canvas dirty
+ * rather than persisting: nothing in this app grants the browser a write to those rows.
+ */
+export interface CanvasNodeProvenance {
+  /** `paid_scaffold_nodes.id`, or the audience group id. */
+  sourceId: string;
+  /** `c0`, `c0/a1`, `c0/a1/ad2` — the name `paid_scaffold_propose` speaks in. */
+  pathKey: string;
+  /** The approval standing between this node and Meta. Null when none was opened. */
+  gate: CanvasGate | null;
+  /** `ACTIVE` / `PAUSED`, once the object actually exists on Meta. */
+  metaStatus: string | null;
+}
 
 export interface BaseCampaignNodeData extends Record<string, unknown> {
   label: string;
@@ -11,6 +29,7 @@ export interface BaseCampaignNodeData extends Record<string, unknown> {
   validationStatus?: 'valid' | 'warning' | 'error';
   validationErrors?: string[];
   metaId?: string; // ID in Meta Ads Manager
+  provenance?: CanvasNodeProvenance;
 }
 
 export interface CampaignData extends BaseCampaignNodeData {

@@ -26,6 +26,7 @@ import {
 import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
 import { Separator } from '@/components/ui/separator';
 import { EditableLabel } from '../components/EditableLabel';
+import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type { AudienceData, CampaignNodeProps } from '../types';
 
@@ -191,6 +192,7 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
                 )}
               </div>
             </div>
+            <NodeProvenance data={data} />
           </NodeContent>
         </Node>
       </ContextMenuTrigger>

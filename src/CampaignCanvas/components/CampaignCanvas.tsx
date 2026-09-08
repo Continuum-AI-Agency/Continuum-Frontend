@@ -24,7 +24,6 @@ import {
   MousePointer2,
   Plus,
   Redo,
-  Send,
   Settings,
   ShieldCheck,
   Trash2,
@@ -126,11 +125,28 @@ export const CampaignCanvas = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { show: toast } = useToast();
 
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const lastMousePos = useRef({ x: 0, y: 0 });
   const connectStartRef = useRef<OnConnectStartParams | null>(null);
 
-  const handleMouseMove = useCallback((event: React.MouseEvent) => {
-    lastMousePos.current = { x: event.clientX, y: event.clientY };
+  /**
+   * Where the pointer last was, so "Add Component" drops a node under the cursor.
+   *
+   * Attached imperatively rather than as an `onMouseMove` prop: a bare handler on a
+   * plain div is an interaction with no role and no keyboard path, which is what
+   * `a11y/noStaticElementInteractions` exists to catch. This listener adds no
+   * affordance — every one of them lives in a child (the canvas, the context menu, the
+   * buttons) and each is reachable on its own — so the honest fix is to keep it out of
+   * the accessibility tree rather than label the div interactive.
+   */
+  useEffect(() => {
+    const surface = surfaceRef.current;
+    if (!surface) return;
+    const track = (event: MouseEvent) => {
+      lastMousePos.current = { x: event.clientX, y: event.clientY };
+    };
+    surface.addEventListener('mousemove', track, { passive: true });
+    return () => surface.removeEventListener('mousemove', track);
   }, []);
 
   const handleAddNode = useCallback(
@@ -242,15 +258,6 @@ export const CampaignCanvas = () => {
     toast({ title: 'Exported', description: 'Canonical campaign payload downloaded as JSON.' });
   }, [nodes, edges, toast]);
 
-  const handleDeploy = useCallback(() => {
-    const payload = buildCampaignCanvasPayload(nodes, edges, { source: 'deploy' });
-    console.info('[campaign-canvas] deploy payload prepared', payload);
-    toast({
-      title: 'Deploy payload ready',
-      description: `${payload.summary.nodeCount} nodes mapped for backend handoff.`,
-    });
-  }, [edges, nodes, toast]);
-
   const handleValidateStructure = useCallback(() => {
     const validationResult = validateGraph();
     if (!validationResult.payloadValid) {
@@ -320,7 +327,7 @@ export const CampaignCanvas = () => {
   }, [nodes, undo, redo, duplicateNode, toast]);
 
   return (
-    <div className="relative h-full w-full" onMouseMove={handleMouseMove}>
+    <div ref={surfaceRef} className="relative h-full w-full">
       <ContextMenu>
         <ContextMenuTrigger className="h-full w-full block">
           <Canvas
@@ -375,10 +382,6 @@ export const CampaignCanvas = () => {
               >
                 <ShieldCheck className="h-4 w-4 text-primary" />
                 Validate
-              </Button>
-              <Button className="gap-2 shadow-lg" onClick={handleDeploy}>
-                <Send className="h-4 w-4" />
-                Deploy
               </Button>
             </Panel>
           </Canvas>

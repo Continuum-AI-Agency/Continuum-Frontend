@@ -12,6 +12,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { create } from 'zustand';
 import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
+import type { CanvasHydration, HydratedCanvasGraph } from '@/lib/campaign-canvas/hydrate';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import type {
   CampaignCanvasEdge,
@@ -33,6 +34,15 @@ interface CampaignStore {
   history: HistoryState[];
   redoStack: HistoryState[];
   edgeStyle: 'curved' | 'straight';
+  /** Set when the graph on screen was loaded from a real scaffold. Null for a draft. */
+  hydration: CanvasHydration | null;
+  /**
+   * True once a hydrated graph has been edited. It never becomes a write: the browser
+   * has no grant on any of these tables, so the only way a local edit reaches Meta is
+   * "Propose via Jaina" -> paid_scaffold_propose -> a human approving the gate.
+   */
+  isDirty: boolean;
+  loadHydratedGraph: (graph: HydratedCanvasGraph) => void;
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
@@ -90,12 +100,35 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   history: [],
   redoStack: [],
   edgeStyle: 'curved',
+  hydration: null,
+  isDirty: false,
+
+  loadHydratedGraph: ({ nodes, edges, hydration }) => {
+    if (validationTimer) {
+      clearTimeout(validationTimer);
+      validationTimer = null;
+    }
+    set({
+      nodes: applyCampaignGraphValidation(nodes, edges),
+      edges,
+      // A hydrated load is a new starting point, not a step: undoing back into the
+      // previous scaffold's graph would offer to "restore" a different proposal.
+      history: [],
+      redoStack: [],
+      hydration,
+      isDirty: false,
+    });
+  },
 
   pushHistory: () => {
-    const { nodes, edges, history } = get();
+    const { nodes, edges, history, hydration } = get();
     set({
       history: [...history, { nodes: [...nodes], edges: [...edges] }].slice(-50),
       redoStack: [],
+      // Every structural mutator calls this before it changes anything, and nothing
+      // that merely moves or selects a node does — which is exactly the line between
+      // "this graph no longer matches the record" and "someone dragged a box".
+      ...(hydration ? { isDirty: true } : {}),
     });
   },
 
@@ -195,7 +228,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     const nextNodes = get().nodes.map((node) =>
       node.id === id ? { ...node, data: { ...node.data, ...data } } : node,
     );
-    set({ nodes: nextNodes });
+    set({ nodes: nextNodes, ...(get().hydration ? { isDirty: true } : {}) });
     debouncedValidation(
       set,
       () => get().nodes,
@@ -282,6 +315,8 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       edges: [],
       history: [],
       redoStack: [],
+      hydration: null,
+      isDirty: false,
     });
   },
 

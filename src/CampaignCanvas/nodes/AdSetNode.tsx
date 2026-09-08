@@ -39,6 +39,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { EditableAmount } from '../components/EditableAmount';
 import { EditableLabel } from '../components/EditableLabel';
+import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type { AdSetData, CampaignNodeProps } from '../types';
 
@@ -276,6 +277,7 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
                 </div>
               </div>
             </div>
+            <NodeProvenance data={data} />
           </NodeContent>
         </Node>
       </ContextMenuTrigger>

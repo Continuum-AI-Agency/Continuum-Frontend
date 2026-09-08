@@ -37,7 +37,7 @@ const CALL_TO_ACTIONS = [
   'CONTACT_US',
   'DOWNLOAD',
 ] as const;
-const PAYLOAD_SOURCES = ['export', 'deploy', 'agent-check-in', 'unknown'] as const;
+const PAYLOAD_SOURCES = ['export', 'deploy', 'agent-check-in', 'propose', 'unknown'] as const;
 
 const campaignNodeTypeSchema = z.enum(NODE_TYPES);
 const validationStatusSchema = z.enum(VALIDATION_STATUSES);
@@ -527,4 +527,145 @@ export function buildCampaignCanvasPayload(
   };
 
   return campaignCanvasPayloadSchema.parse(payload);
+}
+
+/* -- the block the chat actually carries ---------------------------------------- */
+
+/**
+ * The canvas, rendered for a model rather than for a wire.
+ *
+ * `paid_scaffold_propose` takes NAMED STRING inputs — `path_key`, `parent_path_key`,
+ * `level`, `name`, `objective`, `optimization_goal`, ad copy — and no free-form payload
+ * (Continuum-Backend/App/agents-ts/Jaina/src/tools/paidScaffoldTools.ts). So Jaina has
+ * to READ the canvas and name every node itself, and a block it can transcribe beats
+ * one it has to parse: this emits the graph already in the tool's own vocabulary,
+ * path keys included, derived from the edges.
+ *
+ * The raw payload JSON is deliberately NOT what gets sent. It carries pixel positions,
+ * selection flags and client uuids — none of which the tool accepts — and a turn that
+ * spends its context on those is a turn with less left for the proposal.
+ */
+
+const indentFor = (level: 0 | 1 | 2 | 3): string => '  '.repeat(level);
+
+function describeNode(node: CampaignCanvasPayload['nodes'][number]): string {
+  const facts: string[] = [];
+  if (node.nodeType === 'campaign' && node.options.objective) {
+    facts.push(`objective=${node.options.objective}`);
+    if (node.options.specialAdCategories.length > 0) {
+      facts.push(`special_ad_categories=${node.options.specialAdCategories.join(',')}`);
+    }
+  }
+  if (node.nodeType === 'ad-set') {
+    facts.push(`optimization_goal=${node.options.optimizationGoal}`);
+    if (node.options.pacingType.length > 0) {
+      facts.push(`placement=${node.options.pacingType.join(',')}`);
+    }
+  }
+  if (node.nodeType === 'ad') {
+    facts.push(`format=${node.options.adFormat}`, `call_to_action=${node.options.callToAction}`);
+    if (node.options.headline) facts.push(`headline=${JSON.stringify(node.options.headline)}`);
+    if (node.options.primaryText) facts.push(`message=${JSON.stringify(node.options.primaryText)}`);
+    if (node.options.description) {
+      facts.push(`description=${JSON.stringify(node.options.description)}`);
+    }
+  }
+  if (node.nodeType === 'audience') {
+    if (node.options.locations.length > 0) facts.push(`geo=${node.options.locations.join(',')}`);
+    if (node.options.ageMin !== null || node.options.ageMax !== null) {
+      facts.push(`age=${node.options.ageMin ?? '?'}-${node.options.ageMax ?? '?'}`);
+    }
+    if (node.options.interests.length > 0) {
+      facts.push(`interests=${node.options.interests.join(',')}`);
+    }
+    if (node.options.customAudiences.length > 0) {
+      facts.push(`audiences=${node.options.customAudiences.join(',')}`);
+    }
+  }
+  if (node.nodeType === 'creative') {
+    facts.push(`asset=${node.options.assetType}`);
+    if (node.options.mediaId) facts.push(`media_id=${node.options.mediaId}`);
+  }
+  if (node.meta.metaId) facts.push(`meta_id=${node.meta.metaId}`);
+  return facts.join(' ');
+}
+
+export function buildCampaignCanvasProposalBlock(
+  payload: CampaignCanvasPayload,
+  note?: string,
+): string {
+  const byId = new Map(payload.nodes.map((node) => [node.nodeId, node]));
+  const childrenOf = (nodeId: string, nodeType: CampaignNodeType) =>
+    payload.edges
+      .filter((item) => item.sourceNodeId === nodeId && item.targetType === nodeType)
+      .map((item) => byId.get(item.targetNodeId))
+      .filter((item): item is CampaignCanvasPayload['nodes'][number] => Boolean(item));
+
+  const lines: string[] = [];
+  const emit = (
+    node: CampaignCanvasPayload['nodes'][number],
+    pathKey: string,
+    level: 0 | 1 | 2 | 3,
+  ) => {
+    const suffix = describeNode(node);
+    lines.push(
+      `${indentFor(level)}${node.nodeType} ${pathKey} ${JSON.stringify(node.label)}${
+        suffix ? ` ${suffix}` : ''
+      }`,
+    );
+  };
+
+  const campaigns = payload.nodes.filter((node) => node.nodeType === 'campaign');
+  campaigns.forEach((campaign, campaignIndex) => {
+    const campaignKey = `c${campaignIndex}`;
+    emit(campaign, campaignKey, 0);
+    childrenOf(campaign.nodeId, 'ad-set').forEach((adSet, adSetIndex) => {
+      const adSetKey = `${campaignKey}/a${adSetIndex}`;
+      emit(adSet, adSetKey, 1);
+      for (const audience of childrenOf(adSet.nodeId, 'audience')) {
+        emit(audience, `${adSetKey}/audience`, 2);
+      }
+      childrenOf(adSet.nodeId, 'ad').forEach((ad, adIndex) => {
+        const adKey = `${adSetKey}/ad${adIndex}`;
+        emit(ad, adKey, 2);
+        for (const creative of childrenOf(ad.nodeId, 'creative')) {
+          emit(creative, `${adKey}/creative`, 3);
+        }
+      });
+    });
+  });
+
+  // Anything the walk above never reached — an audience nobody targets, a node still
+  // unconnected. Dropping it silently would let a proposal lose work someone did.
+  const orphans = payload.nodes.filter(
+    (node) =>
+      node.nodeType !== 'campaign' &&
+      payload.agentCheckIn.disconnectedNodeIds.includes(node.nodeId),
+  );
+  if (orphans.length > 0) {
+    lines.push('unattached:');
+    for (const node of orphans) emit(node, '(unattached)', 1);
+  }
+
+  const header = [
+    `source=${payload.context.source}`,
+    payload.context.brandProfileId ? `brand=${payload.context.brandProfileId}` : null,
+    payload.context.adAccountId ? `ad_account=${payload.context.adAccountId}` : null,
+    `nodes=${payload.summary.nodeCount}`,
+    `edges=${payload.summary.edgeCount}`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return [
+    '```campaign-canvas',
+    header,
+    ...(note ? [note] : []),
+    ...(payload.summary.validation.errorCount > 0
+      ? [`validation_errors=${payload.summary.validation.errorCount}`]
+      : []),
+    '',
+    ...(lines.length > 0 ? lines : ['(the canvas is empty)']),
+    '```',
+  ].join('\n');
 }
