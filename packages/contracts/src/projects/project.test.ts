@@ -7,6 +7,7 @@ import {
   projectListQuerySchema,
   projectMembershipQuerySchema,
   projectBriefIsAuthoritative,
+  projectTimeState,
   projectSchema,
   projectTagRequestSchema,
   projectUpdateRequestSchema,
@@ -112,19 +113,42 @@ describe('toProject', () => {
   });
 });
 
-describe('projectBriefIsAuthoritative', () => {
-  it('treats a project with no end date as open-ended', () => {
-    expect(projectBriefIsAuthoritative({ endsOn: null }, '2030-01-01')).toBe(true);
+describe('projectTimeState', () => {
+  const window = { startsOn: '2026-09-01', endsOn: '2026-09-30' };
+
+  it('treats a project with no dates as live forever', () => {
+    expect(projectTimeState({ startsOn: null, endsOn: null }, '2030-01-01')).toBe('live');
   });
 
-  // Inclusive: a campaign that ends today is still running today. The off-by-one here would
-  // withhold a brief on the last day of the campaign it was written for.
-  it('is authoritative on the end date itself', () => {
-    expect(projectBriefIsAuthoritative({ endsOn: '2026-09-08' }, '2026-09-08')).toBe(true);
+  // Both bounds inclusive. The off-by-one at either end withholds a brief on a day the
+  // campaign it was written for is actually running.
+  it('is live on the first day and on the last', () => {
+    expect(projectTimeState(window, '2026-09-01')).toBe('live');
+    expect(projectTimeState(window, '2026-09-30')).toBe('live');
   });
 
-  it('stops being authoritative the day after', () => {
-    expect(projectBriefIsAuthoritative({ endsOn: '2026-09-08' }, '2026-09-09')).toBe(false);
+  it('is upcoming the day before it starts', () => {
+    expect(projectTimeState(window, '2026-08-31')).toBe('upcoming');
+  });
+
+  it('is ended the day after it finishes', () => {
+    expect(projectTimeState(window, '2026-10-01')).toBe('ended');
+  });
+
+  // A brief for a campaign that has not begun is as wrong as one for a campaign that is
+  // over — it answers "what should we do now?" with something for another month entirely.
+  it('withholds the brief at both ends, not just the far one', () => {
+    expect(projectBriefIsAuthoritative(window, '2026-08-31')).toBe(false);
+    expect(projectBriefIsAuthoritative(window, '2026-09-15')).toBe(true);
+    expect(projectBriefIsAuthoritative(window, '2026-10-01')).toBe(false);
+  });
+
+  // A back-to-front window has no live day at all. `ended` wins, because the safe reading of
+  // a nonsensical window is to give the agent no instructions from it.
+  it('resolves an inverted window to ended rather than to live', () => {
+    expect(projectTimeState({ startsOn: '2026-09-30', endsOn: '2026-09-01' }, '2026-09-15')).toBe(
+      'ended',
+    );
   });
 });
 

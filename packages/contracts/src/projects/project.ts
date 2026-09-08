@@ -84,18 +84,37 @@ export const projectSchema = z.object({
 export type Project = z.infer<typeof projectSchema>;
 
 /**
- * Is the project's brief still instructions, or is it history?
+ * Where the project sits relative to today: is its brief instructions, not yet, or history?
  *
- * Deliberately a pure function over a supplied `today` rather than a getter that reads the
- * clock: the Backend guard, the settings badge and the bench all have to agree on the
- * answer, and a bench cannot assert an expiry it cannot control. Inclusive of `endsOn` —
- * a campaign that ends today is still running today.
+ * Both ends matter and for the same reason. A brief is injected into an agent that can spend
+ * money, so "run hand-held creator footage for the winter challenge" must not be given as an
+ * instruction in March — and equally must not be given in September for a campaign that
+ * starts in December, when the answer to "what should we do now?" is something else entirely.
+ * A `starts_on` nothing reads would be precisely the defect this feature was already marked
+ * down for on `campaign_ids`: a column written, displayed, and enforced by nothing.
+ *
+ * Deliberately pure over a supplied `today` rather than reading the clock: the Backend guard,
+ * the settings badge and the bench all have to agree on the answer, and a bench cannot assert
+ * a window it cannot control. Both bounds are INCLUSIVE — a campaign that starts today has
+ * started, and one that ends today is still running.
  */
+export type ProjectTimeState = 'upcoming' | 'live' | 'ended';
+
+export function projectTimeState(
+  project: Pick<Project, 'startsOn' | 'endsOn'>,
+  today: string,
+): ProjectTimeState {
+  if (project.endsOn !== null && project.endsOn < today) return 'ended';
+  if (project.startsOn !== null && project.startsOn > today) return 'upcoming';
+  return 'live';
+}
+
+/** The brief is instructions only while the project is live. */
 export function projectBriefIsAuthoritative(
-  project: Pick<Project, 'endsOn'>,
+  project: Pick<Project, 'startsOn' | 'endsOn'>,
   today: string,
 ): boolean {
-  return project.endsOn === null || project.endsOn >= today;
+  return projectTimeState(project, today) === 'live';
 }
 
 /** `YYYY-MM-DD` in UTC — the shape a Postgres `date` column round-trips through PostgREST. */
