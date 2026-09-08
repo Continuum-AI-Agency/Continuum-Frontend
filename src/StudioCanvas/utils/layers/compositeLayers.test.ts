@@ -34,6 +34,8 @@ function recordingCtx() {
     scale: (x: number, y: number) => calls.push(`scale(${x},${y})`),
     drawImage: (image: unknown, x: number, y: number, w: number, h: number) =>
       calls.push(`drawImage(${(image as { tag: string }).tag},${x},${y},${w},${h})`),
+    fillRect: (x: number, y: number, w: number, h: number) =>
+      calls.push(`fillRect(${x},${y},${w},${h})`),
   };
   return { ctx, calls };
 }
@@ -190,5 +192,16 @@ describe('opacity and blend', () => {
       'gco=multiply',
       'gco=difference',
     ]);
+  });
+});
+
+describe('frame background', () => {
+  test('paints under every layer, so the bottom one blends against IT', () => {
+    const { ctx, calls } = recordingCtx();
+    drawLayers(ctx as never, [layer('a')], images('a'));
+    // drawLayers itself never fills — the backdrop belongs to compositeLayers, which owns
+    // the canvas. Pinned so a future "helpful" fill here cannot silently make every blend
+    // assertion in this file secretly an assertion about that colour.
+    expect(calls.some((call) => call.startsWith('fillRect'))).toBe(false);
   });
 });

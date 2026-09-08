@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { LayerEditorLayer } from '../../types';
 import type { LayerMove } from '../../utils/layers/layerOps';
-import { LayersPanel, ROW_ORDER_ITEMS, toArrayIndex } from './LayersPanel';
+import { LayersPanel, ROW_ORDER_ITEMS, sameToThePanel, toArrayIndex } from './LayersPanel';
 
 // The array is paint order BOTTOM-FIRST (aep-interop §4.2.6) and the panel shows it
 // upside down, so every interaction here crosses a reversal. These tests exist because
@@ -31,6 +31,13 @@ const noop = () => undefined;
 function renderPanel(over: Partial<Parameters<typeof LayersPanel>[0]> = {}) {
   const props = {
     layers: [layer('bottom'), layer('middle'), layer('top')],
+    // Not typechecked (tsconfig excludes *.test.*), so this list is maintained by hand —
+    // a prop that silently goes missing here disables the feature in every case below.
+    sources: new Map([
+      ['bottom', 'blob:bottom'],
+      ['middle', 'blob:middle'],
+      ['top', 'blob:top'],
+    ]) as ReadonlyMap<string, string>,
     selectedIds: [] as string[],
     onSelectionChange: noop as (ids: string[]) => void,
     onToggleVisible: noop as (id: string) => void,
@@ -159,5 +166,81 @@ describe('LayersPanel', () => {
     const { getByText, container } = renderPanel({ layers: [] });
     expect(getByText(/Connect images to this node/)).toBeTruthy();
     expect(rowIds(container)).toEqual([]);
+  });
+});
+
+describe('row thumbnails', () => {
+  it('shows each layer its own pixels', () => {
+    const view = renderPanel();
+    expect(view.getByTestId('layer-thumb-top').getAttribute('src')).toBe('blob:top');
+    expect(view.getByTestId('layer-thumb-bottom').getAttribute('src')).toBe('blob:bottom');
+  });
+
+  it('marks a layer whose upstream is gone instead of drawing a broken image', () => {
+    const view = renderPanel({ sources: new Map([['top', 'blob:top']]) });
+    expect(view.queryByTestId('layer-thumb-top')).not.toBeNull();
+    expect(view.queryByTestId('layer-thumb-missing-bottom')).not.toBeNull();
+    expect(view.queryByTestId('layer-thumb-bottom')).toBeNull();
+  });
+});
+
+describe('sameToThePanel', () => {
+  // The panel renders a thumbnail, a name and two toggles. It renders NO geometry, which
+  // is the whole point: `doc.layers` is a new array on every pointer sample of a drag, so
+  // without this the memo could never skip a single render.
+  // One shared instance: the comparator treats a new sources Map as a real change (it
+  // is — the thumbnails come from it), so building a fresh one per call would make every
+  // case below fail for a reason the case is not about.
+  const sharedSources = new Map([['a', 'blob:a']]) as ReadonlyMap<string, string>;
+
+  const props = (over: Partial<Parameters<typeof sameToThePanel>[0]> = {}) =>
+    ({
+      layers: [layer('a'), layer('b')],
+      sources: sharedSources,
+      selectedIds: ['a'] as readonly string[],
+      onSelectionChange: noop,
+      onToggleVisible: noop,
+      onToggleLocked: noop,
+      onRename: noop,
+      onReorder: noop,
+      onOrder: noop,
+      ...over,
+    }) as Parameters<typeof sameToThePanel>[0];
+
+  it('ignores a move — the panel shows no geometry', () => {
+    const before = props();
+    const moved = props({
+      layers: [{ ...layer('a'), position: { x: 999, y: 999 } }, layer('b')],
+    });
+    expect(sameToThePanel(before, moved)).toBe(true);
+  });
+
+  it('ignores a resize and a rotation too', () => {
+    const before = props();
+    const changed = props({
+      layers: [{ ...layer('a'), scale: { x: 4, y: 4 }, rotation: 90 }, layer('b')],
+    });
+    expect(sameToThePanel(before, changed)).toBe(true);
+  });
+
+  it('notices a rename, a visibility flip and a lock', () => {
+    expect(sameToThePanel(props(), props({ layers: [layer('a'), { ...layer('b'), name: 'X' }] }))).toBe(false);
+    expect(
+      sameToThePanel(props(), props({ layers: [layer('a'), { ...layer('b'), visible: false }] })),
+    ).toBe(false);
+    expect(
+      sameToThePanel(props(), props({ layers: [layer('a'), { ...layer('b'), locked: true }] })),
+    ).toBe(false);
+  });
+
+  it('notices reordering, adding and removing', () => {
+    expect(sameToThePanel(props(), props({ layers: [layer('b'), layer('a')] }))).toBe(false);
+    expect(sameToThePanel(props(), props({ layers: [layer('a')] }))).toBe(false);
+  });
+
+  it('notices a new selection and new thumbnails', () => {
+    expect(sameToThePanel(props(), props({ selectedIds: ['b'] }))).toBe(false);
+    expect(sameToThePanel(props(), props({ selectedIds: [] }))).toBe(false);
+    expect(sameToThePanel(props(), props({ sources: new Map() }))).toBe(false);
   });
 });

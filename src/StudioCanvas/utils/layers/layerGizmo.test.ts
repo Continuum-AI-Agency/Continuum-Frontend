@@ -8,6 +8,7 @@ import {
   rotateHandlePoint,
   rotateLayer,
   scaleGroup,
+  turnLayer,
 } from './layerGizmo';
 import { layerBounds, sourceToComposition } from './layerTransform';
 
@@ -319,5 +320,36 @@ describe('group transform', () => {
     expect(rotated(305)).toBe(0);
     // ...and atan2(20,100) is 11.3, which rounds UP to a full step.
     expect(rotated(320)).toBe(15);
+  });
+});
+
+describe('turnLayer', () => {
+  const base = (rotation: number): LayerEditorLayer => ({
+    id: 'l',
+    name: 'l',
+    sourceWidth: 100,
+    sourceHeight: 100,
+    anchor: { x: 50, y: 50 },
+    position: { x: 0, y: 0 },
+    scale: { x: 1, y: 1 },
+    rotation,
+    opacity: 1,
+    blendMode: 'normal',
+    visible: true,
+    locked: false,
+  });
+
+  test('adds the delta', () => {
+    expect(turnLayer(base(10), 15).rotation).toBe(25);
+  });
+
+  test('keeps the range the inspector shows, so it never reads 1440 degrees', () => {
+    expect(turnLayer(base(170), 30).rotation).toBe(-160);
+    expect(turnLayer(base(-170), -30).rotation).toBe(160);
+  });
+
+  test('snaps when asked', () => {
+    expect(turnLayer(base(0), 7, 15).rotation).toBe(0);
+    expect(turnLayer(base(0), 11, 15).rotation).toBe(15);
   });
 });

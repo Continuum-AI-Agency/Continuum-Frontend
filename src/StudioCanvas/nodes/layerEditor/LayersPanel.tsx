@@ -29,7 +29,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, memo } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -57,6 +57,8 @@ import { duplicateNames, type LayerMove } from '../../utils/layers/layerOps';
 
 export interface LayersPanelProps {
   layers: readonly LayerEditorLayer[];
+  /** Layer id -> a displayable URL, for the row thumbnails. Same map the stage paints. */
+  sources: ReadonlyMap<string, string>;
   selectedIds: readonly string[];
   onSelectionChange: (ids: string[]) => void;
   onToggleVisible: (id: string) => void;
@@ -72,8 +74,9 @@ export interface LayersPanelProps {
 export const toArrayIndex = (displayIndex: number, count: number): number =>
   count - 1 - displayIndex;
 
-export function LayersPanel({
+function LayersPanelImpl({
   layers,
+  sources,
   selectedIds,
   onSelectionChange,
   onToggleVisible,
@@ -137,6 +140,7 @@ export function LayersPanel({
             <LayerRow
               key={layer.id}
               layer={layer}
+              source={sources.get(layer.id)}
               selected={selectedIds.includes(layer.id)}
               nameCollides={collisions.has(layer.name)}
               onClick={(event) => onRowClick(layer.id, event)}
@@ -154,6 +158,7 @@ export function LayersPanel({
 
 function LayerRow({
   layer,
+  source,
   selected,
   nameCollides,
   onClick,
@@ -163,6 +168,8 @@ function LayerRow({
   onOrder,
 }: {
   layer: LayerEditorLayer;
+  /** The layer's pixels, or undefined when its upstream is gone. */
+  source: string | undefined;
   selected: boolean;
   nameCollides: boolean;
   onClick: (event: React.MouseEvent) => void;
@@ -232,6 +239,33 @@ function LayerRow({
                   <LockOpen className="h-3 w-3 opacity-50" />
                 )}
               </button>
+
+              {/*
+                A row that reads "Layer 3" is unidentifiable at any stack depth. The map
+                is the one the stage already renders from, so a thumbnail costs a second
+                <img> and no new plumbing. A layer whose upstream was disconnected has no
+                entry — it gets the empty chip, which is the honest picture of it.
+              */}
+              {source ? (
+                // biome-ignore lint/performance/noImgElement: signed storage and data URLs
+                // that next/image cannot resolve at build time.
+                <img
+                  src={source}
+                  alt=""
+                  aria-hidden
+                  className={cn(
+                    'h-5 w-5 shrink-0 rounded-sm border border-border/60 object-cover',
+                    layer.visible ? undefined : 'opacity-40',
+                  )}
+                  data-testid={`layer-thumb-${layer.id}`}
+                />
+              ) : (
+                <span
+                  aria-hidden
+                  className="h-5 w-5 shrink-0 rounded-sm border border-dashed border-border/60"
+                  data-testid={`layer-thumb-missing-${layer.id}`}
+                />
+              )}
 
               {editing ? (
                 <input
@@ -322,3 +356,46 @@ export const ROW_ORDER_ITEMS: {
   { move: 'down', label: 'Send backward', Icon: ChevronDown, chord: '⌘[' },
   { move: 'bottom', label: 'Send to back', Icon: ChevronsDown, chord: '⇧⌘[' },
 ];
+
+/**
+ * What this panel actually renders, per layer.
+ *
+ * Deliberately NOT position, scale or rotation — the panel shows a thumbnail, a name and
+ * two toggles. Measured: without this comparator a twenty-sample drag re-rendered the
+ * panel twenty-two times, because `doc.layers` is necessarily a new array whenever a
+ * layer moves. `React.memo` alone could never help; the identity that changes is real,
+ * it is just irrelevant here.
+ */
+export const sameToThePanel = (a: LayersPanelProps, b: LayersPanelProps): boolean => {
+  if (a.layers.length !== b.layers.length) return false;
+  if (a.sources !== b.sources) return false;
+  if (a.selectedIds.length !== b.selectedIds.length) return false;
+  if (a.selectedIds.some((id, index) => id !== b.selectedIds[index])) return false;
+  for (let index = 0; index < a.layers.length; index += 1) {
+    const left = a.layers[index];
+    const right = b.layers[index];
+    if (
+      left.id !== right.id ||
+      left.name !== right.name ||
+      left.visible !== right.visible ||
+      left.locked !== right.locked
+    ) {
+      return false;
+    }
+  }
+  // Handlers are compared by identity on purpose: the dialog passes inline arrows, so
+  // this returns true only because none of the above changed. If a handler ever needs to
+  // change behaviour mid-drag, this comparator is the thing that would hide it.
+  return true;
+};
+
+/**
+ * Memoised because it sits on the drag path.
+ *
+ * Every pointer sample dispatches a `preview`, which re-renders the dialog. Unmemoised,
+ * that re-rendered this whole panel sixty times a second — for LayersPanel, once per
+ * `useSortable` row inside a `DndContext`, each carrying a ContextMenu and a Tooltip.
+ * The layer objects themselves keep their identity through `mapIds`, so the props of an
+ * untouched panel really are unchanged and the skip is real rather than nominal.
+ */
+export const LayersPanel = memo(LayersPanelImpl, sameToThePanel);

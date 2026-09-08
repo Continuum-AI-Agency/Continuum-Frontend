@@ -150,7 +150,22 @@ export function rotateLayer(
   const angleOf = (point: Point) =>
     (Math.atan2(point.y - start.position.y, point.x - start.position.x) * 180) / Math.PI;
   const delta = angleOf(pointer) - angleOf(startPointer);
-  let rotation = start.rotation + delta;
+  return turnLayer(start, delta, snapDegrees);
+}
+
+/**
+ * Turn a layer by a number of degrees, however that number was arrived at.
+ *
+ * Split out of `rotateLayer` so the keyboard path — where the delta is a keypress, not an
+ * angle between two pointers — normalises through the same arithmetic instead of growing
+ * a second copy that drifts the first time the range convention changes.
+ */
+export function turnLayer(
+  start: LayerEditorLayer,
+  deltaDegrees: number,
+  snapDegrees = 0,
+): LayerEditorLayer {
+  let rotation = start.rotation + deltaDegrees;
   if (snapDegrees > 0) rotation = Math.round(rotation / snapDegrees) * snapDegrees;
   // Keep it in (-180, 180] so the inspector never shows 1440 degrees.
   rotation = ((((rotation + 180) % 360) + 360) % 360) - 180;

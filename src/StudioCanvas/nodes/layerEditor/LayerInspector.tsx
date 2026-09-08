@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 import {
   AlignCenterHorizontal,
   AlignCenterVertical,
@@ -16,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { ColorField } from '@/components/ui/color-field';
 import { NumberScrubField } from '@/components/ui/number-field';
 import {
   Select,
@@ -70,6 +73,9 @@ export interface LayerInspectorProps {
   frame: Frame;
   onFrameChange: (width: number, height: number) => void;
   onFrameCommit: (width: number, height: number) => void;
+  /** `#rrggbb`, or null for the transparent default. */
+  background: string | null;
+  onBackgroundChange: (background: string | null) => void;
   /**
    * The layer whose values are DISPLAYED — the first selected one, not necessarily the
    * only one. Edits go to the whole selection; `selectionCount` says how many that is.
@@ -91,10 +97,12 @@ export interface LayerInspectorProps {
   onFlip: (axis: 'x' | 'y') => void;
 }
 
-export function LayerInspector({
+function LayerInspectorImpl({
   frame,
   onFrameChange,
   onFrameCommit,
+  background,
+  onBackgroundChange,
   layer,
   selectionCount,
   onLayerChange,
@@ -152,6 +160,27 @@ export function LayerInspector({
         <p className="text-3xs text-muted-foreground">
           {FRAME_MIN_SIZE}–{FRAME_MAX_SIZE} px. Resizing the frame never moves a layer.
         </p>
+
+        {/* Transparent stays the DEFAULT — the export owes downstream an alpha channel.
+            This is for the ad that wants a flat brand colour behind its elements, which
+            otherwise needs a whole generated full-frame image to stand in for a fill. */}
+        <div className="flex items-center gap-1">
+          <ColorField
+            value={background}
+            onChange={onBackgroundChange}
+            label="Frame background"
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 shrink-0 px-2 text-3xs"
+            disabled={!background}
+            onClick={() => onBackgroundChange(null)}
+          >
+            Clear
+          </Button>
+        </div>
       </section>
 
       <section className="flex flex-col gap-1.5">
@@ -382,3 +411,14 @@ export function LayerInspector({
     </div>
   );
 }
+
+/**
+ * Memoised because it sits on the drag path.
+ *
+ * Every pointer sample dispatches a `preview`, which re-renders the dialog. Unmemoised,
+ * that re-rendered this whole panel sixty times a second — for LayerInspector, once per
+ * `useSortable` row inside a `DndContext`, each carrying a ContextMenu and a Tooltip.
+ * The layer objects themselves keep their identity through `mapIds`, so the props of an
+ * untouched panel really are unchanged and the skip is real rather than nominal.
+ */
+export const LayerInspector = memo(LayerInspectorImpl);

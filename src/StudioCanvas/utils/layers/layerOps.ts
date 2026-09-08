@@ -44,13 +44,16 @@ const newId = (): string =>
  * anchor field unrecoverable.
  */
 export function createLayer(input: {
-  sourceNodeId: string;
+  /** Omitted for a file-sourced layer, which carries storage coordinates instead. */
+  sourceNodeId?: string;
   name: string;
   sourceWidth: number;
   sourceHeight: number;
   frame: Frame;
   sourceAssetId?: string;
   sourceVersionId?: string;
+  sourceBucket?: string;
+  sourceStoragePath?: string;
   id?: string;
 }): LayerEditorLayer {
   const sourceWidth = Math.max(1, Math.round(input.sourceWidth));
@@ -62,6 +65,8 @@ export function createLayer(input: {
     sourceNodeId: input.sourceNodeId,
     sourceAssetId: input.sourceAssetId,
     sourceVersionId: input.sourceVersionId,
+    sourceBucket: input.sourceBucket,
+    sourceStoragePath: input.sourceStoragePath,
     sourceWidth,
     sourceHeight,
     anchor: { x: sourceWidth / 2, y: sourceHeight / 2 },

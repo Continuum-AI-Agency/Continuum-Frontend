@@ -2,6 +2,7 @@ import type {
   ActionId,
   ApiRenderInputValue,
   ApiRenderOutput,
+  ApiRenderTemplateContract,
   ApiRenderVariable,
   BatchCombine,
   BatchItem,
@@ -537,6 +538,34 @@ export interface ApiRenderNodeData extends BaseNodeData {
    * one: a value that cannot be sent is a value that should never have been stored.
    */
   variables: Record<string, ApiRenderInputValue>;
+  /**
+   * Pixel size of the artwork picked into each media slot, keyed by variable.
+   *
+   * Kept on the node so the placement check can run the instant someone chooses a photo,
+   * rather than after a round trip. It is a CACHE of what the Library already knows — the
+   * server looks the same numbers up by asset id at preflight and its answer is the one that
+   * gets frozen — so a stale or missing entry costs a preview, never a wrong render.
+   *
+   * Absent for a wired slot: the edge carries an asset id, not a size, and inventing one
+   * would draw a box at the wrong scale. Those read "measured at Prepare" until the server
+   * answers, and if the server cannot either, the frame goes to the judge.
+   */
+  assetDims?: Record<string, { w: number; h: number }>;
+  /** The workspace this node renders into. Absent means the brand's default binding. */
+  bindingId?: string | null;
+  /**
+   * The rest of the template's contract, as fetched.
+   *
+   * Stored alongside `variableDefinitions` rather than refetched by every consumer: the node
+   * draws the layout, the inspector lists the fonts, and both survive a reload this way. All
+   * absent on the legacy-reflection arm, which knows none of it.
+   */
+  templateLayout?: ApiRenderTemplateContract['layout'];
+  templateFonts?: ApiRenderTemplateContract['fonts'];
+  templateRatios?: string[];
+  contractSource?: 'template_forge' | 'legacy_reflection' | null;
+  /** The Library asset this template was promoted from, for the fonts push. */
+  templateSourceAssetId?: string | null;
   delivery?: {
     action: 'create';
     adAccountId?: string;
@@ -745,10 +774,21 @@ export interface LayerEditorLayer {
    * UI warning, never a data correction.
    */
   name: string;
-  /** Upstream canvas node feeding this layer's pixels. */
-  sourceNodeId: string;
+  /**
+   * Upstream canvas node feeding this layer's pixels.
+   *
+   * OPTIONAL since layers can also come from a dropped, pasted or picked file, which has
+   * no node behind it — those carry `sourceBucket`/`sourceStoragePath` instead. A layer
+   * with both prefers the node: its ref is a live generator output that must follow a
+   * regenerate, while the stored asset is a fixed snapshot.
+   */
+  sourceNodeId?: string;
   sourceAssetId?: string;
   sourceVersionId?: string;
+  /** Durable, re-signable coordinates for a file-sourced layer. Never a data: URL — the
+   * layer document lives inside the canvas JSON blob, which strips base64 on save. */
+  sourceBucket?: string;
+  sourceStoragePath?: string;
   /** Intrinsic pixel size of the source, as measured. Needed to resolve `anchor`. */
   sourceWidth: number;
   sourceHeight: number;
@@ -780,6 +820,8 @@ export interface LayerEditorNodeData extends BaseNodeData {
   frame: { width: number; height: number };
   /** Paint order, BOTTOM-FIRST. The layers panel renders it reversed. No zIndex field. */
   layers: LayerEditorLayer[];
+  /** `#rrggbb` behind every layer. Absent is TRANSPARENT, which remains the default. */
+  background?: string;
   generatedImage?: string;
   generatedImageUrl?: string;
   // Durable coordinates persistLayerComposite writes — declared so the executor's

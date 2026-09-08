@@ -23,6 +23,8 @@ export interface CompositeLayersInput {
   layers: readonly LayerEditorLayer[];
   /** Pixels, keyed by `layer.id`. A layer with no entry is reported, not drawn. */
   images: ReadonlyMap<string, CanvasImageSource>;
+  /** `#rrggbb` painted under everything. Omitted leaves the frame transparent. */
+  background?: string;
 }
 
 export interface CompositeLayersResult {
@@ -104,6 +106,13 @@ export async function compositeLayers(input: CompositeLayersInput): Promise<Comp
   const canvas = new OffscreenCanvas(width, height);
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get a 2D context for the composition');
+
+  // Under the layers, never over: this is a backdrop, so `multiply` on the bottom layer
+  // must blend against IT rather than against the transparency it replaced.
+  if (input.background) {
+    ctx.fillStyle = input.background;
+    ctx.fillRect(0, 0, width, height);
+  }
 
   const { missing } = drawLayers(ctx, input.layers, input.images);
 

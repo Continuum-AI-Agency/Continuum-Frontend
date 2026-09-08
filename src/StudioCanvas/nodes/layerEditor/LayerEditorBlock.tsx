@@ -126,7 +126,12 @@ export function LayerEditorBlock({
 
   const onPersist = useCallback(
     (doc: LayerDoc, aspectRatio: string) => {
-      updateNodeData(id, { frame: doc.frame, layers: doc.layers, aspectRatio });
+      updateNodeData(id, {
+        frame: doc.frame,
+        layers: doc.layers,
+        background: doc.background,
+        aspectRatio,
+      });
       triggerSave();
     },
     [id, triggerSave, updateNodeData],
@@ -300,6 +305,8 @@ export function LayerEditorBlock({
         onOpenChange={onOpenChange}
         frame={frame}
         layers={layers}
+        background={data.background}
+        brandId={brandId}
         sources={sources}
         onPersist={onPersist}
         onCompose={onCompose}

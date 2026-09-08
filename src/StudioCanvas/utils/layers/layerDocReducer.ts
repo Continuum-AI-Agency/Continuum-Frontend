@@ -15,6 +15,12 @@ import type { Frame } from './frameModel';
 export interface LayerDoc {
   frame: Frame;
   layers: LayerEditorLayer[];
+  /**
+   * A solid fill behind every layer, as `#rrggbb`. Absent means TRANSPARENT, which stays
+   * the default — a stills compositor owes its consumers an alpha channel, and a silent
+   * white would make every blend assertion secretly an assertion about white.
+   */
+  background?: string;
 }
 
 export interface LayerHistory {

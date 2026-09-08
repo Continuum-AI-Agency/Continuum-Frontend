@@ -145,7 +145,9 @@ const brandProfiles = (client: SupabaseClient) =>
 interface SeededLayer {
   id: string;
   name: string;
-  sourceNodeId: string;
+  sourceNodeId?: string;
+  sourceBucket?: string;
+  sourceStoragePath?: string;
   sourceWidth: number;
   sourceHeight: number;
   anchor: { x: number; y: number };
@@ -236,8 +238,17 @@ function buildGraph() {
   return { nodes, edges };
 }
 
-async function seedRoom(supabase: SupabaseClient) {
+async function seedRoom(supabase: SupabaseClient, extraLayers: SeededLayer[] = []) {
   const graph = buildGraph();
+  if (extraLayers.length > 0) {
+    const editor = graph.nodes.find((node) => node.id === EDITOR_NODE_ID);
+    if (editor) {
+      (editor.data as { layers: SeededLayer[] }).layers = [
+        ...(editor.data as { layers: SeededLayer[] }).layers,
+        ...extraLayers,
+      ];
+    }
+  }
   await brandProfiles(supabase)
     .from('canvas_rooms')
     .upsert(
@@ -349,13 +360,18 @@ async function dragComposition(
   if (options.modifier) await page.keyboard.up(options.modifier);
 }
 
-async function openEditor(page: Page) {
+async function openEditor(page: Page, expectedLayers = 2) {
   const node = page.locator(`.react-flow__node[data-id="${EDITOR_NODE_ID}"]`);
   await expect(node).toBeVisible({ timeout: 30_000 });
+  // A dialog that is still animating out keeps its backdrop over the canvas, and the
+  // Edit click lands on the scrim instead of the button — only reachable when REOPENING.
+  await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0, { timeout: 15_000 });
   await node.getByRole('button', { name: 'Edit' }).click();
   await expect(page.getByTestId('layer-frame')).toBeVisible({ timeout: 15_000 });
   // Both sources have to have resolved, or a "layer" is an unhittable rectangle.
-  await expect(page.locator('img[data-layer-id]')).toHaveCount(2, { timeout: 15_000 });
+  await expect(page.locator('img[data-layer-id]')).toHaveCount(expectedLayers, {
+    timeout: 15_000,
+  });
 
   // ...and the stage has to have SETTLED. Its scale comes from a ResizeObserver, so for
   // the first frames after mount the frame element is still zero-sized and `toViewport`
@@ -521,6 +537,69 @@ test.describe('Layer Editor gestures', () => {
     // Snapping pulled the layer's centre onto the frame's centre line at 512.
     await page.mouse.up();
     expect(await placed(page, 'bench-red')).toMatchObject({ x: 512 });
+  });
+
+  test('a file-sourced layer resolves from its stored coordinates', async ({ page }) => {
+    // THE UPLOAD HOP IS NOT EXERCISED HERE, and this is why: `uploadMediaAsset` invokes
+    // the `library-upload` EDGE FUNCTION, and edge functions are deliberately not wired
+    // on the local stack (no secrets) — AGENTS.md calls that expected, not a bug. The
+    // picker itself reports "Failed to fetch" here for exactly that reason.
+    //
+    // So the fixture is seeded into the REAL store with the service role, which is the
+    // same bytes at the same path the edge function would have produced, and everything
+    // downstream of it is exercised for real: a layer with NO sourceNodeId, resolved by
+    // signing its durable coordinates in the browser, rendered, and still rendering after
+    // a close and reopen. Only the edge function's own hop is missing.
+    // BRAND-PREFIXED, and that is load-bearing: storage RLS on `media-library` derives
+    // the brand from the FIRST path segment (`media.storage_object_brand_id` reads
+    // `foldername(name)[1]`), so an object parked anywhere else is unsignable by the
+    // browser and the layer silently never resolves.
+    const objectPath = `${BRAND_ID}/bench-layer-editor/${crypto.randomUUID()}.png`;
+    const bytes = Buffer.from(solidPng([20, 200, 90]).split(',')[1], 'base64');
+
+    const uploaded = await supabase.storage
+      .from('media-library')
+      .upload(objectPath, bytes, { contentType: 'image/png', upsert: true });
+    if (uploaded.error) {
+      test.skip(true, `local storage refused the fixture: ${uploaded.error.message}`);
+      return;
+    }
+
+    try {
+      await seedRoom(supabase, [
+        {
+          ...seededLayer('bench-file', '', 512, 512),
+          sourceNodeId: undefined,
+          sourceBucket: 'media-library',
+          sourceStoragePath: objectPath,
+        },
+      ]);
+      // A fresh navigation rather than reload(): the seed above lands after the canvas
+      // has already loaded this room once, and goto re-enters the route cleanly.
+      await page.goto(`/ai-studio?room=${ROOM_ID}`);
+      await openEditor(page, 3);
+
+      const src = await page
+        .locator('img[data-layer-id="bench-file"]')
+        .getAttribute('src');
+      // Signed, not a data: URL — the layer document lives inside the canvas JSON blob,
+      // which strips base64 on save, so a data URL would come back as nothing.
+      expect(src).toContain(objectPath);
+      expect(src?.startsWith('data:')).toBe(false);
+      // The whole point: this layer has no node behind it at all.
+      const stored = await storedLayers(supabase);
+      expect(stored.find((entry) => entry.id === 'bench-file')?.sourceNodeId).toBeUndefined();
+    } finally {
+      await supabase.storage.from('media-library').remove([objectPath]);
+    }
+  });
+
+  test('the upload affordance is reachable from the Add layer menu', async ({ page }) => {
+    await openEditor(page);
+    await page.getByRole('button', { name: 'Add layer' }).click();
+    await expect(page.getByRole('menuitem', { name: /Upload an image/ })).toBeVisible();
+    // The menu item drives this input; the input is what a drop and a paste share.
+    await expect(page.getByTestId('layer-file-input')).toHaveCount(1);
   });
 
   test('zoom is a real control — the readout changes and Fit restores it', async ({ page }) => {

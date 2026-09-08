@@ -16,6 +16,7 @@ import {
   rotateHandlePoint,
   rotateLayer,
   scaleGroup,
+  turnLayer,
 } from '../../utils/layers/layerGizmo';
 import { duplicateLayer, nudgeLayers, setLayer } from '../../utils/layers/layerOps';
 import {
@@ -66,6 +67,29 @@ const ZOOM_STEP = 1.0015;
 const ZOOM_KEY_STEP = 1.25;
 /** The invisible grab target is this many times the drawn handle. */
 const HANDLE_HIT_SCALE = 2.5;
+/** Composition pixels an arrow key moves a focused handle. Shift multiplies by 10. */
+const KEY_RESIZE_STEP = 1;
+/** Degrees `[` and `]` turn a layer when the rotate grip has focus. */
+const KEY_ROTATE_STEP = 5;
+
+/** Plain-language names for the handles, so a screen reader says something useful. */
+const HANDLE_LABELS: Record<ResizeHandle, string> = {
+  nw: 'top left',
+  n: 'top',
+  ne: 'top right',
+  e: 'right',
+  se: 'bottom right',
+  s: 'bottom',
+  sw: 'bottom left',
+  w: 'left',
+};
+
+const ARROW_DELTAS: Record<string, { x: number; y: number }> = {
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 },
+};
 
 export interface LayerStageProps {
   frame: Frame;
@@ -80,6 +104,10 @@ export interface LayerStageProps {
   onPreview: (layers: LayerEditorLayer[]) => void;
   /** Escape or `pointercancel`: throw the in-flight gesture away, leaving no history. */
   onCancel: () => void;
+  /** `#rrggbb` behind every layer. Undefined leaves the checkerboard showing. */
+  background?: string;
+  /** Images dropped onto the stage. The dialog uploads them and makes them layers. */
+  onDropFiles?: (files: File[]) => void;
   /** Alignment snapping to the frame and to the other layers' edges and centres. */
   snapEnabled: boolean;
 }
@@ -93,6 +121,8 @@ export function LayerStage({
   onBegin,
   onPreview,
   onCancel,
+  background,
+  onDropFiles,
   snapEnabled,
 }: LayerStageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -113,6 +143,8 @@ export function LayerStage({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   /** The rubber-band rect while dragging from empty space, in composition pixels. */
   const [marquee, setMarquee] = useState<Rect | null>(null);
+  /** A file is over the stage. Purely the drop affordance. */
+  const [dropActive, setDropActive] = useState(false);
 
   const baseScale = fitScale(frame, viewport);
   const scale = baseScale * zoom;
@@ -554,6 +586,54 @@ export function LayerStage({
     [endGesture, groupIds, layers, onPreview, runDrag, toComposition],
   );
 
+  /**
+   * Resize from the keyboard by moving the handle itself.
+   *
+   * Reusing `resizeLayer` with a SHIFTED handle point rather than writing a second
+   * scaling path: "the handle is one pixel further right" is exactly what a drag says,
+   * so the two routes cannot disagree about anchors, rotation or flipping.
+   */
+  const nudgeHandle = useCallback(
+    (layer: LayerEditorLayer, handle: ResizeHandle, event: React.KeyboardEvent) => {
+      const delta = ARROW_DELTAS[event.key];
+      if (!delta) return;
+      event.preventDefault();
+      // The stage's own keymap also listens for arrows to MOVE the layer; a focused
+      // handle means the user is resizing, not moving.
+      event.stopPropagation();
+      const step = KEY_RESIZE_STEP * (event.shiftKey ? 10 : 1);
+      const from = handlePoints(layer)[handle];
+      onBegin();
+      onPreview(
+        setLayer(layers, layer.id, {
+          ...resizeLayer(layer, handle, {
+            x: from.x + delta.x * step,
+            y: from.y + delta.y * step,
+          }),
+        }),
+      );
+    },
+    [layers, onBegin, onPreview],
+  );
+
+  const turnFromKeyboard = useCallback(
+    (layer: LayerEditorLayer, event: React.KeyboardEvent) => {
+      const direction = event.key === ']' ? 1 : event.key === '[' ? -1 : 0;
+      if (direction === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onBegin();
+      onPreview(
+        setLayer(
+          layers,
+          layer.id,
+          turnLayer(layer, direction * KEY_ROTATE_STEP * (event.shiftKey ? 3 : 1)),
+        ),
+      );
+    },
+    [layers, onBegin, onPreview],
+  );
+
   const startRotate = useCallback(
     (layer: LayerEditorLayer) => (event: React.PointerEvent<SVGCircleElement>) => {
       event.stopPropagation();
@@ -586,8 +666,40 @@ export function LayerStage({
       ref={containerRef}
       className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/20 p-4"
       data-testid="layer-stage"
+      // `application` because arrows, brackets and space are the stage's own controls
+      // here — under the default document reading mode a screen reader would intercept
+      // them before the gizmo ever saw one.
+      role="application"
+      aria-label="Layer composition stage"
       style={{ cursor: spaceHeld ? 'grab' : undefined }}
       onWheel={onWheel}
+      // Dropping a file straight onto the composition is the shortest path from "I have
+      // this image" to "it is placed". `dragover` must preventDefault or the browser
+      // navigates away to the file instead.
+      onDragOver={
+        onDropFiles
+          ? (event) => {
+              if (!event.dataTransfer.types.includes('Files')) return;
+              event.preventDefault();
+              setDropActive(true);
+            }
+          : undefined
+      }
+      onDragLeave={(event) => {
+        // Only when the pointer has left the stage itself, not merely crossed onto a
+        // child — dragleave fires for every descendant boundary.
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        setDropActive(false);
+      }}
+      onDrop={
+        onDropFiles
+          ? (event) => {
+              event.preventDefault();
+              setDropActive(false);
+              onDropFiles([...event.dataTransfer.files]);
+            }
+          : undefined
+      }
       // Middle-drag always pans; left-drag pans only while space is held, so the plain
       // left-drag stays what it should be — moving a layer.
       onPointerDown={(event) => {
@@ -639,6 +751,16 @@ export function LayerStage({
           accidental, and silently undone by any change to how the zoom transform is
           applied. Stated explicitly, every blend mode keeps matching the PNG.
         */}
+        {/* Over the checkerboard, under the layers — the same order the compositor
+            paints, so a `multiply` bottom layer blends against the fill here too. */}
+        {background ? (
+          <div
+            aria-hidden
+            className="absolute inset-0"
+            style={{ backgroundColor: background }}
+            data-testid="layer-frame-background"
+          />
+        ) : null}
         <div
           className="absolute left-0 top-0 origin-top-left overflow-hidden"
           style={{
@@ -683,7 +805,6 @@ export function LayerStage({
             className="pointer-events-none absolute left-0 top-0 overflow-visible"
             width={frame.width}
             height={frame.height}
-            aria-hidden
           >
             <title>Selection</title>
             {/* The alignment the drag has locked onto. Drawn across the whole frame so it
@@ -830,8 +951,10 @@ export function LayerStage({
                   strokeWidth={1}
                   vectorEffect="non-scaling-stroke"
                 />
+                {/* biome-ignore lint/a11y/useSemanticElements: an SVG <circle> cannot be a
+                    <button> either — same reason as the resize handles above. */}
                 <circle
-                  className="pointer-events-auto cursor-grab"
+                  className="pointer-events-auto cursor-grab focus-visible:outline-none"
                   cx={rotateHandlePoint(only, gripOffset).x}
                   cy={rotateHandlePoint(only, gripOffset).y}
                   r={handleSize * 0.6}
@@ -840,6 +963,10 @@ export function LayerStage({
                   strokeWidth={1.5}
                   vectorEffect="non-scaling-stroke"
                   onPointerDown={startRotate(only)}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Rotate ${only.name} — [ and ] keys`}
+                  onKeyDown={(event) => turnFromKeyboard(only, event)}
                   data-testid="layer-rotate-handle"
                 />
                 {/* The anchor, drawn because it is the pivot everything turns on. */}
@@ -858,8 +985,13 @@ export function LayerStage({
                       {/* An invisible target around the visible 9px square. 9px is well
                           under the ~24px a pointer actually lands within, so the drawn
                           handle stays small and precise while the grabbable area is not. */}
+                      {/* biome-ignore lint/a11y/useSemanticElements: an SVG <rect> cannot BE a
+                          <button>. The gizmo is drawn in composition coordinates with
+                          non-scaling strokes, so a real button would need a <foreignObject>
+                          and would stop scaling and rotating with the layer. role + tabIndex
+                          is the correct ARIA for a focusable SVG control. */}
                       <rect
-                        className="pointer-events-auto"
+                        className="pointer-events-auto focus-visible:outline-none"
                         x={point.x - (handleSize * HANDLE_HIT_SCALE) / 2}
                         y={point.y - (handleSize * HANDLE_HIT_SCALE) / 2}
                         width={handleSize * HANDLE_HIT_SCALE}
@@ -867,6 +999,13 @@ export function LayerStage({
                         fill="transparent"
                         style={{ cursor }}
                         onPointerDown={startResize(only, handle)}
+                        // Resize was keyboard-IMPOSSIBLE before this: the handles were
+                        // pointer-only shapes inside an aria-hidden <svg>, so the only
+                        // route to a layer's size was typing a scale percentage.
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Resize ${only.name} from the ${HANDLE_LABELS[handle]} — arrow keys`}
+                        onKeyDown={(event) => nudgeHandle(only, handle, event)}
                         data-testid={`layer-resize-${handle}`}
                       />
                       <rect
@@ -888,6 +1027,33 @@ export function LayerStage({
           </svg>
         </div>
       </div>
+
+      {/*
+        Announced only when NO gesture is in flight. During a drag `onPreview` fires per
+        pointer sample, and a live region wired to that would read a new position sixty
+        times a second — which is not information, it is noise that buries the answer.
+      */}
+      <span className="sr-only" aria-live="polite" data-testid="layer-announcement">
+        {readout || !only
+          ? ''
+          : `${only.name} at x ${Math.round(only.position.x)}, y ${Math.round(
+              only.position.y,
+            )}, ${Math.round(only.scale.x * 100)} percent, ${Math.round(only.rotation)} degrees`}
+      </span>
+
+      {dropActive ? (
+        <div
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-2 rounded-lg border-2 border-dashed',
+            'flex items-center justify-center text-2xs font-medium',
+          )}
+          style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}
+          data-testid="layer-drop-target"
+        >
+          Drop to add as a layer
+        </div>
+      ) : null}
 
       {/* The numbers for the gesture in flight. Centred at the top of the pane rather
           than chasing the pointer: a badge that follows the cursor sits under the hand

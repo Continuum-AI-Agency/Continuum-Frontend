@@ -481,3 +481,72 @@ describe('a multi-selection transforms as one box', () => {
     expect(view.queryByTestId('layer-resize-se')).not.toBeNull();
   });
 });
+
+describe('the gizmo is operable without a mouse', () => {
+  it('exposes each handle as a labelled control', () => {
+    const { view } = renderStage({ selectedIds: ['a'] });
+    const handle = view.getByTestId('layer-resize-se');
+
+    expect(handle.getAttribute('tabindex')).toBe('0');
+    expect(handle.getAttribute('role')).toBe('button');
+    expect(handle.getAttribute('aria-label')).toContain('bottom right');
+  });
+
+  it('an arrow key on a focused handle resizes the layer', () => {
+    const { calls, view } = renderStage({ selectedIds: ['a'] });
+
+    fireEvent.keyDown(view.getByTestId('layer-resize-se'), { key: 'ArrowRight' });
+
+    expect(calls.begin).toBe(1);
+    const next = (calls.previews.at(-1) as LayerEditorLayer[]).find((l) => l.id === 'a');
+    // Resize was keyboard-impossible before: the only route to a size was typing a
+    // percentage into the inspector.
+    expect(next?.scale.x).toBeGreaterThan(1);
+  });
+
+  it('shift makes the step coarse', () => {
+    const fine = renderStage({ selectedIds: ['a'] });
+    fireEvent.keyDown(fine.view.getByTestId('layer-resize-se'), { key: 'ArrowRight' });
+    const fineScale = (fine.calls.previews.at(-1) as LayerEditorLayer[])[0].scale.x;
+
+    cleanup();
+
+    const coarse = renderStage({ selectedIds: ['a'] });
+    fireEvent.keyDown(coarse.view.getByTestId('layer-resize-se'), {
+      key: 'ArrowRight',
+      shiftKey: true,
+    });
+    const coarseScale = (coarse.calls.previews.at(-1) as LayerEditorLayer[])[0].scale.x;
+
+    expect(coarseScale).toBeGreaterThan(fineScale);
+  });
+
+  it('brackets rotate from the grip', () => {
+    const { calls, view } = renderStage({ selectedIds: ['a'] });
+
+    fireEvent.keyDown(view.getByTestId('layer-rotate-handle'), { key: ']' });
+
+    const next = (calls.previews.at(-1) as LayerEditorLayer[])[0];
+    expect(next.rotation).toBeGreaterThan(0);
+
+    fireEvent.keyDown(view.getByTestId('layer-rotate-handle'), { key: '[' });
+    expect((calls.previews.at(-1) as LayerEditorLayer[])[0].rotation).toBeLessThan(0);
+  });
+
+  it('announces the selection once it is settled, and stays quiet mid-gesture', () => {
+    const { frame, view } = renderStage({ selectedIds: ['a'] });
+    expect(view.getByTestId('layer-announcement').textContent).toContain('x 100');
+
+    press(frame, 100, 100);
+    dispatch(frame, 'pointermove', 180, 160);
+    // Sixty announcements a second is noise, not information.
+    expect(view.getByTestId('layer-announcement').textContent).toBe('');
+  });
+
+  it('the stage names itself to assistive tech', () => {
+    const { view } = renderStage();
+    const stage = view.getByTestId('layer-stage');
+    expect(stage.getAttribute('role')).toBe('application');
+    expect(stage.getAttribute('aria-label')).toBe('Layer composition stage');
+  });
+});

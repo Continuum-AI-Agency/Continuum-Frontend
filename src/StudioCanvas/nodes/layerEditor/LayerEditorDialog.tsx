@@ -1,6 +1,6 @@
 'use client';
 
-import { Layers, Loader2, Plus, Redo2, Undo2 } from 'lucide-react';
+import { Layers, Loader2, Plus, Redo2, Undo2, Upload } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,6 +14,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
@@ -25,6 +26,12 @@ import {
   measureSource,
 } from '../../utils/layers/compositeLayers';
 import { type Frame, writeFrame } from '../../utils/layers/frameModel';
+import {
+  isPlaceableImage,
+  resolveLayerSources,
+  signLayerAsset,
+  uploadLayerAsset,
+} from '../../utils/layers/layerAssets';
 import {
   canRedo,
   canUndo,
@@ -75,6 +82,10 @@ export interface LayerEditorDialogProps {
   onOpenChange: (open: boolean) => void;
   frame: Frame;
   layers: readonly LayerEditorLayer[];
+  /** `#rrggbb` behind every layer, or undefined for the transparent default. */
+  background?: string;
+  /** Needed to upload a dropped or pasted file into the Library. */
+  brandId?: string;
   /** Everything wired into the node's `image-in` pool. */
   sources: readonly LayerSource[];
   /** Persist a committed document back to the node. */
@@ -88,13 +99,15 @@ export function LayerEditorDialog({
   onOpenChange,
   frame,
   layers,
+  background,
+  brandId,
   sources,
   onPersist,
   onCompose,
 }: LayerEditorDialogProps) {
   const [history, rawDispatch] = useReducer(
     layerDocReducer,
-    { frame, layers: [...layers] },
+    { frame, layers: [...layers], background },
     initialHistory,
   );
 
@@ -121,22 +134,107 @@ export function LayerEditorDialog({
     [sources],
   );
 
-  /** Layer id -> a displayable URL, resolved through the layer's upstream node. */
-  const displayUrls = useMemo(() => {
+  const refByNodeId = useMemo(
+    () => new Map([...sourceByNodeId].map(([nodeId, source]) => [nodeId, source.ref])),
+    [sourceByNodeId],
+  );
+
+  const sourceKey = useMemo(
+    () =>
+      doc.layers
+        .map((layer) =>
+          [
+            layer.id,
+            layer.sourceNodeId ?? '',
+            layer.sourceBucket ?? '',
+            layer.sourceStoragePath ?? '',
+          ].join('|'),
+        )
+        .join('\n'),
+    [doc.layers],
+  );
+
+  const layersRef = useRef(doc.layers);
+  layersRef.current = doc.layers;
+
+  /**
+   * Wired layers resolve SYNCHRONOUSLY, as they always did.
+   *
+   * Only a file-sourced layer needs a signature, and making the whole map async for its
+   * sake meant a graph-only document painted nothing on its first frame — a visible
+   * flash, and a stage that could not be clicked until a round trip nobody needed.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `sourceKey` is the content
+  // of `doc.layers` this reads. Keyed on the array itself it rebuilt every pointer
+  // sample, handing the memoised layers panel a new Map and undoing the memo.
+  const wiredUrls = useMemo(() => {
     const urls = new Map<string, string>();
-    for (const layer of doc.layers) {
-      const ref = sourceByNodeId.get(layer.sourceNodeId)?.ref;
+    for (const layer of layersRef.current) {
+      const ref = layer.sourceNodeId ? refByNodeId.get(layer.sourceNodeId) : undefined;
       if (ref) urls.set(layer.id, ref);
     }
     return urls;
-  }, [doc.layers, sourceByNodeId]);
+  }, [sourceKey, refByNodeId]);
+
+  const [assetUrls, setAssetUrls] = useState<ReadonlyMap<string, string>>(new Map());
+
+  // Signed URLs are cached for the life of the dialog, keyed by their durable
+  // coordinates. Without this every keystroke in the inspector re-signs every asset.
+  const signedCacheRef = useRef(new Map<string, string>());
+
+  /**
+   * What a layer's PIXELS depend on, and nothing else.
+   *
+   * `doc.layers` is a fresh array on every pointer sample — moving a layer has to produce
+   * one — so keying the signing effect on it would re-sign the whole document sixty times
+   * a second during a drag. Nothing about a layer's source changes when it moves.
+   */
+
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `assetKey` IS the dependency
+  // — it is the part of `doc.layers` this effect reads, taken through a ref so that
+  // moving a layer does not re-sign it.
+  useEffect(() => {
+    let cancelled = false;
+    void resolveLayerSources({
+      layers: layersRef.current,
+      // Empty: the wired half is resolved synchronously above, so this pass signs only
+      // the layers that actually need a signature.
+      refByNodeId: new Map(),
+      sign: async (coordinates) => {
+        const key = `${coordinates.bucket}/${coordinates.storagePath}`;
+        const cached = signedCacheRef.current.get(key);
+        if (cached) return cached;
+        const url = await signLayerAsset(coordinates);
+        if (url) signedCacheRef.current.set(key, url);
+        return url;
+      },
+    }).then((urls) => {
+      if (cancelled) return;
+      // A graph-only document signs nothing, so this would otherwise write an empty Map
+      // over an empty Map on every open — one wasted render, and a state update that
+      // lands after the tests' act() window.
+      setAssetUrls((current) => (urls.size === 0 && current.size === 0 ? current : urls));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceKey]);
+
+  /** Both routes, with the wired node winning wherever a layer has both. */
+  const displayUrls = useMemo(() => {
+    if (assetUrls.size === 0) return wiredUrls;
+    const merged = new Map(assetUrls);
+    for (const [id, url] of wiredUrls) merged.set(id, url);
+    return merged as ReadonlyMap<string, string>;
+  }, [assetUrls, wiredUrls]);
 
   // Reload from the node ONLY on the false->true edge of `open`. The node's data is the
   // document of record, but this dialog writes back to it — so depending on `layers`
   // here would reset the history on the dialog's own save and eat the edit that caused
   // it. `latestRef` is how the open handler reads current data without subscribing.
-  const latestRef = useRef({ frame, layers });
-  latestRef.current = { frame, layers };
+  const latestRef = useRef({ frame, layers, background });
+  latestRef.current = { frame, layers, background };
   useEffect(() => {
     if (!open) {
       seededRef.current = false;
@@ -144,7 +242,11 @@ export function LayerEditorDialog({
     }
     dispatch({
       type: 'reset',
-      doc: { frame: latestRef.current.frame, layers: [...latestRef.current.layers] },
+      doc: {
+        frame: latestRef.current.frame,
+        layers: [...latestRef.current.layers],
+        background: latestRef.current.background,
+      },
     });
     setSelectedIds([]);
   }, [open]);
@@ -183,6 +285,76 @@ export function LayerEditorDialog({
     },
     [commitLayers, doc.frame, doc.layers],
   );
+
+  const [placing, setPlacing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Drop, paste or pick — one path for all three.
+   *
+   * Uploaded BEFORE the layer exists, so a layer never references pixels that are not
+   * durable yet. A failure therefore leaves the document untouched rather than adding a
+   * layer that can never resolve.
+   */
+  const placeFiles = useCallback(
+    async (files: readonly File[]) => {
+      const images = files.filter(isPlaceableImage);
+      if (images.length === 0) return;
+      if (!brandId) {
+        setProblem('Pick a brand before adding images — uploads are stored per brand.');
+        return;
+      }
+
+      setPlacing(true);
+      setProblem(null);
+      const placed: LayerEditorLayer[] = [];
+      try {
+        for (const file of images) {
+          const asset = await uploadLayerAsset({ file, brandId });
+          const size = await measureSource(asset.signedUrl);
+          signedCacheRef.current.set(`${asset.bucket}/${asset.storagePath}`, asset.signedUrl);
+          placed.push(
+            createLayer({
+              name: asset.name,
+              sourceWidth: size.width,
+              sourceHeight: size.height,
+              sourceAssetId: asset.assetId,
+              sourceVersionId: asset.versionId,
+              sourceBucket: asset.bucket,
+              sourceStoragePath: asset.storagePath,
+              frame: doc.frame,
+            }),
+          );
+        }
+      } catch (error) {
+        setProblem(
+          error instanceof Error ? `Could not add that image: ${error.message}` : 'Upload failed',
+        );
+      } finally {
+        setPlacing(false);
+      }
+
+      if (placed.length === 0) return;
+      commitLayers([...doc.layers, ...placed]);
+      setSelectedIds(placed.map((layer) => layer.id));
+    },
+    [brandId, commitLayers, doc.frame, doc.layers],
+  );
+
+  // Paste anywhere in the editor. Scoped to `open` so it never competes with the canvas'
+  // own clipboard handling, which pastes NODES.
+  useEffect(() => {
+    if (!open) return;
+    const onPaste = (event: ClipboardEvent) => {
+      const files = [...(event.clipboardData?.files ?? [])];
+      if (files.some(isPlaceableImage)) {
+        event.preventDefault();
+        void placeFiles(files);
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [open, placeFiles]);
 
   // Opening an empty editor onto a wired-up node places what is connected. Making the
   // user add each one by hand first would be a step with no decision in it.
@@ -365,13 +537,23 @@ export function LayerEditorDialog({
         frame: doc.frame,
         layers: doc.layers,
         images,
+        background: doc.background,
       });
+      // A composite with holes in it is not a draft, it is a wrong answer — and it used
+      // to be uploaded to the Library anyway, behind an amber note nobody had to read.
+      // The layers are still there and still editable; reconnect the source and compose
+      // again. This is a gate, not a warning.
       if (result.missing.length > 0) {
+        const names = doc.layers
+          .filter((layer) => result.missing.includes(layer.id))
+          .map((layer) => layer.name);
         setProblem(
-          `${result.missing.length} layer${result.missing.length === 1 ? '' : 's'} had no pixels and ${
-            result.missing.length === 1 ? 'was' : 'were'
-          } left out.`,
+          `Nothing was composed: ${names.length === 1 ? 'layer' : 'layers'} ${names
+            .map((name) => `"${name}"`)
+            .join(', ')} ${names.length === 1 ? 'has' : 'have'} no pixels. ` +
+            'Reconnect the upstream node, or hide the layer, then compose again.',
         );
+        return;
       }
       const blob = await (await fetch(result.dataUrl)).blob();
       await onCompose({
@@ -454,17 +636,25 @@ export function LayerEditorDialog({
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={unplaced.length === 0}
-                    >
-                      <Plus className="mr-1 h-3.5 w-3.5" /> Add layer
+                    <Button type="button" size="sm" variant="outline" disabled={placing}>
+                      {placing ? (
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="mr-1 h-3.5 w-3.5" />
+                      )}
+                      Add layer
                     </Button>
                   }
                 />
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    className="text-2xs"
+                    onSelect={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-3 w-3" />
+                    Upload an image…
+                  </DropdownMenuItem>
+                  {unplaced.length > 0 ? <DropdownMenuSeparator /> : null}
                   {unplaced.map((source) => (
                     <DropdownMenuItem
                       key={source.nodeId}
@@ -476,6 +666,22 @@ export function LayerEditorDialog({
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* The picker itself. Hidden rather than styled: a file input's own button
+                  cannot be restyled to match, and the menu item above is the affordance. */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={(event) => {
+                  const files = [...(event.currentTarget.files ?? [])];
+                  event.currentTarget.value = '';
+                  void placeFiles(files);
+                }}
+                data-testid="layer-file-input"
+              />
               <Button type="button" size="sm" onClick={() => void compose()} disabled={composing}>
                 {composing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
                 Compose
@@ -487,6 +693,7 @@ export function LayerEditorDialog({
             <aside className="flex w-56 shrink-0 flex-col overflow-y-auto border-r border-border/60">
               <LayersPanel
                 layers={doc.layers}
+                sources={displayUrls}
                 selectedIds={selectedIds}
                 onSelectionChange={setSelectedIds}
                 onToggleVisible={(id) => {
@@ -507,11 +714,13 @@ export function LayerEditorDialog({
               frame={doc.frame}
               layers={doc.layers}
               sources={displayUrls}
+              background={doc.background}
               selectedIds={selectedIds}
               onSelectionChange={setSelectedIds}
               onBegin={() => dispatch({ type: 'begin' })}
               onPreview={(next) => dispatch({ type: 'preview', doc: { ...doc, layers: next } })}
               onCancel={() => dispatch({ type: 'cancel' })}
+              onDropFiles={(files) => void placeFiles(files)}
               snapEnabled={snapEnabled}
             />
 
@@ -520,6 +729,10 @@ export function LayerEditorDialog({
                 frame={doc.frame}
                 onFrameChange={(width, height) => previewDoc(framed(width, height))}
                 onFrameCommit={(width, height) => settleDoc(framed(width, height))}
+                background={doc.background ?? null}
+                onBackgroundChange={(background) =>
+                  commit({ ...doc, background: background ?? undefined })
+                }
                 layer={selectedLayers[0] ?? null}
                 selectionCount={selectedLayers.length}
                 onLayerChange={(patch) => previewDoc(patched(patch))}
