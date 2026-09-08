@@ -8487,6 +8487,112 @@ export type Database = {
         }
         Relationships: []
       }
+      project_memberships: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          brand_id: string
+          entity_id: string
+          entity_type: string
+          project_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          brand_id: string
+          entity_id: string
+          entity_type: string
+          project_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          brand_id?: string
+          entity_id?: string
+          entity_type?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_memberships_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "project_memberships_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_memberships_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          ad_account_ids: string[]
+          brand_id: string
+          brief: string | null
+          campaign_ids: string[]
+          color: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ad_account_ids?: string[]
+          brand_id: string
+          brief?: string | null
+          campaign_ids?: string[]
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ad_account_ids?: string[]
+          brand_id?: string
+          brief?: string | null
+          campaign_ids?: string[]
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "projects_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prompt_templates: {
         Row: {
           brand_profile_id: string
@@ -17892,6 +17998,7 @@ export type Database = {
           p_owner_ids?: string[]
           p_performance_window?: string
           p_placements?: string[]
+          p_project_ids?: string[]
           p_ratios?: string[]
           p_review_statuses?: string[]
           p_search?: string
@@ -17921,6 +18028,7 @@ export type Database = {
           p_owner_ids?: string[]
           p_performance_window?: string
           p_placements?: string[]
+          p_project_ids?: string[]
           p_ratios?: string[]
           p_review_statuses?: string[]
           p_search?: string
