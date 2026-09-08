@@ -3,6 +3,7 @@ import {
   BookText,
   Building2,
   CreditCard,
+  FolderKanban,
   IdCard,
   Library,
   Link2,
@@ -24,6 +25,7 @@ export type SectionDef = {
 export const BRAND_SECTIONS = [
   { key: 'activation', label: 'Activation', icon: Rocket, scope: 'brand' },
   { key: 'general', label: 'General', icon: IdCard, scope: 'brand' },
+  { key: 'projects', label: 'Projects', icon: FolderKanban, scope: 'brand' },
   { key: 'brand-intelligence', label: 'Brand Intelligence', icon: Library, scope: 'brand' },
   { key: 'skills', label: 'Skills', icon: Sparkles, scope: 'brand' },
   { key: 'prompts', label: 'Prompts', icon: BookText, scope: 'brand' },
@@ -42,6 +44,7 @@ export const ACCOUNT_SECTIONS = [
 export const ALL_SECTION_KEYS = [
   'activation',
   'general',
+  'projects',
   'brand-intelligence',
   'skills',
   'prompts',

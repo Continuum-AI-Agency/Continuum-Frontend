@@ -24,6 +24,7 @@ import { BrandPulseSection } from '@/components/settings/brand/BrandPulseSection
 import { DesignSystemSection } from '@/components/settings/brand/DesignSystemSection';
 import { PromptsSettingsSection } from '@/components/settings/brand/PromptsSettingsSection';
 import { SkillsSettingsSection } from '@/components/settings/brand/SkillsSettingsSection';
+import { ProjectsSettingsSection } from '@/components/settings/projects/ProjectsSettingsSection';
 import { RoleCapabilityLegend } from '@/components/settings/RoleCapabilityLegend';
 import { AccountNavPill } from '@/components/settings/shell/AccountNavPill';
 import { BrandNavPill } from '@/components/settings/shell/BrandNavPill';
@@ -167,6 +168,18 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             />
           </SettingsSection>
         ) : null}
+      </>
+    );
+  } else if (initialSection === 'projects') {
+    activeSectionSlot = (
+      <>
+        {createBrandHeader(defaultBrandName)}
+        <SettingsSection
+          title="Projects"
+          description="A direction inside this brand — a brief, a colour, and the ad accounts and campaigns it covers. Select a project on an agent surface and it reads only that project's evidence."
+        >
+          <ProjectsSettingsSection brandId={activeBrandId} />
+        </SettingsSection>
       </>
     );
   } else if (initialSection === 'skills') {

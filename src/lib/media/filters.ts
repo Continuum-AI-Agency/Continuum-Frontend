@@ -155,6 +155,7 @@ export function buildLibraryBrowseParams(
   setList(params, 'reviewStatuses', query.reviewStatuses);
   setList(params, 'ownerIds', query.ownerIds);
   setList(params, 'campaignIds', query.campaignIds);
+  setList(params, 'projectIds', query.projectIds);
   setList(params, 'usageRights', query.usageRights);
   if (query.collectionId) params.set('collection', query.collectionId);
   if (query.used !== undefined && query.used !== null) params.set('used', String(query.used));

@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { useProjects } from '@/lib/projects';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
 import {
   buildLibraryBrowseParams,
@@ -54,6 +55,7 @@ import { LibraryTagManager } from './LibraryTagManager';
 import { McpUploadIntentPanel } from './McpUploadIntentPanel';
 import { MediaGrid } from './MediaGrid';
 import { MediaSearchBar } from './MediaSearchBar';
+import { PipelinePanel } from './PipelinePanel';
 import { TemplateGrid } from './TemplateGrid';
 import { TypographyPanel } from './TypographyPanel';
 import { UploadStrip } from './UploadStrip';
@@ -108,6 +110,12 @@ export function LibraryViewer({
     initialBrowseQuery.mediaType,
   );
   const [optimisticTags, setOptimisticTags] = useOptimistic(selectedTags);
+  const [optimisticProjectIds, setOptimisticProjectIds] = useOptimistic(
+    initialBrowseQuery.projectIds,
+  );
+  // The project vocabulary the filter section and the bulk "tag into project" control both
+  // read. One fetch for the page: two hooks would be two identical round-trips.
+  const { projects } = useProjects(brandId);
   const [optimisticSort, setOptimisticSort] = useOptimistic(initialBrowseQuery.sort);
   const [optimisticLayout, setOptimisticLayout] = useOptimistic(initialBrowseQuery.layout);
   const [optimisticReviewStatuses, setOptimisticReviewStatuses] = useOptimistic(
@@ -176,6 +184,7 @@ export function LibraryViewer({
 
   const showTemplates = initialBrowseQuery.templateOnly;
   const showTypography = section === 'typography';
+  const showPipelines = section === 'pipelines';
   // Only fetched for the two panels that read it — the creative grid must not pay for a
   // template list nobody asked for.
   const needsTemplateSources = showTemplates || showTypography;
@@ -215,6 +224,7 @@ export function LibraryViewer({
       kind?: KindFilterValue;
       mediaType?: LibraryMediaType;
       tags?: string[];
+      projectIds?: string[];
       sort?: LibrarySort;
       layout?: LibraryLayout;
       reviewStatuses?: LibraryBrowseQuery['reviewStatuses'];
@@ -246,6 +256,7 @@ export function LibraryViewer({
           ? kindToMediaType(nextKind === 'all' ? null : nextKind)
           : optimisticMediaType);
       const nextTags = next.tags ?? optimisticTags;
+      const nextProjectIds = next.projectIds ?? optimisticProjectIds;
       const nextSort = next.sort ?? optimisticSort;
       const nextLayout = next.layout ?? optimisticLayout;
       const nextCollectionId =
@@ -256,6 +267,7 @@ export function LibraryViewer({
         mediaType: nextMediaType,
         createdWith: [...nextCreatedWith],
         tags: [...nextTags],
+        projectIds: [...nextProjectIds],
         reviewStatuses: next.reviewStatuses ?? initialBrowseQuery.reviewStatuses,
         placements: next.placements ?? initialBrowseQuery.placements,
         used: next.used !== undefined ? next.used : initialBrowseQuery.used,
@@ -282,6 +294,7 @@ export function LibraryViewer({
         setOptimisticKind(nextKind);
         setOptimisticMediaType(nextMediaType);
         setOptimisticTags(nextTags);
+        setOptimisticProjectIds(nextProjectIds);
         setOptimisticSort(nextSort);
         setOptimisticLayout(nextLayout);
         setOptimisticReviewStatuses(nextQuery.reviewStatuses);
@@ -296,6 +309,7 @@ export function LibraryViewer({
       optimisticKind,
       optimisticMediaType,
       optimisticTags,
+      optimisticProjectIds,
       optimisticSort,
       optimisticLayout,
       initialBrowseQuery,
@@ -304,6 +318,7 @@ export function LibraryViewer({
       setOptimisticKind,
       setOptimisticMediaType,
       setOptimisticTags,
+      setOptimisticProjectIds,
       setOptimisticSort,
       setOptimisticLayout,
       setOptimisticReviewStatuses,
@@ -353,6 +368,10 @@ export function LibraryViewer({
           // Not a browse query: fonts are not media.assets rows. Section lives in the URL so
           // a refresh and a shared link land on the same panel.
           startFilterTransition(() => router.push('/library?section=typography'));
+          return;
+        case 'pipelines':
+          // Same exception: a published pipeline is a canvas_workflows row, not an asset.
+          startFilterTransition(() => router.push('/library?section=pipelines'));
           return;
         case 'needs_review':
           pushFilters({
@@ -465,9 +484,11 @@ export function LibraryViewer({
               title={
                 showTypography
                   ? 'Typography'
-                  : showTemplates
-                    ? 'Templates'
-                    : (activeCollection?.name ?? browseTitle ?? 'All Media')
+                  : showPipelines
+                    ? 'Pipelines'
+                    : showTemplates
+                      ? 'Templates'
+                      : (activeCollection?.name ?? browseTitle ?? 'All Media')
               }
               action={
                 <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
@@ -552,6 +573,9 @@ export function LibraryViewer({
                 tagOptions={tagOptions}
                 selectedTags={optimisticTags}
                 onTagsChange={(tags) => pushFilters({ tags })}
+                projectOptions={projects}
+                selectedProjectIds={optimisticProjectIds}
+                onProjectIdsChange={(projectIds) => pushFilters({ projectIds })}
                 customFields={customFields ?? []}
                 fieldFilters={fieldFilters}
                 onFieldFiltersChange={(next) => {
@@ -680,6 +704,7 @@ export function LibraryViewer({
                 brandId={brandId}
                 assetIds={[...selectedAssetIds]}
                 collections={initialCollections}
+                projects={projects}
                 customFields={customFields ?? []}
                 currentCollectionId={selectedCollectionId}
                 onClear={() => setSelectedAssetIds(new Set())}
@@ -704,6 +729,8 @@ export function LibraryViewer({
             >
               {showTypography ? (
                 <TypographyPanel brandId={brandId} templateSources={templateSources} />
+              ) : showPipelines ? (
+                <PipelinePanel brandId={brandId} />
               ) : showTemplates ? (
                 <TemplateGrid
                   brandId={brandId}

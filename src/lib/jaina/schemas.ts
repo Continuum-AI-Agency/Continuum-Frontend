@@ -1,6 +1,7 @@
 import {
   agentAttachmentSchema,
   agentDelegatedFrameSchema,
+  agentDocumentAttachmentSchema,
   checkpointBlockV2LenientSchema,
   blockBaseSchema as contractBlockBaseSchema,
   chartBlockBaseSchema as contractChartBlockBaseSchema,
@@ -107,6 +108,19 @@ export const jainaChatRequestSchema = z.object({
     timezone: z.string().min(1).max(64).optional(),
     references: z.array(agentMentionReferenceSchema).optional(),
     images: z.array(agentAttachmentSchema).optional(),
+    /**
+     * The optional sub-brand PROJECT scope. Same stripping hazard as `scaffold_action`:
+     * without this line the selected project never leaves the browser and every turn runs
+     * at brand scope while the chip says otherwise.
+     */
+    projectId: z.string().uuid().optional(),
+    /**
+     * Composer document attachments and the ephemeral-retrieval scope key. Both were
+     * already being SENT by `useJainaChatStream` and both were being silently deleted
+     * here — the exact failure this schema's own comment warns about, live.
+     */
+    documents: z.array(agentDocumentAttachmentSchema).optional(),
+    documentScopeKey: z.string().min(1).max(200).optional(),
   }),
 });
 

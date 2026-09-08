@@ -54,6 +54,16 @@ export const jainaChatContextSchema = z
      */
     adAccountIds: z.array(z.string().min(1)).min(1).max(JAINA_MAX_AD_ACCOUNTS).optional(),
     brandId: z.string().min(1, 'context.brandId is required'),
+    /**
+     * OPTIONAL sub-brand scope. The brand still identifies who this is; the project narrows
+     * the EVIDENCE the turn reads — the ad-account set is intersected with the project's
+     * declared accounts, and document retrieval filters to the documents tagged into it.
+     *
+     * Absent means brand scope, i.e. exactly the behaviour that shipped before projects.
+     * Never trusted on its own: the Backend re-reads the project and drops it unless the row
+     * belongs to `brandId`, so naming another brand's project id buys nothing.
+     */
+    projectId: z.string().uuid().optional(),
     sessionId: z.string().min(1).optional(),
     canvas: z.boolean().optional(),
     // The browser's IANA zone. Absent for non-browser callers (Slack, MCP, cross-agent),

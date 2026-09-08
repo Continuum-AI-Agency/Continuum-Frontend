@@ -29,6 +29,7 @@ export async function GET(request: Request) {
     reviewStatuses: parseTagsParam(url.searchParams.get('reviewStatuses')),
     ownerIds: parseTagsParam(url.searchParams.get('ownerIds')),
     campaignIds: parseTagsParam(url.searchParams.get('campaignIds')),
+    projectIds: parseTagsParam(url.searchParams.get('projectIds')),
     usageRights: parseTagsParam(url.searchParams.get('usageRights')),
     collectionId: url.searchParams.get('collection') ?? url.searchParams.get('collectionId'),
     used: optionalBoolean(url.searchParams.get('used')),

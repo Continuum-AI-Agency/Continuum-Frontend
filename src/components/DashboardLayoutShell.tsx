@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import type React from 'react';
+import { ActiveProjectProvider } from '@/components/projects';
 import { ClientOnly } from '@/components/ui/ClientOnly';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { DashboardHeader } from './dashboard-header';
@@ -95,36 +96,41 @@ export default function DashboardLayoutShell({
       user={user}
       permissions={permissions}
     >
-      {/* Above the route tree but inside the tenant boundary: detached runs survive
-          navigation without ever leaking across an active-brand change. */}
-      <AgentRunsProvider>
-        <ClientRenderProvider>
-          <CommandPaletteProvider>
-            <StrategicAnalysisRealtimeListener brandId={activeBrandId} />
-            <StrategicAnalysisStatusPill brandId={activeBrandId} />
-            <div className="relative">
-              <div className="particle-layer top" aria-hidden="true" />
-              <div className="particle-layer bottom" aria-hidden="true" />
+      {/* Inside the brand provider because a project belongs to exactly one brand: the
+          selection is dropped on a brand switch rather than narrowing brand B's reads by
+          brand A's project id. */}
+      <ActiveProjectProvider>
+        {/* Above the route tree but inside the tenant boundary: detached runs survive
+            navigation without ever leaking across an active-brand change. */}
+        <AgentRunsProvider>
+          <ClientRenderProvider>
+            <CommandPaletteProvider>
+              <StrategicAnalysisRealtimeListener brandId={activeBrandId} />
+              <StrategicAnalysisStatusPill brandId={activeBrandId} />
+              <div className="relative">
+                <div className="particle-layer top" aria-hidden="true" />
+                <div className="particle-layer bottom" aria-hidden="true" />
 
-              <SidebarProvider defaultOpen={false}>
-                <AppSidebar automationEnvironment={automationEnvironment} />
-                <SidebarInset className="flex h-dvh flex-col overflow-hidden bg-transparent">
-                  <DashboardHeader changelogEntries={changelogEntries} />
-                  {/* No inline gutter: surfaces are full-bleed panes and the
-                      sidebar's own border-r is the separation. */}
-                  <main className="@container/app-main min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-[var(--shell-stack-gap)]">
-                    <ClientOnly>
-                      <BrandWelcomeBanner />
-                    </ClientOnly>
-                    {children}
-                  </main>
-                </SidebarInset>
-              </SidebarProvider>
-            </div>
-            <CommandPalette automationEnvironment={automationEnvironment} />
-          </CommandPaletteProvider>
-        </ClientRenderProvider>
-      </AgentRunsProvider>
+                <SidebarProvider defaultOpen={false}>
+                  <AppSidebar automationEnvironment={automationEnvironment} />
+                  <SidebarInset className="flex h-dvh flex-col overflow-hidden bg-transparent">
+                    <DashboardHeader changelogEntries={changelogEntries} />
+                    {/* No inline gutter: surfaces are full-bleed panes and the
+                        sidebar's own border-r is the separation. */}
+                    <main className="@container/app-main min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-[var(--shell-stack-gap)]">
+                      <ClientOnly>
+                        <BrandWelcomeBanner />
+                      </ClientOnly>
+                      {children}
+                    </main>
+                  </SidebarInset>
+                </SidebarProvider>
+              </div>
+              <CommandPalette automationEnvironment={automationEnvironment} />
+            </CommandPaletteProvider>
+          </ClientRenderProvider>
+        </AgentRunsProvider>
+      </ActiveProjectProvider>
     </ActiveBrandProvider>
   );
 }

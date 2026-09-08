@@ -60,6 +60,7 @@ import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { prependUnseen, useEarlierHistory } from '@/components/chat/useEarlierHistory';
 import type { ToolApprovalDecision } from '@/components/paid-media/jaina/components/JainaToolApprovalCard';
 import type { ScaffoldDecision } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
+import { useActiveProjectOptional } from '@/components/projects';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useJainaChatStream } from '@/hooks/useJainaChatStream';
@@ -1185,6 +1186,9 @@ export function JainaChatSurface({
 
   const { state, start, cancel, detach, reset, clearMemory, liveRunId } = useJainaChatStream();
   const isStreaming = state.status === 'streaming' || state.status === 'starting';
+  // The optional sub-brand scope. Brand identity is unchanged; what narrows on the Backend
+  // is the evidence — ad accounts and the documents the turn may read.
+  const activeProjectId = useActiveProjectOptional()?.activeProjectId ?? null;
 
   const [isJainaProMode, setIsJainaProMode] = React.useState(false);
   const { isCollapsed: isSidebarCollapsed, toggle: toggleSidebarCollapsed } =
@@ -2645,6 +2649,7 @@ export function JainaChatSurface({
         canvas: input.canvas || Boolean(campaignCanvasPayload),
         adAccountId,
         brandId: brandProfileId,
+        projectId: activeProjectId,
         sessionId: activeSessionId,
         clarificationId: input.clarificationId,
         userId: userId ?? undefined,
@@ -2673,6 +2678,7 @@ export function JainaChatSurface({
       return true;
     },
     [
+      activeProjectId,
       adAccountId,
       brandProfileId,
       campaignCanvasPayload,

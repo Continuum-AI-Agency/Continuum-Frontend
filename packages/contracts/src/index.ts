@@ -25,6 +25,7 @@ export * from './optimization/index';
 export * from './organic/index';
 export * from './paid/index';
 export * from './paid-creative/index';
+export * from './projects/index';
 export * from './prompts/index';
 export * from './shared/parseRows';
 export * from './skills/index';

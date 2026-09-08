@@ -29,6 +29,11 @@ type JainaChatInput = {
   canvas?: boolean;
   adAccountId: string;
   brandId: string;
+  /**
+   * The optional sub-brand project scope, from ActiveProjectProvider. Absent means brand
+   * scope — the behaviour that shipped before projects existed.
+   */
+  projectId?: string | null;
   sessionId?: string;
   clarificationId?: string;
   userId?: string;
@@ -281,6 +286,7 @@ export function useJainaChatStream() {
             brandId: input.brandId,
             sessionId: input.sessionId,
             canvas: input.canvas,
+            ...(input.projectId ? { projectId: input.projectId } : {}),
             // Jaina answers questions phrased in the user's local calendar
             // ("last week", "since yesterday"), so it needs their zone.
             timezone: browserTimezone(),

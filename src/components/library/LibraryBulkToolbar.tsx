@@ -1,7 +1,23 @@
 'use client';
 
-import type { CustomField, CustomFieldValue, MediaCollection } from '@continuum/contracts';
-import { Check, FolderInput, Link2, ListPlus, Loader2, Tag, Trash2, Workflow, X } from 'lucide-react';
+import type {
+  CustomField,
+  CustomFieldValue,
+  MediaCollection,
+  Project,
+} from '@continuum/contracts';
+import {
+  Check,
+  FolderInput,
+  FolderOpen,
+  Link2,
+  ListPlus,
+  Loader2,
+  Tag,
+  Trash2,
+  Workflow,
+  X,
+} from 'lucide-react';
 import { useState } from 'react';
 import {
   AlertDialog,
@@ -29,12 +45,14 @@ import {
   mutateCollectionMembershipOperation,
 } from '@/lib/library/creativeOperations';
 import { createShareLink } from '@/lib/library/share';
+import { useProjectMutations } from '@/lib/projects';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export function LibraryBulkToolbar({
   brandId,
   assetIds,
   collections,
+  projects,
   customFields,
   currentCollectionId,
   onClear,
@@ -43,12 +61,14 @@ export function LibraryBulkToolbar({
   brandId: string;
   assetIds: string[];
   collections: MediaCollection[];
+  projects: Project[];
   customFields: CustomField[];
   currentCollectionId: string | null;
   onClear: () => void;
   onCompleted: () => void;
 }) {
   const [collectionId, setCollectionId] = useState('');
+  const [projectId, setProjectId] = useState('');
   const [tag, setTag] = useState('');
   const [reviewStatus, setReviewStatus] = useState('');
   const [fieldId, setFieldId] = useState('');
@@ -57,6 +77,9 @@ export function LibraryBulkToolbar({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const client = () => createSupabaseBrowserClient();
+  // Tagging is what makes the Library's Project filter mean anything: without it the filter
+  // can only ever narrow to nothing.
+  const { tag: tagIntoProject } = useProjectMutations(brandId);
   const selectedField = customFields.find((field) => field.id === fieldId) ?? null;
   const fieldPayload: CustomFieldValue =
     selectedField?.type === 'multi_select'
@@ -137,6 +160,41 @@ export function LibraryBulkToolbar({
         >
           Remove here
         </Button>
+      ) : null}
+      {projects.length > 0 ? (
+        <div className="flex items-center gap-1 rounded-md border border-border bg-background pl-2">
+          <FolderOpen className="size-3.5 text-muted-foreground" aria-hidden />
+          <Select value={projectId} onValueChange={setProjectId}>
+            <SelectTrigger size="sm" className="h-7 w-32 border-0 shadow-none" aria-label="Project">
+              <SelectValue placeholder="Project" />
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7"
+            disabled={!projectId || Boolean(busy)}
+            onClick={() =>
+              void run('Tagged into project', () =>
+                tagIntoProject.mutateAsync({
+                  projectId,
+                  entityType: 'asset',
+                  entityIds: assetIds,
+                }),
+              )
+            }
+          >
+            Tag
+          </Button>
+        </div>
       ) : null}
       <div className="flex items-center rounded-md border border-border bg-background pl-2">
         <Tag className="size-3.5 text-muted-foreground" aria-hidden />

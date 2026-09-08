@@ -43,6 +43,10 @@ mock.module('@/components/ui/animated-shader-background', () => ({
 
 mock.module('@/components/ui/ToastProvider', () => ({
   useToast: () => ({ show: toastShowMock }),
+  // A mock.module REPLACES the module: any export the real one has and this one omits is a
+  // hard SyntaxError for whatever imports it. ActiveBrandProvider — reachable from the
+  // surface through the project-scope chip — imports this one.
+  useToastContext: () => null,
 }));
 
 mock.module('@/CampaignCanvas/hooks/useCampaignAI', () => ({

@@ -6,6 +6,7 @@ import type {
   LibraryBrowseQuery,
 } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { libraryBrowseRpcArgs } from './browse-args';
 import { buildCarousel, carouselSignablePaths } from './carousel';
 import { rowToSignedMediaAsset } from './mapper';
 import { buildAssetPreview, loadAssetRenditions, renditionSignablePaths } from './renditions';
@@ -27,29 +28,6 @@ type FacetRow = {
   value: string;
   result_count: number | string;
 };
-
-function queryRpcArgs(query: LibraryBrowseQuery) {
-  return {
-    p_brand_id: query.brandId,
-    p_media_type: query.mediaType,
-    p_sources: query.createdWith.length > 0 ? query.createdWith : null,
-    p_tags: query.tags.length > 0 ? query.tags : null,
-    p_review_statuses: query.reviewStatuses.length > 0 ? query.reviewStatuses : null,
-    p_owner_ids: query.ownerIds.length > 0 ? query.ownerIds : null,
-    p_campaign_ids: query.campaignIds.length > 0 ? query.campaignIds : null,
-    p_usage_rights: query.usageRights.length > 0 ? query.usageRights : null,
-    p_placements: query.placements.length > 0 ? query.placements : null,
-    p_collection_id: query.collectionId ?? null,
-    p_used: query.used ?? null,
-    p_shared: query.shared ?? null,
-    p_leading_only: query.leadingOnly,
-    p_template_only: query.templateOnly,
-    p_ratios: query.ratios.length > 0 ? query.ratios : null,
-    p_fonts: query.fonts.length > 0 ? query.fonts : null,
-    p_search: query.search || null,
-    p_performance_window: query.performanceWindow,
-  };
-}
 
 function decodeCursor(value: string | null | undefined): Record<string, unknown> | null {
   if (!value) return null;
@@ -77,7 +55,7 @@ export async function fetchLibraryBrowsePage(
   query: LibraryBrowseQuery,
 ): Promise<LibraryBrowsePage> {
   const { data, error } = await mediaSchema(client).rpc('library_browse_page', {
-    ...queryRpcArgs(query),
+    ...libraryBrowseRpcArgs(query),
     p_sort: query.sort,
     p_cursor: decodeCursor(query.cursor),
     p_limit: query.limit,
@@ -129,7 +107,7 @@ export async function fetchLibraryBrowseFacets(
 ): Promise<LibraryBrowseFacets> {
   const { data, error } = await mediaSchema(client).rpc(
     'library_browse_facets',
-    queryRpcArgs(query),
+    libraryBrowseRpcArgs(query),
   );
   if (error) throw new Error(`Library facets failed: ${error.message}`);
 

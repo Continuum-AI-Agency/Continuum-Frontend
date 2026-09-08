@@ -7,10 +7,12 @@ import type {
   LibraryPlacement,
   MediaReviewStatus,
   MediaSource,
+  Project,
 } from '@continuum/contracts';
 import { Check, ChevronDown, Search, SlidersHorizontal, Tags, X } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useMemo, useState } from 'react';
+import { ProjectChip } from '@/components/projects/ProjectChip';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -49,6 +51,11 @@ type Props = {
   tagOptions?: readonly LibraryTagOption[];
   selectedTags?: readonly string[];
   onTagsChange?: (tags: string[]) => void;
+  // Project scope. Same opt-in rule as tags: a surface with no projects loaded omits both
+  // and the section does not render.
+  projectOptions?: readonly Project[];
+  selectedProjectIds?: readonly string[];
+  onProjectIdsChange?: (projectIds: string[]) => void;
   // Custom-field chips follow the same opt-in rule as tags, and compose with the
   // source/kind/tag chips rather than replacing them: the API ANDs them together.
   customFields?: readonly CustomField[];
@@ -84,6 +91,9 @@ export function LibraryFilterBar({
   tagOptions,
   selectedTags,
   onTagsChange,
+  projectOptions,
+  selectedProjectIds,
+  onProjectIdsChange,
   customFields,
   fieldFilters,
   onFieldFiltersChange,
@@ -115,7 +125,31 @@ export function LibraryFilterBar({
           tagOptions={tagOptions ?? []}
           selectedTags={selectedTags ?? []}
           onTagsChange={onTagsChange}
+          projectOptions={projectOptions ?? []}
+          selectedProjectIds={selectedProjectIds ?? []}
+          onProjectIdsChange={onProjectIdsChange}
         />
+        {(selectedProjectIds ?? []).flatMap((projectId) => {
+          const project = (projectOptions ?? []).find((option) => option.id === projectId);
+          if (!project) return [];
+          return [
+            <span key={projectId} className="inline-flex min-h-8 items-center gap-1">
+              <ProjectChip project={project} className="max-w-44" />
+              <button
+                type="button"
+                onClick={() =>
+                  onProjectIdsChange?.(
+                    (selectedProjectIds ?? []).filter((item) => item !== projectId),
+                  )
+                }
+                className="rounded-full p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+                aria-label={`Remove ${project.name} project filter`}
+              >
+                <X className="size-3" />
+              </button>
+            </span>,
+          ];
+        })}
         {(selectedTags ?? []).map((tag) => (
           <span
             key={tag}
@@ -236,6 +270,9 @@ function AdvancedFilterPopover({
   tagOptions,
   selectedTags,
   onTagsChange,
+  projectOptions,
+  selectedProjectIds,
+  onProjectIdsChange,
 }: {
   mediaType: LibraryMediaType;
   onMediaTypeChange: (value: LibraryMediaType) => void;
@@ -254,6 +291,9 @@ function AdvancedFilterPopover({
   tagOptions: readonly LibraryTagOption[];
   selectedTags: readonly string[];
   onTagsChange?: (tags: string[]) => void;
+  projectOptions: readonly Project[];
+  selectedProjectIds: readonly string[];
+  onProjectIdsChange?: (projectIds: string[]) => void;
 }) {
   const [query, setQuery] = useState('');
   const normalized = query.trim().toLocaleLowerCase();
@@ -266,7 +306,8 @@ function AdvancedFilterPopover({
     (used == null ? 0 : 1) +
     (shared == null ? 0 : 1) +
     (leadingOnly ? 1 : 0) +
-    selectedTags.length;
+    selectedTags.length +
+    selectedProjectIds.length;
   const toggleValue = <T extends string>(values: readonly T[], value: T): T[] =>
     values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 
@@ -384,6 +425,21 @@ function AdvancedFilterPopover({
                   onClick={() => onLeadingOnlyChange(!leadingOnly)}
                 />
               ) : null}
+            </FilterSection>
+          ) : null}
+
+          {onProjectIdsChange && projectOptions.some((project) => matches(project.name)) ? (
+            <FilterSection label="Project">
+              {projectOptions
+                .filter((project) => matches(project.name))
+                .map((project) => (
+                  <FilterChoice
+                    key={project.id}
+                    label={project.name}
+                    selected={selectedProjectIds.includes(project.id)}
+                    onClick={() => onProjectIdsChange(toggleValue(selectedProjectIds, project.id))}
+                  />
+                ))}
             </FilterSection>
           ) : null}
 

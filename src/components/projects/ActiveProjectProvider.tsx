@@ -111,6 +111,17 @@ export function ActiveProjectProvider({ children }: { children: React.ReactNode 
   return <ActiveProjectContext.Provider value={value}>{children}</ActiveProjectContext.Provider>;
 }
 
+/**
+ * The context when a provider is mounted, else null.
+ *
+ * For surfaces that legitimately render both inside and outside the dashboard shell — the
+ * Jaina surface is embedded in the Campaign Canvas as well as the Scale route. Throwing there
+ * would turn a missing optional scope into a blank screen.
+ */
+export function useActiveProjectOptional(): ActiveProjectContextValue | null {
+  return useContext(ActiveProjectContext);
+}
+
 export function useActiveProject(): ActiveProjectContextValue {
   const ctx = useContext(ActiveProjectContext);
   if (!ctx) {

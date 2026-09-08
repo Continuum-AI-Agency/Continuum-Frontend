@@ -37,6 +37,17 @@ describe('libraryBrowseQuerySchema', () => {
     expect(query.layout).toBe('board');
   });
 
+  test('carries project ids, and refuses a non-uuid the RPC would reject as a cast error', () => {
+    const projectId = '22222222-2222-4222-8222-222222222222';
+    expect(libraryBrowseQuerySchema.parse({ brandId }).projectIds).toEqual([]);
+    expect(libraryBrowseQuerySchema.parse({ brandId, projectIds: [projectId] }).projectIds).toEqual(
+      [projectId],
+    );
+    expect(libraryBrowseQuerySchema.safeParse({ brandId, projectIds: ['UGC focus'] }).success).toBe(
+      false,
+    );
+  });
+
   test('rejects backend provenance as a media type', () => {
     expect(libraryBrowseQuerySchema.safeParse({ brandId, mediaType: 'reel' }).success).toBe(false);
     expect(libraryBrowseQuerySchema.safeParse({ brandId, mediaType: 'hyperframe' }).success).toBe(

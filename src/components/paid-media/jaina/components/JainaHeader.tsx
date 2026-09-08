@@ -2,6 +2,7 @@
 import { Archive, Layers, RotateCcw, Target, X } from 'lucide-react';
 
 import React from 'react';
+import { ActiveProjectSelect, useActiveProjectOptional } from '@/components/projects';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +35,10 @@ export function JainaHeader({
   onStop,
   isStreaming,
 }: JainaHeaderProps) {
+  // Optional: this surface also renders inside the Campaign Canvas, which is not guaranteed
+  // to sit under the dashboard shell's ActiveProjectProvider. No provider, no chip — never a
+  // thrown hook.
+  const projectScope = useActiveProjectOptional();
   return (
     <header className="relative z-10 flex items-center justify-between gap-3 border-b border-border/70 bg-background/70 p-3 transition-all duration-300">
       <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -60,6 +65,12 @@ export function JainaHeader({
               <Target className="size-3" />
               <span className="truncate max-w-[120px]">{campaignId}</span>
             </div>
+          )}
+
+          {/* The one INTERACTIVE chip in this row: the other three report scope the surface
+              was given, this one chooses it. Its trigger renders the selected ProjectChip. */}
+          {projectScope && (
+            <ActiveProjectSelect className="h-6 shrink-0 border-dashed px-2 text-2xs" />
           )}
         </div>
       </div>

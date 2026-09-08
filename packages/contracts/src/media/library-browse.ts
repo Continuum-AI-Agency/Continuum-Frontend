@@ -42,6 +42,13 @@ export const libraryBrowseQuerySchema = z
     reviewStatuses: z.array(mediaReviewStatusSchema).default([]),
     ownerIds: z.array(z.string().uuid()).default([]),
     campaignIds: z.array(z.string().min(1)).default([]),
+    /**
+     * Project scope — assets tagged into any of these `brand_profiles.projects`.
+     *
+     * uuid rather than `min(1)` like `campaignIds`, because the RPC argument is `uuid[]`:
+     * a non-uuid reaches Postgres as a cast error rather than an empty result.
+     */
+    projectIds: z.array(z.string().uuid()).default([]),
     usageRights: z.array(z.enum(['owned', 'licensed', 'restricted', 'expired'])).default([]),
     collectionId: z.string().uuid().nullable().optional(),
     used: z.boolean().nullable().optional(),

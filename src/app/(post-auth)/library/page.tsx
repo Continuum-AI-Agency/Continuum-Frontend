@@ -110,6 +110,7 @@ function parseBrowseQuery(brandId: string, params: LibrarySearchParams) {
     ),
     ownerIds: parseTagsParam(first(params.ownerIds)).filter(isUuid),
     campaignIds: parseTagsParam(first(params.campaignIds)),
+    projectIds: parseTagsParam(first(params.projectIds)).filter(isUuid),
     usageRights: parseTagsParam(first(params.usageRights)).filter((value) =>
       ['owned', 'licensed', 'restricted', 'expired'].includes(value),
     ),
