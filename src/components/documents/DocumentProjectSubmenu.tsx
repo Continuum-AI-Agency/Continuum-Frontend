@@ -27,7 +27,7 @@ import type { DocumentView } from './types';
  * DELETE handler existed, was tested, and was unreachable, so a mis-tag was permanent.
  */
 export function DocumentProjectSubmenu({ brandId, doc }: { brandId: string; doc: DocumentView }) {
-  const { projects } = useProjects(brandId);
+  const { projects, isLoading } = useProjects(brandId);
   const { memberships } = useProjectMemberships(brandId, {
     entityId: doc.id,
     entityType: 'brand_document',
@@ -61,8 +61,6 @@ export function DocumentProjectSubmenu({ brandId, doc }: { brandId: string; doc:
     }
   };
 
-  if (projects.length === 0) return null;
-
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -70,6 +68,16 @@ export function DocumentProjectSubmenu({ brandId, doc }: { brandId: string; doc:
         Projects
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-56">
+        {/* Rendered even with nothing to list. Hiding a control when the list is empty is
+            the exact bug this feature already shipped once — the Library's project control
+            returned null at zero projects, which was every brand, so the feature was
+            invisible in production. An empty menu that says why is a smaller cost than a
+            missing one, and the projects list is one section away on this same page. */}
+        {projects.length === 0 ? (
+          <DropdownMenuItem disabled>
+            {isLoading ? 'Loading projects…' : 'No projects yet — create one in Projects'}
+          </DropdownMenuItem>
+        ) : null}
         {projects.map((project) => (
           <DropdownMenuItem
             key={project.id}
