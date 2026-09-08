@@ -111,8 +111,14 @@ export const metaAudienceGroupTargetingSchema = z
   .object({
     age_min: z.number().int().min(13).max(65).optional(),
     age_max: z.number().int().min(13).max(65).optional(),
+    // Bounded integers, NOT a union of numeric literals. Both forms accept exactly 1 and 2,
+    // but a numeric literal serializes to a JSON Schema `enum` of NUMBERS and Gemini's
+    // Schema proto accepts only string enums — it rejects the whole tool declaration with
+    // `Invalid value at '…enum[0]' (TYPE_STRING), 1`. This schema is a Jaina tool input, so
+    // an illegal form here does not degrade one field: it kills every model call that
+    // carries the tool. See schema_version below, same reason.
     genders: z
-      .array(z.union([z.literal(1), z.literal(2)]))
+      .array(z.number().int().min(1).max(2))
       .max(2)
       .optional(),
     geo_locations: z
@@ -156,7 +162,9 @@ export const metaAudienceGroupTargetingSchema = z
 
 export const audienceGroupManifestSchema = z
   .object({
-    schema_version: z.literal(1).default(1),
+    // `z.literal(1)` here is a numeric enum in JSON Schema and Gemini rejects it — see
+    // `genders` above. Bounded to exactly 1, so the accepted values are unchanged.
+    schema_version: z.number().int().min(1).max(1).default(1),
     name: z.string().trim().min(1).max(255),
     ad_account_id: z.string().trim().min(1),
     members: z.array(metaAudienceGroupMemberSchema).min(1).max(25),
