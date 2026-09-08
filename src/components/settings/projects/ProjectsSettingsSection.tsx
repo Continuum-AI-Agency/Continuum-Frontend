@@ -7,7 +7,7 @@
 // the surface that has to exist first, because until a project can be created nothing else in
 // the feature is reachable by a human.
 
-import type { Project } from '@continuum/contracts';
+import { isoToday, type Project, projectTimeState } from '@continuum/contracts';
 import { Archive, ArchiveRestore, ChevronLeft, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { ProjectChip } from '@/components/projects';
@@ -130,6 +130,27 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
   );
 }
 
+/**
+ * Says out loud what the dates now DO.
+ *
+ * Outside its window a project keeps its scope but stops giving the agent its brief. That is
+ * the right behaviour and a silent one: a person sets an end date in September and in October
+ * the agent quietly reasons without the brief, with nothing anywhere saying why. The same
+ * argument that made the active-project chip worth keeping visible applies here — visibility
+ * is what makes a scope rule safe to have, not the rule alone.
+ */
+function ProjectWindowBadge({ project }: { project: Project }) {
+  const state = projectTimeState(project, isoToday());
+  if (state === 'live') return null;
+  return (
+    <span className="rounded-full border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">
+      {state === 'ended'
+        ? `Ended ${project.endsOn} — brief not sent to the agent`
+        : `Starts ${project.startsOn} — brief not sent to the agent yet`}
+    </span>
+  );
+}
+
 function ProjectRows({
   heading,
   projects,
@@ -169,7 +190,9 @@ function ProjectRows({
                 <ProjectChip project={project} />
                 {archivedGroup ? (
                   <span className="text-xs text-muted-foreground">Archived</span>
-                ) : null}
+                ) : (
+                  <ProjectWindowBadge project={project} />
+                )}
               </span>
               <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                 {project.brief ??
