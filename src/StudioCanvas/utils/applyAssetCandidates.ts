@@ -1,3 +1,4 @@
+import { isVideoGeneratorNodeType } from '@continuum/contracts';
 import type { StudioNode } from '../types';
 
 export type ApplyAssetCandidate = {
@@ -40,7 +41,17 @@ export function collectApplyAssetCandidates(nodes: StudioNode[]): ApplyAssetCand
       return;
     }
 
-    if (node.type === 'videoGen' || node.type === 'extendVideo') {
+    // Every node that can END UP holding a rendered clip, not just the one that was
+    // hand-listed first. `timelineEditor` is how a reel is actually composed, and its
+    // output lands on the same two fields — without it an ig_reel_single_video draft sat
+    // at "0/1 video ready" forever and Apply Back to Planner could never enable. The
+    // contract's own predicate covers veoDirector/veoFast too, which a literal list of
+    // node types silently missed and would miss again on the next video node that ships.
+    if (
+      isVideoGeneratorNodeType(node.type) ||
+      node.type === 'extendVideo' ||
+      node.type === 'timelineEditor'
+    ) {
       const nodeData = node.data as { generatedVideo?: unknown; generatedVideoUrl?: unknown };
       const generatedVideo =
         typeof nodeData.generatedVideo === 'string' ? (nodeData.generatedVideo ?? '').trim() : '';

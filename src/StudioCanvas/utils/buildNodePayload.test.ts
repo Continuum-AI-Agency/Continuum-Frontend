@@ -1169,3 +1169,56 @@ describe('buildNodePayload', () => {
     });
   });
 });
+
+// Veo drops the 4s/6s ladder the moment a render carries a reference. The UI disables
+// those options, but the UI is not the only writer — an agent, a loaded workflow, or a
+// reference wired AFTER the duration was chosen all reach toBackendPayload with a stale
+// value, and the request 400s at Run. This is the one funnel every canvas run passes
+// through, so the clamp belongs here and this is the check that fails if it moves.
+describe('toBackendPayload duration vs references', () => {
+  const veoPayload = (extra: Record<string, unknown>) =>
+    ({
+      brandId: 'brand-1',
+      model: 'veo-3.1',
+      medium: 'video',
+      prompt: 'a dog running',
+      aspectRatio: '16:9',
+      resolution: '720p',
+      durationSeconds: 4,
+      ...extra,
+      // biome-ignore lint/suspicious/noExplicitAny: test fixture stands in for GenerationPayload
+    }) as any;
+
+  it('keeps 4s on a prompt-only render', () => {
+    expect(toBackendPayload(veoPayload({})).duration_seconds).toBe('4');
+  });
+
+  it('clamps to 8s when a reference image is attached', () => {
+    const payload = veoPayload({
+      referenceImages: [{ data: 'abc', mimeType: 'image/png', filename: 'ref.png' }],
+    });
+    expect(toBackendPayload(payload).duration_seconds).toBe('8');
+  });
+
+  it('clamps to 8s when a first frame is attached', () => {
+    const payload = veoPayload({
+      firstFrame: { data: 'abc', mimeType: 'image/png', filename: 'first.png' },
+    });
+    expect(toBackendPayload(payload).duration_seconds).toBe('8');
+  });
+
+  it('clamps to 8s when a last frame is attached', () => {
+    const payload = veoPayload({
+      lastFrame: { data: 'abc', mimeType: 'image/png', filename: 'last.png' },
+    });
+    expect(toBackendPayload(payload).duration_seconds).toBe('8');
+  });
+
+  it('leaves a non-Veo model alone — fal takes 3-15s and has no ladder to clamp to', () => {
+    const payload = veoPayload({
+      model: 'not-a-veo-model',
+      referenceImages: [{ data: 'abc', mimeType: 'image/png', filename: 'ref.png' }],
+    });
+    expect(toBackendPayload(payload).duration_seconds).toBe('4');
+  });
+});

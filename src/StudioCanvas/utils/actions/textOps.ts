@@ -92,7 +92,12 @@ function splitPattern(mode: SplitTextMode, separator: string | undefined): RegEx
       // nothing and shows up as a mystery character downstream.
       return /\r\n|\r|\n/g;
     case 'comma':
-      return /,/g;
+      // A line break ends an item too. Splitting on the comma ALONE ignores newlines
+      // entirely, so three prompts on three lines came back as fragments with the tail
+      // of one welded to the head of the next ("...at sunset\nA busy city street").
+      // Commas inside a single line still split — that is what this mode means — but a
+      // line can no longer bleed into its neighbour.
+      return /,|\r\n|\r|\n/g;
     case 'paragraph':
       return /(?:\r?\n\s*){2,}/g;
     case 'custom':

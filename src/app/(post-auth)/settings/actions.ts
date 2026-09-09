@@ -27,6 +27,30 @@ export async function renameBrandProfileAction(brandId: string, name: string): P
   await repo.renameBrand(brandId, name.trim());
 }
 
+/**
+ * Pin the language every generated word for this brand is written in.
+ *
+ * Nothing persisted this before, so the pipeline inferred it per run from the language
+ * the operator happened to be typing in chat — which is how an agency operator working
+ * in Spanish produced Spanish captions for an English account. An empty value clears the
+ * pin and hands the brand back to detection rather than freezing a wrong answer.
+ */
+export async function updateBrandContentLanguageAction(
+  brandId: string,
+  language: string | null,
+): Promise<void> {
+  if (!brandId) throw new Error('Brand is required');
+  const trimmed = language?.trim() ?? '';
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .update({ content_language: trimmed.length > 0 ? trimmed : null })
+    .eq('id', brandId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/settings', 'page');
+}
+
 export async function updateBrandLogoAction(
   brandId: string,
   logoPath: string | null,

@@ -6042,6 +6042,7 @@ export type Database = {
           brand_typography: Json
           brand_voice: Json | null
           completed_at: string | null
+          content_language: string | null
           context: Json
           created_at: string
           created_by: string
@@ -6062,6 +6063,7 @@ export type Database = {
           brand_typography?: Json
           brand_voice?: Json | null
           completed_at?: string | null
+          content_language?: string | null
           context?: Json
           created_at?: string
           created_by: string
@@ -6082,6 +6084,7 @@ export type Database = {
           brand_typography?: Json
           brand_voice?: Json | null
           completed_at?: string | null
+          content_language?: string | null
           context?: Json
           created_at?: string
           created_by?: string
@@ -8445,6 +8448,63 @@ export type Database = {
           },
         ]
       }
+      onboarding_creative_runs: {
+        Row: {
+          brand_id: string
+          created_at: string
+          created_by: string
+          id: string
+          lease_until: string | null
+          origin_env: string
+          slots: Json
+          source_context: Json
+          status: string
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          lease_until?: string | null
+          origin_env: string
+          slots: Json
+          source_context: Json
+          status?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          lease_until?: string | null
+          origin_env?: string
+          slots?: Json
+          source_context?: Json
+          status?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_creative_runs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "onboarding_creative_runs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       preview_runs: {
         Row: {
           brand_id: string
@@ -8545,8 +8605,11 @@ export type Database = {
           color: string | null
           created_at: string
           created_by: string | null
+          ends_on: string | null
           id: string
+          lead_user_id: string | null
           name: string
+          starts_on: string | null
           status: string
           updated_at: string
         }
@@ -8558,8 +8621,11 @@ export type Database = {
           color?: string | null
           created_at?: string
           created_by?: string | null
+          ends_on?: string | null
           id?: string
+          lead_user_id?: string | null
           name: string
+          starts_on?: string | null
           status?: string
           updated_at?: string
         }
@@ -8571,8 +8637,11 @@ export type Database = {
           color?: string | null
           created_at?: string
           created_by?: string | null
+          ends_on?: string | null
           id?: string
+          lead_user_id?: string | null
           name?: string
+          starts_on?: string | null
           status?: string
           updated_at?: string
         }
@@ -10527,6 +10596,38 @@ export type Database = {
       }
     }
     Functions: {
+      claim_onboarding_creative_run: {
+        Args: { p_env: string; p_worker_id: string }
+        Returns: {
+          brand_id: string
+          created_at: string
+          created_by: string
+          id: string
+          lease_until: string | null
+          origin_env: string
+          slots: Json
+          source_context: Json
+          status: string
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "onboarding_creative_runs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      save_onboarding_creative_run: {
+        Args: {
+          p_id: string
+          p_slot?: string
+          p_status?: string
+          p_value?: Json
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
       advance_automation_next_run: {
         Args: { p_automation_id: string; p_expected: string; p_next: string }
         Returns: boolean
@@ -14465,6 +14566,7 @@ export type Database = {
           last_message_preview: string | null
           last_message_role: string | null
           preview: string | null
+          project_id: string | null
           session_id: string
           tags: string[]
           updated_at: string
@@ -14486,6 +14588,7 @@ export type Database = {
           last_message_preview?: string | null
           last_message_role?: string | null
           preview?: string | null
+          project_id?: string | null
           session_id: string
           tags?: string[]
           updated_at?: string
@@ -14507,6 +14610,7 @@ export type Database = {
           last_message_preview?: string | null
           last_message_role?: string | null
           preview?: string | null
+          project_id?: string | null
           session_id?: string
           tags?: string[]
           updated_at?: string

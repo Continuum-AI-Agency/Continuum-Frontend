@@ -94,6 +94,7 @@ function ConfigSection({
     case 'veoFast':
       return (
         <VideoGenSection
+          nodeId={node.id}
           nodeType={node.type}
           data={node.data as VideoGenNodeData}
           onPatch={onPatch}

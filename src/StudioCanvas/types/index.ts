@@ -715,6 +715,11 @@ export interface BatchNodeData extends BaseNodeData {
   /** One kind per batch — mixing images and videos makes "run per item" ambiguous. */
   itemType: BatchItemKind | null;
   combine: BatchCombine;
+  /** How a wired string source is cut into items. Persisted, so the node reloads the
+   *  way it was left; both fields were read off `data` and never declared, which meant
+   *  they type-checked only because `BaseNodeData` widens to `Record<string, unknown>`. */
+  splitMode?: 'newline' | 'comma' | 'custom';
+  splitSeparator?: string;
 }
 
 /** Identity pass-through. The fan-out is many edges off one output, not many handles. */

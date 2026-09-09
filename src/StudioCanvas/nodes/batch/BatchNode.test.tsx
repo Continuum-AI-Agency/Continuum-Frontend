@@ -58,10 +58,15 @@ const storedItems = (): BatchItem[] =>
   (useStudioStore.getState().nodes.find((node) => node.id === NODE_ID)?.data.items ??
     []) as BatchItem[];
 
-const pasteCsv = (text: string) => {
-  fireEvent.click(screen.getByText('Paste CSV'));
+/** Paste text and add it. Defaults to one-per-line, which is what someone pasting
+ *  prompts means; `mode` opts into the spreadsheet reading. */
+const pasteText = (text: string, mode?: 'newline' | 'comma' | 'csv') => {
+  fireEvent.click(screen.getByText('Paste text'));
+  if (mode) {
+    fireEvent.change(screen.getByTestId('batch-node-paste-mode'), { target: { value: mode } });
+  }
   fireEvent.change(screen.getByTestId('batch-node-csv'), { target: { value: text } });
-  fireEvent.click(screen.getByText('Add column 1'));
+  fireEvent.click(screen.getByText('Add items'));
 };
 
 describe('BatchNode', () => {
@@ -77,7 +82,7 @@ describe('BatchNode', () => {
   it('refuses a mismatched kind and says so in the node, not only in a toast', () => {
     renderNode({ items: [imageItem('a')], itemType: 'image' });
 
-    pasteCsv('headline one\nheadline two');
+    pasteText('headline one\nheadline two');
 
     const refusal = screen.getByTestId('batch-node-refusal').textContent ?? '';
     expect(refusal).toContain('This batch holds images');
@@ -92,7 +97,7 @@ describe('BatchNode', () => {
     );
     renderNode({ items: full, itemType: 'text' });
 
-    pasteCsv('one too many');
+    pasteText('one too many');
 
     expect(screen.getByTestId('batch-node-refusal').textContent ?? '').toContain(
       `A batch holds at most ${MAX_BATCH_ITEMS} items`,
@@ -134,12 +139,28 @@ describe('BatchNode', () => {
     ]);
   });
 
-  it('reads the first CSV column only, quoted commas included', () => {
+  it('reads the first CSV column only when CSV mode is asked for', () => {
     renderNode();
 
-    pasteCsv('"Run, then walk",ignored\nsecond,also ignored\n');
+    pasteText('"Run, then walk",ignored\nsecond,also ignored\n', 'csv');
 
     expect(storedItems().map((item) => item.value)).toEqual(['Run, then walk', 'second']);
+    expect(screen.queryByTestId('batch-node-refusal')).toBeNull();
+  });
+
+  // The reported bug: this box was CSV-only with no label saying so, so a pasted prompt
+  // lost everything after its first comma and nothing said a word about it.
+  it('keeps a prompt whole by default — commas are punctuation, not columns', () => {
+    renderNode();
+
+    pasteText(
+      'A golden retriever, playing fetch, on a beach at sunset\nA busy city street, at night',
+    );
+
+    expect(storedItems().map((item) => item.value)).toEqual([
+      'A golden retriever, playing fetch, on a beach at sunset',
+      'A busy city street, at night',
+    ]);
     expect(screen.queryByTestId('batch-node-refusal')).toBeNull();
   });
 });

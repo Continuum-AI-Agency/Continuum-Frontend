@@ -146,16 +146,20 @@ export function ChatPanel({
   const durationSeconds = form.watch('durationSeconds');
   // Veo 3.1 only renders 1080p at an 8-second duration; 720p accepts 4/6/8s.
   const resolutionRequires8s = medium === 'video' && resolution === '1080p';
+  // ...and the short ladder also disappears the moment a reference is attached, whatever
+  // the resolution. `hasAnyReferences` was already in scope for the aspect list.
+  const referencesRequire8s = medium === 'video' && Boolean(hasAnyReferences);
+  const requires8s = resolutionRequires8s || referencesRequire8s;
   const aspectOptions = React.useMemo(
     () => getAspectsForModel(model, hasAnyReferences),
     [getAspectsForModel, model, hasAnyReferences],
   );
 
   React.useEffect(() => {
-    if (resolutionRequires8s && durationSeconds !== 8) {
+    if (requires8s && durationSeconds !== 8) {
       form.setValue('durationSeconds', 8);
     }
-  }, [resolutionRequires8s, durationSeconds, form]);
+  }, [requires8s, durationSeconds, form]);
 
   React.useEffect(() => {
     onModelChange?.(model);
@@ -421,7 +425,7 @@ export function ChatPanel({
               disabled={disabled || isStreaming}
             >
               {([4, 6, 8] as const).map((d) => {
-                const optionDisabled = resolutionRequires8s && d !== 8;
+                const optionDisabled = requires8s && d !== 8;
                 return (
                   <label
                     key={d}
@@ -442,6 +446,10 @@ export function ChatPanel({
             </RadioGroup>
             {resolutionRequires8s ? (
               <span className="block text-xs text-gray-400">{VEO_RESOLUTION_DURATION_NOTE}</span>
+            ) : referencesRequire8s ? (
+              <span className="block text-xs text-gray-400">
+                Veo renders 8 seconds only when a reference is attached.
+              </span>
             ) : null}
           </div>
         ) : null}

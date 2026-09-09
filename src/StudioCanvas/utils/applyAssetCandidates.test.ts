@@ -122,6 +122,24 @@ describe('collectApplyAssetCandidates', () => {
     ]);
   });
 
+  // The Apply Back to Planner bug: a reel is composed on `timelineEditor`, which was not
+  // in the list, so an ig_reel_single_video draft reported "0/1 video ready" forever and
+  // the button could never enable. veoDirector/veoFast were missing for the same reason —
+  // a hand-written node-type list that the video roster had already outgrown.
+  it('takes videos from every node type that can hold a rendered clip', () => {
+    const nodes = [
+      node('timeline', 'timelineEditor', { generatedVideo: 'reel-video' }, { x: 0, y: 0 }),
+      node('director', 'veoDirector', { generatedVideo: 'director-video' }, { x: 200, y: 0 }),
+      node('fast', 'veoFast', { generatedVideoUrl: 'fast-video-url' }, { x: 400, y: 0 }),
+    ];
+
+    expect(collectApplyAssetCandidates(nodes)).toEqual([
+      { nodeId: 'timeline', role: 'video_1', kind: 'video', source: 'reel-video' },
+      { nodeId: 'director', role: 'video_2', kind: 'video', source: 'director-video' },
+      { nodeId: 'fast', role: 'video_3', kind: 'video', source: 'fast-video-url' },
+    ]);
+  });
+
   it('prefers generatedImage / generatedVideo over the url variants and trims the value', () => {
     const nodes = [
       node(

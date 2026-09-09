@@ -81,17 +81,36 @@ describe('expandBrandBookPieces', () => {
 describe('renderForcedBrandBlock', () => {
   it('filters to only the tagged pieces', () => {
     const { block } = renderForcedBrandBlock(makeTokens(), ['colors']);
-    expect(block).toContain(
-      'Colors (use these exact brand colors): #0a1f44 (primary, Navy), #f5a623 (accent)',
-    );
+    expect(block).toContain('band 1 = primary, Navy');
+    expect(block).toContain('band 2 = accent');
     expect(block).not.toContain('Typography');
     expect(block).not.toContain('Voice');
+  });
+
+  // The defect this file used to lock in: hex codes went into the prompt as prose and
+  // the image model set them as type — creatives shipped with "#eef4f6  #0a2b66" as a
+  // headline. The values now travel as a palette-swatch reference image instead, so no
+  // machine token may appear in the block at all.
+  it('never puts a hex code in the block', () => {
+    const { block } = renderForcedBrandBlock(makeTokens(), ['full']);
+    expect(block).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+
+  it('names the colour roles so the swatch bands can be told apart', () => {
+    const { block } = renderForcedBrandBlock(makeTokens(), ['colors']);
+    expect(block).toContain('palette swatch reference');
+    expect(block).toContain('band 1 = primary, Navy');
+  });
+
+  it('tells the model the block is direction, never text to render', () => {
+    const { block } = renderForcedBrandBlock(makeTokens(), ['colors']);
+    expect(block).toContain('NEVER text to render');
   });
 
   it('wraps the block in an authoritative must-comply envelope', () => {
     const { block } = renderForcedBrandBlock(makeTokens(), ['voice']);
     expect(
-      block.startsWith('<brand_book>(authoritative brand rules — the generation MUST comply)'),
+      block.startsWith('<brand_book>(authoritative brand rules — the generation MUST comply;'),
     ).toBe(true);
     expect(block.endsWith('</brand_book>')).toBe(true);
     expect(block).toContain(
@@ -99,9 +118,14 @@ describe('renderForcedBrandBlock', () => {
     );
   });
 
-  it('maps font family, role, and usage note into typography grounding', () => {
+  // Font FAMILIES leaked exactly like hex did — "IBM Plex Mono" turned up set into the
+  // artwork. A named licensed face is not something an image model can honour anyway, so
+  // only the semantic description survives.
+  it('describes typography by role and note, never by family name', () => {
     const { block } = renderForcedBrandBlock(makeTokens(), ['typography']);
-    expect(block).toContain('Typography: Söhne (display; Semibold for headlines), Inter (body)');
+    expect(block).toContain('Typography: display — Semibold for headlines; body.');
+    expect(block).not.toContain('Söhne');
+    expect(block).not.toContain('Inter');
   });
 
   it('renders every piece for full and reports wantsLogo when a logo path exists', () => {

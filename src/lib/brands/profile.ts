@@ -35,6 +35,8 @@ export type BrandProfileDetails = {
   createdBy: string;
   completedAt: string | null;
   emailReportOptIn: boolean;
+  /** Null until someone pins one or the backend detects it from the brand's own posts. */
+  contentLanguage: string | null;
 };
 
 export async function fetchBrandProfileDetails(
@@ -45,7 +47,7 @@ export async function fetchBrandProfileDetails(
     .schema('brand_profiles')
     .from('brand_profiles')
     .select(
-      'id, brand_name, logo_path, created_at, updated_at, created_by, completed_at, email_report_opt_in',
+      'id, brand_name, logo_path, created_at, updated_at, created_by, completed_at, email_report_opt_in, content_language',
     )
     .eq('id', brandId)
     .maybeSingle();
@@ -67,6 +69,7 @@ export async function fetchBrandProfileDetails(
     createdBy: data.created_by,
     completedAt: data.completed_at,
     emailReportOptIn: (data as { email_report_opt_in?: boolean }).email_report_opt_in ?? true,
+    contentLanguage: (data as { content_language?: string | null }).content_language ?? null,
   };
 }
 

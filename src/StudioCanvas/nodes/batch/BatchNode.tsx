@@ -59,6 +59,19 @@ const SPLIT_MODE_LABEL: Readonly<Record<BatchSplitMode, string>> = {
   custom: 'Custom separator',
 };
 
+/* How the PASTED text is read. This used to be CSV-first-column with no choice and no
+ * label saying so, which silently threw away everything after the first comma of every
+ * row — and a prompt is mostly commas. One per line is what someone pasting prompts
+ * means; column 1 is the spreadsheet case and now has to be asked for. */
+const PASTE_MODES = ['newline', 'comma', 'csv'] as const;
+type BatchPasteMode = (typeof PASTE_MODES)[number];
+
+const PASTE_MODE_LABEL: Readonly<Record<BatchPasteMode, string>> = {
+  newline: 'One per line',
+  comma: 'Split on commas',
+  csv: 'CSV — column 1 only',
+};
+
 const isSynced = (item: BatchItem): boolean => item.id.startsWith(SYNCED_ID_PREFIX);
 
 /** An emptied batch is a fresh batch: keeping the lock would refuse the next thing added
@@ -134,6 +147,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
   const [refusals, setRefusals] = useState<string[]>([]);
   const [csvOpen, setCsvOpen] = useState(false);
   const [csvText, setCsvText] = useState('');
+  const [pasteMode, setPasteMode] = useState<BatchPasteMode>('newline');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const items = useMemo(() => data.items ?? [], [data.items]);
@@ -265,7 +279,19 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
   );
 
   const handleAddCsv = useCallback(() => {
-    const { values, truncated } = csvFirstColumn(csvText);
+    const { values, truncated } =
+      pasteMode === 'csv'
+        ? csvFirstColumn(csvText)
+        : {
+            values: splitText(csvText, {
+              mode: pasteMode,
+              trim: true,
+              skipEmpty: true,
+              size: 1,
+              maxParts: MAX_BATCH_ITEMS,
+            }),
+            truncated: false,
+          };
     const extra = truncated
       ? [`Only the first ${MAX_BATCH_ITEMS} rows were read — the rest of the paste was left out.`]
       : [];
@@ -275,7 +301,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
       extra,
     );
     setCsvText('');
-  }, [commit, csvText, items]);
+  }, [commit, csvText, items, pasteMode]);
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -462,9 +488,24 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 value={csvText}
                 onChange={(event) => setCsvText(event.target.value)}
                 onMouseDown={stopDrag}
-                placeholder="Paste rows — column 1 becomes the items"
+                placeholder="Paste your prompts — one per line"
                 className="nodrag h-14 resize-none text-[10px]"
               />
+              {/* Native on purpose: three options inside a node this small, and the
+                  duration control on the video node already reads this way. */}
+              <select
+                data-testid="batch-node-paste-mode"
+                value={pasteMode}
+                onChange={(event) => setPasteMode(event.target.value as BatchPasteMode)}
+                onMouseDown={stopDrag}
+                className="nodrag h-6 w-full rounded-md border border-input bg-transparent px-2 text-[10px]"
+              >
+                {PASTE_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {PASTE_MODE_LABEL[mode]}
+                  </option>
+                ))}
+              </select>
               <Button
                 variant="secondary"
                 size="sm"
@@ -475,7 +516,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                   handleAddCsv();
                 }}
               >
-                Add column 1
+                Add items
               </Button>
             </div>
           ) : null}
@@ -505,7 +546,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
               }}
             >
               <Table className="size-3" />
-              Paste CSV
+              Paste text
             </Button>
             <input
               ref={fileInputRef}

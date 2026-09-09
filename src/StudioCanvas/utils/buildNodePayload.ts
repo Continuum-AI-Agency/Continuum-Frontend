@@ -1,10 +1,12 @@
 import {
   coerceImageSize,
+  coerceVideoGeneratorDuration,
   DESIGN_REF_IMAGE_OUTPUT_HANDLE,
   DESIGN_REF_TEXT_OUTPUT_HANDLE,
   type DesignRefNodeData,
   designRefEmission,
   imageResolutionFor,
+  isVideoGeneratorModel,
   resolveAmbientDesignSections,
   suppressedDesignSections,
   variationIndexFromHandle,
@@ -960,6 +962,37 @@ export function buildExtendVideoPayload(
   };
 }
 
+/**
+ * The length the request will ACTUALLY be accepted at.
+ *
+ * Veo drops the short ladder the moment a render carries a reference — an image
+ * reference or a first/last frame — so a node still holding 4s from before the
+ * reference was wired looks configured and 400s at Run. The UI disables 4s/6s once a
+ * reference is attached, but the UI is not the only writer: an agent, a loaded
+ * workflow, or a reference added AFTER the duration was chosen all reach here with a
+ * stale value. This is the one funnel every canvas run passes through, and it is the
+ * only place that sees the duration and the references together.
+ */
+function effectiveDurationSeconds(payload: GenerationPayload): '4' | '6' | '8' | undefined {
+  if (!payload.durationSeconds) return undefined;
+  const requested = String(payload.durationSeconds) as '4' | '6' | '8';
+  if (!isVideoGeneratorModel(payload.model)) return requested;
+
+  const hasReferences =
+    Boolean(payload.firstFrame) ||
+    Boolean(payload.lastFrame) ||
+    (payload.referenceImages?.length ?? 0) > 0 ||
+    (payload.imageReferences?.length ?? 0) > 0;
+
+  const duration = coerceVideoGeneratorDuration(
+    payload.model,
+    payload.resolution,
+    payload.durationSeconds,
+    hasReferences,
+  );
+  return duration === undefined ? requested : (String(duration) as '4' | '6' | '8');
+}
+
 export function toBackendPayload(payload: GenerationPayload): BackendChatImageRequestPayload {
   return {
     brand_id: payload.brandId,
@@ -969,9 +1002,7 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
     aspect_ratio: payload.aspectRatio || '16:9',
     resolution: payload.resolution,
     image_size: payload.imageSize,
-    duration_seconds: payload.durationSeconds
-      ? (String(payload.durationSeconds) as '4' | '6' | '8')
-      : undefined,
+    duration_seconds: effectiveDurationSeconds(payload),
     negative_prompt: payload.negativePrompt,
     first_frame: payload.firstFrame
       ? {

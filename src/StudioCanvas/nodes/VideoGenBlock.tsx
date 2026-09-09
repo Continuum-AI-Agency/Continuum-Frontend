@@ -6,6 +6,7 @@ import {
   isVideoGeneratorNodeType,
   VIDEO_GENERATOR_DURATION_NOTE,
   VIDEO_GENERATOR_DURATIONS,
+  videoReferencesRequireEightSeconds,
   videoResolutionRequiresEightSeconds,
 } from '@continuum/contracts';
 import {
@@ -148,22 +149,6 @@ export function VideoGenBlock({
   const supportsReferenceVideo = targetHandles.includes('ref-video');
   const referenceImageHandle = getVideoGeneratorImageReferenceHandle(model, referenceMode);
 
-  // What the node will ACTUALLY render at, not what is merely stored: above 720p Veo
-  // renders 8s whatever the node says, so the chip has to show the effective value or
-  // it lies about the clip the user is about to pay for.
-  const resolution = data.resolution ?? '720p';
-  const lockedToEightSeconds = videoResolutionRequiresEightSeconds(model, resolution);
-  const durationSeconds = coerceVideoGeneratorDuration(model, resolution, data.durationSeconds);
-  const durationNote = lockedToEightSeconds
-    ? `${resolution} renders at 8 seconds only — switch to 720p for 4s or 6s.`
-    : VIDEO_GENERATOR_DURATION_NOTE;
-
-  const [isHovered, setIsHovered] = useState(false);
-  const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
-  const generatorDescription = `${modelLabel} • ${resolution} • ${data.aspectRatio ?? '16:9'}${
-    durationSeconds ? ` • ${durationSeconds}s` : ''
-  }`;
-
   const promptConnections = flowEdges.filter(
     (edge) => edge.target === id && ['prompt-in', 'prompt'].includes(edge.targetHandle ?? ''),
   ).length;
@@ -184,6 +169,34 @@ export function VideoGenBlock({
       edge.target === id &&
       (edge.targetHandle === 'ref-images' || edge.targetHandle === 'ref-image'),
   ).length;
+
+  // What the node will ACTUALLY render at, not what is merely stored: above 720p Veo
+  // renders 8s whatever the node says, and so does any render carrying a reference, so
+  // the chip has to show the effective value or it lies about the clip the user is
+  // about to pay for.
+  const resolution = data.resolution ?? '720p';
+  const hasReferenceInput =
+    refImageCount > 0 || firstFrameConnections > 0 || lastFrameConnections > 0;
+  const lockedByResolution = videoResolutionRequiresEightSeconds(model, resolution);
+  const lockedByReference = videoReferencesRequireEightSeconds(model, hasReferenceInput);
+  const lockedToEightSeconds = lockedByResolution || lockedByReference;
+  const durationSeconds = coerceVideoGeneratorDuration(
+    model,
+    resolution,
+    data.durationSeconds,
+    hasReferenceInput,
+  );
+  const durationNote = lockedByResolution
+    ? `${resolution} renders at 8 seconds only — switch to 720p for 4s or 6s.`
+    : lockedByReference
+      ? 'Veo renders 8 seconds only when a reference image or frame is attached — detach it for 4s or 6s.'
+      : VIDEO_GENERATOR_DURATION_NOTE;
+
+  const [isHovered, setIsHovered] = useState(false);
+  const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
+  const generatorDescription = `${modelLabel} • ${resolution} • ${data.aspectRatio ?? '16:9'}${
+    durationSeconds ? ` • ${durationSeconds}s` : ''
+  }`;
 
   const imageLimit = getVideoGeneratorImageLimit(model, referenceVideoConnections > 0);
 
@@ -462,7 +475,11 @@ export function VideoGenBlock({
                                 disabled={lockedToEightSeconds && seconds !== 8}
                               >
                                 {seconds}s
-                                {lockedToEightSeconds && seconds !== 8 ? ' — 720p only' : ''}
+                                {lockedToEightSeconds && seconds !== 8
+                                  ? lockedByResolution
+                                    ? ' — 720p only'
+                                    : ' — no references'
+                                  : ''}
                               </option>
                             ))}
                           </select>

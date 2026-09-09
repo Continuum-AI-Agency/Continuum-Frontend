@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { renameBrandProfileAction } from '@/app/(post-auth)/settings/actions';
+import {
+  renameBrandProfileAction,
+  updateBrandContentLanguageAction,
+} from '@/app/(post-auth)/settings/actions';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -21,6 +24,9 @@ type BrandIdentitySectionProps = {
   logoPath: string | null;
   profile?: BrandProfileMeta;
   canEdit: boolean;
+  /** Null when nothing is pinned yet — the backend then detects it from the brand's
+   *  own posts on the next generation and writes the answer back here. */
+  contentLanguage?: string | null;
 };
 
 export function BrandIdentitySection({
@@ -28,11 +34,13 @@ export function BrandIdentitySection({
   logoPath,
   profile,
   canEdit,
+  contentLanguage: initialLanguage = null,
 }: BrandIdentitySectionProps) {
   const { show } = useToast();
   const { activeBrandId, updateBrandName } = useActiveBrandContext();
   const [isPending, startTransition] = useTransition();
   const [brandName, setBrandName] = useState(initialName);
+  const [contentLanguage, setContentLanguage] = useState(initialLanguage ?? '');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -42,6 +50,32 @@ export function BrandIdentitySection({
   useEffect(() => {
     setBrandName(initialName);
   }, [initialName]);
+
+  useEffect(() => {
+    setContentLanguage(initialLanguage ?? '');
+  }, [initialLanguage]);
+
+  const handleLanguageSave = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    startTransition(async () => {
+      try {
+        await updateBrandContentLanguageAction(activeBrandId, contentLanguage);
+        show({
+          title: 'Content language saved',
+          description: contentLanguage.trim()
+            ? `New content will be written in ${contentLanguage.trim()}.`
+            : 'Cleared — the language will be detected from this brand’s posts.',
+          variant: 'success',
+        });
+      } catch (error) {
+        show({
+          title: 'Could not save language',
+          description: error instanceof Error ? error.message : 'Unable to save.',
+          variant: 'error',
+        });
+      }
+    });
+  };
 
   const dates = useMemo(() => {
     if (!profile || !mounted) return null;
@@ -103,6 +137,30 @@ export function BrandIdentitySection({
                 <Detail label="Last updated" value={dates?.updatedAt ?? '—'} />
               </div>
             ) : null}
+          </div>
+        </div>
+      </form>
+
+      <form onSubmit={handleLanguageSave}>
+        <div className="flex flex-col gap-2">
+          <div>
+            <span className="text-sm font-medium">Content language</span>
+            <p className="text-xs text-muted-foreground">
+              Every caption, headline and slide for this brand is written in this language. Leave it
+              empty to have it detected from the brand’s existing posts.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Input
+              value={contentLanguage}
+              onChange={(event) => setContentLanguage(event.target.value)}
+              placeholder="e.g. Spanish"
+              className="min-w-[260px]"
+              disabled={!canEdit}
+            />
+            <Button type="submit" variant="outline" disabled={isPending || !canEdit}>
+              Save language
+            </Button>
           </div>
         </div>
       </form>

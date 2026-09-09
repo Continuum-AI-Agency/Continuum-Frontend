@@ -285,3 +285,29 @@ describe('concatText', () => {
     expect(concatText(splitText(source, { mode: 'newline' }), {})).toBe(source);
   });
 });
+
+// Real prompts are mostly commas. The old `comma` pattern ignored newlines entirely, so
+// three prompts on three lines came back as seven fragments, two of which spanned a line
+// break. Every existing case here used single-word tokens ('a,b,c,d'), which is why the
+// suite stayed green through it.
+describe('splitText comma mode on prose', () => {
+  const prompts = [
+    'A golden retriever, playing fetch, on a beach at sunset',
+    'A busy city street, at night, with neon lights',
+  ].join('\n');
+
+  it('never welds the tail of one line onto the head of the next', () => {
+    const parts = splitText(prompts, { mode: 'comma', trim: true, skipEmpty: true });
+    expect(parts.some((part) => part.includes('\n'))).toBe(false);
+    expect(parts).toContain('on a beach at sunset');
+    expect(parts).toContain('A busy city street');
+  });
+
+  it('leaves one-per-line alone — a prompt keeps its own commas', () => {
+    const parts = splitText(prompts, { mode: 'newline', trim: true, skipEmpty: true });
+    expect(parts).toEqual([
+      'A golden retriever, playing fetch, on a beach at sunset',
+      'A busy city street, at night, with neon lights',
+    ]);
+  });
+});

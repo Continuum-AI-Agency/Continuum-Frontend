@@ -388,11 +388,17 @@ function OrganicCalendarWorkspaceInner({
     if (calendarRefetchNonce === 0) return;
     // Debounce so a burst of completions (a bulk run's per-item signals) coalesces
     // into a single reconcile.
+    //
+    // Short on purpose. The loudest producer of this nonce is useCalendarRealtimeSync,
+    // which ALREADY coalesces row events for 400ms before bumping it — so a full 600ms
+    // here stacked on top and every realtime change waited a guaranteed second before a
+    // request was even issued, which is most of "post details don't refresh quickly".
+    // Same-tick bumps from the direct callers (bulk run, pipeline card) still collapse.
     const timer = setTimeout(() => {
       void refetchCalendarDrafts().catch(() => {
         // Best-effort reconcile; the local store remains usable.
       });
-    }, 600);
+    }, 150);
     return () => clearTimeout(timer);
   }, [calendarRefetchNonce, refetchCalendarDrafts]);
 

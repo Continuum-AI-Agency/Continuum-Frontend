@@ -18,8 +18,10 @@ import {
   VIDEO_GENERATOR_REFERENCE_MODE_LABELS,
   type VideoGeneratorModel,
   type VideoGeneratorReferenceMode,
+  videoReferencesRequireEightSeconds,
   videoResolutionRequiresEightSeconds,
 } from '@continuum/contracts';
+import { useStudioStore } from '../../stores/useStudioStore';
 import type { VideoGenNodeData } from '../../types';
 import { InspectorNote, InspectorSection, OptionRow } from './controls';
 
@@ -30,10 +32,12 @@ const resolutionOptions = (model: VideoGeneratorModel): Resolution[] =>
   model === 'veo-3.1' || model === 'veo-3.1-fast' ? ['720p', '1080p', '4k'] : ['720p', '1080p'];
 
 export function VideoGenSection({
+  nodeId,
   nodeType,
   data,
   onPatch,
 }: {
+  nodeId: string;
   nodeType: string;
   data: VideoGenNodeData;
   onPatch: (patch: Record<string, unknown>) => void;
@@ -43,9 +47,29 @@ export function VideoGenSection({
   const referenceMode = resolveVideoGeneratorReferenceMode(shape);
   const referenceModes = getVideoGeneratorReferenceModes(model);
   const resolution = (data.resolution ?? '720p') as Resolution;
-  const lockedToEightSeconds = videoResolutionRequiresEightSeconds(model, resolution);
+
+  // Reference presence lives on the EDGES, not on the node's own data, so the panel has
+  // to read the graph — otherwise it offers 4s on a node whose attached reference has
+  // already pinned it to 8s. From the STORE, not React Flow's useEdges: an inspector
+  // section renders in a side panel with no ReactFlowProvider above it, which is what
+  // the sibling ApiRenderSection reads too.
+  const edges = useStudioStore((state) => state.edges);
+  const hasReferenceInput = edges.some(
+    (edge) =>
+      edge.target === nodeId &&
+      ['ref-image', 'ref-images', 'first-frame', 'last-frame'].includes(edge.targetHandle ?? ''),
+  );
+
+  const lockedByResolution = videoResolutionRequiresEightSeconds(model, resolution);
+  const lockedByReference = videoReferencesRequireEightSeconds(model, hasReferenceInput);
+  const lockedToEightSeconds = lockedByResolution || lockedByReference;
   // What the node will ACTUALLY render at, not what is merely stored.
-  const durationSeconds = coerceVideoGeneratorDuration(model, resolution, data.durationSeconds);
+  const durationSeconds = coerceVideoGeneratorDuration(
+    model,
+    resolution,
+    data.durationSeconds,
+    hasReferenceInput,
+  );
 
   return (
     <>
@@ -116,9 +140,14 @@ export function VideoGenSection({
               }))}
               onChange={(value) => onPatch({ durationSeconds: Number(value) })}
             />
-            {lockedToEightSeconds ? (
+            {lockedByResolution ? (
               <InspectorNote>
                 {resolution} renders at 8 seconds only — switch to 720p for 4s or 6s.
+              </InspectorNote>
+            ) : lockedByReference ? (
+              <InspectorNote>
+                Veo renders 8 seconds only when a reference image or frame is attached — detach it
+                for 4s or 6s.
               </InspectorNote>
             ) : null}
           </>

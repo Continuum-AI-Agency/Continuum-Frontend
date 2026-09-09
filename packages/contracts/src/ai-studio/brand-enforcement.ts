@@ -64,28 +64,39 @@ export function expandBrandBookPieces(
   return CONCRETE_PIECES.filter((piece) => wanted.has(piece));
 }
 
+/*
+ * A hex code is a MACHINE token, and an image model handed one in prose renders it as
+ * prose: creatives shipped with "#eef4f6  #0a2b66" set as the headline. The colours
+ * themselves now travel as a palette-swatch reference image (renderPaletteSwatchReference
+ * → resolveBrandReferences), which is a visual target the model can actually match, so
+ * the text says WHICH ROLE goes where and never repeats the value.
+ */
 function renderColors(tokens: BrandMdTokens): string | null {
   if (tokens.colors.length === 0) return null;
-  const list = tokens.colors
-    .map((color) => {
+  const roles = tokens.colors
+    .map((color, index) => {
       const qualifier = [color.role, color.name]
         .filter((part): part is string => !!part)
         .join(', ');
-      return qualifier ? `${color.value} (${qualifier})` : color.value;
+      return qualifier ? `band ${index + 1} = ${qualifier}` : `band ${index + 1}`;
     })
-    .join(', ');
-  return `Colors (use these exact brand colors): ${list}`;
+    .join('; ');
+  return `Colors: use ONLY the ${tokens.colors.length} colours in the attached palette swatch reference, left to right (${roles}). Match them by eye from the swatch.`;
 }
 
+/*
+ * Font FAMILIES leaked the same way — "IBM Plex Mono", "Instrument Sans" turned up set
+ * into the artwork. A named licensed face is not something an image model can honour
+ * anyway; it approximates. So the family name is withheld and only the semantic
+ * description survives, which is the part that actually steers the render.
+ */
 function renderTypography(tokens: BrandMdTokens): string | null {
   if (tokens.typography.length === 0) return null;
-  const list = tokens.typography
-    .map((font) => {
-      const qualifier = [font.role, font.note].filter((part): part is string => !!part).join('; ');
-      return qualifier ? `${font.family} (${qualifier})` : font.family;
-    })
-    .join(', ');
-  return `Typography: ${list}`;
+  const described = tokens.typography
+    .map((font) => [font.role, font.note].filter((part): part is string => !!part).join(' — '))
+    .filter((part) => part.length > 0);
+  if (described.length === 0) return null;
+  return `Typography: ${described.join('; ')}.`;
 }
 
 function renderVoice(tokens: BrandMdTokens): string | null {
@@ -190,6 +201,8 @@ export function renderForcedBrandBlock(
 
   if (lines.length === 0) return { block: '', wantsLogo, renderedPieces };
 
-  const block = `<brand_book>(authoritative brand rules — the generation MUST comply)\n${lines.join('\n')}\n</brand_book>`;
+  // The block is DIRECTION, never copy. Without saying so, models set the rules
+  // themselves into the artwork — which is how hex codes became headlines.
+  const block = `<brand_book>(authoritative brand rules — the generation MUST comply; these are instructions, NEVER text to render. Never draw hex codes, colour names, font names, or any of this wording into the image.)\n${lines.join('\n')}\n</brand_book>`;
   return { block, wantsLogo, renderedPieces };
 }

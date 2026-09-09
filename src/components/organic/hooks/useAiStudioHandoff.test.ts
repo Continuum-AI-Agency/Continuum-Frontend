@@ -14,7 +14,7 @@ mock.module('@/components/ui/ToastProvider', () => ({
   useToast: () => ({ show: mock(() => {}) }),
 }));
 
-const { useAiStudioHandoff } = await import('./useAiStudioHandoff');
+const { useAiStudioHandoff, withPlannerHandoffParams } = await import('./useAiStudioHandoff');
 
 // An agent-generated carousel: ten realized slides, each with its own blueprint
 // prompt, and NO `slideCount` — that column is only ever restored from a
@@ -121,5 +121,40 @@ describe('useAiStudioHandoff — carousel handoff', () => {
       expect(handoff.authoritativeCount).toBe(1);
       expect(handoff.slides).toBeUndefined();
     });
+  });
+});
+
+// The Apply Back to Planner bug. A reel whose clips are generated carries a
+// `composition.openHref` — a bare `?roomId=&focusNodeId=` timeline link with no handoff
+// identity on it. openDraft pushed that href verbatim, so `source`/`draftId` never
+// reached AIStudioClient, the planner seed stayed null, and the canvas header rendered
+// no Apply Back block at all. The control was absent, not disabled, which is exactly
+// what "the replace button does nothing" looks like from the outside.
+describe('withPlannerHandoffParams', () => {
+  it('stamps the planner identity onto a composition link that has its own query', () => {
+    const href = withPlannerHandoffParams(
+      '/ai-studio?roomId=room-1&focusNodeId=timeline-1',
+      'draft-9',
+    );
+    const params = new URLSearchParams(href.split('?')[1]);
+
+    expect(params.get('roomId')).toBe('room-1');
+    expect(params.get('focusNodeId')).toBe('timeline-1');
+    expect(params.get('source')).toBe('organic-planner');
+    expect(params.get('draftId')).toBe('draft-9');
+  });
+
+  it('falls back to the canvas route when there is no composition yet', () => {
+    const href = withPlannerHandoffParams(undefined, 'draft-9');
+    const params = new URLSearchParams(href.split('?')[1]);
+
+    expect(href.startsWith('/ai-studio')).toBe(true);
+    expect(params.get('mode')).toBe('canvas');
+    expect(params.get('source')).toBe('organic-planner');
+    expect(params.get('draftId')).toBe('draft-9');
+  });
+
+  it('keeps the path relative — never leaks the parse base into the pushed route', () => {
+    expect(withPlannerHandoffParams('/ai-studio?roomId=r', 'd')).not.toContain('local.invalid');
   });
 });

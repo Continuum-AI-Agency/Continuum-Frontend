@@ -302,7 +302,7 @@ export const VIDEO_GENERATOR_DURATIONS = [4, 6, 8] as const;
 export type VideoGeneratorDurationSeconds = (typeof VIDEO_GENERATOR_DURATIONS)[number];
 export const DEFAULT_VIDEO_GENERATOR_DURATION: VideoGeneratorDurationSeconds = 8;
 export const VIDEO_GENERATOR_DURATION_NOTE =
-  'Veo renders 4, 6 or 8 seconds only. 1080p and above render at 8 seconds.';
+  'Veo renders 4, 6 or 8 seconds only. 1080p and above render at 8 seconds, and so does any render carrying a reference image or a first/last frame.';
 
 const VIDEO_RESOLUTIONS_REQUIRING_8S = new Set(['1080p', '2K', '4K']);
 
@@ -319,6 +319,18 @@ export const videoResolutionRequiresEightSeconds = (
   VIDEO_RESOLUTIONS_REQUIRING_8S.has(canonicalVideoResolution(resolution));
 
 /**
+ * The SECOND thing that pins a Veo render to 8s: a reference. Veo only renders the
+ * short ladder for a prompt-only clip — hand it a reference image or a first/last
+ * frame and 4s and 6s stop being offered, so a node left at 4s 400s at Run exactly
+ * the way an over-720p one does. Both frame kinds count, not just `reference_images`:
+ * they are one constraint family upstream.
+ */
+export const videoReferencesRequireEightSeconds = (
+  model: VideoGeneratorModel,
+  hasReferences: unknown,
+): boolean => getVideoGeneratorProvider(model) === 'google' && hasReferences === true;
+
+/**
  * The length this node will ACTUALLY render at. `undefined` means the model has no
  * fixed ladder (the fal models take 3-15s), so the requested value is left alone
  * rather than silently clamped down to something the provider never asked for.
@@ -327,9 +339,11 @@ export function coerceVideoGeneratorDuration(
   model: VideoGeneratorModel,
   resolution: unknown,
   requested: unknown,
+  hasReferences?: unknown,
 ): VideoGeneratorDurationSeconds | undefined {
   if (getVideoGeneratorProvider(model) !== 'google') return undefined;
   if (videoResolutionRequiresEightSeconds(model, resolution)) return 8;
+  if (videoReferencesRequireEightSeconds(model, hasReferences)) return 8;
   const value = Number(requested);
   return (VIDEO_GENERATOR_DURATIONS as readonly number[]).includes(value)
     ? (value as VideoGeneratorDurationSeconds)
@@ -409,7 +423,7 @@ export function getVideoGeneratorReferenceModes(
   return REFERENCE_MODES_BY_MODEL[model];
 }
 
-const isVideoGeneratorModel = (value: unknown): value is VideoGeneratorModel =>
+export const isVideoGeneratorModel = (value: unknown): value is VideoGeneratorModel =>
   typeof value === 'string' && (VIDEO_GENERATOR_MODELS as readonly string[]).includes(value);
 
 export const isVideoGeneratorNodeType = (nodeType?: string): nodeType is VideoGeneratorNodeType =>

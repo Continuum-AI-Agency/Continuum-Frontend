@@ -129,6 +129,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             logoPath={brandProfile?.logoPath ?? null}
             profile={brandProfile ?? undefined}
             canEdit={canEdit}
+            contentLanguage={brandProfile?.contentLanguage ?? null}
           />
         </SettingsSection>
         <SettingsSection

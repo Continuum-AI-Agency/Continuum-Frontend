@@ -93,6 +93,21 @@ type UseAiStudioHandoffOptions = {
   isCalendarHydrated: boolean;
 };
 
+/**
+ * Stamps the planner identity onto whichever route we hand the canvas.
+ *
+ * Relative on purpose: `openHref` is an in-app path, and `URL` needs a base to parse
+ * one, so the base is supplied and thrown away rather than string-concatenating a `?`
+ * onto a href that may already carry a query.
+ */
+export function withPlannerHandoffParams(href: string | undefined, draftId: string): string {
+  const base = href ?? '/ai-studio?mode=canvas';
+  const url = new URL(base, 'https://local.invalid');
+  url.searchParams.set('source', 'organic-planner');
+  url.searchParams.set('draftId', draftId);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
 export function useAiStudioHandoff({
   brandProfileId,
   weekStartId,
@@ -371,14 +386,14 @@ export function useAiStudioHandoff({
         });
         return;
       }
+      // The composition link is minted as a bare timeline focus (`?roomId=&focusNodeId=`)
+      // and carries no handoff identity. Pushing it as-is dropped `source`/`draftId`,
+      // which is what AIStudioClient needs to build the planner seed — and without the
+      // seed the canvas header renders no Apply Back to Planner block at all, so the
+      // control the user came to press is not disabled, it is absent. Every reel with
+      // generated clips took this branch, which is why "the replace button does nothing".
       const compositionHref = draft.mediaSuggestion?.reel?.composition?.openHref;
-      if (compositionHref) {
-        router.push(compositionHref);
-        return;
-      }
-      router.push(
-        `/ai-studio?mode=canvas&source=organic-planner&draftId=${encodeURIComponent(draft.id)}`,
-      );
+      router.push(withPlannerHandoffParams(compositionHref, draft.id));
     },
     [buildAiStudioContext, persistAiStudioContext, router, show],
   );
