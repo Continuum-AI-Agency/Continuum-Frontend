@@ -243,6 +243,64 @@ describe('ActionConfigPopover', () => {
     expect(options).toEqual(['single', 'evenly', 'interval', 'sceneChange']);
   });
 
+  it('edits a curated shader stack without erasing existing keyframes', () => {
+    const keyframe = {
+      id: 'tint-amount-1',
+      property: 'effect.parameter' as const,
+      parameterName: 'amount' as const,
+      timeSec: 1,
+      value: 0.8,
+      interpolation: 'linear' as const,
+    };
+    const { getByLabelText } = renderPopover('image.shader', {
+      mode: 'deferred',
+      shaderStack: {
+        version: 1,
+        effects: [
+          {
+            effectId: 'tint',
+            enabled: true,
+            parameters: { color: '#ff0000', amount: 0.25 },
+            keyframes: [keyframe],
+          },
+        ],
+      },
+    });
+
+    fireEvent.change(getByLabelText('Tint colour'), { target: { value: '#112233' } });
+
+    const written = patch.mock.calls[0]?.[2] as {
+      config: {
+        shaderStack: {
+          effects: Array<{
+            parameters: { color?: string; amount?: number };
+            keyframes: unknown[];
+          }>;
+        };
+      };
+    };
+    expect(written.config.shaderStack.effects[0]?.parameters).toEqual({
+      color: '#112233',
+      amount: 0.25,
+    });
+    expect(written.config.shaderStack.effects[0]?.keyframes).toEqual([keyframe]);
+  });
+
+  it('offers explicit deferred and bake shader modes', () => {
+    const { getByTestId } = renderPopover('video.shader');
+    const select = getByTestId('config-select');
+    expect(Array.from(select.querySelectorAll('option')).map((option) => option.value)).toEqual([
+      'deferred',
+      'bake',
+    ]);
+
+    fireEvent.change(select, { target: { value: 'bake' } });
+
+    expect(patch).toHaveBeenCalledWith('node-1', 'action', {
+      config: { ...parseActionConfig('video.shader', {}), mode: 'bake' },
+    });
+  });
+
   it('routes video.subtitles to the SubtitlesConfig panel', () => {
     const { getByRole } = renderPopover('video.subtitles');
 

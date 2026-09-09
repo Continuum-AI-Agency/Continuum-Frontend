@@ -75,7 +75,15 @@ describe('#289 a designRef never blocks a generation', () => {
   it('generates with an unfilled palette on ref-image instead of stopping on it', async () => {
     const { executeGeneration, node } = await run(
       [generator(), emptyPaletteRef()],
-      [{ id: 'e1', source: 'ref', target: 'gen', sourceHandle: 'image', targetHandle: 'ref-image' }],
+      [
+        {
+          id: 'e1',
+          source: 'ref',
+          target: 'gen',
+          sourceHandle: 'image',
+          targetHandle: 'ref-image',
+        },
+      ],
     );
 
     expect(executeGeneration).toHaveBeenCalledTimes(1);
@@ -98,10 +106,7 @@ describe('#289 a designRef never blocks a generation', () => {
     // The rule is scoped to the designRef, not widened into "nothing is ever required":
     // an Image node wired to ref-image with no media is still the run's blocker.
     const { executeGeneration, node } = await run(
-      [
-        generator(),
-        { id: 'img', position: { x: 0, y: 0 }, type: 'image', data: {} } as StudioNode,
-      ],
+      [generator(), { id: 'img', position: { x: 0, y: 0 }, type: 'image', data: {} } as StudioNode],
       [{ id: 'e1', source: 'img', target: 'gen', targetHandle: 'ref-image' }],
     );
 

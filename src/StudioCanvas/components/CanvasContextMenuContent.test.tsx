@@ -49,7 +49,7 @@ function renderMenu(overrides: { hasSelection?: boolean; techniques?: TechniqueI
     onApplyTechnique: mock(() => {}),
     openLoadWorkflow: mock(() => {}),
     openInstagram: mock(() => {}),
-    openSaveStarter: mock(() => {}),
+    openSave: mock(() => {}),
     enforceBrandBookOnSelection: mock(() => {}),
     clearCanvas: mock(() => {}),
     hasSelection: overrides.hasSelection ?? false,
@@ -70,12 +70,13 @@ function renderMenu(overrides: { hasSelection?: boolean; techniques?: TechniqueI
   return { ...view, props };
 }
 
+// Save is deliberately absent: its label depends on whether anything is selected, so it is
+// asserted by the two Save tests rather than by a fixed list.
 const TOP_LEVEL_LABELS = [
   'Canvas Actions',
   'Add Node',
   'Load Workflow',
   'Import from Instagram',
-  'Save selection as starter',
   'Enforce brand book on selection',
   'View and Interaction',
   'Clear Canvas',
@@ -93,21 +94,37 @@ describe('CanvasContextMenuContent', () => {
   it('disables the selection-only items when nothing is selected', () => {
     const { getByText } = renderMenu({ hasSelection: false });
 
-    for (const label of ['Save selection as starter', 'Enforce brand book on selection']) {
-      const item = getByText(label).closest('[role="menuitem"]');
-      expect(item).not.toBeNull();
-      expect(item?.getAttribute('aria-disabled')).toBe('true');
-    }
+    const item = getByText('Enforce brand book on selection').closest('[role="menuitem"]');
+    expect(item).not.toBeNull();
+    expect(item?.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('enables the selection-only items when a selection exists', () => {
     const { getByText } = renderMenu({ hasSelection: true });
 
-    for (const label of ['Save selection as starter', 'Enforce brand book on selection']) {
-      const item = getByText(label).closest('[role="menuitem"]');
-      expect(item).not.toBeNull();
-      expect(item?.getAttribute('aria-disabled')).not.toBe('true');
-    }
+    const item = getByText('Enforce brand book on selection').closest('[role="menuitem"]');
+    expect(item).not.toBeNull();
+    expect(item?.getAttribute('aria-disabled')).not.toBe('true');
+  });
+
+  // Save is the one item that is never disabled — with nothing selected it saves the whole
+  // canvas, which is the same act the header's Save button performs. It used to be gated on
+  // a selection, so a right-click on empty canvas offered no way to save at all.
+  it('offers Save with nothing selected and saves the whole canvas', () => {
+    const { getByText, props } = renderMenu({ hasSelection: false });
+
+    const item = getByText('Save').closest('[role="menuitem"]');
+    expect(item?.getAttribute('aria-disabled')).not.toBe('true');
+
+    fireEvent.click(getByText('Save'));
+    expect(props.openSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the scope when a selection exists', () => {
+    const { getByText, props } = renderMenu({ hasSelection: true });
+
+    fireEvent.click(getByText('Save selection'));
+    expect(props.openSave).toHaveBeenCalledTimes(1);
   });
 
   it('clears the canvas when Clear Canvas is clicked', () => {
@@ -184,21 +201,17 @@ describe('CanvasContextMenuContent', () => {
     const { getByText, props } = renderMenu({ hasSelection: true });
 
     fireEvent.click(getByText('Import from Instagram'));
-    fireEvent.click(getByText('Save selection as starter'));
     fireEvent.click(getByText('Enforce brand book on selection'));
 
     expect(props.openInstagram).toHaveBeenCalledTimes(1);
-    expect(props.openSaveStarter).toHaveBeenCalledTimes(1);
     expect(props.enforceBrandBookOnSelection).toHaveBeenCalledTimes(1);
   });
 
   it('leaves the selection-only items inert while nothing is selected', () => {
     const { getByText, props } = renderMenu({ hasSelection: false });
 
-    fireEvent.click(getByText('Save selection as starter'));
     fireEvent.click(getByText('Enforce brand book on selection'));
 
-    expect(props.openSaveStarter).toHaveBeenCalledTimes(0);
     expect(props.enforceBrandBookOnSelection).toHaveBeenCalledTimes(0);
   });
 });

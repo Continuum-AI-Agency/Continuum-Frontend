@@ -67,9 +67,8 @@ export type OrganicGeneratablePlatform = z.infer<typeof organicGeneratablePlatfo
  *   generatable  — …and `platformRegistry.ts` can compose a post for it
  *   publishable  — …and `publisherRegistry.ts` can send that post
  *
- * YouTube generates but does not publish: the calendar plans a YouTube post and the generator
- * writes one, but nothing under `App/organic/publishing/` can send it, so the publish boundary
- * refuses rather than pretending. Flattening these would break in one direction or the other —
+ * X and Threads generate nothing and publish nothing; they stay canonical because live
+ * integrations exist for them. Flattening these would break in one direction or the other —
  * widening this enum makes an unpublishable platform look publishable, narrowing the canonical
  * one erases platforms that already hold live integrations.
  *
@@ -80,6 +79,7 @@ export const publishPlatformSchema = organicPlatformSchema.extract([
   'facebook',
   'linkedin',
   'tiktok',
+  'youtube',
 ]);
 export type PublishPlatform = z.infer<typeof publishPlatformSchema>;
 
@@ -136,6 +136,20 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     mediaTransport: 'bytes',
     // LinkedIn ugcPost commentary.
     caption: { maxLength: 3000, maxHashtags: 30 },
+  },
+  youtube: {
+    // YouTube has no photo or carousel surface at all: a video IS the post. POST and CAROUSEL
+    // are refused at the boundary with `unsupported_format` rather than mapped onto something
+    // that would upload a still image as a one-frame video.
+    formats: { POST: false, REEL: true, CAROUSEL: false },
+    // Unreachable while CAROUSEL is false; kept so the shape stays total over PublishFormat.
+    carousel: { min: 0, max: 0 },
+    // YouTube will not fetch a URL — `videos.insert` is a resumable upload of the bytes,
+    // the same posture as LinkedIn and unlike every URL-pull platform here.
+    mediaTransport: 'bytes',
+    // The video DESCRIPTION. The title is a separate, shorter field the publisher derives —
+    // see `youtubePublisher.ts`. YouTube ignores tags past the first 15 in a description.
+    caption: { maxLength: 5000, maxHashtags: 15 },
   },
   tiktok: {
     // REEL is the native shape (a video). POST is a single-image photo post and CAROUSEL a

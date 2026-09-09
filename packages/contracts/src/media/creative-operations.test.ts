@@ -48,6 +48,25 @@ describe('registerGeneratedAssetOperationSchema', () => {
 
     expect(parsed.success).toBe(false);
   });
+
+  it('registers generated audio as the Library file kind', () => {
+    const parsed = registerGeneratedAssetOperationSchema.parse({
+      action: 'register_generated_asset',
+      brandId: BRAND_ID,
+      kind: 'file',
+      bucket: 'brand-profile-assets',
+      storagePath: `${BRAND_ID}/audio/narration.wav`,
+      fileName: 'narration.wav',
+      mimeType: 'audio/wav',
+      source: 'ai_generated',
+      operation: 'vertex_tts',
+      idempotencyKey: 'audio:1',
+    });
+    expect(parsed.kind).toBe('file');
+    expect(
+      registerGeneratedAssetOperationSchema.safeParse({ ...parsed, mimeType: 'image/png' }).success,
+    ).toBe(false);
+  });
 });
 
 describe('registerGeneratedAssetResponseSchema', () => {

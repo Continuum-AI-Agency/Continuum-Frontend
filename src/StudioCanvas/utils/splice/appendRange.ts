@@ -5,6 +5,7 @@ import {
   resolveTextOverlays,
   speedFor,
 } from '../render/effectSpec';
+import { hasShaderStack } from '../render/shaderStack';
 import { type FadeOverlay, transitionOverlayAt } from '../render/transitions';
 import { type CaptionCue, findActiveCues } from './captionCues';
 import { drawActiveCaption } from './drawCaptions';
@@ -138,8 +139,8 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
       const fade = transitionOverlayAt(localOut, outputDurationSec, headFade, tailFade);
       const activeCues = cues?.length ? findActiveCues(cues, outputTimestamp) : [];
       await drawFrameComposition({
-        drawBase: () => {
-          drawClipFrame(
+        drawBase: async () => {
+          await drawClipFrame(
             ctx,
             wrapped.canvas,
             sourceWidth,
@@ -148,6 +149,7 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
             targetHeight,
             effects,
             clipT,
+            localOut,
           );
           if (overlays.length > 0) drawTextOverlays(ctx, overlays, targetWidth, targetHeight);
         },
@@ -290,15 +292,26 @@ export async function appendStill(params: AppendStillParams): Promise<void> {
   const perFrame =
     Boolean(effects?.kenBurns) ||
     Boolean(effects?.keyframes && effects.keyframes.length >= 2) ||
+    hasShaderStack(effects) ||
     Boolean(headFade) ||
     Boolean(tailFade) ||
     Boolean(compositeOverlays) ||
     hasCaptions;
-  const drawBase = (t: number) => {
-    drawClipFrame(ctx, bitmap, bitmap.width, bitmap.height, targetWidth, targetHeight, effects, t);
+  const drawBase = async (t: number, timeSec: number) => {
+    await drawClipFrame(
+      ctx,
+      bitmap,
+      bitmap.width,
+      bitmap.height,
+      targetWidth,
+      targetHeight,
+      effects,
+      t,
+      timeSec,
+    );
     if (overlays.length > 0) drawTextOverlays(ctx, overlays, targetWidth, targetHeight);
   };
-  if (!perFrame) drawBase(0);
+  if (!perFrame) await drawBase(0, 0);
 
   const frameDuration = 1 / STILL_FPS;
   let elapsed = 0;
@@ -309,8 +322,8 @@ export async function appendStill(params: AppendStillParams): Promise<void> {
     const fade = transitionOverlayAt(elapsed, durationSec, headFade, tailFade);
     const activeCues = hasCaptions && cues ? findActiveCues(cues, outputTimestamp) : [];
     await drawFrameComposition({
-      drawBase: () => {
-        if (perFrame) drawBase(durationSec > 0 ? elapsed / durationSec : 0);
+      drawBase: async () => {
+        if (perFrame) await drawBase(durationSec > 0 ? elapsed / durationSec : 0, elapsed);
       },
       ...(compositeOverlays ? { drawOverlays: () => compositeOverlays(ctx, outputTimestamp) } : {}),
       ...(fade

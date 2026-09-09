@@ -36,6 +36,7 @@ import {
   rectsIntersect,
   unionBounds,
 } from '../../utils/layers/layerTransform';
+import { ShaderLayerImage } from './ShaderLayerImage';
 import { isTextEntryTarget } from './useLayerEditorKeymap';
 
 /**
@@ -772,13 +773,10 @@ export function LayerStage({
         >
           {layers.map((layer) =>
             layer.visible && sources.has(layer.id) ? (
-              <img
+              <ShaderLayerImage
                 key={layer.id}
-                data-layer-id={layer.id}
-                src={sources.get(layer.id)}
-                alt={layer.name}
-                draggable={false}
-                className="pointer-events-none absolute left-0 top-0 max-w-none select-none"
+                layer={layer}
+                src={sources.get(layer.id) ?? ''}
                 style={{
                   width: layer.sourceWidth,
                   height: layer.sourceHeight,

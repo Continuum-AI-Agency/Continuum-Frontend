@@ -82,6 +82,7 @@ const PLATFORM_LABELS: Record<PublishPlatform, string> = {
   facebook: 'Facebook',
   linkedin: 'LinkedIn',
   tiktok: 'TikTok',
+  youtube: 'YouTube',
 };
 
 export function publishPlatformLabel(platform: PublishPlatform | undefined | null): string {

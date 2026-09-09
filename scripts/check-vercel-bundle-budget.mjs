@@ -3,6 +3,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(scriptDirectory, '..');
@@ -23,7 +24,7 @@ function readJson(filePath) {
 // unioning every segment's JS (page, layout, ...) so a layout's contribution is counted here. Layouts
 // are segments, not routes, so they can never be rows of their own — budget the route that carries
 // them instead.
-function routeFirstLoadBytes(distDirectory, budget) {
+function routeFirstLoad(distDirectory, budget) {
   const rows = readJson(path.join(distDirectory, 'diagnostics', 'route-bundle-stats.json'));
   const row = rows.find((candidate) => candidate.route === budget.route);
   if (!row) {
@@ -31,30 +32,44 @@ function routeFirstLoadBytes(distDirectory, budget) {
       `${budget.name}: no route-bundle-stats row for "${budget.route}" — renamed or removed?`,
     );
   }
-  return row.firstLoadUncompressedJsBytes;
+  return {
+    actualBytes: row.firstLoadUncompressedJsBytes,
+    gzipBytes: gzipChunks(
+      row.firstLoadChunkPaths.map((file) => path.resolve(projectDirectory, file)),
+    ),
+  };
 }
 
-function rootMainFilesBytes(distDirectory) {
-  const manifest = readJson(path.join(distDirectory, 'build-manifest.json'));
-  if (!Array.isArray(manifest.rootMainFiles)) {
-    throw new Error('build-manifest.json does not contain rootMainFiles');
-  }
-  return manifest.rootMainFiles.reduce(
-    (total, filePath) => total + statSync(path.join(distDirectory, filePath)).size,
+function gzipChunks(files) {
+  return [...new Set(files)].reduce(
+    (total, file) => total + gzipSync(readFileSync(file)).length,
     0,
   );
 }
 
+function rootMainFiles(distDirectory) {
+  const manifest = readJson(path.join(distDirectory, 'build-manifest.json'));
+  if (!Array.isArray(manifest.rootMainFiles)) {
+    throw new Error('build-manifest.json does not contain rootMainFiles');
+  }
+  const files = manifest.rootMainFiles.map((file) => path.join(distDirectory, file));
+  return {
+    actualBytes: files.reduce((total, file) => total + statSync(file).size, 0),
+    gzipBytes: gzipChunks(files),
+  };
+}
+
 export function checkBundleBudgets({ distDirectory, configuration }) {
   return configuration.budgets.map((budget) => {
-    const actualBytes =
+    const { actualBytes, gzipBytes } =
       budget.source === 'rootMainFiles'
-        ? rootMainFilesBytes(distDirectory)
-        : routeFirstLoadBytes(distDirectory, budget);
+        ? rootMainFiles(distDirectory)
+        : routeFirstLoad(distDirectory, budget);
     const maximumBytes = maxAllowedBytes(budget.baselineBytes, configuration.maxGrowthPercent);
     return {
       name: budget.name,
       actualBytes,
+      gzipBytes,
       maximumBytes,
       passed: actualBytes <= maximumBytes,
     };
@@ -69,11 +84,17 @@ function main() {
   const configuration = readJson(path.join(scriptDirectory, 'vercel-bundle-budgets.json'));
   const results = checkBundleBudgets({ distDirectory, configuration });
 
+  if (process.argv.includes('--json')) {
+    console.log(JSON.stringify(results, null, 2));
+    if (results.some((result) => !result.passed)) process.exitCode = 1;
+    return;
+  }
+
   for (const result of results) {
     const actualKb = (result.actualBytes / 1024).toFixed(1);
     const maximumKb = (result.maximumBytes / 1024).toFixed(1);
     console.log(
-      `${result.passed ? 'PASS' : 'FAIL'} ${result.name}: ${actualKb} KB / ${maximumKb} KB`,
+      `${result.passed ? 'PASS' : 'FAIL'} ${result.name}: ${actualKb} KiB / ${maximumKb} KiB (${(result.gzipBytes / 1024).toFixed(1)} KiB gzip)`,
     );
   }
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { imageSizeSchema } from '../ai-studio/image-size';
+import { shaderStackV1Schema } from '../ai-studio/shader-stack';
 import { artDirectionSchema } from '../creative/art-direction';
 import { organicUgcSpecSchema } from '../media/reel-video';
 import { organicGeneratablePlatformSchema } from '../organic/publishing';
@@ -178,6 +179,7 @@ export const organicHyperframeAssetSchema = z
     width: z.number().int().positive().nullable().optional(),
     height: z.number().int().positive().nullable().optional(),
     durationSeconds: z.number().positive().nullable().optional(),
+    shaderStack: shaderStackV1Schema.optional(),
     // Library assets embedded as hf-asset://<id>, re-signed by the browser at
     // render time rather than baked in as URLs that expire before the render.
     sourceAssets: z

@@ -3,7 +3,18 @@ import type { TimelineInputSource, TimelineTrack } from '../../types';
 import { resolveOverlayPreviewLayers } from './overlayPreview';
 
 const pool: TimelineInputSource[] = [
-  { nodeId: 'video-1', kind: 'video', label: 'Product', previewUrl: 'blob:product' },
+  {
+    nodeId: 'video-1',
+    kind: 'video',
+    label: 'Product',
+    previewUrl: 'blob:product',
+    shaderStack: {
+      version: 1,
+      effects: [
+        { effectId: 'film_grain', enabled: true, parameters: { amount: 0.2 }, keyframes: [] },
+      ],
+    },
+  },
   { nodeId: 'image-1', kind: 'image', label: 'Logo', previewUrl: 'blob:logo' },
 ];
 
@@ -52,7 +63,9 @@ describe('resolveOverlayPreviewLayers', () => {
       playbackRate: 2,
       muted: false,
       volume: 0.4,
+      effectTimeSec: 0.5,
     });
+    expect(layers[0].effects?.shaderStack?.effects[0]?.effectId).toBe('film_grain');
     expect(layers[0].mediaStyle.opacity).toBe(0.7);
   });
 

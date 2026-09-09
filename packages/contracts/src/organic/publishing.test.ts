@@ -41,8 +41,9 @@ describe('publish platform capabilities', () => {
       expect(canonical.has(platform)).toBe(true);
     }
     expect(publishPlatformSchema.options.length).toBeLessThan(canonical.size);
-    // The gap is the point: these plan but do not publish.
-    for (const unpublishable of ['youtube', 'x', 'threads'] as const) {
+    // The gap is the point: these plan but do not publish. YouTube left this list on
+    // 2026-09-07 when its publisher shipped — which is the only way a platform may leave it.
+    for (const unpublishable of ['x', 'threads'] as const) {
       expect(canonical.has(unpublishable)).toBe(true);
       expect(publishPlatformSchema.safeParse(unpublishable).success).toBe(false);
     }
@@ -52,12 +53,18 @@ describe('publish platform capabilities', () => {
     }
   });
 
-  it('supports all three formats on every platform', () => {
+  it('supports all three formats on every platform with a feed', () => {
     for (const platform of ['instagram', 'facebook', 'linkedin', 'tiktok'] as const) {
       for (const format of ['POST', 'REEL', 'CAROUSEL'] as const) {
         expect(supportsFormat(platform, format)).toBe(true);
       }
     }
+    // YouTube is the exception and must stay one: a video IS the post, so a still image or a
+    // carousel has nowhere to go. These refuse with `unsupported_format` at the boundary
+    // rather than being mapped onto a one-frame video.
+    expect(supportsFormat('youtube', 'REEL')).toBe(true);
+    expect(supportsFormat('youtube', 'POST')).toBe(false);
+    expect(supportsFormat('youtube', 'CAROUSEL')).toBe(false);
   });
 });
 
@@ -155,10 +162,12 @@ describe('toPublishPlatform', () => {
   });
 
   it('returns null for platforms we cannot publish to', () => {
-    // youtube stays unpublishable: drafts carry it (the agent's schema accepts it) but no
-    // publisher is registered, so it must not resolve to a publish platform.
-    expect(toPublishPlatform('youtube')).toBeNull();
+    // x and threads stay unpublishable: drafts and integrations carry them, but no publisher
+    // is registered, so they must not resolve to a publish platform.
     expect(toPublishPlatform('x')).toBeNull();
+    expect(toPublishPlatform('threads')).toBeNull();
+    // youtube resolves since its publisher shipped 2026-09-07.
+    expect(toPublishPlatform('YouTube')).toBe('youtube');
     expect(toPublishPlatform('')).toBeNull();
     expect(toPublishPlatform(undefined)).toBeNull();
     expect(toPublishPlatform(null)).toBeNull();

@@ -1,4 +1,4 @@
-import type { BrandTypeInputs } from '@continuum/contracts';
+import type { ActionInputModality, BrandTypeInputs } from '@continuum/contracts';
 import {
   actionDef,
   actionInputPort,
@@ -34,7 +34,7 @@ export interface RunRecipeArgs {
 const outputAsInput = async (
   output: NodeOutput,
   handle: string,
-  modality: 'image' | 'video' | 'text',
+  modality: ActionInputModality,
 ): Promise<ResolvedActionInput> => {
   if (modality === 'text') {
     if (output.type !== 'text') throw new Error(`Step output is ${output.type}, not text.`);
@@ -45,21 +45,44 @@ const outputAsInput = async (
     const imageUrl =
       output.url ?? (output.base64 ? buildDataUrl(output.mimeType, output.base64) : null);
     if (!imageUrl) throw new Error('Step produced an image with no readable bytes.');
-    return { handle, imageUrl, assetId: output.assetId };
+    return {
+      handle,
+      imageUrl,
+      mimeType: output.mimeType,
+      storagePath: output.storagePath,
+      storageBucket: output.storageBucket,
+      sizeBytes: output.sizeBytes,
+      assetId: output.assetId,
+      assetVersionId: output.assetVersionId,
+      shaderStack: output.shaderStack,
+    };
+  }
+  if (modality === 'audio') {
+    throw new Error('Step outputs cannot feed an audio input; use a Library audio asset.');
   }
   if (output.type !== 'video') throw new Error(`Step output is ${output.type}, not a video.`);
   // Video ops re-encode, so the worker needs the bytes rather than a URL.
   const response = await fetch(output.url);
   if (!response.ok)
     throw new Error(`Could not read the previous step's video (${response.status}).`);
-  return { handle, blob: await response.blob(), assetId: output.assetId };
+  return {
+    handle,
+    imageUrl: output.url,
+    blob: await response.blob(),
+    storagePath: output.storagePath,
+    storageBucket: output.storageBucket,
+    sizeBytes: output.sizeBytes,
+    assetId: output.assetId,
+    assetVersionId: output.assetVersionId,
+    shaderStack: output.shaderStack,
+  };
 };
 
 const assetAsInput = async (
   url: string,
   assetId: string,
   handle: string,
-  modality: 'image' | 'video' | 'text',
+  modality: ActionInputModality,
 ): Promise<ResolvedActionInput> => {
   if (modality === 'image') return { handle, imageUrl: url, assetId };
   const response = await fetch(url);
@@ -101,7 +124,7 @@ export async function runRecipe(args: RunRecipeArgs): Promise<NodeOutput> {
 async function resolveInput(
   from: CreativeOpInputRef,
   handle: string,
-  modality: 'image' | 'video' | 'text',
+  modality: ActionInputModality,
   outputs: readonly NodeOutput[],
   args: RunRecipeArgs,
 ): Promise<ResolvedActionInput> {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { compileUgcTalkingHeadWorkflow } from './ugc-workflow';
+import { compileStoryboardWorkflow, compileUgcTalkingHeadWorkflow } from './ugc-workflow';
 import { buildWorkflowGraph } from './workflow-builder';
 
 const shot = (id: string, continuity: 'cut' | 'match' = 'cut') => ({
@@ -71,5 +71,28 @@ describe('compileUgcTalkingHeadWorkflow', () => {
 
   it('rejects duplicate shot ids', () => {
     expect(() => compileUgcTalkingHeadWorkflow(recipe([shot('dup'), shot('dup')]))).toThrow();
+  });
+});
+
+it('compiles a general storyboard into one workspace', () => {
+  const compiled = compileStoryboardWorkflow({
+    recipe: 'storyboard',
+    objective: 'Film',
+    script: 'EXT.',
+    references: [],
+    shots: [
+      {
+        id: 'wide',
+        title: 'Wide',
+        frameDirection: 'A wide shot.',
+        visualDirection: 'Wind moves.',
+        durationSeconds: 4,
+      },
+    ],
+  });
+  expect(compiled.nodes[0]?.data?.productionSeed).toMatchObject({
+    recipe: 'storyboard',
+    sourceScript: 'EXT.',
+    shots: [{ title: 'Wide' }],
   });
 });

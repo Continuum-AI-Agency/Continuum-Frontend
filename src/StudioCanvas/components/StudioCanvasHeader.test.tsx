@@ -1,10 +1,29 @@
 // The header's own logic is the apply-back block: whether it renders at all, what the
 // readiness pill says, and when the Apply button is live. Every heavy child (rooms tabs,
-// sync status, presence, the two workflow dialogs, the library, the toolbar) is stubbed
-// so a failure here means the header, not one of them.
+// sync status, presence, the load dialog, the library, the toolbar) is stubbed so a failure
+// here means the header, not one of them.
+//
+// SaveWorkflowDialog is deliberately NOT stubbed. `mock.module` is process-wide in Bun and
+// applies at load time for the whole run, so stubbing it here replaced the component inside
+// SaveWorkflowDialog.test.tsx as well — that file's five tests failed in any multi-file run
+// while passing alone. A stub that only isolates one file is not worth blinding another's.
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render } from '@testing-library/react';
+import type React from 'react';
 
+// The real SaveWorkflowDialog calls useToast, so the header needs a provider stand-in now
+// that the dialog is no longer stubbed.
+mock.module('@/components/ui/ToastProvider', () => ({
+  TOAST_VARIANTS: ['success', 'info', 'warning', 'error'] as const,
+  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+  ToastError: class ToastError extends Error {},
+  coerceToastOptions: (_error: unknown, fallback: unknown) => fallback,
+  useToastContext: () => ({ show: () => {} }),
+  useToast: () => ({ show: () => {} }),
+  throwToastError: (options: { title: string }) => {
+    throw new Error(options.title);
+  },
+}));
 mock.module('@/components/ai-studio/CanvasRoomsTabs', () => ({
   CanvasRoomsTabs: () => <div data-testid="stub-rooms-tabs" />,
 }));
@@ -19,9 +38,6 @@ mock.module('@/components/presence/ActiveUsersStack', () => ({
 }));
 mock.module('./LoadWorkflowDialog', () => ({
   LoadWorkflowDialog: () => <div data-testid="stub-load-workflow-dialog" />,
-}));
-mock.module('./SaveWorkflowDialog', () => ({
-  SaveWorkflowDialog: () => <div data-testid="stub-save-workflow-dialog" />,
 }));
 mock.module('./Toolbar', () => ({
   Toolbar: () => <div data-testid="stub-toolbar" />,

@@ -27,6 +27,7 @@ import {
   Sparkles,
   Trash2,
   Type,
+  Workflow,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
@@ -51,6 +52,7 @@ export type LibraryBrowseDestination =
   | 'templates'
   | 'project_files'
   | 'typography'
+  | 'pipelines'
   | 'needs_review';
 
 type Props = {
@@ -89,6 +91,8 @@ const BROWSE_FOLDERS: {
   { value: 'templates', label: 'Templates', icon: LayoutTemplate },
   { value: 'project_files', label: 'Source files', icon: PackageOpen },
   { value: 'typography', label: 'Typography', icon: Type },
+  // Not media rows either — published canvases, listed for what they take and give.
+  { value: 'pipelines', label: 'Pipelines', icon: Workflow },
   { value: 'needs_review', label: 'Needs review', icon: ShieldAlert },
 ];
 
@@ -99,9 +103,11 @@ function activeDestination(
   templateOnly: boolean,
   section: LibrarySection,
 ): LibraryBrowseDestination | null {
-  // Typography is not a browse query at all — brand faces are licensed and never become
-  // media.assets rows — so it wins before any filter is read.
+  // Neither of these is a browse query — brand faces are licensed and never become
+  // media.assets rows, and a pipeline is a canvas_workflows row — so they win before any
+  // filter is read.
   if (section === 'typography') return 'typography';
+  if (section === 'pipelines') return 'pipelines';
   if (reviewStatuses.includes('in_review') || reviewStatuses.includes('needs_changes')) {
     return 'needs_review';
   }

@@ -120,7 +120,7 @@ function InFlightRow({
         </Button>
       )}
 
-      {!job.canDownload && !job.active && job.href && (
+      {!job.canDownload && (!job.active || job.source === 'onboarding') && job.href && (
         <Button
           className="h-5 shrink-0 px-1.5 text-3xs text-muted-foreground"
           onClick={() => onNavigate(job.href as string)}

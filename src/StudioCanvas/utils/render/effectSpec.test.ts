@@ -7,11 +7,11 @@ import {
   hasVisualEffects,
   opacityFor,
   resolveAdjustments,
-  warmthAdjustments,
   resolveTextOverlays,
   resolveTransformAt,
   speedFor,
   unpreviewableEffects,
+  warmthAdjustments,
 } from './effectSpec';
 
 describe('filterString', () => {

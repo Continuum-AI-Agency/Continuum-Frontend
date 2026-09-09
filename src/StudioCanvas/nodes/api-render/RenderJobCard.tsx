@@ -1,6 +1,7 @@
 'use client';
 
 import type { ApiRenderJob, ApiRenderOutput } from '@continuum/contracts';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -29,6 +30,82 @@ const deliveryLabel = (job: ApiRenderJob): string | null => {
   }
   return 'Delivery pending';
 };
+
+/**
+ * What the checks said about this render — automatically, with nobody asked to press anything.
+ *
+ * Two instruments, in order. The placement check ran at preflight, in closed form, over the
+ * assets that were actually pinned; if it answered cleanly for every slot, that is the end of
+ * it and nothing else was spent. If it could not answer, or answered badly, the finished frame
+ * went to the judge on its own and this is what came back.
+ *
+ * `unknown` from the judge is shown as unknown. It means the judge could not RUN — no
+ * credential, no reachable fleet — and rendering that as a pass is the one inversion that turns
+ * an unchecked frame into a checked one.
+ */
+function CheckSummary({ job }: { job: ApiRenderJob }) {
+  if (job.status !== 'finished') return null;
+  const findings = job.judge?.verdict?.findings ?? [];
+
+  if (job.judge) {
+    if (job.judge.state === 'unknown') {
+      return (
+        <Badge variant="muted" className="mt-1">
+          Not checked · {job.judge.why ?? 'the judge could not run'}
+        </Badge>
+      );
+    }
+    if (job.judge.state === 'pass' && findings.length === 0) {
+      return (
+        <Badge variant="success" className="mt-1">
+          Checked · nothing found
+        </Badge>
+      );
+    }
+    return (
+      <Alert className="mt-1 border-warning/40">
+        <AlertTitle className="text-2xs">
+          {findings.length} finding{findings.length === 1 ? '' : 's'} on the rendered frame
+        </AlertTitle>
+        <AlertDescription className="flex flex-col gap-1">
+          {job.judge.escalatedBecause ? (
+            <span className="text-2xs text-muted-foreground">{job.judge.escalatedBecause}</span>
+          ) : null}
+          <span className="flex flex-wrap gap-1">
+            {findings.map((finding, index) => (
+              <Badge
+                // Findings have no id of their own; kind + hint + position is what distinguishes
+                // two on one frame.
+                key={`${finding.kind}-${finding.layerHint}-${index}`}
+                variant={finding.severity === 'high' ? 'destructive' : 'warning'}
+              >
+                {finding.kind.replace(/_/g, ' ')}
+                {finding.layerHint ? ` · ${finding.layerHint}` : ''}
+              </Badge>
+            ))}
+          </span>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  // No verdict and none coming: every slot was measured and landed. The cheapest good outcome.
+  if (job.fit && !job.fit.escalate) {
+    return (
+      <Badge variant="success" className="mt-1">
+        Placement checked · {job.fit.why}
+      </Badge>
+    );
+  }
+  if (job.fit?.escalate) {
+    return (
+      <Badge variant="muted" className="mt-1">
+        Checking the frame…
+      </Badge>
+    );
+  }
+  return null;
+}
 
 function StatusSteps({ job }: { job: ApiRenderJob }) {
   if (job.status === 'failed') {
@@ -103,6 +180,7 @@ export function RenderJobCard({
         <StatusSteps job={job} />
         {delivery ? <span className="block truncate text-muted-foreground">{delivery}</span> : null}
       </button>
+      <CheckSummary job={job} />
       {job.outputs.map((output) => (
         <div key={output.id} className="mt-1 space-y-1">
           {output.kind === 'video' ? (

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { brandBookPieceKindSchema } from './brand-enforcement';
+import { shaderStackV1Schema } from './shader-stack';
 
 export const HYPERFRAMES_AGENT_NODE_TYPE = 'hyperframesAgent' as const;
 export const HYPERFRAMES_AGENT_MODEL = 'gemini-3.5-flash-lite' as const;
@@ -45,6 +46,7 @@ export const hyperframesAgentNodeDataSchema = z
     durationSeconds: z.number().int().min(5).max(30).default(10),
     fps: z.literal(30).default(30),
     resolution: hyperframesResolutionSchema.default('1080p'),
+    shaderStack: shaderStackV1Schema.optional(),
     // Grounding selection persisted on the node, same as the other generators.
     // Optional rather than defaulted so parsing an existing node does not
     // silently write empty arrays into saved canvases.
@@ -86,6 +88,7 @@ export const hyperframesAgentTurnRequestSchema = z
     aspectRatio: hyperframesAspectRatioSchema.default('16:9'),
     durationSeconds: z.number().int().min(5).max(30).default(10),
     resolution: hyperframesResolutionSchema.default('1080p'),
+    shaderStack: shaderStackV1Schema.optional(),
     idempotencyKey: z.string().min(8).max(200).optional(),
   })
   .strict();

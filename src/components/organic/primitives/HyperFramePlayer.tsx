@@ -1,5 +1,6 @@
 'use client';
 
+import type { ShaderStackV1 } from '@continuum/contracts';
 import { Loader2, Play } from 'lucide-react';
 import * as React from 'react';
 import { createClientRenderJob } from '@/lib/api/clientRenderJobs.client';
@@ -25,6 +26,10 @@ type PlayerState = 'idle' | 'loading' | 'playing' | 'error';
 
 function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasEnabledShader(stack: ShaderStackV1 | null | undefined): boolean {
+  return stack?.effects.some((effect) => effect.enabled) ?? false;
 }
 
 function toDataUrl(base64: string): string {
@@ -99,6 +104,9 @@ export function HyperFramePlayer({
   const hyperframe = draft.mediaSuggestion?.hyperframe ?? null;
   const coverUrl = resolveCoverUrl(draft);
   const mp4Status = hyperframe?.mp4Status ?? null;
+  const usesRenderedShaderPreview = hasEnabledShader(hyperframe?.shaderStack);
+  const renderedPreviewUrl =
+    usesRenderedShaderPreview && hasText(hyperframe?.mp4Url) ? hyperframe.mp4Url.trim() : null;
   const [state, setState] = React.useState<PlayerState>('idle');
   const [signedUrl, setSignedUrl] = React.useState<string | null>(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -141,6 +149,7 @@ export function HyperFramePlayer({
         width: dimensions.width,
         height: dimensions.height,
         assets: resolveSourceAssets(draft),
+        shaderStack: hyperframe.shaderStack ?? undefined,
         origin: {
           label: 'Organic HyperFrame',
           viewHref: '/planner',
@@ -161,6 +170,16 @@ export function HyperFramePlayer({
     }
     setState('loading');
     setErrorMessage(null);
+    if (usesRenderedShaderPreview) {
+      if (!renderedPreviewUrl) {
+        setErrorMessage('Shader preview is still rendering.');
+        setState('error');
+        return;
+      }
+      setSignedUrl(renderedPreviewUrl);
+      setState('playing');
+      return;
+    }
     const url = await signHyperframeComposition(brandId, hyperframe.htmlPath);
     if (!url) {
       setErrorMessage('Could not load the HyperFrame composition.');
@@ -169,17 +188,29 @@ export function HyperFramePlayer({
     }
     setSignedUrl(url);
     setState('playing');
-  }, [brandId, hyperframe]);
+  }, [brandId, hyperframe, renderedPreviewUrl, usesRenderedShaderPreview]);
 
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border/70 bg-black">
       {state === 'playing' && signedUrl ? (
-        <iframe
-          sandbox="allow-scripts allow-same-origin"
-          src={signedUrl}
-          className="h-full w-full"
-          title={draft.title}
-        />
+        usesRenderedShaderPreview ? (
+          // biome-ignore lint/a11y/useMediaCaption: generated creative preview has no caption track
+          <video
+            src={signedUrl}
+            controls
+            autoPlay
+            playsInline
+            className="h-full w-full"
+            aria-label={draft.title}
+          />
+        ) : (
+          <iframe
+            sandbox="allow-scripts allow-same-origin"
+            src={signedUrl}
+            className="h-full w-full"
+            title={draft.title}
+          />
+        )
       ) : (
         <button
           type="button"

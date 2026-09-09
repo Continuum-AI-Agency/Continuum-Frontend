@@ -1,5 +1,7 @@
+import type { PipelineManifest } from '@continuum/contracts';
 import { Download, Ellipsis, Pencil, RotateCw, Trash2, X } from 'lucide-react';
 import React from 'react';
+import { PipelineContract } from '@/components/ai-studio/PipelineContract';
 import { useApplyLibraryWorkflow, WorkflowCard } from '@/components/ai-studio/WorkflowLibrary';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useBrandPipelineManifests } from '@/lib/ai-studio/pipelines';
 import { useWorkflowLibrary } from '@/lib/ai-studio/useWorkflowLibrary';
 import {
   deleteAiStudioWorkflowAction,
@@ -52,6 +55,12 @@ type LoadWorkflowDialogProps = {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   showTrigger?: boolean;
+  /**
+   * Turns the picker into an ATTACH picker: choosing a flow hands it to the caller as agent
+   * context and loading moves to the row menu. The composer uses this so a person grabs the
+   * same three tabs the canvas header offers instead of a separate, thinner list of its own.
+   */
+  onAttachWorkflow?: (workflow: AiStudioWorkflow) => void;
 };
 
 /**
@@ -70,6 +79,9 @@ type WorkflowPanelProps = {
   premadesLoading: boolean;
   onUsePremade: (item: WorkflowLibraryItem) => Promise<void> | void;
   pipelines: AiStudioWorkflow[];
+  /** Manifests by pipeline id. Absent while the Backend read is still in flight. */
+  manifestsById: Map<string, PipelineManifest>;
+  onAttachWorkflow?: (workflow: AiStudioWorkflow) => void;
   brandProfileId?: string;
   error: string | null;
   filteredWorkflows: AiStudioWorkflow[];
@@ -89,6 +101,8 @@ type WorkflowPanelProps = {
 
 function WorkflowRow({
   workflow,
+  manifest,
+  onAttachWorkflow,
   mutationState,
   onApplyWorkflow,
   onDeleteConfirm,
@@ -98,6 +112,14 @@ function WorkflowRow({
   onRenameRequest,
 }: {
   workflow: AiStudioWorkflow;
+  /** Present only on the Pipelines tab — the declared contract plus whether it can run. */
+  manifest?: PipelineManifest;
+  /**
+   * When set, the row's primary click ATTACHES the flow as agent context instead of merging
+   * it onto the canvas, and loading moves into the overflow menu. The composer passes this;
+   * the canvas header does not.
+   */
+  onAttachWorkflow?: (workflow: AiStudioWorkflow) => void;
   mutationState: MutationState;
   onApplyWorkflow: (workflow: AiStudioWorkflow) => Promise<void> | void;
   onDeleteConfirm: (workflowId: string) => Promise<void> | void;
@@ -204,7 +226,9 @@ function WorkflowRow({
       <button
         type="button"
         className="min-w-0 flex-1 text-left transition-colors hover:text-primary"
-        onClick={() => void onApplyWorkflow(workflow)}
+        onClick={() =>
+          onAttachWorkflow ? onAttachWorkflow(workflow) : void onApplyWorkflow(workflow)
+        }
       >
         <p className="truncate text-sm font-medium text-primary">{workflow.name}</p>
         {workflow.description && (
@@ -213,11 +237,12 @@ function WorkflowRow({
         <p className="text-xs text-muted-foreground">
           Updated {formatTimestamp(workflow.updatedAt ?? workflow.createdAt)}
         </p>
+        {manifest && <PipelineContract manifest={manifest} className="mt-1.5" />}
       </button>
 
       <div className="mt-1 flex shrink-0 items-center gap-1">
         <span className="rounded border border-border/70 px-2 py-0.5 text-2xs font-medium text-muted-foreground">
-          Load
+          {onAttachWorkflow ? 'Attach' : 'Load'}
         </span>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -234,7 +259,13 @@ function WorkflowRow({
               </Button>
             }
           />
-          <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuContent align="end" className="w-44">
+            {onAttachWorkflow && (
+              <DropdownMenuItem onSelect={() => void onApplyWorkflow(workflow)}>
+                <Download className="mr-2 h-3.5 w-3.5" />
+                Load onto canvas
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => onRenameRequest(workflow)}>
               <Pencil className="mr-2 h-3.5 w-3.5" />
               Rename
@@ -261,6 +292,8 @@ function WorkflowPanel({
   premadesLoading,
   onUsePremade,
   pipelines,
+  manifestsById,
+  onAttachWorkflow,
   brandProfileId,
   error,
   filteredWorkflows,
@@ -374,6 +407,10 @@ function WorkflowPanel({
                     <WorkflowRow
                       key={workflow.id}
                       workflow={workflow}
+                      manifest={
+                        activeTab === 'pipeline' ? manifestsById.get(workflow.id) : undefined
+                      }
+                      onAttachWorkflow={onAttachWorkflow}
                       mutationState={mutationState}
                       onApplyWorkflow={onApplyWorkflow}
                       onDeleteConfirm={onDeleteConfirm}
@@ -456,6 +493,7 @@ export function LoadWorkflowDialog({
   open,
   onOpenChange,
   showTrigger = true,
+  onAttachWorkflow,
 }: LoadWorkflowDialogProps) {
   const applyWorkflowToCanvas = useApplyWorkflow();
   const { show } = useToast();
@@ -515,6 +553,17 @@ export function LoadWorkflowDialog({
     [query, saved],
   );
 
+  // The Backend read, for the runnability half of the contract. The declared ports are on
+  // the row already; `handle_free` is not — it is occupancy, and only the walker knows.
+  // Gated on the Pipelines tab so opening the panel on Pre-mades pays nothing.
+  const manifests = useBrandPipelineManifests(
+    isOpen && activeTab === 'pipeline' ? brandProfileId : undefined,
+  );
+  const manifestsById = React.useMemo(
+    () => new Map((manifests.data ?? []).map((manifest) => [manifest.pipeline_id, manifest])),
+    [manifests.data],
+  );
+
   // Fetched only while the panel is open, and cached for 30 minutes by the query — the ten
   // templates are the same for everyone and change about never.
   const library = useWorkflowLibrary({ enabled: isOpen });
@@ -535,6 +584,14 @@ export function LoadWorkflowDialog({
       setOpen(false);
     },
     [applyWorkflowToCanvas, setOpen],
+  );
+
+  const attachWorkflow = React.useCallback(
+    (workflow: AiStudioWorkflow) => {
+      onAttachWorkflow?.(workflow);
+      setOpen(false);
+    },
+    [onAttachWorkflow, setOpen],
   );
 
   const handleRenameRequest = React.useCallback((workflow: AiStudioWorkflow) => {
@@ -596,6 +653,8 @@ export function LoadWorkflowDialog({
     premadesLoading: library.isLoading,
     onUsePremade: usePremade,
     pipelines,
+    manifestsById,
+    ...(onAttachWorkflow ? { onAttachWorkflow: attachWorkflow } : {}),
     brandProfileId,
     error,
     filteredWorkflows,

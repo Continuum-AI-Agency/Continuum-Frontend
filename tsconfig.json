@@ -104,7 +104,11 @@
     ".next/studio-color-picker-e2e/types/**/*.ts",
     ".next/studio-color-picker-e2e/dev/types/**/*.ts",
     ".next/inspector-local/types/**/*.ts",
-    ".next/inspector-local/dev/types/**/*.ts"
+    ".next/inspector-local/dev/types/**/*.ts",
+    ".next/inspector-hosted/types/**/*.ts",
+    ".next/inspector-hosted/dev/types/**/*.ts",
+    ".next/layer-editor-gesture-e2e/types/**/*.ts",
+    ".next/layer-editor-gesture-e2e/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

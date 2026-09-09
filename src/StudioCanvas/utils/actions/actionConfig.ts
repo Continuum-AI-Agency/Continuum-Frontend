@@ -38,7 +38,18 @@ export type ConfigField =
       options: readonly string[];
       nullable: boolean;
       defaultValue: string | null;
-    };
+    }
+  | { key: string; label: string; kind: 'custom'; defaultValue: unknown };
+
+const CUSTOM_CONFIG_KEYS: Partial<Record<ActionId, readonly string[]>> = {
+  'image.shader': ['shaderStack'],
+  'video.shader': ['shaderStack'],
+  'video.subtitles': ['manualCaptions'],
+  // An array of per-segment windows, each with its own trim, volume and fades. The
+  // generic popover has no control shape for that and should not grow one — the bed is
+  // placed on the timeline, where the segments are visible against the clip they cut.
+  'video.audioBed': ['segments'],
+};
 
 // ---------------------------------------------------------------------------
 // zod 4 introspection
@@ -251,7 +262,14 @@ function introspect(actionId: ActionId): { fields: ConfigField[]; unsupported: s
     const child = asZod(shape[key]);
     const field = child ? fieldFor(key, child, defaults[key]) : undefined;
     if (field) fields.push(field);
-    else unsupported.push(key);
+    else if (CUSTOM_CONFIG_KEYS[actionId]?.includes(key)) {
+      fields.push({
+        key,
+        label: humaniseConfigKey(key),
+        kind: 'custom',
+        defaultValue: defaults[key],
+      });
+    } else unsupported.push(key);
   }
   return { fields, unsupported };
 }

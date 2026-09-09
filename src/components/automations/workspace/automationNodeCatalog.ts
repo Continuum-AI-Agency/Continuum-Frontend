@@ -510,6 +510,7 @@ export function createAutomationWorkflowNode({
         config: {
           roomId: null,
           pipelineId: null,
+          pipelineInputs: [],
           instructions: 'Generate a creative from the workflow context.',
         },
       };

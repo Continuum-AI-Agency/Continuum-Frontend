@@ -9,8 +9,8 @@ import {
   VISUAL_EVIDENCE_MAX_BASE64_BYTES,
   VISUAL_EVIDENCE_MAX_FRAME_BASE64_BYTES,
   VISUAL_EVIDENCE_MAX_FRAMES,
-  visualEvidenceFrameSchema,
   type VisualEvidenceFrame,
+  visualEvidenceFrameSchema,
 } from './visual-evidence';
 
 const frame = (over: Partial<VisualEvidenceFrame> = {}): VisualEvidenceFrame => ({

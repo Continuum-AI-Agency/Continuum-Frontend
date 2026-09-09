@@ -2,15 +2,15 @@
 
 // Turns a canvas selection into a reusable Technique.
 //
-// A starter (SaveStarterDialog) is a recipe you re-run; a Technique is a PIECE
+// A saved workflow (SaveWorkflowDialog) is a canvas you load; a Technique is a PIECE
 // you drop into work already in progress. The difference is the port contract:
 // this dialog reads the selection's boundary and records what the piece takes
 // and gives back, so a picker can say "1 image in, 1 image out" before you
 // place it and a later collapsed node has something to draw handles from.
 //
-// The save itself rides the exact workflow pipeline the starter uses — the
+// The save itself rides the exact workflow pipeline a plain save uses — the
 // serializer's blocklist keeps model, prompts, skillIds and reference roles
-// intact — with `metadata.technique` in place of `metadata.starter`.
+// intact — with `metadata.technique` as the flag.
 
 import { canvasTechniqueMetadataSchema, type WorkflowFragmentKind } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';

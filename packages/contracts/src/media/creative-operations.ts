@@ -43,11 +43,11 @@ export const registerGeneratedAssetOperationSchema = z
   .object({
     action: z.literal('register_generated_asset'),
     brandId: z.string().uuid(),
-    kind: z.enum(['image', 'video']),
+    kind: z.enum(['image', 'video', 'file']),
     bucket: z.string().min(1).max(100),
     storagePath: z.string().min(1).max(1024),
     fileName: z.string().min(1).max(255),
-    mimeType: z.string().regex(/^(image|video)\//),
+    mimeType: z.string().regex(/^(image|video|audio)\//),
     width: z.number().int().positive().nullable().optional(),
     height: z.number().int().positive().nullable().optional(),
     durationMs: z.number().int().nonnegative().nullable().optional(),
@@ -75,7 +75,13 @@ export const registerGeneratedAssetOperationSchema = z
     integrityState: assetIntegrityStateSchema.default('unknown'),
     idempotencyKey: z.string().min(1).max(200),
   })
-  .strict();
+  .strict()
+  .superRefine(({ kind, mimeType }, ctx) => {
+    const expected = kind === 'file' ? 'audio/' : `${kind}/`;
+    if (!mimeType.startsWith(expected)) {
+      ctx.addIssue({ code: 'custom', path: ['mimeType'], message: `expected ${expected} media` });
+    }
+  });
 export type RegisterGeneratedAssetOperation = z.infer<typeof registerGeneratedAssetOperationSchema>;
 
 export const registerGeneratedAssetResponseSchema = z

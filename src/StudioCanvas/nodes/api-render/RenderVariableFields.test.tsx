@@ -58,34 +58,17 @@ const handleFor = (key: string) => document.querySelector(`[data-handleid="varia
 afterEach(cleanup);
 
 describe('RenderVariableFields — enum geometry', () => {
-  test('offers exactly the options the template reflected, and no others', () => {
-    const options = ['top_left', 'top_right', 'bottom_left', 'bottom_right'];
-    renderFields([
-      variable({ key: 'watermark_position', label: 'Watermark Position', kind: 'enum', options }),
-    ]);
-
-    const picker = screen.getByRole('combobox') as HTMLSelectElement;
-    // One placeholder for a variable that is not required, plus the reflected set.
-    expect([...picker.options].map((option) => option.value)).toEqual(['', ...options]);
-  });
-
-  // A `<select>` with no empty option paints option one as selected while '' is what is
-  // actually stored. The field then reads "a" while the stored value remains missing — the
-  // control and the renderer disagreeing about the same variable. The placeholder stays so
-  // an unanswered required enum LOOKS unanswered.
-  test('a required enum shows an empty choose-state instead of selecting option one', () => {
+  // The control is a Base UI Select, not a native <select>, so the placeholder is TEXT on the
+  // trigger rather than an option inside the list. That removes the failure these tests were
+  // written for outright — a native select paints option one as chosen while '' is what is
+  // stored, and the field then reads "a" while the variable is still unanswered. Here an
+  // unanswered enum has nothing selected and the trigger says so.
+  test('an unanswered required enum reads as unanswered', async () => {
     renderFields([
       variable({ key: 'position', kind: 'enum', required: true, options: ['a', 'b'] }),
     ]);
 
-    const picker = screen.getByRole('combobox') as HTMLSelectElement;
-    expect([...picker.options].map((option) => option.value)).toEqual(['', 'a', 'b']);
-    expect(picker.value).toBe('');
-    expect(picker.selectedIndex).toBe(0);
-    // Disabled, so the placeholder cannot be chosen back as if it were an answer — it is
-    // a prompt, not a value the renderer accepts.
-    expect(picker.options[0]?.disabled).toBe(true);
-    expect(picker.options[0]?.text).toBe('Choose…');
+    expect(screen.getByRole('combobox').textContent).toContain('Choose…');
   });
 
   test('a required enum shows the stored value once one is chosen', () => {
@@ -94,17 +77,51 @@ describe('RenderVariableFields — enum geometry', () => {
       { values: { position: 'b' } },
     );
 
-    expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('b');
+    expect(screen.getByRole('combobox').textContent).toContain('b');
   });
 
-  // The other direction: clearing an optional variable is a real thing to want, so its
-  // placeholder stays reachable.
-  test('an optional enum keeps its placeholder selectable', () => {
-    renderFields([variable({ key: 'position', kind: 'enum', options: ['a', 'b'] })]);
+  test('offers exactly the options the template reflected, and no others', async () => {
+    const options = ['top_left', 'top_right', 'bottom_left', 'bottom_right'];
+    renderFields([
+      variable({
+        key: 'watermark_position',
+        label: 'Watermark Position',
+        kind: 'enum',
+        required: true,
+        options,
+      }),
+    ]);
 
-    const picker = screen.getByRole('combobox') as HTMLSelectElement;
-    expect(picker.options[0]?.disabled).toBe(false);
-    expect(picker.options[0]?.text).toBe('Not set…');
+    fireEvent.click(screen.getByRole('combobox'));
+    const items = await screen.findAllByRole('option');
+    // Required, so there is no way back to unset and the list is exactly the reflected set.
+    expect(items.map((item) => item.textContent)).toEqual(options);
+  });
+
+  // Clearing an optional variable is a real thing to want. The placeholder is not selectable
+  // on this control, so the way back to unset has to be an item of its own — and choosing it
+  // must CLEAR the key rather than store a sentinel, or the renderer receives "__unset__".
+  test('an optional enum offers a way back to unset, and it clears', async () => {
+    const cleared: string[] = [];
+    const changed: string[] = [];
+    renderFields([variable({ key: 'position', kind: 'enum', options: ['a', 'b'] })], {
+      values: { position: 'a' },
+      onClear: (key) => cleared.push(key),
+      onChange: (key) => changed.push(key),
+    });
+
+    fireEvent.click(screen.getByRole('combobox'));
+    const items = await screen.findAllByRole('option');
+    expect(items.map((item) => item.textContent)).toEqual(['Not set…', 'a', 'b']);
+
+    // Base UI commits a selection on pointerup, not on a synthetic click — the same gesture a
+    // real pointer makes. Clearing must reach `onClear`; sending the sentinel through
+    // `onChange` would put the literal string "__unset__" in front of the renderer.
+    fireEvent.pointerDown(items[0]!);
+    fireEvent.pointerUp(items[0]!);
+    fireEvent.click(items[0]!);
+    expect(cleared).toEqual(['position']);
+    expect(changed).toEqual([]);
   });
 
   test('invents no picker when the value set never crossed the boundary', () => {

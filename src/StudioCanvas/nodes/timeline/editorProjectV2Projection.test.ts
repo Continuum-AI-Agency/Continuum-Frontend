@@ -373,6 +373,27 @@ describe('effect instances that used to be dropped', () => {
     expect(corner?.parameters).toEqual({ radiusFrac: 0.2 });
   });
 
+  test('projects the curated pixel effects as durable custom instances', () => {
+    const effects = videoEffectsOf(
+      withEffects({
+        vignette: { amount: 0.4 },
+        filmGrain: { amount: 0.3 },
+        pixelate: { blockPx: 12 },
+        chromaticAberration: { amount: 0.5 },
+        vhs: { amount: 0.6 },
+      }),
+    );
+    expect(
+      Object.fromEntries(effects.map((effect) => [effect.effectId, effect.parameters])),
+    ).toEqual({
+      vignette: { amount: 0.4 },
+      film_grain: { amount: 0.3 },
+      pixelate: { blockPx: 12 },
+      chromatic_aberration: { amount: 0.5 },
+      vhs: { amount: 0.6 },
+    });
+  });
+
   test('clamps the projected corner radius the way the draw does', () => {
     const effects = videoEffectsOf(withEffects({ cornerRadiusFrac: 4 }));
     expect(effects.find((effect) => effect.effectId === 'corner_radius')?.parameters).toEqual({

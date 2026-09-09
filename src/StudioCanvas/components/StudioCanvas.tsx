@@ -72,7 +72,7 @@ import { InstagramMediaBrowser } from './InstagramMediaBrowser';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
 import { NodeInspectorPanel } from './NodeInspectorPanel';
-import { SaveStarterDialog } from './SaveStarterDialog';
+import { SaveWorkflowDialog } from './SaveWorkflowDialog';
 import { SourceDropNodePicker } from './SourceDropNodePicker';
 import { StudioCanvasHeader } from './StudioCanvasHeader';
 import { UnsplashBrowser } from './UnsplashBrowser';
@@ -198,7 +198,7 @@ function Flow({
   const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
   const [isUnsplashBrowserOpen, setIsUnsplashBrowserOpen] = useState(false);
   const [isLibraryBrowserOpen, setIsLibraryBrowserOpen] = useState(false);
-  const [isSaveStarterOpen, setIsSaveStarterOpen] = useState(false);
+  const [isSaveWorkflowOpen, setIsSaveWorkflowOpen] = useState(false);
   // Where an added node lands: the right-click point, pinned when the Add Node submenu
   // opens. Read from a ref at add time rather than lastMousePositionRef, because the
   // submenus are portalled outside the canvas wrapper and the mouse crosses live canvas
@@ -210,11 +210,13 @@ function Flow({
   // Team chat open/closed lifted here so the composer can reserve the chat panel's
   // footprint and the two overlays never fight for the same bottom-right region.
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [starterSelectionNodes, setStarterSelectionNodes] = useState<StudioNode[]>([]);
+  const [saveSelectionNodes, setSaveSelectionNodes] = useState<StudioNode[]>([]);
 
-  const openSaveStarter = useCallback(() => {
-    setStarterSelectionNodes(nodes.filter((node) => node.selected));
-    setIsSaveStarterOpen(true);
+  // Captured at open, not read at submit: the context menu closes on select and Base UI
+  // clears the selection on its way out, so reading it later saves nothing.
+  const openSave = useCallback(() => {
+    setSaveSelectionNodes(nodes.filter((node) => node.selected));
+    setIsSaveWorkflowOpen(true);
   }, [nodes]);
 
   // The Composer builds; the user runs. Same execution path as the toolbar's Run
@@ -681,7 +683,7 @@ function Flow({
           onApplyTechnique={applyTechniqueFromPalette}
           openLoadWorkflow={() => setIsLoadWorkflowOpen(true)}
           openInstagram={() => setIsInstagramBrowserOpen(true)}
-          openSaveStarter={openSaveStarter}
+          openSave={openSave}
           enforceBrandBookOnSelection={enforceBrandBookOnSelection}
           clearCanvas={clearCanvas}
           hasSelection={nodes.some((node) => node.selected)}
@@ -708,11 +710,13 @@ function Flow({
         onOpenChange={setIsLoadWorkflowOpen}
         showTrigger={false}
       />
-      <SaveStarterDialog
-        open={isSaveStarterOpen}
-        onOpenChange={setIsSaveStarterOpen}
+      <SaveWorkflowDialog
+        open={isSaveWorkflowOpen}
+        onOpenChange={setIsSaveWorkflowOpen}
+        showTrigger={false}
         brandProfileId={brandProfileId}
-        nodes={starterSelectionNodes}
+        roomId={activeRoomId}
+        selection={saveSelectionNodes}
       />
     </div>
   );

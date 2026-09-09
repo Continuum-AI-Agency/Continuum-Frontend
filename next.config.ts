@@ -77,6 +77,12 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     root: workspaceRoot,
+    rules: {
+      '*.wgsl': {
+        loaders: ['@vgpu/wgsl/loader-webpack'],
+        as: '*.js',
+      },
+    },
   },
   env: {
     NEXT_PUBLIC_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA ?? 'local-dev',

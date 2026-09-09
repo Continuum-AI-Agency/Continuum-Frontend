@@ -8,6 +8,7 @@ import {
   opacityFor,
   resolveTransformAt,
 } from '../render/effectSpec';
+import { hasShaderStack, shaderStackFromClipEffects } from '../render/shaderStack';
 import { computeLetterboxRect, drawLetterboxed } from './letterbox';
 
 // Shared frame-drawing primitives for the timeline renderer. `drawClipFrame`
@@ -216,56 +217,23 @@ function pixelateScratch(ctx: Ctx, width: number, height: number, blockPx: numbe
  * Returns the original source when there is nothing to do, so the common path
  * allocates and copies nothing.
  */
-function prepareSource(
+async function prepareSource(
   source: CanvasImageSource,
   sourceWidth: number,
   sourceHeight: number,
   effects: ClipEffectSpec | undefined,
-  t: number,
-): CanvasImageSource {
-  const tint = effects?.tint && effects.tint.amount > 0 ? effects.tint : undefined;
-  const pixelate =
-    effects?.pixelate && effects.pixelate.blockPx >= 2 ? effects.pixelate : undefined;
-  const perPixel = Boolean(
-    effects &&
-      (effects.chromaKey ||
-        (effects.vignette && effects.vignette.amount > 0) ||
-        (effects.filmGrain && effects.filmGrain.amount > 0) ||
-        (effects.chromaticAberration && effects.chromaticAberration.amount > 0) ||
-        (effects.vhs && effects.vhs.amount > 0)),
-  );
-  if (!perPixel && !tint && !pixelate) return source;
+  timeSec: number,
+): Promise<CanvasImageSource> {
+  if (!hasShaderStack(effects)) return source;
   if (sourceWidth <= 0 || sourceHeight <= 0) return source;
-
-  const ctx = scratchContext(sourceWidth, sourceHeight);
-  // No OffscreenCanvas (a non-worker or ancient runtime) — draw the frame unkeyed
-  // rather than dropping it. The export is wrong in a visible way, not blank.
-  if (!ctx) return source;
-
-  ctx.drawImage(source, 0, 0, sourceWidth, sourceHeight);
-
-  // A resample, so it runs before anything reads a pixel.
-  if (pixelate) pixelateScratch(ctx, sourceWidth, sourceHeight, pixelate.blockPx);
-
-  if (perPixel && effects) {
-    const image = ctx.getImageData(0, 0, sourceWidth, sourceHeight);
-    applyPixelEffects(image, effects, sourceWidth, sourceHeight, t);
-    ctx.putImageData(image, 0, 0);
-  }
-
-  if (tint) {
-    // `source-atop` over the scratch — which holds only the source's own pixels —
-    // washes the subject and leaves the keyed-out background alone. Over the target
-    // it would also have painted the letterbox bars.
-    ctx.globalCompositeOperation = 'source-atop';
-    ctx.globalAlpha = Math.min(1, Math.max(0, tint.amount));
-    ctx.fillStyle = tint.color;
-    ctx.fillRect(0, 0, sourceWidth, sourceHeight);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1;
-  }
-
-  return scratch as CanvasImageSource;
+  const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
+  return renderShaderStackFrame({
+    source,
+    width: sourceWidth,
+    height: sourceHeight,
+    stack: shaderStackFromClipEffects(effects),
+    timeSec,
+  });
 }
 
 /**
@@ -273,7 +241,7 @@ function prepareSource(
  * `alphaMul` into the opacity. Does NOT fill a background, so a caller can layer
  * two of these for a cross-dissolve. `t` is the clip's normalized time (0..1).
  */
-export function drawEffectFrame(
+export async function drawEffectFrame(
   ctx: Ctx,
   source: CanvasImageSource,
   sourceWidth: number,
@@ -283,48 +251,40 @@ export function drawEffectFrame(
   effects: ClipEffectSpec | undefined,
   t: number,
   alphaMul = 1,
-): void {
+  timeSec = t,
+): Promise<void> {
   ctx.save();
-  ctx.globalAlpha = (effects ? opacityFor(effects) : 1) * alphaMul;
-  if (effects?.blendMode && effects.blendMode !== 'normal') {
-    ctx.globalCompositeOperation = effects.blendMode;
+  let prepared: CanvasImageSource = source;
+  try {
+    ctx.globalAlpha = (effects ? opacityFor(effects) : 1) * alphaMul;
+    if (effects?.blendMode && effects.blendMode !== 'normal') {
+      ctx.globalCompositeOperation = effects.blendMode;
+    }
+    applyCanvasFilter(ctx, effects);
+    if (effects) {
+      applyCanvasTransform(ctx, resolveTransformAt(effects, t), targetWidth, targetHeight, {
+        h: effects.flipH,
+        v: effects.flipV,
+      });
+    }
+    const rect = computeLetterboxRect(sourceWidth, sourceHeight, targetWidth, targetHeight);
+    const radiusFrac = cornerRadiusFracFor(effects);
+    if (radiusFrac > 0 && typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(rect.x, rect.y, rect.width, rect.height, [
+        { x: radiusFrac * rect.width, y: radiusFrac * rect.height },
+      ]);
+      ctx.clip();
+    }
+    prepared = await prepareSource(source, sourceWidth, sourceHeight, effects, timeSec);
+    ctx.drawImage(prepared, rect.x, rect.y, rect.width, rect.height);
+  } finally {
+    if (prepared !== source && prepared instanceof ImageBitmap) prepared.close();
+    ctx.restore();
+    ctx.filter = 'none';
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
   }
-  applyCanvasFilter(ctx, effects);
-  if (effects) {
-    applyCanvasTransform(ctx, resolveTransformAt(effects, t), targetWidth, targetHeight, {
-      h: effects.flipH,
-      v: effects.flipV,
-    });
-  }
-  const rect = computeLetterboxRect(sourceWidth, sourceHeight, targetWidth, targetHeight);
-  // Rounded corners clip the FRAME rect, so they follow the transform and survive a
-  // cross-dissolve and an overlay for the same reason keying does. The radii are the
-  // per-axis pair CSS `border-radius: N%` produces, which is what makes the preview
-  // and the export the same shape rather than approximately the same shape.
-  const radiusFrac = cornerRadiusFracFor(effects);
-  if (radiusFrac > 0 && typeof ctx.roundRect === 'function') {
-    ctx.beginPath();
-    ctx.roundRect(rect.x, rect.y, rect.width, rect.height, [
-      { x: radiusFrac * rect.width, y: radiusFrac * rect.height },
-    ]);
-    ctx.clip();
-  }
-  // Every path that draws a frame comes through HERE, not through `drawClipFrame`:
-  // the cross-dissolve blends two of these per frame and `composeTimeline` draws each
-  // overlay layer with one. Keying in `drawClipFrame` would have worked on a solo clip
-  // and vanished during transitions and on every overlay — which is exactly the
-  // greenscreen case (a keyed clip composited over a background).
-  ctx.drawImage(
-    prepareSource(source, sourceWidth, sourceHeight, effects, t),
-    rect.x,
-    rect.y,
-    rect.width,
-    rect.height,
-  );
-  ctx.restore();
-  ctx.filter = 'none';
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
 }
 
 /**
@@ -333,7 +293,7 @@ export function drawEffectFrame(
  * background under the clip's transform/filter/opacity, mirroring the CSS
  * preview.
  */
-export function drawClipFrame(
+export async function drawClipFrame(
   ctx: Ctx,
   source: CanvasImageSource,
   sourceWidth: number,
@@ -342,7 +302,8 @@ export function drawClipFrame(
   targetHeight: number,
   effects: ClipEffectSpec | undefined,
   t: number,
-): void {
+  timeSec = t,
+): Promise<void> {
   if (!effects || !hasVisualEffects(effects)) {
     drawLetterboxed(ctx, source, sourceWidth, sourceHeight, targetWidth, targetHeight);
     return;
@@ -351,7 +312,18 @@ export function drawClipFrame(
   ctx.globalAlpha = 1;
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, targetWidth, targetHeight);
-  drawEffectFrame(ctx, source, sourceWidth, sourceHeight, targetWidth, targetHeight, effects, t, 1);
+  await drawEffectFrame(
+    ctx,
+    source,
+    sourceWidth,
+    sourceHeight,
+    targetWidth,
+    targetHeight,
+    effects,
+    t,
+    1,
+    timeSec,
+  );
 }
 
 /** Draw a full-frame color wash at the given alpha — the fade/dip transition. */

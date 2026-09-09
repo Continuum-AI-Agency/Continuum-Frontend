@@ -38,6 +38,19 @@ export function registerClientRenderExecutor(
   };
 }
 
+export function registerLazyClientRenderExecutor(
+  kind: ClientRenderJobKind,
+  load: () => Promise<ClientRenderExecutor>,
+): () => void {
+  return registerClientRenderExecutor(kind, async (context) => {
+    context.signal.throwIfAborted();
+    const execute = await load();
+    // A stop while the chunk downloads must not start rendering or uploading.
+    context.signal.throwIfAborted();
+    return execute(context);
+  });
+}
+
 export function getClientRenderExecutor(kind: ClientRenderJobKind): ClientRenderExecutor | null {
   return executors.get(kind) ?? null;
 }

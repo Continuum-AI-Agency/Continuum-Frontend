@@ -115,6 +115,12 @@ describe('ElementsPanel', () => {
 
     expect(await screen.findByText('Needs sheet')).toBeTruthy();
   });
+  it('keeps the canvas accessible while the draggable reference panel is open', async () => {
+    render(<button type="button">Canvas drop target</button>);
+    renderPanel();
+    await screen.findByRole('dialog');
+    expect(screen.getByRole('button', { name: 'Canvas drop target' })).toBeTruthy();
+  });
 
   it('drags an Element out as an element-drop payload, not as an image', async () => {
     requestMock.mockResolvedValue({

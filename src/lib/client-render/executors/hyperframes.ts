@@ -87,6 +87,7 @@ export const executeHyperframesClientRender: ClientRenderExecutor = async (conte
       height: response.revision.height,
       durationSeconds: response.revision.durationSeconds,
       fps: 30 as const,
+      shaderStack: spec.shaderStack,
     };
 
     if (work.kind === 'review') {

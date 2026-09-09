@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { hexColorSchema, httpUrlSchema } from './_shared';
+import { starterProductCandidateSchema } from './starter-kit';
 
 /**
  * Frontend-supplied scrape: deterministic source-of-truth for colors and typography.
@@ -12,6 +13,7 @@ import { hexColorSchema, httpUrlSchema } from './_shared';
 export const scrapeSchema = z
   .object({
     url: httpUrlSchema,
+    productCandidates: z.array(starterProductCandidateSchema).max(8).default([]),
     title: z.string().nullable().optional(),
     description: z.string().nullable().optional(),
     logoUrl: z.string().nullable().optional(),

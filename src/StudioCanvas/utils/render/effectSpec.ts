@@ -75,6 +75,8 @@ export const FILTER_PRESET_LABELS: Record<FilterPreset, string> = {
   dream: 'Dream',
 };
 
+import type { ShaderStackV1 } from '@continuum/contracts';
+
 export interface ClipEffectSpec {
   /** 0..1. Default 1. */
   opacity?: number;
@@ -159,6 +161,8 @@ export interface ClipEffectSpec {
   chromaticAberration?: { amount: number };
   /** Horizontal chroma smear + scanlines + per-row tape noise. 0..1. */
   vhs?: { amount: number };
+  /** Canonical ordered/keyframed stack, used by shader action nodes and V2 clips. */
+  shaderStack?: ShaderStackV1;
 }
 
 export interface TransformKeyframe {
@@ -313,6 +317,9 @@ export interface ResolvedTextOverlay {
   color: string;
   background?: string;
   fontWeight: number;
+  opacity?: number;
+  scale?: number;
+  translateYEm?: number;
 }
 
 export function resolveTextOverlays(spec: ClipEffectSpec | undefined): ResolvedTextOverlay[] {
@@ -477,7 +484,8 @@ export function hasVisualEffects(spec: ClipEffectSpec | undefined): boolean {
       (spec.filmGrain && spec.filmGrain.amount > 0) ||
       (spec.pixelate && spec.pixelate.blockPx >= 2) ||
       (spec.chromaticAberration && spec.chromaticAberration.amount > 0) ||
-      (spec.vhs && spec.vhs.amount > 0),
+      (spec.vhs && spec.vhs.amount > 0) ||
+      spec.shaderStack?.effects.some((effect) => effect.enabled),
   );
 }
 

@@ -235,12 +235,15 @@ describe('canonical EditorProjectV2 assembly operations', () => {
         color: '#ffcc00',
         x: 0.4,
         y: 0.2,
+        animationIn: 'pop',
+        animationOut: 'floatIn',
       }).forward,
     );
     const textTrack = withText.tracks.find((track) => track.kind === 'text');
     expect(textTrack?.clips[0]?.text).toBe('Taste in, film out');
     expect(textTrack?.clips[0]?.style.color).toBe('#ffcc00');
     expect(textTrack?.clips[0]?.transform.position).toMatchObject({ x: 0.4, y: 0.2 });
+    expect(textTrack?.clips[0]).toMatchObject({ animationIn: 'pop', animationOut: 'floatIn' });
 
     const withOverlay = applyDrafts(
       withText,

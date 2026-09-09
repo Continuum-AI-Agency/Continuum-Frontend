@@ -219,6 +219,34 @@ function effectsFor(itemId: string, effects: ClipEffectSpec | undefined): Editor
     });
   }
 
+  for (const [effectId, parameters] of [
+    ['vignette', effects.vignette?.amount ? { amount: effects.vignette.amount } : undefined],
+    ['film_grain', effects.filmGrain?.amount ? { amount: effects.filmGrain.amount } : undefined],
+    [
+      'pixelate',
+      effects.pixelate && effects.pixelate.blockPx >= 2
+        ? { blockPx: effects.pixelate.blockPx }
+        : undefined,
+    ],
+    [
+      'chromatic_aberration',
+      effects.chromaticAberration?.amount
+        ? { amount: effects.chromaticAberration.amount }
+        : undefined,
+    ],
+    ['vhs', effects.vhs?.amount ? { amount: effects.vhs.amount } : undefined],
+  ] as const) {
+    if (!parameters) continue;
+    instances.push({
+      id: `${itemId}:effect:${effectId}`,
+      effectType: 'custom',
+      effectId,
+      enabled: true,
+      mix: 1,
+      parameters,
+    });
+  }
+
   // `custom` because the frozen V2 clip schema has no geometry field for a corner
   // radius. Without this a rounded clip loses its corners on the durable path, which
   // is the same bug as the chroma gap above, one field over.

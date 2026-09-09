@@ -1354,6 +1354,16 @@ describe('Canvas V3 connection rules', () => {
     expect(connect(nodes, 'img', 'image', 'speed', 'in')).toBe(false);
   });
 
+  it('only lets audio nodes feed an action audio port', () => {
+    const nodes = [
+      node('audio', 'audio'),
+      node('img', 'nanoGen'),
+      node('bed', 'action', { actionId: 'video.audioBed' }),
+    ];
+    expect(connect(nodes, 'audio', 'audio', 'bed', 'audio-in')).toBe(true);
+    expect(connect(nodes, 'img', 'image', 'bed', 'audio-in')).toBe(false);
+  });
+
   it('lets an action feed the generators that already accept its modality', () => {
     const nodes = [
       node('src', 'nanoGen'),

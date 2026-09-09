@@ -1,7 +1,5 @@
 'use client';
 
-import { memo } from 'react';
-
 import {
   AlignCenterHorizontal,
   AlignCenterVertical,
@@ -16,9 +14,10 @@ import {
   FlipHorizontal,
   FlipVertical,
 } from 'lucide-react';
+import { memo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { ColorField } from '@/components/ui/color-field';
+import { Label } from '@/components/ui/label';
 import { NumberScrubField } from '@/components/ui/number-field';
 import {
   Select,
@@ -29,6 +28,7 @@ import {
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ShaderEffectControls } from '../../components/ShaderEffectControls';
 import type { LayerEditorLayer } from '../../types';
 import {
   FRAME_MAX_SIZE,
@@ -165,11 +165,7 @@ function LayerInspectorImpl({
             This is for the ad that wants a flat brand colour behind its elements, which
             otherwise needs a whole generated full-frame image to stand in for a fill. */}
         <div className="flex items-center gap-1">
-          <ColorField
-            value={background}
-            onChange={onBackgroundChange}
-            label="Frame background"
-          />
+          <ColorField value={background} onChange={onBackgroundChange} label="Frame background" />
           <Button
             type="button"
             size="sm"
@@ -334,6 +330,17 @@ function LayerInspectorImpl({
                 Centre
               </Button>
             </div>
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
+              Shader effects
+            </h3>
+            <ShaderEffectControls
+              idPrefix="layer"
+              effects={layer.effects ?? {}}
+              onChange={(patch) => onLayerCommit({ effects: { ...layer.effects, ...patch } })}
+            />
           </section>
         </>
       ) : null}

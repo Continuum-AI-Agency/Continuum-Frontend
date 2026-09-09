@@ -65,6 +65,22 @@ const feed = (jobs: InFlightJob[], over: Partial<UseInFlightJobsResult> = {}) =>
 afterEach(() => cleanup());
 
 describe('the in-flight feed', () => {
+  it('lets users reopen their starter kit while generation is still running', () => {
+    render(
+      <InFlightSection
+        feed={feed([
+          organicJob({
+            source: 'onboarding',
+            title: 'Your brand starter kit',
+            href: '/dashboard/starter-kit',
+            canCancel: false,
+          }),
+        ])}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Open' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Stop/ })).toBeNull();
+  });
   it('shows organic generations and Jaina reports in one list', () => {
     render(<InFlightSection feed={feed([organicJob(), reportJob()])} />);
     expect(screen.getByText('Cold-wash care Reel')).toBeTruthy();

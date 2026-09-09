@@ -799,6 +799,11 @@ const applyProductionCommand = (
   command: EditorCommand,
 ): EditorProjectV2 => {
   switch (command.commandType) {
+    case 'set_production_script':
+      return {
+        ...project,
+        production: { ...project.production, sourceScript: command.sourceScript },
+      };
     case 'set_production_references':
       return {
         ...project,

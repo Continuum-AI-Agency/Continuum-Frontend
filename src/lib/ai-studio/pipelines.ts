@@ -16,7 +16,33 @@
 // global has been published — listing an empty tier would be a promise, not a
 // feature.
 
-import { type CanvasTechniquePort, parsePipelineMetadata } from '@continuum/contracts';
+import {
+  type CanvasTechniquePort,
+  PIPELINE_CATALOG_ROUTE,
+  PIPELINE_GUIDE_DRAFT_ROUTE,
+  PIPELINE_MANIFEST_LIST_ROUTE,
+  PIPELINE_PUBLICATIONS_ROUTE,
+  PIPELINE_RUNS_ROUTE,
+  type PipelineAgentGuideDraftResponse,
+  type PipelineCapabilityListResponse,
+  type PipelineCapabilityV2,
+  type PipelineInvocationRequest,
+  type PipelineManifest,
+  type PipelineManifestListResponse,
+  type PipelineRunReceipt,
+  type PipelinePublicationResponse,
+  parsePipelineMetadata,
+  pipelineCapabilityListResponseSchema,
+  pipelineAgentGuideDraftResponseSchema,
+  pipelineManifestListResponseSchema,
+  pipelinePublicationCandidateSchema,
+  pipelinePublicationRequestSchema,
+  pipelinePublicationResponseSchema,
+  pipelineRunReceiptSchema,
+  pipelineRunRoute,
+} from '@continuum/contracts';
+import { useQuery } from '@tanstack/react-query';
+import { request } from '@/lib/api/http';
 import type { AiStudioWorkflow } from '@/lib/schemas/aiStudio';
 import { listAiStudioWorkflowsAction } from './workflowActions';
 
@@ -50,4 +76,135 @@ export async function fetchBrandPipelines(brandProfileId: string): Promise<Pipel
     .map(pipelineFromWorkflow)
     .filter((item): item is PipelineItem => item !== null)
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ---------------------------------------------------------------------------
+// Manifests — the ports PLUS whether the pipeline can actually run
+// ---------------------------------------------------------------------------
+//
+// `pipelineFromWorkflow` above reads the declared contract straight off the row and needs no
+// round trip. It cannot answer the question that actually bites: `handle_free`. The
+// constraint is OCCUPANCY, not legality — a port declared on a handle the author already
+// feeds is type-legal and permanently unwritable, and it refuses LATE, inside `runPipeline`,
+// as "no compatible handle". Only the Backend's walker can settle that, so anything that
+// tells a person whether a pipeline is usable has to ask.
+
+export const brandPipelineManifestsQueryKey = (brandProfileId?: string) =>
+  ['brand-pipeline-manifests', brandProfileId] as const;
+
+export async function fetchBrandPipelineManifests(
+  brandProfileId: string,
+): Promise<PipelineManifest[]> {
+  const { manifests } = await request<PipelineManifestListResponse>({
+    path: `${PIPELINE_MANIFEST_LIST_ROUTE}?brandProfileId=${encodeURIComponent(brandProfileId)}`,
+    schema: pipelineManifestListResponseSchema,
+  });
+  return manifests;
+}
+
+export function useBrandPipelineManifests(brandProfileId?: string) {
+  return useQuery({
+    queryKey: brandPipelineManifestsQueryKey(brandProfileId),
+    queryFn: () => fetchBrandPipelineManifests(brandProfileId as string),
+    enabled: Boolean(brandProfileId),
+    staleTime: 60_000,
+  });
+}
+
+export const pipelineCapabilitiesQueryKey = (brandProfileId?: string) =>
+  ['pipeline-capabilities', brandProfileId] as const;
+
+export async function fetchPipelineCapabilities(
+  brandProfileId: string,
+): Promise<PipelineCapabilityV2[]> {
+  const response = await request<PipelineCapabilityListResponse>({
+    path: `${PIPELINE_CATALOG_ROUTE}?brandProfileId=${encodeURIComponent(brandProfileId)}`,
+    schema: pipelineCapabilityListResponseSchema,
+    cache: 'no-store',
+  });
+  return response.capabilities;
+}
+
+export async function startPipelineRun(
+  invocation: PipelineInvocationRequest,
+): Promise<PipelineRunReceipt> {
+  return request<PipelineRunReceipt>({
+    path: PIPELINE_RUNS_ROUTE,
+    method: 'POST',
+    body: invocation,
+    schema: pipelineRunReceiptSchema,
+    cache: 'no-store',
+  });
+}
+
+export async function draftPipelineGuide(
+  input: unknown,
+): Promise<PipelineAgentGuideDraftResponse> {
+  const candidate = pipelinePublicationCandidateSchema.parse(input);
+  return request<PipelineAgentGuideDraftResponse>({
+    path: PIPELINE_GUIDE_DRAFT_ROUTE,
+    method: 'POST',
+    body: candidate,
+    schema: pipelineAgentGuideDraftResponseSchema,
+    cache: 'no-store',
+  });
+}
+
+export async function publishPipeline(
+  input: unknown,
+): Promise<PipelinePublicationResponse> {
+  const publication = pipelinePublicationRequestSchema.parse(input);
+  return request<PipelinePublicationResponse>({
+    path: PIPELINE_PUBLICATIONS_ROUTE,
+    method: 'POST',
+    body: publication,
+    schema: pipelinePublicationResponseSchema,
+    cache: 'no-store',
+  });
+}
+
+export async function readPipelineRun(
+  brandProfileId: string,
+  runId: string,
+): Promise<PipelineRunReceipt> {
+  return request<PipelineRunReceipt>({
+    path: `${pipelineRunRoute(runId)}?brandProfileId=${encodeURIComponent(brandProfileId)}`,
+    schema: pipelineRunReceiptSchema,
+    cache: 'no-store',
+  });
+}
+
+const ACTIVE_PIPELINE_STATUSES = new Set<PipelineRunReceipt['status']>(['queued', 'running']);
+
+export async function waitForPipelineRun(
+  brandProfileId: string,
+  runId: string,
+  options: { intervalMs?: number; signal?: AbortSignal } = {},
+): Promise<PipelineRunReceipt> {
+  const intervalMs = options.intervalMs ?? 1_500;
+  while (true) {
+    if (options.signal?.aborted) throw options.signal.reason;
+    const receipt = await readPipelineRun(brandProfileId, runId);
+    if (!ACTIVE_PIPELINE_STATUSES.has(receipt.status)) return receipt;
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(resolve, intervalMs);
+      options.signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timeout);
+          reject(options.signal?.reason);
+        },
+        { once: true },
+      );
+    });
+  }
+}
+
+export function usePipelineCapabilities(brandProfileId?: string) {
+  return useQuery({
+    queryKey: pipelineCapabilitiesQueryKey(brandProfileId),
+    queryFn: () => fetchPipelineCapabilities(brandProfileId as string),
+    enabled: Boolean(brandProfileId),
+    staleTime: 60_000,
+  });
 }

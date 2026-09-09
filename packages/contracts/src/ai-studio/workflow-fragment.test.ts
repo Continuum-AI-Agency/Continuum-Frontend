@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  canvasPipelineMetadataSchema,
   canvasTechniqueMetadataSchema,
   joinWorkflowFragments,
   parallelWorkflowPlanSchema,
@@ -8,6 +9,8 @@ import {
   type WorkflowFragment,
   workflowFragmentPortSchema,
 } from './workflow-fragment';
+
+const PIPELINE_FAMILY_ID = '11111111-1111-4111-8111-111111111111';
 
 const plan = parallelWorkflowPlanSchema.parse({
   objective: 'Build a creator product ad',
@@ -236,7 +239,13 @@ describe('canvas technique metadata', () => {
       kind: 'generation',
       inputPorts: [{ ...port, label: 'Reference image', origin: 'edge' }],
       outputPorts: [
-        { id: 'out-1', nodeRef: 'node-b', handleId: 'image', dataType: 'image', origin: 'terminal' },
+        {
+          id: 'out-1',
+          nodeRef: 'node-b',
+          handleId: 'image',
+          dataType: 'image',
+          origin: 'terminal',
+        },
       ],
     });
 
@@ -285,5 +294,93 @@ describe('canvas technique metadata', () => {
       handleId: 'ref-image',
     });
     expect(withHandle.success).toBe(false);
+  });
+});
+
+describe('canvas pipeline metadata', () => {
+  it('carries a stable family and deliberate publication revision', () => {
+    const parsed = canvasPipelineMetadataSchema.parse({
+      version: 1,
+      kind: 'generation',
+      familyId: PIPELINE_FAMILY_ID,
+      revision: 2,
+      inputPorts: [{ id: 'brief', nodeRef: 'generator', dataType: 'text' }],
+      outputPorts: [{ id: 'hero', nodeRef: 'generator', dataType: 'image' }],
+    });
+
+    expect(parsed).toMatchObject({ familyId: PIPELINE_FAMILY_ID, revision: 2 });
+  });
+
+  it('publishes Element inputs and candidate outputs as explicit port semantics', () => {
+    const parsed = canvasPipelineMetadataSchema.parse({
+      version: 1,
+      kind: 'generation',
+      inputPorts: [
+        {
+          id: 'subject',
+          nodeRef: 'generator',
+          dataType: 'image',
+          pipelineBinding: { kind: 'element', allowedCategories: ['character', 'product'] },
+        },
+      ],
+      outputPorts: [
+        {
+          id: 'hero',
+          nodeRef: 'generator',
+          dataType: 'image',
+          pipelineBinding: {
+            kind: 'element_candidate',
+            category: 'character',
+            rightsNote: 'Brand-owned fictional character.',
+          },
+        },
+      ],
+    });
+
+    expect(parsed.inputPorts[0]?.pipelineBinding).toEqual({
+      kind: 'element',
+      allowedCategories: ['character', 'product'],
+    });
+    expect(parsed.outputPorts[0]?.pipelineBinding).toEqual({
+      kind: 'element_candidate',
+      category: 'character',
+      rightsNote: 'Brand-owned fictional character.',
+    });
+  });
+
+  it('rejects Element candidates declared on input ports', () => {
+    const parsed = canvasPipelineMetadataSchema.safeParse({
+      version: 1,
+      kind: 'generation',
+      inputPorts: [
+        {
+          id: 'subject',
+          nodeRef: 'generator',
+          dataType: 'image',
+          pipelineBinding: { kind: 'element_candidate', category: 'character' },
+        },
+      ],
+      outputPorts: [],
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects a person Element candidate without an authored rights basis', () => {
+    const parsed = canvasPipelineMetadataSchema.safeParse({
+      version: 1,
+      kind: 'generation',
+      inputPorts: [],
+      outputPorts: [
+        {
+          id: 'character',
+          nodeRef: 'generator',
+          dataType: 'image',
+          pipelineBinding: { kind: 'element_candidate', category: 'character' },
+        },
+      ],
+    });
+
+    expect(parsed.success).toBe(false);
   });
 });

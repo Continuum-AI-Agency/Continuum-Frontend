@@ -204,13 +204,16 @@ export function TimelineEditorBlock({
         ];
       });
       const commandDrafts = [
+        ...(seed.sourceScript !== undefined && project.production.sourceScript !== seed.sourceScript
+          ? [{ commandType: 'set_production_script' as const, sourceScript: seed.sourceScript }]
+          : []),
         ...(references.length > 0 && project.production.references.length === 0
           ? [{ commandType: 'set_production_references' as const, references }]
           : []),
         ...(project.production.shots.length === 0
           ? seed.shots.map((shot) => ({
               commandType: 'upsert_shot' as const,
-              shot: { ...shot, referenceIds: [], takes: [], selection: {} },
+              shot: { ...shot, referenceIds: shot.referenceIds ?? [], takes: [], selection: {} },
             }))
           : []),
       ];

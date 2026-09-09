@@ -21,44 +21,63 @@ export function describeRenderDiscoveryFailure(message: string): string {
 }
 
 import type {
+  ApiRenderEnvironment,
+  ApiRenderFitVerdict,
   ApiRenderInputSet,
-  ApiRenderOutput,
+  ApiRenderInputValue,
   ApiRenderPreflightRequest,
   ApiRenderTemplateSummary,
   ApiRenderWorkspaceStatus,
-  PaidCanvasTarget,
+  MediaAsset,
 } from '@continuum/contracts';
-import { apiRenderTargetHandles } from '@continuum/contracts';
+import { apiRenderTargetHandles, checkAssetSwap, planFitCheck } from '@continuum/contracts';
 import {
   type NodeProps,
   NodeResizer,
   type Node as ReactFlowNode,
   useUpdateNodeInternals,
 } from '@xyflow/react';
-import { Clapperboard, RefreshCw, Settings2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Clapperboard } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/ui/ToastProvider';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { ApiRenderNodeData, StudioNode } from '../types';
-import { resolveCollisions } from '../utils/nodeCollisions';
 import { apiRendersApi } from './api-render/apiRendersApi';
-import { RenderJobCard } from './api-render/RenderJobCard';
+import { RenderFitMap } from './api-render/RenderFitMap';
 import { RenderVariableFields } from './api-render/RenderVariableFields';
 import {
   inspectApiRenderMediaInputs,
-  resolveApiRenderVariables,
   resolveApiRenderVariations,
 } from './api-render/resolveApiRenderVariables';
 import { useApiRenderJobs } from './api-render/useApiRenderJobs';
 import { NodeBadge, NodeTitleBar } from './NodeChrome';
-import { publishingApi } from './publish/publishingApi';
 
 /**
  * Whether the render fleet will honour THIS brand's workspace.
@@ -90,19 +109,15 @@ export function ApiRenderBlock({
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   const { show } = useToast();
   const [templates, setTemplates] = useState<ApiRenderTemplateSummary[]>([]);
-  // Campaigns and ad sets are SEPARATE lists. One shared array meant choosing a
-  // campaign refetched it at ad-set level, so the campaign list vanished and the
-  // picker could never be re-opened without clearing the selection.
-  const [campaignOptions, setCampaignOptions] = useState<PaidCanvasTarget[]>([]);
-  const [adsetOptions, setAdsetOptions] = useState<PaidCanvasTarget[]>([]);
-  const [campaignQuery, setCampaignQuery] = useState('');
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
-  const [setName, setSetName] = useState('');
   const [busy, setBusy] = useState(false);
   // Separate from `error`: a workspace that the render fleet does not honour is
   // not a failed request, it is a working request with the wrong destination.
   // Showing it as an error would be wrong, and showing nothing is worse.
   const [workspace, setWorkspace] = useState<ApiRenderWorkspaceStatus | null>(null);
+  const [environments, setEnvironments] = useState<ApiRenderEnvironment[]>([]);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   // This node's handles ARE its template contract, and the contract is fetched after the
   // node mounts. React Flow caches a node's handle map at mount, so a handle that appears
@@ -131,7 +146,7 @@ export function ApiRenderBlock({
 
   const deliveryEnabled = data.deliveryEnabled === true;
   const trackedIds = data.jobIds ?? (data.latestJobId ? [data.latestJobId] : []);
-  const { jobs, setJobs, error, setError, refreshJobs, refreshOne } = useApiRenderJobs({
+  const { jobs, setJobs, error, setError, refreshJobs } = useApiRenderJobs({
     brandId,
     trackedIds,
   });
@@ -171,11 +186,32 @@ export function ApiRenderBlock({
     });
   }, [brandId, patchData, setError, setJobs]);
 
+  // Which workspaces this brand can reach. Discovered rather than assumed: the fleet has no
+  // endpoint that enumerates them, so Supabase's own bindings are the authority, and a brand
+  // that holds several used to be able to reach exactly one of them, silently.
   useEffect(() => {
     if (!brandId) return;
     let cancelled = false;
     void apiRendersApi
-      .listTemplates(brandId)
+      .listEnvironments(brandId)
+      .then((response) => !cancelled && setEnvironments(response.items))
+      .catch(() => {
+        // Not fatal: the template list below reports the resolved workspace on its own, so a
+        // failed enumeration costs the picker, never the render.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId]);
+
+  const bindingId = data.bindingId ?? null;
+
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    setLoadingTemplates(true);
+    void apiRendersApi
+      .listTemplates(brandId, bindingId)
       .then((response) => {
         if (cancelled) return;
         setTemplates(response.items);
@@ -189,11 +225,14 @@ export function ApiRenderBlock({
               ? describeRenderDiscoveryFailure(cause.message)
               : 'Render discovery failed',
           ),
-      );
+      )
+      .finally(() => {
+        if (!cancelled) setLoadingTemplates(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [brandId, setError]);
+  }, [brandId, bindingId, setError]);
 
   // Jobs have exactly ONE loader. Two effects both calling the list raced, and the loser
   // overwrote the tracked-id recovery that makes a batch survive a reload — nothing
@@ -227,57 +266,6 @@ export function ApiRenderBlock({
     patchData({ latestOutputs: durable, status: 'finished' });
   }, [latestJob, data.latestOutputs, patchData]);
 
-  /**
-   * Put a finished image output on the canvas as an ordinary reference node.
-   *
-   * The node is a plain `image` node, which is what makes this small: `ImageNode` already
-   * owns the source handle and `resolveApiRenderVariables` already reads `assetId` /
-   * `assetVersionId` off one, so the output is immediately wireable as the version-pinned
-   * input to the next render. This node adds no handle of its own — a second owner of the
-   * same wire is how a handle alias silently stops painting an edge.
-   *
-   * The React Flow id IS the version, so clicking twice is idempotent and two outputs of
-   * the same job (different versions) add independently. `image`/`sourceUrl` come from the
-   * live DTO and expire; the durable pair is what survives, and the canvas re-sign path on
-   * room load mints a fresh URL from exactly that version.
-   */
-  const addOutputReference = useCallback(
-    (output: ApiRenderOutput) => {
-      if (output.kind !== 'image' || !output.assetId || !output.versionId) return;
-      const store = useStudioStore.getState();
-      const nodeId = `api-render-ref-${output.versionId}`;
-      if (store.nodes.some((node) => node.id === nodeId)) {
-        show({ title: 'Already on the canvas', description: output.fileName, variant: 'info' });
-        return;
-      }
-      const sourceNode = store.getNodeById(id);
-      if (!sourceNode) return;
-      store.takeSnapshot();
-      const derivedNode: StudioNode = {
-        id: nodeId,
-        type: 'image',
-        position: {
-          x: sourceNode.position.x + (sourceNode.measured?.width ?? sourceNode.width ?? 260) + 40,
-          y: sourceNode.position.y,
-        },
-        style: { width: 260, height: 260 },
-        data: {
-          label: output.fileName,
-          image: output.url,
-          fileName: output.fileName,
-          assetId: output.assetId,
-          assetVersionId: output.versionId,
-          sourceUrl: output.url,
-          referenceStatus: 'ready',
-        },
-      };
-      store.setNodes(resolveCollisions([...store.nodes, derivedNode]) as StudioNode[]);
-      store.triggerSave();
-      show({ title: 'Added as reference', description: output.fileName, variant: 'success' });
-    },
-    [id, show],
-  );
-
   // Saved sets are brand AND template scoped — a set authored against one template's
   // contract means nothing against another.
   useEffect(() => {
@@ -297,70 +285,25 @@ export function ApiRenderBlock({
     };
   }, [brandId, data.templateKey]);
 
-  // Meta discovery runs ONLY when delivery is switched on. It used to run on every mount,
-  // so every library-only render paid for a Graph campaign search it never used.
+  // The saved sets, for their NAMES only — a batch record is labelled with the preset it came
+  // from, and the inspector that owns the preset UI is not mounted when a render is submitted
+  // from the node. Losing this left every batch record labelled with a raw uuid.
   useEffect(() => {
-    if (!brandId || !deliveryEnabled) return;
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      try {
-        const response = await publishingApi.searchPaid({
-          brandId,
-          adAccountId: data.delivery?.adAccountId,
-          level: 'campaign',
-          query: campaignQuery || undefined,
-          limit: 50,
-        });
-        if (cancelled) return;
-        setCampaignOptions(response.items);
-        if (response.adAccountId !== data.delivery?.adAccountId) {
-          patchData({
-            delivery: {
-              action: 'create',
-              adStatus: 'PAUSED',
-              ...data.delivery,
-              adAccountId: response.adAccountId,
-            },
-          });
-        }
-      } catch (cause) {
-        if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : 'Meta discovery failed');
-        }
-      }
-    }, 250);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [brandId, campaignQuery, data.delivery, deliveryEnabled, patchData, setError]);
-
-  const chosenCampaignId = data.delivery?.campaignId;
-  useEffect(() => {
-    if (!brandId || !deliveryEnabled || !chosenCampaignId) {
-      setAdsetOptions([]);
+    if (!brandId || !data.templateKey) {
+      setInputSets([]);
       return;
     }
     let cancelled = false;
-    void publishingApi
-      .searchPaid({
-        brandId,
-        adAccountId: data.delivery?.adAccountId,
-        level: 'adset',
-        parentId: chosenCampaignId,
-        limit: 50,
-      })
-      .then((response) => {
-        if (!cancelled) setAdsetOptions(response.items);
-      })
-      .catch(
-        (cause) =>
-          !cancelled && setError(cause instanceof Error ? cause.message : 'Meta discovery failed'),
-      );
+    void apiRendersApi
+      .listInputSets(brandId, data.templateKey)
+      .then((response) => !cancelled && setInputSets(response.items))
+      .catch(() => {
+        // A missing set list must not block rendering; the label falls back to the id.
+      });
     return () => {
       cancelled = true;
     };
-  }, [brandId, chosenCampaignId, data.delivery?.adAccountId, deliveryEnabled, setError]);
+  }, [brandId, data.templateKey]);
 
   const selectTemplate = useCallback(
     async (templateKey: string) => {
@@ -368,13 +311,21 @@ export function ApiRenderBlock({
       setBusy(true);
       setError(null);
       try {
-        const contract = await apiRendersApi.getContract(brandId, templateKey);
+        const contract = await apiRendersApi.getContract(brandId, templateKey, bindingId);
         patchData({
           templateKey,
           templateName: contract.template.name,
           contractHash: contract.template.contractHash,
           variableDefinitions: contract.variables,
+          // Everything Template Forge knows about this template, kept so the layout can be
+          // drawn and the fonts listed without a second fetch — and so both survive a reload.
+          templateLayout: contract.layout,
+          templateFonts: contract.fonts,
+          templateRatios: contract.template.ratios,
+          contractSource: contract.template.contractSource,
+          templateSourceAssetId: contract.template.sourceAssetId,
           variables: {},
+          assetDims: {},
           inputSetId: null,
           batchInputSetIds: [],
           status: 'idle',
@@ -385,7 +336,7 @@ export function ApiRenderBlock({
         setBusy(false);
       }
     },
-    [brandId, patchData, setError],
+    [bindingId, brandId, patchData, setError],
   );
 
   // Delivery is the caller's choice, and the contract says variables come from exactly one
@@ -403,55 +354,6 @@ export function ApiRenderBlock({
     };
   }, [data.delivery, deliveryEnabled]);
 
-  const saveInputSet = useCallback(async () => {
-    if (!brandId || !data.templateKey || !data.contractHash || !setName.trim()) return;
-    const resolved = resolveApiRenderVariables({ nodeId: id, data, nodes, edges });
-    if (resolved.errors.length > 0) {
-      setError(resolved.errors.join(' · '));
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      // The RESOLVED variables are what gets stored — pins included, the reserved key
-      // excluded — so replaying a set reproduces the render rather than a half of it.
-      const created = await apiRendersApi.createInputSet({
-        brandId,
-        templateKey: data.templateKey,
-        contractHash: data.contractHash,
-        name: setName.trim(),
-        variables: resolved.variables,
-      });
-      setInputSets((current) => [created, ...current]);
-      setSetName('');
-      patchData({ inputSetId: created.id });
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? describeRenderDiscoveryFailure(cause.message) : 'Save failed',
-      );
-    } finally {
-      setBusy(false);
-    }
-  }, [brandId, data, edges, id, nodes, patchData, setError, setName]);
-
-  const deleteInputSet = useCallback(async () => {
-    if (!brandId || !data.inputSetId) return;
-    const doomed = data.inputSetId;
-    setBusy(true);
-    try {
-      await apiRendersApi.deleteInputSet(brandId, doomed);
-      setInputSets((current) => current.filter((item) => item.id !== doomed));
-      patchData({
-        inputSetId: null,
-        batchInputSetIds: (data.batchInputSetIds ?? []).filter((item) => item !== doomed),
-      });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Delete failed');
-    } finally {
-      setBusy(false);
-    }
-  }, [brandId, data.batchInputSetIds, data.inputSetId, patchData, setError]);
-
   const batchIds = data.batchInputSetIds ?? [];
   const variations = useMemo(
     () => resolveApiRenderVariations({ nodeId: id, data, nodes, edges }),
@@ -462,6 +364,70 @@ export function ApiRenderBlock({
     [data, edges, id, nodes],
   );
   const variationCount = batchIds.length || (data.inputSetId ? 1 : variations.count);
+
+  /**
+   * The placement check, run here the moment artwork is chosen.
+   *
+   * The same closed form the server runs at preflight and the forge runs offline — one port,
+   * pinned against the forge's own fixtures. This copy exists for latency alone: the answer
+   * that is frozen onto the render is the SERVER's, computed over the assets it actually
+   * pinned, so a stale preview here costs a preview and never a wrong render.
+   *
+   * A wired slot has no size in the browser (an edge carries an asset id, not pixels), so it
+   * comes back `unknown` and says "Measured at Prepare" — which is the truth, and which is
+   * also what escalates the finished frame to the judge if the server cannot size it either.
+   */
+  const fit = useMemo(() => {
+    const definitions = data.variableDefinitions ?? [];
+    const boxes = data.templateLayout?.boxes ?? [];
+    const verdicts = definitions
+      .filter(
+        (variable) =>
+          (variable.kind === 'image' || variable.kind === 'video') && !variable.reserved,
+      )
+      .map((variable) =>
+        checkAssetSwap({
+          key: variable.key,
+          placement: variable.placement,
+          asset: data.assetDims?.[variable.key] ?? null,
+          neighbours: boxes.filter((row) => row.key !== variable.key),
+        }),
+      );
+    return {
+      byKey: new Map<string, ApiRenderFitVerdict>(
+        verdicts.map((verdict) => [verdict.key, verdict]),
+      ),
+      report: planFitCheck({
+        comp: data.templateLayout?.comp ?? null,
+        slots: verdicts,
+      }),
+      verdicts,
+    };
+  }, [data.assetDims, data.templateLayout, data.variableDefinitions]);
+
+  /**
+   * Remember the chosen artwork's pixel size alongside the pin.
+   *
+   * The pin is what renders; these numbers are only what lets the check above run without a
+   * round trip. Written in the same patch as the pin so the two can never disagree about which
+   * asset is in the slot.
+   */
+  const pickMedia = useCallback(
+    (key: string, value: ApiRenderInputValue, assets: MediaAsset[]) => {
+      const first = assets[0];
+      const dims = first?.width && first.height ? { w: first.width, h: first.height } : undefined;
+      patchData({
+        variables: { ...data.variables, [key]: value },
+        assetDims: dims
+          ? { ...(data.assetDims ?? {}), [key]: dims }
+          : // No recorded size is not zero. Dropping the entry makes the slot read `unknown`,
+            // which is what sends the finished frame to the judge.
+            Object.fromEntries(Object.entries(data.assetDims ?? {}).filter(([k]) => k !== key)),
+        inputSetId: null,
+      });
+    },
+    [data.assetDims, data.variables, patchData],
+  );
 
   const submitRender = useCallback(async () => {
     if (!brandId || !data.templateKey || !data.contractHash) return;
@@ -477,6 +443,12 @@ export function ApiRenderBlock({
 
     const base = {
       brandId,
+      // The environment the picker is ON. Omitted when it is the brand's default, because an
+      // absent binding means "the default" server-side and a blank one is a 400. Without this
+      // the whole selection was cosmetic: the node would list templates and fetch a contract
+      // from the chosen workspace, then preflight against the default one — a contract-hash
+      // mismatch at best, and a render into the wrong workspace at worst.
+      ...(bindingId ? { bindingId } : {}),
       templateKey: data.templateKey,
       contractHash: data.contractHash,
       ...(delivery ? { delivery } : {}),
@@ -541,6 +513,7 @@ export function ApiRenderBlock({
     }
   }, [
     batchIds,
+    bindingId,
     brandId,
     data,
     deliveryBlock,
@@ -554,16 +527,31 @@ export function ApiRenderBlock({
   ]);
 
   const templatesOffered = canOfferTemplates(workspace);
+  const chosenEnvironment =
+    environments.find((environment) => environment.bindingId === bindingId) ??
+    environments.find((environment) => environment.isDefault) ??
+    null;
+  const chosenTemplate = templates.find((template) => template.key === data.templateKey) ?? null;
+  // A template name is prefixed by the fleet with its own bracketed tag; the tag is noise to
+  // everyone but the fleet.
+  const templateLabel = (template: ApiRenderTemplateSummary) =>
+    template.name.replace(/^\[[^\]]+\]\s*/, '');
+  const statusTone =
+    workspace?.state === 'eligible'
+      ? ('success' as const)
+      : workspace?.state === 'unknown'
+        ? ('muted' as const)
+        : ('warning' as const);
 
   return (
     <div
       className={cn(
-        'relative group h-full w-full min-w-[320px] min-h-[260px]',
+        'relative group h-full w-full min-w-[320px] min-h-[300px]',
         isSelectedByOther && 'selected-by-other',
       )}
       style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
     >
-      <NodeResizer minWidth={320} minHeight={260} isVisible={selected} />
+      <NodeResizer minWidth={320} minHeight={300} isVisible={selected} />
       <CanvasNode
         selected={selected}
         handles={{ target: false, source: false }}
@@ -573,240 +561,198 @@ export function ApiRenderBlock({
           <NodeBadge>{renderCount(variationCount)}</NodeBadge>
         </NodeTitleBar>
         <NodeContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 text-xs">
-          <select
-            aria-label="Render template"
-            className="nodrag h-8 rounded-md border border-border bg-background px-2 disabled:opacity-60"
-            value={data.templateKey ?? ''}
-            disabled={busy || !templatesOffered}
-            onChange={(event) => void selectTemplate(event.target.value)}
-          >
-            <option value="">Choose template…</option>
-            {templates.map((template) => (
-              <option key={template.key} value={template.key}>
-                {template.name.replace(/^\[[^\]]+\]\s*/, '')}
-              </option>
-            ))}
-          </select>
+          {/* Where this renders. A brand with one workspace gets a label; a brand with several
+              gets a choice it never had. Either way the eligibility verdict is on screen —
+              `env_plane_undeployed` is the state that most needs saying, because the fleet does
+              not refuse it, it renders against the shared workspace and looks like success. */}
+          <div className="flex items-center gap-1.5">
+            {environments.length > 1 ? (
+              <Select
+                value={chosenEnvironment?.bindingId ?? ''}
+                onValueChange={(next) =>
+                  patchData({
+                    bindingId: next,
+                    // The contract is workspace-scoped: the same template key in another
+                    // workspace is another template. Clearing is the honest reset.
+                    templateKey: null,
+                    templateName: null,
+                    contractHash: null,
+                    variableDefinitions: [],
+                    templateLayout: null,
+                    variables: {},
+                    assetDims: {},
+                    inputSetId: null,
+                    batchInputSetIds: [],
+                  })
+                }
+              >
+                <SelectTrigger className="nodrag h-7 flex-1 text-2xs" aria-label="Render workspace">
+                  <SelectValue placeholder="Workspace" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {environments.map((environment) => (
+                      <SelectItem key={environment.bindingId} value={environment.bindingId}>
+                        {environment.workspace}
+                        {environment.isDefault ? ' · default' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className="truncate text-2xs text-muted-foreground">
+                {chosenEnvironment?.workspace ?? workspace?.workspace ?? 'No workspace'}
+              </span>
+            )}
+            {workspace ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={<Badge variant={statusTone}>{workspace.state.replace(/_/g, ' ')}</Badge>}
+                />
+                <TooltipContent className="max-w-64">{workspace.detail}</TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
 
-          <RenderVariableFields
-            definitions={data.variableDefinitions ?? []}
-            values={data.variables}
-            brandId={brandId}
-            connectedKeys={connectedKeys}
-            mediaStatus={mediaStatus}
-            onChange={(key, value) =>
-              patchData({ variables: { ...data.variables, [key]: value }, inputSetId: null })
-            }
-            // DELETE the key rather than blanking it. `resolveApiRenderVariables` treats an
-            // empty string as an answered scalar, so a cleared media slot that kept its key
-            // would read as filled with nothing instead of as unfilled.
-            onClear={(key) => {
-              const { [key]: _cleared, ...rest } = data.variables ?? {};
-              patchData({ variables: rest, inputSetId: null });
-            }}
-          />
+          {/* Searchable, because a workspace holds hundreds of templates and a <select> of
+              hundreds is a list nobody can get to the bottom of. */}
+          <Popover open={templatePickerOpen} onOpenChange={setTemplatePickerOpen}>
+            <PopoverTrigger
+              disabled={busy || !templatesOffered}
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="nodrag w-full justify-between font-normal"
+                >
+                  <span className="truncate">
+                    {chosenTemplate ? templateLabel(chosenTemplate) : 'Choose template…'}
+                  </span>
+                  <ChevronsUpDown data-icon="inline-end" aria-hidden />
+                </Button>
+              }
+            />
+            <PopoverContent className="nodrag w-80 p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Search templates…" />
+                <CommandList>
+                  <CommandEmpty>No template matches.</CommandEmpty>
+                  <CommandGroup>
+                    {templates.map((template) => (
+                      <CommandItem
+                        key={template.key}
+                        value={`${templateLabel(template)} ${template.key}`}
+                        onSelect={() => {
+                          setTemplatePickerOpen(false);
+                          void selectTemplate(template.key);
+                        }}
+                      >
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="truncate">{templateLabel(template)}</span>
+                          <span className="flex flex-wrap items-center gap-1">
+                            {template.contractSource === 'template_forge' ? (
+                              <Badge variant="violet">Forge</Badge>
+                            ) : null}
+                            {template.ratios.slice(0, 4).map((ratio) => (
+                              <Badge key={ratio} variant="muted">
+                                {ratio}
+                              </Badge>
+                            ))}
+                            {/* Null means nobody checked, which must not read as "none
+                                missing" — so only a real count is shown. */}
+                            {template.fontsMissing ? (
+                              <Badge variant="warning">{template.fontsMissing} fonts missing</Badge>
+                            ) : null}
+                          </span>
+                        </span>
+                        {template.key === data.templateKey ? <Check aria-hidden /> : null}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+
+          {loadingTemplates && templates.length === 0 ? (
+            <div className="flex flex-col gap-1.5">
+              <Skeleton className="h-7 w-full" />
+              <Skeleton className="h-7 w-2/3" />
+            </div>
+          ) : null}
+
+          {data.templateKey ? (
+            <>
+              {/* The layout, to scale, with the chosen artwork drawn where it lands. Only when
+                  the template carries measurements — a drawing of a template nobody parsed
+                  would be a picture of nothing. */}
+              <RenderFitMap layout={data.templateLayout ?? null} verdicts={fit.verdicts} />
+              <RenderVariableFields
+                definitions={data.variableDefinitions ?? []}
+                values={data.variables}
+                brandId={brandId}
+                connectedKeys={connectedKeys}
+                mediaStatus={mediaStatus}
+                assetDims={data.assetDims}
+                fit={fit.byKey}
+                onChange={(key, value) =>
+                  patchData({ variables: { ...data.variables, [key]: value }, inputSetId: null })
+                }
+                onPickMedia={pickMedia}
+                // DELETE the key rather than blanking it. `resolveApiRenderVariables` treats an
+                // empty string as an answered scalar, so a cleared media slot that kept its key
+                // would read as filled with nothing instead of as unfilled.
+                onClear={(key) => {
+                  const { [key]: _cleared, ...rest } = data.variables ?? {};
+                  const { [key]: _dims, ...dims } = data.assetDims ?? {};
+                  patchData({ variables: rest, assetDims: dims, inputSetId: null });
+                }}
+              />
+            </>
+          ) : templatesOffered ? (
+            <Empty className="border-0 py-6">
+              <EmptyHeader>
+                <EmptyTitle className="text-xs">No template chosen</EmptyTitle>
+                <EmptyDescription className="text-2xs">
+                  Pick one to see what it needs and where the artwork lands.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : null}
+
           {error ? (
-            <p className="rounded bg-destructive/10 px-2 py-1 text-2xs text-destructive">{error}</p>
+            <p className="rounded-md bg-destructive/10 px-2 py-1 text-2xs text-destructive">
+              {error}
+            </p>
           ) : null}
           {workspace && !templatesOffered ? (
-            <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-2xs">
+            <p className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-2xs">
               {workspace.detail}
             </p>
           ) : null}
+
           <div className="mt-auto flex items-center gap-2 border-t border-border/60 pt-2">
             <span className="text-2xs text-muted-foreground">
               {renderCount(variationCount)} · saves to Library
             </span>
             <Button
               size="sm"
-              className="nodrag ml-auto min-w-32 bg-teal-600 text-white hover:bg-teal-700"
+              className="nodrag ml-auto min-w-32"
               disabled={busy || !data.templateKey}
               onClick={() => void submitRender()}
             >
-              {busy ? 'Submitting…' : `Render ${variationCount}`}
+              {busy ? (
+                <>
+                  <Spinner data-icon="inline-start" /> Submitting…
+                </>
+              ) : (
+                `Render ${variationCount}`
+              )}
             </Button>
           </div>
         </NodeContent>
       </CanvasNode>
-      <details className="nodrag absolute left-full top-0 z-20 ml-2">
-        <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5 text-xs shadow-sm hover:bg-muted">
-          <Settings2 className="size-3.5" aria-hidden /> Advanced
-        </summary>
-        <div className="mt-2 flex max-h-[70vh] w-80 flex-col gap-3 overflow-y-auto rounded-lg border border-border bg-background p-3 shadow-xl">
-          {data.templateKey ? (
-            <section className="flex flex-col gap-1.5">
-              <span className="font-medium">Presets</span>
-              <select
-                aria-label="Preset"
-                className="h-8 rounded-md border border-border bg-background px-2"
-                value={data.inputSetId ?? ''}
-                onChange={(event) => patchData({ inputSetId: event.target.value || null })}
-              >
-                <option value="">Current values</option>
-                {inputSets.map((set) => (
-                  <option key={set.id} value={set.id}>
-                    {set.name}
-                  </option>
-                ))}
-              </select>
-              <div className="flex gap-1">
-                <Input
-                  className="h-7 text-xs"
-                  aria-label="New preset name"
-                  placeholder="Preset name"
-                  value={setName}
-                  onChange={(event) => setSetName(event.target.value)}
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy || !setName.trim()}
-                  onClick={() => void saveInputSet()}
-                >
-                  Save
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy || !data.inputSetId}
-                  onClick={() => void deleteInputSet()}
-                >
-                  Delete
-                </Button>
-              </div>
-              {inputSets.length > 0 ? (
-                <div className="flex flex-col gap-1">
-                  <span className="text-2xs text-muted-foreground">Render preset variations</span>
-                  {inputSets.map((set) => (
-                    <label key={set.id} className="flex items-center gap-1.5 text-2xs">
-                      <input
-                        type="checkbox"
-                        checked={batchIds.includes(set.id)}
-                        onChange={(event) =>
-                          patchData({
-                            batchInputSetIds: event.target.checked
-                              ? [...batchIds, set.id]
-                              : batchIds.filter((item) => item !== set.id),
-                          })
-                        }
-                      />
-                      {set.name}
-                    </label>
-                  ))}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          <section className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
-            <label className="flex items-center justify-between gap-3">
-              <span>
-                <span className="block font-medium">Paused Meta ad</span>
-                <span className="block text-2xs text-muted-foreground">Off by default</span>
-              </span>
-              <input
-                aria-label="Also create a PAUSED Meta ad"
-                type="checkbox"
-                checked={deliveryEnabled}
-                onChange={(event) => patchData({ deliveryEnabled: event.target.checked })}
-              />
-            </label>
-            {deliveryEnabled ? (
-              <>
-                <Input
-                  className="h-7 text-xs"
-                  aria-label="Search campaigns"
-                  placeholder="Search campaigns"
-                  value={campaignQuery}
-                  onChange={(event) => setCampaignQuery(event.target.value)}
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    aria-label="Meta campaign"
-                    className="h-8 rounded-md border border-border bg-background px-2"
-                    value={data.delivery?.campaignId ?? ''}
-                    onChange={(event) => {
-                      const target = campaignOptions.find((item) => item.id === event.target.value);
-                      patchData({
-                        delivery: {
-                          action: 'create',
-                          adStatus: 'PAUSED',
-                          adAccountId: data.delivery?.adAccountId,
-                          campaignId: target?.id,
-                          campaignName: target?.name,
-                        },
-                      });
-                    }}
-                  >
-                    <option value="">Campaign</option>
-                    {data.delivery?.campaignId &&
-                    !campaignOptions.some((item) => item.id === data.delivery?.campaignId) ? (
-                      <option value={data.delivery.campaignId}>{data.delivery.campaignName}</option>
-                    ) : null}
-                    {campaignOptions.map((target) => (
-                      <option key={target.id} value={target.id}>
-                        {target.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    aria-label="Meta ad set"
-                    className="h-8 rounded-md border border-border bg-background px-2"
-                    value={data.delivery?.adsetId ?? ''}
-                    disabled={!data.delivery?.campaignId}
-                    onChange={(event) => {
-                      const target = adsetOptions.find((item) => item.id === event.target.value);
-                      patchData({
-                        delivery: {
-                          ...data.delivery!,
-                          adsetId: target?.id,
-                          adsetName: target?.name,
-                        },
-                      });
-                    }}
-                  >
-                    <option value="">Ad set</option>
-                    {adsetOptions.map((target) => (
-                      <option key={target.id} value={target.id}>
-                        {target.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </>
-            ) : null}
-          </section>
-
-          <section className="flex flex-col gap-1 border-t border-border/60 pt-3">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">Render history</span>
-              <button
-                type="button"
-                className="rounded p-1 hover:bg-muted"
-                onClick={() => void refreshJobs()}
-                aria-label="Refresh renders"
-              >
-                <RefreshCw className="size-3" />
-              </button>
-            </div>
-            {jobs.length === 0 ? (
-              <p className="text-2xs text-muted-foreground">
-                {data.latestOutputs?.[0]
-                  ? `Last render · ${data.latestOutputs[0].fileName}`
-                  : 'No renders yet.'}
-              </p>
-            ) : null}
-            {jobs.map((job) => (
-              <RenderJobCard
-                key={job.id}
-                job={job}
-                onRefresh={() => void refreshOne(job.id)}
-                onUseAsReference={addOutputReference}
-              />
-            ))}
-          </section>
-        </div>
-      </details>
     </div>
   );
 }

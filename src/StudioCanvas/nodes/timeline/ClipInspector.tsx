@@ -10,6 +10,7 @@ import { NumberScrubField } from '@/components/ui/number-field';
 import { Separator } from '@/components/ui/separator';
 import { SliderField } from '@/components/ui/slider-field';
 import { Switch } from '@/components/ui/switch';
+import { ShaderEffectControls } from '../../components/ShaderEffectControls';
 import type { TimelineItem } from '../../types';
 import {
   type BlendMode,
@@ -66,56 +67,6 @@ const KEN_BURNS_DEFAULT: NonNullable<ClipEffectSpec['kenBurns']> = {
   from: { scale: 1 },
   to: { scale: 1.2 },
 };
-
-// Turning a keyer ON is not the same as setting its amount to zero: at tolerance 0 a
-// chroma key still knocks out exact matches, so the toggle writes the whole object or
-// removes it. Green because that is what a greenscreen is shot against.
-const CHROMA_KEY_DEFAULT: NonNullable<ClipEffectSpec['chromaKey']> = {
-  color: '#00ff00',
-  tolerance: 0.35,
-  softness: 0.1,
-};
-
-const TINT_DEFAULT_COLOR = '#ff8a3d';
-
-// The draw-time presets, all of which are `{ amount }` on a 0..1 scale and all of which
-// mean "off" at 0 — so one row shape drives every one of them, and a zero writes the
-// field away rather than leaving a no-op object on the clip.
-const EFFECT_AMOUNT_FIELDS = [
-  { field: 'vignette', label: 'Vignette' },
-  { field: 'filmGrain', label: 'Film grain' },
-  { field: 'chromaticAberration', label: 'Chromatic aberration' },
-  { field: 'vhs', label: 'VHS' },
-] as const satisfies readonly { field: keyof ClipEffectSpec; label: string }[];
-
-// A labelled native colour well. `<input type="color">` is the platform's own picker —
-// no library, and it is the one control here whose value is not a number on a track.
-function ColorRow({
-  id,
-  label,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <Label htmlFor={id} className="text-2xs">
-        {label}
-      </Label>
-      <input
-        id={id}
-        type="color"
-        className="nodrag h-7 w-12 shrink-0 cursor-pointer rounded-md border border-border/70 bg-background p-0.5"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
-  );
-}
 
 export interface ClipBackgroundRemoval {
   /** Runs the matte. Absent host support hides the section entirely. */
@@ -193,10 +144,6 @@ export function ClipInspector({
 
   const updateText = (next: TextOverlay[]) => onSetEffects({ text: next });
 
-  const chromaKey = effects.chromaKey;
-  const tint = effects.tint;
-  const pixelate = effects.pixelate;
-
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto rounded-lg border border-border/60 p-3">
       <div className="flex items-center justify-between gap-2">
@@ -232,11 +179,11 @@ export function ClipInspector({
       {unpreviewable.length > 0 ? (
         <div
           className="w-fit rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-2xs text-muted-foreground"
-          title={`No CSS preview for: ${unpreviewable.join(', ')}. The export renders them exactly.`}
+          title={`Live WebGPU preview: ${unpreviewable.join(', ')}. Export uses the same shader stack.`}
         >
           {unpreviewable.length === 1
-            ? '1 effect renders but can’t be previewed'
-            : `${unpreviewable.length} effects render but can’t be previewed`}
+            ? '1 GPU shader effect active'
+            : `${unpreviewable.length} GPU shader effects active`}
         </div>
       ) : null}
 
@@ -550,97 +497,11 @@ export function ClipInspector({
 
       <Separator />
 
-      {/* Draw-time effects. None of these has a CSS `filter` primitive, so the badge at
-          the top of the panel is what tells the author the preview cannot show them —
-          the export renders every one of them exactly. */}
       <div className="flex flex-col gap-3">
         <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
           Effects
         </span>
-
-        <div className="flex items-center justify-between">
-          <Label htmlFor="clip-chroma" className="text-2xs">
-            Chroma key
-          </Label>
-          <Switch
-            id="clip-chroma"
-            checked={Boolean(chromaKey)}
-            onCheckedChange={(checked) =>
-              onSetEffects({ chromaKey: checked ? CHROMA_KEY_DEFAULT : undefined })
-            }
-          />
-        </div>
-        {chromaKey ? (
-          <>
-            <ColorRow
-              id="clip-chroma-color"
-              label="Key colour"
-              value={chromaKey.color}
-              onChange={(color) => onSetEffects({ chromaKey: { ...chromaKey, color } })}
-            />
-            <SliderField
-              label="Tolerance"
-              value={chromaKey.tolerance}
-              min={0}
-              max={1}
-              step={0.01}
-              onChange={(v) => onSetEffects({ chromaKey: { ...chromaKey, tolerance: v } })}
-            />
-            <SliderField
-              label="Softness"
-              value={chromaKey.softness}
-              min={0}
-              max={1}
-              step={0.01}
-              onChange={(v) => onSetEffects({ chromaKey: { ...chromaKey, softness: v } })}
-            />
-          </>
-        ) : null}
-
-        <ColorRow
-          id="clip-tint-color"
-          label="Tint colour"
-          value={tint?.color ?? TINT_DEFAULT_COLOR}
-          onChange={(color) => onSetEffects({ tint: { color, amount: tint?.amount ?? 0.5 } })}
-        />
-        <SliderField
-          label="Tint"
-          value={tint?.amount ?? 0}
-          min={0}
-          max={1}
-          step={0.05}
-          onChange={(v) =>
-            onSetEffects({
-              tint: v > 0 ? { color: tint?.color ?? TINT_DEFAULT_COLOR, amount: v } : undefined,
-            })
-          }
-        />
-
-        {EFFECT_AMOUNT_FIELDS.map(({ field, label: fieldLabel }) => (
-          <SliderField
-            key={field}
-            label={fieldLabel}
-            value={(effects[field] as { amount: number } | undefined)?.amount ?? 0}
-            min={0}
-            max={1}
-            step={0.05}
-            onChange={(v) => onSetEffects({ [field]: v > 0 ? { amount: v } : undefined })}
-          />
-        ))}
-
-        {/* Pixelate is the odd one out: its scale is SOURCE pixels per block, and
-            anything under 2 is not a mosaic, so 0 on the track means off. The step is 2
-            so that "off" and the smallest real mosaic are adjacent — a step of 1 leaves
-            a value the field discards, and the track cannot then climb past it. */}
-        <SliderField
-          label="Pixelate"
-          value={pixelate && pixelate.blockPx >= 2 ? pixelate.blockPx : 0}
-          min={0}
-          max={64}
-          step={2}
-          suffix="px"
-          onChange={(v) => onSetEffects({ pixelate: v >= 2 ? { blockPx: v } : undefined })}
-        />
+        <ShaderEffectControls idPrefix="clip" effects={effects} onChange={onSetEffects} />
       </div>
 
       {backgroundRemoval ? (

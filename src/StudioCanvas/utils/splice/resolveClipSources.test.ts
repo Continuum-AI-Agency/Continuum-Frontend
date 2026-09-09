@@ -210,11 +210,22 @@ describe('resolveTimelineInputPool — every source the validator admits', () =>
   });
 
   it('places an action clip as real bytes instead of throwing "upstream produced no media"', async () => {
+    const shaderStack = {
+      version: 1 as const,
+      effects: [
+        {
+          effectId: 'vignette' as const,
+          enabled: true,
+          parameters: { amount: 0.5 },
+          keyframes: [],
+        },
+      ],
+    };
     const node = {
       id: 'act',
       type: 'action',
       position: { x: 0, y: 0 },
-      data: { actionId: 'video.reverse', generatedVideoUrl: clip },
+      data: { actionId: 'video.shader', generatedVideoUrl: clip, shaderStack },
     } as unknown as StudioNode;
     const items = [{ id: 'i1', order: 0, sourceNodeId: 'act' }] as unknown as TimelineItem[];
 
@@ -229,6 +240,7 @@ describe('resolveTimelineInputPool — every source the validator admits', () =>
     expect(resolved).toHaveLength(1);
     expect(resolved[0].kind).toBe('video');
     expect(resolved[0].blob.type).toBe('video/mp4');
+    expect(resolved[0].effects?.shaderStack).toEqual(shaderStack);
   });
 });
 
@@ -275,7 +287,13 @@ describe('the connectable set and the resolvable set are the same set', () => {
         target: targetId,
         targetHandle: TIMELINE_MEDIA_INPUT_HANDLE,
       };
-      if (!isValidConnection({ source: 'src', target: targetId, targetHandle: TIMELINE_MEDIA_INPUT_HANDLE }, [], [source, target]))
+      if (
+        !isValidConnection(
+          { source: 'src', target: targetId, targetHandle: TIMELINE_MEDIA_INPUT_HANDLE },
+          [],
+          [source, target],
+        )
+      )
         continue;
       admitted.push(type);
 

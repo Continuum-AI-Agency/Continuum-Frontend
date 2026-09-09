@@ -32,11 +32,17 @@ export const brandDirectionPiecesQueryKey = (brandId?: string) =>
  * inspector mounts this hook twice over (its own toggle handlers, then the popover it
  * renders), and every generation node on the canvas mounts it again. One shared key
  * collapses all of them into a single request.
+ *
+ * The queryFn takes no AbortSignal on purpose. A cancelled fetch is a fetch React Query must
+ * REDO for the next observer, and observers here churn: StrictMode remounts the tree in dev,
+ * and the canvas mounts and unmounts generation nodes as you work. Letting an in-flight read
+ * finish lets the remount join it — one request instead of two — and the answer is wanted by
+ * whoever mounts next anyway.
  */
 export function useBrandDirectionPieces(brandId?: string): BrandDirectionPiecesState {
   const query = useQuery({
     queryKey: brandDirectionPiecesQueryKey(brandId),
-    queryFn: ({ signal }) => fetchBrandDirectionPieces(brandId as string, signal),
+    queryFn: () => fetchBrandDirectionPieces(brandId as string),
     enabled: Boolean(brandId),
     staleTime: 5 * 60_000,
   });

@@ -24,9 +24,9 @@ describe('ACTION_DEFS', () => {
   // A count, not a floor: silently trimming the catalog is exactly the drift this
   // registry exists to stop, and a shrinking list should have to be edited on purpose.
   it('declares the whole catalog up front', () => {
-    expect(ACTION_IDS).toHaveLength(36);
-    expect(ACTION_IDS.filter((id) => id.startsWith('image.'))).toHaveLength(13);
-    expect(ACTION_IDS.filter((id) => id.startsWith('video.'))).toHaveLength(20);
+    expect(ACTION_IDS).toHaveLength(39);
+    expect(ACTION_IDS.filter((id) => id.startsWith('image.'))).toHaveLength(14);
+    expect(ACTION_IDS.filter((id) => id.startsWith('video.'))).toHaveLength(22);
     expect(ACTION_IDS.filter((id) => id.startsWith('text.'))).toHaveLength(3);
   });
 
@@ -216,5 +216,67 @@ describe('lookups', () => {
     expect(actionOutputModality('text.concat')).toBe('text');
     expect(actionInputPort('video.overlay', 'overlay-in')?.modality).toBe('image');
     expect(actionInputPort('video.overlay', 'nope')).toBeUndefined();
+  });
+});
+
+describe('shader actions', () => {
+  it('reuse the generic action node with deferred and baked output modes', () => {
+    expect(actionInputPort('image.shader', 'in')?.modality).toBe('image');
+    expect(actionInputPort('video.shader', 'in')?.modality).toBe('video');
+    expect(ACTION_DEFS['image.shader'].config.parse({})).toEqual({
+      mode: 'deferred',
+      shaderStack: { version: 1, effects: [] },
+    });
+    expect(
+      ACTION_DEFS['video.shader'].config.safeParse({
+        mode: 'bake',
+        shaderStack: {
+          version: 1,
+          effects: [{ effectId: 'vhs', parameters: { amount: 0.7 } }],
+        },
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe('video.audioBed', () => {
+  it('takes one clip and one audio asset with safe mix defaults', () => {
+    expect(actionInputPort('video.audioBed', 'in')?.modality).toBe('video');
+    expect(actionInputPort('video.audioBed', 'audio-in')?.modality).toBe('audio');
+    expect(ACTION_DEFS['video.audioBed'].config.parse({})).toEqual({
+      startSec: 0,
+      trimStartSec: null,
+      trimEndSec: null,
+      volume: 0.5,
+      fadeInSec: 0.15,
+      fadeOutSec: 0.35,
+      segments: null,
+    });
+    expect(
+      ACTION_DEFS['video.audioBed'].config.safeParse({ trimStartSec: 4, trimEndSec: 2 }).success,
+    ).toBe(false);
+    expect(
+      ACTION_DEFS['video.audioBed'].config.safeParse({
+        segments: [
+          { startSec: 0, trimStartSec: 0, trimEndSec: 12, volume: 0.08 },
+          { startSec: 12, trimStartSec: 12, trimEndSec: 18, volume: 0.2 },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe('video.subtitles', () => {
+  it('accepts timed manual captions and refuses inverted windows', () => {
+    expect(
+      ACTION_DEFS['video.subtitles'].config.safeParse({
+        manualCaptions: [{ text: 'AGENDA TU VISITA', startSec: 1, endSec: 3 }],
+      }).success,
+    ).toBe(true);
+    expect(
+      ACTION_DEFS['video.subtitles'].config.safeParse({
+        manualCaptions: [{ text: 'AGENDA TU VISITA', startSec: 3, endSec: 1 }],
+      }).success,
+    ).toBe(false);
   });
 });

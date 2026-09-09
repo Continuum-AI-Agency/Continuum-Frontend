@@ -1477,7 +1477,7 @@ export function OrganicDraftPreview({
 
             {isHyperframeFormat ? (
               <div className="flex flex-col gap-3">
-                <HyperFramePlayer draft={draft} brandId={brandProfileId ?? ''} />
+                <HyperFramePlayer draft={draftForPreview} brandId={brandProfileId ?? ''} />
                 <div className="rounded-xl border border-border/70 bg-background/90 p-3">
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Caption

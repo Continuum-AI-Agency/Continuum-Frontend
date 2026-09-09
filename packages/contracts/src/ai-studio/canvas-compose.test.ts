@@ -34,6 +34,32 @@ describe('canvas composer references', () => {
     ).toBe(false);
   });
 
+  // The reference type that carries a saved canvas as agent context. Without this member
+  // the wire drops it silently: `toCanvasComposerReferences` filters on the enum, so an
+  // attached flow would vanish between the picker and the request with nothing to show for
+  // it, and the composer would claim it took the flow while the model got nothing.
+  it('carries an attached workflow grab through the wire', () => {
+    expect(
+      canvasComposerReferenceSchema.parse({
+        type: 'workflow',
+        id: 'wf-1',
+        label: 'Product hero shot',
+      }),
+    ).toEqual({ type: 'workflow', id: 'wf-1', label: 'Product hero shot' });
+  });
+
+  it('accepts a compose request whose only grab is a workflow', () => {
+    const request = canvasComposeRequestSchema.parse({
+      brandProfileId: 'brand-1',
+      roomId: 'room-1',
+      prompt: 'Build something in the spirit of this flow',
+      references: [{ type: 'workflow', id: 'wf-1', label: 'Product hero shot' }],
+    });
+    expect(request.references).toEqual([
+      { type: 'workflow', id: 'wf-1', label: 'Product hero shot' },
+    ]);
+  });
+
   it('rejects client-authored asset coordinates', () => {
     expect(
       canvasComposerReferenceSchema.safeParse({

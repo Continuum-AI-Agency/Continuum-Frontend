@@ -1,5 +1,4 @@
 import type { ClientRenderCapabilities } from '@continuum/contracts';
-import { probeHyperframesCapabilities } from '@/lib/hyperframes-agent/browserRenderer';
 
 export async function probeClientRenderCapabilities(): Promise<ClientRenderCapabilities> {
   const webCodecs =
@@ -7,6 +6,7 @@ export async function probeClientRenderCapabilities(): Promise<ClientRenderCapab
     typeof window.VideoEncoder !== 'undefined' &&
     typeof window.VideoDecoder !== 'undefined';
   if (!webCodecs) return { webCodecs: false, avc: false, aac: false };
+  const { probeHyperframesCapabilities } = await import('@/lib/hyperframes-agent/browserRenderer');
   const { avc, aac } = await probeHyperframesCapabilities();
   return { webCodecs, avc, aac };
 }

@@ -8,10 +8,12 @@ import { captionAnchorSec, captionWordTransform } from '@/lib/clips/captionAnima
 import { ensureCaptionFonts } from '@/lib/clips/captionFonts';
 import { captionFontFamiliesFor, resolveStyleWithPreset } from '@/lib/clips/captionPresets';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
-import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
+import type { ClipEffectSpec, ResolvedTextOverlay } from '../../utils/render/effectSpec';
+import { hasShaderStack } from '../../utils/render/shaderStack';
 import type { CaptionCue } from '../../utils/splice/captionCues';
 import type { OverlayPreviewLayer } from './overlayPreview';
 import { TimelineOverlayPreviewLayers } from './TimelineOverlayPreviewLayers';
+import { TimelineShaderPreview } from './TimelineShaderPreview';
 
 function formatTime(sec: number): string {
   const safe = Number.isFinite(sec) && sec > 0 ? sec : 0;
@@ -124,6 +126,8 @@ export function TimelinePreview({
   playheadSec,
   totalSec,
   mediaStyle,
+  shaderEffects,
+  shaderTimeSec = 0,
   textOverlays,
   fadeOverlay,
   crossfade,
@@ -146,11 +150,21 @@ export function TimelinePreview({
   // Effect CSS (filter/transform/opacity) for the active clip — the same spec
   // that the canvas export bakes in, so preview and output match.
   mediaStyle?: React.CSSProperties;
+  shaderEffects?: ClipEffectSpec;
+  shaderTimeSec?: number;
   textOverlays?: ResolvedTextOverlay[];
   // Fade/dip transition wash over the whole frame at the current playhead.
   fadeOverlay?: { color: string; alpha: number } | null;
   // Incoming clip's frame faded in over the current one during a cross-dissolve.
-  crossfade?: { url: string; kind: 'video' | 'image'; opacity: number };
+  crossfade?: {
+    url: string;
+    kind: 'video' | 'image';
+    opacity: number;
+    sourceSec: number;
+    playbackRate: number;
+    effects?: ClipEffectSpec;
+    effectTimeSec: number;
+  };
   overlayLayers?: OverlayPreviewLayer[];
   mediaMuted?: boolean;
   mediaVolume?: number;
@@ -193,9 +207,12 @@ export function TimelinePreview({
           playsInline
           muted={false}
           className="absolute inset-0 h-full w-full object-contain transition-opacity"
-          style={{ ...mediaStyle, opacity: showVideo ? (mediaStyle?.opacity ?? 1) : 0 }}
+          style={{
+            ...mediaStyle,
+            opacity: showVideo && !hasShaderStack(shaderEffects) ? (mediaStyle?.opacity ?? 1) : 0,
+          }}
         />
-        {!showVideo && activeImageUrl ? (
+        {!showVideo && activeImageUrl && !hasShaderStack(shaderEffects) ? (
           // biome-ignore lint/performance/noImgElement: in-memory still preview; next/image adds no value for canvas media
           <img
             src={activeImageUrl}
@@ -204,27 +221,33 @@ export function TimelinePreview({
             style={mediaStyle}
           />
         ) : null}
+        <TimelineShaderPreview
+          videoRef={videoRef}
+          imageUrl={showVideo ? undefined : activeImageUrl}
+          effects={shaderEffects}
+          timeSec={shaderTimeSec}
+          style={mediaStyle}
+        />
 
         {crossfade && crossfade.opacity > 0 ? (
-          crossfade.kind === 'video' ? (
-            <video
-              key={crossfade.url}
-              src={crossfade.url}
-              muted
-              playsInline
-              preload="metadata"
-              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-              style={{ opacity: crossfade.opacity }}
-            />
-          ) : (
-            // biome-ignore lint/performance/noImgElement: in-memory dissolve frame; next/image adds no value
-            <img
-              src={crossfade.url}
-              alt=""
-              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-              style={{ opacity: crossfade.opacity }}
-            />
-          )
+          <TimelineOverlayPreviewLayers
+            layers={[
+              {
+                id: 'incoming-crossfade',
+                kind: crossfade.kind,
+                url: crossfade.url,
+                sourceSec: crossfade.sourceSec,
+                playbackRate: crossfade.playbackRate,
+                muted: true,
+                volume: 0,
+                effects: crossfade.effects,
+                effectTimeSec: crossfade.effectTimeSec,
+                mediaStyle: { opacity: crossfade.opacity },
+                textOverlays: [],
+              },
+            ]}
+            isPlaying={isPlaying}
+          />
         ) : null}
 
         {textOverlays?.map((overlay) => (
@@ -242,6 +265,8 @@ export function TimelinePreview({
               borderRadius: overlay.background ? '0.15em' : undefined,
               textShadow: overlay.background ? undefined : '0 0 0.18em rgba(0,0,0,0.75)',
               maxWidth: '90%',
+              opacity: overlay.opacity,
+              transform: `translate(-50%, -50%) translateY(${overlay.translateYEm ?? 0}em) scale(${overlay.scale ?? 1})`,
             }}
           >
             {overlay.text}

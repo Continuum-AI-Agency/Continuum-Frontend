@@ -10,6 +10,9 @@ export const agentMentionReferenceTypeSchema = z.enum([
   'adset',
   'media_asset',
   'canvas_node',
+  // A saved Canvas workflow attached as reference material — the agent reads its shape,
+  // it does not land on the canvas. Loading one is a separate, explicit act.
+  'workflow',
   'link',
   'skill',
   'document',

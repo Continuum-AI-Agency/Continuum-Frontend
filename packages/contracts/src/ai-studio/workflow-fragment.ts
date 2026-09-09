@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { elementCategorySchema } from '../media/element';
 import {
   type ConnectSpec,
   connectSpecSchema,
@@ -132,10 +133,133 @@ export function parseTechniqueMetadata(
 // the same question about the same graph, and the inference that derives them is one pass.
 // What differs is the promise, not the shape.
 
-export const canvasPipelineMetadataSchema = canvasTechniqueMetadataSchema.extend({
-  /** When it was published, so a reader can tell a fresh contract from a stale one. */
-  publishedAt: z.string().min(1).optional(),
+export const pipelinePortBindingSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('asset') }).strict(),
+  z
+    .object({
+      kind: z.literal('element'),
+      allowedCategories: z.array(elementCategorySchema).min(1),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('element_candidate'),
+      category: elementCategorySchema,
+      guidelines: z.string().max(2_000).nullable().optional(),
+      rightsNote: z.string().min(1).max(500).nullable().optional(),
+    })
+    .strict(),
+]);
+export type PipelinePortBinding = z.infer<typeof pipelinePortBindingSchema>;
+
+export const canvasPipelinePortSchema = canvasTechniquePortSchema.extend({
+  /** Explicit pipeline contract semantics. Never inferred from a label. */
+  pipelineBinding: pipelinePortBindingSchema.optional(),
 });
+export type CanvasPipelinePort = z.infer<typeof canvasPipelinePortSchema>;
+
+export const canvasPipelineAgentGuideSchema = z
+  .object({
+    version: z.literal(1),
+    useWhen: z.array(z.string().min(1).max(160)).min(1).max(6),
+    avoidWhen: z.array(z.string().min(1).max(160)).max(6),
+    inputGuidance: z
+      .array(
+        z
+          .object({
+            inputId: fragmentPortIdSchema,
+            instruction: z.string().min(1).max(300),
+          })
+          .strict(),
+      )
+      .max(24),
+    invocationNotes: z.array(z.string().min(1).max(300)).max(8),
+  })
+  .strict();
+export type CanvasPipelineAgentGuide = z.infer<typeof canvasPipelineAgentGuideSchema>;
+
+export const canvasPipelineMetadataSchema = canvasTechniqueMetadataSchema
+  .extend({
+    // Pipelines may expose the repeated prompt/reference ports of a multi-shot graph.
+    inputPorts: z.array(canvasPipelinePortSchema).max(24),
+    outputPorts: z.array(canvasPipelinePortSchema).max(24),
+    /** When it was published, so a reader can tell a fresh contract from a stale one. */
+    publishedAt: z.string().min(1).optional(),
+    /** Stable across republished revisions of the same capability. */
+    familyId: z.string().uuid().optional(),
+    /** Bumped only when the pipeline is deliberately republished. */
+    revision: z.number().int().positive().optional(),
+    agentGuide: canvasPipelineAgentGuideSchema.optional(),
+  })
+  .superRefine((metadata, context) => {
+    const inputIds = new Set(metadata.inputPorts.map((port) => port.id));
+    const guidedIds = new Set<string>();
+    metadata.agentGuide?.inputGuidance.forEach((guidance, index) => {
+      if (!inputIds.has(guidance.inputId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['agentGuide', 'inputGuidance', index, 'inputId'],
+          message: 'Agent guidance may reference only a declared public input.',
+        });
+      }
+      if (guidedIds.has(guidance.inputId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['agentGuide', 'inputGuidance', index, 'inputId'],
+          message: 'Each public input may have at most one agent-guidance entry.',
+        });
+      }
+      guidedIds.add(guidance.inputId);
+    });
+    metadata.inputPorts.forEach((port, index) => {
+      if (port.pipelineBinding?.kind === 'element_candidate') {
+        context.addIssue({
+          code: 'custom',
+          path: ['inputPorts', index, 'pipelineBinding'],
+          message: 'Element candidates may only be declared on output ports',
+        });
+      }
+      if (
+        port.pipelineBinding?.kind === 'element' &&
+        port.dataType !== 'image' &&
+        port.dataType !== 'media'
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['inputPorts', index, 'pipelineBinding'],
+          message: 'Element inputs require an image-compatible port',
+        });
+      }
+    });
+    metadata.outputPorts.forEach((port, index) => {
+      if (port.pipelineBinding?.kind === 'element') {
+        context.addIssue({
+          code: 'custom',
+          path: ['outputPorts', index, 'pipelineBinding'],
+          message: 'Element inputs may only be declared on input ports',
+        });
+      }
+      if (port.pipelineBinding?.kind === 'element_candidate' && port.dataType !== 'image') {
+        context.addIssue({
+          code: 'custom',
+          path: ['outputPorts', index, 'pipelineBinding'],
+          message: 'Element candidates require an image output port',
+        });
+      }
+      if (
+        port.pipelineBinding?.kind === 'element_candidate' &&
+        (port.pipelineBinding.category === 'model' ||
+          port.pipelineBinding.category === 'character') &&
+        !port.pipelineBinding.rightsNote
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['outputPorts', index, 'pipelineBinding', 'rightsNote'],
+          message: 'A person Element candidate requires a rights note',
+        });
+      }
+    });
+  });
 export type CanvasPipelineMetadata = z.infer<typeof canvasPipelineMetadataSchema>;
 
 /** The metadata key. Distinct from `technique`, and a row may legitimately carry both. */

@@ -29,7 +29,7 @@ const OVERLAP_FPS = 30;
 
 // Draw one overlap layer (a clip's frame) under its per-frame transition transform
 // (translate/scale/rotate/clip + alpha), on top of its own clip effects.
-function drawOverlapLayer(
+async function drawOverlapLayer(
   ctx: OffscreenCanvasRenderingContext2D,
   frame: Frame,
   effects: ClipEffectSpec | undefined,
@@ -37,39 +37,44 @@ function drawOverlapLayer(
   xform: OverlapLayerXform,
   targetWidth: number,
   targetHeight: number,
-): void {
+  timeSec: number,
+): Promise<void> {
   ctx.save();
-  if (xform.clip) {
-    ctx.beginPath();
-    ctx.rect(xform.clip.x, xform.clip.y, xform.clip.w, xform.clip.h);
-    ctx.clip();
+  try {
+    if (xform.clip) {
+      ctx.beginPath();
+      ctx.rect(xform.clip.x, xform.clip.y, xform.clip.w, xform.clip.h);
+      ctx.clip();
+    }
+    if (xform.translateX || xform.translateY) ctx.translate(xform.translateX, xform.translateY);
+    if (xform.scale !== 1 || xform.rotate !== 0) {
+      const cx = targetWidth / 2;
+      const cy = targetHeight / 2;
+      ctx.translate(cx, cy);
+      if (xform.rotate) ctx.rotate(xform.rotate);
+      if (xform.scale !== 1) ctx.scale(xform.scale, xform.scale);
+      ctx.translate(-cx, -cy);
+    }
+    await drawEffectFrame(
+      ctx,
+      frame.image,
+      frame.width,
+      frame.height,
+      targetWidth,
+      targetHeight,
+      effects,
+      clipT,
+      xform.alpha,
+      timeSec,
+    );
+    const textOverlays = resolveTextOverlays(effects);
+    if (textOverlays.length > 0) {
+      ctx.globalAlpha *= xform.alpha;
+      drawTextOverlays(ctx, textOverlays, targetWidth, targetHeight);
+    }
+  } finally {
+    ctx.restore();
   }
-  if (xform.translateX || xform.translateY) ctx.translate(xform.translateX, xform.translateY);
-  if (xform.scale !== 1 || xform.rotate !== 0) {
-    const cx = targetWidth / 2;
-    const cy = targetHeight / 2;
-    ctx.translate(cx, cy);
-    if (xform.rotate) ctx.rotate(xform.rotate);
-    if (xform.scale !== 1) ctx.scale(xform.scale, xform.scale);
-    ctx.translate(-cx, -cy);
-  }
-  drawEffectFrame(
-    ctx,
-    frame.image,
-    frame.width,
-    frame.height,
-    targetWidth,
-    targetHeight,
-    effects,
-    clipT,
-    xform.alpha,
-  );
-  const textOverlays = resolveTextOverlays(effects);
-  if (textOverlays.length > 0) {
-    ctx.globalAlpha *= xform.alpha;
-    drawTextOverlays(ctx, textOverlays, targetWidth, targetHeight);
-  }
-  ctx.restore();
 }
 
 export type CrossDissolveClip =
@@ -181,14 +186,14 @@ export async function appendOverlapTransition(params: {
     const outputTimestamp = outputStart + u;
     const activeCues = cues?.length ? findActiveCues(cues, outputTimestamp) : [];
     await drawFrameComposition({
-      drawBase: () => {
+      drawBase: async () => {
         ctx.filter = 'none';
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, targetWidth, targetHeight);
         if (outFrame) {
-          drawOverlapLayer(
+          await drawOverlapLayer(
             ctx,
             outFrame,
             outgoing.effects,
@@ -196,10 +201,11 @@ export async function appendOverlapTransition(params: {
             xform.outgoing,
             targetWidth,
             targetHeight,
+            outDuration - overlap + u,
           );
         }
         if (inFrame) {
-          drawOverlapLayer(
+          await drawOverlapLayer(
             ctx,
             inFrame,
             incoming.effects,
@@ -207,6 +213,7 @@ export async function appendOverlapTransition(params: {
             xform.incoming,
             targetWidth,
             targetHeight,
+            u,
           );
         }
       },

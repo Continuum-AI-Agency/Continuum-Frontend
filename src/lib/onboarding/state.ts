@@ -201,6 +201,7 @@ export const brandInviteSchema = z.object({
 });
 
 const onboardingStateSchema = z.object({
+  catalogCompleted: z.boolean().default(false),
   step: z.number().int().min(0).max(7),
   brand: brandSchema,
   documents: z.array(onboardingDocumentSchema),
@@ -220,6 +221,7 @@ const onboardingStateSchema = z.object({
 });
 
 const onboardingPatchSchema = z.object({
+  catalogCompleted: z.boolean().optional(),
   step: z.number().int().min(0).max(7).optional(),
   brand: brandSchema.partial().optional(),
   documents: z.array(onboardingDocumentSchema).optional(),
@@ -288,6 +290,7 @@ function makeDefaultConnections(): Record<PlatformKey, OnboardingConnectionState
 export function createDefaultOnboardingState(owner?: BrandMember): OnboardingState {
   const ownerHandle = owner?.email?.split('@')[0];
   return {
+    catalogCompleted: false,
     step: 0,
     brand: {
       name: ownerHandle ? `${ownerHandle}'s Brand` : owner ? 'My Brand' : '',
@@ -342,6 +345,7 @@ export function repairOnboardingState(
   }
 
   const topLevelKeys = [
+    'catalogCompleted',
     'step',
     'documents',
     'members',
@@ -455,6 +459,7 @@ export function mergeOnboardingState(
   patch: OnboardingPatch,
 ): OnboardingState {
   const next: OnboardingState = {
+    catalogCompleted: current.catalogCompleted ?? false,
     step: current.step,
     brand: { ...current.brand },
     documents: [...current.documents],
@@ -467,6 +472,7 @@ export function mergeOnboardingState(
     preview: current.preview ?? null,
   };
 
+  if (patch.catalogCompleted !== undefined) next.catalogCompleted = patch.catalogCompleted;
   if (patch.step !== undefined) {
     next.step = clampStep(patch.step);
   }

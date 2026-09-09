@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { editorProjectV2Schema } from '../ai-studio/editor-project-v2';
+import { shaderStackV1Schema } from '../ai-studio/shader-stack';
 import { creativeOpsRecipeSchema } from './creative-ops';
 import { databaseUuidSchema } from './database-uuid';
 import { pinnedLibraryAssetRefSchema } from './library-reference';
@@ -82,6 +83,7 @@ export const hyperframesClientRenderSpecSchema = z
     runId: databaseUuidSchema,
     canvasId: z.string().min(1),
     nodeId: z.string().min(1),
+    shaderStack: shaderStackV1Schema.optional(),
     origin: renderOriginSchema,
   })
   .strict();
@@ -95,6 +97,7 @@ export const organicHyperframeClientRenderSpecSchema = z
     durationSeconds: z.number().positive(),
     width: z.number().int().positive(),
     height: z.number().int().positive(),
+    shaderStack: shaderStackV1Schema.optional(),
     // Library assets the composition embeds as hf-asset://<id>. Carried as ids,
     // not URLs, because the browser re-signs them at render time — a signature
     // minted when the draft was written is long dead by then. Absent on

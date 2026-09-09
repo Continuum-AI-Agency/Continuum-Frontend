@@ -60,6 +60,109 @@ export const ugcTalkingHeadRecipeSchema = z
   });
 export type UgcTalkingHeadRecipe = z.infer<typeof ugcTalkingHeadRecipeSchema>;
 
+export const storyboardShotSchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/i),
+    title: z.string().min(1).max(500),
+    frameDirection: z.string().min(1).max(1000),
+    visualDirection: z.string().min(1).max(1000),
+    spokenLine: z.string().max(4000).optional(),
+    cameraMove: z.string().min(1).max(2000).default('Locked camera.'),
+    durationSeconds: z.union([z.literal(4), z.literal(6), z.literal(8)]),
+    continuity: shotContinuitySchema.default('cut'),
+    referenceNodeIds: z.array(z.string().min(1)).max(20).default([]),
+  })
+  .strict();
+export type StoryboardShot = z.infer<typeof storyboardShotSchema>;
+
+export const storyboardRecipeSchema = z
+  .object({
+    recipe: z.literal('storyboard'),
+    objective: z.string().min(1).max(2000),
+    script: z.string().min(1).max(50_000),
+    aspectRatio: z.enum(['9:16', '16:9', '1:1']).default('16:9'),
+    references: z
+      .array(
+        z
+          .object({
+            nodeId: z.string().min(1),
+            role: z.enum(['style', 'character', 'location', 'product', 'score', 'ambience']),
+          })
+          .strict(),
+      )
+      .max(50)
+      .default([]),
+    shots: z.array(storyboardShotSchema).min(1).max(50),
+  })
+  .strict()
+  .superRefine((recipe, context) => {
+    const ids = recipe.shots.map((shot) => shot.id);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({ code: 'custom', path: ['shots'], message: 'Shot ids must be unique' });
+    }
+  });
+export type StoryboardRecipe = z.infer<typeof storyboardRecipeSchema>;
+
+export function compileStoryboardWorkflow(input: StoryboardRecipe): CompiledUgcTalkingHeadWorkflow {
+  const recipe = storyboardRecipeSchema.parse(input);
+  const timelineRef = 'storyboard:assembly:timeline';
+  return {
+    timelineRef,
+    nodes: [
+      {
+        ref: timelineRef,
+        type: 'timelineEditor',
+        data: {
+          items: [],
+          committed: false,
+          productionSeed: {
+            recipe: 'storyboard',
+            objective: recipe.objective,
+            sourceScript: recipe.script,
+            aspectRatio: recipe.aspectRatio,
+            references: recipe.references,
+            shots: recipe.shots.map((shot, order) => ({
+              id: shot.id,
+              order,
+              title: shot.title,
+              brief: shot.frameDirection,
+              spokenLine: shot.spokenLine,
+              subjectAction: shot.frameDirection,
+              cameraMove: shot.cameraMove,
+              inSceneEvent: shot.visualDirection,
+              continuity: shot.continuity,
+              referenceIds: shot.referenceNodeIds,
+              targetDurationSec: shot.durationSeconds,
+            })),
+          },
+          ...moduleData('storyboard:assembly', 'timeline'),
+        },
+      },
+    ],
+    connections: recipe.references.map((reference) => ({
+      from_ref: reference.nodeId,
+      to_ref: timelineRef,
+      role: 'media-in',
+    })),
+    shots: recipe.shots.map((shot) => ({
+      id: shot.id,
+      title: shot.title,
+      brief: shot.frameDirection,
+    })),
+    modules: [
+      {
+        version: 1,
+        id: 'storyboard:assembly',
+        label: 'Storyboard assembly',
+        kind: 'assembly',
+        nodeRefs: [timelineRef],
+        inputPorts: ['references'],
+        outputPorts: ['final-video'],
+      },
+    ],
+  };
+}
+
 export interface CompiledUgcShot {
   id: string;
   title: string;

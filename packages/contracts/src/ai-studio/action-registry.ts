@@ -7,6 +7,7 @@ import {
   VERNE_TITLE_MIN_CONTRAST,
   VERNE_TITLE_RIGHT_MARGIN,
 } from '../design-system/placement';
+import { shaderActionConfigSchema } from './shader-stack';
 
 // The Canvas action catalog — every deterministic operation an `action` node can run,
 // declared in one place so a new op is a registry entry rather than a node type.
@@ -19,15 +20,15 @@ import {
 //
 // Data only — no React, no engine code. The Backend imports this through the root entry.
 
-/** What flows through an action port. Deliberately NOT `StudioPortDataType`: an action
- *  never moves audio or documents, and collection-ness is a runtime output SHAPE
- *  (`outputsCollection`), never a port type. */
+/** What an action produces and which catalog family it belongs to. */
 export type ActionModality = 'image' | 'video' | 'text';
+/** Inputs additionally accept Library audio, while no action produces audio. */
+export type ActionInputModality = ActionModality | 'audio';
 
 /** One input port on an action. `max` is the connection limit that handle enforces. */
 export interface ActionPort {
   readonly handle: string;
-  readonly modality: ActionModality;
+  readonly modality: ActionInputModality;
   readonly max: number;
 }
 
@@ -77,6 +78,7 @@ export const ACTION_IDS = [
   'image.pad',
   'image.text',
   'image.overlay',
+  'image.shader',
   'video.grade',
   'video.filter',
   'video.effect',
@@ -84,6 +86,7 @@ export const ACTION_IDS = [
   'video.speed',
   'video.kenBurns',
   'video.stitch',
+  'video.audioBed',
   'video.split',
   'video.crop',
   'video.pad',
@@ -97,6 +100,7 @@ export const ACTION_IDS = [
   'video.subtitles',
   'video.extractFrames',
   'video.frameGrid',
+  'video.shader',
   'text.split',
   'text.findReplace',
   'text.concat',
@@ -504,6 +508,18 @@ export const ACTION_DEFS = {
     output: 'image',
     config: overlayPlacementConfig,
   },
+  'image.shader': {
+    id: 'image.shader',
+    family: 'image',
+    label: 'Shader Effect',
+    description:
+      'Applies a curated shader stack to a still. Deferred mode preserves the source media reference and stack; bake materializes modified pixels.',
+    group: 'Colour',
+    execution: 'sync',
+    inputs: singleImageIn,
+    output: 'image',
+    config: shaderActionConfigSchema,
+  },
   'image.duplicate': {
     id: 'image.duplicate',
     family: 'image',
@@ -604,6 +620,53 @@ export const ACTION_DEFS = {
       transition: z.enum(['none', 'crossDissolve']).default('none'),
       transitionSec: z.number().min(0).max(3).default(0.5),
     }),
+  },
+  'video.audioBed': {
+    id: 'video.audioBed',
+    family: 'video',
+    label: 'Audio Bed',
+    description: 'Mixes an audio track under a video clip.',
+    group: 'Assembly',
+    execution: 'worker',
+    inputs: [
+      { handle: 'in', modality: 'video', max: 1 },
+      { handle: 'audio-in', modality: 'audio', max: 1 },
+    ],
+    output: 'video',
+    config: z
+      .object({
+        startSec: z.number().min(0).default(0),
+        trimStartSec: z.number().min(0).nullable().default(null),
+        trimEndSec: z.number().min(0).nullable().default(null),
+        volume: z.number().min(0).max(2).default(0.5),
+        fadeInSec: z.number().min(0).max(30).default(0.15),
+        fadeOutSec: z.number().min(0).max(30).default(0.35),
+        segments: z
+          .array(
+            z
+              .object({
+                startSec: z.number().min(0),
+                trimStartSec: z.number().min(0).nullable().default(null),
+                trimEndSec: z.number().min(0).nullable().default(null),
+                volume: z.number().min(0).max(2),
+                fadeInSec: z.number().min(0).max(30).default(0.05),
+                fadeOutSec: z.number().min(0).max(30).default(0.05),
+              })
+              .refine(
+                ({ trimStartSec, trimEndSec }) =>
+                  trimStartSec === null || trimEndSec === null || trimEndSec > trimStartSec,
+                { message: 'trimEndSec must be greater than trimStartSec', path: ['trimEndSec'] },
+              ),
+          )
+          .max(12)
+          .nullable()
+          .default(null),
+      })
+      .refine(
+        ({ trimStartSec, trimEndSec }) =>
+          trimStartSec === null || trimEndSec === null || trimEndSec > trimStartSec,
+        { message: 'trimEndSec must be greater than trimStartSec', path: ['trimEndSec'] },
+      ),
   },
   'video.split': {
     id: 'video.split',
@@ -751,6 +814,27 @@ export const ACTION_DEFS = {
       preset: z.enum(['pop', 'pulse', 'glide', 'fusion', 'classic', 'boxed']).default('pop'),
       emphasize: z.boolean().default(true),
       language: z.string().nullable().default(null),
+      manualCaptions: z
+        .array(
+          z
+            .object({
+              text: z.string().trim().min(1).max(200),
+              startSec: z.number().min(0),
+              endSec: z.number().positive(),
+            })
+            .refine(({ startSec, endSec }) => endSec > startSec, {
+              message: 'endSec must be greater than startSec',
+              path: ['endSec'],
+            }),
+        )
+        .max(100)
+        // Defaulted, not optional. A custom key still has to be a key the schema
+        // DECLARES — configFieldsFor lists it, and `parse({})` has to agree, or the
+        // popover advertises a control the config never carries. Its sibling
+        // `video.audioBed.segments` is nullable+default for the same reason, and the
+        // only reader does Array.isArray(), which cannot tell null from undefined.
+        .nullable()
+        .default(null),
     }),
   },
   'video.extractFrames': {
@@ -790,6 +874,18 @@ export const ACTION_DEFS = {
         .regex(/^#[0-9a-fA-F]{6}$/)
         .default('#000000'),
     }),
+  },
+  'video.shader': {
+    id: 'video.shader',
+    family: 'video',
+    label: 'Shader Effect',
+    description:
+      'Applies a curated shader stack to a clip. Deferred mode preserves the source media reference and stack; bake materializes a modified video.',
+    group: 'Colour',
+    execution: 'worker',
+    inputs: singleVideoIn,
+    output: 'video',
+    config: shaderActionConfigSchema,
   },
 
   // ── text (pure) ────────────────────────────────────────────────────────────

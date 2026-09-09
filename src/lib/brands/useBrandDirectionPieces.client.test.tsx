@@ -70,6 +70,23 @@ describe('useBrandDirectionPieces', () => {
     expect(fetchBrandDirectionPieces).toHaveBeenCalledTimes(1);
   });
 
+  it('does not refire when an observer unmounts mid-flight', async () => {
+    // What a StrictMode remount and canvas node churn both do. With an AbortSignal the
+    // unmount cancelled the read and the remount paid for it again — two backend hits.
+    fetchBrandDirectionPieces.mockImplementationOnce(
+      () => new Promise((resolve) => setTimeout(() => resolve(RESPONSE), 50)),
+    );
+    const queryClient = newClient();
+    const wrapper = createWrapper(queryClient);
+
+    const first = renderHook(() => useBrandDirectionPieces(BRAND), { wrapper });
+    first.unmount();
+    const second = renderHook(() => useBrandDirectionPieces(BRAND), { wrapper });
+
+    await waitFor(() => expect(second.result.current.isLoading).toBe(false));
+    expect(fetchBrandDirectionPieces).toHaveBeenCalledTimes(1);
+  });
+
   it('reads nothing and reports no load without a brand', () => {
     const { result } = renderHook(() => useBrandDirectionPieces(undefined), {
       wrapper: createWrapper(newClient()),

@@ -113,6 +113,7 @@ export async function startHyperframesAgentNode(params: {
     aspectRatio: data.aspectRatio,
     durationSeconds: data.durationSeconds,
     resolution: data.resolution,
+    shaderStack: data.shaderStack,
     idempotencyKey: `${params.nodeId}:${crypto.randomUUID()}`,
   });
   const run: AgentRunDto = {

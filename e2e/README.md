@@ -4,6 +4,65 @@ End-to-end tests for the Next.js app, driven by Playwright against a real browse
 (Chromium). Auth is exercised through real Supabase GoTrue sessions minted with
 the service-role admin API.
 
+## Bundle first-load benchmark
+
+With local Supabase running, hydrated, and `.env.local` configured, run from the Frontend:
+
+```bash
+NEXT_DIST_DIR=.next/bundle-optimized bun run build
+NEXT_DIST_DIR=.next/bundle-optimized bun run bundle:e2e:bench
+NEXT_DIST_DIR=.next/bundle-optimized bun run bundle:check --json
+```
+
+The bench starts a production Next server on `3125` and its own real local Backend on
+`4425`, signs in as the local fixture owner, and cold-loads Login, Organic, Settings,
+Library, Scale, and AI Studio. Local API requests are forwarded to the owned Backend;
+responses are not mocked. The fixture owner's render queue must have no ready jobs.
+Do not run concurrently with another bench that enqueues work for that owner.
+The local snapshot must include the tracked `client_render_jobs_target_client` and
+`library_template_sources` migrations. This run applied those existing migrations
+locally; it did not reset fixtures or change the hosted database.
+
+Each test attaches `cold-load.json` with actual JavaScript transfer sizes and separately
+identified navigation-prefetch requests. Organic also asserts that all six executor
+exports are absent from downloaded chunks before a job starts, and the palette is
+absent before Cmd+K. It exercises focus, abbreviated search, Escape, reopening, and
+navigation to Library. The export lookup fails if an expected export disappears, so
+a bundler-format change cannot silently turn the absence checks into false positives.
+As a negative control, the unchanged baseline fails because it downloads the palette
+before opening it; the optimized build passes all seven checks.
+
+The build budget measures the initial route chunk graph; browser measurements can also
+include components loaded after hydration, such as Canvas, and navigation prefetches.
+Gzip figures from `bundle:check` use Node's compressor consistently in local and CI runs.
+For module attribution, add `--experimental-analyze` to `next build`; analyzer chunk
+names in Next 16.3 precede final hashing and are not browser request URLs.
+
+The render execution check is separate and uses real local Library media, claim/lease,
+worker encoding, upload, and a pinned completion receipt through the lazy registry:
+
+```bash
+# Monorepo root; owns and cleans its fixtures and provider-free Edge runtime.
+bun run studio:video-editor-v2:render:e2e:bench
+```
+
+The bundle bench also runs that render through the actual dashboard provider: it holds
+the fixture's signed-media request, navigates from Organic to Settings while the lease
+is active, releases the request, and verifies completion and stored output bytes.
+Paid Gemini analysis is disabled; the fixture has no Meta token and lacks poster-rendition
+support. These limitations are reported explicitly, not counted as provider coverage.
+
+Measured on identical local production builds, 2026-09-04 (uncompressed initial JS):
+
+| Route | Before (KiB) | After (KiB) |
+|---|---:|---:|
+| Login | 1235.8 | 1235.8 |
+| Organic | 4174.7 | 3779.4 |
+| Settings | 5559.7 | 5249.9 |
+| Library | 4119.0 | 3786.3 |
+| Scale | 3576.4 | 3344.1 |
+| AI Studio | 3679.4 | 3284.6 |
+
 ## Layout
 
 ```

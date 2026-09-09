@@ -441,7 +441,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
               const frame = await overlay.frameAt(sourceSec);
               if (!frame) continue;
               const t = overlay.outputDurationSec > 0 ? local / overlay.outputDurationSec : 0;
-              drawEffectFrame(
+              await drawEffectFrame(
                 overlayCtx,
                 frame.image,
                 frame.width,
@@ -451,6 +451,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
                 overlay.effects,
                 t,
                 1,
+                local,
               );
               const textOverlays = resolveTextOverlays(overlay.effects);
               if (textOverlays.length > 0) {

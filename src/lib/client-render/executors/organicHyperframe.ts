@@ -67,6 +67,7 @@ export const executeOrganicHyperframeClientRender: ClientRenderExecutor = async 
       height: spec.height,
       durationSeconds: spec.durationSeconds,
       fps: 30,
+      shaderStack: spec.shaderStack,
     },
     signal: context.signal,
     onProgress: (progress) => {

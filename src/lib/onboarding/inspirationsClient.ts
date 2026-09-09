@@ -3,10 +3,7 @@
 // the line-delimited frames through the shared @continuum/contracts schemas.
 
 import {
-  type OnboardingGenerationStreamFrame,
-  type OnboardingInspirationSelection,
   type OnboardingInspirationsStreamFrame,
-  onboardingGenerationStreamFrameSchema,
   onboardingInspirationsStreamFrameSchema,
   parseFrame,
 } from '@continuum/contracts';
@@ -94,48 +91,4 @@ export const streamInspirations = async (params: {
     params.signal,
   );
   await readFrames(response, onboardingInspirationsStreamFrameSchema, params.onFrame);
-};
-
-// The generation stream runs on a Supabase edge function
-// (onboarding-inspirations-generate), called directly from the browser with the
-// user's JWT — not the Backend. apikey routes through the Supabase gateway; the
-// function self-verifies the JWT and checks brand access via RLS.
-const getSupabaseFunctionsConfig = (): { url: string; anonKey: string } => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) throw new Error('supabase_functions_not_configured');
-  return { url: url.replace(/\/+$/, ''), anonKey };
-};
-
-export const streamGeneration = async (params: {
-  brandId: string;
-  selectedInspiration?: OnboardingInspirationSelection | null;
-  referenceImageUrl?: string | null;
-  competitorName?: string | null;
-  signal?: AbortSignal;
-  onFrame: (frame: OnboardingGenerationStreamFrame) => void;
-}): Promise<void> => {
-  const token = await getBrowserAccessToken();
-  const { url, anonKey } = getSupabaseFunctionsConfig();
-  const response = await fetch(`${url}/functions/v1/onboarding-inspirations-generate`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: anonKey,
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({
-      brandId: params.brandId,
-      referenceAssetId: null,
-      referenceImageUrl: params.selectedInspiration?.imageUrl ?? params.referenceImageUrl ?? null,
-      competitorName: params.selectedInspiration?.competitorName ?? params.competitorName ?? null,
-    }),
-    signal: params.signal,
-  });
-  if (!response.ok || !response.body) {
-    throw new Error(`onboarding_stream_failed_${response.status}`);
-  }
-  await readFrames(response, onboardingGenerationStreamFrameSchema, params.onFrame);
 };

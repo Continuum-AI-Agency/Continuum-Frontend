@@ -10,7 +10,7 @@ import { Copy, FileText, Library, Loader2, Trash2, Unlink, Upload, X } from 'luc
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { describeError, type DocumentView } from '@/components/documents/types';
+import { type DocumentView, describeError } from '@/components/documents/types';
 import { useDocuments } from '@/components/documents/useDocuments';
 import { Button } from '@/components/ui/button';
 import {

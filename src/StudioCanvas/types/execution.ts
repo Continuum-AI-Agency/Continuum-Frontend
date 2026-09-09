@@ -1,3 +1,4 @@
+import type { ShaderStackV1 } from '@continuum/contracts';
 import type {
   BrandBookPieceKind,
   BrandDirectionPiece,
@@ -31,6 +32,8 @@ export type ImageOutputItem = {
   sizeBytes?: number;
   assetId?: string;
   assetVersionId?: string;
+  /** Deferred curated effects; source bytes remain untouched until preview or bake. */
+  shaderStack?: ShaderStackV1;
 };
 
 export type NodeOutput =
@@ -48,6 +51,8 @@ export type NodeOutput =
       sizeBytes?: number;
       assetId?: string;
       assetVersionId?: string;
+      /** Deferred curated effects; source bytes remain untouched until preview or bake. */
+      shaderStack?: ShaderStackV1;
     }
   // A fan-out result: N outputs of ONE modality, in item order.
   //

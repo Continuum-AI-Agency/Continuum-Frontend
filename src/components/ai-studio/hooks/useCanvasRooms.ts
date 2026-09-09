@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -34,34 +35,81 @@ type WorkspaceRpcClient = {
   ): Promise<{ data: unknown; error: WorkspaceRpcError | null }>;
 };
 
+export const canvasRoomsQueryKey = (brandProfileId: string) =>
+  ['canvas-rooms', brandProfileId] as const;
+
+/** Module-level so an unloaded brand's rooms keep one identity across renders. */
+const NO_ROOMS: CanvasRoom[] = [];
+
+/**
+ * The brand's canvas workspaces.
+ *
+ * Goes through React Query because the answer is per-BRAND and this hook has two callers on
+ * one screen: `StudioCanvas` mounts it for the room it should open, and the `CanvasRoomsTabs`
+ * it renders mounts it again for the tab strip. Held in local state that was four identical
+ * `canvas_rooms` SELECTs per canvas open — two instances, each fetching once on mount and
+ * again when its realtime channel subscribed. One shared key collapses them.
+ *
+ * Realtime rows are written into the SAME cache entry rather than into per-instance state,
+ * so both callers see one list. A row that arrives before the first read lands is dropped
+ * on purpose: the read in flight already includes it, and seeding the cache early would
+ * flip `isLoading` and paint a one-room list over an empty one.
+ */
 export function useCanvasRooms(brandProfileId: string) {
   const supabase = createSupabaseBrowserClient();
-  const [rooms, setRooms] = useState<CanvasRoom[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const queryKey = canvasRoomsQueryKey(brandProfileId);
 
-  const fetchRooms = useCallback(async () => {
-    if (!brandProfileId) return;
-    setIsLoading(true);
+  const query = useQuery({
+    queryKey,
+    // No AbortSignal: an unmount mid-flight would cancel a read the other caller is waiting
+    // on, and React Query would then have to redo it.
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .schema('brand_profiles' as any)
+        .from('canvas_rooms' as any)
+        .select('*')
+        .eq('brand_profile_id', brandProfileId)
+        .order('created_at', { ascending: true });
 
-    const { data, error } = await supabase
-      .schema('brand_profiles' as any)
-      .from('canvas_rooms' as any)
-      .select('*')
-      .eq('brand_profile_id', brandProfileId)
-      .order('created_at', { ascending: true });
+      if (error) {
+        console.error('[Canvas Rooms] Fetch failed', error);
+        throw new Error(error.message);
+      }
+      return ((data as CanvasRoom[]) ?? []) as CanvasRoom[];
+    },
+    enabled: Boolean(brandProfileId),
+    staleTime: 5 * 60_000,
+  });
 
-    if (error) {
-      console.error('[Canvas Rooms] Fetch failed', error);
-      toast.error('Failed to load workspaces');
-    } else {
-      setRooms((data as CanvasRoom[]) || []);
-    }
-    setIsLoading(false);
-  }, [brandProfileId, supabase]);
-
+  // Toasted here rather than inside the queryFn: the client retries a failed read once, and
+  // a toast in the queryFn would tell the user twice about one failure.
+  const failed = query.isError;
   useEffect(() => {
-    fetchRooms();
-  }, [fetchRooms]);
+    if (failed) toast.error('Failed to load workspaces');
+  }, [failed]);
+
+  const rooms = query.data ?? NO_ROOMS;
+  // No brand means no answer is coming, which is what this hook reported before React Query
+  // and what CanvasRoomsTabs renders nothing for.
+  const isLoading = !brandProfileId || query.isLoading;
+
+  // Keyed off `brandProfileId`, not the key array: `canvasRoomsQueryKey` builds a fresh array
+  // every render, and a changing dep here would tear down and rebuild the realtime
+  // subscription below on every single render.
+  const setRooms = useCallback(
+    (update: (current: CanvasRoom[]) => CanvasRoom[]) => {
+      queryClient.setQueryData<CanvasRoom[]>(canvasRoomsQueryKey(brandProfileId), (current) =>
+        current ? update(current) : current,
+      );
+    },
+    [queryClient, brandProfileId],
+  );
+
+  const fetchRooms = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: canvasRoomsQueryKey(brandProfileId) }),
+    [queryClient, brandProfileId],
+  );
 
   useEffect(() => {
     if (!brandProfileId) return;
@@ -109,7 +157,7 @@ export function useCanvasRooms(brandProfileId: string) {
         void fetchRooms();
       },
     });
-  }, [brandProfileId, fetchRooms]);
+  }, [brandProfileId, fetchRooms, setRooms]);
 
   const createRoom = async (name: string) => {
     const generalRooms = rooms.filter((room) => room.kind !== 'planner');

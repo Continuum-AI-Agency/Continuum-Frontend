@@ -116,6 +116,7 @@ export function VideoProductionWorkspaceDialog({
   const [project, setProject] = useState<EditorProjectV2 | null>(null);
   const [activeStage, setActiveStage] = useState<WorkspaceStage>('style');
   const [busy, setBusy] = useState<string | null>(null);
+  const [scriptText, setScriptText] = useState('');
   const [styleText, setStyleText] = useState('');
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const [redoStack, setRedoStack] = useState<RedoEntry[]>([]);
@@ -123,6 +124,7 @@ export function VideoProductionWorkspaceDialog({
   const refresh = useCallback(async () => {
     const next = await getVideoProject(projectId);
     setProject(next);
+    setScriptText(next.production.sourceScript ?? '');
     setStyleText(next.production.styleContract?.lockedText ?? '');
     setActiveStage((current) =>
       current === 'style' && next.revision === 0 ? stageFor(next) : current,
@@ -175,6 +177,7 @@ export function VideoProductionWorkspaceDialog({
       try {
         const next = await applyVideoProjectCommands(batch);
         setProject(next);
+        setScriptText(next.production.sourceScript ?? '');
         setStyleText(next.production.styleContract?.lockedText ?? '');
         return next;
       } finally {
@@ -229,6 +232,7 @@ export function VideoProductionWorkspaceDialog({
           idempotencyKey: `ui-restore:${project.projectId}:${project.revision}:${restoreRevision}:${crypto.randomUUID()}`,
         });
         setProject(next);
+        setScriptText(next.production.sourceScript ?? '');
         setStyleText(next.production.styleContract?.lockedText ?? '');
         return next;
       } finally {
@@ -507,6 +511,30 @@ export function VideoProductionWorkspaceDialog({
           {activeStage === 'style' ? (
             <div className="mx-auto max-w-4xl space-y-4">
               <div className="rounded-xl border border-border/60 bg-card p-5">
+                <h2 className="font-medium">Script</h2>
+                <Textarea
+                  className="mt-4"
+                  value={scriptText}
+                  onChange={(event) => setScriptText(event.target.value)}
+                  rows={8}
+                  placeholder="Paste or write the source script"
+                />
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    variant="outline"
+                    disabled={Boolean(busy)}
+                    onClick={() =>
+                      void commit({
+                        commandType: 'set_production_script',
+                        sourceScript: scriptText,
+                      })
+                    }
+                  >
+                    Save script
+                  </Button>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-card p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h2 className="font-medium">Style contract</h2>
@@ -529,6 +557,37 @@ export function VideoProductionWorkspaceDialog({
                     </span>
                   ) : null}
                 </div>
+                {project.production.references.map((reference) => (
+                  <label
+                    key={reference.id}
+                    className="mt-2 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <span>{reference.label ?? reference.id}</span>
+                    <select
+                      aria-label={`Role for ${reference.label ?? reference.id}`}
+                      className="h-8 rounded-md border bg-background px-2"
+                      value={reference.role}
+                      onChange={(event) =>
+                        void commit({
+                          commandType: 'set_production_references',
+                          references: project.production.references.map((item) =>
+                            item.id === reference.id
+                              ? { ...item, role: event.target.value as typeof item.role }
+                              : item,
+                          ),
+                        })
+                      }
+                    >
+                      {['style', 'character', 'location', 'product', 'score', 'ambience'].map(
+                        (role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </label>
+                ))}
                 <div className="mt-4 flex gap-2">
                   <Button
                     variant="outline"

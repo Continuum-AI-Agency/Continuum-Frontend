@@ -498,6 +498,8 @@ export function upsertTextOperation(
     color?: string;
     x?: number;
     y?: number;
+    animationIn?: 'none' | 'pop' | 'scaleIn' | 'floatIn';
+    animationOut?: 'none' | 'pop' | 'scaleIn' | 'floatIn';
   },
 ): EditorAssemblyOperation {
   const text = input.text.trim();
@@ -554,8 +556,10 @@ export function upsertTextOperation(
         unit: 'normalized',
       },
     },
-    animationIn: existing?.animationIn,
-    animationOut: existing?.animationOut,
+    animationIn:
+      input.animationIn === 'none' ? undefined : (input.animationIn ?? existing?.animationIn),
+    animationOut:
+      input.animationOut === 'none' ? undefined : (input.animationOut ?? existing?.animationOut),
     effects: existing?.effects ?? [],
     keyframes: existing?.keyframes ?? [],
   };

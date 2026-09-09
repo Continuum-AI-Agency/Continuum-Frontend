@@ -346,6 +346,7 @@ describe('action config compatibility', () => {
       instructions: 'Generate a creative from the workflow context.',
       maxOutputs: 1,
       pipelineId: null,
+      pipelineInputs: [],
     });
   });
 

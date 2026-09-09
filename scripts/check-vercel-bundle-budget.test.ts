@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { gzipSync } from 'node:zlib';
 import {
   checkBundleBudgets,
   isWithinBudget,
@@ -25,7 +26,11 @@ writeFileSync(
   path.join(distDirectory, 'diagnostics', 'route-bundle-stats.json'),
   JSON.stringify([
     { route: '/organic', firstLoadUncompressedJsBytes: 4000, firstLoadChunkPaths: [] },
-    { route: '/login', firstLoadUncompressedJsBytes: 1000, firstLoadChunkPaths: [] },
+    {
+      route: '/login',
+      firstLoadUncompressedJsBytes: 1000,
+      firstLoadChunkPaths: [path.join(distDirectory, 'static/chunks/main.js')],
+    },
   ]),
 );
 
@@ -65,6 +70,7 @@ describe('Vercel bundle budgets', () => {
       },
     });
     expect(result.actualBytes).toBe(1000);
+    expect(result.gzipBytes).toBe(gzipSync('x'.repeat(500)).length);
     expect(result.passed).toBe(true);
   });
 

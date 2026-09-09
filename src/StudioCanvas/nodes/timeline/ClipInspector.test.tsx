@@ -1,6 +1,5 @@
-// The unpreviewable-effects badge: the CSS preview cannot show chromaKey/tint/etc.,
-// and a preview that silently omits an effect is how an export surprises its author.
-// The badge is the inspector's honest note that those effects render only in the export.
+// Curated effects use the same vgpu stack in preview and export; the badge makes the
+// GPU path visible without exposing arbitrary shader source.
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render } from '@testing-library/react';
@@ -53,10 +52,10 @@ const stillItem = (): TimelineItem => ({
   kind: 'image',
 });
 
-describe('ClipInspector unpreviewable-effects badge', () => {
-  it('shows a singular badge for one unpreviewable effect', () => {
+describe('ClipInspector GPU shader badge', () => {
+  it('shows a singular badge for one shader effect', () => {
     const { container } = renderInspector(item({ tint: { color: '#ff0000', amount: 0.4 } }));
-    expect(container.textContent).toContain('1 effect renders but can’t be previewed');
+    expect(container.textContent).toContain('1 GPU shader effect active');
   });
 
   it('counts every unpreviewable effect on the clip', () => {
@@ -67,14 +66,14 @@ describe('ClipInspector unpreviewable-effects badge', () => {
         pixelate: { blockPx: 16 },
       }),
     );
-    expect(container.textContent).toContain('3 effects render but can’t be previewed');
+    expect(container.textContent).toContain('3 GPU shader effects active');
   });
 
   it('renders no badge when every effect previews truthfully', () => {
     const { container } = renderInspector(
       item({ adjustments: { brightness: 1.2 }, cornerRadiusFrac: 0.2 }),
     );
-    expect(container.textContent).not.toContain('previewed');
+    expect(container.textContent).not.toContain('GPU shader');
   });
 });
 

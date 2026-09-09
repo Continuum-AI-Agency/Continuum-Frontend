@@ -1,8 +1,7 @@
-// The knobs for whatever op the node is set to, drawn from `configFieldsFor` descriptors.
-// No per-op branch here either: a new op with a new config schema gets its controls for
-// free, and an op whose schema grows a key gets the extra control on the next render.
+// Scalar knobs are drawn from `configFieldsFor` descriptors. Structured configs that
+// cannot be represented by one primitive field route to a focused panel below.
 
-import type { ActionId } from '@continuum/contracts';
+import type { ActionId, ShaderEffectV1, ShaderStackV1 } from '@continuum/contracts';
 import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -19,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { SliderField } from '@/components/ui/slider-field';
 import { Switch } from '@/components/ui/switch';
+import { ShaderEffectControls } from '../../components/ShaderEffectControls';
 import { useNodeConfigPatch } from '../../hooks/useNodeConfigPatch';
 import {
   type ConfigField,
@@ -28,6 +28,7 @@ import {
   parseActionConfig,
 } from '../../utils/actions/actionConfig';
 import { isOverlayActionId } from '../../utils/actions/overlayOp';
+import type { ClipEffectSpec } from '../../utils/render/effectSpec';
 import { BurnInConfig } from './BurnInConfig';
 import { OverlayConfig } from './OverlayConfig';
 import { SubtitlesConfig } from './SubtitlesConfig';
@@ -65,6 +66,7 @@ function ConfigControl({
   controlId: string;
   onChange: (next: unknown) => void;
 }) {
+  if (field.kind === 'custom') return null;
   if (field.kind === 'boolean') {
     return (
       <Switch
@@ -235,6 +237,133 @@ function fieldsForMode(
   return fields.filter((field) => field.key === gate.discriminator || reads.includes(field.key));
 }
 
+const numberParameter = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const stringParameter = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value : undefined;
+
+/** Present the canonical flat stack through the same curated controls used by both editors. */
+function shaderControlsEffects(stack: ShaderStackV1): ClipEffectSpec {
+  const effects: ClipEffectSpec = {};
+  for (const effect of stack.effects) {
+    if (!effect.enabled) continue;
+    const amount = numberParameter(effect.parameters.amount);
+    switch (effect.effectId) {
+      case 'chroma_key': {
+        const color = stringParameter(effect.parameters.color);
+        const tolerance = numberParameter(effect.parameters.tolerance);
+        const softness = numberParameter(effect.parameters.softness);
+        if (color !== undefined && tolerance !== undefined && softness !== undefined) {
+          effects.chromaKey = { color, tolerance, softness };
+        }
+        break;
+      }
+      case 'tint': {
+        const color = stringParameter(effect.parameters.color);
+        if (color !== undefined && amount !== undefined) effects.tint = { color, amount };
+        break;
+      }
+      case 'vignette':
+        if (amount !== undefined) effects.vignette = { amount };
+        break;
+      case 'film_grain':
+        if (amount !== undefined) effects.filmGrain = { amount };
+        break;
+      case 'pixelate': {
+        const blockPx = numberParameter(effect.parameters.blockPx);
+        if (blockPx !== undefined) effects.pixelate = { blockPx };
+        break;
+      }
+      case 'chromatic_aberration':
+        if (amount !== undefined) effects.chromaticAberration = { amount };
+        break;
+      case 'vhs':
+        if (amount !== undefined) effects.vhs = { amount };
+        break;
+    }
+  }
+  return effects;
+}
+
+function writeShaderEffect(
+  stack: ShaderStackV1,
+  effectId: ShaderEffectV1['effectId'],
+  parameters: ShaderEffectV1['parameters'] | undefined,
+): ShaderStackV1 {
+  const effects = [...stack.effects];
+  const index = effects.findIndex((effect) => effect.effectId === effectId);
+  const existing = index >= 0 ? effects[index] : undefined;
+  if (!parameters) {
+    // Keep a disabled preset's parameters and animation so turning it back on is lossless.
+    if (existing) effects[index] = { ...existing, enabled: false };
+    return { version: 1, effects };
+  }
+  const next: ShaderEffectV1 = {
+    effectId,
+    enabled: true,
+    parameters,
+    // Parameter edits must not erase animation authored by the agent or another editor.
+    keyframes: existing?.keyframes ?? [],
+  };
+  if (existing) effects[index] = next;
+  else effects.push(next);
+  return { version: 1, effects };
+}
+
+function patchShaderStack(stack: ShaderStackV1, patch: Partial<ClipEffectSpec>): ShaderStackV1 {
+  let next = stack;
+  if ('chromaKey' in patch) next = writeShaderEffect(next, 'chroma_key', patch.chromaKey);
+  if ('tint' in patch) next = writeShaderEffect(next, 'tint', patch.tint);
+  if ('vignette' in patch) next = writeShaderEffect(next, 'vignette', patch.vignette);
+  if ('filmGrain' in patch) next = writeShaderEffect(next, 'film_grain', patch.filmGrain);
+  if ('pixelate' in patch) next = writeShaderEffect(next, 'pixelate', patch.pixelate);
+  if ('chromaticAberration' in patch) {
+    next = writeShaderEffect(next, 'chromatic_aberration', patch.chromaticAberration);
+  }
+  if ('vhs' in patch) next = writeShaderEffect(next, 'vhs', patch.vhs);
+  return next;
+}
+
+function ShaderActionConfig({
+  nodeId,
+  current,
+  onWrite,
+}: {
+  nodeId: string;
+  current: Record<string, unknown>;
+  onWrite: (key: string, value: unknown) => void;
+}) {
+  const stack = current.shaderStack as ShaderStackV1;
+  const mode = current.mode === 'bake' ? 'bake' : 'deferred';
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <Label htmlFor={`action-config-${nodeId}-mode`} className="text-xs">
+          Output
+        </Label>
+        <Select value={mode} onValueChange={(next: string) => onWrite('mode', next)}>
+          <SelectTrigger id={`action-config-${nodeId}-mode`} size="sm" className="h-7 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="deferred">Keep source editable</SelectItem>
+            <SelectItem value="bake">Bake into pixels</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <p className="text-2xs text-muted-foreground">
+        Deferred keeps the source reference and effect settings. Bake creates modified pixels now.
+      </p>
+      <ShaderEffectControls
+        idPrefix={`action-${nodeId}`}
+        effects={shaderControlsEffects(stack)}
+        onChange={(patch) => onWrite('shaderStack', patchShaderStack(stack, patch))}
+      />
+    </div>
+  );
+}
+
 /**
  * The op's knobs, with no surface of their own.
  *
@@ -274,6 +403,9 @@ export function ActionConfigFields({
   // four field kinds above — the attempt is what put design-section enums in the schema.
   if (actionId === 'image.text') {
     return <BurnInConfig nodeId={nodeId} config={config} />;
+  }
+  if (actionId === 'image.shader' || actionId === 'video.shader') {
+    return <ShaderActionConfig nodeId={nodeId} current={current} onWrite={write} />;
   }
   return (
     <div className="flex flex-col gap-3">

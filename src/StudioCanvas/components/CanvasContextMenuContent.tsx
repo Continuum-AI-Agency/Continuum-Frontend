@@ -3,8 +3,8 @@ import {
   FolderOpen,
   ScanLine,
   ShieldCheck,
-  Sparkles,
   Trash2,
+  Upload,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
@@ -39,7 +39,7 @@ export function CanvasContextMenuContent({
   onApplyTechnique,
   openLoadWorkflow,
   openInstagram,
-  openSaveStarter,
+  openSave,
   enforceBrandBookOnSelection,
   clearCanvas,
   hasSelection,
@@ -57,7 +57,8 @@ export function CanvasContextMenuContent({
   onApplyTechnique?: ApplyTechniqueHandler;
   openLoadWorkflow: () => void;
   openInstagram: () => void;
-  openSaveStarter: () => void;
+  /** Opens the one save panel. Selection-scoped when something is selected. */
+  openSave: () => void;
   enforceBrandBookOnSelection: () => void;
   clearCanvas: () => void;
   hasSelection: boolean;
@@ -89,9 +90,11 @@ export function CanvasContextMenuContent({
         Import from Instagram
       </ContextMenuItem>
 
-      <ContextMenuItem inset disabled={!hasSelection} onSelect={openSaveStarter}>
-        <Sparkles className="mr-2 h-4 w-4" />
-        Save selection as starter
+      {/* Never disabled: with nothing selected this saves the whole canvas, which is the
+          same act the header's Save button performs. */}
+      <ContextMenuItem inset onSelect={openSave}>
+        <Upload className="mr-2 h-4 w-4" />
+        {hasSelection ? 'Save selection' : 'Save'}
       </ContextMenuItem>
 
       <ContextMenuItem inset disabled={!hasSelection} onSelect={enforceBrandBookOnSelection}>

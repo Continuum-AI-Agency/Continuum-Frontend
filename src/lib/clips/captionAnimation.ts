@@ -161,6 +161,43 @@ export function captionWordTransform(
   };
 }
 
+/** Resolve the editor's durable preset id without letting arbitrary strings reach the renderer. */
+export function captionAnimationFromEditorId(id: string | undefined): CaptionAnimation | undefined {
+  const kind = id?.replace(/[-_\s]/g, '').toLowerCase();
+  if (!kind || kind === 'none') return undefined;
+  if (kind === 'pop') return { kind: 'pop', anchor: 'cue', reveal: 'cue' };
+  if (kind === 'scalein') return { kind: 'scaleIn', anchor: 'cue', reveal: 'cue' };
+  if (kind === 'floatin') return { kind: 'floatIn', anchor: 'cue', reveal: 'cue' };
+  return undefined;
+}
+
+/** Entry plus the same curve played backwards at the end of the cue. */
+export function captionMotionTransform(input: {
+  entry?: CaptionAnimation;
+  exit?: CaptionAnimation;
+  cueStartSec: number;
+  cueEndSec: number;
+  wordStartSec: number;
+  wordEndSec: number;
+  outputTimeSec: number;
+  fontPx: number;
+}): CaptionWordTransform {
+  const entry = captionWordTransform(
+    input.entry,
+    input.outputTimeSec - captionAnchorSec(input.entry, input.cueStartSec, input.wordStartSec),
+    input.fontPx,
+  );
+  const exitEndSec = input.exit?.anchor === 'cue' ? input.cueEndSec : input.wordEndSec;
+  const exiting = captionWordTransform(input.exit, exitEndSec - input.outputTimeSec, input.fontPx);
+  return {
+    scale: entry.scale * exiting.scale,
+    dx: entry.dx + exiting.dx,
+    dy: entry.dy + exiting.dy,
+    alpha: entry.alpha * exiting.alpha,
+    visible: entry.visible && exiting.visible,
+  };
+}
+
 /** The clock a word's age is measured against, given the animation's anchor. */
 export function captionAnchorSec(
   anim: CaptionAnimation | undefined,

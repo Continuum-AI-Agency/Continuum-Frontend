@@ -1,4 +1,4 @@
-import { ACTION_DEFS, type ActionId } from '@continuum/contracts';
+import { ACTION_DEFS, type ActionId, type ShaderStackV1 } from '@continuum/contracts';
 import type { TimelineWorkerItem } from '../../workers/spliceWorkerProtocol';
 import {
   blurEffects,
@@ -18,7 +18,7 @@ import {
 } from '../actions/videoOps';
 import type { ClipEffectSpec } from '../render/effectSpec';
 import { loadMediabunny } from './appendRange';
-import { composeTimeline } from './composeTimeline';
+import { type ComposeTimelineOptions, composeTimeline } from './composeTimeline';
 import { renderReverse } from './reverseRange';
 import type { SpliceProgress, SpliceResult } from './spliceClips';
 
@@ -324,6 +324,56 @@ const videoStitch: ActionEngine = async (args) => {
   return toResult(result);
 };
 
+type AudioBedConfig = {
+  startSec: number;
+  trimStartSec: number | null;
+  trimEndSec: number | null;
+  volume: number;
+  fadeInSec: number;
+  fadeOutSec: number;
+  segments: Array<{
+    startSec: number;
+    trimStartSec: number | null;
+    trimEndSec: number | null;
+    volume: number;
+    fadeInSec: number;
+    fadeOutSec: number;
+  }> | null;
+};
+
+export const audioBedPlan = (
+  video: Blob,
+  audio: Blob,
+  config: AudioBedConfig,
+): Pick<ComposeTimelineOptions, 'items' | 'audioTracks'> => ({
+  items: [{ itemId: 'action-audio-bed-video', kind: 'video', blob: video }],
+  audioTracks: (config.segments ?? [config]).map((segment, index) => ({
+    itemId: `action-audio-bed-track-${index + 1}`,
+    blob: audio,
+    startSec: segment.startSec,
+    ...(segment.trimStartSec === null ? {} : { trimStartSec: segment.trimStartSec }),
+    ...(segment.trimEndSec === null ? {} : { trimEndSec: segment.trimEndSec }),
+    volume: segment.volume,
+    fadeInSec: segment.fadeInSec,
+    fadeOutSec: segment.fadeOutSec,
+  })),
+});
+
+const videoAudioBed: ActionEngine = async (args) =>
+  toResult(
+    await composeTimeline({
+      ...audioBedPlan(
+        requireInput(args, 'in'),
+        requireInput(args, 'audio-in'),
+        args.config as AudioBedConfig,
+      ),
+      videoBitrate: args.videoBitrate,
+      audioBitrate: args.audioBitrate,
+      signal: args.signal,
+      onProgress: args.onProgress,
+    }),
+  );
+
 const videoReverse: ActionEngine = async (args) =>
   toResult(
     await renderReverse({
@@ -400,6 +450,9 @@ export async function renderSplitParts(args: ActionEngineArgs): Promise<ActionEn
  * ops and belong in `runAction`'s `SYNC_OPS`, not here.
  */
 export const ACTION_ENGINES: Partial<Record<ActionId, ActionEngine>> = {
+  'video.shader': singleClipEngine('action-shader', (config) => ({
+    shaderStack: config.shaderStack as ShaderStackV1,
+  })),
   'video.grade': singleClipEngine('action-grade', gradeEffects),
   'video.filter': singleClipEngine('action-filter', filterEffects),
   'video.effect': singleClipEngine('action-effect', effectPresetEffects),
@@ -418,6 +471,7 @@ export const ACTION_ENGINES: Partial<Record<ActionId, ActionEngine>> = {
   'video.pad': videoPad,
   'video.greenscreen': videoGreenscreen,
   'video.stitch': videoStitch,
+  'video.audioBed': videoAudioBed,
   'video.reverse': videoReverse,
   'video.boomerang': videoBoomerang,
   // The worker's `outputsCollection` branch calls `renderSplitParts` directly and never

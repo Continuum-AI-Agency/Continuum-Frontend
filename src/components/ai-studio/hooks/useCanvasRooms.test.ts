@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { useCanvasRooms } from './useCanvasRooms';
 
 const mockRooms = [
@@ -44,8 +46,16 @@ mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => mockSupabase,
 }));
 
+// One client per test: the rooms live in the query cache now, so a shared client would
+// serve the previous test's rooms to the next one.
+let queryClient: QueryClient;
+const wrapper = ({ children }: { children: ReactNode }) =>
+  createElement(QueryClientProvider, { client: queryClient }, children);
+const render = () => renderHook(() => useCanvasRooms('brand-1'), { wrapper });
+
 describe('useCanvasRooms', () => {
   beforeEach(() => {
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     mockSupabase.from.mockClear();
     mockSupabase.select.mockClear();
     mockSupabase.rpc.mockClear();
@@ -64,16 +74,14 @@ describe('useCanvasRooms', () => {
   });
 
   it('should fetch rooms on mount', async () => {
-    const { result } = renderHook(() => useCanvasRooms('brand-1'));
+    const { result } = render();
 
-    await act(async () => {});
-
-    expect(result.current.rooms).toEqual(mockRooms);
+    await waitFor(() => expect(result.current.rooms).toEqual(mockRooms));
     expect(mockSupabase.from).toHaveBeenCalledWith('canvas_rooms' as any);
   });
 
   it('adds an MCP-created workspace from Realtime', async () => {
-    const { result } = renderHook(() => useCanvasRooms('brand-1'));
+    const { result } = render();
     const room = {
       id: '00000000-0000-4000-8000-000000000002',
       brand_profile_id: 'brand-1',
@@ -83,20 +91,47 @@ describe('useCanvasRooms', () => {
       kind: 'general',
     };
 
-    await act(async () => {});
+    await waitFor(() => expect(result.current.rooms).toEqual(mockRooms));
+    // The row lands in the query cache, which notifies its observers asynchronously — so
+    // this waits for the re-render rather than reading the render that was already on screen.
     act(() => realtimeHandlers.get('INSERT')?.({ new: room }));
 
-    expect(result.current.rooms).toContainEqual(room);
+    await waitFor(() => expect(result.current.rooms).toContainEqual(room));
   });
 
   it('uses a distinct Realtime channel for each hook instance', async () => {
-    const first = renderHook(() => useCanvasRooms('brand-1'));
-    const second = renderHook(() => useCanvasRooms('brand-1'));
+    const first = render();
+    const second = render();
 
     await act(async () => {});
 
     const topics = mockSupabase.channel.mock.calls.map(([topic]: [string]) => topic);
     expect(new Set(topics).size).toBe(topics.length);
+    first.unmount();
+    second.unmount();
+  });
+
+  it('reads canvas_rooms once per mount, not once per effect', async () => {
+    // Local state made this hook read twice on its own: once from the mount effect and
+    // again when its realtime channel reported SUBSCRIBED. Both now go through one query
+    // key, so the second lands on a read already in flight.
+    const solo = render();
+    await waitFor(() => expect(solo.result.current.rooms).toEqual(mockRooms));
+
+    expect(mockSupabase.select).toHaveBeenCalledTimes(1);
+    solo.unmount();
+  });
+
+  it('serves both callers on one screen without doubling the reads', async () => {
+    // StudioCanvas mounts this hook and renders CanvasRoomsTabs, which mounts it again —
+    // four identical SELECTs per canvas open before the shared key. Both instances now ride
+    // one read.
+    const first = render();
+    const second = render();
+    await waitFor(() => expect(first.result.current.rooms).toEqual(mockRooms));
+
+    expect(mockSupabase.select).toHaveBeenCalledTimes(1);
+    expect(second.result.current.rooms).toEqual(mockRooms);
     first.unmount();
     second.unmount();
   });
@@ -109,7 +144,7 @@ describe('useCanvasRooms', () => {
     ];
     mockSupabase.then = (resolve: any) => resolve({ data: fullRooms, error: null });
 
-    const { result } = renderHook(() => useCanvasRooms('brand-1'));
+    const { result } = render();
 
     await act(async () => {
       await Promise.resolve();
@@ -131,7 +166,7 @@ describe('useCanvasRooms', () => {
     };
     mockSupabase.rpc.mockImplementation(() => Promise.resolve({ data: rpcRoom, error: null }));
 
-    const { result } = renderHook(() => useCanvasRooms('brand-1'));
+    const { result } = render();
 
     await act(async () => {
       const room = await result.current.createRoom('New Room');
@@ -152,7 +187,7 @@ describe('useCanvasRooms', () => {
 
   it('should not allow deleting the last room', async () => {
     mockSupabase.then = (resolve: any) => resolve({ data: mockRooms, error: null });
-    const { result } = renderHook(() => useCanvasRooms('brand-1'));
+    const { result } = render();
 
     await act(async () => {
       const success = await result.current.deleteRoom('room-1');

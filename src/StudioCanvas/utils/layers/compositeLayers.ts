@@ -1,4 +1,5 @@
 import type { LayerEditorLayer } from '../../types';
+import { hasShaderStack, shaderStackFromClipEffects } from '../render/shaderStack';
 import type { Frame } from './frameModel';
 import { applyLayerTransform } from './layerTransform';
 
@@ -114,18 +115,37 @@ export async function compositeLayers(input: CompositeLayersInput): Promise<Comp
     ctx.fillRect(0, 0, width, height);
   }
 
-  const { missing } = drawLayers(ctx, input.layers, input.images);
+  const prepared = new Map(input.images);
+  const rendered: ImageBitmap[] = [];
+  try {
+    for (const layer of input.layers) {
+      const source = prepared.get(layer.id);
+      if (!source || !hasShaderStack(layer.effects)) continue;
+      const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
+      const bitmap = await renderShaderStackFrame({
+        source,
+        width: layer.sourceWidth,
+        height: layer.sourceHeight,
+        stack: shaderStackFromClipEffects(layer.effects),
+      });
+      prepared.set(layer.id, bitmap);
+      rendered.push(bitmap);
+    }
 
-  const blob = await canvas.convertToBlob({ type: 'image/png' });
-  const base64 = await toBase64(blob);
-  return {
-    base64,
-    mimeType: 'image/png',
-    dataUrl: `data:image/png;base64,${base64}`,
-    width,
-    height,
-    missing,
-  };
+    const { missing } = drawLayers(ctx, input.layers, prepared);
+    const blob = await canvas.convertToBlob({ type: 'image/png' });
+    const base64 = await toBase64(blob);
+    return {
+      base64,
+      mimeType: 'image/png',
+      dataUrl: `data:image/png;base64,${base64}`,
+      width,
+      height,
+      missing,
+    };
+  } finally {
+    for (const bitmap of rendered) bitmap.close();
+  }
 }
 
 /**

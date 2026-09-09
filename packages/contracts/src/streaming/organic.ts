@@ -606,6 +606,10 @@ export const angleEvidenceSourceEnum = z.enum([
   // the organic analytics pipeline, so an angle can be anchored to who the brand
   // actually reaches.
   'audienceDemographics',
+  // The brand's OWN published posts — the ones this product planned and shipped —
+  // joined to what they actually did. Every other source here measures the account
+  // or the market; this one measures US.
+  'publishedPostAttribution',
 ]);
 export type AngleEvidenceSource = z.infer<typeof angleEvidenceSourceEnum>;
 
@@ -613,7 +617,18 @@ export const angleEvidenceMetricUnitEnum = z.enum(['pct', 'count', 'rate', 'rati
 export type AngleEvidenceMetricUnit = z.infer<typeof angleEvidenceMetricUnitEnum>;
 
 export const angleEvidenceItemSchema = z.object({
-  kind: z.enum(['trend_lift', 'hook_rate', 'top_post', 'trend', 'competitor', 'demographic']),
+  kind: z.enum([
+    'trend_lift',
+    'hook_rate',
+    'top_post',
+    'trend',
+    'competitor',
+    'demographic',
+    // A post WE published, with the angle we chose, and how it did against the
+    // brand's own median. The only evidence kind that closes the loop on our own
+    // recommendations rather than reporting the account at large.
+    'own_post_result',
+  ]),
   refId: z.string().nullable().describe('trendId / mediaId / competitor handle'),
   label: z.string().describe('Human-readable, e.g. "Trend: cold brew hacks"'),
   metric: z

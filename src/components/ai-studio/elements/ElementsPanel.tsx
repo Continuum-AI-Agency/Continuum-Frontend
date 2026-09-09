@@ -36,7 +36,7 @@ import {
   useElements,
   useSignedAssetUrls,
 } from '@/lib/ai-studio/elements';
-import { buildElementDragPayload, ELEMENT_DRAG_TYPE } from '@/lib/ai-studio/referenceDrop';
+import { ElementCard } from './ElementCard';
 import { ElementCreateForm, type ElementMemberUploader } from './ElementCreateForm';
 import { ElementDetail } from './ElementDetail';
 
@@ -52,6 +52,7 @@ export interface ElementsPanelProps {
   /** 'create' opens the panel straight on the creation form — the canvas node's
    *  onboarding path. Default keeps the toolbar behavior (resume wherever you were). */
   initialView?: 'list' | 'create';
+  initialElementId?: string;
   /** Injected in tests; the real seam is the library upload edge function. */
   uploadAsset?: ElementMemberUploader;
 }
@@ -63,13 +64,15 @@ export function ElementsPanel({
   onOpenChange,
   brandId,
   initialView,
+  initialElementId,
   uploadAsset,
 }: ElementsPanelProps) {
   const [view, setView] = React.useState<PanelView>({ kind: 'list' });
 
   React.useEffect(() => {
-    if (open && initialView === 'create') setView({ kind: 'create' });
-  }, [open, initialView]);
+    if (open && initialElementId) setView({ kind: 'detail', elementId: initialElementId });
+    else if (open && initialView === 'create') setView({ kind: 'create' });
+  }, [open, initialView, initialElementId]);
   const { elements, isLoading, isError, error } = useElements(brandId);
   const mutations = useElementMutations(brandId);
 
@@ -83,7 +86,7 @@ export function ElementsPanel({
   }, [view, isLoading, selected]);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={false} disablePointerDismissal>
       {/* z-[110] beats the canvas header's `relative z-[100]`: the header's parent
             establishes no stacking context, so a body-portalled z-50 sheet would paint
             UNDER the toolbar it was opened from. */}
@@ -254,54 +257,5 @@ function ElementList({
         ))
       )}
     </div>
-  );
-}
-
-function ElementCard({
-  element,
-  previewUrl,
-  onSelect,
-}: {
-  element: ElementRecord;
-  previewUrl?: string;
-  onSelect: (elementId: string) => void;
-}) {
-  return (
-    <button
-      type="button"
-      draggable
-      data-testid={`element-card-${element.id}`}
-      onClick={() => onSelect(element.id)}
-      onDragStart={(event) => {
-        event.dataTransfer.effectAllowed = 'copy';
-        event.dataTransfer.setData(
-          ELEMENT_DRAG_TYPE,
-          buildElementDragPayload({
-            elementId: element.id,
-            name: element.name,
-            category: element.category,
-            previewUrl,
-          }),
-        );
-      }}
-      className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-background text-left transition-shadow hover:shadow-md"
-    >
-      <div className="flex aspect-video w-full items-center justify-center bg-muted/30">
-        {previewUrl ? (
-          // biome-ignore lint/performance/noImgElement: signed storage URL, not a build-time asset.
-          <img src={previewUrl} alt={element.name} className="h-full w-full object-cover" />
-        ) : (
-          <Layers className="h-5 w-5 text-muted-foreground" />
-        )}
-      </div>
-      <div className="flex items-center justify-between gap-1 px-2 py-1.5">
-        <span className="truncate text-xs">{element.name}</span>
-        {element.defaultReferenceAssetId ? null : (
-          <Badge variant="outline" className="h-4 shrink-0 px-1 text-3xs">
-            Needs sheet
-          </Badge>
-        )}
-      </div>
-    </button>
   );
 }

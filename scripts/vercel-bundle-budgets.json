@@ -4,19 +4,43 @@
     {
       "name": "shared application runtime",
       "source": "rootMainFiles",
-      "baselineBytes": 656148
+      "baselineBytes": 656994
     },
     {
       "name": "login route",
       "source": "routeFirstLoad",
       "route": "/login",
-      "baselineBytes": 1265075
+      "baselineBytes": 1265493
     },
     {
       "name": "authenticated dashboard route",
       "source": "routeFirstLoad",
       "route": "/organic",
-      "baselineBytes": 4766255
+      "baselineBytes": 3870144
+    },
+    {
+      "name": "settings route",
+      "source": "routeFirstLoad",
+      "route": "/settings",
+      "baselineBytes": 5375929
+    },
+    {
+      "name": "library route",
+      "source": "routeFirstLoad",
+      "route": "/library",
+      "baselineBytes": 3877156
+    },
+    {
+      "name": "scale route",
+      "source": "routeFirstLoad",
+      "route": "/scale",
+      "baselineBytes": 3424371
+    },
+    {
+      "name": "AI Studio route",
+      "source": "routeFirstLoad",
+      "route": "/ai-studio",
+      "baselineBytes": 3363408
     }
   ]
 }

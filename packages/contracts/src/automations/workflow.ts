@@ -919,6 +919,24 @@ export const AUTOMATION_AI_STUDIO_GENERATE_DEFAULTS = {
   maxOutputs: 1,
 } as const satisfies { generator: AutomationAiStudioGenerator; maxOutputs: number };
 
+export const automationPipelineInputSchema = z
+  .object({
+    portId: z.string().min(1).max(200),
+    text: z.string().max(20_000).optional(),
+    asset: z
+      .object({ assetId: z.string().uuid(), versionId: z.string().uuid().optional() })
+      .strict()
+      .optional(),
+    config: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict()
+  .refine(
+    ({ text, asset, config }) =>
+      [text !== undefined, asset !== undefined, config !== undefined].filter(Boolean).length === 1,
+    { message: 'exactly one of text, asset, or config is required' },
+  );
+export type AutomationPipelineInput = z.infer<typeof automationPipelineInputSchema>;
+
 const studioActionNodeSchema = z
   .object({
     ...nodeBaseShape,
@@ -945,6 +963,8 @@ const studioActionNodeSchema = z
          * automation has no asset to feed it.
          */
         pipelineId: z.string().uuid().nullable().default(null),
+        /** Exact published port bindings; omitted text ports still receive `instructions`. */
+        pipelineInputs: z.array(automationPipelineInputSchema).max(50).default([]),
       })
       .strict(),
   })
@@ -958,6 +978,7 @@ export type AutomationAiStudioGenerateRequest = {
   instructions: string;
   maxOutputs: number;
   pipelineId: string | null;
+  pipelineInputs: AutomationPipelineInput[];
 };
 
 export const resolveAutomationAiStudioGenerateConfig = (
@@ -971,6 +992,7 @@ export const resolveAutomationAiStudioGenerateConfig = (
   // that reached a caller without a Zod parse must not switch execution paths on an
   // `undefined` that reads as "not null".
   pipelineId: config.pipelineId ?? null,
+  pipelineInputs: config.pipelineInputs ?? [],
 });
 
 /**

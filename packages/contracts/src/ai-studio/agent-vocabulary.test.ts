@@ -80,6 +80,15 @@ describe('action op catalog', () => {
     }
   });
 
+  it('publishes the curated shader vocabulary and forbids shader source', () => {
+    expect(rowFor('image.shader')).toContain('mode shaderStack');
+    expect(rowFor('video.shader')).toContain('mode shaderStack');
+    expect(block).toContain('chroma_key, tint, vignette, film_grain');
+    expect(block).toContain('Never write WGSL');
+    expect(block).toContain('mode "deferred"');
+    expect(block).toContain('or "bake"');
+  });
+
   it('carries the multi-input ops that a single-clip assumption would break', () => {
     expect(rowFor('video.stitch')).toContain('in(20)');
     expect(rowFor('text.concat')).toContain('in(10)');
@@ -99,7 +108,11 @@ describe('action op catalog', () => {
 
   it('groups by family then by the registry group order', () => {
     const headings = lines.filter((line) => / · /.test(line) && !line.startsWith('  '));
-    expect(headings.slice(0, 3)).toEqual(['image · Colour', 'image · Transform', 'image · Overlay']);
+    expect(headings.slice(0, 3)).toEqual([
+      'image · Colour',
+      'image · Transform',
+      'image · Overlay',
+    ]);
     for (const id of ACTION_IDS) {
       const family = ACTION_DEFS[id].family;
       const group = ACTION_DEFS[id].group;

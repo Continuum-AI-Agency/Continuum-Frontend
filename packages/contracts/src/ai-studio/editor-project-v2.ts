@@ -707,6 +707,7 @@ export type EditorShot = z.infer<typeof editorShotSchema>;
 
 export const editorProductionSchema = z
   .object({
+    sourceScript: z.string().max(50_000).optional(),
     workflowStage: editorProductionStageSchema.default('assembly'),
     references: z.array(editorProductionReferenceSchema).max(50).default([]),
     styleContract: editorStyleContractSchema.nullable().default(null),
@@ -936,6 +937,13 @@ export const editorCommandSchema = z.discriminatedUnion('commandType', [
       ...editorCommandMetadataShape,
       commandType: z.literal('set_production_references'),
       references: z.array(editorProductionReferenceSchema).max(50),
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('set_production_script'),
+      sourceScript: z.string().max(50_000),
     })
     .strict(),
   z

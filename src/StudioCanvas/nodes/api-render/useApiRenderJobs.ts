@@ -4,8 +4,24 @@ import type { ApiRenderJob } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRendersApi } from './apiRendersApi';
 
+/**
+ * Whether this job still has something coming.
+ *
+ * The render itself is the obvious half. The second clause is the automatic check: the placement
+ * verdict frozen at preflight said this frame needed a judge, the judge runs server-side AFTER
+ * the job is marked finished, and polling that stopped at `finished` would leave the card
+ * reading "Checking the frame…" until somebody pressed refresh — which is precisely the human
+ * interaction the automatic check exists to remove.
+ *
+ * Bounded on both sides: it only holds for jobs whose own `fit.escalate` is true, and it ends
+ * the moment a verdict lands, whatever that verdict says. A frame that measured cleanly is never
+ * judged and never polls past `finished`.
+ */
 const isInFlight = (job: ApiRenderJob) =>
-  job.status === 'submitting' || job.status === 'queued' || job.status === 'rendering';
+  job.status === 'submitting' ||
+  job.status === 'queued' ||
+  job.status === 'rendering' ||
+  (job.status === 'finished' && job.fit?.escalate === true && job.judge === null);
 
 /**
  * The node's view of its renders.
@@ -90,3 +106,6 @@ export function useApiRenderJobs(args: {
 
   return { jobs, setJobs, error, setError, refreshJobs, refreshOne, mergeJob };
 }
+
+/** Test seam: the polling predicate is the whole cost/latency rule, so it is asserted directly. */
+export const __test__ = { isInFlight };

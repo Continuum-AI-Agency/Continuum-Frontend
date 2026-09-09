@@ -19,6 +19,7 @@ import type {
   ElementUseIntent,
   ImageGeneratorModel,
   ImageSize,
+  ShaderStackV1,
   StudioEmittedModality,
 } from '@continuum/contracts';
 import type {
@@ -398,6 +399,8 @@ export interface TimelineInputSource {
   sourceAssetId?: string;
   sourceVersionId?: string;
   previewUrl?: string;
+  /** Deferred effects carried by a connected shader action's source media. */
+  shaderStack?: ShaderStackV1;
   // Known source duration (seconds), when the host already has it. Absent on the
   // canvas, where the editor probes the preview URL for it instead.
   durationSec?: number;
@@ -408,8 +411,9 @@ export interface TimelineEditorNodeData extends BaseNodeData {
   videoProjectId?: string;
   videoProductionSummary?: EditorProductionSummary;
   productionSeed?: {
-    recipe: 'ugc_talking_head';
+    recipe: 'ugc_talking_head' | 'storyboard';
     objective: string;
+    sourceScript?: string;
     aspectRatio: '9:16' | '16:9' | '1:1';
     references: Array<{
       nodeId: string;
@@ -425,6 +429,7 @@ export interface TimelineEditorNodeData extends BaseNodeData {
       cameraMove: string;
       inSceneEvent: string;
       continuity?: string;
+      referenceIds?: string[];
       targetDurationSec: 4 | 6 | 8;
     }>;
   };
@@ -700,6 +705,8 @@ export interface ActionNodeData extends BaseNodeData {
   generatedImageUrl?: string;
   generatedVideo?: string | Blob;
   generatedVideoUrl?: string;
+  /** Persisted when a shader action defers baking so manual editors can consume it. */
+  shaderStack?: ShaderStackV1;
   /** A text op's output. Same field a `string` node uses, so consumers need no new case. */
   value?: string;
   /** How many items the last `collection` output carried. */
@@ -815,6 +822,8 @@ export interface LayerEditorLayer {
   opacity: number;
   /** The existing seven-value union. Do NOT widen to AE's ~38 — see aep-interop §4.4. */
   blendMode: BlendMode;
+  /** Curated per-layer effects, rendered by the shared vgpu preview/export path. */
+  effects?: ClipEffectSpec;
   visible: boolean;
   locked: boolean;
 }

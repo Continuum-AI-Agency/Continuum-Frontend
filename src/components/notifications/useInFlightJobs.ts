@@ -19,6 +19,11 @@ import { useGenerationJobsRealtime } from '@/components/organic/hooks/useGenerat
 import { useToast } from '@/components/ui/ToastProvider';
 import { type ReportJob, useReportJobsRealtime } from '@/hooks/useReportJobsRealtime';
 import { http } from '@/lib/api/http';
+import {
+  retryableStarterSlots,
+  starterStateLine,
+  useOnboardingStarter,
+} from '@/lib/onboarding/starterKit';
 import { cancelOrganicJobOptimistically } from '@/lib/organic/agent-cancellation';
 import { retryOrganicJobOptimistically } from '@/lib/organic/agent-retry';
 import {
@@ -27,7 +32,7 @@ import {
   useGenerationSummaries,
 } from '@/lib/organic/generationSummaries';
 
-export type InFlightSource = 'organic' | 'jaina';
+export type InFlightSource = 'organic' | 'jaina' | 'onboarding';
 
 export type InFlightJob = {
   /** Unique across sources — a report job id and a generation job id share no namespace. */
@@ -167,13 +172,42 @@ export function useInFlightJobs(brandId: string | null): UseInFlightJobsResult {
   useGenerationJobsRealtime(brandId);
   const { summaries, windowStats } = useGenerationSummaries(brandId);
   const { jobs: reportJobs } = useReportJobsRealtime(brandId ?? '');
+  const starter = useOnboardingStarter(brandId);
+  const starterJobs = useMemo<InFlightJob[]>(() => {
+    const run = starter.run;
+    if (!run) return [];
+    const active = run.status === 'running' || run.status === 'queued';
+    return [
+      {
+        key: `onboarding:${run.id}`,
+        source: 'onboarding',
+        jobId: run.id,
+        title: 'Your brand starter kit',
+        badge: 'Onboarding',
+        meta: null,
+        stateLine: starterStateLine(run),
+        tone: active ? 'active' : run.status === 'partial' ? 'error' : 'ready',
+        active,
+        diagnostic: null,
+        error:
+          run.status === 'partial'
+            ? 'Some items need attention. Your saved Elements are ready to use.'
+            : null,
+        href: '/dashboard/starter-kit',
+        canCancel: false,
+        canRetry: !active && retryableStarterSlots(run).length > 0,
+        canDownload: false,
+        sortAt: timestamp(run.updatedAt),
+      },
+    ];
+  }, [starter.run]);
 
   const jobs = useMemo(
     () =>
-      [...summaries.map(fromGeneration), ...reportJobs.map(fromReportJob)].sort(
+      [...summaries.map(fromGeneration), ...reportJobs.map(fromReportJob), ...starterJobs].sort(
         (a, b) => rank(a) - rank(b) || b.sortAt - a.sortAt,
       ),
-    [summaries, reportJobs],
+    [summaries, reportJobs, starterJobs],
   );
 
   const runningCount = useMemo(() => jobs.filter((job) => job.active).length, [jobs]);
@@ -225,6 +259,12 @@ export function useInFlightJobs(brandId: string | null): UseInFlightJobsResult {
 
   const retry = useCallback(
     (job: InFlightJob) => {
+      if (job.source === 'onboarding' && starter.run) {
+        void starter
+          .retry(retryableStarterSlots(starter.run))
+          .catch(() => show({ title: 'Could not retry your starter kit', variant: 'error' }));
+        return;
+      }
       if (!brandId || job.source !== 'organic') return;
       let revert: () => void = () => {};
       void retryOrganicJobOptimistically({
@@ -241,7 +281,7 @@ export function useInFlightJobs(brandId: string | null): UseInFlightJobsResult {
           }),
       }).finally(settle);
     },
-    [brandId, patchGeneration, settle, show],
+    [brandId, patchGeneration, settle, show, starter.run, starter.retry],
   );
 
   const download = useCallback(

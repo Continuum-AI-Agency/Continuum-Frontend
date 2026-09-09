@@ -10,6 +10,7 @@ import {
   supportsImageSize,
 } from './image-size';
 import { STUDIO_NODE_REGISTRY } from './node-registry';
+import { SHADER_PRESET_IDS } from './shader-stack';
 import { workflowEditOpSchema } from './workflow-builder';
 import {
   CLIP_TRANSITION_TYPES,
@@ -190,6 +191,16 @@ function describeActionOps(): string {
       for (const id of ids) lines.push(describeActionOp(id));
     }
   }
+  lines.push(
+    '',
+    'SHADER STACK — image.shader and video.shader use config.mode "deferred" to preserve the',
+    'source media reference plus stack, or "bake" to materialize modified pixels. shaderStack',
+    'is { version: 1, effects: [{ effectId, enabled, parameters, keyframes }] }. Never write WGSL.',
+    `Legal effectId values: ${SHADER_PRESET_IDS.join(', ')}.`,
+    'Parameters: chroma_key=color tolerance softness; tint=color amount; pixelate=blockPx;',
+    'vignette, film_grain, chromatic_aberration and vhs=amount. Keyframes animate numeric',
+    'parameters with { id, property: "effect.parameter", parameterName, timeSec, value, interpolation }.',
+  );
   return lines.join('\n');
 }
 

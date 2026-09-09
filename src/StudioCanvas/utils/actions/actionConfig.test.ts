@@ -205,6 +205,13 @@ describe('configFieldsFor per op', () => {
     expect(configFieldsFor('video.reverse')).toEqual([]);
     expect(unsupportedConfigKeys('video.reverse')).toEqual([]);
   });
+
+  it('marks shader stacks as custom controls owned by the shader panel', () => {
+    for (const id of ['image.shader', 'video.shader'] as const) {
+      expect(fieldsByKey(id).get('shaderStack')?.kind).toBe('custom');
+      expect(unsupportedConfigKeys(id)).toEqual([]);
+    }
+  });
 });
 
 describe('parseActionConfig', () => {
@@ -218,6 +225,9 @@ describe('parseActionConfig', () => {
       preset: 'pop',
       emphasize: false,
       language: null,
+      // Hand-authored cues. Defaulted rather than optional so the key the popover
+      // lists is a key the parsed config actually carries.
+      manualCaptions: null,
     });
   });
 

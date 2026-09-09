@@ -3,7 +3,7 @@
 import {
   ACTION_DEFS,
   type ActionDef,
-  type ActionModality,
+  type ActionInputModality,
   actionDef,
   actionOutputModality,
   type BatchItem,
@@ -22,6 +22,7 @@ import {
   STUDIO_PUBLISHER_NODE_KINDS,
   STUDIO_RUNNABLE_NODE_TYPES,
   type StudioNodeType,
+  shaderStackV1Schema,
   TIMELINE_MEDIA_INPUT_HANDLE,
   VIDEO_REFERENCE_VIDEO_HANDLE,
   variationIndexFromHandle,
@@ -655,7 +656,13 @@ const actionInputFromOutput = (output: NodeOutput, handle: string): ResolvedActi
     return {
       handle,
       imageUrl: output.base64 ? buildDataUrl(output.mimeType, output.base64) : output.url,
+      mimeType: output.mimeType,
+      storagePath: output.storagePath,
+      storageBucket: output.storageBucket,
+      sizeBytes: output.sizeBytes,
       ...(output.assetId ? { assetId: output.assetId } : {}),
+      ...(output.assetVersionId ? { assetVersionId: output.assetVersionId } : {}),
+      ...(output.shaderStack ? { shaderStack: output.shaderStack } : {}),
     };
   }
   if (output.type === 'images') {
@@ -667,7 +674,16 @@ const actionInputFromOutput = (output: NodeOutput, handle: string): ResolvedActi
     };
   }
   if (output.type === 'video') {
-    return { handle, imageUrl: output.url, ...(output.assetId ? { assetId: output.assetId } : {}) };
+    return {
+      handle,
+      imageUrl: output.url,
+      storagePath: output.storagePath,
+      storageBucket: output.storageBucket,
+      sizeBytes: output.sizeBytes,
+      ...(output.assetId ? { assetId: output.assetId } : {}),
+      ...(output.assetVersionId ? { assetVersionId: output.assetVersionId } : {}),
+      ...(output.shaderStack ? { shaderStack: output.shaderStack } : {}),
+    };
   }
   // A collection reaching here means the fan-out did not unwrap it — the caller's bug,
   // not a shape to guess at.
@@ -680,7 +696,7 @@ const collectionInputFor = (
   nodeId: string,
   edges: Edge[],
   resolvedOutputs: Map<string, NodeOutput>,
-): { handle: string; modality: ActionModality; items: NodeOutput[] } | undefined => {
+): { handle: string; modality: ActionInputModality; items: NodeOutput[] } | undefined => {
   for (const port of def.inputs) {
     // A port that takes MANY inputs consumes the whole collection instead of being
     // fanned over it: Stitch's twenty clips are twenty inputs on one handle, not twenty
@@ -702,16 +718,16 @@ const collectionInputFor = (
 const actionInputFromItem = async (
   item: NodeOutput,
   handle: string,
-  modality: ActionModality,
+  modality: ActionInputModality,
 ): Promise<ResolvedActionInput> => {
   const resolved = actionInputFromOutput(item, handle);
-  if (modality !== 'video') return resolved;
+  if (modality !== 'video' && modality !== 'audio') return resolved;
   // The bytes replace the URL, but the Library pointer has to survive the swap — an
   // op that records its result as a derivative needs it whatever the modality.
   return {
+    ...resolved,
     handle,
     blob: await fetchBlob(resolved.imageUrl, handle),
-    ...(resolved.assetId ? { assetId: resolved.assetId } : {}),
   };
 };
 
@@ -766,11 +782,11 @@ const resolveActionInputsFor = async (
           sourceNodeId: edge.source,
         };
         inputs.push(
-          port.modality === 'video'
+          port.modality === 'video' || port.modality === 'audio'
             ? {
+                ...resolved,
                 handle: port.handle,
                 blob: await fetchBlob(resolved.imageUrl, port.handle),
-                ...(resolved.assetId ? { assetId: resolved.assetId } : {}),
                 sourceNodeId: edge.source,
               }
             : resolved,
@@ -781,9 +797,16 @@ const resolveActionInputsFor = async (
       // No run output yet: read the reference node's own durable fields. This is how a
       // plain image/video node feeds an action without ever having "run".
       const sourceData = (nodeById.get(edge.source)?.data ?? {}) as Record<string, unknown>;
-      const url = [sourceData.image, sourceData.video, sourceData.sourceUrl].find(
-        (value): value is string => typeof value === 'string' && value.length > 0,
-      );
+      const url = [
+        sourceData.generatedImageUrl,
+        sourceData.generatedImage,
+        sourceData.generatedVideoUrl,
+        sourceData.generatedVideo,
+        sourceData.image,
+        sourceData.video,
+        sourceData.audio,
+        sourceData.sourceUrl,
+      ].find((value): value is string => typeof value === 'string' && value.length > 0);
       if (!url) {
         throw new Error(
           unresolvedInputReason(port.handle, nodeById.get(edge.source), resolvedOutputs),
@@ -795,19 +818,26 @@ const resolveActionInputsFor = async (
       // depending on how the media reached the canvas, and reading only `assetId`
       // reported "not saved to the Library" about assets that were already there.
       const ref = readNodeAssetRef(sourceData);
-      const assetId = ref ? { assetId: ref.assetId } : {};
+      const assetRef = ref
+        ? { assetId: ref.assetId, ...(ref.versionId ? { assetVersionId: ref.versionId } : {}) }
+        : {};
+      const shaderStack = shaderStackV1Schema.safeParse(sourceData.shaderStack);
+      const metadata = {
+        ...assetRef,
+        ...(shaderStack.success ? { shaderStack: shaderStack.data } : {}),
+      };
       // The node id travels with the input so an op that REQUIRES a Library asset can
       // mint the missing pointer itself instead of refusing the run.
       const sourceNodeId = { sourceNodeId: edge.source };
       inputs.push(
-        port.modality === 'video'
+        port.modality === 'video' || port.modality === 'audio'
           ? {
               handle: port.handle,
               blob: await fetchBlob(url, port.handle),
-              ...assetId,
+              ...metadata,
               ...sourceNodeId,
             }
-          : { handle: port.handle, imageUrl: url, ...assetId, ...sourceNodeId },
+          : { handle: port.handle, imageUrl: url, ...metadata, ...sourceNodeId },
       );
     }
   }
@@ -2138,6 +2168,7 @@ export async function executeWorkflow(
         generatedImageBucket: output.storageBucket,
         renderOutputAssetId: output.assetId,
         renderOutputAssetVersionId: output.assetVersionId,
+        shaderStack: output.shaderStack,
         generationSignature: generationSignatureFor(nodeId),
         isComplete: true,
         isExecuting: false,
@@ -2172,6 +2203,7 @@ export async function executeWorkflow(
         generatedVideoBucket: output.storageBucket,
         renderOutputAssetId: output.assetId,
         renderOutputAssetVersionId: output.assetVersionId,
+        shaderStack: output.shaderStack,
         generationSignature: generationSignatureFor(nodeId),
         isComplete: true,
         isExecuting: false,

@@ -1,4 +1,10 @@
-import { ACTION_DEFS, type ActionId, actionDef, type BrandTypeInputs } from '@continuum/contracts';
+import {
+  ACTION_DEFS,
+  type ActionId,
+  actionDef,
+  type BrandTypeInputs,
+  type ShaderStackV1,
+} from '@continuum/contracts';
 import type { NodeOutput } from '../../types/execution';
 import { runActionInWorker } from '../../workers/spliceWorkerClient';
 import { parseDataUrl } from '../dataUrl';
@@ -14,7 +20,6 @@ import {
   type BlurKind,
   canvasToDataUrl,
   cropToAspect,
-  type DrawableImage,
   duplicateValue,
   type FilterColorMode,
   flipImage,
@@ -43,6 +48,11 @@ export interface ResolvedActionInput {
   handle: string;
   /** Set for image inputs: a data URL or a signed http(s) URL. */
   imageUrl?: string;
+  mimeType?: string;
+  storagePath?: string;
+  storageBucket?: string;
+  sizeBytes?: number;
+  assetVersionId?: string;
   /** Set for video inputs: the bytes, because the worker re-encodes them. */
   blob?: Blob;
   /** Set for text inputs. */
@@ -61,6 +71,8 @@ export interface ResolvedActionInput {
    * holds — instead of refusing a run over media the Library can absorb.
    */
   sourceNodeId?: string;
+  /** Effects deferred by an upstream image.shader/video.shader action. */
+  shaderStack?: ShaderStackV1;
 }
 
 export interface RunActionArgs {
@@ -87,14 +99,14 @@ const inputFor = (args: RunActionArgs, handle: string): ResolvedActionInput => {
 };
 
 /** Decode an image input to something canvas can draw. */
-async function loadImage(input: ResolvedActionInput): Promise<DrawableImage> {
+async function loadImage(input: ResolvedActionInput): Promise<ImageBitmap> {
   const source = input.imageUrl;
   if (!source) throw new Error('The connected image has no readable source');
   // `createImageBitmap` over an `<img>`: it works in a worker context too, it decodes
   // off the main thread, and it does not depend on the element ever being laid out.
   const response = await fetch(source);
   if (!response.ok) throw new Error(`Could not read the connected image (${response.status})`);
-  return (await createImageBitmap(await response.blob())) as DrawableImage;
+  return createImageBitmap(await response.blob());
 }
 
 type SyncOp = (args: RunActionArgs, config: Record<string, unknown>) => Promise<NodeOutput>;
@@ -107,6 +119,64 @@ async function imageOutput(canvas: OffscreenCanvas): Promise<NodeOutput> {
     base64: parsed?.base64 ?? '',
     mimeType: parsed?.mimeType ?? 'image/png',
   };
+}
+
+function appendShaderStack(
+  upstream: ShaderStackV1 | undefined,
+  configured: ShaderStackV1,
+): ShaderStackV1 {
+  const effects = new Map(
+    upstream?.effects.map((effect) => [effect.effectId, effect] as const) ?? [],
+  );
+  for (const effect of configured.effects) effects.set(effect.effectId, effect);
+  return {
+    version: 1,
+    // One slot per curated id: a downstream node replaces the upstream definition
+    // deterministically instead of growing an invalid >7 or ambiguous duplicate stack.
+    effects: [...effects.values()],
+  };
+}
+
+async function bakeImageShader(
+  args: RunActionArgs,
+  config: Record<string, unknown>,
+): Promise<NodeOutput> {
+  const input = inputFor(args, 'in');
+  const stack = appendShaderStack(input.shaderStack, config.shaderStack as ShaderStackV1);
+  if (config.mode === 'deferred') {
+    return {
+      type: 'image',
+      mimeType: input.mimeType ?? 'image/png',
+      url: input.imageUrl,
+      ...(input.storagePath ? { storagePath: input.storagePath } : {}),
+      ...(input.storageBucket ? { storageBucket: input.storageBucket } : {}),
+      ...(input.sizeBytes !== undefined ? { sizeBytes: input.sizeBytes } : {}),
+      ...(input.assetId ? { assetId: input.assetId } : {}),
+      ...(input.assetVersionId ? { assetVersionId: input.assetVersionId } : {}),
+      shaderStack: stack,
+    };
+  }
+  const image = await loadImage(input);
+  try {
+    const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
+    const bitmap = await renderShaderStackFrame({
+      source: image,
+      width: image.width,
+      height: image.height,
+      stack,
+    });
+    try {
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('OffscreenCanvas 2D context unavailable');
+      context.drawImage(bitmap, 0, 0);
+      return imageOutput(canvas);
+    } finally {
+      bitmap.close();
+    }
+  } finally {
+    image.close();
+  }
 }
 
 /** Several canvases as one collection, which is what the batch fan-out loops over. */
@@ -161,6 +231,7 @@ const inputsFor = (args: RunActionArgs, handle: string): ResolvedActionInput[] =
  * applies — so widening the contract later is an enum edit with no work in this file.
  */
 const SYNC_OPS: Partial<Record<ActionId, SyncOp>> = {
+  'image.shader': bakeImageShader,
   'image.grade': async (args, config) =>
     imageOutput(
       applyColorGrade(await loadImage(inputFor(args, 'in')), {
@@ -380,12 +451,14 @@ const WORKER_OPS_WITH_ENGINES = new Set<ActionId>([
   'video.speed',
   'video.kenBurns',
   'video.stitch',
+  'video.audioBed',
   'video.split',
   'video.crop',
   'video.pad',
   'video.greenscreen',
   'video.reverse',
   'video.boomerang',
+  'video.shader',
 ]);
 
 /**
@@ -440,6 +513,27 @@ export async function runAction(args: RunActionArgs): Promise<NodeOutput> {
   // gets the op's defaults instead of a crash, and a hand-edited canvas row cannot
   // smuggle an out-of-range value past the op.
   const config = parseActionConfig(args.actionId, args.config);
+
+  if (args.actionId === 'video.shader') {
+    const input = inputFor(args, 'in');
+    const stack = appendShaderStack(input.shaderStack, config.shaderStack as ShaderStackV1);
+    if (config.mode === 'deferred') {
+      if (!input.imageUrl) throw new Error('The connected video has no readable source');
+      return {
+        type: 'video',
+        url: input.imageUrl,
+        ...(input.storagePath ? { storagePath: input.storagePath } : {}),
+        ...(input.storageBucket ? { storageBucket: input.storageBucket } : {}),
+        ...(input.sizeBytes !== undefined || input.blob
+          ? { sizeBytes: input.sizeBytes ?? input.blob?.size }
+          : {}),
+        ...(input.assetId ? { assetId: input.assetId } : {}),
+        ...(input.assetVersionId ? { assetVersionId: input.assetVersionId } : {}),
+        shaderStack: stack,
+      };
+    }
+    config.shaderStack = stack;
+  }
 
   const orchestrated = ORCHESTRATED_OPS[args.actionId];
   if (orchestrated) return orchestrated(args, config);

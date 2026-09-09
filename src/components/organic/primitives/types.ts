@@ -1,4 +1,9 @@
-import type { OrganicMediaStage, OrganicUgcSpec, PlannerComposition } from '@continuum/contracts';
+import type {
+  OrganicMediaStage,
+  OrganicUgcSpec,
+  PlannerComposition,
+  ShaderStackV1,
+} from '@continuum/contracts';
 import type { CalendarGenerationEvent } from '@/lib/organic/calendar-generation';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 
@@ -148,6 +153,7 @@ export type OrganicCalendarDraft = {
       width?: number | null;
       height?: number | null;
       durationSeconds?: number | null;
+      shaderStack?: ShaderStackV1 | null;
       /** Library assets embedded as hf-asset://, re-signed at render time. */
       sourceAssets?: Array<{ assetId: string; kind: 'image' | 'video' | 'audio' }> | null;
     } | null;

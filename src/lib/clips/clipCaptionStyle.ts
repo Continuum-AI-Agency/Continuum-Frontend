@@ -61,6 +61,7 @@ export type CaptionStyle = {
   activeBoxColor?: string;
   shadow?: CaptionShadow;
   animation?: CaptionAnimation;
+  exitAnimation?: CaptionAnimation;
   emphasis?: CaptionEmphasis;
 };
 

@@ -1,6 +1,6 @@
 'use client';
 import type { AgentMentionReference } from '@continuum/contracts';
-import { Gem, MessageCircle, Play, Trash2, TriangleAlert, Wand2, X } from 'lucide-react';
+import { Gem, MessageCircle, Play, Trash2, TriangleAlert, Wand2, Workflow, X } from 'lucide-react';
 
 import { useCallback, useMemo, useState } from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
@@ -31,13 +31,13 @@ import {
 } from '@/lib/ai-studio/elements';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
+import { LoadWorkflowDialog } from '@/StudioCanvas/components/LoadWorkflowDialog';
 import { createCanvasComposerMentionProvider } from './canvasContextProvider';
 import {
   expandElementMentions,
   readElementMention,
   refreshElementMentions,
 } from './elementMentions';
-import { StarterPickerButton } from './StarterPickerButton';
 import {
   type CanvasComposerState,
   type ComposerTurn,
@@ -58,6 +58,9 @@ import {
 // stable empty array keeps the mention provider (and its one-read signals cache)
 // from being rebuilt on every render while the Elements load.
 const NO_ELEMENTS: ElementRecord[] = [];
+
+/** How many saved flows may ride along as reference in one turn. */
+const MAX_ATTACHED_WORKFLOWS = 3;
 
 const EXAMPLES = [
   'A hero image of our product on wet concrete, then animate it into a 6s clip',
@@ -89,6 +92,11 @@ export function CanvasComposer({
   const [expanded, setExpanded] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [queuedText, setQueuedText] = useState<string | null>(null);
+  const [workflowPickerOpen, setWorkflowPickerOpen] = useState(false);
+  // Saved flows the user pointed at, as REFERENCE. Nothing lands on the canvas — the row's
+  // menu still offers that separately. Kept as {id,label} rather than the whole row: only
+  // the id crosses the wire, and the Backend re-reads the graph brand-scoped anyway.
+  const [attachedWorkflows, setAttachedWorkflows] = useState<{ id: string; label: string }[]>([]);
   const composerAttachments = useChatAttachments({
     brandId: brandProfileId,
     sessionId: roomId,
@@ -106,6 +114,17 @@ export function CanvasComposer({
     dismiss();
     onRun();
   }, [dismiss, onRun]);
+
+  const attachWorkflow = useCallback((workflow: { id: string; name: string }) => {
+    setAttachedWorkflows((current) =>
+      current.some((item) => item.id === workflow.id)
+        ? current
+        : // An outline is far heavier than a skill id, so this caps well below the wire's
+          // 20-reference limit. Three flows is already a lot to hold beside the canvas the
+          // agent is being shown.
+          [...current, { id: workflow.id, label: workflow.name }].slice(-MAX_ATTACHED_WORKFLOWS),
+    );
+  }, []);
   const { all: brandSkills } = useBrandSkills(brandProfileId);
   const { elements } = useElements(brandProfileId);
   const elementCatalog = elements.length > 0 ? elements : NO_ELEMENTS;
@@ -129,7 +148,28 @@ export function CanvasComposer({
 
   const hero = isCanvasEmpty && state.status === 'idle' && !expanded && !roomRunStreaming;
 
-  const inputRow = (
+  const attachedRow = attachedWorkflows.length > 0 && (
+    <div className="flex flex-wrap items-center gap-1 px-1 pb-1">
+      {attachedWorkflows.map((workflow) => (
+        <Badge key={workflow.id} variant="muted" className="gap-1 pr-1">
+          <Workflow className="size-3" aria-hidden />
+          <span className="max-w-40 truncate">{workflow.label}</span>
+          <button
+            type="button"
+            aria-label={`Remove ${workflow.label} from context`}
+            className="rounded-full p-0.5 hover:bg-foreground/10"
+            onClick={() =>
+              setAttachedWorkflows((current) => current.filter((item) => item.id !== workflow.id))
+            }
+          >
+            <X className="size-3" />
+          </button>
+        </Badge>
+      ))}
+    </div>
+  );
+
+  const promptInput = (
     <PromptInput
       variant="canvas"
       disabled={!brandProfileId || !roomId}
@@ -156,10 +196,19 @@ export function CanvasComposer({
             getElement(brandProfileId as string, elementId),
           ),
         );
+        // Attached flows join the same `references` array the @-grabber fills: the Backend
+        // resolver reads one list, so a second channel would be a second thing to keep in
+        // step for no gain.
+        const workflowReferences: AgentMentionReference[] = attachedWorkflows.map((workflow) => ({
+          id: workflow.id,
+          type: 'workflow',
+          label: workflow.label,
+          source: 'canvas',
+        }));
         await submit(value, selectedNodeIds, {
           remember: expanded,
           attachments: attachmentContext.attachments,
-          references: grounded.references,
+          references: [...grounded.references, ...workflowReferences],
           thinking,
           ...(grounded.grounding ? { grounding: grounded.grounding } : {}),
         });
@@ -175,6 +224,17 @@ export function CanvasComposer({
           <Button
             size="icon"
             variant="ghost"
+            onClick={() => setWorkflowPickerOpen(true)}
+            aria-label="Attach a saved workflow as context"
+            title="Attach a saved workflow as context"
+            className="size-8 shrink-0 text-muted-foreground"
+            type="button"
+          >
+            <Workflow />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
             onClick={() => setExpanded((value) => !value)}
             aria-label={expanded ? 'Collapse composer chat' : 'Expand composer chat'}
             aria-expanded={expanded}
@@ -184,7 +244,6 @@ export function CanvasComposer({
           >
             {expanded ? <X /> : <MessageCircle />}
           </Button>
-          <StarterPickerButton brandProfileId={brandProfileId} />
           <Button
             size="sm"
             variant={thinking ? 'secondary' : 'ghost'}
@@ -200,6 +259,20 @@ export function CanvasComposer({
         </>
       }
     />
+  );
+
+  const inputRow = (
+    <>
+      {attachedRow}
+      {promptInput}
+      <LoadWorkflowDialog
+        brandProfileId={brandProfileId}
+        open={workflowPickerOpen}
+        onOpenChange={setWorkflowPickerOpen}
+        showTrigger={false}
+        onAttachWorkflow={attachWorkflow}
+      />
+    </>
   );
 
   return (

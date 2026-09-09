@@ -1,25 +1,11 @@
 'use client';
 
-import type {
-  GenerationDirection,
-  OnboardingGeneratedImage,
-  OnboardingGenerationStreamFrame,
-  OnboardingInspirationSelection,
-} from '@continuum/contracts';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import type { OnboardingInspirationSelection } from '@continuum/contracts';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { streamGeneration } from '@/lib/onboarding/inspirationsClient';
-import { cn } from '@/lib/utils';
-import { useBackgroundJobs } from '../state/BackgroundJobsProvider';
-
-const DIRECTION_LABEL: Record<GenerationDirection, string> = {
-  brand_awareness: 'Brand values',
-  product: 'Promo',
-  hybrid: 'Social proof',
-};
-
-type Phase = 'generating' | 'done' | 'error';
+import { useOnboardingStarter } from '@/lib/onboarding/starterKit';
+import { StarterKitResults } from '../StarterKitResults';
 
 type Props = {
   brandId: string;
@@ -31,9 +17,6 @@ type Props = {
   selectedInspiration: OnboardingInspirationSelection | null;
 };
 
-// Brand-only creatives are prewarmed while the user moves through onboarding.
-// When they choose a competitor inspiration, this screen intentionally bypasses
-// that prewarm and generates a new set with the selected reference.
 export function InspirationGenerationScreen({
   brandId,
   onFinish,
@@ -43,182 +26,67 @@ export function InspirationGenerationScreen({
   onEmailReportOptInChange,
   selectedInspiration,
 }: Props) {
-  const { jobs } = useBackgroundJobs();
-  const prewarm = jobs.creativePrewarm;
-  const prewarmImages =
-    (prewarm.data as { images?: OnboardingGeneratedImage[] } | null)?.images ?? [];
-
-  const [total, setTotal] = useState(3);
-  const [images, setImages] = useState<OnboardingGeneratedImage[]>([]);
-  const [phase, setPhase] = useState<Phase>('generating');
-  const selfStartedRef = useRef(false);
-  const erroredRef = useRef(false);
-  const imageCountRef = useRef(0);
-  const controllerRef = useRef<AbortController | null>(null);
-
-  const runGeneration = useCallback(() => {
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    selfStartedRef.current = true;
-    erroredRef.current = false;
-    imageCountRef.current = 0;
-    setImages([]);
-    setPhase('generating');
-
-    const handleFrame = (frame: OnboardingGenerationStreamFrame) => {
-      switch (frame.type) {
-        case 'generation_started':
-          setTotal(frame.data.total);
-          break;
-        case 'image_ready':
-          imageCountRef.current += 1;
-          setImages((prev) => [...prev, frame.data]);
-          break;
-        case 'generation_complete':
-          if (imageCountRef.current > 0) {
-            setPhase('done');
-          } else {
-            erroredRef.current = true;
-            setPhase('error');
-          }
-          break;
-        case 'error':
-          erroredRef.current = true;
-          break;
-      }
-    };
-
-    void streamGeneration({
-      brandId,
-      selectedInspiration,
-      signal: controller.signal,
-      onFrame: handleFrame,
-    })
-      .then(() =>
-        setPhase((p) => (p === 'generating' ? (erroredRef.current ? 'error' : 'done') : p)),
-      )
-      .catch(() => {
-        if (!controller.signal.aborted) setPhase('error');
-      });
-  }, [brandId, selectedInspiration?.competitorName, selectedInspiration?.imageUrl]);
-
-  // Always abort an in-flight self-generation on unmount.
-  useEffect(() => () => controllerRef.current?.abort(), []);
-
-  // Start logic: defer to the prewarm while it runs / when it produced images;
-  // otherwise generate locally exactly once.
+  const { run, start, retry, error } = useOnboardingStarter(brandId);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const competitorName = selectedInspiration?.competitorName;
+  const imageUrl = selectedInspiration?.imageUrl;
   useEffect(() => {
-    if (selfStartedRef.current) return;
-    if (selectedInspiration) {
-      runGeneration();
-      return;
-    }
-    if (prewarm.status === 'running') return;
-    if (prewarm.status === 'done' && prewarmImages.length > 0) return;
-    runGeneration();
-  }, [prewarm.status, prewarmImages.length, runGeneration, selectedInspiration]);
-
-  const usingPrewarm =
-    !selectedInspiration &&
-    !selfStartedRef.current &&
-    (prewarm.status === 'running' || (prewarm.status === 'done' && prewarmImages.length > 0));
-  const displayImages = usingPrewarm ? prewarmImages : images;
-  const displayPhase: Phase = usingPrewarm
-    ? prewarm.status === 'done'
-      ? 'done'
-      : 'generating'
-    : phase;
-
-  const slots = Array.from({ length: Math.max(total, displayImages.length) });
-
+    let mounted = true;
+    setStartError(null);
+    void start(competitorName && imageUrl ? { competitorName, imageUrl } : null).catch(
+      (error: unknown) => {
+        if (mounted)
+          setStartError(error instanceof Error ? error.message : 'Could not start your kit.');
+      },
+    );
+    // Only detach the view. The worker keeps saving results after navigation.
+    return () => {
+      mounted = false;
+    };
+  }, [start, competitorName, imageUrl, attempt]);
   return (
-    <div className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col px-4 pb-28 md:px-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-32 md:px-8">
       <header className="py-6 text-center">
-        <h1 className="text-2xl font-semibold text-foreground">Your first on-brand creatives</h1>
+        <h1 className="text-2xl font-semibold">Your brand, ready to create</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {selectedInspiration
-            ? `Guided by ${selectedInspiration.competitorName}, then rebuilt for your brand.`
-            : 'Generated from your brand guidelines.'}{' '}
-          They&apos;re saving to your library now.
+          Four reusable Elements and your first three creatives, made from your brand. This starter
+          kit is on us.
         </p>
       </header>
-
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-        {slots.map((_, index) => {
-          const image = displayImages[index];
-          return (
-            <div
-              key={image?.assetId ?? `slot-${index}`}
-              className={cn(
-                'flex flex-col overflow-hidden rounded-xl border border-border bg-card',
-                !image && 'animate-pulse',
-              )}
-            >
-              {image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={image.signedUrl}
-                  alt={`${DIRECTION_LABEL[image.direction]} creative${
-                    selectedInspiration ? ` inspired by ${selectedInspiration.competitorName}` : ''
-                  }`}
-                  className="aspect-square w-full object-cover"
-                />
-              ) : (
-                <div className="flex aspect-square w-full items-center justify-center bg-muted text-xs text-muted-foreground">
-                  {displayPhase === 'error' ? 'Generation failed' : 'Generating…'}
-                </div>
-              )}
-              <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {image ? DIRECTION_LABEL[image.direction] : ' '}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {displayPhase === 'error' ? (
-        <div className="mt-6 flex flex-col items-center gap-3">
-          <p className="text-center text-sm text-muted-foreground">
-            We couldn&apos;t generate previews right now — try again, or continue and create them
-            later in the studio.
-          </p>
-          <Button variant="default" size="sm" onClick={runGeneration} disabled={finishing}>
+      {run ? (
+        <StarterKitResults run={run} onRetry={retry} />
+      ) : (
+        <p role="status" className="py-8 text-center text-sm text-muted-foreground">
+          Preparing your product, character, style and setting…
+        </p>
+      )}
+      {startError || error ? (
+        <div role="alert" className="mt-4 text-sm">
+          <p>{startError ?? 'We could not refresh your progress. Your saved results are safe.'}</p>
+          <Button variant="outline" size="sm" onClick={() => setAttempt((value) => value + 1)}>
             Try again
           </Button>
         </div>
       ) : null}
-
-      <footer className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-between gap-3 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:px-8">
+      <footer className="fixed inset-x-0 bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background px-4 py-3 md:px-8">
         <Button variant="outline" size="sm" onClick={onBack} disabled={finishing}>
-          ← Back
+          Back
         </Button>
-        <div className="flex items-center gap-3">
-          {displayPhase === 'generating' ? (
-            <span className="hidden text-xs text-muted-foreground sm:inline">
-              Still creating — they&apos;ll keep saving to your library.
-            </span>
-          ) : null}
-          <div className="flex items-center gap-2">
-            <Switch
-              id="onboarding-email-report"
-              checked={emailReportOptIn}
-              onCheckedChange={onEmailReportOptInChange}
-              disabled={finishing}
-            />
-            <label
-              htmlFor="onboarding-email-report"
-              className="cursor-pointer select-none text-xs text-muted-foreground"
-            >
-              Email me my brand readiness report
-            </label>
-          </div>
-          {/* Never block the finale: creatives persist to the library server-side,
-              so the user can head to the dashboard even while generation runs. */}
-          <Button variant="success" size="sm" onClick={onFinish} disabled={finishing}>
-            {finishing ? 'Finishing…' : 'Go to dashboard ✦'}
-          </Button>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="onboarding-email-report"
+            checked={emailReportOptIn}
+            onCheckedChange={onEmailReportOptInChange}
+            disabled={finishing}
+          />
+          <label htmlFor="onboarding-email-report" className="text-xs">
+            Email me my brand readiness report
+          </label>
         </div>
+        <Button variant="success" size="sm" onClick={onFinish} disabled={finishing}>
+          {finishing ? 'Finishing…' : 'Go to dashboard'}
+        </Button>
       </footer>
     </div>
   );

@@ -17,7 +17,9 @@
     "typecheck": "bunx tsc --noEmit",
     "typecheck:e2e": "bunx tsc -p tsconfig.e2e.json --noEmit",
     "typecheck:build": "tsc --noEmit --pretty false --project ${NEXT_TSCONFIG_PATH:-tsconfig.build.json}",
-    "bundle:check": "bun scripts/check-vercel-bundle-budget.mjs",
+    "bundle:check": "node scripts/check-vercel-bundle-budget.mjs",
+    "shader:check": "vgpu check src/lib/vgpu/shader-stack.wgsl --require-validation",
+    "bundle:e2e:bench": "playwright test --config playwright.bundle.config.ts",
     "test:vercel": "bun test scripts/check-vercel-bundle-budget.test.ts scripts/vercel-ignore-build.test.ts src/lib/theme/themeDom.test.ts",
     "vercel:runtime:bench": "playwright test --config playwright.vercel.config.ts",
     "tests": "bun test --path-ignore-patterns '**/e2e/**'",
@@ -80,6 +82,7 @@
     "videoeditor:render:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-v2-render.spec.ts --workers=1",
     "videoeditor:ui:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-v2-ui.spec.ts --workers=1",
     "videoeditor:v2:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-v2-ui.spec.ts e2e/video-editor-v2-render.spec.ts --workers=1",
+    "flow:components:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/flow-components.bench.spec.ts --workers=1",
     "planner:status:e2e:bench": "set -a; . ./.env.local; set +a; PLANNER_STATUS_BENCH_BACKEND_PORT=4409 NEXT_PUBLIC_API_URL=http://127.0.0.1:4409 API_URL=http://127.0.0.1:4409 PORT=3109 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3109 NEXT_DIST_DIR=.next/planner-status-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/organic-planner-status.spec.ts --workers=1",
     "planner:composition:bench": "bun run e2e/planner-composition.bench.ts",
     "planner:composition:e2e:bench": "bun run e2e/planner-composition-edge.e2e.bench.ts",
@@ -89,7 +92,8 @@
     "onboarding:catalog:bench": "set -a; . ./.env.local; set +a; ONBOARDING_CATALOG_BENCH_BACKEND_PORT=4416 NEXT_PUBLIC_API_URL=http://127.0.0.1:4416 API_URL=http://127.0.0.1:4416 PORT=3116 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3116 NEXT_DIST_DIR=.next/onboarding-catalog-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/onboarding-catalog.bench.spec.ts --workers=1",
     "brand:panels:bench": "set -a; . ./.env.local; set +a; BRAND_PANELS_BENCH_BACKEND_PORT=4412 NEXT_PUBLIC_API_URL=http://127.0.0.1:4412 API_URL=http://127.0.0.1:4412 PORT=3112 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3112 NEXT_DIST_DIR=.next/brand-panels-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/brand-panels.bench.spec.ts --workers=1",
     "onboarding:dna:bench": "set -a; . ./.env.local; set +a; ONBOARDING_DNA_BENCH_BACKEND_PORT=4413 NEXT_PUBLIC_API_URL=http://127.0.0.1:4413 API_URL=http://127.0.0.1:4413 PORT=3113 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3113 NEXT_DIST_DIR=.next/onboarding-dna-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/onboarding-dna.bench.spec.ts --workers=1",
-    "brand-system:export:e2e:bench": "bun run e2e/brand-system-export.bench.ts"
+    "brand-system:export:e2e:bench": "bun run e2e/brand-system-export.bench.ts",
+    "layer-editor:gesture:bench": "set -a; . ./.env.local; set +a; PORT=3001 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 NEXT_DIST_DIR=.next/layer-editor-gesture-e2e playwright test e2e/layer-editor-gesture.bench.spec.ts --workers=1"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.17",
@@ -146,6 +150,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "cn": "^0.2.5",
     "color": "^5.0.3",
     "croner": "^10.0.1",
     "d3-array": "^3.2.4",
@@ -197,6 +202,7 @@
     "topojson-client": "^3.1.0",
     "use-stick-to-bottom": "^1.1.6",
     "uuid": "^13.0.0",
+    "vgpu": "^0.4.1",
     "world-atlas": "^2.0.2",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"

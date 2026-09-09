@@ -21,5 +21,6 @@ export * from './readiness';
 export * from './readiness-summary';
 export * from './scrape';
 export * from './sse-events';
+export * from './starter-kit';
 export * from './target-audience';
 export * from './website-summary';

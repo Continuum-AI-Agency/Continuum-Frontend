@@ -1,4 +1,4 @@
-import type { ActionModality } from '@continuum/contracts';
+import type { ActionInputModality, ActionModality } from '@continuum/contracts';
 import type React from 'react';
 import { NodeVideoPreview } from '../components/NodeVideoPreview';
 
@@ -10,10 +10,11 @@ import { NodeVideoPreview } from '../components/NodeVideoPreview';
 
 /** Port colour by modality — the same three vars the edges paint themselves with, so a
  *  handle and the wire leaving it can never be different colours. */
-export const EDGE_COLOR_BY_MODALITY: Readonly<Record<ActionModality, string>> = {
+export const EDGE_COLOR_BY_MODALITY: Readonly<Record<ActionInputModality, string>> = {
   image: 'var(--edge-image)',
   video: 'var(--edge-video)',
   text: 'var(--edge-text)',
+  audio: 'var(--edge-audio, #10b981)',
 };
 
 export const MODALITY_LABEL: Readonly<Record<ActionModality, string>> = {
@@ -23,7 +24,7 @@ export const MODALITY_LABEL: Readonly<Record<ActionModality, string>> = {
 };
 
 export const handleStyle = (
-  modality: ActionModality | undefined,
+  modality: ActionInputModality | undefined,
   top?: string,
 ): React.CSSProperties => ({
   ['--edge-color' as keyof React.CSSProperties]: modality

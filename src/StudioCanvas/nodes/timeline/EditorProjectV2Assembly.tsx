@@ -26,9 +26,12 @@ import { Input } from '@/components/ui/input';
 import { NumberScrubField } from '@/components/ui/number-field';
 import { SliderField } from '@/components/ui/slider-field';
 import { useToast } from '@/components/ui/ToastProvider';
+import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
+import { captionAnimationFromEditorId, captionMotionTransform } from '@/lib/clips/captionAnimation';
 import { listAssetVersions } from '@/lib/library/versions';
 import type { TimelineInputSource, TimelineItem } from '../../types';
-import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
+import { clipEffectsToCss, type ResolvedTextOverlay } from '../../utils/render/effectSpec';
+import { mergeClipShaderEffects } from '../../utils/render/shaderStack';
 import { AUDIO_DROP_ID, AudioTracks } from './AudioTracks';
 import {
   type EditorAssemblyOperation,
@@ -69,6 +72,22 @@ function sourceCoordinates(clip: EditorVideoClip | EditorAudioClip | EditorOverl
   const source = clip.source;
   if (source.sourceType !== 'library_asset' || !source.renditionId) return null;
   return { assetId: source.assetId, versionId: source.renditionId };
+}
+
+function poolSourceForClip(
+  clip: EditorVideoClip | EditorAudioClip | EditorOverlayClip,
+  pool: readonly TimelineInputSource[],
+): TimelineInputSource | undefined {
+  const sourceRef = clip.source;
+  if (sourceRef.sourceType === 'canvas_node') {
+    return pool.find((source) => source.nodeId === sourceRef.nodeId);
+  }
+  if (sourceRef.sourceType !== 'library_asset') return undefined;
+  return pool.find(
+    (source) =>
+      source.sourceAssetId === sourceRef.assetId &&
+      (!sourceRef.renditionId || source.sourceVersionId === sourceRef.renditionId),
+  );
 }
 
 const probeSourceDuration = (
@@ -242,6 +261,8 @@ function TextOverlayRow({
   const [color, setColor] = useState(clip.style.color);
   const [x, setX] = useState(clip.transform.position.x);
   const [y, setY] = useState(clip.transform.position.y);
+  const [animationIn, setAnimationIn] = useState(clip.animationIn ?? 'none');
+  const [animationOut, setAnimationOut] = useState(clip.animationOut ?? 'none');
   useEffect(() => {
     setText(clip.text);
     setStart(clip.timelineStartSec);
@@ -250,6 +271,8 @@ function TextOverlayRow({
     setColor(clip.style.color);
     setX(clip.transform.position.x);
     setY(clip.transform.position.y);
+    setAnimationIn(clip.animationIn ?? 'none');
+    setAnimationOut(clip.animationOut ?? 'none');
   }, [clip]);
   return (
     <div className="space-y-2 rounded-md border border-border/50 bg-muted/20 p-2">
@@ -304,6 +327,34 @@ function TextOverlayRow({
           value={y}
           onChange={setY}
         />
+        <label className="space-y-1 text-3xs text-muted-foreground">
+          <span>Animate in</span>
+          <select
+            aria-label="Animate text in"
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
+            value={animationIn}
+            onChange={(event) => setAnimationIn(event.target.value)}
+          >
+            <option value="none">None</option>
+            <option value="pop">Pop</option>
+            <option value="scaleIn">Scale in</option>
+            <option value="floatIn">Float in</option>
+          </select>
+        </label>
+        <label className="space-y-1 text-3xs text-muted-foreground">
+          <span>Animate out</span>
+          <select
+            aria-label="Animate text out"
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
+            value={animationOut}
+            onChange={(event) => setAnimationOut(event.target.value)}
+          >
+            <option value="none">None</option>
+            <option value="pop">Pop</option>
+            <option value="scaleIn">Scale out</option>
+            <option value="floatIn">Float out</option>
+          </select>
+        </label>
       </div>
       <div className="flex justify-end gap-1">
         <Button
@@ -330,6 +381,8 @@ function TextOverlayRow({
                 color,
                 x,
                 y,
+                animationIn: animationIn as 'none' | 'pop' | 'scaleIn' | 'floatIn',
+                animationOut: animationOut as 'none' | 'pop' | 'scaleIn' | 'floatIn',
               }),
             )
           }
@@ -716,6 +769,18 @@ export function EditorProjectV2Assembly({
       playback.playheadSec >= clip.startSec &&
       playback.playheadSec < clip.startSec + clip.durationSec,
   );
+  const activeVideoClip = active ? clipById.get(active.item.id) : undefined;
+  const activeEffectTimeSec = active ? Math.max(0, playback.playheadSec - active.startSec) : 0;
+  const activeEffects = activeVideoClip
+    ? mergeClipShaderEffects(
+        clipEffectSpecFromEditorClip(activeVideoClip),
+        poolSourceForClip(activeVideoClip, pool)?.shaderStack,
+      )
+    : undefined;
+  const activeClipT =
+    active && active.durationSec > 0
+      ? Math.max(0, Math.min(1, activeEffectTimeSec / active.durationSec))
+      : 0;
   const textTrack = project.tracks.find((track): track is TextTrack => track.kind === 'text');
   const activeText: ResolvedTextOverlay[] = (textTrack?.clips ?? [])
     .filter(
@@ -724,16 +789,31 @@ export function EditorProjectV2Assembly({
         playback.playheadSec >= clip.timelineStartSec &&
         playback.playheadSec < clip.timelineStartSec + clip.durationSec,
     )
-    .map((clip) => ({
-      id: clip.id,
-      text: clip.text,
-      xFrac: clip.transform.position.x,
-      yFrac: clip.transform.position.y,
-      sizeFrac: clip.style.fontSizePx / project.canvas.height,
-      color: clip.style.color,
-      background: clip.style.backgroundColor,
-      fontWeight: clip.style.fontWeight,
-    }));
+    .map((clip) => {
+      const motion = captionMotionTransform({
+        entry: captionAnimationFromEditorId(clip.animationIn),
+        exit: captionAnimationFromEditorId(clip.animationOut),
+        cueStartSec: clip.timelineStartSec,
+        cueEndSec: clip.timelineStartSec + clip.durationSec,
+        wordStartSec: clip.timelineStartSec,
+        wordEndSec: clip.timelineStartSec + clip.durationSec,
+        outputTimeSec: playback.playheadSec,
+        fontPx: clip.style.fontSizePx,
+      });
+      return {
+        id: clip.id,
+        text: clip.text,
+        xFrac: clip.transform.position.x,
+        yFrac: clip.transform.position.y,
+        sizeFrac: clip.style.fontSizePx / project.canvas.height,
+        color: clip.style.color,
+        background: clip.style.backgroundColor,
+        fontWeight: clip.style.fontWeight,
+        opacity: motion.alpha,
+        scale: motion.scale,
+        translateYEm: motion.dy / clip.style.fontSizePx,
+      };
+    });
   const overlayTrack = project.tracks.find(
     (track): track is OverlayTrack => track.kind === 'overlay',
   );
@@ -746,6 +826,11 @@ export function EditorProjectV2Assembly({
       playback.playheadSec >= clip.timelineStartSec + clip.durationSec
     )
       return [];
+    const effectTimeSec = playback.playheadSec - clip.timelineStartSec;
+    const effects = mergeClipShaderEffects(
+      clipEffectSpecFromEditorClip(clip),
+      poolSourceForClip(clip, pool)?.shaderStack,
+    );
     return [
       {
         id: clip.id,
@@ -755,6 +840,8 @@ export function EditorProjectV2Assembly({
         playbackRate: 1,
         muted: true,
         volume: 0,
+        effects,
+        effectTimeSec,
         mediaStyle: {
           opacity: clip.transform.opacity,
           transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
@@ -994,6 +1081,9 @@ export function EditorProjectV2Assembly({
             onTogglePlay={playback.toggle}
             playheadSec={playback.playheadSec}
             totalSec={layout.totalSec}
+            mediaStyle={clipEffectsToCss(activeEffects, activeClipT)}
+            shaderEffects={activeEffects}
+            shaderTimeSec={activeEffectTimeSec}
             textOverlays={activeText}
             overlayLayers={overlayLayers}
             mediaMuted={

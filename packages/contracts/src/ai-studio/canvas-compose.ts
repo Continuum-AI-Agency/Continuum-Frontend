@@ -43,6 +43,7 @@ export const CANVAS_COMPOSER_MAX_REFERENCES = 20;
 export const canvasComposerReferenceTypeSchema = z.enum([
   'skill',
   'media_asset',
+  'workflow',
   'trend',
   'event',
   'question',

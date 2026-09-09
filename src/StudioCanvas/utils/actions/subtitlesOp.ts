@@ -8,7 +8,11 @@ import { useStudioStore } from '../../stores/useStudioStore';
 import type { NodeOutput } from '../../types/execution';
 import { runSingleSourceSpliceInWorker } from '../../workers/spliceWorkerClient';
 import { extractAudioWav } from '../clip/extractAudioWav';
-import { applyEmphasisIndices, groupWordsIntoCues } from '../splice/captionCues';
+import {
+  applyEmphasisIndices,
+  groupWordsIntoCues,
+  wordsForCaptionText,
+} from '../splice/captionCues';
 
 // The `video.subtitles` action: transcribe a clip, choose which words shout, and burn
 // word-synced captions into the bytes.
@@ -54,19 +58,40 @@ export async function runSubtitlesAction(
   const blob = args.inputs.find((input) => input.handle === 'in')?.blob;
   if (!blob) throw new Error('Connect a clip to the subtitles action first');
 
-  const brandId = (deps.resolveBrandId ?? (() => useStudioStore.getState().brandId))();
-  if (!brandId) throw new Error('Select a brand before running subtitles');
-
   const preset = resolveCaptionPreset(
     typeof config.preset === 'string' ? config.preset : undefined,
   );
   const captionStyle = applyCaptionPreset(preset);
+  const splice = deps.splice ?? runSingleSourceSpliceInWorker;
+  const loadFonts = deps.loadFonts ?? loadCaptionFonts;
+  const manualCaptions = Array.isArray(config.manualCaptions)
+    ? (config.manualCaptions as Array<{ text: string; startSec: number; endSec: number }>)
+    : [];
+
+  if (manualCaptions.length > 0) {
+    const result = await splice({
+      blob,
+      ranges: WHOLE_SOURCE,
+      captionCues: manualCaptions.map((caption, index) => ({
+        id: `manual-caption-${index + 1}`,
+        startSec: caption.startSec,
+        endSec: caption.endSec,
+        words: wordsForCaptionText(caption.text, caption.startSec, caption.endSec),
+      })),
+      captionStyle,
+      captionFonts: await loadFonts(preset.fontFamily ? [preset.fontFamily] : []),
+      signal: args.signal,
+      onProgress: ({ progress }) => args.onProgress?.(progress),
+    });
+    return { type: 'video', url: result.objectUrl, sizeBytes: result.blob.size };
+  }
+
+  const brandId = (deps.resolveBrandId ?? (() => useStudioStore.getState().brandId))();
+  if (!brandId) throw new Error('Select a brand before running subtitles');
 
   const extractAudio = deps.extractAudio ?? extractAudioWav;
   const uploadAudio = deps.uploadAudio ?? uploadCaptionAudio;
   const cleanupAudio = deps.cleanupAudio ?? cleanupCaptionAudio;
-  const splice = deps.splice ?? runSingleSourceSpliceInWorker;
-  const loadFonts = deps.loadFonts ?? loadCaptionFonts;
   const getToken = deps.getToken ?? getBrowserAccessToken;
   const fetchImpl = deps.fetchImpl ?? fetch;
 

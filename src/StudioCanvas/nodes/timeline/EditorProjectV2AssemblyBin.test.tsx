@@ -57,13 +57,67 @@ const wiredClip: TimelineInputSource = {
   nodeId: 'clip-node',
   kind: 'video',
   label: 'bench-clip.mp4',
+  shaderStack: {
+    version: 1,
+    effects: [{ effectId: 'vignette', enabled: true, parameters: { amount: 0.8 }, keyframes: [] }],
+  },
 };
 
-const renderAssembly = (applied: EditorAssemblyOperation[]) =>
+const projectWithClip = (): EditorProjectV2 => {
+  const project = emptyProject();
+  return editorProjectV2Schema.parse({
+    ...project,
+    durationSec: 4,
+    tracks: [
+      {
+        id: 'video-track',
+        name: 'Video',
+        order: 0,
+        enabled: true,
+        locked: false,
+        muted: false,
+        solo: false,
+        kind: 'video',
+        clips: [
+          {
+            id: 'clip',
+            name: 'Clip',
+            timelineStartSec: 0,
+            durationSec: 4,
+            enabled: true,
+            locked: false,
+            tags: [],
+            kind: 'video',
+            source: { sourceType: 'canvas_node', nodeId: 'clip-node' },
+            sourceInSec: 0,
+            playbackRate: 1,
+            reverse: false,
+            transform: {
+              position: { x: 0.5, y: 0.5, unit: 'normalized' },
+              scaleX: 1,
+              scaleY: 1,
+              rotationDeg: 0,
+              anchorX: 0.5,
+              anchorY: 0.5,
+              opacity: 1,
+            },
+            crop: { left: 0, top: 0, right: 0, bottom: 0 },
+            blendMode: 'normal',
+            audioEnabled: true,
+            effects: [],
+            keyframes: [],
+          },
+        ],
+      },
+    ],
+  });
+};
+
+const renderAssembly = (applied: EditorAssemblyOperation[], project = emptyProject()) =>
   render(
     <ToastProvider>
       <EditorProjectV2Assembly
-        project={emptyProject()}
+        project={project}
         brandId="00000000-0000-4000-8000-0000000000b2"
         pool={[wiredClip]}
         busy={false}
@@ -97,6 +151,11 @@ describe('Assembly media bin', () => {
     expect(
       upsert && 'clip' in upsert && 'source' in upsert.clip ? upsert.clip.source : undefined,
     ).toMatchObject({ sourceType: 'canvas_node', nodeId: 'clip-node' });
+  });
+
+  it('previews a deferred source shader on the durable project clip', () => {
+    renderAssembly([], projectWithClip());
+    expect(screen.getByLabelText('GPU shader preview')).toBeDefined();
   });
 });
 

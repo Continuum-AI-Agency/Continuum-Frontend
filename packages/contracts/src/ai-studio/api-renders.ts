@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { apiRenderFitReportSchema, pixelBoxSchema, slotPlacementSchema } from './api-render-fit';
+import { apiRenderJudgeSchema } from './api-render-judge';
 
 export const API_RENDER_TEMPLATES_ROUTE = '/api/ai-studio/renders/templates';
 export const API_RENDER_PREFLIGHT_ROUTE = '/api/ai-studio/renders/preflight';
@@ -6,6 +8,7 @@ export const API_RENDER_JOBS_ROUTE = '/api/ai-studio/renders/jobs';
 export const API_RENDER_INPUT_SETS_ROUTE = '/api/ai-studio/renders/input-sets';
 export const API_RENDER_BATCH_PREFLIGHT_ROUTE = '/api/ai-studio/renders/batch-preflight';
 export const API_RENDER_BATCHES_ROUTE = '/api/ai-studio/renders/batches';
+export const API_RENDER_ENVIRONMENTS_ROUTE = '/api/ai-studio/renders/environments';
 
 /**
  * A caller-facing variable name. Physical `f_<hash>` renderer field names are private
@@ -34,6 +37,44 @@ export const apiRenderVariableKeySchema = z
  */
 export const WATERMARK_LOGO_VARIABLE_KEY = 'watermark_logo';
 
+/**
+ * The product-centric role vocabulary, byte-identical to RENDER_REGISTRY_CONTRACT.md §7 and to
+ * the fleet's own two copies (`nocobase-plugin-template-forge/src/server/slotRoles.ts`,
+ * `render-request-contract/src/productRecord.js`). A role is what a slot MEANS, independent of
+ * what the designer called the layer — it is what lets one brand's product record fill any
+ * template without either side knowing the other's field names.
+ *
+ * Copied rather than imported because the authority lives in another repo on the fleet. A
+ * closed enum on this side is the point: a role the fleet invents and this build does not know
+ * should fail loudly here, not render as an unlabelled group.
+ */
+export const apiRenderSlotRoleSchema = z.enum([
+  'sku',
+  'external_id',
+  'name',
+  'description',
+  'quantity',
+  'price',
+  'currency',
+  'old_price',
+  'discount_percent',
+  'promo_start',
+  'promo_end',
+  'promo_dates',
+  'product_image',
+  'brand_logo',
+  'background_image',
+  'background_color',
+  'legal_text',
+  'color_primary',
+  'color_secondary',
+  'color_accent',
+  'color_text',
+  'cta_text',
+  'landing_url',
+]);
+export type ApiRenderSlotRole = z.infer<typeof apiRenderSlotRoleSchema>;
+
 export const apiRenderVariableKindSchema = z.enum([
   'text',
   'number',
@@ -60,6 +101,33 @@ export const apiRenderVariableSchema = z
     // off `required` alone will either refuse to render or offer the wrong control.
     // Defaulted so a server too old to emit it stays contract-valid.
     reserved: z.boolean().default(false),
+
+    // --- Template Forge facts -------------------------------------------------
+    //
+    // Every field below is OPTIONAL and DEFAULTED, and none of them enter `contractHash`. The
+    // hash is built from a separate list in the backend's adapter, so a server that starts
+    // emitting these does not 409 a single saved input set or in-flight confirmation. That is
+    // deliberate: they describe a variable, they do not change what it accepts.
+    //
+    // They are absent entirely on the legacy-reflection arm, which knows a field's type and
+    // nothing about what it means.
+
+    /** What this slot MEANS. Null when nobody has assigned a role. */
+    role: apiRenderSlotRoleSchema.nullable().default(null),
+    /** Who said so. `declared` is the operator's contract, `human` outranks `agent`. */
+    roleSource: z.enum(['declared', 'agent', 'human']).nullable().default(null),
+    /**
+     * The designer's own composed length in the tightest comp — NOT a limit After Effects
+     * enforces. It is the only honest budget available without a render, and the number a
+     * field can show a live count against.
+     */
+    charBudget: z.number().int().nonnegative().nullable().default(null),
+    /** Which delivery comps carry this slot. One slot in seven ratios is one slot. */
+    comps: z.array(z.string()).default([]),
+    /** The designer's own value, when the parse read one. Useful as a placeholder. */
+    sample: z.string().nullable().default(null),
+    /** Where this slot lands, so a picked asset can be placed before a render is spent. */
+    placement: slotPlacementSchema.nullable().default(null),
   })
   .strict();
 export type ApiRenderVariable = z.infer<typeof apiRenderVariableSchema>;
@@ -76,14 +144,75 @@ export const apiRenderTemplateSummarySchema = z
     variableCount: z.number().int().nonnegative(),
     previewUrl: z.string().url().nullable(),
     updatedAt: z.string().nullable(),
+
+    // --- Template Forge facts, all optional and none of them hashed -------------
+    /** Ratio labels the source ships, e.g. ['1:1','4:5','9:16']. Empty on the legacy arm. */
+    ratios: z.array(z.string()).default([]),
+    /** The Library asset this template was promoted from, when the join resolves. */
+    sourceAssetId: z.string().uuid().nullable().default(null),
+    /**
+     * How many faces this template needs that the brand does NOT hold. Null means nobody has
+     * checked — which is a different thing from zero, and a card that showed them the same
+     * would report an unread template as ready.
+     */
+    fontsMissing: z.number().int().nonnegative().nullable().default(null),
   })
   .strict();
 export type ApiRenderTemplateSummary = z.infer<typeof apiRenderTemplateSummarySchema>;
+
+/** A face the template needs, against what the brand actually holds. */
+export const apiRenderTemplateFontSchema = z
+  .object({ family: z.string().min(1), layers: z.number().int().nonnegative(), held: z.boolean() })
+  .strict();
+export type ApiRenderTemplateFont = z.infer<typeof apiRenderTemplateFontSchema>;
 
 export const apiRenderTemplateContractSchema = z
   .object({
     template: apiRenderTemplateSummarySchema,
     variables: z.array(apiRenderVariableSchema),
+
+    /**
+     * Which faces this template needs and whether the brand holds them.
+     *
+     * Empty means nobody could check — the template has no parsed source — and that is not the
+     * same as "no fonts needed". A template missing a face still renders: it finishes and hands
+     * back a frame with the text in a fallback, which looks exactly like success.
+     */
+    fonts: z.array(apiRenderTemplateFontSchema).default([]),
+    /**
+     * The delivery comp and every measured row in it, so a caller can DRAW the layout and place
+     * a picked asset in it before spending a render. Null when the template has no parsed source.
+     */
+    layout: z
+      .object({
+        comp: z
+          .object({
+            name: z.string(),
+            width: z.number().int().positive(),
+            height: z.number().int().positive(),
+          })
+          .strict(),
+        boxes: z.array(
+          z
+            .object({
+              key: z.string(),
+              label: z.string(),
+              box: pixelBoxSchema,
+              role: apiRenderSlotRoleSchema.nullable().default(null),
+              kind: apiRenderVariableKindSchema.nullable().default(null),
+            })
+            .strict(),
+        ),
+      })
+      .strict()
+      .nullable()
+      .default(null),
+    /**
+     * Where the LIVE template and its stored contract disagree, straight from the forge. A
+     * template whose fields moved under its contract is one whose renders quietly stop matching
+     * what a caller filled in, so it is reported rather than reconciled here.
+     */
+    divergence: z.array(z.string()).default([]),
   })
   .strict();
 export type ApiRenderTemplateContract = z.infer<typeof apiRenderTemplateContractSchema>;
@@ -107,6 +236,34 @@ export const apiRenderWorkspaceStatusSchema = z
   })
   .strict();
 export type ApiRenderWorkspaceStatus = z.infer<typeof apiRenderWorkspaceStatusSchema>;
+
+/**
+ * One environment this brand can render into.
+ *
+ * A brand may hold several enabled bindings — `media.render_workspace_bindings` has always
+ * modelled that — and until now exactly one of them, the default, was reachable and none of
+ * them were visible. `status` is the same eligibility verdict the template list already
+ * carried, per environment, because "which workspace am I in" and "will the fleet honour it"
+ * are the same question asked twice.
+ */
+export const apiRenderEnvironmentSchema = z
+  .object({
+    bindingId: z.string().uuid(),
+    workspace: z.string().min(1),
+    environmentKey: z.string(),
+    clientKey: z.string(),
+    isDefault: z.boolean(),
+    status: apiRenderWorkspaceStatusSchema,
+  })
+  .strict();
+export type ApiRenderEnvironment = z.infer<typeof apiRenderEnvironmentSchema>;
+
+export const apiRenderEnvironmentListResponseSchema = z
+  .object({ items: z.array(apiRenderEnvironmentSchema) })
+  .strict();
+export type ApiRenderEnvironmentListResponse = z.infer<
+  typeof apiRenderEnvironmentListResponseSchema
+>;
 
 export const apiRenderTemplateListResponseSchema = z
   .object({
@@ -185,9 +342,20 @@ const oneVariableSourceMessage = {
   message: 'Supply either variables or inputSetId, never both and never neither',
 };
 
+/**
+ * Which environment to render into.
+ *
+ * Optional, and omitting it keeps today's behaviour exactly: the brand's enabled DEFAULT
+ * binding. Naming one is how a brand with several enabled workspaces picks. It is not a
+ * loosening — the binding is still resolved server-side against this brand, frozen into the
+ * signed confirmation, and re-checked at confirm time by `assertBindingUnchanged`.
+ */
+const bindingIdField = z.string().uuid().optional();
+
 export const apiRenderPreflightRequestSchema = z
   .object({
     brandId: z.string().uuid(),
+    bindingId: bindingIdField,
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
     variables: apiRenderVariableMapSchema.optional(),
@@ -257,6 +425,7 @@ export type ApiRenderBatchRecord = z.infer<typeof apiRenderBatchRecordSchema>;
 export const apiRenderBatchPreflightRequestSchema = z
   .object({
     brandId: z.string().uuid(),
+    bindingId: bindingIdField,
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
     delivery: apiRenderDeliveryTargetSchema.optional(),
@@ -320,6 +489,22 @@ export const apiRenderJobSchema = z
     error: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
+
+    /** Which environment this job was prepared against — the binding frozen into its token. */
+    environment: z.string().nullable().default(null),
+    /**
+     * The deterministic placement check, computed at preflight and frozen here.
+     *
+     * Frozen rather than recomputed because it is what decides whether the finished frame goes
+     * to the judge, and that decision must not depend on a template or an asset changing while
+     * the render was in the queue.
+     */
+    fit: apiRenderFitReportSchema.nullable().default(null),
+    /**
+     * The judge's verdict on the finished frame, when the fit check escalated it. Null means
+     * either the frame has not finished or nothing needed judging — `fit.escalate` says which.
+     */
+    judge: apiRenderJudgeSchema.nullable().default(null),
   })
   .strict();
 export type ApiRenderJob = z.infer<typeof apiRenderJobSchema>;
@@ -371,6 +556,12 @@ export const apiRenderPreflightResponseSchema = z
     // was locked rather than infer it from `inputKeys` — a key name proves a slot was
     // filled, not which asset filled it. Null when the template has no such slot.
     watermarkLogo: pinnedRenderAssetSchema.nullable().default(null),
+    /**
+     * The server's own placement check over the pinned assets. Echoed so the canvas shows the
+     * verdict that was actually frozen rather than the one the browser computed while typing —
+     * they agree in the ordinary case, and when they do not the server's is the one that ran.
+     */
+    fit: apiRenderFitReportSchema.nullable().default(null),
   })
   .strict();
 export type ApiRenderPreflightResponse = z.infer<typeof apiRenderPreflightResponseSchema>;

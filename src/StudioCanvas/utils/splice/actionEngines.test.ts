@@ -14,6 +14,7 @@ import {
   ACTION_ENGINES,
   type ActionEngineArgs,
   actionEngine,
+  audioBedPlan,
   renderSplitParts,
   requireInput,
   speedTimelineItem,
@@ -35,12 +36,14 @@ const WAVE_3_VIDEO_ENGINES: ActionId[] = [
   'video.speed',
   'video.kenBurns',
   'video.stitch',
+  'video.audioBed',
   'video.split',
   'video.crop',
   'video.pad',
   'video.greenscreen',
   'video.reverse',
   'video.boomerang',
+  'video.shader',
 ];
 
 /**
@@ -157,6 +160,79 @@ describe('video.stitch', () => {
 
   it('still names the handle when nothing at all is wired', async () => {
     await expect(ACTION_ENGINES['video.stitch']!(argsWith([]))).rejects.toThrow(/"in" input/);
+  });
+});
+
+describe('video.audioBed', () => {
+  it('maps its two inputs onto the existing timeline audio mixer', () => {
+    const video = blob('clip');
+    const audio = new Blob(['music'], { type: 'audio/wav' });
+    expect(
+      audioBedPlan(video, audio, {
+        startSec: 0,
+        trimStartSec: null,
+        trimEndSec: 12,
+        volume: 0.5,
+        fadeInSec: 0.15,
+        fadeOutSec: 0.35,
+        segments: null,
+      }),
+    ).toEqual({
+      items: [{ itemId: 'action-audio-bed-video', kind: 'video', blob: video }],
+      audioTracks: [
+        {
+          itemId: 'action-audio-bed-track-1',
+          blob: audio,
+          startSec: 0,
+          trimEndSec: 12,
+          volume: 0.5,
+          fadeInSec: 0.15,
+          fadeOutSec: 0.35,
+        },
+      ],
+    });
+  });
+
+  it('maps timed music-control segments into one mixdown pass', () => {
+    const video = blob('clip');
+    const audio = new Blob(['music'], { type: 'audio/wav' });
+    const plan = audioBedPlan(video, audio, {
+      startSec: 0,
+      trimStartSec: null,
+      trimEndSec: null,
+      volume: 0.5,
+      fadeInSec: 0.15,
+      fadeOutSec: 0.35,
+      segments: [
+        {
+          startSec: 0,
+          trimStartSec: 0,
+          trimEndSec: 1,
+          volume: 0.18,
+          fadeInSec: 0.05,
+          fadeOutSec: 0.05,
+        },
+        {
+          startSec: 1,
+          trimStartSec: 1,
+          trimEndSec: 20,
+          volume: 0.06,
+          fadeInSec: 0.05,
+          fadeOutSec: 0.05,
+        },
+      ],
+    });
+    expect(
+      plan.audioTracks?.map(({ startSec, trimStartSec, trimEndSec, volume }) => ({
+        startSec,
+        trimStartSec,
+        trimEndSec,
+        volume,
+      })),
+    ).toEqual([
+      { startSec: 0, trimStartSec: 0, trimEndSec: 1, volume: 0.18 },
+      { startSec: 1, trimStartSec: 1, trimEndSec: 20, volume: 0.06 },
+    ]);
   });
 });
 

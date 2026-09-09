@@ -53,4 +53,16 @@ describe('publishing is a separate act from saving', () => {
   test('the port shape is shared, so inference has one implementation', () => {
     expect(canvasPipelineMetadataSchema.safeParse(ports).success).toBe(true);
   });
+
+  test('a multi-shot Pipeline may publish more ports than a hand-wired Technique', () => {
+    const inputPorts = Array.from({ length: 16 }, (_, index) => ({
+      id: `in-${index}`,
+      nodeRef: `node-${index}`,
+    }));
+    expect(canvasPipelineMetadataSchema.safeParse({ ...ports, inputPorts }).success).toBe(true);
+    expect(
+      canvasPipelineMetadataSchema.safeParse({ ...ports, inputPorts: [...inputPorts, ...inputPorts] })
+        .success,
+    ).toBe(false);
+  });
 });

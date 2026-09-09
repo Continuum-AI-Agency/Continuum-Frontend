@@ -23,7 +23,9 @@ import {
   PreviewRateLimitedError,
 } from '@/lib/onboarding/agentClient';
 import { resolveSafeBrandName } from '@/lib/onboarding/brandName';
+import { persistOnboardingBrandKit } from '@/lib/onboarding/inspirationsClient';
 import { useBrandProfileRevealCache } from '@/lib/onboarding/revealCache';
+import { prepareOnboardingStarter } from '@/lib/onboarding/starterKit';
 import type { OnboardingState } from '@/lib/onboarding/state';
 import { timing, trackOnboardingEvent } from '@/lib/onboarding/telemetry';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -50,7 +52,7 @@ import {
 } from './state/agentPreview';
 import { BackgroundJobsProvider, useBackgroundJobs } from './state/BackgroundJobsProvider';
 import { JobPersistor } from './state/JobPersistor';
-import { runCreativePrewarm, runScrape } from './state/jobRunners';
+import { runScrape } from './state/jobRunners';
 
 type ScreenIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -105,9 +107,12 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   const navigate = useCallback(
     async (next: ScreenIndex): Promise<boolean> => {
       directionRef.current = next > screen ? 1 : -1;
-      if (next > persistedStepRef.current) {
+      if (next > persistedStepRef.current || (screen === 2 && next === 3)) {
         try {
-          await updateState({ step: next });
+          await updateState({
+            step: next,
+            ...(screen === 2 && next === 3 ? { catalogCompleted: true } : {}),
+          });
           persistedStepRef.current = next;
         } catch {
           return false;
@@ -579,11 +584,11 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
 
   useEffect(() => {
     if (jobs.agentPreview.status !== 'done') return;
+    if (!state.catalogCompleted) return;
     if (prewarmedRef.current) return;
     prewarmedRef.current = true;
     router.prefetch('/dashboard');
-    // Generate the first on-brand creatives now too — decoupled from the strategic
-    // analysis, grounded in the brand profile. Persists the kit (colors) first.
+    // Prepare Elements after catalog selection; creatives wait for inspiration selection.
     if (INSPIRATIONS_ENABLED) {
       const kit = {
         colors: state.brand.colors ?? [],
@@ -592,17 +597,14 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       };
       void (async () => {
         try {
-          await start('creativePrewarm', (signal) =>
-            runCreativePrewarm(brandId, kit, signal, (images) =>
-              patch('creativePrewarm', { images }),
-            ),
-          );
+          await persistOnboardingBrandKit({ brandId, ...kit });
+          await prepareOnboardingStarter(brandId);
         } catch (error) {
           console.warn('[onboarding] creative prewarm failed', error);
         }
       })();
     }
-  }, [jobs.agentPreview.status, brandId, start, router, state.brand]);
+  }, [jobs.agentPreview.status, brandId, router, state.brand, state.catalogCompleted]);
 
   return (
     <OnboardingShell

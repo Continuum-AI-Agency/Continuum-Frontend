@@ -50,6 +50,7 @@ import {
   resolveExportPreset,
   resolveExportQuality,
 } from '../../utils/render/exportPresets';
+import { mergeClipShaderEffects } from '../../utils/render/shaderStack';
 import { headFadeFor, tailFadeFor, transitionOverlayAt } from '../../utils/render/transitions';
 import { findActiveCue, groupWordsIntoCues } from '../../utils/splice/captionCues';
 import { nleClipsFrom, toEdlCmx3600, toFcpxml } from '../../utils/timeline/nleExport';
@@ -730,8 +731,12 @@ export function TimelineEditorDialog({
           Math.min(1, (playback.playheadSec - activeClip.startSec) / activeClip.durationSec),
         )
       : 0;
-  const activeMediaStyle = clipEffectsToCss(activeClip?.item.effects, activeClipT);
-  const activeTextOverlays = resolveTextOverlays(activeClip?.item.effects);
+  const activeEffects = mergeClipShaderEffects(
+    activeClip?.item.effects,
+    activeClip ? poolById.get(activeClip.item.sourceNodeId)?.shaderStack : undefined,
+  );
+  const activeMediaStyle = clipEffectsToCss(activeEffects, activeClipT);
+  const activeTextOverlays = resolveTextOverlays(activeEffects);
   const activeOverlayLayers = useMemo(() => {
     const layers = resolveOverlayPreviewLayers({
       document,
@@ -768,14 +773,25 @@ export function TimelineEditorDialog({
     const localOut = playback.playheadSec - activeClip.startSec;
     const tailStart = activeClip.durationSec - dur;
     if (localOut < tailStart) return undefined;
-    const url = poolById.get(nextDissolveClip.item.sourceNodeId)?.previewUrl;
+    const source = poolById.get(nextDissolveClip.item.sourceNodeId);
+    const url = source?.previewUrl;
     if (!url) return undefined;
-    const kind =
-      nextDissolveClip.item.kind ??
-      poolById.get(nextDissolveClip.item.sourceNodeId)?.kind ??
-      'video';
+    const kind = nextDissolveClip.item.kind ?? source?.kind ?? 'video';
     if (kind === 'audio') return undefined;
-    return { url, kind, opacity: Math.min(1, (localOut - tailStart) / dur) };
+    const effectTimeSec = Math.max(0, localOut - tailStart);
+    const effects = mergeClipShaderEffects(nextDissolveClip.item.effects, source?.shaderStack);
+    return {
+      url,
+      kind,
+      opacity: Math.min(1, effectTimeSec / dur),
+      sourceSec:
+        kind === 'video'
+          ? (nextDissolveClip.item.trimStartSec ?? 0) + effectTimeSec * speedFor(effects)
+          : 0,
+      playbackRate: speedFor(effects),
+      effects,
+      effectTimeSec,
+    };
   })();
 
   const captionCues = useMemo(
@@ -1022,6 +1038,10 @@ export function TimelineEditorDialog({
                   playheadSec={playback.playheadSec}
                   totalSec={model.layout.totalSec}
                   mediaStyle={activeMediaStyle}
+                  shaderEffects={activeEffects}
+                  shaderTimeSec={
+                    activeClip ? Math.max(0, playback.playheadSec - activeClip.startSec) : 0
+                  }
                   textOverlays={activeTextOverlays}
                   fadeOverlay={activeFadeOverlay}
                   crossfade={activeCrossfade}

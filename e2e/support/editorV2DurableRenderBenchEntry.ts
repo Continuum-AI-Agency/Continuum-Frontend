@@ -4,7 +4,8 @@ import {
   completeClientRenderJob,
   updateClientRenderJob,
 } from '../../src/lib/api/clientRenderJobs.client';
-import { executeTimelineEditorClientRender } from '../../src/lib/client-render/executors/timelineEditor';
+import { getClientRenderExecutor } from '../../src/lib/client-render/executorRegistry';
+import { registerDefaultClientRenderExecutors } from '../../src/lib/client-render/registerDefaultExecutors';
 import { uploadMediaAsset } from '../../src/lib/library/uploadMediaAsset';
 import { createSupabaseBrowserClient } from '../../src/lib/supabase/client';
 
@@ -63,7 +64,9 @@ const encodeSource = async (): Promise<Blob> => {
   return new Blob([output.target.buffer], { type: 'video/mp4' });
 };
 
-const seedSource = async (input: BenchAuth & { brandId: string }): Promise<DurableSourceReceipt> => {
+const seedSource = async (
+  input: BenchAuth & { brandId: string },
+): Promise<DurableSourceReceipt> => {
   await authenticate(input);
   const blob = await encodeSource();
   const uploaded = await uploadMediaAsset({
@@ -96,7 +99,10 @@ const render = async (
     phase: 'Lease heartbeat confirmed',
   });
   const controller = new AbortController();
-  const result = await executeTimelineEditorClientRender({
+  registerDefaultClientRenderExecutors();
+  const execute = getClientRenderExecutor('timeline_editor');
+  if (!execute) throw new Error('Timeline executor was not registered.');
+  const result = await execute({
     job: claimed.job,
     leaseToken: claimed.leaseToken,
     capabilities,

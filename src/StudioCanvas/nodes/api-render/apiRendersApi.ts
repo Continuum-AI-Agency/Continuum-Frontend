@@ -1,6 +1,7 @@
 import {
   API_RENDER_BATCH_PREFLIGHT_ROUTE,
   API_RENDER_BATCHES_ROUTE,
+  API_RENDER_ENVIRONMENTS_ROUTE,
   API_RENDER_INPUT_SETS_ROUTE,
   API_RENDER_JOBS_ROUTE,
   API_RENDER_PREFLIGHT_ROUTE,
@@ -10,6 +11,7 @@ import {
   type ApiRenderBatchPreflightResponse,
   type ApiRenderCreateInputSetRequest,
   type ApiRenderCreateJobRequest,
+  type ApiRenderEnvironmentListResponse,
   type ApiRenderInputSet,
   type ApiRenderInputSetListResponse,
   type ApiRenderJob,
@@ -21,6 +23,7 @@ import {
   type ApiRenderUpdateInputSetRequest,
   apiRenderBatchPreflightResponseSchema,
   apiRenderBatchSchema,
+  apiRenderEnvironmentListResponseSchema,
   apiRenderInputSetListResponseSchema,
   apiRenderInputSetSchema,
   apiRenderJobListResponseSchema,
@@ -35,15 +38,28 @@ const query = (input: Record<string, string | number>) =>
   new URLSearchParams(Object.entries(input).map(([key, value]) => [key, String(value)])).toString();
 
 export const apiRendersApi = {
-  listTemplates(brandId: string) {
+  // Which workspaces this brand can render into. Most brands answer with one — the picker
+  // collapses to a label then — but a brand with several could previously reach only its
+  // default and had no way to see that the others existed.
+  listEnvironments(brandId: string) {
+    return http.request<ApiRenderEnvironmentListResponse>({
+      path: `${API_RENDER_ENVIRONMENTS_ROUTE}?${query({ brandId })}`,
+      schema: apiRenderEnvironmentListResponseSchema,
+    });
+  },
+  // `bindingId` is omitted, not sent empty, when the node is on the brand's default: an absent
+  // param means "the default" on the server, and sending a blank one would be a 400.
+  listTemplates(brandId: string, bindingId?: string | null) {
     return http.request<ApiRenderTemplateListResponse>({
-      path: `${API_RENDER_TEMPLATES_ROUTE}?${query({ brandId })}`,
+      path: `${API_RENDER_TEMPLATES_ROUTE}?${query(bindingId ? { brandId, bindingId } : { brandId })}`,
       schema: apiRenderTemplateListResponseSchema,
     });
   },
-  getContract(brandId: string, templateKey: string) {
+  getContract(brandId: string, templateKey: string, bindingId?: string | null) {
     return http.request<ApiRenderTemplateContract>({
-      path: `${API_RENDER_TEMPLATES_ROUTE}/${encodeURIComponent(templateKey)}/contract?${query({ brandId })}`,
+      path: `${API_RENDER_TEMPLATES_ROUTE}/${encodeURIComponent(templateKey)}/contract?${query(
+        bindingId ? { brandId, bindingId } : { brandId },
+      )}`,
       schema: apiRenderTemplateContractSchema,
     });
   },

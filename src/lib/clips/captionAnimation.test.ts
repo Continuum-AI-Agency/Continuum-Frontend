@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import {
   captionAnchorSec,
+  captionAnimationFromEditorId,
+  captionMotionTransform,
   captionWordTransform,
   easeOutCubic,
   easeOutQuad,
@@ -171,5 +173,34 @@ describe('captionAnchorSec', () => {
     expect(captionAnchorSec({ kind: 'pop' }, 1, 2.5)).toBe(2.5);
     expect(captionAnchorSec({ kind: 'pop', anchor: 'word' }, 1, 2.5)).toBe(2.5);
     expect(captionAnchorSec({ kind: 'scaleIn', anchor: 'cue' }, 1, 2.5)).toBe(1);
+  });
+});
+
+describe('editor text motion', () => {
+  it('maps only supported durable preset ids', () => {
+    expect(captionAnimationFromEditorId('scale-in')).toEqual({
+      kind: 'scaleIn',
+      anchor: 'cue',
+      reveal: 'cue',
+    });
+    expect(captionAnimationFromEditorId('FLOAT_IN')?.kind).toBe('floatIn');
+    expect(captionAnimationFromEditorId('custom-js')).toBeUndefined();
+  });
+
+  it('plays the exit curve backwards without frame state', () => {
+    const base = {
+      entry: captionAnimationFromEditorId('pop'),
+      exit: captionAnimationFromEditorId('float-in'),
+      cueStartSec: 0,
+      cueEndSec: 4,
+      wordStartSec: 0,
+      wordEndSec: 4,
+      fontPx: FONT_PX,
+    };
+    expect(captionMotionTransform({ ...base, outputTimeSec: 1 }).alpha).toBe(1);
+    const nearEnd = captionMotionTransform({ ...base, outputTimeSec: 3.9 });
+    expect(nearEnd.alpha).toBeLessThan(1);
+    expect(nearEnd.dy).toBeGreaterThan(0);
+    expect(captionMotionTransform({ ...base, outputTimeSec: 4 }).alpha).toBe(0);
   });
 });

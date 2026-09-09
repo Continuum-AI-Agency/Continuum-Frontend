@@ -1,7 +1,9 @@
 import {
   actionDef,
   type GraphNodeLike,
+  type ShaderStackV1,
   STUDIO_NODE_REGISTRY,
+  shaderStackV1Schema,
   TIMELINE_MEDIA_INPUT_HANDLE,
   type TimelineMediaKind,
   timelineMediaKind,
@@ -113,18 +115,21 @@ function sourceVersionId(node: StudioNode): string | undefined {
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined;
 }
 
-type ResolvedMedia = { kind: TimelineMediaKind; url?: string };
+type ResolvedMedia = { kind: TimelineMediaKind; url?: string; shaderStack?: ShaderStackV1 };
 
 // What a node handed downstream while the run is still in memory. Preferred over the
 // node's stamped data: it is the fresher of the two.
 function readMediaFromOutput(output: NodeOutput | undefined): ResolvedMedia | undefined {
-  if (output?.type === 'video' && output.url) return { kind: 'video', url: output.url };
+  if (output?.type === 'video' && output.url) {
+    return { kind: 'video', url: output.url, shaderStack: output.shaderStack };
+  }
   if (output?.type === 'image' && (isUsableUrl(output.url) || output.base64)) {
     return {
       kind: 'image',
       url: isUsableUrl(output.url)
         ? output.url
         : `data:${output.mimeType || 'image/png'};base64,${output.base64}`,
+      shaderStack: output.shaderStack,
     };
   }
   return undefined;
@@ -142,7 +147,14 @@ function readSourceKindAndUrl(
   const fromOutput = readMediaFromOutput(resolvedOutputs?.get(node.id));
   if (fromOutput) return fromOutput;
   const kind = timelineMediaKind(asGraphNode(node), sourceHandle) ?? 'video';
-  return { kind, url: readMediaUrl(node, kind) };
+  const shaderStack = shaderStackV1Schema.safeParse(
+    (node.data as Record<string, unknown>).shaderStack,
+  );
+  return {
+    kind,
+    url: readMediaUrl(node, kind),
+    ...(shaderStack.success ? { shaderStack: shaderStack.data } : {}),
+  };
 }
 
 // The `media-in` pool as source node id → the handle it left its source on. The
@@ -178,7 +190,7 @@ export function resolveTimelineInputPool(
   for (const [sourceId, sourceHandle] of mediaInSourceHandles(edges, targetNodeId)) {
     const node = nodeById.get(sourceId);
     if (!node) continue;
-    const { kind, url } = readSourceKindAndUrl(node, sourceHandle, resolvedOutputs);
+    const { kind, url, shaderStack } = readSourceKindAndUrl(node, sourceHandle, resolvedOutputs);
     pool.push({
       nodeId: sourceId,
       kind,
@@ -186,6 +198,7 @@ export function resolveTimelineInputPool(
       ...(sourceAssetId(node) ? { sourceAssetId: sourceAssetId(node) } : {}),
       ...(sourceVersionId(node) ? { sourceVersionId: sourceVersionId(node) } : {}),
       previewUrl: isUsableUrl(url) ? url : undefined,
+      shaderStack,
     });
   }
 
@@ -199,13 +212,18 @@ function createTimelineSourceResolver(
   nodeById: Map<string, StudioNode>,
   resolvedOutputs: Map<string, NodeOutput>,
   handleBySource: Map<string, string | null>,
-): (sourceId: string) => Promise<{ kind: TimelineMediaKind; blob: Blob }> {
-  const cache = new Map<string, Promise<{ kind: TimelineMediaKind; blob: Blob }>>();
+): (
+  sourceId: string,
+) => Promise<{ kind: TimelineMediaKind; blob: Blob; shaderStack?: ShaderStackV1 }> {
+  const cache = new Map<
+    string,
+    Promise<{ kind: TimelineMediaKind; blob: Blob; shaderStack?: ShaderStackV1 }>
+  >();
   return (sourceId: string) => {
     const cached = cache.get(sourceId);
     if (cached) return cached;
     const promise = (async () => {
-      const { kind, url } = readSourceKindAndUrl(
+      const { kind, url, shaderStack } = readSourceKindAndUrl(
         nodeById.get(sourceId),
         handleBySource.get(sourceId),
         resolvedOutputs,
@@ -214,7 +232,7 @@ function createTimelineSourceResolver(
         throw new Error(`Timeline source ${sourceId}: upstream produced no media`);
       }
       const blob = await resolveSource(url);
-      return { kind, blob };
+      return { kind, blob, shaderStack };
     })();
     cache.set(sourceId, promise);
     return promise;
@@ -241,7 +259,7 @@ export async function resolveTimelineOverlays(
       if (!item.sourceNodeId || !handleBySource.has(item.sourceNodeId)) {
         throw new Error(`Overlay item ${item.id}: no connected source`);
       }
-      const { kind, blob } = await resolveSourceNode(item.sourceNodeId);
+      const { kind, blob, shaderStack } = await resolveSourceNode(item.sourceNodeId);
       if (kind === 'audio') {
         throw new Error(`Overlay item ${item.id}: audio belongs on an audio track`);
       }
@@ -257,7 +275,7 @@ export async function resolveTimelineOverlays(
         volume: item.volume,
         audioFadeInSec: item.audioFadeInSec,
         audioFadeOutSec: item.audioFadeOutSec,
-        effects: item.effects,
+        effects: shaderStack ? { ...item.effects, shaderStack } : item.effects,
       } satisfies TimelineOverlayRenderItem;
     }),
   );
@@ -285,7 +303,7 @@ export async function resolveTimelineSources(
       if (!item.sourceNodeId || !handleBySource.has(item.sourceNodeId)) {
         throw new Error(`Timeline item ${item.order + 1}: no connected source`);
       }
-      const { kind, blob } = await resolveSourceNode(item.sourceNodeId);
+      const { kind, blob, shaderStack } = await resolveSourceNode(item.sourceNodeId);
       if (kind === 'audio') {
         throw new Error(`Timeline item ${item.order + 1}: audio belongs on an audio track`);
       }
@@ -300,7 +318,7 @@ export async function resolveTimelineSources(
         volume: item.volume,
         audioFadeInSec: item.audioFadeInSec,
         audioFadeOutSec: item.audioFadeOutSec,
-        effects: item.effects,
+        effects: shaderStack ? { ...item.effects, shaderStack } : item.effects,
         transition: item.transition,
       } satisfies TimelineRenderItem;
     }),

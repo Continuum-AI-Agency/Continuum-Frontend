@@ -1,8 +1,7 @@
 import {
   type CaptionAnimation,
   type CaptionWordTransform,
-  captionAnchorSec,
-  captionWordTransform,
+  captionMotionTransform,
 } from '@/lib/clips/captionAnimation';
 import { resolveStyleWithPreset } from '@/lib/clips/captionPresets';
 import { type CaptionStyle, DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
@@ -225,6 +224,7 @@ export function drawActiveCaption(
 
   const activeWordMode = resolvedStyle.activeWordMode ?? 'fill';
   const animation: CaptionAnimation | undefined = resolvedStyle.animation;
+  const exitAnimation: CaptionAnimation | undefined = resolvedStyle.exitAnimation;
   const emphasisColor = resolvedStyle.emphasis?.color;
   const emphasisScale = resolvedStyle.emphasis?.scale ?? 1;
   const shadow = resolvedStyle.shadow;
@@ -250,12 +250,16 @@ export function drawActiveCaption(
     let x = left;
     for (const item of line) {
       const { word, glyphs, width: wordWidth, font, emphasis } = item;
-      const anchorSec = captionAnchorSec(animation, cue.startSec, word.startSec);
-      const transform: CaptionWordTransform = captionWordTransform(
-        animation,
-        outputTimeSec - anchorSec,
+      const transform: CaptionWordTransform = captionMotionTransform({
+        entry: animation,
+        exit: exitAnimation,
+        cueStartSec: cue.startSec,
+        cueEndSec: cue.endSec,
+        wordStartSec: word.startSec,
+        wordEndSec: word.endSec,
+        outputTimeSec,
         fontPx,
-      );
+      });
 
       if (transform.visible) {
         const active = outputTimeSec >= word.startSec && outputTimeSec < word.endSec;

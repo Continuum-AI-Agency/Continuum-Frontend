@@ -6,6 +6,7 @@ import {
   type EditorTransition,
 } from '@continuum/contracts';
 import { request } from '@/lib/api/http';
+import { captionAnimationFromEditorId } from '@/lib/clips/captionAnimation';
 import {
   type CaptionStyle,
   type CaptionStyleOverride,
@@ -207,6 +208,33 @@ export const clipEffectSpecFromEditorClip = (clip: {
     const color = tint ? stringParameter(tint.parameters.color) : undefined;
     const amount = tint ? numberParameter(tint.parameters.amount) : undefined;
     return color && amount !== undefined && amount > 0 ? { tint: { color, amount } } : {};
+  })(),
+  ...(() => {
+    const amountFor = (effectId: string): number | undefined => {
+      const effect = clip.effects?.find(
+        (candidate) => candidate.enabled && candidate.effectId === effectId,
+      );
+      return effect ? numberParameter(effect.parameters.amount) : undefined;
+    };
+    const blockPx = (() => {
+      const effect = clip.effects?.find(
+        (candidate) => candidate.enabled && candidate.effectId === 'pixelate',
+      );
+      return effect ? numberParameter(effect.parameters.blockPx) : undefined;
+    })();
+    const vignette = amountFor('vignette');
+    const filmGrain = amountFor('film_grain');
+    const chromaticAberration = amountFor('chromatic_aberration');
+    const vhs = amountFor('vhs');
+    return {
+      ...(vignette !== undefined && vignette > 0 ? { vignette: { amount: vignette } } : {}),
+      ...(filmGrain !== undefined && filmGrain > 0 ? { filmGrain: { amount: filmGrain } } : {}),
+      ...(blockPx !== undefined && blockPx >= 2 ? { pixelate: { blockPx } } : {}),
+      ...(chromaticAberration !== undefined && chromaticAberration > 0
+        ? { chromaticAberration: { amount: chromaticAberration } }
+        : {}),
+      ...(vhs !== undefined && vhs > 0 ? { vhs: { amount: vhs } } : {}),
+    };
   })(),
   ...(() => {
     const corner = clip.effects?.find(
@@ -534,7 +562,11 @@ export async function buildTimelineEditorRenderPlan(input: {
           clip.timelineStartSec,
           clip.timelineStartSec + clip.durationSec,
         ),
-        style: captionStyleFor(clip, input.project.canvas.height),
+        style: {
+          ...captionStyleFor(clip, input.project.canvas.height),
+          animation: captionAnimationFromEditorId(clip.animationIn),
+          exitAnimation: captionAnimationFromEditorId(clip.animationOut),
+        },
       });
     }
   }

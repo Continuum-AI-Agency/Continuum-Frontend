@@ -168,6 +168,24 @@ const projectWithTimeline = (
 };
 
 describe('editor project reducer', () => {
+  test('stores the storyboard source script in the canonical project', () => {
+    const project = createEditorProjectV2({
+      projectId: 'project-script',
+      title: 'Board',
+      width: 1920,
+      height: 1080,
+      now: '2026-08-01T12:00:00.000Z',
+    });
+    const next = applyEditorCommandBatch(
+      project,
+      command(project, {
+        commandType: 'set_production_script',
+        sourceScript: 'EXT. RIDGELINE - SUNSET',
+      }),
+    );
+    expect(next.production.sourceScript).toBe('EXT. RIDGELINE - SUNSET');
+  });
+
   test('requires each human gate before advancing generation stages', () => {
     let project = createEditorProjectV2({
       projectId: 'project-1',

@@ -70,6 +70,25 @@ function harness(over: Partial<SubtitlesOpDeps> = {}, transcript: unknown = TRAN
 }
 
 describe('runSubtitlesAction', () => {
+  it('burns supplied caption beats without transcription or a browser session', async () => {
+    const { deps, args, calls } = harness({ resolveBrandId: () => undefined });
+    await runSubtitlesAction(
+      args,
+      {
+        preset: 'pop',
+        manualCaptions: [{ text: 'AGENDA TU VISITA', startSec: 1, endSec: 3 }],
+      },
+      deps,
+    );
+    expect(calls.uploads).toHaveLength(0);
+    expect(calls.fetches).toHaveLength(0);
+    expect(calls.splice[0].captionCues?.[0]).toMatchObject({
+      startSec: 1,
+      endSec: 3,
+      words: [{ text: 'AGENDA' }, { text: 'TU' }, { text: 'VISITA' }],
+    });
+  });
+
   it('returns the rendered clip as a video output', async () => {
     const { deps, args } = harness();
     const output = await runSubtitlesAction(args, { preset: 'pop' }, deps);

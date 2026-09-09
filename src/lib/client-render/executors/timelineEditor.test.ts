@@ -141,6 +141,36 @@ describe('timeline editor client render executor', () => {
                   effectId: 'vivid',
                   parameters: { filterPreset: 'vivid', saturation: 1.25 },
                 },
+                {
+                  id: 'vignette-hook',
+                  effectType: 'custom',
+                  effectId: 'vignette',
+                  parameters: { amount: 0.4 },
+                },
+                {
+                  id: 'grain-hook',
+                  effectType: 'custom',
+                  effectId: 'film_grain',
+                  parameters: { amount: 0.3 },
+                },
+                {
+                  id: 'pixelate-hook',
+                  effectType: 'custom',
+                  effectId: 'pixelate',
+                  parameters: { blockPx: 12 },
+                },
+                {
+                  id: 'aberration-hook',
+                  effectType: 'custom',
+                  effectId: 'chromatic_aberration',
+                  parameters: { amount: 0.5 },
+                },
+                {
+                  id: 'vhs-hook',
+                  effectType: 'custom',
+                  effectId: 'vhs',
+                  parameters: { amount: 0.6 },
+                },
               ],
               keyframes: [
                 {
@@ -294,6 +324,8 @@ describe('timeline editor client render executor', () => {
               durationSec: 2,
               kind: 'text',
               text: 'Start today',
+              animationIn: 'pop',
+              animationOut: 'float-in',
               style: {
                 fontFamily: 'Inter',
                 fontSizePx: 64,
@@ -339,6 +371,11 @@ describe('timeline editor client render executor', () => {
     expect(plan.items[0]?.effects).toMatchObject({
       filterPreset: 'vivid',
       adjustments: { saturation: 1.25 },
+      vignette: { amount: 0.4 },
+      filmGrain: { amount: 0.3 },
+      pixelate: { blockPx: 12 },
+      chromaticAberration: { amount: 0.5 },
+      vhs: { amount: 0.6 },
     });
     expect(plan.items[0]?.effects?.keyframes).toHaveLength(2);
     expect(plan.items[1]?.effects?.keyframes?.map((keyframe) => keyframe.t)).toEqual([0, 1]);
@@ -355,6 +392,8 @@ describe('timeline editor client render executor', () => {
     expect(plan.captionCues[1]?.style).toMatchObject({
       textColor: '#ffcc00',
       backgroundColor: '#000000',
+      animation: { kind: 'pop', anchor: 'cue', reveal: 'cue' },
+      exitAnimation: { kind: 'floatIn', anchor: 'cue', reveal: 'cue' },
     });
   });
 

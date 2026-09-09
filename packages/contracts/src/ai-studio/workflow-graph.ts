@@ -1305,6 +1305,7 @@ function isConnectionCompatible(
       return false;
     if (port.modality === 'video' && !isVideoProducingSource(sourceNode, sourceHandle))
       return false;
+    if (port.modality === 'audio' && sourceNode.type !== 'audio') return false;
   } else if (targetNode.type === 'router') {
     if (targetHandle !== ROUTER_INPUT_HANDLE) return false;
     const incoming = isTextProducingSource(sourceNode, sourceHandle)

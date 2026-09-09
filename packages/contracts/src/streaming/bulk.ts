@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { shaderStackV1Schema } from '../ai-studio/shader-stack';
 import { artDirectionSchema } from '../creative/art-direction';
 import { coerceLegacyHyperframeFormat } from './organic';
 import {
@@ -73,6 +74,7 @@ export const bulkHyperframeBriefSchema = z
     tone: organicHyperframeToneSchema,
     aspectRatio: organicHyperframeAspectRatioSchema,
     durationSec: z.number().int().min(5).max(30),
+    shaderStack: shaderStackV1Schema.optional(),
   })
   .strict();
 

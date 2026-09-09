@@ -1,5 +1,6 @@
 'use client';
 
+import type { ShaderStackV1 } from '@continuum/contracts';
 import {
   AUDIO_CHANNELS,
   AUDIO_SAMPLE_RATE,
@@ -22,6 +23,7 @@ export type HyperframesBrowserComposition = {
   height: number;
   durationSeconds: number;
   fps: 30;
+  shaderStack?: ShaderStackV1;
 };
 
 export type HyperframesBrowserCapabilities = {
@@ -347,6 +349,33 @@ const createCanvas = (width: number, height: number): HTMLCanvasElement | Offscr
   return canvas;
 };
 
+const applyShaderStack = async (
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  stack: ShaderStackV1 | undefined,
+  timeSec: number,
+): Promise<void> => {
+  if (!stack?.effects.some((effect) => effect.enabled)) return;
+  const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
+  const bitmap = await renderShaderStackFrame({
+    source: canvas,
+    width: canvas.width,
+    height: canvas.height,
+    stack,
+    timeSec,
+  });
+  try {
+    const context =
+      typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas
+        ? canvas.getContext('2d')
+        : (canvas as HTMLCanvasElement).getContext('2d');
+    if (!context) throw new Error('2D canvas context is unavailable after shader rendering.');
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  } finally {
+    bitmap.close();
+  }
+};
+
 export async function probeHyperframesCapabilities(): Promise<HyperframesBrowserCapabilities> {
   const { canEncodeAudio, canEncodeVideo } = await import('mediabunny');
   const [avc, aac] = await Promise.all([
@@ -374,6 +403,7 @@ export async function captureHyperframesReviewFrames(params: {
       throwIfAborted(params.signal);
       await seekComposition(iframe, timestamp);
       await rasterizeFrame(iframe, canvas, params.composition.width, params.composition.height);
+      await applyShaderStack(canvas, params.composition.shaderStack, timestamp);
       frames.push(await canvasToPng(canvas));
     }
     return frames;
@@ -491,6 +521,7 @@ export async function renderHyperframesVideo(params: {
       const timestamp = frame * frameDuration;
       await seekComposition(iframe, timestamp);
       await rasterizeFrame(iframe, canvas, params.composition.width, params.composition.height);
+      await applyShaderStack(canvas, params.composition.shaderStack, timestamp);
       await videoSource.add(timestamp, frameDuration);
       params.onProgress?.((frame + 1) / frameCount);
     }

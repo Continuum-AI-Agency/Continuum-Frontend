@@ -32,6 +32,7 @@ import { useModuleFoldStore } from '../stores/useModuleFoldStore';
 import { useStudioStore } from '../stores/useStudioStore';
 import type {
   ActionNodeData,
+  ApiRenderNodeData,
   ExtendVideoNodeData,
   NanoGenNodeData,
   OmniGenNodeData,
@@ -41,6 +42,7 @@ import type {
 import { moduleIdForNode } from '../utils/moduleFold';
 import { CanvasFloatingPanel } from './CanvasFloatingPanel';
 import { ActionSection } from './inspector/ActionSection';
+import { ApiRenderSection } from './inspector/ApiRenderSection';
 import { ExtendVideoSection } from './inspector/ExtendVideoSection';
 import { GenericSection } from './inspector/GenericSection';
 import { GroundingSection } from './inspector/GroundingSection';
@@ -87,6 +89,14 @@ function ConfigSection({
   switch (node.type) {
     case 'action':
       return <ActionSection nodeId={node.id} data={node.data as ActionNodeData} />;
+    case 'apiRender':
+      return (
+        <ApiRenderSection
+          nodeId={node.id}
+          data={node.data as ApiRenderNodeData}
+          onPatch={onPatch}
+        />
+      );
     case 'nanoGen':
       return <ImageGenSection data={node.data as NanoGenNodeData} onPatch={onPatch} />;
     case 'videoGen':

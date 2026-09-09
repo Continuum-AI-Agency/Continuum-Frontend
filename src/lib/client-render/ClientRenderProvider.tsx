@@ -23,22 +23,30 @@ import {
   updateClientRenderJob,
 } from '@/lib/api/clientRenderJobs.client';
 import { useStudioRenderQueue } from '@/lib/studio-render/StudioRenderProvider';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { probeClientRenderCapabilities } from './capabilities';
 import { getClientId } from './clientId';
 import { getClientRenderExecutor, hasClientRenderExecutor } from './executorRegistry';
+import { shouldRefreshForRow } from './inboxRelevance';
 import { shouldAutoRunClientRenderJob } from './ownedRuns';
 import { registerDefaultClientRenderExecutors } from './registerDefaultExecutors';
 
-const POLL_MS = 12_000;
 /**
- * The queue is polled whether or not the inbox is open.
+ * The queue is pushed, and the interval is only what catches a socket that died quietly.
  *
- * It used to be polled ONLY while open, which made the bell badge unreachable: it is
- * derived from `jobs`, `jobs` stays empty until a poll runs, and a poll only ran once
- * someone had already opened the thing the badge exists to point at. Jobs waited for
- * weeks behind that (Airtable #296).
+ * It used to be polled — and before that, polled ONLY while the inbox was open, which made
+ * the bell badge unreachable: it is derived from `jobs`, `jobs` stays empty until a read
+ * runs, and a read only ran once someone had already opened the thing the badge exists to
+ * point at. Jobs waited weeks behind that (Airtable #296). So the read still has to happen
+ * without a person in the loop; it just no longer has to happen on a timer.
+ *
+ * The fallback cadence is what the timer was before Realtime carried this table, and it is
+ * what a browser with a blocked WebSocket falls back to.
  */
-const IDLE_POLL_MS = 60_000;
+const PUSHED_SAFETY_NET_MS = 300_000;
+const FALLBACK_POLL_MS = 12_000;
+const FALLBACK_IDLE_POLL_MS = 60_000;
 const HEARTBEAT_MS = 20_000;
 const OPEN_INBOX_EVENT = 'continuum:client-render:open-inbox';
 
@@ -90,9 +98,19 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
   const { show } = useToast();
   const [jobs, setJobs] = useState<ClientRenderJob[]>([]);
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [pushed, setPushed] = useState(false);
   const localJobIds = useRef(new Map<string, string>());
   const leaseTokens = useRef(new Map<string, string>());
   const previousReadyCount = useRef(0);
+
+  // Assigned in the render body, not an effect: the subscription must not tear down and
+  // rebuild every time a job changes, and its handler still has to read the current list.
+  // Same shape as `useShortcut`. A state updater would not do — StrictMode invokes those
+  // twice, and this one decides whether to spend a request.
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
+  const inboxOpenRef = useRef(inboxOpen);
+  inboxOpenRef.current = inboxOpen;
 
   useEffect(() => {
     const openInbox = () => setInboxOpen(true);
@@ -114,11 +132,82 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // The push channel. INSERT and UPDATE are bound SEPARATELY rather than as '*': Realtime
+  // broadcasts DELETE without an RLS check and with a primary-key-only payload, so a
+  // wildcard binding would hand every operator in every account every deleted row — and
+  // `brand_id … on delete cascade` fires the whole table's worth at once.
+  //
+  // No brand filter, because the queue deliberately spans every brand this person operates
+  // and a postgres_changes filter reads one column. The RLS policy is the scoping, exactly
+  // as it is for the endpoint this refreshes.
+  //
+  // ponytail: unfiltered means every operator tab receives every progress heartbeat over
+  // the socket and Realtime evaluates the policy once per subscription for each. Fine at
+  // this table's volume; if a brand ever renders many jobs at once, add a `brand_id=eq.`
+  // channel for the selected brand alongside this one.
+  useEffect(() => {
+    if (!viewerId) return;
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    let unsubscribe: (() => void) | null = null;
+    let cancelled = false;
+
+    const onRow = (row: Record<string, unknown>) => {
+      if (!shouldRefreshForRow(row, jobsRef.current, inboxOpenRef.current)) return;
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => void refresh(), 400);
+    };
+
+    // Push the viewer's token onto the socket BEFORE joining. The join payload only carries
+    // an access token if the client already has one resolved, and a subscription created
+    // without it is registered as `anon` — which the `to authenticated` policy never
+    // matches. The channel still reports SUBSCRIBED and then delivers nothing until the
+    // next 30-second heartbeat repairs it. Measured, not theorised: the queue bench sat at
+    // zero events for exactly that long until this await was added on its side too.
+    void createSupabaseBrowserClient()
+      .realtime.setAuth()
+      .catch(() => undefined)
+      .then(() => {
+        if (cancelled) return;
+        unsubscribe = subscribeToPostgresChanges({
+          label: 'client-render-jobs',
+          bindings: (['INSERT', 'UPDATE'] as const).map((event) => ({
+            event,
+            schema: 'media',
+            table: 'client_render_jobs',
+            // The MediaStream ingest worker shares this table and heartbeats on its own
+            // service lease. Dropped at the socket, not just in the predicate.
+            filter: 'kind=neq.url_ingest',
+            onRow,
+          })),
+          onSubscribed: refresh,
+          onStatus: (status) => setPushed(status === 'SUBSCRIBED'),
+        });
+      });
+
+    return () => {
+      cancelled = true;
+      if (debounce) clearTimeout(debounce);
+      setPushed(false);
+      unsubscribe?.();
+    };
+  }, [refresh, viewerId]);
+
+  // The mount read stays unconditional. If `onSubscribed` were the only backfill, a browser
+  // whose channel never joins — WebSocket blocked, publication missing in an environment —
+  // would show a bell that reads zero forever, which is Airtable #296 all over again.
   useEffect(() => {
     void refresh();
-    const interval = window.setInterval(() => void refresh(), inboxOpen ? POLL_MS : IDLE_POLL_MS);
+  }, [refresh]);
+
+  useEffect(() => {
+    const every = pushed
+      ? PUSHED_SAFETY_NET_MS
+      : inboxOpen
+        ? FALLBACK_POLL_MS
+        : FALLBACK_IDLE_POLL_MS;
+    const interval = window.setInterval(() => void refresh(), every);
     return () => window.clearInterval(interval);
-  }, [inboxOpen, refresh]);
+  }, [inboxOpen, pushed, refresh]);
 
   const readyCount = jobs.filter((job) => job.state === 'ready').length;
   useEffect(() => {

@@ -1,6 +1,11 @@
 import type React from 'react';
 import type { TimelineInputSource } from '../../types';
-import { type ResolvedTextOverlay, speedFor } from '../../utils/render/effectSpec';
+import {
+  type ClipEffectSpec,
+  type ResolvedTextOverlay,
+  speedFor,
+} from '../../utils/render/effectSpec';
+import { mergeClipShaderEffects } from '../../utils/render/shaderStack';
 import type { TimelineDocument } from './adapter';
 import { evaluateTimelineScene } from './timelineScene';
 
@@ -12,6 +17,8 @@ export interface OverlayPreviewLayer {
   playbackRate: number;
   muted: boolean;
   volume: number;
+  effects?: ClipEffectSpec;
+  effectTimeSec: number;
   mediaStyle: React.CSSProperties;
   textOverlays: ResolvedTextOverlay[];
 }
@@ -29,15 +36,18 @@ export function resolveOverlayPreviewLayers(input: {
     if (!source?.previewUrl) return [];
     const kind = layer.item.kind ?? source.kind;
     if (kind === 'audio') return [];
+    const effects = mergeClipShaderEffects(layer.item.effects, source.shaderStack);
     return [
       {
         id: layer.item.id,
         kind,
         url: source.previewUrl,
         sourceSec: layer.sourceTimeSec,
-        playbackRate: speedFor(layer.item.effects),
+        playbackRate: speedFor(effects),
         muted: layer.item.muteAudio ?? true,
         volume: Math.max(0, Math.min(1, layer.item.volume ?? 1)),
+        effects,
+        effectTimeSec: layer.localOutputSec,
         mediaStyle: layer.cssStyle,
         textOverlays: layer.textOverlays,
       },

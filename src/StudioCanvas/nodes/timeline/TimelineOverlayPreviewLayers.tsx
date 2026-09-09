@@ -2,7 +2,9 @@
 
 import { useEffect, useRef } from 'react';
 import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
+import { hasShaderStack } from '../../utils/render/shaderStack';
 import type { OverlayPreviewLayer } from './overlayPreview';
+import { TimelineShaderPreview } from './TimelineShaderPreview';
 
 function TextOverlays({ overlays }: { overlays: ResolvedTextOverlay[] }) {
   return overlays.map((overlay) => (
@@ -29,6 +31,7 @@ function TextOverlays({ overlays }: { overlays: ResolvedTextOverlay[] }) {
 
 function VideoLayer({ layer, isPlaying }: { layer: OverlayPreviewLayer; isPlaying: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const shaderEnabled = hasShaderStack(layer.effects);
 
   useEffect(() => {
     const video = ref.current;
@@ -44,14 +47,48 @@ function VideoLayer({ layer, isPlaying }: { layer: OverlayPreviewLayer; isPlayin
   }, [isPlaying, layer.muted, layer.playbackRate, layer.sourceSec, layer.volume]);
 
   return (
-    <video
-      ref={ref}
-      src={layer.url}
-      playsInline
-      preload="metadata"
-      className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-      style={layer.mediaStyle}
-    />
+    <>
+      {/* biome-ignore lint/a11y/useMediaCaption: the editor previews authored media; captions are composited separately. */}
+      <video
+        ref={ref}
+        src={layer.url}
+        playsInline
+        preload="metadata"
+        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+        style={shaderEnabled ? { ...layer.mediaStyle, opacity: 0 } : layer.mediaStyle}
+      />
+      <TimelineShaderPreview
+        videoRef={ref}
+        effects={layer.effects}
+        timeSec={layer.effectTimeSec}
+        style={layer.mediaStyle}
+      />
+    </>
+  );
+}
+
+function ImageLayer({ layer }: { layer: OverlayPreviewLayer }) {
+  const emptyVideoRef = useRef<HTMLVideoElement>(null);
+  const shaderEnabled = hasShaderStack(layer.effects);
+  return (
+    <>
+      {!shaderEnabled ? (
+        // biome-ignore lint/performance/noImgElement: editor preview uses signed/blob media URLs
+        <img
+          src={layer.url}
+          alt=""
+          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+          style={layer.mediaStyle}
+        />
+      ) : null}
+      <TimelineShaderPreview
+        videoRef={emptyVideoRef}
+        imageUrl={layer.url}
+        effects={layer.effects}
+        timeSec={layer.effectTimeSec}
+        style={layer.mediaStyle}
+      />
+    </>
   );
 }
 
@@ -67,13 +104,7 @@ export function TimelineOverlayPreviewLayers({
       {layer.kind === 'video' ? (
         <VideoLayer layer={layer} isPlaying={isPlaying} />
       ) : (
-        // biome-ignore lint/performance/noImgElement: editor preview uses signed/blob media URLs
-        <img
-          src={layer.url}
-          alt=""
-          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-          style={layer.mediaStyle}
-        />
+        <ImageLayer layer={layer} />
       )}
       <TextOverlays overlays={layer.textOverlays} />
     </div>
