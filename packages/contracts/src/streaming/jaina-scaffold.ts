@@ -23,6 +23,30 @@ import { z } from 'zod';
 // 'tool.approval_required' and 'tool.output_denied' with these field names).
 // ---------------------------------------------------------------------------
 
+/** One row of the before → after table a person reads on the approval card. */
+export const jainaApprovalPreviewRowSchema = z.object({
+  field: z.string(),
+  before: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+  after: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+  /** Percent change when both sides are numbers — 25 means +25%. */
+  changePct: z.number().nullable().optional(),
+  unit: z.string().optional(),
+});
+
+/**
+ * What will change if the person approves, computed by the gated tool's registry entry
+ * from the proposed input ALONE (no network) — the input carries the prior by rule
+ * (`expected_status`, `expected_current_name`), so the table and the tool read the same
+ * values. A tool that declares no preview leaves the field absent and the card falls
+ * back to the exact-input definition list.
+ */
+export const jainaApprovalPreviewSchema = z.object({
+  /** The thing being changed, for the header — e.g. "Ad set 1234 · Summer Sale". */
+  subject: z.string().optional(),
+  rows: z.array(jainaApprovalPreviewRowSchema),
+});
+export type JainaApprovalPreview = z.infer<typeof jainaApprovalPreviewSchema>;
+
 /** data shape for type: "tool.approval_required". NO `signature` — see file header. */
 export const jainaToolApprovalRequiredPayloadSchema = z
   .object({
@@ -33,6 +57,8 @@ export const jainaToolApprovalRequiredPayloadSchema = z
     input: z.unknown(),
     /** ISO timestamp after which the approval can no longer be redeemed. */
     expiresAt: z.string(),
+    /** Before → after rows for the card; absent when the tool declares none. */
+    preview: jainaApprovalPreviewSchema.optional(),
   })
   .passthrough();
 export type JainaToolApprovalRequiredPayload = z.infer<
