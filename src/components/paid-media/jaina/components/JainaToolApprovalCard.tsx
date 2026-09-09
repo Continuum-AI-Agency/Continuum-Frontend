@@ -13,6 +13,7 @@ import {
   StatusLabel,
 } from '@/components/shared/agent-cards/agentCardKit';
 import { fetchAudienceGroupVersionSummary } from '@/lib/paid-media/audience-group-client';
+import { ApprovalChangeTable } from './ApprovalChangeTable';
 
 /**
  * One pending `tool.approval_required` for any gated tool that is NOT a paid scaffold.
@@ -22,6 +23,16 @@ import { fetchAudienceGroupVersionSummary } from '@/lib/paid-media/audience-grou
  * shows the EXACT proposed input rather than a prose summary — a summary is a second
  * description of the call that can disagree with the one that will actually run, which
  * is the whole failure mode an approval gate exists to stop.
+ *
+ * A tool that declares a `previewOf` also gets a before -> after table above that list
+ * (`ApprovalChangeTable`) — a person approving a budget change reads the budget, not a
+ * uuid — and the list collapses behind a disclosure rather than disappearing.
+ *
+ * ai-elements `Confirmation` is deliberately NOT used here: it renders an `Alert`
+ * (`role="alert"`, its own `rounded-lg border bg-card`) which nests a second bordered
+ * card inside AgentDecisionCard and announces every pending approval as an alert, and
+ * its `ConfirmationActions` are bare shadcn Buttons rather than the kit's AgentButton.
+ * It fights agentCardKit on both the framing and the actions row, so the kit wins.
  *
  * There is no resolved/denied state here on purpose: the reducer drops an approval
  * from `pendingToolApprovals` the moment it resolves, so a decided card disappears and
@@ -39,6 +50,11 @@ const TOOL_LABELS: Record<string, string> = {
   request_optimizer_budget_apply: 'Request budget apply',
   apply_approved_optimizer_pauses: 'Apply approved pauses',
   paid_creative_slate: 'Generate creative slate',
+  pause_meta_entity: 'Pause ad set / ad',
+  rename_meta_entity: 'Rename campaign / ad set / ad',
+  activate_meta_entity: 'Resume a paused ad set / ad',
+  archive_meta_entity: 'Archive ad set / ad',
+  duplicate_meta_entity: 'Duplicate as a paused copy',
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -120,6 +136,8 @@ export function JainaToolApprovalCard({
     approval.toolName === 'audience_group_publish'
       ? ((asRecord(approval.input)?.group_version_id as string | undefined) ?? null)
       : null;
+  // Absent for every tool that declares no `previewOf`; those cards render as before.
+  const preview = approval.preview?.rows.length ? approval.preview : null;
 
   return (
     <AgentDecisionCard>
@@ -132,9 +150,32 @@ export function JainaToolApprovalCard({
 
         {groupVersionId ? <AudienceGroupSummary groupVersionId={groupVersionId} /> : null}
 
-        <div className="mt-3 rounded-md border border-border/50 bg-muted/20 px-3 py-2.5">
-          <ProposedInput input={approval.input} />
-        </div>
+        {preview ? (
+          <div className="mt-3 rounded-md border border-border/50 bg-muted/20 px-1 py-1.5">
+            <ApprovalChangeTable preview={preview} />
+          </div>
+        ) : null}
+
+        {/*
+         * The table summarises; this list IS the call. It therefore never leaves the
+         * card — a preview only collapses it, because the exact arguments are what an
+         * approval actually authorises and a summary that disagrees with them is the
+         * failure mode this gate exists to stop.
+         */}
+        {preview ? (
+          <details className="mt-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
+            <summary className="cursor-pointer text-muted-foreground text-xs">
+              Exact input
+            </summary>
+            <div className="mt-2">
+              <ProposedInput input={approval.input} />
+            </div>
+          </details>
+        ) : (
+          <div className="mt-3 rounded-md border border-border/50 bg-muted/20 px-3 py-2.5">
+            <ProposedInput input={approval.input} />
+          </div>
+        )}
 
         {expired && !optimisticDecision ? (
           <p className="mt-2 text-muted-foreground text-sm">

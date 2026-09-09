@@ -1119,6 +1119,119 @@ export const ApplyAdsetStatusResponseSchema = z.object({
 });
 export type ApplyAdsetStatusResponse = z.infer<typeof ApplyAdsetStatusResponseSchema>;
 
+/** ── Targeted entity pause (POST /apply/entity-status, edge optimizer-pause-entity) ──
+ *
+ *  A DIFFERENT shape from the drain above, and deliberately a separate route. The drain
+ *  (/apply/adset-status) takes no ids: it reads every human-approved pause recommendation on
+ *  the portfolio and writes them all. This one takes the ids a human NAMED — the entry point
+ *  Jaina's pause_meta_entity arms when someone says "pause the retargeting ad set".
+ *
+ *  It is not a widening of ApplyAdsetStatusRequestSchema because that schema is non-strict
+ *  and its edge forwards only portfolio_id/dryRun/authorized_by: a caller deployed ahead of
+ *  the service that sent explicit ids to the OLD route would have them silently stripped and
+ *  would drain EVERY approved pause on the portfolio. A new route + a new edge name fails
+ *  closed instead — an old deployment answers optimizer-pause-entity with a 404.
+ *
+ *  Strict on purpose, for the same reason: an unknown key is a 400, never a silent strip. */
+export const EntityStatusTargetSchema = z
+  .object({
+    level: z.enum(['adset', 'ad']),
+    /** The Meta ad-set / ad id. Refused by name (`not_enrolled`) when it is not an active
+     *  member of the portfolio — for an ad, when its ad set is not. */
+    id: z.string().min(1),
+    /** What the caller believes this entity's status is RIGHT NOW, from the read it showed
+     *  the human. Compared at the write against what the applier reads from Meta; a mismatch
+     *  is a named refusal (`status_drifted`) and ZERO writes — someone has changed it since
+     *  the human was shown it, so the approval no longer describes reality. */
+    expected_status: z.enum(['ACTIVE', 'PAUSED']),
+    /** PAUSE is the only representable target. Typed as the literal so `'ACTIVE'` is a 400
+     *  from the schema, not a runtime branch: this route can never re-activate spend a human
+     *  deliberately stopped. Unpausing stays with /apply/revert, which restores a status this
+     *  system itself recorded. */
+    target_status: z.literal('PAUSED').default('PAUSED'),
+  })
+  .strict();
+export type EntityStatusTarget = z.infer<typeof EntityStatusTargetSchema>;
+
+export const ApplyEntityStatusRequestSchema = z
+  .object({
+    portfolio_id: z.string().uuid(),
+    targets: z.array(EntityStatusTargetSchema).min(1).max(50),
+    /** Default TRUE, as on every apply route: a real write is never an accident of an
+     *  omitted field. A dry run returns `would` with ZERO Meta writes and ZERO ledger touches. */
+    dryRun: z.boolean().optional(),
+    /** The human who authorized the pause — stamped by the edge from the caller's JWT,
+     *  NEVER read from the body. Named in each apply_audits row. */
+    authorized_by: z.string().uuid().optional(),
+    /** The human's own reason, carried to apply_audits.justification so the row can answer
+     *  'why was this paused'. */
+    justification: z.string().max(2000).optional(),
+  })
+  .strict();
+export type ApplyEntityStatusRequest = z.infer<typeof ApplyEntityStatusRequestSchema>;
+
+/** One entity a dry run WOULD pause. */
+export const EntityStatusWouldWriteSchema = z.object({
+  level: z.enum(['adset', 'ad']),
+  id: z.string(),
+  target_status: z.literal('PAUSED'),
+});
+export type EntityStatusWouldWrite = z.infer<typeof EntityStatusWouldWriteSchema>;
+
+/** Why ONE target was refused before any write was attempted. Every value is a refusal the
+ *  caller can render as a sentence — this route never fails a target anonymously.
+ *  - `not_enrolled`   — the id is not an active member of this portfolio (for an ad, its
+ *                       ad set is not). The optimizer only writes to what it manages.
+ *  - `unknown_ad`     — no ad row for this id under the portfolio's brand, so its ad set
+ *                       cannot be resolved to check membership.
+ *  - `status_drifted` — Meta says the entity is not in `expected_status` any more. */
+export const EntityStatusRefusalSchema = z.enum(['not_enrolled', 'unknown_ad', 'status_drifted']);
+export type EntityStatusRefusal = z.infer<typeof EntityStatusRefusalSchema>;
+
+/** One target's outcome. `refused` carries `reason`; the rest are the applier's OWN per-item
+ *  statuses passed through verbatim — `applied`, `failed`, `skipped` (already PAUSED),
+ *  `deduped` (this pause is already on the ledger for this cycle), and `held`, which the ad
+ *  applier reserves for an unpause autopilot declined. `held` cannot occur on this route (the
+ *  only representable target is PAUSED and the only authorization is human); it is in the
+ *  union because the applier's type says it can be, and narrowing it here by re-labelling it
+ *  would make the envelope lie about which write actually happened. */
+export const EntityStatusResultSchema = z.object({
+  level: z.enum(['adset', 'ad']),
+  id: z.string(),
+  ok: z.boolean(),
+  status: z.enum(['applied', 'failed', 'skipped', 'deduped', 'held', 'refused']).optional(),
+  reason: EntityStatusRefusalSchema.optional(),
+  /** What Meta said the status was when the write was attempted. */
+  prior_status: z.enum(['ACTIVE', 'PAUSED']).nullable().optional(),
+  error: z.string().optional(),
+});
+export type EntityStatusResult = z.infer<typeof EntityStatusResultSchema>;
+
+/** POST /apply/entity-status response. Same envelope family as the drain above.
+ *
+ *  The route is ALL-OR-NOTHING on refusals: if ANY named target is refused, `ok` is false
+ *  with `reason: 'targets_refused'`, `results` names EVERY refused target (and only those),
+ *  and ZERO writes were attempted. A human naming three ad sets gets three pauses or none —
+ *  never a partial set they have to reconcile by hand.
+ *
+ *  Top-level `reason` values: `no_cycle` (the portfolio has no run to key the ledger on),
+ *  `observe_mode` (observe portfolios have hard no-write rights), `targets_refused`. */
+export const ApplyEntityStatusResponseSchema = z.object({
+  ok: z.boolean(),
+  dryRun: z.boolean().optional(),
+  runId: z.string().optional(),
+  would: z.array(EntityStatusWouldWriteSchema).default([]),
+  applied: z.number().int().nonnegative().optional(),
+  failed: z.number().int().nonnegative().optional(),
+  deduped: z.number().int().nonnegative().optional(),
+  skipped: z.number().int().nonnegative().optional(),
+  refused: z.number().int().nonnegative().optional(),
+  results: z.array(EntityStatusResultSchema).default([]),
+  reason: z.string().optional(),
+  error: z.string().optional(),
+});
+export type ApplyEntityStatusResponse = z.infer<typeof ApplyEntityStatusResponseSchema>;
+
 /** The Meta write receipt captured on a successful budget write and stored in
  *  optimizer.apply_audits.meta_receipt. Kept loose — it is read back from jsonb. */
 export const ApplyReceiptSchema = z
