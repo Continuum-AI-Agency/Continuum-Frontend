@@ -9,6 +9,8 @@ const RENDER_DISCOVERY_MESSAGES: Record<string, string> = {
   render_contract_changed:
     'This template changed since that set was saved. Re-pick the template and save the set again.',
   render_reserved_variable: 'That variable is filled by Continuum and cannot be sent.',
+  render_callback_not_configured:
+    'This environment has no render callback URL configured, so nothing can be prepared here yet.',
 };
 
 export function describeRenderDiscoveryFailure(message: string): string {
