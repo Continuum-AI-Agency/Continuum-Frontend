@@ -39,6 +39,13 @@ import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJo
 // ponytail: 30 s list refresh; the realtime channel makes foreign jobs land in under a second.
 
 const LIST_LIMIT = 50;
+
+/** How far from square an output is — 0 for a square, growing either way. Unknown sizes sort last. */
+const squareness = (output: { width: number | null; height: number | null; fileName: string }) => {
+  if (output.width && output.height) return Math.abs(Math.log(output.width / output.height));
+  const ratio = /(\d+)[_x](\d+)/.exec(output.fileName);
+  return ratio ? Math.abs(Math.log(Number(ratio[1]) / Number(ratio[2]))) : Number.POSITIVE_INFINITY;
+};
 const LIST_REFRESH_MS = 30_000;
 
 const STATUS_TONE: Record<ApiRenderJob['status'], 'muted' | 'warning' | 'success' | 'destructive'> =
@@ -141,17 +148,26 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
       selectColumn<ApiRenderJob>(),
       {
         id: 'preview',
-        size: 56,
+        size: 52,
         enableSorting: false,
         header: '',
         cell: ({ row: { original: job } }) => {
-          const first = job.outputs[0];
+          // The Library copy when there is one: the fleet's own URL serves the bytes as
+          // application/octet-stream and only exists while the bucket keeps them. The
+          // squarest frame of the set reads best in a square thumbnail.
+          const first = [...job.outputs]
+            .sort(
+              (a, b) =>
+                Number(Boolean(b.assetId)) - Number(Boolean(a.assetId)) ||
+                squareness(a) - squareness(b),
+            )
+            .at(0);
           return first?.kind === 'image' ? (
-            <img src={first.url} alt="" className="h-6 w-10 rounded-sm object-cover" />
+            <img src={first.url} alt="" className="size-9 rounded-sm object-cover" />
           ) : first ? (
             <Video className="size-4 text-muted-foreground" aria-hidden />
           ) : (
-            <div className="h-6 w-10 rounded-sm bg-muted" />
+            <div className="size-9 rounded-sm bg-muted" />
           );
         },
       },
