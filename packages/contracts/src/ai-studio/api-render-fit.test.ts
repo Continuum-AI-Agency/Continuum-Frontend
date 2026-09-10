@@ -174,3 +174,25 @@ describe('the escalation rule is what makes the judge automatic', () => {
     expect(report.why).toContain('no media slots');
   });
 });
+
+describe('a fit-rigged slot', () => {
+  test('is unknown by construction, keeps its spot, and still classifies the asset', () => {
+    const verdict = checkAssetSwap({
+      key: 'ref_imagen_producto',
+      placement: {
+        comp: 'Producto 1:1',
+        compSize: [1080, 1080],
+        box: [290, 290, 790, 790],
+        boxSource: 'projected',
+        source: [2000, 2000],
+        sourceKind: 'file',
+        rigged: true,
+      },
+      asset: { w: 600, h: 1400 },
+    });
+    expect(verdict.state).toBe('unknown');
+    expect(verdict.shapeClass).toBe('tall');
+    expect(verdict.box).toEqual([290, 290, 790, 790]);
+    expect(verdict.why).toContain('rig');
+  });
+});

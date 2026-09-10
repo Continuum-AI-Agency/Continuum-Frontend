@@ -49,6 +49,13 @@ export const slotPlacementSchema = z
       .nullable()
       .default(null),
     sourceKind: z.string().nullable().default(null),
+    /**
+     * The leaf's transform is driven by an expression — a controller rig (`anchorAligment` and
+     * friends) that places, and usually fits, whatever asset lands there. `box` is then the
+     * SPOT the rig fills, not a rectangle the asset's own pixels would draw, so a swap cannot
+     * be predicted from it: the rig does the fitting, and the render is what shows the result.
+     */
+    rigged: z.boolean().default(false),
   })
   .strict();
 export type SlotPlacement = z.infer<typeof slotPlacementSchema>;
@@ -211,6 +218,18 @@ export function checkAssetSwap(args: {
     scale: null,
     covers: [],
   };
+  if (args.placement?.rigged) {
+    // The rig fits the asset into its spot from an expression this port cannot evaluate, so a
+    // box drawn from the raw placement would blame the swap for what the rig undoes. Unknown —
+    // and the judge, after the render, is what confirms the rig did its job.
+    return {
+      ...base,
+      state: 'unknown',
+      shapeClass: args.asset ? shapeClass(args.asset.w, args.asset.h) : null,
+      box: args.placement.box,
+      why: 'placed by a rig in the template, which fits the asset at render time — checked on the finished frame',
+    };
+  }
   if (!args.asset) {
     return { ...base, state: 'unknown', why: 'no asset is chosen for this slot yet' };
   }
