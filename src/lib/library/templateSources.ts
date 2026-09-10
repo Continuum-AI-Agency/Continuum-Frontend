@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  RenderWorkspace,
   TemplateFontStatus,
   TemplateForgeNeed,
   TemplateSource,
@@ -59,16 +60,28 @@ export async function fetchTemplateFonts(
   return unwrap<TemplateFontReadiness>(response, 'Template font check');
 }
 
+/** The workspaces this brand may build in. More than one is a supported, live shape. */
+export async function fetchRenderWorkspaces(brandId: string): Promise<RenderWorkspace[]> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/workspaces?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return (await unwrap<{ items: RenderWorkspace[] }>(response, 'Render workspaces')).items;
+}
+
 export async function sendTemplateToForge(
   brandId: string,
   assetId: string,
   // Asked for, never inferred: the forge names this template's render table after it, capped at
   // 40 characters and never truncated, so a filename is not a safe default.
   templateName: string,
+  // Which workspace to build in. Omitted means the brand's default, which is the only choice
+  // when it has one — but a template belongs to exactly ONE workspace, so when there are several
+  // the person picks and we send it.
+  workspaceId?: string,
 ): Promise<TemplateSource> {
   const response = await authorizedFetch(`/api/ai-studio/templates/${assetId}/forge`, {
     method: 'POST',
-    body: JSON.stringify({ brandId, templateName }),
+    body: JSON.stringify({ brandId, templateName, ...(workspaceId ? { workspaceId } : {}) }),
   });
   return unwrap<TemplateSource>(response, 'Template Forge hand-off');
 }

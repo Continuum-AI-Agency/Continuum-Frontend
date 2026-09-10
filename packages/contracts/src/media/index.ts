@@ -36,6 +36,7 @@ export * from './saved-views';
 export * from './search';
 export * from './share';
 export * from './template-forge-run';
+export * from './render-workspace';
 export * from './template-name';
 export * from './template-source-slot';
 export * from './template-source';
