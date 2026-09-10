@@ -525,10 +525,39 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       selected: false,
     };
 
+    /**
+     * The duplicate keeps its INPUTS.
+     *
+     * Without this a duplicated node arrives with nothing wired to it, which for most
+     * nodes is a re-plumbing chore and for the Layer Editor is a broken document: its
+     * layers still name the upstream nodes, but `layerSourcesFromGraph` builds the source
+     * pool from EDGES, so every layer resolved to no pixels — placed, named, invisible.
+     *
+     * Inputs only, deliberately. Copying the outputs too would fan the duplicate into
+     * everything downstream, and a duplicate is made to become a variant, not to double-
+     * feed the node after it.
+     */
+    const now = Date.now();
+    const copiedInputs = state.edges
+      .filter((edge) => edge.target === id)
+      .map((edge, index) => ({
+        ...edge,
+        id: `e-dup-${now}-${index}`,
+        target: newNode.id,
+        selected: false,
+      }));
+
     set({
       nodes: [...state.nodes, newNode],
       saveTrigger: state.saveTrigger + 1,
     });
+
+    // Through `setEdges` so handle validation and the per-handle connection limits are
+    // re-applied against the new node — a pooled handle at its cap must refuse the copy
+    // rather than silently exceed it. Same route `pasteNodes` takes.
+    if (copiedInputs.length > 0) {
+      get().setEdges([...get().edges, ...copiedInputs]);
+    }
   },
 
   deleteNode: (id: string) => {

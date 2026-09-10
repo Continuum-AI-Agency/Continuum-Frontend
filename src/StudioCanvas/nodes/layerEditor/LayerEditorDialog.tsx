@@ -1,6 +1,6 @@
 'use client';
 
-import { Layers, Loader2, Plus, Redo2, Undo2, Upload } from 'lucide-react';
+import { ImageIcon, Layers, Loader2, Plus, Redo2, Undo2, Upload } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import type { MediaAsset } from '@continuum/contracts';
 import type { LayerEditorLayer } from '../../types';
 import {
   compositeLayers,
@@ -26,8 +27,10 @@ import {
   measureSource,
 } from '../../utils/layers/compositeLayers';
 import { type Frame, writeFrame } from '../../utils/layers/frameModel';
+import { LibraryMediaPickerDialog } from '@/components/library/editor/LibraryMediaPickerDialog';
 import {
   isPlaceableImage,
+  layerSourceFromAsset,
   resolveLayerSources,
   signLayerAsset,
   uploadLayerAsset,
@@ -287,6 +290,7 @@ export function LayerEditorDialog({
   );
 
   const [placing, setPlacing] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /**
@@ -339,6 +343,59 @@ export function LayerEditorDialog({
       setSelectedIds(placed.map((layer) => layer.id));
     },
     [brandId, commitLayers, doc.frame, doc.layers],
+  );
+
+  /**
+   * Place assets that are ALREADY in the Library.
+   *
+   * No upload, and usually no decode: the asset row carries the durable coordinates and
+   * the intrinsic size. Only an asset whose dimensions were never recorded costs a
+   * measure, and only then does this need its signed URL.
+   */
+  const placeAssets = useCallback(
+    async (assets: readonly MediaAsset[]) => {
+      if (assets.length === 0) return;
+      setPlacing(true);
+      setProblem(null);
+      const placed: LayerEditorLayer[] = [];
+      try {
+        for (const asset of assets) {
+          const source = layerSourceFromAsset(asset);
+          const url = source.signedUrl ?? (await signLayerAsset(source));
+          if (!url) {
+            setProblem(`Could not read "${source.name}" from the Library.`);
+            continue;
+          }
+          signedCacheRef.current.set(`${source.bucket}/${source.storagePath}`, url);
+          const size =
+            source.width && source.height
+              ? { width: source.width, height: source.height }
+              : await measureSource(url);
+          placed.push(
+            createLayer({
+              name: source.name,
+              sourceWidth: size.width,
+              sourceHeight: size.height,
+              sourceAssetId: source.assetId,
+              sourceBucket: source.bucket,
+              sourceStoragePath: source.storagePath,
+              frame: doc.frame,
+            }),
+          );
+        }
+      } catch (error) {
+        setProblem(
+          error instanceof Error ? `Could not add that image: ${error.message}` : 'Placing failed',
+        );
+      } finally {
+        setPlacing(false);
+      }
+
+      if (placed.length === 0) return;
+      commitLayers([...doc.layers, ...placed]);
+      setSelectedIds(placed.map((layer) => layer.id));
+    },
+    [commitLayers, doc.frame, doc.layers],
   );
 
   // Paste anywhere in the editor. Scoped to `open` so it never competes with the canvas'
@@ -569,6 +626,14 @@ export function LayerEditorDialog({
     }
   }, [displayUrls, doc.frame, doc.layers, onCompose]);
 
+  const placedAssetIds = useMemo(
+    () =>
+      doc.layers
+        .map((layer) => layer.sourceAssetId)
+        .filter((id): id is string => typeof id === 'string'),
+    [doc.layers],
+  );
+
   const unplaced = sources.filter(
     (source) => !doc.layers.some((layer) => layer.sourceNodeId === source.nodeId),
   );
@@ -654,6 +719,15 @@ export function LayerEditorDialog({
                     <Upload className="mr-2 h-3 w-3" />
                     Upload an image…
                   </DropdownMenuItem>
+                  {brandId ? (
+                    <DropdownMenuItem
+                      className="text-2xs"
+                      onSelect={() => setLibraryOpen(true)}
+                    >
+                      <ImageIcon className="mr-2 h-3 w-3" />
+                      From the Library…
+                    </DropdownMenuItem>
+                  ) : null}
                   {unplaced.length > 0 ? <DropdownMenuSeparator /> : null}
                   {unplaced.map((source) => (
                     <DropdownMenuItem
@@ -682,6 +756,20 @@ export function LayerEditorDialog({
                 }}
                 data-testid="layer-file-input"
               />
+
+              {/* Controlled, so the Add layer menu drives it — the picker's own trigger
+                  button is for the Library's media bin, not for this header. `image`
+                  narrows it: this is a stills compositor and cannot place a clip. */}
+              {brandId ? (
+                <LibraryMediaPickerDialog
+                  brandId={brandId}
+                  accept="image"
+                  excludeAssetIds={placedAssetIds}
+                  open={libraryOpen}
+                  onOpenChange={setLibraryOpen}
+                  onPickAssets={(assets) => void placeAssets(assets)}
+                />
+              ) : null}
               <Button type="button" size="sm" onClick={() => void compose()} disabled={composing}>
                 {composing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
                 Compose

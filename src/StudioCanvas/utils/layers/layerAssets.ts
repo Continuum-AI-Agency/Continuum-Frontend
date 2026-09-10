@@ -2,6 +2,7 @@
 
 import { MEDIA_LIBRARY_BUCKET, uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { MediaAsset } from '@continuum/contracts';
 import type { LayerEditorLayer } from '../../types';
 
 /**
@@ -112,4 +113,35 @@ export async function resolveLayerSources(input: {
 
   await Promise.all(pending);
   return resolved;
+}
+
+/**
+ * A Library asset, as the fields a layer needs.
+ *
+ * `MediaAsset` already carries the durable pair AND the intrinsic size, so placing from
+ * the Library costs no decode round trip — unlike an uploaded file, whose dimensions are
+ * only known once the browser has read it. `width`/`height` are nullable on the contract
+ * though (an asset analysed before those columns existed), so the caller still needs a
+ * measure fallback and is told so by the null.
+ */
+export function layerSourceFromAsset(asset: MediaAsset): {
+  assetId: string;
+  bucket: string;
+  storagePath: string;
+  signedUrl: string | null;
+  name: string;
+  width: number | null;
+  height: number | null;
+} {
+  return {
+    assetId: asset.id,
+    bucket: asset.bucket,
+    storagePath: asset.storagePath,
+    signedUrl: asset.signedUrl ?? null,
+    // The title if a person gave it one, else the file name minus its extension — the
+    // same shape `uploadLayerAsset` produces, so the two routes name layers alike.
+    name: asset.title?.trim() || asset.fileName.replace(/\.[^.]+$/, '') || asset.fileName,
+    width: asset.width ?? null,
+    height: asset.height ?? null,
+  };
 }

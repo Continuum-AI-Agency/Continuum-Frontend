@@ -184,11 +184,11 @@ const KPI_COLUMNS: MetricKey[] = ['spend', 'roas', 'ctr', 'cpc', 'cpa', 'impress
 const radarConfig = {
   baseline: {
     label: 'Baseline',
-    color: 'hsl(var(--muted-foreground))',
+    color: 'var(--muted-foreground)',
   },
   delta: {
     label: 'Delta',
-    color: 'hsl(var(--chart-2))',
+    color: 'var(--chart-2)',
   },
 } satisfies ChartConfig;
 
@@ -705,7 +705,7 @@ function ContextMetricCard({ metric, value, delta, selected, onClick }: ContextM
       className={cn(
         'group rounded-lg border px-3 py-2.5 text-left transition-all',
         selected
-          ? 'border-primary/60 bg-primary/[0.08] shadow-[0_0_0_1px_hsl(var(--primary)/0.18)_inset]'
+          ? 'border-primary/60 bg-primary/[0.08] shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_18%,transparent)_inset]'
           : 'border-border/80 bg-card hover:border-primary/35 hover:bg-muted/40',
       )}
     >
@@ -2507,7 +2507,7 @@ export function CampaignTimelineWorkspace({
                             endIndex={topChartZoomRange?.endIndex ?? topChartModel.data.length - 1}
                             height={26}
                             travellerWidth={8}
-                            stroke="hsl(var(--border))"
+                            stroke="var(--border)"
                             tickFormatter={(value) =>
                               new Date(String(value)).toLocaleDateString('en-US', {
                                 month: 'short',

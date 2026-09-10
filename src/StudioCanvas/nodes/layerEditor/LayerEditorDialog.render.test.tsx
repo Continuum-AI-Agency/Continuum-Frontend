@@ -144,3 +144,44 @@ describe('a drag leaves the layers panel nothing to do', () => {
     expect(moved?.style.transform ?? '').toContain('translate(140px');
   });
 });
+
+describe('the Library picker is reachable from Add layer', () => {
+  const openWithBrand = (brandId?: string) => {
+    seen.length = 0;
+    return render(
+      <LayerEditorDialog
+        open
+        onOpenChange={() => undefined}
+        frame={{ width: 512, height: 512 }}
+        layers={[layer('a', 100, 100)]}
+        brandId={brandId}
+        sources={[{ nodeId: 'n-a', ref: 'blob:a', name: 'a' }]}
+        onPersist={() => undefined}
+        onCompose={async () => undefined}
+      />,
+    );
+  };
+
+  it('offers both routes into a layer, and opens the picker', async () => {
+    const view = openWithBrand('brand-1');
+
+    fireEvent.click(view.getByRole('button', { name: 'Add layer' }));
+    expect(await view.findByText('Upload an image…')).toBeDefined();
+    const fromLibrary = await view.findByText('From the Library…');
+
+    fireEvent.click(fromLibrary);
+    // The picker is controlled by the editor: its own trigger button belongs to the
+    // Library's media bin, not to this header.
+    expect(await view.findByText('Add an image from the Library')).toBeDefined();
+    // Narrowed to images — a stills compositor cannot place a clip.
+    expect(view.queryByText('Add media from the Library')).toBeNull();
+  });
+
+  it('hides the Library route with no brand — uploads are stored per brand', async () => {
+    const view = openWithBrand(undefined);
+
+    fireEvent.click(view.getByRole('button', { name: 'Add layer' }));
+    expect(await view.findByText('Upload an image…')).toBeDefined();
+    expect(view.queryByText('From the Library…')).toBeNull();
+  });
+});

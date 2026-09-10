@@ -29,7 +29,21 @@ export type LibraryMediaPickerDialogProps = {
   brandId: string;
   /** Assets already in the bin — shown as disabled tiles so the bin stays deduped. */
   excludeAssetIds: readonly string[];
-  onAdd: (sources: LibraryPoolSource[]) => void;
+  onAdd?: (sources: LibraryPoolSource[]) => void;
+  /**
+   * The chosen assets themselves, for callers that need what `LibraryPoolSource` drops.
+   *
+   * The pool source keeps a signed URL, which expires. The Layer Editor stores a layer
+   * inside the canvas document and has to re-sign it on every open, so it needs the
+   * durable `bucket` + `storagePath` — and the intrinsic `width`/`height`, which save it
+   * a decode round trip per placed asset.
+   */
+  onPickAssets?: (assets: MediaAsset[]) => void;
+  /** Images only, for surfaces that cannot place a clip — the stills compositor. */
+  accept?: 'media' | 'image';
+  /** Controlled open. Supplying it also hides the built-in trigger button. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 function isPlaceable(asset: MediaAsset): boolean {
@@ -153,8 +167,21 @@ export function LibraryMediaPickerDialog({
   brandId,
   excludeAssetIds,
   onAdd,
+  onPickAssets,
+  accept = 'media',
+  open: controlledOpen,
+  onOpenChange,
 }: LibraryMediaPickerDialogProps) {
-  const [open, setOpen] = useState(false);
+  const controlled = controlledOpen !== undefined;
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (!controlled) setUncontrolledOpen(next);
+      onOpenChange?.(next);
+    },
+    [controlled, onOpenChange],
+  );
   const [query, setQuery] = useState('');
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(false);
@@ -163,6 +190,10 @@ export function LibraryMediaPickerDialog({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const excluded = new Set(excludeAssetIds);
+
+  // Narrowed here rather than inside `isPlaceable`, which is used as `filter(isPlaceable)`
+  // — a second parameter there would receive the array INDEX and never the mode.
+  const visible = accept === 'image' ? assets.filter((asset) => asset.kind === 'image') : assets;
 
   useEffect(() => {
     if (!open) return;
@@ -212,11 +243,14 @@ export function LibraryMediaPickerDialog({
   }, []);
 
   const confirm = useCallback(() => {
-    const chosen = assets.filter((asset) => selected.has(asset.id)).map(assetToPoolSource);
-    if (chosen.length > 0) onAdd(chosen);
+    const chosen = visible.filter((asset) => selected.has(asset.id));
+    if (chosen.length > 0) {
+      onPickAssets?.(chosen);
+      onAdd?.(chosen.map(assetToPoolSource));
+    }
     setSelected(new Set());
     setOpen(false);
-  }, [assets, selected, onAdd]);
+  }, [visible, selected, onAdd, onPickAssets, setOpen]);
 
   const handleOpenChange = useCallback((next: boolean) => {
     setOpen(next);
@@ -228,17 +262,23 @@ export function LibraryMediaPickerDialog({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Plus className="size-3.5" aria-hidden />
-        Add media
-      </Button>
+      {controlled ? null : (
+        <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+          <Plus className="size-3.5" aria-hidden />
+          Add media
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="flex h-[70dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="shrink-0 border-b border-border px-4 py-3">
-            <DialogTitle className="text-sm font-medium">Add media from the Library</DialogTitle>
+            <DialogTitle className="text-sm font-medium">
+              {accept === 'image' ? 'Add an image from the Library' : 'Add media from the Library'}
+            </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Pick images, videos, or audio to place on the timeline.
+              {accept === 'image'
+                ? 'Pick images to place as layers.'
+                : 'Pick images, videos, or audio to place on the timeline.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -265,13 +305,13 @@ export function LibraryMediaPickerDialog({
                 <Loader2 className="size-3.5 animate-spin" aria-hidden />
                 Loading media...
               </p>
-            ) : assets.length === 0 ? (
+            ) : visible.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 {query.trim() ? 'No media matched that search.' : 'No placeable media yet.'}
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                {assets.map((asset) => (
+                {visible.map((asset) => (
                   <MediaTile
                     key={asset.id}
                     asset={asset}

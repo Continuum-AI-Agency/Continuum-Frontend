@@ -891,3 +891,64 @@ describe('normalizeEdges apiRender dynamic variable handles', () => {
     expect(edges[0].targetHandle).toBe('variable-hero_image');
   });
 });
+
+describe('duplicateNode carries the inputs', () => {
+  const makeNode = (id: string, type: string): StudioNode =>
+    ({ id, type, position: { x: 0, y: 0 }, data: {} }) as StudioNode;
+
+  // Handles are real ones: `setEdges` validates against the node type and silently drops
+  // an edge whose handle is not in the allowed set, which would make these pass or fail
+  // for a reason that has nothing to do with duplication.
+  const intoStack = (id: string, source: string): Edge =>
+    ({ id, source, target: 'stack', targetHandle: 'image-in' }) as Edge;
+
+  it('rewires the copy to the same upstream sources', () => {
+    const store = useStudioStore.getState();
+    store.setNodes([
+      makeNode('src-a', 'image'),
+      makeNode('src-b', 'image'),
+      makeNode('stack', 'layerEditor'),
+    ]);
+    store.setEdges([intoStack('e1', 'src-a'), intoStack('e2', 'src-b')]);
+
+    useStudioStore.getState().duplicateNode('stack');
+
+    const copy = useStudioStore
+      .getState()
+      .nodes.find((node) => node.id !== 'stack' && node.type === 'layerEditor');
+    expect(copy).toBeDefined();
+
+    // A Layer Editor's source pool is built from EDGES, so a copy with none resolved no
+    // pixels at all — layers placed, named, and invisible.
+    const intoCopy = useStudioStore.getState().edges.filter((edge) => edge.target === copy?.id);
+    expect(intoCopy).toHaveLength(2);
+    expect(intoCopy.map((edge) => edge.source).sort()).toEqual(['src-a', 'src-b']);
+    expect(intoCopy.every((edge) => edge.targetHandle === 'image-in')).toBe(true);
+  });
+
+  it('does NOT carry the outputs — a duplicate is a variant, not a second feed', () => {
+    const store = useStudioStore.getState();
+    store.setNodes([makeNode('src-a', 'image'), makeNode('stack', 'layerEditor')]);
+    store.setEdges([intoStack('e1', 'src-a')]);
+
+    useStudioStore.getState().duplicateNode('src-a');
+
+    const copy = useStudioStore
+      .getState()
+      .nodes.find((node) => node.id !== 'src-a' && node.type === 'image');
+    const outOfCopy = useStudioStore.getState().edges.filter((edge) => edge.source === copy?.id);
+    expect(outOfCopy).toHaveLength(0);
+  });
+
+  it('leaves the original wired exactly as it was', () => {
+    const store = useStudioStore.getState();
+    store.setNodes([makeNode('src-a', 'image'), makeNode('stack', 'layerEditor')]);
+    store.setEdges([intoStack('e1', 'src-a')]);
+
+    useStudioStore.getState().duplicateNode('stack');
+
+    const intoOriginal = useStudioStore.getState().edges.filter((edge) => edge.target === 'stack');
+    expect(intoOriginal).toHaveLength(1);
+    expect(intoOriginal[0].source).toBe('src-a');
+  });
+});

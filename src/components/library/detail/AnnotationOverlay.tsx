@@ -123,7 +123,7 @@ function SpatialShape({
       <polyline
         points={points}
         fill="none"
-        stroke="hsl(var(--primary))"
+        stroke="var(--primary)"
         strokeWidth="3"
         strokeDasharray={draft ? '5 4' : undefined}
         strokeLinecap="round"

@@ -36,7 +36,7 @@ export const SERIES_COLORS = [
   'var(--chart-3)',
   'var(--chart-4)',
   'var(--chart-5)',
-  'hsl(var(--primary))',
+  'var(--primary)',
 ] as const;
 
 export const BLEND_COLOR = 'var(--foreground)';

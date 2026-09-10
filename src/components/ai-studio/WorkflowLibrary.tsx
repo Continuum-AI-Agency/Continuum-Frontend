@@ -136,7 +136,7 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
             key={e.id}
             d={`M ${x1} ${y1} C ${cpx} ${y1} ${cpx} ${y2} ${x2} ${y2}`}
             fill="none"
-            stroke="hsl(var(--foreground))"
+            stroke="var(--foreground)"
             strokeOpacity={0.2}
             strokeWidth={1}
           />

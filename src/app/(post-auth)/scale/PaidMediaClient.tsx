@@ -32,6 +32,12 @@ function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
   return PAID_MEDIA_TABS.some((tab) => tab === value) ? (value as PaidMediaTab) : null;
 }
 
+const OpenAiCampaignBar = dynamic(
+  () =>
+    import('@/CampaignCanvas/components/OpenAiCampaignBar').then((mod) => mod.OpenAiCampaignBar),
+  { ssr: false },
+);
+
 const CampaignCanvas = dynamic(
   () => import('@/CampaignCanvas/components/CampaignCanvas').then((mod) => mod.CampaignCanvas),
   { ssr: false },
@@ -200,6 +206,11 @@ export default function PaidMediaClientPage({
     normalizedTabParam ?? (jainaSessionIdParam ? 'jaina' : 'dashboard'),
   );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
+  // The ads-manager panel on the Dashboard tab. Separate from `isCanvasOpen`, which is
+  // Jaina's canvas: the two tabs open the same canvas for different reasons and closing
+  // one must not close the other.
+  const [isAdsManagerOpen, setIsAdsManagerOpen] = React.useState(false);
+  const adsManagerShellRef = React.useRef<HTMLDivElement | null>(null);
   const [isJainaFullscreen, setIsJainaFullscreen] = React.useState(false);
   const [canvasWidthPx, setCanvasWidthPx] = React.useState(540);
   const [isResizingCanvas, setIsResizingCanvas] = React.useState(false);
@@ -276,6 +287,14 @@ export default function PaidMediaClientPage({
   React.useEffect(() => {
     setSelectedCampaign(null);
   }, [selectedAdAccount]);
+
+  const handleCreateNewCampaign = React.useCallback(async () => {
+    // Imported here rather than at module scope so the canvas store (and React Flow with
+    // it) stays out of the Dashboard bundle until someone actually opens the builder.
+    const { useCampaignStore } = await import('@/CampaignCanvas/stores/useCampaignStore');
+    useCampaignStore.getState().startOpenAiDraft();
+    setIsAdsManagerOpen(true);
+  }, []);
 
   const handleToggleCanvas = React.useCallback(() => {
     setIsCanvasOpen((previous) => !previous);
@@ -516,16 +535,72 @@ export default function PaidMediaClientPage({
         </div>
 
         <TabsContent value="dashboard" className="box-border min-h-0 overflow-hidden">
-          {selectedAdAccount ? (
-            <PaidMediaDashboard
-              brandId={brandProfileId}
-              adAccountId={selectedAdAccount}
-              platform={platform}
-              onPlatformChange={handlePlatformChange}
-            />
-          ) : (
-            renderBlockedState()
-          )}
+          <div ref={adsManagerShellRef} className="relative flex h-full min-h-0 overflow-hidden">
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+              {selectedAdAccount ? (
+                <PaidMediaDashboard
+                  brandId={brandProfileId}
+                  adAccountId={selectedAdAccount}
+                  platform={platform}
+                  onPlatformChange={handlePlatformChange}
+                  onCreateNewCampaign={handleCreateNewCampaign}
+                />
+              ) : (
+                renderBlockedState()
+              )}
+            </div>
+
+            <AnimatePresence initial={false}>
+              {isAdsManagerOpen ? (
+                <>
+                  <motion.div
+                    key="ads-manager-handle"
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize ads manager"
+                    className="z-30 w-2 shrink-0 cursor-col-resize bg-border/70 transition-colors hover:bg-primary/50"
+                    initial={{ opacity: 0, x: 8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 8 }}
+                    transition={{ type: 'spring', stiffness: 260, damping: 28, mass: 0.8 }}
+                    onPointerDown={handleCanvasResizeStart}
+                  />
+                  <motion.aside
+                    key="ads-manager-panel"
+                    className="relative min-h-0 shrink-0 overflow-hidden border-l border-border/70 bg-background/80"
+                    initial={{ opacity: 0, x: 24 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 24 }}
+                    transition={{ type: 'spring', stiffness: 240, damping: 26, mass: 0.85 }}
+                    style={{ width: canvasWidthPx }}
+                  >
+                    <div className="flex h-full min-h-0 flex-col">
+                      <div className="flex items-center justify-between gap-2 border-b px-2 py-1.5">
+                        <OpenAiCampaignBar
+                          brandId={brandProfileId}
+                          adAccountId={selectedAdAccount}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          aria-label="Close ads manager"
+                          onClick={() => setIsAdsManagerOpen(false)}
+                        >
+                          <PanelRightClose className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="relative min-h-0 flex-1">
+                        <ReactFlowProvider>
+                          <CampaignCanvas />
+                        </ReactFlowProvider>
+                      </div>
+                    </div>
+                  </motion.aside>
+                </>
+              ) : null}
+            </AnimatePresence>
+          </div>
         </TabsContent>
 
         <TabsContent value="performance" className="box-border min-h-0 overflow-hidden">
@@ -588,7 +663,7 @@ export default function PaidMediaClientPage({
                     style={{
                       width: canvasWidthPx,
                       boxShadow: isResizingCanvas
-                        ? 'inset 0 0 0 1px hsl(var(--primary) / 0.35)'
+                        ? 'inset 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent)'
                         : undefined,
                     }}
                   >

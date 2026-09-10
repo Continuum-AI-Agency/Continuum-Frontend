@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { LayerEditorLayer } from '../../types';
-import { layerAssetCoordinates, resolveLayerSources } from './layerAssets';
+import { layerAssetCoordinates, layerSourceFromAsset, resolveLayerSources } from './layerAssets';
 
 /**
  * `uploadLayerAsset` and `signLayerAsset` are not exercised here — both are thin wrappers
@@ -143,5 +143,49 @@ describe('resolveLayerSources', () => {
 
     expect(urls.size).toBe(3);
     expect(peak).toBeGreaterThan(1);
+  });
+});
+
+describe('layerSourceFromAsset', () => {
+  const asset = (over: Record<string, unknown> = {}) =>
+    ({
+      id: 'asset-1',
+      bucket: 'media-library',
+      storagePath: 'brand/hero.png',
+      fileName: 'hero.png',
+      mimeType: 'image/png',
+      kind: 'image',
+      width: 1200,
+      height: 800,
+      signedUrl: 'https://signed/hero',
+      ...over,
+      // biome-ignore lint/suspicious/noExplicitAny: a fixture, not a full MediaAsset
+    }) as any;
+
+  test('carries the durable pair and the intrinsic size', () => {
+    expect(layerSourceFromAsset(asset())).toMatchObject({
+      assetId: 'asset-1',
+      bucket: 'media-library',
+      storagePath: 'brand/hero.png',
+      width: 1200,
+      height: 800,
+    });
+  });
+
+  test('prefers a title, else the file name without its extension', () => {
+    expect(layerSourceFromAsset(asset({ title: 'Hero shot' })).name).toBe('Hero shot');
+    expect(layerSourceFromAsset(asset({ title: '   ' })).name).toBe('hero');
+    expect(layerSourceFromAsset(asset({ title: null })).name).toBe('hero');
+  });
+
+  test('reports a missing size as null so the caller knows to measure', () => {
+    // Nullable on the contract — an asset analysed before those columns existed.
+    const source = layerSourceFromAsset(asset({ width: null, height: undefined }));
+    expect(source.width).toBeNull();
+    expect(source.height).toBeNull();
+  });
+
+  test('reports a missing signed URL rather than an empty string', () => {
+    expect(layerSourceFromAsset(asset({ signedUrl: null })).signedUrl).toBeNull();
   });
 });
