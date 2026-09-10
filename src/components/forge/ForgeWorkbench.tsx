@@ -1,6 +1,6 @@
 'use client';
 
-import type { TemplateSource } from '@continuum/contracts';
+import { type TemplateSource, templateNameProblem } from '@continuum/contracts';
 import { FileUp, Hammer, Loader2, RefreshCw, Rocket, Send, TestTube2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ import { UploadStrip } from '@/components/library/UploadStrip';
 import { useMediaUpload } from '@/components/library/useMediaUpload';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   advanceTemplateForgeRun,
   type ForgeLadderAction,
@@ -59,6 +60,17 @@ function ladderFor(state: string | undefined): Array<{
           label: 'Publish',
           Icon: Rocket,
           hint: 'Publishes the template and grants this brand permission to render it.',
+        },
+      ];
+    // The stop every from-scratch build reaches: the table and the graph are built and the media
+    // variables have no picture yet. Nothing is broken, so the button says what to do next.
+    case 'needs_input':
+      return [
+        {
+          action: 'resume',
+          label: 'Build again',
+          Icon: RefreshCw,
+          hint: 'Re-runs the checks with what the variables say now.',
         },
       ];
     case 'failed':
@@ -113,6 +125,14 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
   const [parseState, setParseState] = useState('pending');
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState<ForgeLadderAction | 'submit' | null>(null);
+  // THE TEMPLATE NAME IS ASKED FOR, never inferred.
+  //
+  // The forge derives this template's render table from it (`tpl_<slug(name)>_root`, 40
+  // characters, never truncated — a shortened key is two templates sharing one root table). The
+  // upload's own filename was the obvious default and it is the wrong one: a real AE file is
+  // called `Vivo47_EasyFit_1x1_9x16_16x9_v11_FINAL_APPROVED.aep`, which is past the limit before
+  // anyone has typed anything. So it is a field, and it is validated while you type.
+  const [templateName, setTemplateName] = useState('');
   const { uploads, uploadFiles, pauseUpload, resumeUpload, cancelUpload } = useMediaUpload(brandId);
   const { run, pushed, refresh: refreshRun } = useForgeRun(brandId, selected);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -144,6 +164,17 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
     void loadVariables();
   }, [loadVariables]);
 
+  // A name belongs to the project it names — carrying one across a selection change is how the
+  // wrong template ends up owning a root table. The AEP's own filename is offered as a STARTING
+  // POINT when it happens to be usable, and left blank when it is not: prefilling a name the
+  // forge would refuse is worse than an empty field, because the refusal arrives at submit.
+  useEffect(() => {
+    const suggestion = (
+      sources.find((source) => source.assetId === selected)?.parse?.filename ?? ''
+    ).replace(/\.[^.]+$/, '');
+    setTemplateName(templateNameProblem(suggestion) ? '' : suggestion);
+  }, [selected, sources]);
+
   // A parse lands seconds after the upload registers, and the row that appears is `pending` until
   // it does. Re-reading when an upload finishes is what turns a just-dropped file into a card
   // with its ratios and slot count on it, without a manual refresh.
@@ -168,9 +199,14 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
 
   const onSubmit = async () => {
     if (!selected) return;
+    const problem = templateNameProblem(templateName);
+    if (problem) {
+      toast.error(`Template name: ${problem}`);
+      return;
+    }
     setBusy('submit');
     try {
-      await sendTemplateToForge(brandId, selected);
+      await sendTemplateToForge(brandId, selected, templateName.trim());
       await Promise.all([loadSources(), refreshRun()]);
       toast.success('Sent to the forge');
     } catch (error) {
@@ -194,6 +230,7 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
   };
 
   const current = sources.find((source) => source.assetId === selected) ?? null;
+  const nameProblem = templateNameProblem(templateName);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -274,20 +311,47 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
               </div>
               <div className="flex flex-wrap gap-2">
                 {!run || run.state === 'failed' ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="gap-2"
-                    disabled={busy !== null || current.parseState !== 'parsed'}
-                    onClick={onSubmit}
-                  >
-                    {busy === 'submit' ? (
-                      <Loader2 className="size-4 animate-spin" aria-hidden />
-                    ) : (
-                      <Send className="size-4" aria-hidden />
-                    )}
-                    Build the template
-                  </Button>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex gap-2">
+                      <Input
+                        value={templateName}
+                        onChange={(event) => setTemplateName(event.target.value)}
+                        placeholder="Name this template"
+                        aria-label="Template name"
+                        aria-invalid={nameProblem !== null && templateName.length > 0}
+                        className="h-8 w-56"
+                        disabled={busy !== null}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-2"
+                        disabled={
+                          busy !== null || current.parseState !== 'parsed' || nameProblem !== null
+                        }
+                        onClick={onSubmit}
+                      >
+                        {busy === 'submit' ? (
+                          <Loader2 className="size-4 animate-spin" aria-hidden />
+                        ) : (
+                          <Send className="size-4" aria-hidden />
+                        )}
+                        Build the template
+                      </Button>
+                    </div>
+                    <p
+                      className={cn(
+                        'text-xs',
+                        templateName.length > 0 && nameProblem
+                          ? 'text-destructive'
+                          : 'text-muted-foreground',
+                      )}
+                    >
+                      {templateName.length > 0 && nameProblem
+                        ? nameProblem
+                        : 'Its render table is named after this, and cannot be renamed later.'}
+                    </p>
+                  </div>
                 ) : null}
                 {ladderFor(run?.state).map(({ action, label, Icon, hint }) => (
                   <Button
@@ -316,8 +380,17 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
                 <ForgeRunProgress run={run} />
                 {run.needs?.length ? (
                   <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+                    {/*
+                      Two different stops wear `needs_input`, and they ask for opposite things.
+                      An `asset` need is where EVERY from-scratch build lands — the table is
+                      built, the graph is built, and nobody has chosen the pictures yet. Calling
+                      that "nothing could bind" reads as a broken AEP when the answer is one
+                      Library asset in the variable editor below.
+                    */}
                     <p className="font-medium">
-                      {run.needs.length} slot{run.needs.length === 1 ? '' : 's'} nothing could bind
+                      {run.needs.every((need) => need.kind === 'asset')
+                        ? `Pick a picture for ${run.needs.length} media variable${run.needs.length === 1 ? '' : 's'} below, then build again`
+                        : `${run.needs.length} slot${run.needs.length === 1 ? '' : 's'} nothing could bind`}
                     </p>
                     <ul className="mt-1 space-y-0.5 text-muted-foreground">
                       {run.needs.map((need) => (

@@ -1,6 +1,6 @@
 'use client';
 
-import type { MediaAsset, TemplateSource } from '@continuum/contracts';
+import { type MediaAsset, type TemplateSource, templateNameProblem } from '@continuum/contracts';
 import { AlertTriangle, Clock3, Layers, Loader2, Send, Type } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -70,9 +70,17 @@ function TemplateCard({
   }, [brandId, source.assetId, source.parseState, source.fonts.length]);
 
   const sendToForge = useCallback(async () => {
+    // One naming rule, checked in the same words the Forge field uses. The render table is named
+    // after this and cannot be renamed later, so a Library title that will not fit is a trip to
+    // Forge — where there is a field for it — not a silent truncation.
+    const problem = templateNameProblem(name);
+    if (problem) {
+      toast.error(`Name this template in Forge first — ${problem}`);
+      return;
+    }
     setSending(true);
     try {
-      const next = await sendTemplateToForge(brandId, source.assetId);
+      const next = await sendTemplateToForge(brandId, source.assetId, name);
       toast.success(
         next.forgeState === 'stubbed'
           ? 'Recorded for Template Forge. The live hand-off is not switched on yet.'
@@ -84,7 +92,7 @@ function TemplateCard({
     } finally {
       setSending(false);
     }
-  }, [brandId, source.assetId, onChanged]);
+  }, [brandId, source.assetId, name, onChanged]);
 
   return (
     <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-border/60 bg-card p-4">

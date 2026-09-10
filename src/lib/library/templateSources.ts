@@ -1,6 +1,10 @@
 'use client';
 
-import type { TemplateFontStatus, TemplateSource } from '@continuum/contracts';
+import type {
+  TemplateFontStatus,
+  TemplateForgeNeed,
+  TemplateSource,
+} from '@continuum/contracts';
 import { getApiUrl } from '@/lib/api/config';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -58,10 +62,13 @@ export async function fetchTemplateFonts(
 export async function sendTemplateToForge(
   brandId: string,
   assetId: string,
+  // Asked for, never inferred: the forge names this template's render table after it, capped at
+  // 40 characters and never truncated, so a filename is not a safe default.
+  templateName: string,
 ): Promise<TemplateSource> {
   const response = await authorizedFetch(`/api/ai-studio/templates/${assetId}/forge`, {
     method: 'POST',
-    body: JSON.stringify({ brandId }),
+    body: JSON.stringify({ brandId, templateName }),
   });
   return unwrap<TemplateSource>(response, 'Template Forge hand-off');
 }
@@ -189,7 +196,10 @@ export type TemplateRunRow = {
     phases: Array<{ name: string; total: number | null; done: number }>;
   } | null;
   findings: Array<{ code: string; what?: string; why?: string; resolver?: string | null }>;
-  needs: Array<{ id: string; reason?: string; slot?: { label?: string } }>;
+  // The contract's own shape, not a second hand-written one: `kind` is what tells a slot
+  // nothing could bind apart from a media variable waiting for its picture, and a local
+  // mirror that drifts from it is how the UI ends up calling the second one broken.
+  needs: TemplateForgeNeed[];
   error: { code: string; message?: string } | null;
   root_table: string | null;
   application: string | null;
