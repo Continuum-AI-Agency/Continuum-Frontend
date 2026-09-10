@@ -42,6 +42,8 @@ const isInFlight = (job: ApiRenderJob) =>
 export function useApiRenderJobs(args: {
   brandId: string | null | undefined;
   trackedIds: string[];
+  /** How many recent rows the list read returns. The node wants a handful; a grid wants the cap. */
+  limit?: number;
 }) {
   const { brandId } = args;
   const [jobs, setJobs] = useState<ApiRenderJob[]>([]);
@@ -63,7 +65,7 @@ export function useApiRenderJobs(args: {
 
   const refreshJobs = useCallback(async () => {
     if (!brandId) return;
-    const response = await apiRendersApi.listJobs(brandId, 8);
+    const response = await apiRendersApi.listJobs(brandId, args.limit ?? 8);
     const listed = new Set(response.items.map((item) => item.id));
     const missing = trackedKey ? trackedKey.split(',').filter((id) => id && !listed.has(id)) : [];
     // A tracked id the list did not return is fetched directly rather than dropped.
@@ -71,7 +73,7 @@ export function useApiRenderJobs(args: {
       missing.map((id) => apiRendersApi.getJob(brandId, id).catch(() => null)),
     );
     setJobs([...response.items, ...recovered.filter((job): job is ApiRenderJob => job !== null)]);
-  }, [brandId, trackedKey]);
+  }, [brandId, trackedKey, args.limit]);
 
   const refreshOne = useCallback(
     async (jobId: string) => {

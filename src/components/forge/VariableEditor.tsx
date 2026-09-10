@@ -247,8 +247,8 @@ export function VariableEditor({
                       onChange={(event) => patch(variable.key, { publicName: event.target.value })}
                       aria-label={`Name for ${variable.key}`}
                     />
-                    <p className="mt-1 flex flex-wrap items-center gap-1 font-mono text-[10px] text-muted-foreground">
-                      <Badge variant="secondary" className="px-1 py-0 text-[10px]">
+                    <p className="mt-1 flex flex-wrap items-center gap-1 font-mono text-2xs text-muted-foreground">
+                      <Badge variant="secondary" className="px-1 py-0 text-2xs">
                         {variable.kind}
                       </Badge>
                       {/* One slot in seven ratios is one slot — say which frames carry it. */}
@@ -279,7 +279,7 @@ export function VariableEditor({
                       </SelectContent>
                     </Select>
                     {clash ? (
-                      <p className="mt-1 text-[10px] text-destructive">
+                      <p className="mt-1 text-2xs text-destructive">
                         Another variable already means this.
                       </p>
                     ) : null}

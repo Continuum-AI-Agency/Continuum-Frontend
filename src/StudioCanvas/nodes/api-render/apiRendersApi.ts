@@ -5,6 +5,7 @@ import {
   API_RENDER_INPUT_SETS_ROUTE,
   API_RENDER_JOBS_ROUTE,
   API_RENDER_PREFLIGHT_ROUTE,
+  API_RENDER_SUGGEST_ROWS_ROUTE,
   API_RENDER_TEMPLATES_ROUTE,
   type ApiRenderBatch,
   type ApiRenderBatchPreflightRequest,
@@ -18,6 +19,8 @@ import {
   type ApiRenderJobListResponse,
   type ApiRenderPreflightRequest,
   type ApiRenderPreflightResponse,
+  type ApiRenderSuggestRowsRequest,
+  type ApiRenderSuggestRowsResponse,
   type ApiRenderTemplateContract,
   type ApiRenderTemplateListResponse,
   type ApiRenderUpdateInputSetRequest,
@@ -29,6 +32,7 @@ import {
   apiRenderJobListResponseSchema,
   apiRenderJobSchema,
   apiRenderPreflightResponseSchema,
+  apiRenderSuggestRowsResponseSchema,
   apiRenderTemplateContractSchema,
   apiRenderTemplateListResponseSchema,
 } from '@continuum/contracts';
@@ -135,6 +139,15 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: apiRenderBatchPreflightResponseSchema,
+    });
+  },
+  // AI fill for the requests grid. Proposals only — nothing is rendered or saved.
+  suggestRows(input: ApiRenderSuggestRowsRequest) {
+    return http.request<ApiRenderSuggestRowsResponse>({
+      path: API_RENDER_SUGGEST_ROWS_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: apiRenderSuggestRowsResponseSchema,
     });
   },
   createBatch(input: ApiRenderCreateJobRequest) {

@@ -4,7 +4,8 @@ import { Toast as ToastPrimitive } from '@base-ui/react/toast';
 import { CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type React from 'react';
-import { createContext, useCallback, useContext, useMemo, useRef } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import { registerToastSink } from './toast-imperative';
 
 export const TOAST_VARIANTS = ['success', 'info', 'warning', 'error'] as const;
 
@@ -146,6 +147,10 @@ function ToastBridge({ children }: { children: React.ReactNode }) {
       data: { variant: options.variant ?? 'success', action: options.action, durationMs },
     });
   }, []);
+
+  // Publish `show` to the imperative entry point so non-React callers (stores, plain
+  // modules) reach this same provider instead of a toast system nothing renders.
+  useEffect(() => registerToastSink(show), [show]);
 
   const value = useMemo<ToastContextValue>(() => ({ show }), [show]);
   return <ToastContext.Provider value={value}>{children}</ToastContext.Provider>;

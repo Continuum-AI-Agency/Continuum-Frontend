@@ -592,3 +592,37 @@ export const apiRenderBatchSchema = z
   .object({ batchId: z.string().uuid(), jobs: z.array(apiRenderJobSchema) })
   .strict();
 export type ApiRenderBatch = z.infer<typeof apiRenderBatchSchema>;
+
+// --- AI fill ---------------------------------------------------------------------------------
+//
+// Rows for the render-requests grid, proposed by a model from a brief. Only scalar variables
+// (text, number, boolean, enum, colour) are ever proposed: a media slot is a Library pin the
+// model cannot mint, and a reserved slot is the server's. Every proposed row still goes through
+// the same client validation and server preflight as a typed one — this is a draft, not a render.
+
+export const API_RENDER_SUGGEST_ROWS_ROUTE = '/api/ai-studio/renders/suggest-rows';
+
+export const API_RENDER_SUGGEST_ROWS_MAX = 20;
+
+export const apiRenderSuggestRowsRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    bindingId: bindingIdField,
+    templateKey: z.string().min(1),
+    contractHash: z.string().min(1),
+    prompt: z.string().trim().min(1).max(2000),
+    count: z.number().int().min(1).max(API_RENDER_SUGGEST_ROWS_MAX).default(5),
+    /** Values to keep across every proposed row — a product already chosen, a fixed price. */
+    seed: apiRenderVariableMapSchema.optional(),
+  })
+  .strict();
+export type ApiRenderSuggestRowsRequest = z.infer<typeof apiRenderSuggestRowsRequestSchema>;
+
+export const apiRenderSuggestRowsResponseSchema = z
+  .object({
+    rows: z.array(z.object({ label: z.string(), variables: apiRenderVariableMapSchema }).strict()),
+    /** What the model proposed that was dropped, and why — surfaced, never silent. */
+    dropped: z.array(z.string()).default([]),
+  })
+  .strict();
+export type ApiRenderSuggestRowsResponse = z.infer<typeof apiRenderSuggestRowsResponseSchema>;

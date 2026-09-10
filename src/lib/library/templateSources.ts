@@ -2,10 +2,10 @@
 
 import type {
   RenderWorkspace,
-  WorkspaceTemplate,
   TemplateFontStatus,
   TemplateForgeNeed,
   TemplateSource,
+  WorkspaceTemplate,
 } from '@continuum/contracts';
 import { getApiUrl } from '@/lib/api/config';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';

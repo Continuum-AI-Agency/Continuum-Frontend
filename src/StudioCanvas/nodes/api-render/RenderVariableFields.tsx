@@ -460,3 +460,6 @@ export function RenderVariableFields(props: {
     </FieldGroup>
   );
 }
+
+// The pin helpers, for surfaces that take the same Library picks in a different frame.
+export { pickedPins, pinFromAsset };

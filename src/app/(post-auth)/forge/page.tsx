@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { ForgeWorkbench } from '@/components/forge/ForgeWorkbench';
+import { ForgeTabs } from '@/components/forge/ForgeTabs';
 import { TierAccessRedirect } from '@/components/ui/TierAccessRedirect';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { isTemplateForgeTier } from '@/lib/media/tier';
@@ -31,13 +31,12 @@ export default async function ForgePage() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Forge</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Upload an After Effects project and watch it become a template. Everything the designer
-          left adjustable shows up here as a variable you can name, give a meaning, and give a
-          default — and once it is published, it is selectable from the API render node on the
-          canvas.
+          Turn an After Effects project into a template, set up renders against it in a grid, and
+          watch them come back. Everything the designer left adjustable is a variable here — and
+          once a template is published it is selectable from the API render node on the canvas.
         </p>
       </header>
-      <ForgeWorkbench brandId={activeBrandId} />
+      <ForgeTabs brandId={activeBrandId} />
     </div>
   );
 }

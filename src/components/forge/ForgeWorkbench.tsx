@@ -1,20 +1,28 @@
 'use client';
 
-import { type TemplateSource, templateNameProblem } from '@continuum/contracts';
+import {
+  type RenderWorkspace,
+  renderWorkspaceLabel,
+  type TemplateSource,
+  templateNameProblem,
+} from '@continuum/contracts';
 import { FileUp, Hammer, Loader2, RefreshCw, Rocket, Send, TestTube2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
+import { PendingApprovals } from '@/components/forge/PendingApprovals';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
+import { WorkspaceTemplates } from '@/components/forge/WorkspaceTemplates';
 import { UploadStrip } from '@/components/library/UploadStrip';
 import { useMediaUpload } from '@/components/library/useMediaUpload';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/toast-imperative';
 import {
   advanceTemplateForgeRun,
   type ForgeLadderAction,
+  fetchRenderWorkspaces,
   fetchTemplateSources,
   fetchTemplateVariables,
   saveTemplateVariables,
@@ -108,7 +116,7 @@ function TemplateRow({
     >
       <p className="truncate text-sm font-medium">{source.assetId}</p>
       <p className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-        <Badge variant="secondary" className="px-1 py-0 text-[10px]">
+        <Badge variant="secondary" className="px-1 py-0 text-2xs">
           {source.parseState}
         </Badge>
         {source.slotCount ? <span>{source.slotCount} variables</span> : null}
@@ -133,6 +141,12 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
   // called `Vivo47_EasyFit_1x1_9x16_16x9_v11_FINAL_APPROVED.aep`, which is past the limit before
   // anyone has typed anything. So it is a field, and it is validated while you type.
   const [templateName, setTemplateName] = useState('');
+  // WHICH WORKSPACE. A brand may hold several enabled bindings (vivo47 renders into Continuum_app
+  // and Parsed_app), and a template belongs to exactly one: the render table is named after that
+  // binding's client_key and the membership row points at its id. So when there is a choice a
+  // person makes it, and when there is not there is nothing to ask.
+  const [workspaces, setWorkspaces] = useState<RenderWorkspace[]>([]);
+  const [workspaceId, setWorkspaceId] = useState<string>('');
   const { uploads, uploadFiles, pauseUpload, resumeUpload, cancelUpload } = useMediaUpload(brandId);
   const { run, pushed, refresh: refreshRun } = useForgeRun(brandId, selected);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -159,6 +173,22 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
   useEffect(() => {
     void loadSources();
   }, [loadSources]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchRenderWorkspaces(brandId)
+      .then((items) => {
+        if (cancelled) return;
+        setWorkspaces(items);
+        setWorkspaceId(items.find((w) => w.isDefault)?.id ?? items[0]?.id ?? '');
+      })
+      // Advisory: a brand with no binding yet gets one provisioned on submit, so failing to list
+      // them must not block the page.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId]);
 
   useEffect(() => {
     void loadVariables();
@@ -206,7 +236,12 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
     }
     setBusy('submit');
     try {
-      await sendTemplateToForge(brandId, selected, templateName.trim());
+      await sendTemplateToForge(
+        brandId,
+        selected,
+        templateName.trim(),
+        workspaces.length > 1 ? workspaceId : undefined,
+      );
       await Promise.all([loadSources(), refreshRun()]);
       toast.success('Sent to the forge');
     } catch (error) {
@@ -233,191 +268,224 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
   const nameProblem = templateNameProblem(templateName);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-      <aside className="space-y-3">
-        <input
-          ref={fileInput}
-          type="file"
-          multiple
-          accept=".aep,.aepx,.aet,.zip"
-          className="sr-only"
-          onChange={(event) => {
-            const files = Array.from(event.target.files ?? []);
-            if (files.length) void uploadFiles(files);
-            event.target.value = '';
-          }}
-        />
-        <Button type="button" className="w-full gap-2" onClick={() => fileInput.current?.click()}>
-          <FileUp className="size-4" aria-hidden />
-          Upload a project
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          .aep, .aepx, .aet or a .zip package, up to 5 GB. It lands in your Library like any other
-          file.
-        </p>
+    <div className="space-y-6">
+      {/* Above the workbench, not inside it: a batch waiting on a person is the
+          most time-sensitive thing on this page, and it belongs to no one
+          template. Renders nothing when there is nothing waiting. */}
+      <PendingApprovals brandId={brandId} />
 
-        {uploads.length ? (
-          <UploadStrip
-            uploads={uploads}
-            onPause={pauseUpload}
-            onResume={resumeUpload}
-            onRetry={resumeUpload}
-            onCancel={cancelUpload}
+      <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <aside className="space-y-3">
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            accept=".aep,.aepx,.aet,.zip"
+            className="sr-only"
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              if (files.length) void uploadFiles(files);
+              event.target.value = '';
+            }}
           />
-        ) : null}
+          <Button type="button" className="w-full gap-2" onClick={() => fileInput.current?.click()}>
+            <FileUp className="size-4" aria-hidden />
+            Upload a project
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            .aep, .aepx, .aet or a .zip package, up to 5 GB. It lands in your Library like any other
+            file.
+          </p>
 
-        <div className="space-y-1">
-          {sources.length ? (
-            sources.map((source) => (
-              <TemplateRow
-                key={source.assetId}
-                source={source}
-                active={source.assetId === selected}
-                onSelect={() => setSelected(source.assetId)}
-              />
-            ))
-          ) : (
-            <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
-              No project files yet.
-            </p>
-          )}
-        </div>
-      </aside>
+          {uploads.length ? (
+            <UploadStrip
+              uploads={uploads}
+              onPause={pauseUpload}
+              onResume={resumeUpload}
+              onRetry={resumeUpload}
+              onCancel={cancelUpload}
+            />
+          ) : null}
 
-      <section className="min-w-0 space-y-6">
-        {!current ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
-            <Hammer className="size-8 text-muted-foreground" aria-hidden />
-            <p className="mt-3 text-sm text-muted-foreground">
-              Pick a project to see what is inside it.
-            </p>
+          <div className="space-y-1">
+            {sources.length ? (
+              sources.map((source) => (
+                <TemplateRow
+                  key={source.assetId}
+                  source={source}
+                  active={source.assetId === selected}
+                  onSelect={() => setSelected(source.assetId)}
+                />
+              ))
+            ) : (
+              <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
+                No project files yet.
+              </p>
+            )}
           </div>
-        ) : (
-          <>
-            <header className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="truncate text-lg font-semibold">{current.assetId}</h2>
-                <p className="text-xs text-muted-foreground">
-                  {/*
+        </aside>
+
+        <section className="min-w-0 space-y-6">
+          {!current ? (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
+              <Hammer className="size-8 text-muted-foreground" aria-hidden />
+              <p className="mt-3 text-sm text-muted-foreground">
+                Pick a project to see what is inside it.
+              </p>
+            </div>
+          ) : (
+            <>
+              <header className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="truncate text-lg font-semibold">{current.assetId}</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {/*
                     A card never says "published" off a forge run alone: the fleet can finish a job
                     against an unpromoted package and hand back a blank frame, which reads as
                     success. Only a template key means renderable.
                   */}
-                  {current.templateKey
-                    ? `Renderable — template ${current.templateKey}`
-                    : 'Not renderable yet'}
-                  {pushed ? null : ' · live updates unavailable'}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {!run || run.state === 'failed' ? (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex gap-2">
-                      <Input
-                        value={templateName}
-                        onChange={(event) => setTemplateName(event.target.value)}
-                        placeholder="Name this template"
-                        aria-label="Template name"
-                        aria-invalid={nameProblem !== null && templateName.length > 0}
-                        className="h-8 w-56"
-                        disabled={busy !== null}
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="gap-2"
-                        disabled={
-                          busy !== null || current.parseState !== 'parsed' || nameProblem !== null
-                        }
-                        onClick={onSubmit}
-                      >
-                        {busy === 'submit' ? (
-                          <Loader2 className="size-4 animate-spin" aria-hidden />
-                        ) : (
-                          <Send className="size-4" aria-hidden />
+                    {current.templateKey
+                      ? `Renderable — template ${current.templateKey}`
+                      : 'Not renderable yet'}
+                    {pushed ? null : ' · live updates unavailable'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {!run || run.state === 'failed' ? (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex gap-2">
+                        <Input
+                          value={templateName}
+                          onChange={(event) => setTemplateName(event.target.value)}
+                          placeholder="Name this template"
+                          aria-label="Template name"
+                          aria-invalid={nameProblem !== null && templateName.length > 0}
+                          className="h-8 w-56"
+                          disabled={busy !== null}
+                        />
+                        {/* Only when there is a choice: one workspace is not a decision. */}
+                        {workspaces.length > 1 ? (
+                          <select
+                            value={workspaceId}
+                            onChange={(event) => setWorkspaceId(event.target.value)}
+                            aria-label="Render workspace"
+                            disabled={busy !== null}
+                            className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                          >
+                            {workspaces.map((workspace) => (
+                              <option key={workspace.id} value={workspace.id}>
+                                {renderWorkspaceLabel(workspace)}
+                                {workspace.isDefault ? ' (default)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="gap-2"
+                          disabled={
+                            busy !== null || current.parseState !== 'parsed' || nameProblem !== null
+                          }
+                          onClick={onSubmit}
+                        >
+                          {busy === 'submit' ? (
+                            <Loader2 className="size-4 animate-spin" aria-hidden />
+                          ) : (
+                            <Send className="size-4" aria-hidden />
+                          )}
+                          Build the template
+                        </Button>
+                      </div>
+                      <p
+                        className={cn(
+                          'text-xs',
+                          templateName.length > 0 && nameProblem
+                            ? 'text-destructive'
+                            : 'text-muted-foreground',
                         )}
-                        Build the template
-                      </Button>
+                      >
+                        {templateName.length > 0 && nameProblem
+                          ? nameProblem
+                          : workspaces.length > 1
+                            ? 'Its render table is named after this, in the workspace you pick — neither can be changed later.'
+                            : 'Its render table is named after this, and cannot be renamed later.'}
+                      </p>
                     </div>
-                    <p
-                      className={cn(
-                        'text-xs',
-                        templateName.length > 0 && nameProblem
-                          ? 'text-destructive'
-                          : 'text-muted-foreground',
-                      )}
+                  ) : null}
+                  {ladderFor(run?.state).map(({ action, label, Icon, hint }) => (
+                    <Button
+                      key={action}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      title={hint}
+                      disabled={busy !== null}
+                      onClick={() => onAdvance(action)}
                     >
-                      {templateName.length > 0 && nameProblem
-                        ? nameProblem
-                        : 'Its render table is named after this, and cannot be renamed later.'}
-                    </p>
-                  </div>
-                ) : null}
-                {ladderFor(run?.state).map(({ action, label, Icon, hint }) => (
-                  <Button
-                    key={action}
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="gap-2"
-                    title={hint}
-                    disabled={busy !== null}
-                    onClick={() => onAdvance(action)}
-                  >
-                    {busy === action ? (
-                      <Loader2 className="size-4 animate-spin" aria-hidden />
-                    ) : (
-                      <Icon className="size-4" aria-hidden />
-                    )}
-                    {label}
-                  </Button>
-                ))}
-              </div>
-            </header>
+                      {busy === action ? (
+                        <Loader2 className="size-4 animate-spin" aria-hidden />
+                      ) : (
+                        <Icon className="size-4" aria-hidden />
+                      )}
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              </header>
 
-            {run ? (
-              <div className="rounded-lg border p-4">
-                <ForgeRunProgress run={run} />
-                {run.needs?.length ? (
-                  <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
-                    {/*
+              {run ? (
+                <div className="rounded-lg border p-4">
+                  <ForgeRunProgress run={run} />
+                  {run.needs?.length ? (
+                    <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+                      {/*
                       Two different stops wear `needs_input`, and they ask for opposite things.
                       An `asset` need is where EVERY from-scratch build lands — the table is
                       built, the graph is built, and nobody has chosen the pictures yet. Calling
                       that "nothing could bind" reads as a broken AEP when the answer is one
                       Library asset in the variable editor below.
                     */}
-                    <p className="font-medium">
-                      {run.needs.every((need) => need.kind === 'asset')
-                        ? `Pick a picture for ${run.needs.length} media variable${run.needs.length === 1 ? '' : 's'} below, then build again`
-                        : `${run.needs.length} slot${run.needs.length === 1 ? '' : 's'} nothing could bind`}
-                    </p>
-                    <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                      {run.needs.map((need) => (
-                        <li key={need.id}>
-                          {need.slot?.label ?? need.id}
-                          {need.reason ? ` — ${need.reason}` : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+                      <p className="font-medium">
+                        {run.needs.every((need) => need.kind === 'asset')
+                          ? `Pick a picture for ${run.needs.length} media variable${run.needs.length === 1 ? '' : 's'} below, then build again`
+                          : `${run.needs.length} slot${run.needs.length === 1 ? '' : 's'} nothing could bind`}
+                      </p>
+                      <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                        {run.needs.map((need) => (
+                          <li key={need.id}>
+                            {need.slot?.label ?? need.id}
+                            {need.reason ? ` — ${need.reason}` : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
-            <div>
-              <h3 className="mb-2 text-sm font-medium">Dynamic variables</h3>
-              <VariableEditor
+              {/* What is already in the workspace — including templates that never came through
+                the Library. Renders nothing when there is nothing to show. */}
+              <WorkspaceTemplates
                 brandId={brandId}
-                variables={variables}
-                parseState={parseState}
-                saving={saving}
-                onSave={onSave}
+                {...(workspaces.length > 1 && workspaceId ? { workspaceId } : {})}
               />
-            </div>
-          </>
-        )}
-      </section>
+
+              <div>
+                <h3 className="mb-2 text-sm font-medium">Dynamic variables</h3>
+                <VariableEditor
+                  brandId={brandId}
+                  variables={variables}
+                  parseState={parseState}
+                  saving={saving}
+                  onSave={onSave}
+                />
+              </div>
+            </>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

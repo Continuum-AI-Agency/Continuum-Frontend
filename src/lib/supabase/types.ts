@@ -2705,6 +2705,51 @@ export type Database = {
         }
         Relationships: []
       }
+      openai_ad_accounts: {
+        Row: {
+          ad_account_id: string
+          brand_integration_id: string
+          created_at: string
+          currency_code: string | null
+          id: string
+          name: string | null
+          raw_profile: Json
+          review_status: string | null
+          status: string | null
+          synced_at: string | null
+          time_zone: string | null
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          brand_integration_id: string
+          created_at?: string
+          currency_code?: string | null
+          id?: string
+          name?: string | null
+          raw_profile?: Json
+          review_status?: string | null
+          status?: string | null
+          synced_at?: string | null
+          time_zone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          brand_integration_id?: string
+          created_at?: string
+          currency_code?: string | null
+          id?: string
+          name?: string | null
+          raw_profile?: Json
+          review_status?: string | null
+          status?: string | null
+          synced_at?: string | null
+          time_zone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tiktok_users: {
         Row: {
           avatar_url: string | null
@@ -7753,6 +7798,63 @@ export type Database = {
         }
         Relationships: []
       }
+      onboarding_creative_runs: {
+        Row: {
+          brand_id: string
+          created_at: string
+          created_by: string
+          id: string
+          lease_until: string | null
+          origin_env: string
+          slots: Json
+          source_context: Json
+          status: string
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          lease_until?: string | null
+          origin_env: string
+          slots: Json
+          source_context: Json
+          status?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          lease_until?: string | null
+          origin_env?: string
+          slots?: Json
+          source_context?: Json
+          status?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_creative_runs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "onboarding_creative_runs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       paid_media_campaign_indexes: {
         Row: {
           brand_id: string
@@ -8416,6 +8518,90 @@ export type Database = {
           },
         ]
       }
+      pipeline_runs: {
+        Row: {
+          brand_profile_id: string
+          contract_hash: string
+          created_at: string
+          error: Json | null
+          finished_at: string | null
+          heartbeat_at: string | null
+          id: string
+          idempotency_key: string
+          origin: string
+          pipeline_family_id: string
+          pipeline_id: string
+          pipeline_revision: number
+          pipeline_source: string
+          receipt: Json | null
+          request: Json
+          requested_by: string
+          resolved_inputs: Json | null
+          started_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          brand_profile_id: string
+          contract_hash: string
+          created_at?: string
+          error?: Json | null
+          finished_at?: string | null
+          heartbeat_at?: string | null
+          id?: string
+          idempotency_key: string
+          origin: string
+          pipeline_family_id: string
+          pipeline_id: string
+          pipeline_revision: number
+          pipeline_source: string
+          receipt?: Json | null
+          request: Json
+          requested_by: string
+          resolved_inputs?: Json | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_profile_id?: string
+          contract_hash?: string
+          created_at?: string
+          error?: Json | null
+          finished_at?: string | null
+          heartbeat_at?: string | null
+          id?: string
+          idempotency_key?: string
+          origin?: string
+          pipeline_family_id?: string
+          pipeline_id?: string
+          pipeline_revision?: number
+          pipeline_source?: string
+          receipt?: Json | null
+          request?: Json
+          requested_by?: string
+          resolved_inputs?: Json | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_runs_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "pipeline_runs_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       preview_run_events: {
         Row: {
           created_at: string
@@ -8444,63 +8630,6 @@ export type Database = {
             columns: ["run_id"]
             isOneToOne: false
             referencedRelation: "preview_runs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      onboarding_creative_runs: {
-        Row: {
-          brand_id: string
-          created_at: string
-          created_by: string
-          id: string
-          lease_until: string | null
-          origin_env: string
-          slots: Json
-          source_context: Json
-          status: string
-          updated_at: string
-          worker_id: string | null
-        }
-        Insert: {
-          brand_id: string
-          created_at?: string
-          created_by: string
-          id?: string
-          lease_until?: string | null
-          origin_env: string
-          slots: Json
-          source_context: Json
-          status?: string
-          updated_at?: string
-          worker_id?: string | null
-        }
-        Update: {
-          brand_id?: string
-          created_at?: string
-          created_by?: string
-          id?: string
-          lease_until?: string | null
-          origin_env?: string
-          slots?: Json
-          source_context?: Json
-          status?: string
-          updated_at?: string
-          worker_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "onboarding_creative_runs_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: true
-            referencedRelation: "brand_account_directory"
-            referencedColumns: ["brand_id"]
-          },
-          {
-            foreignKeyName: "onboarding_creative_runs_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: true
-            referencedRelation: "brand_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -10596,38 +10725,6 @@ export type Database = {
       }
     }
     Functions: {
-      claim_onboarding_creative_run: {
-        Args: { p_env: string; p_worker_id: string }
-        Returns: {
-          brand_id: string
-          created_at: string
-          created_by: string
-          id: string
-          lease_until: string | null
-          origin_env: string
-          slots: Json
-          source_context: Json
-          status: string
-          updated_at: string
-          worker_id: string | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "onboarding_creative_runs"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      save_onboarding_creative_run: {
-        Args: {
-          p_id: string
-          p_slot?: string
-          p_status?: string
-          p_value?: Json
-          p_worker_id: string
-        }
-        Returns: boolean
-      }
       advance_automation_next_run: {
         Args: { p_automation_id: string; p_expected: string; p_next: string }
         Returns: boolean
@@ -10954,6 +11051,28 @@ export type Database = {
           to: "creative_strategy_jobs"
           isOneToOne: true
           isSetofReturn: false
+        }
+      }
+      claim_onboarding_creative_run: {
+        Args: { p_env: string; p_worker_id: string }
+        Returns: {
+          brand_id: string
+          created_at: string
+          created_by: string
+          id: string
+          lease_until: string | null
+          origin_env: string
+          slots: Json
+          source_context: Json
+          status: string
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "onboarding_creative_runs"
+          isOneToOne: false
+          isSetofReturn: true
         }
       }
       claim_paid_scaffold_gate: {
@@ -11685,6 +11804,16 @@ export type Database = {
           p_version_id: string
         }
         Returns: Json
+      }
+      save_onboarding_creative_run: {
+        Args: {
+          p_id: string
+          p_slot?: string
+          p_status?: string
+          p_value?: Json
+          p_worker_id: string
+        }
+        Returns: boolean
       }
       search_admin_user_directory: {
         Args: { p_limit?: number; p_offset?: number; p_query: string }
@@ -13584,6 +13713,56 @@ export type Database = {
           },
         ]
       }
+      optimizer_ping_subscriptions: {
+        Row: {
+          brand_id: string
+          channel_id: string | null
+          channel_name: string | null
+          connection_id: string | null
+          created_at: string
+          destination: string
+          id: string
+          platform: string
+          updated_at: string
+          user_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          brand_id: string
+          channel_id?: string | null
+          channel_name?: string | null
+          connection_id?: string | null
+          created_at?: string
+          destination: string
+          id?: string
+          platform?: string
+          updated_at?: string
+          user_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          brand_id?: string
+          channel_id?: string | null
+          channel_name?: string | null
+          connection_id?: string | null
+          created_at?: string
+          destination?: string
+          id?: string
+          platform?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "optimizer_ping_subscriptions_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "chat_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       slack_installations: {
         Row: {
           app_id: string
@@ -15074,10 +15253,13 @@ export type Database = {
           created_by: string
           delivery_receipts: Json
           delivery_target: Json
+          environment: string | null
           error: string | null
           finished_at: string | null
+          fit: Json | null
           id: string
           idempotency_key: string
+          judge: Json | null
           outputs: Json
           render_input: Json
           status: string
@@ -15095,10 +15277,13 @@ export type Database = {
           created_by: string
           delivery_receipts?: Json
           delivery_target?: Json
+          environment?: string | null
           error?: string | null
           finished_at?: string | null
+          fit?: Json | null
           id?: string
           idempotency_key: string
+          judge?: Json | null
           outputs?: Json
           render_input?: Json
           status?: string
@@ -15116,10 +15301,13 @@ export type Database = {
           created_by?: string
           delivery_receipts?: Json
           delivery_target?: Json
+          environment?: string | null
           error?: string | null
           finished_at?: string | null
+          fit?: Json | null
           id?: string
           idempotency_key?: string
+          judge?: Json | null
           outputs?: Json
           render_input?: Json
           status?: string
@@ -16921,6 +17109,87 @@ export type Database = {
           },
         ]
       }
+      render_approvals: {
+        Row: {
+          action: string
+          ad_id: string | null
+          adset_id: string | null
+          batch_id: string
+          brand_id: string
+          campaign_id: string | null
+          client_key: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decided_by_platform_user_id: string | null
+          decision_reason: string | null
+          delivery_receipts: Json
+          environment_key: string | null
+          files: Json
+          group_key: string | null
+          id: string
+          picinst: string
+          provider_channel_id: string | null
+          provider_message_id: string | null
+          provider_thread_id: string | null
+          status: string
+          task_uid: string
+          updated_at: string
+        }
+        Insert: {
+          action?: string
+          ad_id?: string | null
+          adset_id?: string | null
+          batch_id: string
+          brand_id: string
+          campaign_id?: string | null
+          client_key?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_by_platform_user_id?: string | null
+          decision_reason?: string | null
+          delivery_receipts?: Json
+          environment_key?: string | null
+          files?: Json
+          group_key?: string | null
+          id?: string
+          picinst: string
+          provider_channel_id?: string | null
+          provider_message_id?: string | null
+          provider_thread_id?: string | null
+          status?: string
+          task_uid: string
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          ad_id?: string | null
+          adset_id?: string | null
+          batch_id?: string
+          brand_id?: string
+          campaign_id?: string | null
+          client_key?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_by_platform_user_id?: string | null
+          decision_reason?: string | null
+          delivery_receipts?: Json
+          environment_key?: string | null
+          files?: Json
+          group_key?: string | null
+          id?: string
+          picinst?: string
+          provider_channel_id?: string | null
+          provider_message_id?: string | null
+          provider_thread_id?: string | null
+          status?: string
+          task_uid?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       render_input_sets: {
         Row: {
           brand_id: string
@@ -17328,6 +17597,127 @@ export type Database = {
           created_by?: string | null
         }
         Relationships: []
+      }
+      template_source_runs: {
+        Row: {
+          application: string | null
+          asset_id: string
+          brand_id: string
+          done: boolean
+          error: Json | null
+          etag: string | null
+          findings: Json
+          finished_at: string | null
+          needs: Json
+          ok: boolean | null
+          polled_at: string | null
+          progress: Json | null
+          root_table: string | null
+          run_id: string
+          started_at: string
+          state: string
+        }
+        Insert: {
+          application?: string | null
+          asset_id: string
+          brand_id: string
+          done?: boolean
+          error?: Json | null
+          etag?: string | null
+          findings?: Json
+          finished_at?: string | null
+          needs?: Json
+          ok?: boolean | null
+          polled_at?: string | null
+          progress?: Json | null
+          root_table?: string | null
+          run_id: string
+          started_at?: string
+          state: string
+        }
+        Update: {
+          application?: string | null
+          asset_id?: string
+          brand_id?: string
+          done?: boolean
+          error?: Json | null
+          etag?: string | null
+          findings?: Json
+          finished_at?: string | null
+          needs?: Json
+          ok?: boolean | null
+          polled_at?: string | null
+          progress?: Json | null
+          root_table?: string | null
+          run_id?: string
+          started_at?: string
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_source_runs_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "template_sources"
+            referencedColumns: ["asset_id"]
+          },
+        ]
+      }
+      template_source_slots: {
+        Row: {
+          asset_id: string
+          binding: Json | null
+          brand_id: string
+          char_budget: number | null
+          default_value: Json | null
+          kind: string
+          public_name: string | null
+          required: boolean | null
+          role: string | null
+          role_source: string
+          slot_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          asset_id: string
+          binding?: Json | null
+          brand_id: string
+          char_budget?: number | null
+          default_value?: Json | null
+          kind: string
+          public_name?: string | null
+          required?: boolean | null
+          role?: string | null
+          role_source?: string
+          slot_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          asset_id?: string
+          binding?: Json | null
+          brand_id?: string
+          char_budget?: number | null
+          default_value?: Json | null
+          kind?: string
+          public_name?: string | null
+          required?: boolean | null
+          role?: string | null
+          role_source?: string
+          slot_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_source_slots_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "template_sources"
+            referencedColumns: ["asset_id"]
+          },
+        ]
       }
       template_sources: {
         Row: {
@@ -17955,6 +18345,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      expire_client_render_targets: { Args: never; Returns: number }
       fail_service_render_job: {
         Args: {
           p_error_code: string

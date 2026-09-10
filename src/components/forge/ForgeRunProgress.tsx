@@ -94,7 +94,7 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
           aria-label="Reading the project"
           aria-valuetext="Working out how much there is to do"
         >
-          <div className="h-full w-1/3 animate-[forge-indeterminate_1.4s_ease-in-out_infinite] rounded-full bg-primary" />
+          <div className="h-full w-1/3 animate-[forge-indeterminate_1.4s_ease-in-out_infinite] rounded-full bg-primary motion-reduce:animate-none motion-reduce:w-full motion-reduce:opacity-60" />
         </div>
       ) : (
         <Progress value={pct} aria-label={`${label}, ${pct}% done`} />

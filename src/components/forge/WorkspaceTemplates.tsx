@@ -8,13 +8,10 @@ import {
 } from '@continuum/contracts';
 import { Check, Loader2, Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  discoverWorkspaceTemplates,
-  setTemplateAdoption,
-} from '@/lib/library/templateSources';
+import { toast } from '@/components/ui/toast-imperative';
+import { discoverWorkspaceTemplates, setTemplateAdoption } from '@/lib/library/templateSources';
 
 // Templates that are ALREADY in the workspace.
 //

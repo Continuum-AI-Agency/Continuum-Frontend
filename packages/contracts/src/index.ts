@@ -27,6 +27,7 @@ export * from './paid/index';
 export * from './paid-creative/index';
 export * from './projects/index';
 export * from './prompts/index';
+export * from './render-approvals/index';
 export * from './shared/parseRows';
 export * from './skills/index';
 export * from './streaming/index';
