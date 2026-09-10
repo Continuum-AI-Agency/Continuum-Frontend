@@ -76,6 +76,45 @@ export const templateSlotSchema = z
      * measured at upload and a box measured at preflight cannot disagree.
      */
     placement: slotPlacementSchema.nullish(),
+    /**
+     * Every place this slot actually appears, one entry per comp.
+     *
+     * A template ships one design at N ratios, so the slot itself is deduped on layer name — this
+     * is the un-deduped truth underneath it, and the reason a per-comp box exists at all: the same
+     * knob is a different rectangle in 1:1 than in 9:16, and a fit check that used one box for
+     * both would pass a headline that clips in the vertical cut.
+     */
+    instances: z
+      .array(
+        z
+          .object({
+            compId: z.number().int(),
+            comp: z.string(),
+            layerId: z.number().int(),
+            layerName: z.string().optional(),
+            box: z.array(z.number()).length(4).nullish(),
+            compSize: z.array(z.number()).length(2).nullish(),
+            charBudget: z.number().int().nonnegative().nullish(),
+            sample: z.string().nullish(),
+          })
+          .passthrough(),
+      )
+      .optional(),
+    /**
+     * The Essential Graphics controller behind this slot, when one drives it.
+     *
+     * Present for a slot reached through a sourced precomp, where the family is keyed on the
+     * CONTROLLER's name rather than the layer's — the controller is the thing the designer
+     * actually exposed.
+     */
+    control: z
+      .object({
+        controllerType: z.number().int().nullish(),
+        name: z.string().nullish(),
+        uuid: z.string().nullish(),
+      })
+      .passthrough()
+      .nullish(),
   })
   // Passthrough, NOT strict — and the switch was not cosmetic.
   //
@@ -122,12 +161,31 @@ export const templateRatioSchema = z
     height: z.number().int().positive(),
     comps: z.array(z.string()).default([]),
   })
-  .strict();
+  // Passthrough for the same reason every sibling here is: this mirrors a shape the forge owns
+  // and extends, and a strict mirror turns an additive upstream change into a dead ingestion.
+  .passthrough();
 export type TemplateRatio = z.infer<typeof templateRatioSchema>;
 
 export const templateFontSchema = z
-  .object({ family: z.string().min(1), layers: z.number().int().nonnegative() })
-  .strict();
+  .object({
+    /** What After Effects reports, which is a PostScript name far more often than a family. */
+    family: z.string().min(1),
+    layers: z.number().int().nonnegative(),
+    /**
+     * The face's own PostScript name, when the parse read one.
+     *
+     * `family` has always carried this in practice — AE reports `HeadingNow-36CompBold`, not
+     * "Heading Now" — which is why the font-gap diff is case- and separator-insensitive.
+     */
+    postScriptName: z.string().nullish(),
+    /**
+     * Whether the face is installed where the parse ran. **`null` is the normal answer**: the
+     * library verb is called without `--fonts`, so it cannot know, and null means UNKNOWN rather
+     * than "missing". Treating it as missing would report every template as unrenderable.
+     */
+    installed: z.boolean().nullish(),
+  })
+  .passthrough();
 export type TemplateFont = z.infer<typeof templateFontSchema>;
 
 export const templateParseSchema = z
@@ -150,7 +208,7 @@ export const templateParseSchema = z
             font: z.string().nullable().default(null),
             comp: z.string(),
           })
-          .strict(),
+          .passthrough(),
       )
       .default([]),
     warnings: z.array(z.string()).default([]),
