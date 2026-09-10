@@ -2,6 +2,7 @@
 
 import type {
   RenderWorkspace,
+  WorkspaceTemplate,
   TemplateFontStatus,
   TemplateForgeNeed,
   TemplateSource,
@@ -66,6 +67,40 @@ export async function fetchRenderWorkspaces(brandId: string): Promise<RenderWork
     `/api/ai-studio/templates/workspaces?brandId=${encodeURIComponent(brandId)}`,
   );
   return (await unwrap<{ items: RenderWorkspace[] }>(response, 'Render workspaces')).items;
+}
+
+/**
+ * What is already in the workspace, and what the brand may do about it.
+ *
+ * Not the same list as `fetchTemplateSources`: that one is the Library's uploads, this one is the
+ * workspace's contents — which is where templates made before the forge, or by an operator
+ * directly in NocoBase, actually live.
+ */
+export async function discoverWorkspaceTemplates(
+  brandId: string,
+  workspaceId?: string,
+): Promise<{ workspace: RenderWorkspace; items: WorkspaceTemplate[] }> {
+  const params = new URLSearchParams({ brandId });
+  if (workspaceId) params.set('workspaceId', workspaceId);
+  const response = await authorizedFetch(`/api/ai-studio/templates/discover?${params}`);
+  return unwrap<{ workspace: RenderWorkspace; items: WorkspaceTemplate[] }>(
+    response,
+    'Workspace templates',
+  );
+}
+
+/** Adopt a template that is already there, or put it back. */
+export async function setTemplateAdoption(input: {
+  brandId: string;
+  templateKey: string;
+  enabled: boolean;
+  workspaceId?: string;
+}): Promise<{ granted: boolean; reason?: string }> {
+  const response = await authorizedFetch('/api/ai-studio/templates/adopt', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return unwrap<{ granted: boolean; reason?: string }>(response, 'Adopt template');
 }
 
 export async function sendTemplateToForge(

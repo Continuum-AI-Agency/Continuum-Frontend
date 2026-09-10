@@ -38,6 +38,7 @@ export * from './share';
 export * from './template-forge-run';
 export * from './render-workspace';
 export * from './template-name';
+export * from './workspace-template';
 export * from './template-source-slot';
 export * from './template-source';
 export * from './timeline-draft';
