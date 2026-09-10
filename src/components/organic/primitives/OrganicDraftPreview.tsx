@@ -1,6 +1,6 @@
 'use client';
 
-import type { MediaAsset } from '@continuum/contracts';
+import { type MediaAsset, publishFormatForAssetKinds } from '@continuum/contracts';
 import {
   DndContext,
   type DragEndEvent,
@@ -795,7 +795,6 @@ export function OrganicDraftPreview({
   const openInStudio = useOpenDraftInAiStudio();
   const draftForPreview = useDraftWithFreshMedia(draft, brandProfileId);
   const isHyperframeFormat = draft.format.toLowerCase() === 'hyperframe';
-  const isCarouselFormat = draft.format.toLowerCase() === 'carousel';
   // The platforms this post goes out on. Multi-select is the whole point of #235:
   // one editable draft, N destinations.
   const selectedPlatforms = React.useMemo<OrganicPlatformKey[]>(
@@ -828,6 +827,17 @@ export function OrganicDraftPreview({
     [draftForPreview],
   );
   const lastSlidePosition = Math.max(previewSlides.length - 1, 0);
+
+  // Carousel-ness is a property of the MEDIA that is actually attached, not of the format
+  // string, which drifts. A draft the generator labelled "Reel" whose creative was then
+  // re-applied as five slides is a carousel by every observable measure, and reading the
+  // label instead of the slides is what hid Remove and pointed Replace at the whole media:
+  // clicking it on slide 1 of 5 destroyed the other four. `publishFormatForAssetKinds` is
+  // the same rule the attach contract uses, so the panel and the writer agree.
+  const isCarouselFormat =
+    previewSlides.length > 0
+      ? publishFormatForAssetKinds(previewSlides.map((slide) => slide.kind)) === 'CAROUSEL'
+      : draft.format.toLowerCase() === 'carousel';
 
   // Active carousel slide POSITION (shared between preview and strip).
   const [activeSlideIndex, setActiveSlideIndex] = React.useState(0);

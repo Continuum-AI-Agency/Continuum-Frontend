@@ -126,9 +126,25 @@ function buildStorageState(rawSessionJson: string): PlaywrightStorageState {
   return { cookies, origins: [] };
 }
 
+/**
+ * A minted session plus the two facts a bench needs that cookies alone do not carry: who
+ * it belongs to, and the bearer the Backend expects. A bench that drives BOTH the browser
+ * and a Backend route needs the same identity on both, and re-minting for the second one
+ * is how they end up being different sessions.
+ */
+export interface MintedSession {
+  state: PlaywrightStorageState;
+  accessToken: string;
+  userId: string;
+}
+
 // Drives a real GoTrue session for `email` and captures the exact serialized
 // session string the browser client would persist, then encodes it as cookies.
 export async function mintSessionForEmail(email: string): Promise<PlaywrightStorageState> {
+  return (await mintSessionBundleForEmail(email)).state;
+}
+
+export async function mintSessionBundleForEmail(email: string): Promise<MintedSession> {
   const admin = createAdminClient();
   const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const anonKey = resolveAnonKey();
@@ -171,7 +187,13 @@ export async function mintSessionForEmail(email: string): Promise<PlaywrightStor
     throw new Error(`[e2e/auth] No session was persisted after verifyOtp for ${email}.`);
   }
 
-  return buildStorageState(rawSessionJson);
+  const accessToken = verifyData.session?.access_token;
+  const userId = verifyData.session?.user?.id;
+  if (!accessToken || !userId) {
+    throw new Error(`[e2e/auth] verifyOtp returned no access token or user for ${email}.`);
+  }
+
+  return { state: buildStorageState(rawSessionJson), accessToken, userId };
 }
 
 // The local GoTrue container shares a machine with Turbopack. A cold Next compile pegs the

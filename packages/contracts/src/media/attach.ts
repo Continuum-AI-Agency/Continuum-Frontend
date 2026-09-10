@@ -181,6 +181,14 @@ const ALL_MEDIA_SLOTS_CLEARED: Required<ClearedMediaOutputs> = {
   hyperframe: null,
 };
 
+/** Can these creatives actually publish as `format`? One video for a reel, two or more slides
+ * for a carousel, exactly one asset for a single post. */
+function canPublishAs(format: PublishFormat, list: CreativeRef[]): boolean {
+  if (format === 'REEL') return list[0]?.kind === 'video';
+  if (format === 'CAROUSEL') return list.length > 1;
+  return list.length === 1;
+}
+
 /**
  * Shape one or more library creatives into a publishable media patch. A single
  * image → image slot; multiple images → carousel (selection order = slide
@@ -210,9 +218,18 @@ export function shapeUserSuppliedMedia(
   }
   const primary = list[0];
   const publishableKinds = list.flatMap((item) => (item.kind === 'file' ? [] : [item.kind]));
+  const inferred = publishFormatForAssetKinds(publishableKinds);
+  // The caller's format is a TIE-BREAK, never an override. It exists for `[video, image]`,
+  // which the assets genuinely cannot settle — reel-with-a-cover or mixed carousel. When the
+  // caller names a format the assets cannot satisfy, the assets win.
+  //
+  // Taking the caller's word for it is how applying five edited images to a draft the canvas
+  // still labelled REEL fell past the REEL branch (no video), past the CAROUSEL branch (wrong
+  // declared format) and into SINGLE IMAGE: four slides deleted, the post relabelled POST, no
+  // error anywhere. A format that contradicts what is actually attached is stale metadata, and
+  // the media is the fact.
   const format =
-    options?.format ??
-    publishFormatForAssetKinds(publishableKinds);
+    options?.format !== undefined && canPublishAs(options.format, list) ? options.format : inferred;
 
   // VIDEO / REEL — a single user video fills the reel slot.
   if (format === 'REEL' && primary.kind === 'video') {

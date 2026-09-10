@@ -429,6 +429,37 @@ export const isVideoGeneratorModel = (value: unknown): value is VideoGeneratorMo
 export const isVideoGeneratorNodeType = (nodeType?: string): nodeType is VideoGeneratorNodeType =>
   typeof nodeType === 'string' && VIDEO_GENERATOR_NODE_TYPES.has(nodeType);
 
+/**
+ * Which node types can END UP HOLDING a finished creative — distinct from which node
+ * types are generators. `isVideoGeneratorNodeType` above answers "does this node take a
+ * video-generator config", and widening it would change how configs are coerced; these
+ * two answer "can this node's output be published as the post's creative", which is a
+ * different question with a different, larger answer.
+ *
+ * Keeping the two apart is what the apply-back path kept getting wrong. It hand-listed
+ * node types at the call site, so every node that shipped afterwards was silently
+ * invisible to it: `timelineEditor` left a reel stuck at "0/1 video ready", and
+ * `layerEditor` — the node you use to EDIT an existing creative — left an image draft
+ * stuck at "0/1 image ready" with Apply Back to Planner disabled forever. `omniGen`
+ * writes `generatedVideo*` and was missed by both the generator predicate and the hand
+ * list. A literal list at the call site cannot be audited; this can.
+ */
+const IMAGE_OUTPUT_NODE_TYPES = new Set(['nanoGen', 'layerEditor', 'frameExtract']);
+const VIDEO_OUTPUT_NODE_TYPES = new Set([
+  ...VIDEO_GENERATOR_NODE_TYPES,
+  'omniGen',
+  'extendVideo',
+  'timelineEditor',
+]);
+
+/** Can this node's output be applied as the post's image creative? */
+export const isImageOutputNodeType = (nodeType?: string): boolean =>
+  typeof nodeType === 'string' && IMAGE_OUTPUT_NODE_TYPES.has(nodeType);
+
+/** Can this node's output be applied as the post's video creative? */
+export const isVideoOutputNodeType = (nodeType?: string): boolean =>
+  typeof nodeType === 'string' && VIDEO_OUTPUT_NODE_TYPES.has(nodeType);
+
 export function resolveVideoGeneratorModel(node: {
   type?: string;
   data?: Record<string, unknown>;

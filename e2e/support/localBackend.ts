@@ -75,6 +75,17 @@ type StartOptions = {
   /** The origin the browser will load the app from, e.g. http://127.0.0.1:3109. */
   browserOrigin: string;
   label?: string;
+  /**
+   * Which Supabase the Backend reads. `local` is the default and the right answer for a
+   * bench that seeds its own fixture brand into the local stack.
+   *
+   * `hosted` exists for the benches that MUST run against a real brand's real data — the
+   * StarCraft creative library, for one — where a local stack has nothing to prove
+   * anything with. It is the caller's job to keep those benches inside a brand the bench
+   * login owns; the app and the Backend must agree on the target either way, which is why
+   * this is one option rather than two independent env vars.
+   */
+  supabase?: 'local' | 'hosted';
 };
 
 // A file-scope `beforeAll` runs once per SERIAL describe group, not once per file, so
@@ -112,7 +123,7 @@ export async function startLocalBackend(options: StartOptions): Promise<LocalBac
 }
 
 async function spawnLocalBackend(options: StartOptions): Promise<LocalBackend> {
-  const { port, browserOrigin } = options;
+  const { port, browserOrigin, supabase } = options;
   const label = options.label ?? 'e2e';
   const url = `http://127.0.0.1:${port}`;
 
@@ -141,7 +152,11 @@ async function spawnLocalBackend(options: StartOptions): Promise<LocalBackend> {
 
   const child: ChildProcess = spawn(
     'bun',
-    ['--no-env-file', 'scripts/run-backend.ts', '--supabase=local'],
+    [
+      '--no-env-file',
+      'scripts/run-backend.ts',
+      `--supabase=${supabase === 'hosted' ? 'production' : 'local'}`,
+    ],
     {
       cwd: BACKEND_DIR,
       // `run-backend.ts` resolves the environment and then spawns the real server as

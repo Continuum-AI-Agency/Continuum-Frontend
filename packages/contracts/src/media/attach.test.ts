@@ -231,6 +231,68 @@ describe('shapeUserSuppliedMedia — an explicitly named format', () => {
 });
 
 /**
+ * The named format is a TIE-BREAK for `[video, image]`, not an override. AI Studio names the
+ * format from the draft's stale `postType`, so a draft still labelled REEL whose user just
+ * applied five edited IMAGES named a format its own assets could not satisfy — and the shaper
+ * took its word for it, fell past both media branches into SINGLE IMAGE, and deleted four
+ * slides while relabelling the post POST. Silently. This is that case.
+ */
+describe('shapeUserSuppliedMedia — a named format the assets cannot satisfy', () => {
+  const fiveImages = [1, 2, 3, 4, 5].map((n) =>
+    imageRef({ assetId: `i${n}`, storagePath: `library/slide-${n}.png` }),
+  );
+  const videoThenImage = [
+    videoRef({ assetId: 'v1', storagePath: 'library/clip.mp4' }),
+    imageRef({ assetId: 'i1', storagePath: 'library/cover.png' }),
+  ];
+
+  it('keeps all five slides when the caller still says REEL', () => {
+    const { contentPatch, publishingAssets, mediaSuggestionPatch } = shapeUserSuppliedMedia(
+      fiveImages,
+      { format: 'REEL' },
+    );
+
+    expect(publishingAssets).toHaveLength(5);
+    expect(contentPatch.format).toBe('CAROUSEL');
+    expect(mediaSuggestionPatch.kind).toBe('carousel');
+  });
+
+  it('preserves slide order rather than keeping only the first', () => {
+    const { publishingAssets } = shapeUserSuppliedMedia(fiveImages, { format: 'REEL' });
+    expect(publishingAssets.map((asset) => asset.storagePath)).toEqual([
+      'library/slide-1.png',
+      'library/slide-2.png',
+      'library/slide-3.png',
+      'library/slide-4.png',
+      'library/slide-5.png',
+    ]);
+  });
+
+  it('demotes a named CAROUSEL to POST when only one asset was attached', () => {
+    const { contentPatch, publishingAssets } = shapeUserSuppliedMedia([imageRef()], {
+      format: 'CAROUSEL',
+    });
+    expect(contentPatch.format).toBe('POST');
+    expect(publishingAssets).toHaveLength(1);
+  });
+
+  it('demotes a named REEL to POST when the single asset is an image', () => {
+    expect(shapeUserSuppliedMedia([imageRef()], { format: 'REEL' }).contentPatch.format).toBe(
+      'POST',
+    );
+  });
+
+  it('still honours the caller on the one genuinely ambiguous selection', () => {
+    expect(shapeUserSuppliedMedia(videoThenImage, { format: 'REEL' }).contentPatch.format).toBe(
+      'REEL',
+    );
+    expect(shapeUserSuppliedMedia(videoThenImage, { format: 'CAROUSEL' }).contentPatch.format).toBe(
+      'CAROUSEL',
+    );
+  });
+});
+
+/**
  * The shaper always knew which format the attached media could publish as — it just kept the
  * answer to itself. Three images landing on a "Reel" draft left `content.format` saying Reel with
  * no video anywhere, which died in staging once per scheduler tick.

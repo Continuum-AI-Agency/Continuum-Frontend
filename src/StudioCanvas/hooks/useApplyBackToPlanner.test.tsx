@@ -169,6 +169,33 @@ describe('useApplyBackToPlanner', () => {
     expect(withSeed.result.current.applyReadiness).not.toBeNull();
   });
 
+  // The whole point of the round trip: open the creative in Studio, EDIT it, apply it back.
+  // Editing happens on `layerEditor`, which apply-back could not see, so readiness sat at
+  // "0/1 image ready" and the button stayed disabled however much work the user did.
+  it('counts an edited creative from the Layer Editor, not just a fresh generation', () => {
+    const { result, rerender } = renderApply(makeSeed(), 'brand-1');
+
+    expect(result.current.applyReadiness?.ready).toBe(false);
+
+    store.nodes = [
+      {
+        id: 'layers-1',
+        type: 'layerEditor',
+        position: { x: 0, y: 0 },
+        data: { generatedImage: 'data:image/png;base64,EDITED' },
+      } as unknown as StudioNode,
+    ];
+    rerender();
+
+    expect(result.current.applyReadiness).toEqual({
+      ready: true,
+      completed: 1,
+      total: 1,
+      label: '1/1 image ready',
+      detail: 'Ready to apply this draft back to Planner.',
+    });
+  });
+
   it('gates a reel workflow on a single video candidate', () => {
     const seed = makeSeed({ postType: 'reel', format: 'Reel' });
     const { result, rerender } = renderApply(seed, 'brand-1');

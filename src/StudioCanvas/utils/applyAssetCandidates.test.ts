@@ -99,7 +99,11 @@ describe('collectApplyAssetCandidates', () => {
     ]);
   });
 
-  it('only takes images from nanoGen nodes and videos from videoGen / extendVideo nodes', () => {
+  // A reference node is not an output node. `image` / `video` are what the user DROPPED on
+  // the canvas and `string` is a prompt — collecting them would apply the input back onto
+  // the post as if it were the edit. `omniGen` renders video, so it contributes its clip and
+  // not its preview still.
+  it('ignores reference and prompt nodes, and takes each output node on its real kind', () => {
     const nodes = [
       node('nano', 'nanoGen', { generatedImage: 'nano-image' }, { x: 0, y: 0 }),
       node('video-gen', 'videoGen', { generatedVideo: 'video-gen-video' }, { x: 200, y: 0 }),
@@ -119,6 +123,25 @@ describe('collectApplyAssetCandidates', () => {
       { nodeId: 'nano', role: 'image_1', kind: 'image', source: 'nano-image' },
       { nodeId: 'video-gen', role: 'video_1', kind: 'video', source: 'video-gen-video' },
       { nodeId: 'extend', role: 'video_2', kind: 'video', source: 'extend-video' },
+      { nodeId: 'omni', role: 'video_3', kind: 'video', source: 'omni-video' },
+    ]);
+  });
+
+  // The image half of the same bug the video half was already fixed for. `layerEditor` is
+  // the node you open to CHANGE UP an existing creative, and it was not in the hand-written
+  // list, so every "edit the creative and re-apply it" round trip reported "0/1 image ready"
+  // and Apply Back to Planner stayed disabled no matter what the user did.
+  it('takes images from every node type that can hold a finished still', () => {
+    const nodes = [
+      node('layers', 'layerEditor', { generatedImage: 'edited-image' }, { x: 0, y: 0 }),
+      node('frame', 'frameExtract', { generatedImageUrl: 'frame-url' }, { x: 200, y: 0 }),
+      node('nano', 'nanoGen', { generatedImage: 'nano-image' }, { x: 400, y: 0 }),
+    ];
+
+    expect(collectApplyAssetCandidates(nodes)).toEqual([
+      { nodeId: 'layers', role: 'image_1', kind: 'image', source: 'edited-image' },
+      { nodeId: 'frame', role: 'image_2', kind: 'image', source: 'frame-url' },
+      { nodeId: 'nano', role: 'image_3', kind: 'image', source: 'nano-image' },
     ]);
   });
 
