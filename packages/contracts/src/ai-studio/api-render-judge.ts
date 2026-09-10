@@ -45,13 +45,14 @@ export const judgeFindingSchema = z
   .strict();
 export type JudgeFinding = z.infer<typeof judgeFindingSchema>;
 
-export const judgeVerdictSchema = z
-  .object({
-    findings: z.array(judgeFindingSchema).default([]),
-    overall: z.enum(['pass', 'fail']),
-    confidence: z.number().min(0).max(1),
-  })
-  .strict();
+// NOT strict: the forge's verdict rides with `_usage` (token counts) and whatever the judge
+// adds next, and a strict parse turned every real verdict into `verdict: null` while `state`
+// still said fail — a finding nobody could read. Unknown keys are dropped, never refused.
+export const judgeVerdictSchema = z.object({
+  findings: z.array(judgeFindingSchema).default([]),
+  overall: z.enum(['pass', 'fail']),
+  confidence: z.number().min(0).max(1),
+});
 export type JudgeVerdict = z.infer<typeof judgeVerdictSchema>;
 
 /**
