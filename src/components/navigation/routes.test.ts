@@ -22,6 +22,7 @@ describe('navigation structure', () => {
       'Scale',
       'Library',
       'Brand Spy',
+      'Forge',
     ]);
     expect(APP_NAVIGATION.map((i) => i.href)).toEqual([
       '/dashboard',
@@ -31,6 +32,7 @@ describe('navigation structure', () => {
       '/scale',
       '/library',
       '/competitor-spy',
+      '/forge',
     ]);
   });
 
@@ -111,15 +113,18 @@ describe('navigation structure', () => {
     expect(intelligence?.items.map((i) => i.href)).toEqual(['/competitor-spy']);
   });
 
-  it('exposes a single locked, greyed-out Developers entry with a stated reason', () => {
-    const developers = APP_NAVIGATION_GROUPS.flatMap((g) => g.items).find(
-      (i) => i.label === 'Developers',
-    );
-    expect(developers).toBeDefined();
-    expect(developers!.disabled).toBe(true);
-    expect(developers!.locked).toBe(true);
-    // BUG-009: a disabled entry must carry a user-facing reason.
-    expect(developers!.disabledReason).toBe('You are not enrolled in our developers program');
+  it('exposes Forge as a real destination, not the old locked placeholder', () => {
+    const forge = APP_NAVIGATION_GROUPS.flatMap((g) => g.items).find((i) => i.label === 'Forge');
+    expect(forge).toBeDefined();
+    expect(forge!.href).toBe('/forge');
+    // It replaced the `Developers` placeholder, which was disabled+locked with no route behind
+    // it. Forge has a route, so it must NOT be inert — a link that goes nowhere is the thing
+    // BUG-009 was about.
+    expect(forge!.disabled).toBeUndefined();
+    expect(forge!.locked).toBeUndefined();
+    // Tier 3 is enforced at the page (TierAccessRedirect) and on the server
+    // (assertTemplateForgeTier), the same shape /ai-studio and /scale use.
+    expect(APP_NAVIGATION_GROUPS.flatMap((g) => g.items).find((i) => i.label === 'Developers')).toBeUndefined();
   });
 
   it('footer is Settings + admin-gated Admin', () => {

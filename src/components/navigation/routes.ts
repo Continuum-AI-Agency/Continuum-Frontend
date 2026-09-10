@@ -4,10 +4,10 @@ import {
   Bot,
   CalendarDays,
   ChartColumn,
-  Code,
   Eye,
   Frame,
   Gauge,
+  Hammer,
   Home,
   Images,
   type LucideIcon,
@@ -144,27 +144,34 @@ const SCALE: AppNavigationItem = {
   items: SCALE_ITEMS,
 };
 
-// Locked developer surface. Greyed-out and non-interactive for users not in the
-// Continuum Developers program; disabledReason is the hover tooltip + a11y name
-// so the entry never reads as an unexplained dead affordance (BUG-009).
-const DEVELOPERS: AppNavigationItem = {
-  label: 'Developers',
-  href: '/developers',
-  icon: Code,
-  disabled: true,
-  locked: true,
-  disabledReason: 'You are not enrolled in our developers program',
+// Forge — bring your own After Effects project.
+//
+// This slot was the locked `Developers` placeholder: an entry with no route behind it, greyed out
+// for everyone. It now leads somewhere.
+//
+// Gated at the PAGE rather than here, like every other tier-restricted destination (`/ai-studio`,
+// `/scale`): the nav array is a module-level constant and the tier is per-brand and runtime, and
+// the client brand context does not carry a tier. Threading one through a provider every screen
+// mounts, to grey out one link, is a worse trade than the redirect those destinations already use.
+// The gate that actually matters is on the server anyway — `assertTemplateForgeTier` — because a
+// page-level redirect has never been a boundary.
+const FORGE: AppNavigationItem = {
+  label: 'Forge',
+  href: '/forge',
+  icon: Hammer,
+  accentColor: 'text-orange-500',
+  description: 'Turn an After Effects project into a template you can render.',
 };
 
 // The canonical sidebar IA: an unlabeled lead group, then one labeled section
-// per product area, Storage, and the locked Developers section.
+// per product area, Storage, and Forge.
 export const APP_NAVIGATION_GROUPS: AppNavigationGroup[] = [
   { label: null, items: [HOME, CANVAS, AUTOMATIONS] },
   { label: 'Organic', items: ORGANIC_ITEMS },
   { label: 'Scale', items: SCALE_ITEMS },
   { label: 'Intelligence', items: [BRAND_SPY] },
   { label: 'Storage', items: [LIBRARY] },
-  { label: null, items: [DEVELOPERS] },
+  { label: null, items: [FORGE] },
 ];
 
 // Flat list of navigable areas for non-grouped consumers (breadcrumb, command
@@ -177,6 +184,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
   SCALE,
   LIBRARY,
   BRAND_SPY,
+  FORGE,
 ];
 
 export const APP_NAVIGATION_FOOTER: AppNavigationItem[] = [

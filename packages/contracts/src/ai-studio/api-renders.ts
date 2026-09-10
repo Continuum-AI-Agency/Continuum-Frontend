@@ -82,6 +82,14 @@ export const apiRenderVariableKindSchema = z.enum([
   'image',
   'video',
   'enum',
+  // A colour is its own kind, not a string that happens to look like one.
+  //
+  // The forge has always emitted it — `KIND_BY_AE_TYPE` maps AE's `color` aeType straight to
+  // `color`, and the render contract types it `^#?[0-9A-Fa-f]{6}$` — but this enum had no member
+  // for it, so every `color_primary` / `background_color` slot arrived as `text` and rendered as
+  // a free-text input. A person then types `magenta` into it, which is one of the six pre-render
+  // row guards (`invalid_color`) and a real 2026-09-05 live failure.
+  'color',
 ]);
 export type ApiRenderVariableKind = z.infer<typeof apiRenderVariableKindSchema>;
 

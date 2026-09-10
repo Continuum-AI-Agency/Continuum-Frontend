@@ -110,3 +110,119 @@ export async function fetchBrandFonts(brandId: string): Promise<BrandFontSummary
   const body = await unwrap<{ fonts_in_store?: BrandFontSummary[] }>(response, 'Font list');
   return body.fonts_in_store ?? [];
 }
+
+// ── Forge: the run, and the variables ────────────────────────────────────────────────────────
+
+/** An `ApiRenderVariable` as the Library editor sees it: the parse, with the brand's edits on top. */
+export type TemplateVariable = {
+  key: string;
+  label: string;
+  kind: string;
+  required: boolean;
+  multiple: boolean;
+  accept: string[];
+  options: string[];
+  description: string | null;
+  reserved: boolean;
+  role: string | null;
+  roleSource: 'human' | null;
+  charBudget: number | null;
+  comps: string[];
+  sample: string | null;
+  placement: null;
+};
+
+export type TemplateSlotEdit = {
+  slotKey: string;
+  publicName?: string | null;
+  role?: string | null;
+  charBudget?: number | null;
+  required?: boolean | null;
+  defaultValue?: unknown;
+  binding?: { source: string; path: string; label?: string } | null;
+};
+
+export type TemplateVariablesResponse = {
+  variables: TemplateVariable[];
+  edits: Array<TemplateSlotEdit & { assetId: string; kind: string; updatedAt: string }>;
+  /**
+   * `pending` and an empty variable list mean "we have not opened the file yet", which is a very
+   * different message from "this template has no knobs". Without this they are identical.
+   */
+  parseState: string;
+};
+
+export async function fetchTemplateVariables(
+  brandId: string,
+  assetId: string,
+): Promise<TemplateVariablesResponse> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${assetId}/variables?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return unwrap<TemplateVariablesResponse>(response, 'Template variables');
+}
+
+export async function saveTemplateVariables(
+  brandId: string,
+  assetId: string,
+  slots: TemplateSlotEdit[],
+): Promise<void> {
+  const response = await authorizedFetch(`/api/ai-studio/templates/${assetId}/variables`, {
+    method: 'PUT',
+    body: JSON.stringify({ brandId, slots }),
+  });
+  await unwrap(response, 'Saving variables');
+}
+
+/** The mirrored run row. The LIVE channel is Realtime; this is the mount backfill beside it. */
+export type TemplateRunRow = {
+  run_id: string;
+  state: string;
+  done: boolean;
+  ok: boolean | null;
+  progress: {
+    total: number | null;
+    done: number;
+    pct: number | null;
+    phase: string | null;
+    detail: string | null;
+    phases: Array<{ name: string; total: number | null; done: number }>;
+  } | null;
+  findings: Array<{ code: string; what?: string; why?: string; resolver?: string | null }>;
+  needs: Array<{ id: string; reason?: string; slot?: { label?: string } }>;
+  error: { code: string; message?: string } | null;
+  root_table: string | null;
+  application: string | null;
+};
+
+export async function fetchTemplateRun(
+  brandId: string,
+  assetId: string,
+): Promise<TemplateRunRow | null> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${assetId}/run?brandId=${encodeURIComponent(brandId)}`,
+  );
+  const body = await unwrap<{ run: TemplateRunRow | null }>(response, 'Template run');
+  return body.run;
+}
+
+export type ForgeLadderAction = 'decisions' | 'draft' | 'smoke' | 'promote' | 'resume';
+
+/**
+ * Move a parked run one rung on.
+ *
+ * The forge advances itself to `draft_ready` and stops, because everything past there writes into
+ * a live workspace or spends a render.
+ */
+export async function advanceTemplateForgeRun(
+  brandId: string,
+  assetId: string,
+  action: ForgeLadderAction,
+  extra?: { decisions?: unknown; taskUID?: string },
+): Promise<void> {
+  const response = await authorizedFetch(`/api/ai-studio/templates/${assetId}/forge/${action}`, {
+    method: 'POST',
+    body: JSON.stringify({ brandId, ...(extra ?? {}) }),
+  });
+  await unwrap(response, `Forge ${action}`);
+}

@@ -35,6 +35,8 @@ export * from './review';
 export * from './saved-views';
 export * from './search';
 export * from './share';
+export * from './template-forge-run';
+export * from './template-source-slot';
 export * from './template-source';
 export * from './timeline-draft';
 export * from './transformations';
