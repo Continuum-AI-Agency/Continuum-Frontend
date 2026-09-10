@@ -68,6 +68,10 @@ export function AdAccountSelector({
 }: AdAccountSelectorProps) {
   const isGoogleAds = platform === 'google-ads';
   const isLinkedIn = platform === 'linkedin';
+  // OpenAI Ads, like Google and LinkedIn, has no timeline endpoint: its accounts come
+  // from the brand integration summary, which the platform-key maps now group under
+  // `openai`.
+  const isOpenAi = platform === 'openai';
   const { integrations, isLoading, isError, refresh } = useBrandIntegrations(brandId);
   const [open, setOpen] = React.useState(false);
   const [timedOut, setTimedOut] = React.useState(false);
@@ -103,6 +107,10 @@ export function AdAccountSelector({
       pushIntegrationAccounts(integrations?.linkedin?.accounts);
       return merged;
     }
+    if (isOpenAi) {
+      pushIntegrationAccounts(integrations?.openai?.accounts);
+      return merged;
+    }
 
     timelineAccounts.forEach((account) => {
       if (seen.has(account.id)) return;
@@ -112,7 +120,7 @@ export function AdAccountSelector({
     pushIntegrationAccounts(integrations?.facebook?.accounts);
 
     return merged;
-  }, [integrations, timelineAccounts, isGoogleAds, isLinkedIn]);
+  }, [integrations, timelineAccounts, isGoogleAds, isLinkedIn, isOpenAi]);
 
   // Scope to the brand's ASSIGNED accounts when the caller provides that set.
   // `null`/`undefined` ⇒ feature off (show every reachable account, today's
@@ -130,7 +138,7 @@ export function AdAccountSelector({
   React.useEffect(() => {
     // Non-Meta paid platforms have no timeline endpoint — accounts come from
     // the brand integration summary.
-    if (isGoogleAds || isLinkedIn) {
+    if (isGoogleAds || isLinkedIn || isOpenAi) {
       initialAccountsUsedRef.current = false;
       setTimelineAccounts([]);
       setTimelineAccountsLoaded(true);

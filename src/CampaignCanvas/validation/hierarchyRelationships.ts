@@ -1,7 +1,12 @@
 import type { Connection } from '@xyflow/react';
 import type { CampaignCanvasEdge, CampaignCanvasNode, CampaignNodeType } from '../types';
 
-type ChildNodeTypeWithSingleParent = 'ad-set' | 'ad' | 'creative';
+type ChildNodeTypeWithSingleParent =
+  | 'ad-set'
+  | 'ad'
+  | 'creative'
+  | 'openai-ad-group'
+  | 'openai-ad';
 
 interface SingleParentIssue {
   childId: string;
@@ -15,6 +20,10 @@ const SINGLE_PARENT_RULES: Record<ChildNodeTypeWithSingleParent, CampaignNodeTyp
   'ad-set': 'campaign',
   ad: 'ad-set',
   creative: 'ad',
+  // The OpenAI hierarchy is campaign > ad group > ad, with no audience or creative node:
+  // targeting lives on the campaign and the creative is fields on the ad itself.
+  'openai-ad-group': 'openai-campaign',
+  'openai-ad': 'openai-ad-group',
 };
 
 const NODE_DISPLAY_NAMES: Record<CampaignNodeType, string> = {
@@ -23,12 +32,23 @@ const NODE_DISPLAY_NAMES: Record<CampaignNodeType, string> = {
   ad: 'ad',
   audience: 'audience',
   creative: 'creative',
+  'openai-campaign': 'campaign',
+  'openai-ad-group': 'ad group',
+  'openai-ad': 'ad',
 };
+
+const SINGLE_PARENT_CHILD_TYPES: readonly ChildNodeTypeWithSingleParent[] = [
+  'ad-set',
+  'ad',
+  'creative',
+  'openai-ad-group',
+  'openai-ad',
+];
 
 function isSingleParentChildNodeType(
   nodeType: CampaignNodeType,
 ): nodeType is ChildNodeTypeWithSingleParent {
-  return nodeType === 'ad-set' || nodeType === 'ad' || nodeType === 'creative';
+  return SINGLE_PARENT_CHILD_TYPES.includes(nodeType as ChildNodeTypeWithSingleParent);
 }
 
 export function getExpectedSingleParentTypeForChild(

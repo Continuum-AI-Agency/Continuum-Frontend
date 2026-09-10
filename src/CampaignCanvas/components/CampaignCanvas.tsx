@@ -66,6 +66,9 @@ import { AdSetNode } from '../nodes/AdSetNode';
 import { AudienceNode } from '../nodes/AudienceNode';
 import { CampaignNode } from '../nodes/CampaignNode';
 import { CreativeNode } from '../nodes/CreativeNode';
+import { OpenAiAdGroupNode } from '../nodes/OpenAiAdGroupNode';
+import { OpenAiAdNode } from '../nodes/OpenAiAdNode';
+import { OpenAiCampaignNode } from '../nodes/OpenAiCampaignNode';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type { CampaignNodeType } from '../types';
 import { getNodeTypeToCreateFromHandle } from '../types/hierarchyNavigation';
@@ -81,6 +84,9 @@ const nodeTypes: NodeTypes = {
   ad: AdNode as unknown as ComponentType<ReactFlowNodeProps>,
   audience: AudienceNode as unknown as ComponentType<ReactFlowNodeProps>,
   creative: CreativeNode as unknown as ComponentType<ReactFlowNodeProps>,
+  'openai-campaign': OpenAiCampaignNode as unknown as ComponentType<ReactFlowNodeProps>,
+  'openai-ad-group': OpenAiAdGroupNode as unknown as ComponentType<ReactFlowNodeProps>,
+  'openai-ad': OpenAiAdNode as unknown as ComponentType<ReactFlowNodeProps>,
 };
 
 const edgeTypes = {
@@ -119,6 +125,7 @@ export const CampaignCanvas = () => {
     edgeStyle,
     setEdgeStyle,
     validateGraph,
+    platform,
   } = useCampaignStore();
 
   const { screenToFlowPosition, fitView } = useReactFlow();
@@ -412,37 +419,62 @@ export const CampaignCanvas = () => {
               Add Component
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56">
-              <ContextMenuItem onClick={() => handleAddNode('campaign')}>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-blue-500" />
-                  Campaign
-                </div>
-              </ContextMenuItem>
-              <ContextMenuItem onClick={() => handleAddNode('ad-set')}>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-primary" />
-                  Ad Set
-                </div>
-              </ContextMenuItem>
-              <ContextMenuItem onClick={() => handleAddNode('ad')}>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                  Ad
-                </div>
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-              <ContextMenuItem onClick={() => handleAddNode('audience')}>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-orange-500" />
-                  Audience
-                </div>
-              </ContextMenuItem>
-              <ContextMenuItem onClick={() => handleAddNode('creative')}>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-pink-500" />
-                  Creative
-                </div>
-              </ContextMenuItem>
+              {platform === 'openai' ? (
+                <>
+                  <ContextMenuItem onClick={() => handleAddNode('openai-campaign')}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                      Campaign
+                    </div>
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => handleAddNode('openai-ad-group')}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-emerald-400" />
+                      Ad Group
+                    </div>
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => handleAddNode('openai-ad')}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-emerald-300" />
+                      Chat Card Ad
+                    </div>
+                  </ContextMenuItem>
+                </>
+              ) : (
+                <>
+                  <ContextMenuItem onClick={() => handleAddNode('campaign')}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-blue-500" />
+                      Campaign
+                    </div>
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => handleAddNode('ad-set')}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-primary" />
+                      Ad Set
+                    </div>
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => handleAddNode('ad')}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                      Ad
+                    </div>
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onClick={() => handleAddNode('audience')}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-orange-500" />
+                      Audience
+                    </div>
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => handleAddNode('creative')}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-pink-500" />
+                      Creative
+                    </div>
+                  </ContextMenuItem>
+                </>
+              )}
             </ContextMenuSubContent>
           </ContextMenuSub>
 

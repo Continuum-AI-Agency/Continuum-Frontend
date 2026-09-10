@@ -1,7 +1,7 @@
 'use client';
 
 import { format, parseISO } from 'date-fns';
-import { Bell, Calendar as CalendarIcon, Info, RotateCw } from 'lucide-react';
+import { Bell, Calendar as CalendarIcon, Info, Plus, RotateCw } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import type { DateRange } from 'react-day-picker';
@@ -52,6 +52,8 @@ type PaidMediaDashboardProps = {
   adAccountId: string | null;
   platform: PaidMediaPlatform;
   onPlatformChange: (platform: PaidMediaPlatform) => void;
+  /** Opens the ads-manager canvas on an empty graph. */
+  onCreateNewCampaign?: () => void;
 };
 
 type LoadState =
@@ -71,6 +73,7 @@ export function PaidMediaDashboard({
   adAccountId,
   platform,
   onPlatformChange,
+  onCreateNewCampaign,
 }: PaidMediaDashboardProps) {
   const loadCampaignPerformance = usePaidMediaPerformanceStore(
     (state) => state.loadCampaignPerformance,
@@ -342,11 +345,28 @@ export function PaidMediaDashboard({
           <SelectItem value="meta">Meta</SelectItem>
           <SelectItem value="google-ads">Google Ads</SelectItem>
           <SelectItem value="linkedin">LinkedIn Ads</SelectItem>
+          <SelectItem value="openai">OpenAI Ads</SelectItem>
           <SelectItem value="dv360" disabled>
             DV360
           </SelectItem>
         </SelectContent>
       </Select>
+
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 gap-1 px-2 text-xs"
+        onClick={onCreateNewCampaign}
+        disabled={platform !== 'openai' || !onCreateNewCampaign}
+        title={
+          platform === 'openai'
+            ? 'Build a new OpenAI campaign on the canvas'
+            : 'Hand-building campaigns is OpenAI Ads only for now — ask Jaina to build a Meta or Google campaign.'
+        }
+      >
+        <Plus className="h-3 w-3" />
+        Create new
+      </Button>
 
       <Select
         value={timeRangePreset}

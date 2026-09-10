@@ -10,6 +10,7 @@ export const PLATFORM_KEYS = [
   'dv360',
   'googleAnalytics',
   'threads',
+  'openai',
 ] as const;
 
 export type PlatformKey = (typeof PLATFORM_KEYS)[number];
@@ -26,6 +27,7 @@ const PLATFORM_LABELS: Record<PlatformKey, string> = {
   dv360: 'DV360',
   googleAnalytics: 'Google Analytics',
   threads: 'Threads',
+  openai: 'OpenAI Ads',
 };
 
 export const PLATFORMS: { key: PlatformKey; label: string }[] = PLATFORM_KEYS.map((key) => ({

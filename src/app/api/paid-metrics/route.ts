@@ -31,7 +31,7 @@ const rangeSchema = z
 
 const requestSchema = z.object({
   brandId: z.string(),
-  platform: z.enum(['meta', 'google-ads', 'dv360', 'linkedin']).optional().default('meta'),
+  platform: z.enum(['meta', 'google-ads', 'dv360', 'linkedin', 'openai']).optional().default('meta'),
   scope: z
     .enum([
       'campaign',

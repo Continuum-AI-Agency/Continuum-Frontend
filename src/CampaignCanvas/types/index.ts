@@ -1,7 +1,39 @@
 import type { Edge, Node, NodeProps } from '@xyflow/react';
 import type { CanvasGate } from '@/lib/paid-media/jaina-activity-client';
 
-export type CampaignNodeType = 'campaign' | 'ad-set' | 'ad' | 'audience' | 'creative';
+/**
+ * The Meta-shaped nodes. Their vocabulary (OUTCOME_SALES, AUCTION, optimization goals) is
+ * Meta's, and the only way a graph of them reaches Meta is "Propose via Jaina" -> a
+ * human-approved scaffold gate.
+ */
+export type MetaCampaignNodeType = 'campaign' | 'ad-set' | 'ad' | 'audience' | 'creative';
+
+/**
+ * The OpenAI Ads nodes. Deliberately a SEPARATE set rather than a `platform` flag on the
+ * Meta ones: the two platforms share no field beyond a name, and widening the live Meta
+ * node data to cover both would touch every component that renders them.
+ *
+ * These are also the first canvas nodes with a direct write path — the canvas publishes
+ * them straight to /paid/openai/* rather than through an agent proposal. That is safe
+ * because the API creates everything paused and only an explicit activate can serve it.
+ */
+export type OpenAiCampaignNodeType = 'openai-campaign' | 'openai-ad-group' | 'openai-ad';
+
+export type CampaignNodeType = MetaCampaignNodeType | OpenAiCampaignNodeType;
+
+export const OPENAI_CAMPAIGN_NODE_TYPES: readonly OpenAiCampaignNodeType[] = [
+  'openai-campaign',
+  'openai-ad-group',
+  'openai-ad',
+];
+
+export const isOpenAiCampaignNodeType = (
+  type: string | undefined,
+): type is OpenAiCampaignNodeType =>
+  OPENAI_CAMPAIGN_NODE_TYPES.includes(type as OpenAiCampaignNodeType);
+
+/** Which platform a canvas (and every node on it) belongs to. */
+export type CampaignCanvasPlatform = 'meta' | 'openai';
 
 export type AdFormat = 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'COLLECTION';
 export type CreativeAssetType = 'image' | 'video';
@@ -82,12 +114,66 @@ export interface CreativeData extends BaseCampaignNodeData {
   aspectRatio?: string;
 }
 
+/**
+ * An OpenAI Ads campaign. `openAiId` is the whole difference between a draft and a record:
+ * a node that has one is UPDATED on publish, a node without one is CREATED.
+ *
+ * `biddingType` and `conversionEventSettingIds` are immutable upstream once the campaign
+ * exists, so a hydrated node renders them read-only rather than offering an edit the API
+ * will refuse.
+ */
+export interface OpenAiCampaignData extends BaseCampaignNodeData {
+  biddingType: 'impressions' | 'clicks' | 'conversions';
+  /** Micros. The API's minimum is 1_000_000 (one unit of the account currency). */
+  lifetimeSpendLimitMicros?: number;
+  currencyCode?: string;
+  description?: string;
+  startTime?: string;
+  endTime?: string;
+  /** Location ids from /geo_lookup/search. Empty means "all available locations". */
+  locationIds?: string[];
+  locationLabels?: string[];
+  conversionEventSettingIds?: string[];
+  openAiId?: string;
+  openAiStatus?: string;
+}
+
+export interface OpenAiAdGroupData extends BaseCampaignNodeData {
+  /** `impression` for CPM campaigns; `click` for BOTH click and conversion campaigns. */
+  billingEventType: 'impression' | 'click';
+  /** Micros, per billing event. Under oCPC this is the CPA bid despite click billing. */
+  maxBidMicros?: number;
+  currencyCode?: string;
+  description?: string;
+  contextHints?: string[];
+  openAiId?: string;
+  openAiStatus?: string;
+}
+
+export interface OpenAiAdData extends BaseCampaignNodeData {
+  creativeType: 'chat_card' | 'product_ad_template';
+  /** 3-50 chars upstream. */
+  title: string;
+  /** <= 100 chars upstream. */
+  body: string;
+  targetUrl?: string;
+  /** The uploaded file id. A chat_card cannot be created without one. */
+  fileId?: string;
+  imageUrl?: string;
+  openAiId?: string;
+  openAiStatus?: string;
+  reviewStatus?: string;
+}
+
 type CampaignNodeDataMap = {
   campaign: CampaignData;
   'ad-set': AdSetData;
   ad: AdData;
   audience: AudienceData;
   creative: CreativeData;
+  'openai-campaign': OpenAiCampaignData;
+  'openai-ad-group': OpenAiAdGroupData;
+  'openai-ad': OpenAiAdData;
 };
 
 export type CampaignCanvasNodeData = CampaignNodeDataMap[CampaignNodeType];

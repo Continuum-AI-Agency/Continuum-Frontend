@@ -5,6 +5,8 @@ const CHILD_NODE_BY_SOURCE_TYPE: Partial<Record<CampaignNodeType, CampaignNodeTy
   campaign: 'ad-set',
   'ad-set': 'ad',
   ad: 'creative',
+  'openai-campaign': 'openai-ad-group',
+  'openai-ad-group': 'openai-ad',
 };
 
 const PARENT_NODE_BY_TARGET_TYPE: Partial<Record<CampaignNodeType, CampaignNodeType>> = {
@@ -12,6 +14,8 @@ const PARENT_NODE_BY_TARGET_TYPE: Partial<Record<CampaignNodeType, CampaignNodeT
   ad: 'ad-set',
   creative: 'ad',
   audience: 'ad-set',
+  'openai-ad-group': 'openai-campaign',
+  'openai-ad': 'openai-ad-group',
 };
 
 export function getNodeTypeToCreateFromHandle(

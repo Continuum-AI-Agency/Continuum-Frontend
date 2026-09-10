@@ -134,7 +134,7 @@ export type PaidMetricsRange =
 
 export type PaidMetricsRequest = {
   brandId: string;
-  platform?: 'meta' | 'google-ads' | 'dv360' | 'linkedin';
+  platform?: 'meta' | 'google-ads' | 'dv360' | 'linkedin' | 'openai';
   accountId?: string;
   campaignId?: string;
   adsetId?: string;

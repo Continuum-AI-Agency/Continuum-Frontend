@@ -11,12 +11,17 @@ import type {
   CampaignNodeType,
   CreativeAssetType,
   CreativeData,
+  MetaCampaignNodeType,
 } from '@/CampaignCanvas/types';
 import {
   DEFAULT_AD_FORMAT,
   DEFAULT_CREATIVE_ASSET_TYPE,
 } from '@/CampaignCanvas/types/adCreativeCompatibility';
 
+// The Meta five. This payload feeds `paid_scaffold_propose`, which only speaks Meta, so
+// the OpenAI node types are deliberately absent — they are filtered out below rather than
+// mapped, because a canvas can hold either platform's nodes and the Jaina propose path
+// must see exactly the graph it can act on.
 const NODE_TYPES = ['campaign', 'ad-set', 'ad', 'audience', 'creative'] as const;
 const VALIDATION_STATUSES = ['valid', 'warning', 'error'] as const;
 const OBJECTIVES = [
@@ -385,6 +390,15 @@ function normalizeCreativeNode(node: CampaignCanvasNode) {
   };
 }
 
+/**
+ * OpenAI nodes publish directly through /paid/openai/* and never reach a scaffold, so a
+ * mixed canvas contributes only its Meta half here. Filtering (rather than throwing) keeps
+ * the Jaina chat usable on an OpenAI canvas instead of degrading it to a blank payload.
+ */
+function isMetaNode(node: CampaignCanvasNode): boolean {
+  return (NODE_TYPES as readonly string[]).includes(node.type as string);
+}
+
 function normalizeNode(node: CampaignCanvasNode) {
   switch (node.type) {
     case 'campaign':
@@ -397,10 +411,8 @@ function normalizeNode(node: CampaignCanvasNode) {
       return normalizeAudienceNode(node);
     case 'creative':
       return normalizeCreativeNode(node);
-    default: {
-      const exhaustiveCheck: never = node.type;
-      throw new Error(`Unsupported node type: ${String(exhaustiveCheck)}`);
-    }
+    default:
+      throw new Error(`Unsupported node type: ${String(node.type)}`);
   }
 }
 
@@ -436,27 +448,33 @@ export function buildCampaignCanvasPayload(
   edges: CampaignCanvasEdge[],
   context: CampaignCanvasPayloadContext = {},
 ): CampaignCanvasPayload {
-  const normalizedNodes = nodes.map(normalizeNode);
+  const metaNodes = nodes.filter(isMetaNode);
+  const metaNodeIds = new Set(metaNodes.map((node) => node.id));
+  const normalizedNodes = metaNodes.map(normalizeNode);
   const nodesById = new Map(normalizedNodes.map((node) => [node.nodeId, node]));
 
-  const normalizedEdges = edges.map((edge, index) => {
-    const sourceNode = nodesById.get(edge.source);
-    const targetNode = nodesById.get(edge.target);
+  // An edge whose endpoints were filtered out would describe a relationship between two
+  // nodes this payload does not contain.
+  const normalizedEdges = edges
+    .filter((edge) => metaNodeIds.has(edge.source) && metaNodeIds.has(edge.target))
+    .map((edge, index) => {
+      const sourceNode = nodesById.get(edge.source);
+      const targetNode = nodesById.get(edge.target);
 
-    return {
-      edgeId: normalizeString(edge.id) ?? `edge-${index + 1}`,
-      sourceNodeId: edge.source,
-      targetNodeId: edge.target,
-      sourceType: sourceNode?.nodeType ?? null,
-      targetType: targetNode?.nodeType ?? null,
-      relationship: buildEdgeRelationship(
-        sourceNode?.nodeType ?? null,
-        targetNode?.nodeType ?? null,
-      ),
-      sourceHandle: normalizeString(edge.sourceHandle),
-      targetHandle: normalizeString(edge.targetHandle),
-    };
-  });
+      return {
+        edgeId: normalizeString(edge.id) ?? `edge-${index + 1}`,
+        sourceNodeId: edge.source,
+        targetNodeId: edge.target,
+        sourceType: sourceNode?.nodeType ?? null,
+        targetType: targetNode?.nodeType ?? null,
+        relationship: buildEdgeRelationship(
+          sourceNode?.nodeType ?? null,
+          targetNode?.nodeType ?? null,
+        ),
+        sourceHandle: normalizeString(edge.sourceHandle),
+        targetHandle: normalizeString(edge.targetHandle),
+      };
+    });
 
   const byType = NODE_TYPES.reduce(
     (acc, type) => {
@@ -469,7 +487,7 @@ export function buildCampaignCanvasPayload(
       ad: 0,
       audience: 0,
       creative: 0,
-    } as Record<CampaignNodeType, number>,
+    } as Record<MetaCampaignNodeType, number>,
   );
 
   const validationIssues: CampaignCanvasPayload['agentCheckIn']['validationIssues'] =

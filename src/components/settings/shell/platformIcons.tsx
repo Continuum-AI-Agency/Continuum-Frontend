@@ -1,4 +1,4 @@
-import { BarChart3 } from 'lucide-react';
+import { BarChart3, Sparkles } from 'lucide-react';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import {
   AmazonIcon,
@@ -27,6 +27,7 @@ export const PLATFORM_LABELS: Record<PlatformKey, string> = {
   dv360: 'DV360',
   googleAnalytics: 'Google Analytics',
   threads: 'Threads',
+  openai: 'OpenAI Ads',
 };
 
 export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
@@ -42,9 +43,12 @@ export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
   dv360: BarChart3,
   googleAnalytics: GoogleIcon,
   threads: ThreadsIcon,
+  // A lucide glyph rather than a brand mark, the same compromise dv360 makes above:
+  // @/lib/brand-icons carries no OpenAI artwork yet. Swap it in there when it does.
+  openai: Sparkles,
 };
 
-export type ProviderGroup = 'facebook' | 'google' | 'tiktok' | 'linkedin' | 'x';
+export type ProviderGroup = 'facebook' | 'google' | 'tiktok' | 'linkedin' | 'x' | 'openai';
 
 // Display order for every surface that offers a provider connect. Single list so
 // a newly supported provider reaches Settings and onboarding at the same time.
@@ -54,6 +58,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   'tiktok',
   'linkedin',
   'x',
+  'openai',
 ];
 
 export const PROVIDER_GROUP_LABELS: Record<ProviderGroup, string> = {
@@ -62,6 +67,7 @@ export const PROVIDER_GROUP_LABELS: Record<ProviderGroup, string> = {
   tiktok: 'TikTok',
   linkedin: 'LinkedIn',
   x: 'X',
+  openai: 'OpenAI Ads',
 };
 
 export const PROVIDER_GROUP_DESCRIPTIONS: Record<ProviderGroup, string> = {
@@ -70,6 +76,7 @@ export const PROVIDER_GROUP_DESCRIPTIONS: Record<ProviderGroup, string> = {
   tiktok: 'TikTok Marketing',
   linkedin: 'LinkedIn Ads / Organic',
   x: 'X (Twitter)',
+  openai: 'ChatGPT Ads (API key)',
 };
 
 export const PROVIDER_GROUP_ICONS: Record<ProviderGroup, IconComponent> = {
@@ -78,6 +85,7 @@ export const PROVIDER_GROUP_ICONS: Record<ProviderGroup, IconComponent> = {
   tiktok: TikTokIcon,
   linkedin: LinkedInIcon,
   x: XIcon,
+  openai: Sparkles,
 };
 
 // Provider groups that are surfaced but not yet open to users. Rendered

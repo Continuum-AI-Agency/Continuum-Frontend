@@ -13,11 +13,20 @@ import { v4 as uuidv4 } from 'uuid';
 import { create } from 'zustand';
 import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
 import type { CanvasHydration, HydratedCanvasGraph } from '@/lib/campaign-canvas/hydrate';
+import type {
+  HydratedOpenAiGraph,
+  OpenAiCanvasHydration,
+} from '@/lib/campaign-canvas/hydrateOpenAi';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
+import {
+  captureOpenAiBaseline,
+  type OpenAiPublishBaseline,
+} from '@/lib/campaign-canvas/publishOpenAi';
 import type {
   CampaignCanvasEdge,
   CampaignCanvasNode,
   CampaignCanvasNodeData,
+  CampaignCanvasPlatform,
   CampaignNodeType,
 } from '../types';
 import { applyCampaignGraphValidation } from '../validation/applyCampaignGraphValidation';
@@ -34,8 +43,22 @@ interface CampaignStore {
   history: HistoryState[];
   redoStack: HistoryState[];
   edgeStyle: 'curved' | 'straight';
+  /**
+   * Which platform this canvas is for. It decides which node palette the context menu
+   * offers and which record bar the page mounts — a canvas is never half Meta, half
+   * OpenAI, because no edge may cross the two.
+   */
+  platform: CampaignCanvasPlatform;
   /** Set when the graph on screen was loaded from a real scaffold. Null for a draft. */
   hydration: CanvasHydration | null;
+  /** Set when the graph was loaded from a real OpenAI campaign. Null for a draft. */
+  openAiHydration: OpenAiCanvasHydration | null;
+  /**
+   * Node data as it was at hydration, keyed by node id. The publish plan diffs against
+   * this, which is what lets the confirmation say "budget, name" instead of re-sending
+   * every field of every node and calling it an update.
+   */
+  openAiBaseline: Record<string, OpenAiPublishBaseline>;
   /**
    * True once a hydrated graph has been edited. It never becomes a write: the browser
    * has no grant on any of these tables, so the only way a local edit reaches Meta is
@@ -43,6 +66,8 @@ interface CampaignStore {
    */
   isDirty: boolean;
   loadHydratedGraph: (graph: HydratedCanvasGraph) => void;
+  loadOpenAiGraph: (graph: HydratedOpenAiGraph) => void;
+  startOpenAiDraft: () => void;
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
@@ -81,6 +106,21 @@ function getSiblingHorizontalOffset(index: number): number {
   return direction * depth * CONNECTED_NODE_SIBLING_HORIZONTAL_SPACING;
 }
 
+/**
+ * The name a freshly dropped node gets. Title-casing the type is fine for `campaign` and
+ * wrong for `openai-ad-group` ("Openai-ad-group 3"), so the label is declared.
+ */
+const NEW_NODE_LABELS: Record<CampaignNodeType, string> = {
+  campaign: 'Campaign',
+  'ad-set': 'Ad set',
+  ad: 'Ad',
+  audience: 'Audience',
+  creative: 'Creative',
+  'openai-campaign': 'Campaign',
+  'openai-ad-group': 'Ad group',
+  'openai-ad': 'Ad',
+};
+
 let validationTimer: ReturnType<typeof setTimeout> | null = null;
 
 function debouncedValidation(
@@ -100,7 +140,10 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   history: [],
   redoStack: [],
   edgeStyle: 'curved',
+  platform: 'meta',
   hydration: null,
+  openAiHydration: null,
+  openAiBaseline: {},
   isDirty: false,
 
   loadHydratedGraph: ({ nodes, edges, hydration }) => {
@@ -115,7 +158,51 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       // previous scaffold's graph would offer to "restore" a different proposal.
       history: [],
       redoStack: [],
+      platform: 'meta',
       hydration,
+      openAiHydration: null,
+      openAiBaseline: {},
+      isDirty: false,
+    });
+  },
+
+  /**
+   * Load a real OpenAI campaign as the graph. Unlike its Meta sibling this IS editable
+   * back to the platform: the baseline captured here is what the publish diff reads.
+   */
+  loadOpenAiGraph: ({ nodes, edges, hydration }) => {
+    if (validationTimer) {
+      clearTimeout(validationTimer);
+      validationTimer = null;
+    }
+    set({
+      nodes: applyCampaignGraphValidation(nodes, edges),
+      edges,
+      history: [],
+      redoStack: [],
+      platform: 'openai',
+      hydration: null,
+      openAiHydration: hydration,
+      openAiBaseline: captureOpenAiBaseline(nodes),
+      isDirty: false,
+    });
+  },
+
+  /** An empty OpenAI canvas — what "Create new" opens. */
+  startOpenAiDraft: () => {
+    if (validationTimer) {
+      clearTimeout(validationTimer);
+      validationTimer = null;
+    }
+    set({
+      nodes: [],
+      edges: [],
+      history: [],
+      redoStack: [],
+      platform: 'openai',
+      hydration: null,
+      openAiHydration: null,
+      openAiBaseline: {},
       isDirty: false,
     });
   },
@@ -128,7 +215,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       // Every structural mutator calls this before it changes anything, and nothing
       // that merely moves or selects a node does — which is exactly the line between
       // "this graph no longer matches the record" and "someone dragged a box".
-      ...(hydration ? { isDirty: true } : {}),
+      ...(hydration || get().openAiHydration ? { isDirty: true } : {}),
     });
   },
 
@@ -196,7 +283,7 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       type,
       position,
       data: {
-        label: `${type.charAt(0).toUpperCase() + type.slice(1)} ${get().nodes.length + 1}`,
+        label: `${NEW_NODE_LABELS[type]} ${get().nodes.length + 1}`,
         validationStatus: 'valid',
         ...data,
       } as CampaignCanvasNodeData,
@@ -315,7 +402,10 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       edges: [],
       history: [],
       redoStack: [],
+      platform: 'meta',
       hydration: null,
+      openAiHydration: null,
+      openAiBaseline: {},
       isDirty: false,
     });
   },
@@ -344,12 +434,18 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
 }));
 
 function validateConnection(sourceType: CampaignNodeType, targetType: CampaignNodeType): boolean {
+  // Cross-platform edges are absent from every list on purpose. An `openai-ad` under a
+  // Meta `ad-set` is a graph that can never publish to either platform, and a rule that
+  // merely warned about it would let someone build one and find out at publish time.
   const rules: Record<CampaignNodeType, CampaignNodeType[]> = {
     campaign: ['ad-set'],
     'ad-set': ['ad', 'audience'],
     ad: ['creative'],
     audience: [],
     creative: [],
+    'openai-campaign': ['openai-ad-group'],
+    'openai-ad-group': ['openai-ad'],
+    'openai-ad': [],
   };
 
   return rules[sourceType]?.includes(targetType) || false;

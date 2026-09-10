@@ -34,6 +34,9 @@ const TYPE_TO_PLATFORM_MAP: Record<string, PlatformKey> = {
   x_user: 'x',
   x_account: 'x',
   twitter_user: 'x',
+  // OpenAI Ads: one partner API key is scoped to one ad account, so there is exactly
+  // one asset type and no organic sibling to disambiguate it from.
+  openai_ad_account: 'openai',
 };
 
 export function mapIntegrationTypeToPlatformKey(type?: string | null): PlatformKey | null {

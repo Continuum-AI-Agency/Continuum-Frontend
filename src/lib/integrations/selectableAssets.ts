@@ -40,6 +40,7 @@ const FALLBACK_TYPE_BY_PLATFORM: Record<PlatformKey, string> = {
   dv360: 'dv360_advertiser',
   googleAnalytics: 'ga4_property',
   threads: 'meta_threads_account',
+  openai: 'openai_ad_account',
 };
 
 const PROVIDER_BY_PLATFORM: Partial<Record<PlatformKey, string>> = {

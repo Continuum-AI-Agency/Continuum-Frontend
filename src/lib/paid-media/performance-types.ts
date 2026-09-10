@@ -4,7 +4,7 @@ import type {
 } from '@/components/paid-media/dashboard/PerformanceDetails';
 import type { PaidMetricsResponse } from '@/lib/schemas/paidMetrics';
 
-export type PaidMediaPlatform = 'meta' | 'google-ads' | 'dv360' | 'linkedin';
+export type PaidMediaPlatform = 'meta' | 'google-ads' | 'dv360' | 'linkedin' | 'openai';
 
 export type CampaignPerformanceMetricKey = keyof PaidMetricsResponse['metrics'];
 
