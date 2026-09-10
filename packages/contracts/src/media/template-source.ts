@@ -10,6 +10,7 @@
 // no role, because it silently binds the wrong field. Slots come out typed and unlabelled.
 
 import { z } from 'zod';
+import { slotPlacementSchema } from '../ai-studio/api-render-fit';
 import { apiRenderVariableKindSchema } from '../ai-studio/api-renders';
 
 export const templateSourceFamilySchema = z.enum([
@@ -67,8 +68,27 @@ export const templateSlotSchema = z
     charBudget: z.number().int().nonnegative().optional(),
     box: z.array(z.number()).length(4).optional(),
     sample: z.string().optional(),
+    /**
+     * Where this slot lands: the projected box in comp coordinates, the footage's own pixel size,
+     * and which comp the box belongs to. Null for a slot the parse could not place.
+     *
+     * The same `slotPlacementSchema` the render path's fit check consumes — one shape, so a box
+     * measured at upload and a box measured at preflight cannot disagree.
+     */
+    placement: slotPlacementSchema.nullish(),
   })
-  .strict();
+  // Passthrough, NOT strict — and the switch was not cosmetic.
+  //
+  // This is a mirror of a shape another repo owns and extends. It was strict, the forge added
+  // `placement` (its `forge:placement` work, 2026-09-05), and `parseProjectFile` runs
+  // `templateParseSchema.safeParse` and throws `template_forge_invalid_parse` on failure — so
+  // from that day every real upload's parse 502'd and every row stayed `pending`. An additive
+  // change upstream took the whole feature down silently.
+  //
+  // The drift signal is worth keeping, but it belongs somewhere loud rather than somewhere fatal:
+  // `library:forge:e2e:bench` asserts the live parse carries no key this build does not know, so
+  // the next added field is a red bench instead of a dead ingestion.
+  .passthrough();
 export type TemplateSlot = z.infer<typeof templateSlotSchema>;
 
 export const templateCompSchema = z
