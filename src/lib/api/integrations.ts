@@ -1,5 +1,11 @@
 'use client';
 
+import {
+  type JainaSheetsExportRequest,
+  type JainaSheetsExportResponse,
+  jainaSheetsExportRequestSchema,
+  jainaSheetsExportResponseSchema,
+} from '@continuum/contracts';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/api/http';
 import { deriveMetaAccountRole } from '@/lib/integrations/metaRole';
@@ -83,6 +89,27 @@ export async function startGoogleSync(
     path: buildSyncPath('/integrations/google/sync', params),
     method: 'GET',
     schema: googleSyncResponseSchema,
+    cache: 'no-store',
+  });
+}
+
+export async function startGoogleWorkspaceSync(callbackUrl: string): Promise<GoogleSyncResponse> {
+  return http.request({
+    path: buildSyncPath('/integrations/google-workspace/sync', { callback_url: callbackUrl }),
+    method: 'GET',
+    schema: googleSyncResponseSchema,
+    cache: 'no-store',
+  });
+}
+
+export async function exportJainaReportToGoogleSheets(
+  request: JainaSheetsExportRequest,
+): Promise<JainaSheetsExportResponse> {
+  return http.request({
+    path: '/integrations/google-workspace/sheets',
+    method: 'POST',
+    body: jainaSheetsExportRequestSchema.parse(request),
+    schema: jainaSheetsExportResponseSchema,
     cache: 'no-store',
   });
 }

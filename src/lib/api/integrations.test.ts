@@ -35,9 +35,9 @@ mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => supabaseStub,
 }));
 
-type HttpRequestArgs = { path: string };
-const httpRequestMock = mock<(args: HttpRequestArgs) => Promise<{ url: string; state: string }>>(
-  () => Promise.resolve({ url: 'https://accounts.google.com/o/oauth2/auth', state: 'state-1' }),
+type HttpRequestArgs = { path: string; method?: string; body?: unknown; schema?: unknown };
+const httpRequestMock = mock<(args: HttpRequestArgs) => Promise<unknown>>(() =>
+  Promise.resolve({ url: 'https://accounts.google.com/o/oauth2/auth', state: 'state-1' }),
 );
 
 mock.module('@/lib/api/http', () => ({
@@ -46,7 +46,9 @@ mock.module('@/lib/api/http', () => ({
 
 import {
   assignBrandIntegrationAccount,
+  exportJainaReportToGoogleSheets,
   startGoogleSync,
+  startGoogleWorkspaceSync,
   startLinkedInSync,
   unassignBrandIntegrationAccount,
 } from '@/lib/api/integrations';
@@ -110,6 +112,49 @@ describe('startGoogleSync', () => {
 
     const [{ path }] = httpRequestMock.mock.calls[0] as [HttpRequestArgs];
     expect(path).toContain('force_account_chooser=true');
+  });
+});
+
+describe('Google Workspace report export', () => {
+  beforeEach(() => {
+    httpRequestMock.mockReset();
+  });
+
+  it('starts the Sheets OAuth flow with the trusted callback URL', async () => {
+    httpRequestMock.mockResolvedValue({
+      url: 'https://accounts.google.com/o/oauth2/auth',
+      state: 'state-1',
+    });
+
+    await startGoogleWorkspaceSync('https://app.test/integrations/callback?context=jaina-report');
+
+    expect(httpRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: expect.stringContaining('/integrations/google-workspace/sync?callback_url='),
+        method: 'GET',
+      }),
+    );
+  });
+
+  it('posts a contract-valid Sheets payload', async () => {
+    const payload = {
+      title: 'September report',
+      sheets: [{ title: 'Summary', rows: [['Summary', 'ROAS improved']] }],
+    };
+    httpRequestMock.mockResolvedValue({
+      spreadsheet_id: 'sheet-1',
+      url: 'https://docs.google.com/spreadsheets/d/sheet-1',
+    });
+
+    await exportJainaReportToGoogleSheets(payload);
+
+    expect(httpRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/integrations/google-workspace/sheets',
+        method: 'POST',
+        body: payload,
+      }),
+    );
   });
 });
 

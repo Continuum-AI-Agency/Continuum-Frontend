@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
 import type { CheckpointReportV2 } from '@/lib/jaina/schemas';
 
@@ -39,8 +39,23 @@ mock.module('../blocks/BlockRenderer', () => ({
   ),
 }));
 
+const buildSheetsRequestMock = mock(() => ({
+  title: 'Jaina Performance Analysis',
+  sheets: [{ title: 'Summary', rows: [['Report']] }],
+}));
+const exportToSheetsMock = mock(async () => ({
+  spreadsheet_id: 'sheet-1',
+  url: 'https://docs.google.com/spreadsheets/d/sheet-1',
+}));
+
 mock.module('../reportExport', () => ({
+  buildJainaReportV2SheetsExportRequest: buildSheetsRequestMock,
+  createJainaReportV2PdfFile: mock(async () => new File(['report'], 'report.pdf')),
+  downloadFile: mock(),
   downloadJainaReportV2Pdf: mock(async () => {}),
+  exportJainaReportToSheets: exportToSheetsMock,
+  openJainaReportMailDraft: mock(),
+  shareJainaReportFile: mock(async () => 'shared'),
 }));
 
 const { JainaReportV2 } = await import('./JainaReportV2');
@@ -119,5 +134,22 @@ describe('JainaReportV2 module controls', () => {
 
     expect(screen.queryByRole('group', { name: 'Report modules' })).toBeNull();
     expect(screen.getByTestId('module-wins')).toBeTruthy();
+  });
+
+  it('exports only modules that are visible', async () => {
+    buildSheetsRequestMock.mockClear();
+    exportToSheetsMock.mockClear();
+    render(<JainaReportV2 report={report} isStreaming={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Recent wins module' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Export visible modules to Google Sheets' }),
+    );
+
+    await waitFor(() => expect(exportToSheetsMock).toHaveBeenCalledTimes(1));
+    const [{ visibleBlocks }] = buildSheetsRequestMock.mock.calls[0] as [
+      { visibleBlocks: CheckpointReportV2['blocks'] },
+    ];
+    expect(visibleBlocks.map((block) => block.block_id)).toEqual(['risks']);
   });
 });

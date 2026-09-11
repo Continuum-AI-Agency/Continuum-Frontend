@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
+import type { CheckpointReportV2 } from '@/lib/jaina/schemas';
 
 import {
   buildJainaReportHtml,
+  buildJainaReportV2SheetsExportRequest,
   createJainaReportFilename,
   createJainaReportHtmlFilename,
   formatMetricValueForPdf,
+  shareJainaReportFile,
 } from './reportExport';
 
 describe('createJainaReportFilename', () => {
@@ -109,5 +112,73 @@ describe('buildJainaReportHtml', () => {
     expect(html).toContain('Shift budget');
     expect(html).toContain('Summary &lt;script&gt;');
     expect(html).not.toContain('Summary <script>');
+  });
+});
+
+describe('buildJainaReportV2SheetsExportRequest', () => {
+  it('projects visible tables and summary within the shared contract limits', () => {
+    const columns = Array.from({ length: 55 }, (_, index) => ({
+      key: `column-${index}`,
+      label: `Column ${index}`,
+      format: 'text' as const,
+      align: 'left' as const,
+    }));
+    const blocks = Array.from({ length: 12 }, (_, blockIndex) => ({
+      block_id: `block-${blockIndex}`,
+      category: 'data_table' as const,
+      scope: 'current_account',
+      title: `Table ${blockIndex}`,
+      priority: blockIndex,
+      provenance: null,
+      columns,
+      rows: Array.from({ length: 510 }, (_, rowIndex) =>
+        Object.fromEntries(columns.map((column) => [column.key, `${rowIndex}-${column.key}`])),
+      ),
+      notes: null,
+      dataset_id: null,
+      row_meta: null,
+      render_mode: 'table' as const,
+      card_fields: null,
+    }));
+    const report = {
+      executive_summary: 'x'.repeat(6_000),
+      blocks,
+    } as unknown as CheckpointReportV2;
+
+    const request = buildJainaReportV2SheetsExportRequest({
+      report,
+      visibleBlocks: report.blocks,
+    });
+
+    expect(request.sheets).toHaveLength(10);
+    expect(request.sheets.every((sheet) => sheet.title.length <= 80)).toBe(true);
+    expect(request.sheets.every((sheet) => sheet.rows.length <= 500)).toBe(true);
+    expect(request.sheets.every((sheet) => sheet.rows.every((row) => row.length <= 50))).toBe(true);
+    expect(String(request.sheets[0].rows[1][1])).toHaveLength(5_000);
+  });
+});
+
+describe('shareJainaReportFile', () => {
+  it('hands the exported file to the native confirmation surface', async () => {
+    const share = mock(async () => {});
+    const originalShare = navigator.share;
+    const originalCanShare = navigator.canShare;
+    Object.defineProperties(navigator, {
+      share: { configurable: true, value: share },
+      canShare: { configurable: true, value: () => true },
+    });
+
+    try {
+      const file = new File(['report'], 'jaina-report.html', { type: 'text/html' });
+      await expect(shareJainaReportFile(file, 'Jaina report')).resolves.toBe('shared');
+      expect(share).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Jaina report', files: [file] }),
+      );
+    } finally {
+      Object.defineProperties(navigator, {
+        share: { configurable: true, value: originalShare },
+        canShare: { configurable: true, value: originalCanShare },
+      });
+    }
   });
 });

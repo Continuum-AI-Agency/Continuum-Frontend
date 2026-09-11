@@ -1,4 +1,12 @@
-import type { FrontendCheckpointReport } from '@/lib/jaina/schemas';
+import {
+  type JainaSheetsExportRequest,
+  type JainaSheetsExportResponse,
+  jainaSheetsExportRequestSchema,
+} from '@continuum/contracts';
+import { ApiError } from '@/lib/api/errors';
+import { exportJainaReportToGoogleSheets, startGoogleWorkspaceSync } from '@/lib/api/integrations';
+import type { CheckpointReportV2, FrontendCheckpointReport } from '@/lib/jaina/schemas';
+import { openCenteredPopup, waitForOAuthCompletion } from '@/lib/popup';
 
 export type PdfTable = {
   headers: string[];
@@ -13,6 +21,276 @@ type DownloadJainaReportPdfOptions = {
   exportNode?: HTMLElement | null;
   backgroundColor?: string;
 };
+
+const SHEETS_LIMITS = {
+  reportTitle: 120,
+  sheets: 10,
+  sheetTitle: 80,
+  rows: 500,
+  cells: 50,
+  cellText: 5_000,
+} as const;
+
+type SheetCell = JainaSheetsExportRequest['sheets'][number]['rows'][number][number];
+type SheetCandidate = { title: string; rows: SheetCell[][] };
+
+function boundedText(value: unknown, limit: number = SHEETS_LIMITS.cellText): string {
+  return String(value ?? '').slice(0, limit);
+}
+
+function sheetCell(value: unknown): SheetCell {
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : boundedText(value);
+  return boundedText(value);
+}
+
+function sheetTitle(value: unknown): string {
+  return (
+    boundedText(value, SHEETS_LIMITS.sheetTitle)
+      .replace(/[\\/?*[\]:]/g, ' ')
+      .trim() || 'Report'
+  );
+}
+
+function boundedSheetRows(rows: unknown[][]): SheetCell[][] {
+  return rows
+    .slice(0, SHEETS_LIMITS.rows)
+    .map((row) => row.slice(0, SHEETS_LIMITS.cells).map(sheetCell));
+}
+
+function buildSheetsRequest(title: string, candidates: SheetCandidate[]): JainaSheetsExportRequest {
+  const usedTitles = new Set<string>();
+  const sheets = candidates.slice(0, SHEETS_LIMITS.sheets).map((candidate) => {
+    const base = sheetTitle(candidate.title);
+    let uniqueTitle = base;
+    let suffix = 2;
+    while (usedTitles.has(uniqueTitle)) {
+      const marker = ` (${suffix})`;
+      uniqueTitle = `${base.slice(0, SHEETS_LIMITS.sheetTitle - marker.length)}${marker}`;
+      suffix += 1;
+    }
+    usedTitles.add(uniqueTitle);
+    return { title: uniqueTitle, rows: boundedSheetRows(candidate.rows) };
+  });
+
+  return jainaSheetsExportRequestSchema.parse({
+    title: boundedText(title.trim() || 'Jaina Performance Analysis', SHEETS_LIMITS.reportTitle),
+    sheets: sheets.length > 0 ? sheets : [{ title: 'Summary', rows: [['Report', title]] }],
+  });
+}
+
+export function buildLegacyJainaSheetsExportRequest({
+  report,
+  fallbackTables,
+}: {
+  report: FrontendCheckpointReport;
+  fallbackTables: PdfTable[];
+}): JainaSheetsExportRequest {
+  const title = report.report_title || 'Jaina Performance Analysis';
+  const candidates: SheetCandidate[] = [
+    {
+      title: 'Summary',
+      rows: [
+        ['Report', title],
+        ['Executive summary', report.executive_summary],
+      ],
+    },
+    ...report.sections.flatMap((section) =>
+      section.tables.flatMap((table, index) => {
+        const candidate = table as Partial<PdfTable>;
+        if (!Array.isArray(candidate.headers) || !Array.isArray(candidate.rows)) return [];
+        return [
+          {
+            title: `${section.heading} ${index + 1}`,
+            rows: [
+              candidate.headers.map(sheetCell),
+              ...candidate.rows.map((row) =>
+                Array.isArray(row) ? row.map(sheetCell) : [sheetCell(row)],
+              ),
+            ],
+          },
+        ];
+      }),
+    ),
+    ...fallbackTables.map((table, index) => ({
+      title: `Data ${index + 1}`,
+      rows: [table.headers.map(sheetCell), ...table.rows.map((row) => row.map(sheetCell))],
+    })),
+  ];
+  return buildSheetsRequest(title, candidates);
+}
+
+function projectV2Block(block: CheckpointReportV2['blocks'][number]): SheetCandidate {
+  switch (block.category) {
+    case 'narrative':
+      return {
+        title: block.title,
+        rows: [
+          ['Summary', block.body],
+          ...block.highlights.map((item) => [item.category || 'Highlight', item.text]),
+        ],
+      };
+    case 'metric_grid':
+      return {
+        title: block.title,
+        rows: [
+          ['Metric', 'Value', 'Unit', 'Change'],
+          ...block.metrics.map((metric) => [
+            metric.label,
+            metric.value,
+            metric.unit ?? null,
+            metric.change ?? null,
+          ]),
+        ],
+      };
+    case 'chart': {
+      const keys = [
+        block.category_key,
+        ...Object.keys(block.chart_config).filter((key) => key !== block.category_key),
+      ];
+      return {
+        title: block.title,
+        rows: [keys, ...block.data.map((row) => keys.map((key) => row[key] ?? null))],
+      };
+    }
+    case 'data_table':
+      return {
+        title: block.title,
+        rows: [
+          block.columns.map((column) => column.label),
+          ...block.rows.map((row) => block.columns.map((column) => row[column.key] ?? null)),
+        ],
+      };
+    case 'insight_list':
+      return {
+        title: block.title,
+        rows: [
+          ['Type', 'Title', 'Summary', 'Rationale', 'Impact', 'Priority'],
+          ...block.items.map((item) => [
+            item.item_type,
+            item.title,
+            item.summary,
+            item.rationale ?? null,
+            item.impact ?? null,
+            item.priority,
+          ]),
+        ],
+      };
+    case 'comparison':
+      return {
+        title: block.title,
+        rows: [
+          ['Metric', block.before_label, block.after_label, 'Unit', 'Change'],
+          ...block.pairs.map((pair) => [
+            pair.label,
+            pair.before,
+            pair.after,
+            pair.unit ?? null,
+            pair.change ?? null,
+          ]),
+        ],
+      };
+  }
+}
+
+export function buildJainaReportV2SheetsExportRequest({
+  report,
+  visibleBlocks,
+}: {
+  report: CheckpointReportV2;
+  visibleBlocks: CheckpointReportV2['blocks'];
+}): JainaSheetsExportRequest {
+  return buildSheetsRequest('Jaina Performance Analysis', [
+    {
+      title: 'Summary',
+      rows: [
+        ['Report', 'Jaina Performance Analysis'],
+        ['Executive summary', report.executive_summary],
+      ],
+    },
+    ...visibleBlocks.map(projectV2Block),
+  ]);
+}
+
+function isGoogleWorkspaceNotConnected(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  return (
+    error.code === 'google_workspace_not_connected' ||
+    error.message === 'google_workspace_not_connected'
+  );
+}
+
+async function connectGoogleWorkspace(): Promise<void> {
+  const context = 'jaina-report';
+  const callbackUrl = new URL('/integrations/callback', window.location.origin);
+  callbackUrl.searchParams.set('provider', 'google_workspace');
+  callbackUrl.searchParams.set('context', context);
+  const sync = await startGoogleWorkspaceSync(callbackUrl.toString());
+  const popup = openCenteredPopup(sync.url, 'Connect Google Sheets', 600, 700);
+  if (!popup) throw new Error('Please allow popups for this site and try again.');
+
+  const abortController = new AbortController();
+  const timeoutId = window.setTimeout(() => abortController.abort(), 120_000);
+  try {
+    await waitForOAuthCompletion({
+      popup,
+      signal: abortController.signal,
+      predicate: (message) =>
+        message.provider === 'google_workspace' &&
+        message.context === context &&
+        message.state === sync.state,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+    abortController.abort();
+    try {
+      popup.close();
+    } catch {
+      // Popup may already be closed.
+    }
+  }
+}
+
+export async function exportJainaReportToSheets(
+  request: JainaSheetsExportRequest,
+): Promise<JainaSheetsExportResponse> {
+  try {
+    return await exportJainaReportToGoogleSheets(request);
+  } catch (error) {
+    if (!isGoogleWorkspaceNotConnected(error)) throw error;
+  }
+
+  await connectGoogleWorkspace();
+  return exportJainaReportToGoogleSheets(request);
+}
+
+export type JainaNativeShareResult = 'shared' | 'cancelled' | 'unsupported';
+
+export async function shareJainaReportFile(
+  file: File,
+  title: string,
+): Promise<JainaNativeShareResult> {
+  if (!navigator.share || !navigator.canShare?.({ files: [file] })) return 'unsupported';
+  try {
+    await navigator.share({
+      title,
+      text: 'Jaina performance report',
+      files: [file],
+    });
+    return 'shared';
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return 'cancelled';
+    throw error;
+  }
+}
+
+export function openJainaReportMailDraft(title: string): void {
+  const params = new URLSearchParams({
+    subject: title,
+    body: 'Please attach the downloaded Jaina report before sending this email.',
+  });
+  window.location.href = `mailto:?${params.toString()}`;
+}
 
 export function createJainaReportFilename(now: Date = new Date()): string {
   const safeDate = Number.isNaN(now.getTime()) ? new Date() : now;
@@ -588,10 +866,10 @@ function resolveExportBackground(node: HTMLElement | null): string {
 // Capture a LIVE rendered report node (the real React/Recharts output) into a
 // multi-page PDF. The front-end owns rendering; this only snapshots it — there
 // is no second charting implementation to drift from what the user sees.
-async function captureNodeToPdf(
+async function captureNodeToPdfFile(
   exportNode: HTMLElement,
   options: { backgroundColor: string; fileName: string },
-): Promise<void> {
+): Promise<File> {
   const { jsPDF } = await import('jspdf');
   const html2canvas = (await import('html2canvas')).default;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
@@ -626,7 +904,7 @@ async function captureNodeToPdf(
     );
     renderedHeight += usableHeight;
   }
-  doc.save(options.fileName);
+  return new File([doc.output('blob')], options.fileName, { type: 'application/pdf' });
 }
 
 export async function downloadJainaReportPdf({
@@ -637,10 +915,12 @@ export async function downloadJainaReportPdf({
 }: DownloadJainaReportPdfOptions): Promise<void> {
   if (exportNode) {
     try {
-      await captureNodeToPdf(exportNode, {
-        backgroundColor,
-        fileName: createJainaReportFilename(),
-      });
+      downloadFile(
+        await captureNodeToPdfFile(exportNode, {
+          backgroundColor,
+          fileName: createJainaReportFilename(),
+        }),
+      );
       return;
     } catch {
       // Fall back to deterministic text/pdf rendering if canvas export fails.
@@ -665,7 +945,18 @@ export async function downloadJainaReportV2Pdf({
   if (!exportNode) {
     throw new Error('No rendered report available to export.');
   }
-  await captureNodeToPdf(exportNode, {
+  downloadFile(await createJainaReportV2PdfFile({ exportNode, backgroundColor }));
+}
+
+export async function createJainaReportV2PdfFile({
+  exportNode,
+  backgroundColor,
+}: {
+  exportNode: HTMLElement | null;
+  backgroundColor?: string;
+}): Promise<File> {
+  if (!exportNode) throw new Error('No rendered report available to export.');
+  return captureNodeToPdfFile(exportNode, {
     backgroundColor: backgroundColor ?? resolveExportBackground(exportNode),
     fileName: createJainaReportFilename(),
   });
@@ -808,21 +1099,29 @@ export function buildJainaReportHtml({
 }
 
 // ---------------------------------------------------------------------------
-function downloadHtmlFile(filename: string, html: string) {
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
+export function downloadFile(file: File): void {
+  const url = URL.createObjectURL(file);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = filename;
+  anchor.download = file.name;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
 }
 
+export function createJainaReportHtmlFile(options: {
+  report: FrontendCheckpointReport;
+  fallbackTables: PdfTable[];
+}): File {
+  return new File([buildJainaReportHtml(options)], createJainaReportHtmlFilename(), {
+    type: 'text/html;charset=utf-8',
+  });
+}
+
 export function downloadJainaReportHtml(options: {
   report: FrontendCheckpointReport;
   fallbackTables: PdfTable[];
 }) {
-  downloadHtmlFile(createJainaReportHtmlFilename(), buildJainaReportHtml(options));
+  downloadFile(createJainaReportHtmlFile(options));
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { DownloadIcon, FileCode2Icon } from 'lucide-react';
+import { DownloadIcon, FileCode2Icon, Share2Icon, Table2Icon } from 'lucide-react';
 import * as React from 'react';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -8,7 +8,16 @@ import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { useToast } from '@/components/ui/ToastProvider';
 import { type FrontendCheckpointReport, hasReportContent } from '@/lib/jaina/schemas';
-import { downloadJainaReportHtml, downloadJainaReportPdf } from '../reportExport';
+import {
+  buildLegacyJainaSheetsExportRequest,
+  createJainaReportHtmlFile,
+  downloadFile,
+  downloadJainaReportHtml,
+  downloadJainaReportPdf,
+  exportJainaReportToSheets,
+  openJainaReportMailDraft,
+  shareJainaReportFile,
+} from '../reportExport';
 import { buildJitSnapshotFallbackTables } from '../reportTableUtils';
 import { isJainaChartInput, JainaReportCharts } from './JainaReportCharts';
 import { JainaReportMetrics } from './JainaReportMetrics';
@@ -28,6 +37,7 @@ export function JainaInlineReport({
   onSuggestionClick,
 }: JainaInlineReportProps) {
   const { show } = useToast();
+  const [exporting, setExporting] = React.useState<'sheets' | 'share' | null>(null);
   const fallbackTables = React.useMemo(
     () => (report ? buildJitSnapshotFallbackTables(report) : []),
     [report],
@@ -75,6 +85,55 @@ export function JainaInlineReport({
         description: 'Unable to generate HTML report right now.',
         variant: 'error',
       });
+    }
+  }, [fallbackTables, report, show]);
+
+  const handleSheetsExport = React.useCallback(async () => {
+    if (!report) return;
+    setExporting('sheets');
+    try {
+      const result = await exportJainaReportToSheets(
+        buildLegacyJainaSheetsExportRequest({ report, fallbackTables }),
+      );
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+      show({
+        title: 'Google Sheet created',
+        description: 'Your report is ready in Google Sheets.',
+      });
+    } catch (error) {
+      show({
+        title: 'Google Sheets export failed',
+        description: error instanceof Error ? error.message : 'Unable to export the report.',
+        variant: 'error',
+      });
+    } finally {
+      setExporting(null);
+    }
+  }, [fallbackTables, report, show]);
+
+  const handleShare = React.useCallback(async () => {
+    if (!report) return;
+    setExporting('share');
+    try {
+      const file = createJainaReportHtmlFile({ report, fallbackTables });
+      const result = await shareJainaReportFile(file, report.report_title || 'Jaina report');
+      if (result === 'unsupported') {
+        downloadFile(file);
+        openJainaReportMailDraft(report.report_title || 'Jaina report');
+        show({
+          title: 'Attach the downloaded report',
+          description:
+            'Your email draft is open. Attach the downloaded HTML report before sending.',
+        });
+      }
+    } catch {
+      show({
+        title: 'Share failed',
+        description: 'Unable to prepare the report for sharing right now.',
+        variant: 'error',
+      });
+    } finally {
+      setExporting(null);
     }
   }, [fallbackTables, report, show]);
 
@@ -176,17 +235,41 @@ export function JainaInlineReport({
         <span className="text-xs text-muted-foreground">
           Export includes summary, metrics, charts, tables, recommendations, and follow-up prompts.
         </span>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={handleHtmlExport}
-          disabled={isStreaming}
-          aria-label="Export response as HTML"
-        >
-          <FileCode2Icon className="size-3.5" />
-          Export HTML
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void handleSheetsExport()}
+            disabled={isStreaming || exporting !== null}
+            aria-label="Export report to Google Sheets"
+          >
+            <Table2Icon className="size-3.5" />
+            Google Sheets
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void handleShare()}
+            disabled={isStreaming || exporting !== null}
+            aria-label="Share report by email"
+          >
+            <Share2Icon className="size-3.5" />
+            Email
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleHtmlExport}
+            disabled={isStreaming || exporting !== null}
+            aria-label="Export response as HTML"
+          >
+            <FileCode2Icon className="size-3.5" />
+            Export HTML
+          </Button>
+        </div>
       </footer>
     </section>
   );

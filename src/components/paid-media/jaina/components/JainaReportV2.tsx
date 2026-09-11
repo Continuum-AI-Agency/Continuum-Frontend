@@ -1,6 +1,6 @@
 'use client';
 
-import { BookIcon, EyeIcon, EyeOffIcon, FileDownIcon } from 'lucide-react';
+import { BookIcon, EyeIcon, EyeOffIcon, FileDownIcon, Share2Icon, Table2Icon } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
@@ -13,7 +13,15 @@ import { cn } from '@/lib/utils';
 import { BlockRenderer } from '../blocks/BlockRenderer';
 import { countBlockCitations } from '../blocks/citations';
 import { MediaMapProvider } from '../blocks/mediaText';
-import { downloadJainaReportV2Pdf } from '../reportExport';
+import {
+  buildJainaReportV2SheetsExportRequest,
+  createJainaReportV2PdfFile,
+  downloadFile,
+  downloadJainaReportV2Pdf,
+  exportJainaReportToSheets,
+  openJainaReportMailDraft,
+  shareJainaReportFile,
+} from '../reportExport';
 
 const OBJECTIVE_STATUS_STYLE: Record<ExecutionObjective['status'], string> = {
   completed: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
@@ -102,9 +110,14 @@ export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaR
   const { show } = useToast();
   const reportRef = useRef<HTMLDivElement | null>(null);
   const [hiddenBlockIds, setHiddenBlockIds] = useState<Set<string>>(() => new Set());
+  const [exporting, setExporting] = useState<'sheets' | 'share' | null>(null);
   const sortedBlocks = useMemo(
     () => [...report.blocks].sort((a, b) => a.priority - b.priority),
     [report.blocks],
+  );
+  const visibleBlocks = useMemo(
+    () => sortedBlocks.filter((block) => !hiddenBlockIds.has(block.block_id)),
+    [hiddenBlockIds, sortedBlocks],
   );
 
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
@@ -131,6 +144,49 @@ export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaR
         description: 'Unable to generate the report PDF right now.',
         variant: 'error',
       });
+    }
+  }, [show]);
+
+  const handleSheetsExport = useCallback(async () => {
+    setExporting('sheets');
+    try {
+      const result = await exportJainaReportToSheets(
+        buildJainaReportV2SheetsExportRequest({ report, visibleBlocks }),
+      );
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+      show({ title: 'Google Sheet created', description: 'Your visible modules are ready.' });
+    } catch (error) {
+      show({
+        title: 'Google Sheets export failed',
+        description: error instanceof Error ? error.message : 'Unable to export the report.',
+        variant: 'error',
+      });
+    } finally {
+      setExporting(null);
+    }
+  }, [report, show, visibleBlocks]);
+
+  const handleShare = useCallback(async () => {
+    setExporting('share');
+    try {
+      const file = await createJainaReportV2PdfFile({ exportNode: reportRef.current });
+      const result = await shareJainaReportFile(file, 'Jaina performance report');
+      if (result === 'unsupported') {
+        downloadFile(file);
+        openJainaReportMailDraft('Jaina performance report');
+        show({
+          title: 'Attach the downloaded report',
+          description: 'Your email draft is open. Attach the downloaded PDF before sending.',
+        });
+      }
+    } catch {
+      show({
+        title: 'Share failed',
+        description: 'Unable to prepare the report for sharing right now.',
+        variant: 'error',
+      });
+    } finally {
+      setExporting(null);
     }
   }, [show]);
 
@@ -184,11 +240,9 @@ export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaR
           />
         ) : null}
 
-        {sortedBlocks.map((block) =>
-          hiddenBlockIds.has(block.block_id) ? null : (
-            <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
-          ),
-        )}
+        {visibleBlocks.map((block) => (
+          <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
+        ))}
 
         {!isStreaming ? <ReportSupplementaryDetails report={report} /> : null}
       </div>
@@ -211,17 +265,41 @@ export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaR
         <span className="text-xs text-muted-foreground">
           Export a PDF of this report exactly as shown.
         </span>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={handlePdfExport}
-          disabled={isStreaming}
-          aria-label="Export report as PDF"
-        >
-          <FileDownIcon className="size-3.5" />
-          Export PDF
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void handleSheetsExport()}
+            disabled={isStreaming || exporting !== null}
+            aria-label="Export visible modules to Google Sheets"
+          >
+            <Table2Icon className="size-3.5" />
+            Google Sheets
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void handleShare()}
+            disabled={isStreaming || exporting !== null}
+            aria-label="Share report by email"
+          >
+            <Share2Icon className="size-3.5" />
+            Email
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handlePdfExport}
+            disabled={isStreaming || exporting !== null}
+            aria-label="Export report as PDF"
+          >
+            <FileDownIcon className="size-3.5" />
+            Export PDF
+          </Button>
+        </div>
       </footer>
     </section>
   );
