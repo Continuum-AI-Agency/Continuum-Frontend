@@ -253,7 +253,15 @@ export const tableColumnSchema = z.object({
 });
 export type TableColumn = z.infer<typeof tableColumnSchema>;
 
-export const dataTableBlockSchema = blockBaseSchema.extend({
+export const creativeCardFieldsSchema = z.object({
+  creative: z.string().min(1),
+  title: z.string().min(1),
+  subtitle: z.string().min(1).optional(),
+  metrics: z.array(z.string().min(1)).default([]),
+});
+export type CreativeCardFields = z.infer<typeof creativeCardFieldsSchema>;
+
+export const dataTableBlockBaseSchema = blockBaseSchema.extend({
   category: z.literal('data_table'),
   columns: z.array(tableColumnSchema).min(1),
   rows: z.array(z.record(z.string(), z.union([z.string(), z.number(), z.null()]))).min(1),
@@ -262,8 +270,27 @@ export const dataTableBlockSchema = blockBaseSchema.extend({
   dataset_id: z.string().nullable().default(null),
   // Per-row metadata aligned by index to `rows` (entity id, `creative` ref).
   row_meta: z.array(z.record(z.string(), z.unknown())).nullable().default(null),
+  render_mode: z.enum(['table', 'creative_cards']).default('table'),
+  card_fields: creativeCardFieldsSchema.nullable().default(null),
 });
-export type DataTableBlock = z.infer<typeof dataTableBlockSchema>;
+
+const addDataTableInvariantIssues = (
+  block: z.infer<typeof dataTableBlockBaseSchema>,
+  ctx: z.RefinementCtx,
+): void => {
+  if (block.render_mode === 'creative_cards' && block.card_fields === null) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['card_fields'],
+      message: 'creative_cards render_mode requires explicit card_fields',
+    });
+  }
+};
+
+export const dataTableBlockSchema = dataTableBlockBaseSchema.superRefine(
+  addDataTableInvariantIssues,
+);
+export type DataTableBlock = z.infer<typeof dataTableBlockBaseSchema>;
 
 // ---------------------------------------------------------------------------
 // Insight list block
@@ -328,7 +355,7 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   narrativeBlockSchema,
   metricGridBlockSchema,
   chartBlockBaseSchema,
-  dataTableBlockSchema,
+  dataTableBlockBaseSchema,
   insightListBlockSchema,
   comparisonBlockSchema,
 ]);
@@ -336,6 +363,9 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
 export const checkpointBlockV2Schema = checkpointBlockV2UnionSchema.superRefine((block, ctx) => {
   if (block.category === 'chart') {
     addChartInvariantIssues(block, ctx);
+  }
+  if (block.category === 'data_table') {
+    addDataTableInvariantIssues(block, ctx);
   }
 });
 export type CheckpointBlockV2 = z.infer<typeof checkpointBlockV2UnionSchema>;

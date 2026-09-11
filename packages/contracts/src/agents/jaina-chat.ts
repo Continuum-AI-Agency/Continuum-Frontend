@@ -19,6 +19,10 @@ import {
   agentMentionReferenceSchema,
 } from '../streaming/agent-references';
 import { jainaScaffoldActionSchema, jainaToolActionSchema } from '../streaming/jaina-scaffold';
+import {
+  type ConversationDataScopeV1,
+  conversationDataScopeV1Schema,
+} from './conversation-data-scope';
 import { crossAgentProvenanceSchema } from './cross-agent';
 
 /**
@@ -53,6 +57,7 @@ export const jainaChatContextSchema = z
      * express without every consumer inventing `[0]`.
      */
     adAccountIds: z.array(z.string().min(1)).min(1).max(JAINA_MAX_AD_ACCOUNTS).optional(),
+    dataScope: conversationDataScopeV1Schema.optional(),
     brandId: z.string().min(1, 'context.brandId is required'),
     /**
      * OPTIONAL sub-brand scope. The brand still identifies who this is; the project narrows
@@ -83,6 +88,15 @@ export const jainaChatContextSchema = z
     documentScopeKey: z.string().min(1).max(200).optional(),
   })
   .superRefine((value, ctx) => {
+    if (
+      value.dataScope?.accounts.some(({ platform }) => !['meta', 'google_ads'].includes(platform))
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['dataScope', 'accounts'],
+        message: 'Jaina dataScope accepts only paid account platforms: meta and google_ads',
+      });
+    }
     if (!value.adAccountIds) return;
     const bare = value.adAccountIds.map(normalizeAdAccountId);
     if (new Set(bare).size !== bare.length) {
@@ -149,3 +163,13 @@ export type JainaChatRequest = z.infer<typeof jainaChatRequestSchema>;
  */
 export const resolveJainaAdAccountIds = (context: JainaChatContext): string[] =>
   context.adAccountIds ?? [context.adAccountId];
+
+/** Explicit scope wins; legacy Jaina account fields are the same selection on Meta. */
+export const resolveJainaDataScope = (context: JainaChatContext): ConversationDataScopeV1 =>
+  context.dataScope ?? {
+    schemaVersion: 1,
+    accounts: resolveJainaAdAccountIds(context).map((accountId) => ({
+      platform: 'meta',
+      accountId,
+    })),
+  };

@@ -4,6 +4,7 @@ import {
   JAINA_MAX_AD_ACCOUNTS,
   jainaChatRequestSchema,
   resolveJainaAdAccountIds,
+  resolveJainaDataScope,
 } from './jaina-chat';
 
 const baseRequest = (context: Record<string, unknown>) => ({
@@ -71,6 +72,37 @@ describe('jainaChatContextSchema', () => {
       jainaChatRequestSchema.parse({ query: 'x', context: { adAccountId: 'act_1' } }),
     ).toThrow();
   });
+
+  it('accepts an explicit paid data scope', () => {
+    const parsed = jainaChatRequestSchema.parse(
+      baseRequest({
+        adAccountId: 'act_1',
+        dataScope: {
+          schemaVersion: 1,
+          accounts: [
+            { platform: 'meta', accountId: 'act_1' },
+            { platform: 'google_ads', accountId: 'customers/2' },
+          ],
+          campaigns: { ids: [] },
+        },
+      }),
+    );
+    expect(parsed.context.dataScope?.campaigns?.ids).toEqual([]);
+  });
+
+  it('rejects non-paid platforms in an explicit Jaina data scope', () => {
+    expect(() =>
+      jainaChatRequestSchema.parse(
+        baseRequest({
+          adAccountId: 'act_1',
+          dataScope: {
+            schemaVersion: 1,
+            accounts: [{ platform: 'instagram', accountId: 'ig-1' }],
+          },
+        }),
+      ),
+    ).toThrow(/paid account platforms/);
+  });
 });
 
 describe('resolveJainaAdAccountIds', () => {
@@ -84,5 +116,34 @@ describe('resolveJainaAdAccountIds', () => {
       baseRequest({ adAccountId: 'act_1', adAccountIds: ['act_1', 'act_2'] }),
     );
     expect(resolveJainaAdAccountIds(context)).toEqual(['act_1', 'act_2']);
+  });
+});
+
+describe('resolveJainaDataScope', () => {
+  it('normalizes legacy account fields to a Meta data scope', () => {
+    const { context } = jainaChatRequestSchema.parse(
+      baseRequest({ adAccountId: 'act_1', adAccountIds: ['act_1', 'act_2'] }),
+    );
+    expect(resolveJainaDataScope(context)).toEqual({
+      schemaVersion: 1,
+      accounts: [
+        { platform: 'meta', accountId: 'act_1' },
+        { platform: 'meta', accountId: 'act_2' },
+      ],
+    });
+  });
+
+  it('returns an explicit paid data scope unchanged', () => {
+    const { context } = jainaChatRequestSchema.parse(
+      baseRequest({
+        adAccountId: 'act_1',
+        dataScope: {
+          schemaVersion: 1,
+          accounts: [{ platform: 'google_ads', accountId: 'customers/2' }],
+          ads: { ids: [] },
+        },
+      }),
+    );
+    expect(resolveJainaDataScope(context)).toBe(context.dataScope);
   });
 });
