@@ -2,6 +2,7 @@ export * from './adNaming';
 export * from './audience-groups';
 export * from './hierarchy';
 export * from './insight-model';
+export * from './jaina-export';
 export * from './kpi';
 export * from './multi-account';
 // OpenAI Ads (ChatGPT Ads) — Advertiser API request/response shapes shared by the
