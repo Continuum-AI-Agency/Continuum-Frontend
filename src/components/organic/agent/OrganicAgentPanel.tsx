@@ -8,6 +8,10 @@ import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState
 import { useShallow } from 'zustand/react/shallow';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import { Suggestion } from '@/components/ai-elements/suggestion';
+import {
+  type AgentDataScopeOption,
+  AgentDataScopePicker,
+} from '@/components/chat/AgentDataScopePicker';
 import { ChatProvenanceBanner } from '@/components/chat/AgentInitiatorPill';
 import {
   buildAgentAttachmentContext,
@@ -78,6 +82,7 @@ import {
 } from '@/lib/organic/agent-sessions';
 import { useGenerationSummaries } from '@/lib/organic/generationSummaries';
 import { mapPlacementToDraft } from '@/lib/organic/mapPlacementToDraft';
+import { organicPlatformLabel } from '@/lib/organic/platforms';
 import { useBrandPrompts } from '@/lib/organic/prompts-api';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { useCalendarStore } from '@/lib/organic/store';
@@ -161,9 +166,33 @@ const SIGNALS_QUESTIONS_FOLDER_KEY = 'folder:Signals:Questions';
 type OrganicAgentPanelProps = {
   brandId: string;
   platformAccountIds: Record<string, string>;
+  platformAccountOptions?: Record<string, Array<{ id: string; label: string }>>;
   mentionContext?: OrganicAgentMentionContext;
   initialSessionId?: string | null;
 };
+
+export function scopeOrganicPlatformAccounts(
+  platformAccountIds: Record<string, string>,
+  selectedPlatforms: string[],
+): Record<string, string> {
+  const selected = new Set(selectedPlatforms);
+  return Object.fromEntries(
+    Object.entries(platformAccountIds).filter(([platform]) => selected.has(platform)),
+  );
+}
+
+export function buildOrganicScopeOptions(
+  platformAccountIds: Record<string, string>,
+  platformAccountOptions: Record<string, Array<{ id: string; label: string }>> = {},
+): AgentDataScopeOption[] {
+  return Object.entries(platformAccountIds).map(([platform, accountId]) => ({
+    id: platform,
+    label: `${organicPlatformLabel(platform)} · ${
+      platformAccountOptions[platform]?.find((option) => option.id === accountId)?.label ??
+      accountId
+    }`,
+  }));
+}
 
 export type OrganicAgentMentionContext = {
   generationId?: string;
@@ -332,9 +361,21 @@ function canvasNodeToMentionSuggestion(node: StudioNode): AgentMentionSuggestion
 export function OrganicAgentPanel({
   brandId,
   platformAccountIds,
+  platformAccountOptions = {},
   mentionContext,
   initialSessionId,
 }: OrganicAgentPanelProps) {
+  const [selectedAccountPlatforms, setSelectedAccountPlatforms] = useState(() =>
+    Object.keys(platformAccountIds),
+  );
+  const scopedPlatformAccountIds = useMemo(
+    () => scopeOrganicPlatformAccounts(platformAccountIds, selectedAccountPlatforms),
+    [platformAccountIds, selectedAccountPlatforms],
+  );
+  const accountScopeOptions = useMemo(
+    () => buildOrganicScopeOptions(platformAccountIds, platformAccountOptions),
+    [platformAccountIds, platformAccountOptions],
+  );
   const [state, dispatch] = useReducer(panelReducer, undefined, initialPanelState);
   const { show } = useToast();
   const router = useRouter();
@@ -787,7 +828,7 @@ export function OrganicAgentPanel({
         weekStart: currentWeekStartIso(),
         timezone: resolveTimezone(),
         locale: resolveLocale(),
-        platformAccountIds,
+        platformAccountIds: scopedPlatformAccountIds,
         images,
         documents,
         // Scopes which ephemeral documents this turn may resolve. Derived from the
@@ -801,7 +842,7 @@ export function OrganicAgentPanel({
       state.sessionId,
       isStreaming,
       brandId,
-      platformAccountIds,
+      scopedPlatformAccountIds,
       start,
       activeSessionId,
       debouncedRefreshSessions,
@@ -846,7 +887,7 @@ export function OrganicAgentPanel({
         ],
         weekStart: currentWeekStartIso(),
         timezone: resolveTimezone(),
-        platformAccountIds,
+        platformAccountIds: scopedPlatformAccountIds,
       })
         .then(() => debouncedRefreshSessions())
         .catch((error: unknown) => {
@@ -869,7 +910,7 @@ export function OrganicAgentPanel({
     [
       state.sessionId,
       brandId,
-      platformAccountIds,
+      scopedPlatformAccountIds,
       startControl,
       activeSessionId,
       debouncedRefreshSessions,
@@ -891,7 +932,7 @@ export function OrganicAgentPanel({
         approvals: [{ id: approval.approvalId, approved }],
         weekStart: currentWeekStartIso(),
         timezone: resolveTimezone(),
-        platformAccountIds,
+        platformAccountIds: scopedPlatformAccountIds,
       })
         .then(() => debouncedRefreshSessions())
         .catch(() => {
@@ -911,7 +952,7 @@ export function OrganicAgentPanel({
       state.sessionId,
       isStreaming,
       brandId,
-      platformAccountIds,
+      scopedPlatformAccountIds,
       start,
       activeSessionId,
       debouncedRefreshSessions,
@@ -957,7 +998,7 @@ export function OrganicAgentPanel({
         references,
         weekStart: currentWeekStartIso(),
         timezone: resolveTimezone(),
-        platformAccountIds,
+        platformAccountIds: scopedPlatformAccountIds,
       })
         .then(() => debouncedRefreshSessions())
         .catch(() => {});
@@ -968,7 +1009,7 @@ export function OrganicAgentPanel({
       state.messages,
       isStreaming,
       brandId,
-      platformAccountIds,
+      scopedPlatformAccountIds,
       start,
       activeSessionId,
       debouncedRefreshSessions,
@@ -2057,6 +2098,13 @@ export function OrganicAgentPanel({
             onMentionPlatformChange={setMentionPlatform}
             actions={
               <>
+                <AgentDataScopePicker
+                  label="Organic accounts"
+                  options={accountScopeOptions}
+                  selectedIds={selectedAccountPlatforms}
+                  onChange={setSelectedAccountPlatforms}
+                  disabled={inputDisabled}
+                />
                 <SkillPickerButton
                   skills={brandSkills}
                   templates={brandSkillTemplates}

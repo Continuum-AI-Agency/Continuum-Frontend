@@ -29,7 +29,11 @@ import type {
   JainaToolApprovalRequiredPayload,
   PaidScaffoldGate,
 } from '@continuum/contracts';
-import { updateAgentSessionTagsResponseSchema } from '@continuum/contracts';
+import {
+  JAINA_MAX_AD_ACCOUNTS,
+  normalizeAdAccountId,
+  updateAgentSessionTagsResponseSchema,
+} from '@continuum/contracts';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useCampaignAI } from '@/CampaignCanvas/hooks/useCampaignAI';
 import {
@@ -46,6 +50,7 @@ import {
   QueueSectionTrigger,
 } from '@/components/ai-elements/queue';
 import { AutomationSheets } from '@/components/automations/AutomationSheets';
+import { AgentDataScopePicker } from '@/components/chat/AgentDataScopePicker';
 import { ChatProvenanceBanner } from '@/components/chat/AgentInitiatorPill';
 import {
   buildAgentAttachmentContext,
@@ -63,6 +68,7 @@ import type { ScaffoldDecision } from '@/components/paid-media/jaina/scaffold/Pa
 import { useActiveProjectOptional } from '@/components/projects';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
 import { useJainaChatStream } from '@/hooks/useJainaChatStream';
 import {
   isTerminalRunStatus,
@@ -211,6 +217,40 @@ type JainaMentionAdSet = {
   name: string;
   status?: string;
 };
+
+function metaAccountOptions(
+  adAccountId: string | null,
+  accounts:
+    | Array<{
+        integrationAccountId: string;
+        externalAccountId: string | null;
+        alias: string | null;
+        name: string;
+        type: string | null;
+      }>
+    | undefined,
+) {
+  if (!adAccountId) return [];
+  const primaryKey = normalizeAdAccountId(adAccountId);
+  const seen = new Set<string>();
+  const options: Array<{ id: string; label: string }> = [];
+
+  for (const account of accounts ?? []) {
+    if (account.type !== 'meta_ad_account') continue;
+    const sourceId = account.externalAccountId ?? account.integrationAccountId;
+    const key = normalizeAdAccountId(sourceId);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    options.push({
+      id: key === primaryKey ? adAccountId : sourceId,
+      label: account.alias ?? account.name,
+    });
+  }
+
+  const primary = options.find(({ id }) => normalizeAdAccountId(id) === primaryKey);
+  if (primary) return [primary, ...options.filter((option) => option !== primary)];
+  return [{ id: adAccountId, label: adAccountId }, ...options];
+}
 
 function matchesJainaMentionQuery(
   query: string,
@@ -1177,6 +1217,7 @@ export function JainaChatSurface({
   className,
 }: JainaChatSurfaceProps) {
   const { show } = useToast();
+  const { integrations } = useBrandIntegrations(brandProfileId);
   const { processAIAction } = useCampaignAI();
   const loadCampaignPerformance = usePaidMediaPerformanceStore(
     (store) => store.loadCampaignPerformance,
@@ -1189,6 +1230,16 @@ export function JainaChatSurface({
   // The optional sub-brand scope. Brand identity is unchanged; what narrows on the Backend
   // is the evidence — ad accounts and the documents the turn may read.
   const activeProjectId = useActiveProjectOptional()?.activeProjectId ?? null;
+  const accountScopeOptions = React.useMemo(
+    () => metaAccountOptions(adAccountId, integrations?.facebook?.accounts),
+    [adAccountId, integrations],
+  );
+  const [selectedAdAccountIds, setSelectedAdAccountIds] = React.useState<string[]>(() =>
+    adAccountId ? [adAccountId] : [],
+  );
+  React.useEffect(() => {
+    setSelectedAdAccountIds(adAccountId ? [adAccountId] : []);
+  }, [adAccountId]);
 
   const [isJainaProMode, setIsJainaProMode] = React.useState(false);
   const { isCollapsed: isSidebarCollapsed, toggle: toggleSidebarCollapsed } =
@@ -2648,6 +2699,7 @@ export function JainaChatSurface({
         query: wireQuery,
         canvas: input.canvas || Boolean(campaignCanvasPayload),
         adAccountId,
+        ...(selectedAdAccountIds.length > 1 ? { adAccountIds: selectedAdAccountIds } : {}),
         brandId: brandProfileId,
         projectId: activeProjectId,
         sessionId: activeSessionId,
@@ -2680,6 +2732,7 @@ export function JainaChatSurface({
     [
       activeProjectId,
       adAccountId,
+      selectedAdAccountIds,
       brandProfileId,
       campaignCanvasPayload,
       ensureConversationSession,
@@ -3455,6 +3508,17 @@ export function JainaChatSurface({
               ) : null}
 
               <div data-tour-id="paid-jaina-chat" className="w-full">
+                <div className="mb-1 px-1">
+                  <AgentDataScopePicker
+                    label="Meta accounts"
+                    options={accountScopeOptions}
+                    selectedIds={selectedAdAccountIds}
+                    requiredIds={[adAccountId]}
+                    maxSelected={JAINA_MAX_AD_ACCOUNTS}
+                    disabled={isInputDisabled || isViewedStreaming}
+                    onChange={setSelectedAdAccountIds}
+                  />
+                </div>
                 <PromptInput
                   onSubmit={(value, submitted, references) =>
                     handleSubmit(value, submitted, references)

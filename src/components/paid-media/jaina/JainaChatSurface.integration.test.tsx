@@ -70,6 +70,41 @@ mock.module('@/hooks/useJainaChatStream', () => ({
   }),
 }));
 
+mock.module('@/hooks/useBrandIntegrations', () => ({
+  useBrandIntegrations: () => ({
+    integrations: {
+      facebook: {
+        accounts: [
+          {
+            integrationAccountId: 'integration-1',
+            externalAccountId: 'act-1',
+            alias: 'Primary Meta',
+            name: 'Primary Meta',
+            type: 'meta_ad_account',
+          },
+          {
+            integrationAccountId: 'integration-2',
+            externalAccountId: 'act-2',
+            alias: 'Second Meta',
+            name: 'Second Meta',
+            type: 'meta_ad_account',
+          },
+          {
+            integrationAccountId: 'page-1',
+            externalAccountId: 'page-1',
+            alias: 'Meta Page',
+            name: 'Meta Page',
+            type: 'meta_page',
+          },
+        ],
+      },
+    },
+    isLoading: false,
+    isError: false,
+    refresh: () => Promise.resolve(),
+  }),
+}));
+
 mock.module('@/components/ai-elements/conversation', () => ({
   Conversation: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ConversationContent: ({ children }: { children: ReactNode }) => (
@@ -365,6 +400,55 @@ describe('JainaChatSurface integration', () => {
       query: 'Recommend budget reallocations for this week by campaign',
       forceReportArtifact: true,
       canvas: false,
+    });
+    expect(startMock.mock.calls[0]?.[0].adAccountIds).toBeUndefined();
+  });
+
+  it('lets the user include another linked Meta ad account for the turn', async () => {
+    global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method ?? 'GET';
+      if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
+        return Promise.resolve(jsonResponse({ sessions: [], messages: [] }));
+      }
+      if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
+        return Promise.resolve(
+          jsonResponse({
+            session_id: 'session-scope',
+            brand_id: 'brand-1',
+            ad_account_id: 'act-1',
+            conversation_title: null,
+          }),
+        );
+      }
+      return Promise.resolve({
+        ok: false,
+        text: () => Promise.resolve('Unhandled fetch route'),
+      } as MockFetchResponse);
+    }) as typeof fetch;
+
+    render(
+      <JainaChatSurface
+        brandProfileId="brand-1"
+        brandName="Test Brand"
+        adAccountId="act-1"
+        campaignId={null}
+        userId="user-1"
+      />,
+      { wrapper: withQueryClient },
+    );
+
+    await waitFor(() => {
+      expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Meta accounts: 1 of 2 included' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Second Meta' }));
+    fireEvent.click(screen.getByTestId('prompt-submit'));
+
+    await waitFor(() => expect(startMock).toHaveBeenCalledTimes(1));
+    expect(startMock.mock.calls[0]?.[0]).toMatchObject({
+      adAccountId: 'act-1',
+      adAccountIds: ['act-1', 'act-2'],
     });
   });
 

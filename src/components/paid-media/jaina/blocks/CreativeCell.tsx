@@ -13,6 +13,8 @@ type CreativeCellProps = {
   label: string;
   // `row_meta[i].creative` — typed `unknown` upstream, narrowed here.
   creative: unknown;
+  display?: 'cell' | 'card';
+  alt?: string;
 };
 
 type PreviewState = { status: 'idle' | 'loading' | 'ready' | 'error'; url: string | null };
@@ -20,7 +22,12 @@ type PreviewState = { status: 'idle' | 'loading' | 'ready' | 'error'; url: strin
 // A creative table cell: shows its label, and on hover-open lazy-resolves a
 // fresh preview image (Meta CDN URLs expire) via the creative-preview endpoint.
 // Falls back to plain text when the row carries no resolvable creative ref.
-export function CreativeCell({ label, creative }: CreativeCellProps) {
+export function CreativeCell({
+  label,
+  creative,
+  display = 'cell',
+  alt = label,
+}: CreativeCellProps) {
   const ref = useMemo(() => {
     const parsed = datasetCreativeRefSchema.safeParse(creative);
     return parsed.success ? parsed.data : null;
@@ -31,9 +38,10 @@ export function CreativeCell({ label, creative }: CreativeCellProps) {
   const fetchedRef = useRef(false);
 
   const resolvable = ref !== null && isResolvableCreativeRef(ref);
+  const shouldResolve = display === 'card' || open;
 
   useEffect(() => {
-    if (!open || !ref || !resolvable || fetchedRef.current) return;
+    if (!shouldResolve || !ref || !resolvable || fetchedRef.current) return;
     fetchedRef.current = true;
     let active = true;
     setPreview({ status: 'loading', url: null });
@@ -49,7 +57,25 @@ export function CreativeCell({ label, creative }: CreativeCellProps) {
     return () => {
       active = false;
     };
-  }, [open, ref, resolvable]);
+  }, [ref, resolvable, shouldResolve]);
+
+  if (display === 'card') {
+    return (
+      <div className="flex aspect-[4/3] items-center justify-center bg-muted/30">
+        {preview.status === 'ready' && preview.url ? (
+          <img src={preview.url} alt={alt} className="size-full object-contain" loading="lazy" />
+        ) : !resolvable || preview.status === 'error' ? (
+          <span className="text-xs text-muted-foreground">Preview unavailable</span>
+        ) : (
+          <span
+            role="status"
+            aria-label={`Loading preview for ${alt}`}
+            className="size-full animate-pulse bg-muted/60"
+          />
+        )}
+      </div>
+    );
+  }
 
   if (!resolvable) return <span>{label}</span>;
 

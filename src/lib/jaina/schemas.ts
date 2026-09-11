@@ -510,7 +510,7 @@ export const tableColumnV2Schema = contractTableColumnSchema.extend({
 });
 export type TableColumnV2 = z.infer<typeof tableColumnV2Schema>;
 
-export const dataTableBlockV2Schema = contractDataTableBlockSchema.extend({
+export const dataTableBlockV2Schema = contractDataTableBlockSchema.safeExtend({
   priority: blockPriorityV2Schema,
   columns: z.array(tableColumnV2Schema).min(1),
 });

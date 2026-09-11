@@ -1,18 +1,18 @@
 'use client';
 
-import type { AgentAttachment, AgentDocumentAttachment } from '@continuum/contracts';
+import {
+  type AgentAttachment,
+  type AgentDocumentAttachment,
+  type ConversationDataScopeV1,
+  type JainaChatRequest as JainaChatStreamRequest,
+  jainaChatRequestSchema,
+} from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentMentionReference } from '@/lib/agent-references';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { browserTimezone } from '@/lib/automations/schedule';
-import {
-  type JainaChatStreamRequest,
-  type JainaPlanAction,
-  type JainaScaffoldAction,
-  type JainaToolAction,
-  jainaChatRequestSchema,
-} from '@/lib/jaina/schemas';
+import type { JainaPlanAction, JainaScaffoldAction, JainaToolAction } from '@/lib/jaina/schemas';
 import {
   coalesceJainaStreamEvents,
   createInitialJainaStreamState,
@@ -24,10 +24,11 @@ import {
 } from '@/lib/jaina/stream';
 import { readNdjsonStream } from '@/lib/streaming/readNdjsonStream';
 
-type JainaChatInput = {
+export type JainaChatInput = {
   query: string;
   canvas?: boolean;
   adAccountId: string;
+  adAccountIds?: string[];
   brandId: string;
   /**
    * The optional sub-brand project scope, from ActiveProjectProvider. Absent means brand
@@ -59,6 +60,89 @@ type JainaChatInput = {
    */
   onDispatchError?: (message: string) => void;
 };
+
+function referenceMetadataId(reference: AgentMentionReference, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = reference.metadata?.[key];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return null;
+}
+
+function unique(values: Array<string | null>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+}
+
+function buildJainaDataScope(
+  accountIds: string[],
+  references: AgentMentionReference[],
+): { dataScope: ConversationDataScopeV1; hasEntityScope: boolean } {
+  const campaigns = unique(
+    references.map((reference) =>
+      reference.type === 'campaign' ? reference.id : referenceMetadataId(reference, ['campaignId']),
+    ),
+  );
+  const groups = unique(
+    references.map((reference) =>
+      reference.type === 'adset'
+        ? reference.id
+        : referenceMetadataId(reference, ['adsetId', 'adSetId']),
+    ),
+  );
+  const ads = unique(references.map((reference) => referenceMetadataId(reference, ['adId'])));
+  const hasEntityScope = campaigns.length + groups.length + ads.length > 0;
+
+  return {
+    hasEntityScope,
+    dataScope: {
+      schemaVersion: 1,
+      accounts: accountIds.map((accountId) => ({ platform: 'meta', accountId })),
+      ...(hasEntityScope
+        ? {
+            campaigns: { ids: campaigns },
+            groups: { ids: groups },
+            ads: { ids: ads },
+          }
+        : {}),
+    },
+  };
+}
+
+export function buildJainaChatStreamRequest(
+  input: JainaChatInput,
+  timezone = browserTimezone(),
+): JainaChatStreamRequest {
+  const accountIds = input.adAccountIds ?? [input.adAccountId];
+  const references = input.references ?? [];
+  const { dataScope, hasEntityScope } = buildJainaDataScope(accountIds, references);
+  const includeScope = input.adAccountIds !== undefined || hasEntityScope;
+
+  return jainaChatRequestSchema.parse({
+    query: input.query,
+    include_thoughts: true,
+    force_report_artifact: input.forceReportArtifact,
+    message_metadata: references.length > 0 ? { references } : undefined,
+    userId: input.userId,
+    canvas: input.canvas,
+    clarification: input.clarificationId ? { id: input.clarificationId } : undefined,
+    ...(input.planAction ? { plan_action: input.planAction } : {}),
+    ...(input.scaffoldAction ? { scaffold_action: input.scaffoldAction } : {}),
+    ...(input.toolAction ? { tool_action: input.toolAction } : {}),
+    context: {
+      adAccountId: input.adAccountId,
+      ...(includeScope ? { adAccountIds: accountIds, dataScope } : {}),
+      brandId: input.brandId,
+      sessionId: input.sessionId,
+      canvas: input.canvas,
+      ...(input.projectId ? { projectId: input.projectId } : {}),
+      timezone,
+      ...(references.length > 0 ? { references } : {}),
+      ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
+      ...(input.documents && input.documents.length > 0 ? { documents: input.documents } : {}),
+      ...(input.documentScopeKey ? { documentScopeKey: input.documentScopeKey } : {}),
+    },
+  });
+}
 
 type StartResult = { error?: string };
 
@@ -267,39 +351,7 @@ export function useJainaChatStream() {
 
       let payload: JainaChatStreamRequest;
       try {
-        payload = jainaChatRequestSchema.parse({
-          query: input.query,
-          include_thoughts: true,
-          force_report_artifact: input.forceReportArtifact,
-          message_metadata:
-            input.references && input.references.length > 0
-              ? { references: input.references }
-              : undefined,
-          userId: input.userId,
-          canvas: input.canvas,
-          clarification: input.clarificationId ? { id: input.clarificationId } : undefined,
-          ...(input.planAction ? { plan_action: input.planAction } : {}),
-          ...(input.scaffoldAction ? { scaffold_action: input.scaffoldAction } : {}),
-          ...(input.toolAction ? { tool_action: input.toolAction } : {}),
-          context: {
-            adAccountId: input.adAccountId,
-            brandId: input.brandId,
-            sessionId: input.sessionId,
-            canvas: input.canvas,
-            ...(input.projectId ? { projectId: input.projectId } : {}),
-            // Jaina answers questions phrased in the user's local calendar
-            // ("last week", "since yesterday"), so it needs their zone.
-            timezone: browserTimezone(),
-            ...(input.references && input.references.length > 0
-              ? { references: input.references }
-              : {}),
-            ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
-            ...(input.documents && input.documents.length > 0
-              ? { documents: input.documents }
-              : {}),
-            ...(input.documentScopeKey ? { documentScopeKey: input.documentScopeKey } : {}),
-          },
-        });
+        payload = buildJainaChatStreamRequest(input);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid request payload';
         setState((prev) => ({ ...prev, status: 'error', error: message }));

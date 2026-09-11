@@ -401,6 +401,7 @@ async function OrganicContent({
           <OrganicAgentPanelLazy
             brandId={brandProfileId}
             platformAccountIds={platformAccountIds}
+            platformAccountOptions={platformAccountOptions}
             mentionContext={organicAgentMentionContext}
             initialSessionId={initialAgentSessionId}
           />
