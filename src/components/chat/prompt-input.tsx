@@ -705,11 +705,18 @@ export function PromptInput({
   const handlePaste = useCallback(
     (event: React.ClipboardEvent<HTMLDivElement>) => {
       const pasted = Array.from(event.clipboardData?.files ?? []);
-      if (pasted.length === 0) return;
-      // A pasted screenshot must not also land in the contenteditable as an <img> node.
+      if (pasted.length > 0) {
+        // A pasted screenshot must not also land in the contenteditable as an <img> node.
+        event.preventDefault();
+        attachments?.add(pasted);
+        return;
+      }
+
+      const text = event.clipboardData?.getData('text/plain') ?? '';
+      if (!attachments || (!/[\r\n]/.test(text) && text.length <= 280)) return;
+
       event.preventDefault();
-      if (attachments) attachments.add(pasted);
-      else event.preventDefault();
+      attachments.add([new File([text], 'pasted-text.txt', { type: 'text/plain' })]);
     },
     [attachments],
   );
