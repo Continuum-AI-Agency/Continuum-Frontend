@@ -7,12 +7,26 @@ export const jainaSheetsExportRequestSchema = z.object({
   sheets: z
     .array(
       z.object({
-        title: z.string().trim().min(1).max(80),
+        title: z.string().trim().min(1).max(80).regex(/^[^\\/?*[\]:]+$/),
         rows: z.array(z.array(sheetCellSchema).max(50)).max(500),
       }),
     )
     .min(1)
-    .max(10),
+    .max(10)
+    .superRefine((sheets, context) => {
+      const titles = new Set<string>();
+      for (const [index, sheet] of sheets.entries()) {
+        const title = sheet.title.toLocaleLowerCase();
+        if (titles.has(title)) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Sheet titles must be unique',
+            path: [index, 'title'],
+          });
+        }
+        titles.add(title);
+      }
+    }),
 });
 
 export const jainaSheetsExportResponseSchema = z.object({
