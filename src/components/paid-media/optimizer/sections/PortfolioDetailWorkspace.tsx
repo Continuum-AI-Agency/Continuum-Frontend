@@ -16,8 +16,6 @@
 
 import {
   getOptimizationMetricDefinition,
-  LOOKBACK_LABEL,
-  type LookbackWindow,
   type OptimizationObjective,
   type PortfolioLevel,
   type PortfolioListItem,
@@ -44,7 +42,8 @@ import { CpaHeroTimeline } from '../charts/CpaHeroTimeline';
 import { splitReallocation } from '../charts/chartData';
 import { maxCiUpperBound } from '../charts/chartScale';
 import { chartStatus, combinedChartStatus } from '../charts/chartStatus';
-import { PacingGauge } from '../charts/PacingGauge';
+import { buildFlightPacing } from '../charts/flightPacingModel';
+import { FlightPacing } from '../charts/FlightPacing';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { RoasProfitLine } from '../charts/RoasProfitLine';
 import { ScoreRadar } from '../charts/ScoreRadar';
@@ -52,9 +51,10 @@ import { StepFunnel } from '../charts/StepFunnel';
 import {
   adSetRoasSeries,
   bindTimelineEvents,
-  DEFAULT_PACING_PERIOD_DAYS,
+  sumFunnelRange,
   sumFunnelWindow,
 } from '../charts/vizData';
+import { DateRangeControl } from '../components/DateRangeControl';
 import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { costCiLegend, itemToRow, kpiColumns } from '../kpiColumns';
 import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
@@ -74,6 +74,9 @@ import {
 } from '../useOptimizerData';
 import type { OptimizerAdMetric, WorkspaceSection } from '../useOptimizerUrlState';
 import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
+import { ObjectiveCostRecap } from './detail/ObjectiveCostRecap';
+import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
+import { buildRecap } from './detail/recapModel';
 import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { OptimizerPanel } from './OptimizerPanel';
@@ -94,6 +97,9 @@ type PortfolioDetailWorkspaceProps = {
   onMetricChange: (metric: OptimizerAdMetric) => void;
   section: WorkspaceSection;
   onSectionChange: (section: WorkspaceSection) => void;
+  /** The dashboard's one reporting range (URL-owned); every panel reads it. */
+  range: RangeSpec;
+  onRangeChange: (range: RangeSpec) => void;
 };
 
 export function PortfolioDetailWorkspace({
@@ -108,6 +114,8 @@ export function PortfolioDetailWorkspace({
   onMetricChange,
   section,
   onSectionChange,
+  range,
+  onRangeChange,
 }: PortfolioDetailWorkspaceProps) {
   // Campaign portfolios enroll campaigns: read the matching snapshot scope so the
   // conversion-funnel sum (keyed by the enrolled entity id) resolves. The cycle
@@ -116,13 +124,15 @@ export function PortfolioDetailWorkspace({
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const cpaSeriesQuery = useOptimizerCpaSeries(portfolio.id);
   const timelineEventsQuery = useOptimizerTimelineEvents(portfolio.id);
-  // The portfolio's reporting window, defaulting to the historical d14 for rows written
-  // before the setting existed.
-  const lookbackWindow = (portfolio.lookback_window ?? 'd14') as LookbackWindow;
+  // ONE reporting range for every panel. Presets trail today; 'flight' is the portfolio's
+  // own period. Read surfaces that only take d7/d14/d30 get the nearest window.
+  const today = todayIso();
+  const resolvedRange = resolveRange(range, portfolio, today);
+  const hasFlight = Boolean(portfolio.period_start && portfolio.period_end);
   const flightLabel = portfolio.period_start
     ? formatDateRange({ from: portfolio.period_start, to: portfolio.period_end ?? null })
     : null;
-  const winratesQuery = useOptimizerAdsetCreativeWinrates(brandId, lookbackWindow, 'angle');
+  const winratesQuery = useOptimizerAdsetCreativeWinrates(brandId, resolvedRange.lookback, 'angle');
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
   const snapshotsQuery = useOptimizerAccountSnapshots(brandId, adAccountId, level);
   const { run, archive, update } = useOptimizerMutations(brandId, adAccountId);
@@ -170,8 +180,12 @@ export function PortfolioDetailWorkspace({
     cpaSeriesQuery.data.map((point) => ({ ts: point.cycle_ts })),
     timelineEventsQuery.data,
   );
-  const pacing = (latestRun as { pacing?: unknown } | null)?.pacing ?? null;
   const metric = getOptimizationMetricDefinition(portfolio.objective);
+  // Target in the metric's DISPLAY unit (CPM for awareness), like every cost it meets.
+  const targetDisplay =
+    portfolio.cpa_target != null && portfolio.cpa_target > 0
+      ? portfolio.cpa_target * metric.denominatorMultiplier
+      : null;
   // Human ad-set names for the action surface. The enrolled roster stores each name
   // at enroll time, so raw Meta ids never have to leak into the labels; falls back
   // to the id wherever a name is unknown.
@@ -216,9 +230,32 @@ export function PortfolioDetailWorkspace({
     backfillNames,
   ]);
 
-  const funnelWindow = sumFunnelWindow(
-    snapshotsQuery.data,
-    enrolledQuery.data.map((adset) => adset.adset_id),
+  const enrolledIds = enrolledQuery.data.map((adset) => adset.adset_id);
+  // The funnel over the chosen range from the daily series; older snapshot rows without
+  // one fall back to the engine's 7-day window, and the panel meta says which.
+  const funnelRange = sumFunnelRange(snapshotsQuery.data, enrolledIds, resolvedRange.from, resolvedRange.to);
+  const funnelWindow = funnelRange ?? sumFunnelWindow(snapshotsQuery.data, enrolledIds);
+  const funnelMeta = funnelRange ? resolvedRange.label.toLowerCase() : 'engine 7d window';
+  // Pacing: the run's own verdict when it paced THIS flight, else derived from the daily
+  // spend of the enrolled ad sets — never a green gauge off the engine's flat fallback.
+  const flightPacing = buildFlightPacing({
+    portfolio,
+    runPacing: latestRun?.pacing ?? null,
+    snapshots: snapshotsQuery.data,
+    enrolledIds,
+    today,
+  });
+  const recap = buildRecap({
+    snapshots: snapshotsQuery.data,
+    enrolledIds,
+    range: resolvedRange,
+    metric,
+    target: targetDisplay,
+  });
+  // The cost timeline is per cycle; keep the cycles inside the range (older ones still feed
+  // the event binding above so a pin on the first shown cycle keeps its history).
+  const cpaSeriesInRange = cpaSeriesQuery.data.filter(
+    (point) => point.cycle_ts.slice(0, 10) >= resolvedRange.from,
   );
   const maxCiCpa = maxCiUpperBound(items, metric.denominatorMultiplier);
 
@@ -234,17 +271,6 @@ export function PortfolioDetailWorkspace({
     }),
   );
   const adsetColumns = kpiColumns({ currency, maxCiCost: maxCiCpa, metric });
-
-  // Period budget: real when set, else estimated from the daily budget so the KPI
-  // strip always shows a figure (never "not set").
-  const periodBudgetEstimated = !(
-    typeof portfolio.period_budget === 'number' && portfolio.period_budget > 0
-  );
-  const periodBudgetValue = periodBudgetEstimated
-    ? portfolio.daily_total != null
-      ? portfolio.daily_total * DEFAULT_PACING_PERIOD_DAYS
-      : null
-    : portfolio.period_budget;
 
   const dailyTrendsQuery = useOptimizerAdDailyTrends(brandId, adAccountId, selectedAdsetId);
   const adsetAdsQuery = useOptimizerAdsetAds(brandId, adAccountId, selectedAdsetId);
@@ -386,21 +412,16 @@ export function PortfolioDetailWorkspace({
                       ? formatCurrency(portfolio.daily_total, currency)
                       : `${formatCurrency(portfolio.daily_total, currency)} · matched`,
                 },
-                {
-                  label: 'Period budget',
-                  value:
-                    periodBudgetValue != null
-                      ? `${formatCurrency(periodBudgetValue, currency)}${periodBudgetEstimated ? ' est.' : ''}`
-                      : '—',
-                },
+                ...(typeof portfolio.period_budget === 'number' && portfolio.period_budget > 0
+                  ? [{ label: 'Flight budget', value: formatCurrency(portfolio.period_budget, currency) }]
+                  : []),
                 {
                   label: 'Optimizing for',
                   value: `${humanize(portfolio.objective)} · ${metric.resultLabel}`,
                 },
                 { label: portfolioLevelLabel(level), value: String(portfolio.adset_count) },
                 { label: 'Pending', value: String(pendingWorkCount(portfolio)) },
-                { label: 'Lookback', value: LOOKBACK_LABEL[lookbackWindow] ?? lookbackWindow },
-                ...(flightLabel ? [{ label: 'Period', value: flightLabel }] : []),
+                ...(flightLabel ? [{ label: 'Flight', value: flightLabel }] : []),
               ]}
             />
             <span className="inline-flex items-center gap-1.5">
@@ -414,6 +435,34 @@ export function PortfolioDetailWorkspace({
               />
             </span>
           </div>
+
+          {/* The one period every panel below reports on, and the objective recap for it. */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-foreground">
+              {resolvedRange.label}
+              {resolvedRange.flightMissing ? (
+                <span className="ml-2 font-normal text-2xs text-muted-foreground">
+                  set a flight in Manage to report on it
+                </span>
+              ) : null}
+            </p>
+            <DateRangeControl hasFlight={hasFlight} onChange={onRangeChange} value={range} />
+          </div>
+          <DataState
+            error={
+              <ChartError message="The recap could not load." onRetry={snapshotsQuery.refetch} />
+            }
+            loading={<ChartSkeleton className="h-24" />}
+            status={combinedChartStatus(snapshotsQuery, enrolledQuery)}
+          >
+            <ObjectiveCostRecap
+              currency={currency}
+              metric={metric}
+              range={resolvedRange}
+              recap={recap}
+              target={targetDisplay}
+            />
+          </DataState>
 
           {noRecommendations ? (
             <SignalReadinessCard
@@ -445,11 +494,8 @@ export function PortfolioDetailWorkspace({
                 confidenceBand={latestRun?.confidence?.band}
                 currency={currency}
                 objective={portfolio.objective}
-                series={cpaSeriesQuery.data}
-                targetCpa={
-                  ((portfolio as { cpa_target?: number | null }).cpa_target ?? 0) *
-                    metric.denominatorMultiplier || null
-                }
+                series={cpaSeriesInRange}
+                targetCpa={targetDisplay}
               />
             </DataState>
           </OptimizerPanel>
@@ -471,16 +517,27 @@ export function PortfolioDetailWorkspace({
               />
             </OptimizerPanel>
 
-            <OptimizerPanel title="Pacing">
-              <PacingGauge
+            <OptimizerPanel
+              meta={
+                flightPacing.kind === 'ready' ? (
+                  <span className="text-3xs text-muted-foreground">
+                    {flightPacing.source === 'engine' ? 'engine verdict' : 'from daily spend'}
+                  </span>
+                ) : null
+              }
+              title="Flight pacing"
+            >
+              <FlightPacing
                 currency={currency}
-                dailyTotal={portfolio.daily_total}
-                pacing={pacing as never}
+                model={flightPacing}
+                onSetFlight={() => onSectionChange('manage')}
               />
             </OptimizerPanel>
 
             <OptimizerPanel
-              meta={<span className="text-3xs text-muted-foreground">step conversion · 7d</span>}
+              meta={
+                <span className="text-3xs text-muted-foreground">step conversion · {funnelMeta}</span>
+              }
               title="Conversion funnel"
             >
               <DataState
@@ -567,7 +624,7 @@ export function PortfolioDetailWorkspace({
             <OptimizerPanel
               meta={
                 <span className="text-3xs text-muted-foreground">
-                  within-ad-set creative wins · {lookbackWindow}
+                  within-ad-set creative wins · {resolvedRange.lookback}
                 </span>
               }
               title="Angle to run next"

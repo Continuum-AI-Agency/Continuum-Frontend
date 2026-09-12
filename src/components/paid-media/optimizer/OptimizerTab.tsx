@@ -98,6 +98,8 @@ export function OptimizerTab({
     openCreate,
     setAdset,
     setMetric,
+    range,
+    setRange,
     setSection,
     setView,
   } = useOptimizerUrlState();
@@ -280,9 +282,11 @@ export function OptimizerTab({
           chartMetric={metric}
           onClose={closePortfolio}
           onMetricChange={setMetric}
+          onRangeChange={setRange}
           onSectionChange={setSection}
           onSelectAdset={setAdset}
           portfolio={detailPortfolio}
+          range={range}
           section={section}
           selectedAdsetId={adsetId}
         />
