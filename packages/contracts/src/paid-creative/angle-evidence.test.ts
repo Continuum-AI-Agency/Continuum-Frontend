@@ -62,7 +62,13 @@ describe('paidCreativeAngleEvidenceV1Schema', () => {
   it('defaults omitted audience evidence to unknown rather than implying a segment', () => {
     const { audience: _audience, ...withoutAudience } = evidence;
     const parsed = paidCreativeAngleEvidenceV1Schema.parse(withoutAudience);
-    expect(parsed.audience).toEqual({ label: null, source: null, coverage: 'unknown' });
+    expect(parsed.audience).toMatchObject({
+      label: null,
+      source: null,
+      coverage: 'unknown',
+      coveredAds: 0,
+      segments: [],
+    });
   });
 
   it('rejects claimed audience coverage without a source', () => {

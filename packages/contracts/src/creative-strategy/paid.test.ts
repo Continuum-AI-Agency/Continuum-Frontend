@@ -87,6 +87,52 @@ describe('creativeWinRateRowSchema', () => {
     expect(row.flags).toEqual(['spend_concentrated']);
   });
 
+  it('carries absolute spend and measured audience-targeting coverage', () => {
+    const row = creativeWinRateRowSchema.parse({
+      dimension: 'angle',
+      value: 'family_lunch',
+      funnelStage: 'tof',
+      eligibleAds: 5,
+      winners: 3,
+      winRate: 0.6,
+      spend: 12_500,
+      spendShare: 0.5,
+      audience: {
+        coverage: 'known',
+        source: 'paid_media.adset_targeting_snapshots',
+        coveredAds: 5,
+        coveredSpend: 12_500,
+        spendCoverage: 1,
+        segments: [
+          {
+            audienceCellId: 'aud:cell/brand/hash',
+            observedAt: '2026-09-11T18:00:00.000Z',
+            source: 'meta_graph',
+            adsetCount: 2,
+            eligibleAds: 5,
+            spend: 12_500,
+            spendShare: 1,
+            ageMin: 25,
+            ageMax: 54,
+            genders: [2],
+            geoCount: 3,
+            customAudienceCount: 1,
+            excludedCustomAudienceCount: 1,
+            publisherPlatforms: ['facebook', 'instagram'],
+            placements: ['feed'],
+            devicePlatforms: ['mobile'],
+          },
+        ],
+      },
+      flags: [],
+    });
+
+    expect(row.spend).toBe(12_500);
+    expect(row.audience.coverage).toBe('known');
+    expect(row.audience.segments[0]?.ageMin).toBe(25);
+    expect(row.audience.segments[0]?.spend).toBe(12_500);
+  });
+
   it('rejects a win rate above 1', () => {
     const bad = creativeWinRateRowSchema.safeParse({
       dimension: 'angle',

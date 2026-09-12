@@ -1,11 +1,36 @@
 import { z } from 'zod';
 import { conversationDataPlatformSchema } from '../agents/conversation-data-scope';
 
+export const paidCreativeAudienceSegmentSchema = z.object({
+  audienceCellId: z.string().min(1),
+  observedAt: z.string().min(1),
+  source: z.enum(['meta_graph', 'audience_group_publish']),
+  adsetCount: z.number().int().nonnegative(),
+  eligibleAds: z.number().int().nonnegative(),
+  spend: z.number().nonnegative(),
+  spendShare: z.number().min(0).max(1).nullable().default(null),
+  ageMin: z.number().int().nonnegative().nullable().default(null),
+  ageMax: z.number().int().nonnegative().nullable().default(null),
+  genders: z.array(z.number().int()).max(3).default([]),
+  geoCount: z.number().int().nonnegative().default(0),
+  customAudienceCount: z.number().int().nonnegative().default(0),
+  excludedCustomAudienceCount: z.number().int().nonnegative().default(0),
+  publisherPlatforms: z.array(z.string()).max(20).default([]),
+  placements: z.array(z.string()).max(50).default([]),
+  devicePlatforms: z.array(z.string()).max(20).default([]),
+});
+export type PaidCreativeAudienceSegment = z.infer<typeof paidCreativeAudienceSegmentSchema>;
+
 export const paidCreativeAudienceEvidenceSchema = z
   .object({
     label: z.string().min(1).nullable().default(null),
     source: z.string().min(1).nullable().default(null),
     coverage: z.enum(['known', 'partial', 'unknown']).default('unknown'),
+    coveredAds: z.number().int().nonnegative().default(0),
+    eligibleAds: z.number().int().nonnegative().default(0),
+    coveredSpend: z.number().nonnegative().default(0),
+    spendCoverage: z.number().min(0).max(1).nullable().default(null),
+    segments: z.array(paidCreativeAudienceSegmentSchema).max(8).default([]),
   })
   .superRefine((audience, ctx) => {
     if (audience.coverage !== 'unknown' && audience.source === null) {
@@ -48,6 +73,11 @@ export const paidCreativeAngleEvidenceV1Schema = z.object({
     label: null,
     source: null,
     coverage: 'unknown',
+    coveredAds: 0,
+    eligibleAds: 0,
+    coveredSpend: 0,
+    spendCoverage: null,
+    segments: [],
   }),
   reportingWindow: z.object({
     since: z.string().min(1),

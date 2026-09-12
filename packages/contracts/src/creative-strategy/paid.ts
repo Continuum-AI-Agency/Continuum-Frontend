@@ -18,6 +18,7 @@
 
 import { z } from 'zod';
 import type { AdsetAudience } from '../paid/adNaming';
+import { paidCreativeAudienceEvidenceSchema } from '../paid-creative/angle-evidence';
 import { firstPartyCreativeAnalysisSchema } from './analysis';
 import { GLOBAL_ANGLE_DEFINITIONS, type GlobalAngleId, globalAngleIdSchema } from './angles';
 import { creativeAssetTypeSchema, creativeFunnelStageSchema } from './taxonomy';
@@ -192,8 +193,20 @@ export const creativeWinRateRowSchema = z.object({
   winners: z.number().int().nonnegative(),
   winRate: z.number().min(0).max(1),
   spendWeightedWinRate: z.number().min(0).max(1).nullable().default(null),
+  /** Absolute category spend in the ad account's currency for this row's window. */
+  spend: z.number().nonnegative().nullable().default(null),
   // This category's share of the cohort's spend (0-1) — the confounding lens.
   spendShare: z.number().min(0).max(1).nullable().default(null),
+  audience: paidCreativeAudienceEvidenceSchema.default({
+    label: null,
+    coverage: 'unknown',
+    source: null,
+    coveredAds: 0,
+    eligibleAds: 0,
+    coveredSpend: 0,
+    spendCoverage: null,
+    segments: [],
+  }),
   medianCpa: z.number().nullable().default(null),
   flags: z.array(creativeWinRateFlagSchema).default([]),
 });
