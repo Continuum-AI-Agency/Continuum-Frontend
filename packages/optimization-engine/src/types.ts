@@ -594,6 +594,28 @@ export type PacingResult = {
   pacingRatio: number; // actual / ideal (>1 over, <1 under)
   status: 'on_track' | 'underpacing' | 'overpacing';
   note: string;
+  /** Where the daily total came from. 'pacing' = a real flight window drove it; the
+   *  other two are flat totals whose `status` is a placeholder, not a verdict. The
+   *  scheduler stamps 'fixed' when a human pinned daily_total. */
+  source?: 'pacing' | 'observed' | 'fixed';
+  /** The flight state the verdict was computed from — present only on 'pacing'. */
+  periodBudget?: number;
+  periodDays?: number;
+  dayIndex?: number;
+  actualSpendToDate?: number;
+};
+
+/** What scale mode did this cycle. Present on the result only when mode is 'scale'. */
+export type ScaleStep = {
+  /** True when the planned total was actually grown this cycle. */
+  stepped: boolean;
+  /** Planned total before / after the step (equal when not stepped). */
+  from: number;
+  to: number;
+  /** The ceiling the step was clamped to; null = uncapped. */
+  ceiling: number | null;
+  /** Why it stepped or did not — the sentence the dashboard shows. */
+  reason: string;
 };
 
 /** How much to trust a measured efficiency signal (0..1). Deterministic, derived
@@ -610,6 +632,8 @@ export type Confidence = {
 export type CycleResult = {
   mode: OptimizationMode;
   pacing: PacingResult;
+  /** Scale-mode growth verdict; absent in efficiency/balanced. */
+  scale?: ScaleStep;
   reallocation: ReallocationResult;
   recommendations: Recommendation[];
   /** Spend-weighted confidence that this cycle's reallocation signal is real. */

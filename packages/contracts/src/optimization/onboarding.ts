@@ -42,6 +42,8 @@ export function suggestionToPortfolioConfig(
     // whatever they happened to be on the day the portfolio was created.
     budget_source: 'observed',
     lookback_window: 'd14',
+    // A suggestion is always a daily figure; the wizard's plan step may re-express it.
+    budget_granularity: 'daily',
     ...(suggestion.cpa_target ? { cpa_target: suggestion.cpa_target } : {}),
   };
 }

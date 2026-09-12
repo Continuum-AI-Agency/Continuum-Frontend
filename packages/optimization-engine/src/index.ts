@@ -25,6 +25,17 @@ export {
   evaluateCreative,
   LAGGARD_COST_MULTIPLE,
 } from './creative';
+export type {
+  BucketItem,
+  CreativeBucket,
+  RankBucketsOptions,
+} from './creativeBuckets';
+export {
+  bucketCitations,
+  canonicalKey,
+  labelTokens,
+  rankCreativeBuckets,
+} from './creativeBuckets';
 // Stage D — is this ad set being SERVED? The question every performance ratio presumes
 // an answer to, and the one nothing here could previously ask.
 export {
@@ -40,17 +51,6 @@ export {
   readDelivery,
   THROTTLED_IMPRESSION_RATIO,
 } from './delivery';
-export type {
-  BucketItem,
-  CreativeBucket,
-  RankBucketsOptions,
-} from './creativeBuckets';
-export {
-  bucketCitations,
-  canonicalKey,
-  labelTokens,
-  rankCreativeBuckets,
-} from './creativeBuckets';
 export { reallocate } from './engine';
 export type { BudgetMoveWhy, ExplainDiagnostics } from './explain';
 export {
@@ -145,20 +145,21 @@ export type {
   CreativeStandingAd,
   CreativeStandingFlag,
   CycleResult,
+  DeliveryRead,
+  DeliverySignals,
+  DeliveryState,
   ItemDiagnostics,
   OptimizationMode,
   OptimizationObjective,
   PacingResult,
   PacingState,
-  DeliveryRead,
-  DeliverySignals,
-  DeliveryState,
   ReallocationResult,
   Recommendation,
   RecommendationKind,
   RecommendationTrigger,
   RetentionMetrics,
   RetentionRates,
+  ScaleStep,
   TrajectoryState,
   WindowMetrics,
 } from './types';

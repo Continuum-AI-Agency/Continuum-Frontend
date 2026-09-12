@@ -30,14 +30,19 @@ import type {
   PacingResult,
   PacingState,
   Recommendation,
+  ScaleStep,
 } from './types';
 
 export type CycleOptions = {
   mode?: OptimizationMode; // default 'balanced'
   pacing?: PacingState; // if given, pacing decides the daily total
   total?: number; // explicit total when no pacing state is provided
-  maxBudget?: number; // ceiling for 'scale' mode
-  weeklyGrowthPct?: number; // step for 'scale' mode (default 0.05)
+  maxBudget?: number; // ceiling for 'scale' mode (absent = uncapped once a growth step is set)
+  weeklyGrowthPct?: number; // growth step for 'scale' mode, as a fraction (default 0.05 when maxBudget is set)
+  /** Scale mode grows the total only on a cycle where the cadence says a step is due.
+   *  The caller owns the calendar (last_scaled_at + cadence days); the engine only needs
+   *  the verdict. Absent ⇒ due, which is the pre-cadence behaviour. */
+  scaleStepDue?: boolean;
   objective?: OptimizationObjective; // selects the calibrated profile + KPI
   /** Prior smoothed composite per ad set id (EWMA state from the last cycle). */
   priorComposites?: Record<string, number>;
@@ -80,6 +85,7 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
       pacingRatio: 1,
       status: 'on_track',
       note: 'No pacing state: using the provided total.',
+      source: 'observed',
     };
   }
 
@@ -268,6 +274,7 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
   // --- Mode shapes the boundary -----------------------------------------
   let total = plannedTotal;
   let overflowMode: EngineConfig['overflowMode'] = 'breach_best';
+  let scale: ScaleStep | undefined;
 
   if (mode === 'efficiency') {
     // planned total is a ceiling; never force-spend on bad inventory
@@ -278,9 +285,52 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
     const totEvents = sum(prepared.map((s) => kpiEvents(s.windows.d14, baseCfg)));
     const portfolioCpp = totEvents > 0 ? totSpend / totEvents : Infinity;
     const meetsTarget = portfolioCpp <= baseCfg.cpaTarget;
-    if (meetsTarget && opts.maxBudget) {
-      const step = 1 + (opts.weeklyGrowthPct ?? 0.05);
-      total = Math.min(opts.maxBudget, plannedTotal * step);
+    // A growth plan exists when the caller gave a step or a ceiling. Historically only the
+    // ceiling switched growth on (with a 5% default step); a step alone now does too, so a
+    // portfolio can grow "10% every week" with no ceiling.
+    const growthPct = opts.weeklyGrowthPct ?? (opts.maxBudget != null ? 0.05 : undefined);
+    const ceiling = opts.maxBudget ?? null;
+    const due = opts.scaleStepDue !== false;
+    if (growthPct == null) {
+      scale = {
+        stepped: false,
+        from: plannedTotal,
+        to: plannedTotal,
+        ceiling,
+        reason: 'Scale mode has no growth plan: set a growth step to grow the budget.',
+      };
+    } else if (!meetsTarget) {
+      const cpp = Number.isFinite(portfolioCpp) ? portfolioCpp.toFixed(2) : 'n/a';
+      scale = {
+        stepped: false,
+        from: plannedTotal,
+        to: plannedTotal,
+        ceiling,
+        reason: `Not grown: portfolio cost per result ${cpp} is above the target ${baseCfg.cpaTarget}.`,
+      };
+    } else if (!due) {
+      scale = {
+        stepped: false,
+        from: plannedTotal,
+        to: plannedTotal,
+        ceiling,
+        reason: 'On target; next growth step is not due yet.',
+      };
+    } else {
+      const grown = plannedTotal * (1 + growthPct);
+      total = ceiling != null ? Math.min(ceiling, grown) : grown;
+      const stepped = total > plannedTotal;
+      scale = {
+        stepped,
+        from: plannedTotal,
+        to: total,
+        ceiling,
+        reason: stepped
+          ? `On target: budget grown ${(growthPct * 100).toFixed(0)}%${
+              ceiling != null && grown > ceiling ? ` and capped at the ceiling ${ceiling}` : ''
+            }.`
+          : `On target but already at the ceiling ${ceiling}.`,
+      };
     }
   }
 
@@ -305,6 +355,7 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
   return {
     mode,
     pacing,
+    ...(scale ? { scale } : {}),
     reallocation: { ...reallocation, items },
     recommendations,
     confidence,

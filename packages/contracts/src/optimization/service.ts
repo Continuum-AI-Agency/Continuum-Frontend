@@ -208,6 +208,28 @@ export type LookbackWindow = z.infer<typeof LookbackWindowSchema>;
 export const CreativeAnalysisSchema = z.enum(['off', 'on']);
 export type CreativeAnalysis = z.infer<typeof CreativeAnalysisSchema>;
 
+/** The metric a portfolio's target is priced in, when it is not the objective's own.
+ *
+ *  Every objective already IS a metric definition (OPTIMIZATION_METRIC_DEFINITIONS), so
+ *  the vocabulary is the objective enum itself: a `traffic` portfolio whose operator buys
+ *  clicks sets `target_metric: 'link_clicks'` and the engine scores on CPC instead of cost
+ *  per landing-page view. Null / absent ⇒ the objective's own metric — today's behaviour. */
+export const TargetMetricSchema = OptimizationObjectiveSchema;
+export type TargetMetric = z.infer<typeof TargetMetricSchema>;
+
+/** How the operator typed the portfolio's budget. Presentation only: `period_budget` and
+ *  `daily_total` remain the pacing inputs; this records which one the human authored so
+ *  the form re-opens the way it was filled in and the other is shown as derived. */
+export const BudgetGranularitySchema = z.enum(['daily', 'monthly', 'total']);
+export type BudgetGranularity = z.infer<typeof BudgetGranularitySchema>;
+
+/** Scale-mode growth plan: grow the daily total by `scale_growth_pct` (fraction) every
+ *  `scale_cadence_days` while the portfolio meets its target, never above
+ *  `scale_max_daily` when set. The engine already accepted a growth step and a ceiling;
+ *  these are the stored inputs the scheduler passes it. */
+export const ScaleGrowthPctSchema = z.number().gt(0).max(1);
+export const ScaleCadenceDaysSchema = z.number().int().min(1).max(90);
+
 /** One ABO campaign's observable daily pool: the sum of its ACTIVE ad sets that own a
  * daily_budget. Read-only metadata; it is deliberately not part of AdSetSnapshotSchema so
  * the optimization engine cannot accidentally treat it as an allocation input. */
@@ -320,35 +342,68 @@ export const OptimizerAdsetInventoryEnvelopeSchema = z.object({
 export type OptimizerAdsetInventoryEnvelope = z.infer<typeof OptimizerAdsetInventoryEnvelopeSchema>;
 
 /** Input to create a portfolio (maps to optimizer_create_portfolio's p_config). */
-export const PortfolioConfigSchema = z.object({
-  name: z.string().min(1),
-  objective: OptimizationObjectiveSchema,
-  /** adset (default) or campaign-level (CBO) reallocation. */
-  level: PortfolioLevelSchema.default('adset'),
-  mode: OptimizationModeSchema.default('balanced'),
-  apply_mode: ApplyModeSchema.default('recommend'),
-  daily_total: z.number().nonnegative(),
-  period_budget: z.number().nonnegative().optional(),
-  /** Where the cycle's daily total comes from. 'observed' (default) reallocates within the
-   *  live sum of enrolled ad-set budgets, so gainers and losers net to zero. 'fixed' means
-   *  a human set daily_total as a deliberate target and the total is allowed to move. */
-  budget_source: BudgetSourceSchema.default('observed'),
-  /** Trailing window every read/analysis surface reports on. Does not re-key the engine's
-   *  d3/d7/d14 scoring blend — use `config.weights` for that. */
-  lookback_window: LookbackWindowSchema.default('d14'),
-  /** Flight window (YYYY-MM-DD). With period_budget set, these turn on real pacing. */
-  period_start: z.string().date().optional(),
-  period_end: z.string().date().optional(),
-  cpa_target: z.number().positive().optional(),
-  velocity_cap_pct: z.number().min(0).max(5).optional(),
-  /** Autopilot guardrails. max_daily_apply_minor: refuse autopilot if the daily pool
-   *  exceeds this ceiling (MINOR units). max_change_pct_per_cycle: an autopilot change
-   *  above this fraction is HELD for per-item human approval instead of auto-written. */
-  max_daily_apply_minor: z.number().int().nonnegative().optional(),
-  max_change_pct_per_cycle: z.number().min(0).optional(),
-  /** DeepPartial<EngineConfig> overrides — kept loose; the engine validates. */
-  config: z.record(z.string(), z.unknown()).optional(),
-});
+export const PortfolioConfigSchema = z
+  .object({
+    name: z.string().min(1),
+    objective: OptimizationObjectiveSchema,
+    /** adset (default) or campaign-level (CBO) reallocation. */
+    level: PortfolioLevelSchema.default('adset'),
+    mode: OptimizationModeSchema.default('balanced'),
+    apply_mode: ApplyModeSchema.default('recommend'),
+    daily_total: z.number().nonnegative(),
+    period_budget: z.number().nonnegative().optional(),
+    /** Where the cycle's daily total comes from. 'observed' (default) reallocates within the
+     *  live sum of enrolled ad-set budgets, so gainers and losers net to zero. 'fixed' means
+     *  a human set daily_total as a deliberate target and the total is allowed to move. */
+    budget_source: BudgetSourceSchema.default('observed'),
+    /** Trailing window every read/analysis surface reports on. Does not re-key the engine's
+     *  d3/d7/d14 scoring blend — use `config.weights` for that. */
+    lookback_window: LookbackWindowSchema.default('d14'),
+    /** Flight window (YYYY-MM-DD). With period_budget set, these turn on real pacing. */
+    period_start: z.string().date().optional(),
+    period_end: z.string().date().optional(),
+    cpa_target: z.number().positive().optional(),
+    /** Which metric `cpa_target` is priced in. Absent ⇒ the objective's own. */
+    target_metric: TargetMetricSchema.optional(),
+    budget_granularity: BudgetGranularitySchema.default('daily'),
+    /** Scale-mode growth plan (see ScaleGrowthPctSchema). Meaningful only with mode 'scale'. */
+    scale_growth_pct: ScaleGrowthPctSchema.optional(),
+    scale_cadence_days: ScaleCadenceDaysSchema.optional(),
+    scale_max_daily: z.number().positive().optional(),
+    velocity_cap_pct: z.number().min(0).max(5).optional(),
+    /** Autopilot guardrails. max_daily_apply_minor: refuse autopilot if the daily pool
+     *  exceeds this ceiling (MINOR units). max_change_pct_per_cycle: an autopilot change
+     *  above this fraction is HELD for per-item human approval instead of auto-written. */
+    max_daily_apply_minor: z.number().int().nonnegative().optional(),
+    max_change_pct_per_cycle: z.number().min(0).optional(),
+    /** DeepPartial<EngineConfig> overrides — kept loose; the engine validates. */
+    config: z.record(z.string(), z.unknown()).optional(),
+  })
+  // The DB refuses an unguarded autopilot (optimizer_portfolios_autopilot_guardrails_chk);
+  // say so at the contract so the wizard can enable autopilot at creation with defaults
+  // instead of discovering the constraint as a 23514 after submit.
+  .superRefine((config, ctx) => {
+    if (
+      config.apply_mode === 'autopilot' &&
+      (!config.max_daily_apply_minor || !config.max_change_pct_per_cycle)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['apply_mode'],
+        message: 'autopilot requires max_daily_apply_minor and max_change_pct_per_cycle, both > 0',
+      });
+    }
+    if (
+      config.mode === 'scale' &&
+      (config.scale_growth_pct == null) !== (config.scale_cadence_days == null)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['scale_growth_pct'],
+        message: 'scale_growth_pct and scale_cadence_days must be set together',
+      });
+    }
+  });
 export type PortfolioConfig = z.infer<typeof PortfolioConfigSchema>;
 
 export const PortfolioStatusSchema = z.enum(['active', 'paused', 'archived']);
@@ -438,6 +493,13 @@ export const UpdatePortfolioPatchSchema = z
     period_start: z.string().date().nullable().optional(),
     period_end: z.string().date().nullable().optional(),
     cpa_target: z.number().positive().nullable().optional(),
+    // null returns the target to the objective's own metric.
+    target_metric: TargetMetricSchema.nullable().optional(),
+    budget_granularity: BudgetGranularitySchema.optional(),
+    // Scale-mode growth plan — null clears (scale mode then grows nothing, as before).
+    scale_growth_pct: ScaleGrowthPctSchema.nullable().optional(),
+    scale_cadence_days: ScaleCadenceDaysSchema.nullable().optional(),
+    scale_max_daily: z.number().positive().nullable().optional(),
     velocity_cap_pct: z.number().min(0).max(5).optional(),
     // Autopilot guardrails — null clears the cap (uncapped).
     max_daily_apply_minor: z.number().int().nonnegative().nullable().optional(),
@@ -770,6 +832,43 @@ export const RunConfidenceSchema = z
   .loose();
 export type RunConfidence = z.infer<typeof RunConfidenceSchema>;
 
+/** The engine's pacing verdict as persisted on optimizer.cycle_runs.pacing.
+ *
+ *  `dailyTotal`/`pacingRatio`/`status`/`note` have always been stored. The flight STATE
+ *  (`periodBudget`, `periodDays`, `dayIndex`, `actualSpendToDate`) was computed and dropped,
+ *  which is why the dashboard's pacing gauge could never draw "spent vs plan": it needs the
+ *  budget and the spend on the same row. `source` says whether the number came from a real
+ *  flight window ('pacing') or is the flat fallback ('observed' / 'fixed'), because the
+ *  fallback also reports `status: 'on_track'` and must not render as a green gauge. Rows
+ *  from before the fields existed carry none of them. Loose: the engine may grow it. */
+export const CycleRunPacingSchema = z
+  .object({
+    dailyTotal: z.number(),
+    idealCumulative: z.number(),
+    pacingRatio: z.number(),
+    status: z.string(),
+    note: z.string(),
+    source: z.enum(['pacing', 'observed', 'fixed']).optional(),
+    periodBudget: z.number().optional(),
+    periodDays: z.number().optional(),
+    dayIndex: z.number().optional(),
+    actualSpendToDate: z.number().optional(),
+  })
+  .loose();
+export type CycleRunPacing = z.infer<typeof CycleRunPacingSchema>;
+
+/** What scale mode did this cycle, when the portfolio is in scale mode. */
+export const CycleRunScaleSchema = z
+  .object({
+    stepped: z.boolean(),
+    from: z.number(),
+    to: z.number(),
+    ceiling: z.number().nullable(),
+    reason: z.string(),
+  })
+  .loose();
+export type CycleRunScale = z.infer<typeof CycleRunScaleSchema>;
+
 /** One optimizer.cycle_runs row (latest_run + history entries). */
 export const CycleRunRowSchema = z
   .object({
@@ -779,6 +878,9 @@ export const CycleRunRowSchema = z
     allocated_total: z.number().nullable().optional(),
     conserved: z.boolean().nullable().optional(),
     confidence: RunConfidenceSchema.nullable().optional(),
+    // Declared so the parse keeps it: an undeclared key on a z.object is stripped, which is
+    // exactly how the pacing gauge read `undefined` off a row that stored the field.
+    pacing: CycleRunPacingSchema.nullable().optional(),
   })
   .loose();
 export type CycleRunRow = z.infer<typeof CycleRunRowSchema>;
@@ -799,6 +901,12 @@ export const PortfolioRowSchema = z
     period_start: z.string().nullable().optional(),
     period_end: z.string().nullable().optional(),
     cpa_target: z.number().nullable().optional(),
+    target_metric: z.string().nullable().optional(),
+    budget_granularity: z.string().nullable().optional(),
+    scale_growth_pct: z.number().nullable().optional(),
+    scale_cadence_days: z.number().nullable().optional(),
+    scale_max_daily: z.number().nullable().optional(),
+    last_scaled_at: z.string().nullable().optional(),
     velocity_cap_pct: z.number().nullable().optional(),
   })
   .loose();
@@ -837,6 +945,15 @@ export const PortfolioListItemSchema = z.object({
   creative_analysis: z.string().nullable().optional(),
   period_start: z.string().nullable().optional(),
   period_end: z.string().nullable().optional(),
+  cpa_target: z.number().nullable().optional(),
+  // Plan / target / scale fields. Same declare-or-be-stripped rule as everything above.
+  target_metric: z.string().nullable().optional(),
+  budget_granularity: z.string().nullable().optional(),
+  scale_growth_pct: z.number().nullable().optional(),
+  scale_cadence_days: z.number().nullable().optional(),
+  scale_max_daily: z.number().nullable().optional(),
+  last_scaled_at: z.string().nullable().optional(),
+  velocity_cap_pct: z.number().nullable().optional(),
   status: z.string(),
   next_realloc_at: z.string().nullable(),
   adset_count: z.number().int().nonnegative(),
@@ -1006,18 +1123,19 @@ export const CyclePreviewItemSchema = z
   .loose();
 export type CyclePreviewItem = z.infer<typeof CyclePreviewItemSchema>;
 
-/** Cycle pacing carried on the preview (engine PacingResult). Loose — the FE reads
- *  only the daily total today, and the field set may grow service-side. */
-export const CyclePreviewPacingSchema = z
-  .object({
-    dailyTotal: z.number(),
-    idealCumulative: z.number(),
-    pacingRatio: z.number(),
-    status: z.string(),
-    note: z.string(),
-  })
-  .loose();
+/** Cycle pacing carried on the preview — the same shape a persisted run stores. */
+export const CyclePreviewPacingSchema = CycleRunPacingSchema;
 export type CyclePreviewPacing = z.infer<typeof CyclePreviewPacingSchema>;
+
+/** One row of optimizer_get_spend_by_objective: what a brand's ENROLLED ad sets spent on
+ *  one day, summed per portfolio objective. Read off the latest cycle's snapshot daily
+ *  series (no Meta call), so it covers at most the ~30 days the ingest carries. */
+export const SpendByObjectiveRowSchema = z.object({
+  date: z.string(),
+  objective: z.string(),
+  spend: z.number(),
+});
+export type SpendByObjectiveRow = z.infer<typeof SpendByObjectiveRowSchema>;
 
 /** POST /cycle/preview response — the engine's reallocation mapped to FE rows, plus
  *  the recommendations it raised (FE renders a count), the cycle confidence, and the

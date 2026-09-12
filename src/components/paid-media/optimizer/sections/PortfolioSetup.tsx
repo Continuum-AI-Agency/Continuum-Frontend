@@ -824,6 +824,7 @@ export function PortfolioCreateForm({
           // it is what made balanced cycles claw budgets back to their create-day values.
           budget_source: 'observed',
           lookback_window: 'd14',
+          budget_granularity: 'daily',
           ...(Number.isFinite(cpaValue) && cpaValue > 0
             ? { cpa_target: cpaValue / metric.denominatorMultiplier }
             : {}),
