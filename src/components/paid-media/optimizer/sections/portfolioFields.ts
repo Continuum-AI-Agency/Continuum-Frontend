@@ -13,6 +13,8 @@
 // number", which a text input unavoidably needs.
 
 import {
+  type BudgetGranularity,
+  DAYS_PER_MONTH,
   metaCurrencyOffset,
   toMinorUnits,
   type UpdatePortfolioPatch,
@@ -37,6 +39,12 @@ export type UnitContext = {
   currency: string | null | undefined;
   /** getOptimizationMetricDefinition(objective).denominatorMultiplier. */
   denominatorMultiplier: number;
+  /** How the operator types the flight budget. The stored column is always the WHOLE
+   *  flight (`period_budget`); 'daily' and 'monthly' are re-expressions of it, which
+   *  need the flight length. Absent ⇒ 'total' (the stored figure itself). */
+  budgetGranularity?: BudgetGranularity;
+  /** Inclusive days in the flight; null without a flight (then only 'total' converts). */
+  flightDays?: number | null;
 };
 
 type Unit = {
@@ -62,10 +70,24 @@ const CURRENCY_MINOR: Unit = {
   toStored: (typed, unit) => toMinorUnits(typed, unit.currency),
 };
 
+/** period_budget is typed per day, per month or for the whole flight. The factor is
+ *  (stored → typed): daily = 1/days, monthly = 30/days, total = 1. Without a flight the
+ *  daily/monthly views cannot be computed, so the field falls back to the whole figure. */
+const PERIOD_BUDGET: Unit = scaledBy((unit) => {
+  const granularity = unit.budgetGranularity ?? 'total';
+  const days = unit.flightDays ?? null;
+  if (granularity === 'total' || days == null || days <= 0) return 1;
+  if (granularity === 'daily') return 1 / days;
+  return DAYS_PER_MONTH / days;
+});
+
 /** One descriptor per numeric column of the config form. */
 const NUMERIC_UNITS = {
   daily_total: scaledBy(() => 1),
-  period_budget: scaledBy(() => 1),
+  period_budget: PERIOD_BUDGET,
+  scale_growth_pct: scaledBy(() => 100),
+  scale_cadence_days: scaledBy(() => 1),
+  scale_max_daily: scaledBy(() => 1),
   cpa_target: scaledBy((unit) => unit.denominatorMultiplier),
   velocity_cap_pct: scaledBy(() => 100),
   max_daily_apply_minor: CURRENCY_MINOR,
@@ -84,6 +106,9 @@ const NUMERIC_COLUMNS: Record<NumericFieldKey, z.ZodType<number | null, number |
   velocity_cap_pct: PATCH_SHAPE.velocity_cap_pct.unwrap().nullable(),
   max_daily_apply_minor: PATCH_SHAPE.max_daily_apply_minor.unwrap().nullable(),
   max_change_pct_per_cycle: PATCH_SHAPE.max_change_pct_per_cycle.unwrap().nullable(),
+  scale_growth_pct: PATCH_SHAPE.scale_growth_pct.unwrap().nullable(),
+  scale_cadence_days: PATCH_SHAPE.scale_cadence_days.unwrap().nullable(),
+  scale_max_daily: PATCH_SHAPE.scale_max_daily.unwrap().nullable(),
 };
 
 /** stored → the string the input shows. The ONLY place a current value becomes a field. */
@@ -155,6 +180,9 @@ export type PortfolioCurrentValues = Record<NumericFieldKey, number | null | und
   creative_analysis: string | null | undefined;
   period_start: string | null | undefined;
   period_end: string | null | undefined;
+  /** Which metric prices cpa_target; null = the objective's own. */
+  target_metric: string | null | undefined;
+  budget_granularity: string | null | undefined;
 };
 
 /** The form's resolver: every field piped into the SAME contracts column schema the service
@@ -174,6 +202,11 @@ export function createPortfolioFormSchema(
       creative_analysis: PATCH_SHAPE.creative_analysis.unwrap(),
       period_start: PATCH_SHAPE.period_start.unwrap(),
       period_end: PATCH_SHAPE.period_end.unwrap(),
+      target_metric: PATCH_SHAPE.target_metric.unwrap(),
+      budget_granularity: PATCH_SHAPE.budget_granularity.unwrap(),
+      scale_growth_pct: numericField('scale_growth_pct', getUnit, current.scale_growth_pct),
+      scale_cadence_days: numericField('scale_cadence_days', getUnit, current.scale_cadence_days),
+      scale_max_daily: numericField('scale_max_daily', getUnit, current.scale_max_daily),
       daily_total: numericField('daily_total', getUnit, current.daily_total),
       period_budget: numericField('period_budget', getUnit, current.period_budget),
       cpa_target: numericField('cpa_target', getUnit, current.cpa_target),
@@ -193,6 +226,21 @@ export function createPortfolioFormSchema(
     // STORE autopilot without both caps positive, so a form that let you submit it would
     // only reach a failing save.
     .superRefine((values, ctx) => {
+      // Scale mode grows nothing without BOTH a step and a cadence; one alone is a plan
+      // the scheduler cannot run, so refuse it here rather than store half of it.
+      if (values.mode === 'scale') {
+        const hasStep = values.scale_growth_pct != null && values.scale_growth_pct > 0;
+        const hasCadence = values.scale_cadence_days != null && values.scale_cadence_days > 0;
+        if (hasStep !== hasCadence) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [hasStep ? 'scale_cadence_days' : 'scale_growth_pct'],
+            message: hasStep
+              ? 'Say how often to grow (every N days).'
+              : 'Say how much to grow by (%).',
+          });
+        }
+      }
       if (values.apply_mode !== 'autopilot') return;
       if (!values.max_daily_apply_minor || values.max_daily_apply_minor <= 0) {
         ctx.addIssue({
@@ -234,6 +282,11 @@ export function toFormValues(
     creative_analysis: current.creative_analysis ?? 'off',
     period_start: current.period_start ?? null,
     period_end: current.period_end ?? null,
+    target_metric: current.target_metric ?? null,
+    budget_granularity: current.budget_granularity ?? 'daily',
+    scale_growth_pct: toInput('scale_growth_pct', current.scale_growth_pct, unit),
+    scale_cadence_days: toInput('scale_cadence_days', current.scale_cadence_days, unit),
+    scale_max_daily: toInput('scale_max_daily', current.scale_max_daily, unit),
     daily_total: toInput('daily_total', current.daily_total, unit),
     period_budget: toInput('period_budget', current.period_budget, unit),
     cpa_target: toInput('cpa_target', current.cpa_target, unit),

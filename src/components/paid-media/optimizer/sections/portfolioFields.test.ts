@@ -28,6 +28,12 @@ const current = (over: Partial<PortfolioCurrentValues> = {}): PortfolioCurrentVa
   velocity_cap_pct: null,
   max_daily_apply_minor: 630_000,
   max_change_pct_per_cycle: 0.2,
+  creative_analysis: 'off',
+  target_metric: null,
+  budget_granularity: 'daily',
+  scale_growth_pct: null,
+  scale_cadence_days: null,
+  scale_max_daily: null,
   ...over,
 });
 
@@ -126,5 +132,85 @@ describe('buildPatch — the diff is the dirty fields, in contract units', () =>
   it('drops a blank on a column that cannot be nulled', () => {
     const values = parsed({ velocity_cap_pct: '' });
     expect(buildPatch(values, { velocity_cap_pct: true })).toEqual({});
+  });
+});
+
+describe('period_budget — typed per day, per month or for the whole flight', () => {
+  const flight30 = { ...usd, flightDays: 30 };
+  it('daily × flight days is the stored whole-flight figure', () => {
+    const unit = { ...flight30, budgetGranularity: 'daily' as const };
+    expect(toInput('period_budget', 240_000, unit)).toBe('8000');
+    expect(toStored('period_budget', '8000', unit)).toBe(240_000);
+  });
+  it('monthly is normalised on a 30-day month', () => {
+    const unit = { ...usd, flightDays: 15, budgetGranularity: 'monthly' as const };
+    expect(toInput('period_budget', 120_000, unit)).toBe('240000');
+    expect(toStored('period_budget', '240000', unit)).toBe(120_000);
+  });
+  it('total is the figure itself, and so is anything without a flight', () => {
+    expect(toInput('period_budget', 240_000, { ...flight30, budgetGranularity: 'total' })).toBe(
+      '240000',
+    );
+    expect(toInput('period_budget', 240_000, { ...usd, budgetGranularity: 'daily' })).toBe(
+      '240000',
+    );
+    expect(toStored('period_budget', '240000', usd)).toBe(240_000);
+  });
+});
+
+describe('scale plan descriptors', () => {
+  it('shows the growth step as a whole percent and stores a fraction', () => {
+    expect(toInput('scale_growth_pct', 0.1, usd)).toBe('10');
+    expect(toStored('scale_growth_pct', '10', usd)).toBe(0.1);
+    expect(toStored('scale_cadence_days', '7', usd)).toBe(7);
+    expect(toStored('scale_max_daily', '2500', usd)).toBe(2500);
+  });
+  it('seeds target metric, granularity and the scale plan from the portfolio', () => {
+    const values = toFormValues(
+      current({
+        target_metric: 'link_clicks',
+        budget_granularity: 'monthly',
+        scale_growth_pct: 0.1,
+        scale_cadence_days: 7,
+        scale_max_daily: null,
+      }),
+      usd,
+    );
+    expect(values.target_metric).toBe('link_clicks');
+    expect(values.budget_granularity).toBe('monthly');
+    expect(values.scale_growth_pct).toBe('10');
+    expect(values.scale_cadence_days).toBe('7');
+    expect(values.scale_max_daily).toBe('');
+  });
+  it('the resolver refuses half a scale plan', () => {
+    const schema = createPortfolioFormSchema(() => usd, current());
+    const base = toFormValues(current({ mode: 'scale' }), usd);
+    const half = schema.safeParse({ ...base, scale_growth_pct: '10' });
+    expect(half.success).toBe(false);
+    if (!half.success) {
+      expect(half.error.issues.some((issue) => issue.path.join('.') === 'scale_cadence_days')).toBe(
+        true,
+      );
+    }
+    const whole = schema.safeParse({ ...base, scale_growth_pct: '10', scale_cadence_days: '7' });
+    expect(whole.success).toBe(true);
+    if (whole.success) {
+      expect(whole.data.scale_growth_pct).toBe(0.1);
+      expect(whole.data.scale_cadence_days).toBe(7);
+    }
+    const none = schema.safeParse(base);
+    expect(none.success).toBe(true);
+  });
+  it('only the dirty plan fields reach the patch', () => {
+    const schema = createPortfolioFormSchema(() => usd, current());
+    const parsed = schema.parse({
+      ...toFormValues(current(), usd),
+      target_metric: 'link_clicks',
+      budget_granularity: 'total',
+    });
+    expect(buildPatch(parsed, { target_metric: true, budget_granularity: true })).toEqual({
+      target_metric: 'link_clicks',
+      budget_granularity: 'total',
+    });
   });
 });
