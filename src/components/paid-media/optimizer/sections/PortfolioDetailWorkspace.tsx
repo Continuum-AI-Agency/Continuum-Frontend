@@ -45,6 +45,8 @@ import { chartStatus, combinedChartStatus } from '../charts/chartStatus';
 import { buildFlightPacing } from '../charts/flightPacingModel';
 import { FlightPacing } from '../charts/FlightPacing';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
+import { ReallocationStory } from '../charts/ReallocationStory';
+import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { RoasProfitLine } from '../charts/RoasProfitLine';
 import { ScoreRadar } from '../charts/ScoreRadar';
 import { StepFunnel } from '../charts/StepFunnel';
@@ -609,14 +611,32 @@ export function PortfolioDetailWorkspace({
                   Manage.
                 </p>
               ) : null}
-              <ReallocationFlow
-                budgetSource={portfolio.budget_source}
+              {/* The move as a picture and a sentence first; the sortable table below stays
+                  for anyone who wants the exact numbers per row. */}
+              <ReallocationStory
                 currency={currency}
+                defaultLookback={defaultStoryLookback(portfolio.lookback_window)}
                 items={items}
+                metric={metric}
                 nameById={adsetNameById}
-                objective={portfolio.objective}
                 snapshotById={snapshotById}
+                target={targetDisplay}
               />
+              <details className="group">
+                <summary className="cursor-pointer text-2xs text-muted-foreground hover:text-foreground">
+                  Exact figures per ad set
+                </summary>
+                <div className="pt-2">
+                  <ReallocationFlow
+                    budgetSource={portfolio.budget_source}
+                    currency={currency}
+                    items={items}
+                    nameById={adsetNameById}
+                    objective={portfolio.objective}
+                    snapshotById={snapshotById}
+                  />
+                </div>
+              </details>
               {/* Held/approved budget approve+execute now lives in the Activity tab's unified
                   queue (it owns approval, the drain, and the receipts). This panel stays a
                   read view of the proposed reallocation. */}
