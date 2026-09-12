@@ -261,3 +261,35 @@ describe('freezeReason survives the real contracts parse (WS0+WS1 boundary)', ()
     expect(freezeLabel(reason)?.label).toBe('Held · CBO/lifetime');
   });
 });
+
+describe('spendStream', () => {
+  const { spendStream } = require('./chartData') as typeof import('./chartData');
+  const rows = [
+    { date: '2026-09-09', objective: 'purchase', spend: 100 },
+    { date: '2026-09-09', objective: 'lead', spend: 50 },
+    { date: '2026-09-10', objective: 'purchase', spend: 120 },
+    { date: '2026-09-11', objective: 'lead', spend: 60 },
+    { date: '2026-09-11', objective: 'purchase', spend: 130 },
+    { date: '2026-08-01', objective: 'awareness', spend: 999 }, // outside the window, still counted in totals? no — only its order
+  ];
+  it('stacks per day in largest-objective-first order and fills gaps with zeros', () => {
+    const stream = spendStream(rows, 3, '2026-09-11');
+    expect(stream.objectives).toEqual(['awareness', 'purchase', 'lead']);
+    expect(stream.points.map((p) => p.date)).toEqual(['2026-09-09', '2026-09-10', '2026-09-11']);
+    expect(stream.points[1].byObjective).toEqual({ awareness: 0, purchase: 120, lead: 0 });
+    expect(stream.points[2].stacked).toEqual({ awareness: 0, purchase: 130, lead: 190 });
+    expect(stream.points[2].total).toBe(190);
+    expect(stream.latest).toEqual({
+      date: '2026-09-11',
+      total: 190,
+      byObjective: { awareness: 0, purchase: 130, lead: 60 },
+    });
+    expect(stream.hasData).toBe(true);
+  });
+  it('is honestly empty with no rows', () => {
+    const stream = spendStream([], 14, '2026-09-11');
+    expect(stream.hasData).toBe(false);
+    expect(stream.points).toHaveLength(14);
+    expect(stream.latest).toBeNull();
+  });
+});

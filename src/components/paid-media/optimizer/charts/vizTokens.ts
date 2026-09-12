@@ -23,6 +23,13 @@ export const OBJECTIVE_COLOR: Record<string, string> = {
   app_install: 'var(--chart-4)',
   traffic: 'var(--chart-5)',
   awareness: 'var(--muted-foreground)',
+  // The five objectives added later share the palette by hue family: messaging and
+  // engagement sit with leads/signups, clicks with traffic, video with installs.
+  conversations: 'var(--chart-2)',
+  link_clicks: 'var(--chart-5)',
+  thruplays: 'var(--chart-4)',
+  post_engagement: 'var(--chart-3)',
+  clicks: 'var(--chart-5)',
 };
 
 /** Momentum trajectory → semantic feedback color. */

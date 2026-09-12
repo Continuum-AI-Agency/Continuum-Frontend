@@ -343,6 +343,7 @@ export function OptimizerTab({
 
         <TabsContent value="overview" className="min-h-0 overflow-y-auto p-2">
           <OptimizerOverview
+            brandId={brandId}
             portfolios={portfolios}
             pendingCount={pendingCount}
             currency={currency}

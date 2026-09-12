@@ -184,3 +184,81 @@ export function budgetMix(portfolios: PortfolioListItem[]): BudgetMix {
   }
   return { dimension: 'portfolio', slices: budgetByPortfolio(portfolios) };
 }
+
+// ── Spend by objective, over time ────────────────────────────────────────────
+
+export type SpendByObjectiveInput = { date: string; objective: string; spend: number };
+
+export type SpendStreamPoint = {
+  date: string;
+  total: number;
+  byObjective: Record<string, number>;
+  /** Running sum in `objectives` order — what a stacked area draws. */
+  stacked: Record<string, number>;
+};
+
+export type SpendStream = {
+  /** Objectives that spent anything in the window, largest total first. */
+  objectives: string[];
+  /** One point per calendar day of the window, gaps filled with zeros. */
+  points: SpendStreamPoint[];
+  totals: Record<string, number>;
+  /** The most recent day with any spend, and its split — the "today" of the legend. */
+  latest: { date: string; total: number; byObjective: Record<string, number> } | null;
+  hasData: boolean;
+};
+
+function isoDaysEnding(today: string, days: number): string[] {
+  const end = Date.parse(`${today}T00:00:00Z`);
+  const out: string[] = [];
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    out.push(new Date(end - offset * 86_400_000).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+/** Fold the per-day, per-objective spend rows into a stacked daily series ending today. */
+export function spendStream(
+  rows: SpendByObjectiveInput[],
+  days: number,
+  today: string,
+): SpendStream {
+  const totals = new Map<string, number>();
+  const byDate = new Map<string, Record<string, number>>();
+  for (const row of rows) {
+    if (!row.objective || !Number.isFinite(row.spend)) continue;
+    totals.set(row.objective, (totals.get(row.objective) ?? 0) + row.spend);
+    const day = byDate.get(row.date) ?? {};
+    day[row.objective] = (day[row.objective] ?? 0) + row.spend;
+    byDate.set(row.date, day);
+  }
+  const objectives = [...totals.entries()]
+    .filter(([, total]) => total > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([objective]) => objective);
+
+  const points: SpendStreamPoint[] = isoDaysEnding(today, days).map((date) => {
+    const day = byDate.get(date) ?? {};
+    const byObjective: Record<string, number> = {};
+    const stacked: Record<string, number> = {};
+    let running = 0;
+    for (const objective of objectives) {
+      const value = day[objective] ?? 0;
+      byObjective[objective] = value;
+      running += value;
+      stacked[objective] = running;
+    }
+    return { date, total: running, byObjective, stacked };
+  });
+
+  const latestPoint = [...points].reverse().find((point) => point.total > 0) ?? null;
+  return {
+    objectives,
+    points,
+    totals: Object.fromEntries(objectives.map((objective) => [objective, totals.get(objective) ?? 0])),
+    latest: latestPoint
+      ? { date: latestPoint.date, total: latestPoint.total, byObjective: latestPoint.byObjective }
+      : null,
+    hasData: objectives.length > 0,
+  };
+}

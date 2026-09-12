@@ -6,10 +6,13 @@ import { cleanup, fireEvent, render } from '@testing-library/react';
 // TooltipProvider ancestor. Neither is what these tests are about (the header actions,
 // the sort control, and the clickable glance cards), so both are stubbed to keep the
 // render focused on OptimizerOverview's own behavior.
-mock.module('../charts/BudgetMixChart', () => ({
-  BudgetMixChart: () => <div data-testid="budget-chart" />,
+mock.module('../charts/SpendByObjectiveStream', () => ({
+  SpendByObjectiveStream: () => <div data-testid="spend-stream" />,
 }));
 mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));
+mock.module('../useOptimizerData', () => ({
+  useOptimizerSpendByObjective: () => ({ data: [], isLoading: false, isError: false }),
+}));
 
 const { OptimizerOverview, sortPortfolios } = await import('./OptimizerOverview');
 
@@ -42,6 +45,7 @@ describe('OptimizerOverview', () => {
     const onCreate = mock(() => {});
     const { getByRole } = render(
       <OptimizerOverview
+        brandId="b1"
         portfolios={[ALPHA]}
         pendingCount={0}
         currency="USD"
@@ -59,6 +63,7 @@ describe('OptimizerOverview', () => {
     const onSelect = mock((_id: string) => {});
     const { getByRole } = render(
       <OptimizerOverview
+        brandId="b1"
         portfolios={[ALPHA]}
         pendingCount={0}
         currency="USD"
@@ -76,6 +81,7 @@ describe('OptimizerOverview', () => {
     const onPrefetch = mock((_id: string) => {});
     const { getByRole } = render(
       <OptimizerOverview
+        brandId="b1"
         portfolios={[ALPHA]}
         pendingCount={0}
         currency="USD"
@@ -93,6 +99,7 @@ describe('OptimizerOverview', () => {
   it('reorders the glance list when the sort control changes the key', () => {
     const { getByRole, getAllByRole } = render(
       <OptimizerOverview
+        brandId="b1"
         portfolios={[ZEBRA, ALPHA]}
         pendingCount={0}
         currency="USD"
@@ -115,6 +122,7 @@ describe('OptimizerOverview', () => {
   it('flips order when the direction toggle is pressed', () => {
     const { getByRole, getAllByRole } = render(
       <OptimizerOverview
+        brandId="b1"
         portfolios={[ZEBRA, ALPHA]}
         pendingCount={0}
         currency="USD"

@@ -1,28 +1,31 @@
 'use client';
 
-// Overview sub-view — headline KPIs as a quiet MetricStrip (the calm-dense
-// styleguide replacement for a stat-card grid) with a primary "New portfolio"
-// action, then a two-column body: the "portfolios at a glance" list is the star
-// (left, ~2fr, sortable), and the budget mix rides a compact, height-constrained
-// panel in the right rail. On narrow widths the grid collapses to one column, list
-// first, so the clickable portfolios stay above the fold.
+// Overview — the optimizer's front page. A health strip of four numbers anyone can read
+// (what the book spends per day, what it actually spent yesterday against that, how much of
+// it runs itself, what is waiting on a decision), the spend-by-objective stream with the
+// live split beside it, and the portfolio cards. The legend filters the cards, so "show me
+// the lead portfolios" is one click.
 
 import type { PortfolioListItem } from '@continuum/contracts';
 import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
-import { MetricStrip } from '@/components/shared/MetricStrip';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { BudgetMixChart } from '../charts/BudgetMixChart';
-import { budgetMix } from '../charts/chartData';
-import { formatCurrency } from '../format';
+import { spendStream } from '../charts/chartData';
+import { SpendByObjectiveStream } from '../charts/SpendByObjectiveStream';
+import { KpiTile } from '../components/KpiTile';
+import { StatusChip, type StatusTone } from '../components/StatusChip';
+import { formatCurrency, humanize } from '../format';
 import { pendingWorkCount } from '../reportModel';
+import { useOptimizerSpendByObjective } from '../useOptimizerData';
 import { OptimizerPanel } from './OptimizerPanel';
 import { PortfolioRowCard } from './PortfolioRowCard';
 
 type SortKey = 'name' | 'daily' | 'pending';
 type SortDir = 'asc' | 'desc';
+
+const STREAM_DAYS = 14;
 
 /** Pure, order-stable sort for the glance list. Nullable daily budgets sort as 0 so a
  *  half-configured portfolio does not jump to the top of a descending budget sort. */
@@ -41,7 +44,21 @@ export function sortPortfolios(
   });
 }
 
+/** Yesterday's spend against the daily plan, as a verdict. Null without either number. */
+export function spendVsPlan(
+  spent: number | null,
+  plan: number,
+): { pct: number; tone: StatusTone; label: string } | null {
+  if (spent == null || plan <= 0) return null;
+  const ratio = spent / plan;
+  const pct = Math.round(ratio * 100);
+  if (ratio > 1.1) return { pct, tone: 'warning', label: `${pct}% of plan · over` };
+  if (ratio < 0.9) return { pct, tone: 'info', label: `${pct}% of plan · under` };
+  return { pct, tone: 'success', label: `${pct}% of plan` };
+}
+
 type OptimizerOverviewProps = {
+  brandId: string;
   portfolios: PortfolioListItem[];
   pendingCount: number;
   currency?: string | null;
@@ -52,6 +69,7 @@ type OptimizerOverviewProps = {
 };
 
 export function OptimizerOverview({
+  brandId,
   portfolios,
   pendingCount,
   currency,
@@ -62,120 +80,201 @@ export function OptimizerOverview({
 }: OptimizerOverviewProps) {
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [objectiveFilter, setObjectiveFilter] = useState<string | null>(null);
+  const spendQuery = useOptimizerSpendByObjective(brandId, STREAM_DAYS);
 
-  const adsetTotal = portfolios.reduce((sum, portfolio) => sum + portfolio.adset_count, 0);
   const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
-  const autopilotCount = portfolios.filter(
-    (portfolio) => portfolio.apply_mode === 'autopilot',
-  ).length;
+  const autopilot = portfolios.filter((portfolio) => portfolio.apply_mode === 'autopilot');
+  const paused = autopilot.filter((portfolio) => portfolio.autopilot_paused).length;
+  const stream = useMemo(
+    () => spendStream(spendQuery.data, STREAM_DAYS, new Date().toISOString().slice(0, 10)),
+    [spendQuery.data],
+  );
+  const spentSpark = stream.points.map((point) => point.total);
+  const vsPlan = spendVsPlan(stream.latest?.total ?? null, dailyTotal);
 
-  const sorted = sortPortfolios(portfolios, sortKey, sortDir);
-  const mix = budgetMix(portfolios);
-  const mixTitle = mix.dimension === 'objective' ? 'Budget by objective' : 'Budget by portfolio';
+  const visible = objectiveFilter
+    ? portfolios.filter((portfolio) => portfolio.objective === objectiveFilter)
+    : portfolios;
+  const sorted = sortPortfolios(visible, sortKey, sortDir);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <MetricStrip
-          items={[
-            { label: 'Portfolios', value: String(portfolios.length) },
-            { label: 'Ad sets', value: String(adsetTotal) },
-            { label: 'Daily budget', value: formatCurrency(dailyTotal, currency) },
-            { label: 'Autopilot', value: String(autopilotCount) },
-            { label: 'Pending', value: String(pendingCount) },
-          ]}
-        />
+        <p className="text-xs font-semibold text-foreground">
+          {portfolios.length} {portfolios.length === 1 ? 'portfolio' : 'portfolios'} ·{' '}
+          {portfolios.reduce((sum, portfolio) => sum + portfolio.adset_count, 0)} ad sets under
+          management
+        </p>
         <div className="flex items-center gap-2">
           {pendingCount > 0 ? (
             <Button
-              type="button"
-              size="sm"
-              variant="secondary"
               className="h-7 gap-1.5 px-2 text-xs"
               onClick={onOpenActions}
+              size="sm"
+              type="button"
+              variant="secondary"
             >
               Review {pendingCount} pending
-              <ArrowRightIcon className="size-3.5" aria-hidden="true" />
+              <ArrowRightIcon aria-hidden="true" className="size-3.5" />
             </Button>
           ) : null}
           <Button
-            type="button"
-            size="sm"
             className="h-7 gap-1.5 px-2 text-xs"
             onClick={onCreatePortfolio}
+            size="sm"
+            type="button"
           >
-            <PlusIcon className="size-3.5" aria-hidden="true" />
+            <PlusIcon aria-hidden="true" className="size-3.5" />
             New portfolio
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <section className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Portfolios at a glance
-            </p>
-            <div className="flex items-center gap-1.5">
-              <ToggleGroup
-                type="single"
-                size="sm"
-                variant="outline"
-                value={sortKey}
-                onValueChange={(value) => {
-                  if (value) setSortKey(value as SortKey);
-                }}
-                aria-label="Sort portfolios by"
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <KpiTile
+          label="Daily budget"
+          spark={spentSpark}
+          sub={`planned across ${portfolios.length} ${portfolios.length === 1 ? 'portfolio' : 'portfolios'}`}
+          value={formatCurrency(dailyTotal, currency)}
+        />
+        <KpiTile
+          chip={
+            vsPlan ? (
+              <StatusChip
+                hint="The last full day of spend across every enrolled ad set, against the sum of the daily budgets."
+                tone={vsPlan.tone}
               >
-                <ToggleGroupItem value="name" className="h-7 px-2 text-2xs">
-                  Name
-                </ToggleGroupItem>
-                <ToggleGroupItem value="daily" className="h-7 px-2 text-2xs">
-                  Daily budget
-                </ToggleGroupItem>
-                <ToggleGroupItem value="pending" className="h-7 px-2 text-2xs">
-                  Pending
-                </ToggleGroupItem>
-              </ToggleGroup>
-              <Button
+                {vsPlan.label}
+              </StatusChip>
+            ) : (
+              <StatusChip tone="muted">no spend history yet</StatusChip>
+            )
+          }
+          label="Spent yesterday"
+          sub={stream.latest ? `last full day · ${STREAM_DAYS}-day trend` : undefined}
+          value={stream.latest ? formatCurrency(stream.latest.total, currency) : '—'}
+        />
+        <KpiTile
+          chip={
+            paused > 0 ? (
+              <StatusChip tone="warning">{paused} stopped</StatusChip>
+            ) : autopilot.length > 0 ? (
+              <StatusChip tone="success">applying within guardrails</StatusChip>
+            ) : (
+              <StatusChip tone="muted">you approve every move</StatusChip>
+            )
+          }
+          label="On autopilot"
+          sub={`of ${portfolios.length} ${portfolios.length === 1 ? 'portfolio' : 'portfolios'}`}
+          value={String(autopilot.length)}
+        />
+        <KpiTile
+          action={
+            pendingCount > 0 ? (
+              <button
+                className="text-2xs text-primary hover:underline"
+                onClick={onOpenActions}
                 type="button"
-                size="sm"
-                variant="ghost"
-                className="size-7 p-0"
-                aria-label={sortDir === 'asc' ? 'Sort ascending' : 'Sort descending'}
-                onClick={() => setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'))}
               >
-                {sortDir === 'asc' ? (
-                  <ArrowUpIcon className="size-3.5" aria-hidden="true" />
-                ) : (
-                  <ArrowDownIcon className="size-3.5" aria-hidden="true" />
-                )}
-              </Button>
-            </div>
-          </div>
-          <div className="space-y-2">
-            {sorted.map((portfolio) => (
-              <PortfolioRowCard
-                key={portfolio.id}
-                portfolio={portfolio}
-                currency={currency}
-                onSelect={() => onSelectPortfolio(portfolio.id)}
-                onPrefetch={
-                  onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined
-                }
-              />
-            ))}
-          </div>
-        </section>
-
-        <OptimizerPanel
-          title={mixTitle}
-          className="self-start"
-          bodyClassName="max-h-72 overflow-y-auto"
-        >
-          <BudgetMixChart mix={mix} currency={currency} />
-        </OptimizerPanel>
+                Review
+              </button>
+            ) : null
+          }
+          chip={
+            pendingCount > 0 ? (
+              <StatusChip tone="info">waiting on you</StatusChip>
+            ) : (
+              <StatusChip tone="success">all clear</StatusChip>
+            )
+          }
+          label="Decisions waiting"
+          value={String(pendingCount)}
+        />
       </div>
+
+      <OptimizerPanel
+        meta={
+          <span className="text-3xs text-muted-foreground">
+            {stream.hasData
+              ? `last ${STREAM_DAYS} days · click an objective to filter`
+              : 'from enrolled ad sets'}
+          </span>
+        }
+        title="Spend by objective"
+      >
+        <SpendByObjectiveStream
+          currency={currency}
+          days={STREAM_DAYS}
+          filter={objectiveFilter}
+          onFilter={setObjectiveFilter}
+          portfolios={portfolios}
+          rows={spendQuery.data}
+        />
+      </OptimizerPanel>
+
+      <section className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Portfolios
+            {objectiveFilter ? (
+              <span className="ml-2 normal-case tracking-normal">
+                · {humanize(objectiveFilter)} only
+              </span>
+            ) : null}
+          </p>
+          <div className="flex items-center gap-1.5">
+            <ToggleGroup
+              aria-label="Sort portfolios by"
+              onValueChange={(value) => {
+                if (value) setSortKey(value as SortKey);
+              }}
+              size="sm"
+              type="single"
+              value={sortKey}
+              variant="outline"
+            >
+              <ToggleGroupItem className="h-7 px-2 text-2xs" value="name">
+                Name
+              </ToggleGroupItem>
+              <ToggleGroupItem className="h-7 px-2 text-2xs" value="daily">
+                Daily budget
+              </ToggleGroupItem>
+              <ToggleGroupItem className="h-7 px-2 text-2xs" value="pending">
+                Pending
+              </ToggleGroupItem>
+            </ToggleGroup>
+            <Button
+              aria-label={sortDir === 'asc' ? 'Sort ascending' : 'Sort descending'}
+              className="size-7 p-0"
+              onClick={() => setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'))}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {sortDir === 'asc' ? (
+                <ArrowUpIcon aria-hidden="true" className="size-3.5" />
+              ) : (
+                <ArrowDownIcon aria-hidden="true" className="size-3.5" />
+              )}
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          {sorted.map((portfolio) => (
+            <PortfolioRowCard
+              currency={currency}
+              key={portfolio.id}
+              onPrefetch={onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined}
+              onSelect={() => onSelectPortfolio(portfolio.id)}
+              portfolio={portfolio}
+            />
+          ))}
+          {sorted.length === 0 ? (
+            <p className="text-2xs text-muted-foreground">No portfolios match this objective.</p>
+          ) : null}
+        </div>
+      </section>
     </div>
   );
 }
