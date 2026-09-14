@@ -98,11 +98,7 @@ export function toInput(
 /** what the operator typed → the contract unit. null when blank or not a number, so a
  *  live read (the autopilot guardrail gate, the preview's pool) sees the same value the
  *  resolver will produce on submit. */
-export function toStored(
-  key: NumericFieldKey,
-  raw: string,
-  unit: UnitContext,
-): number | null {
+export function toStored(key: NumericFieldKey, raw: string, unit: UnitContext): number | null {
   const trimmed = raw.trim();
   if (trimmed === '') return null;
   const parsed = Number(trimmed);
@@ -163,52 +159,54 @@ export function createPortfolioFormSchema(
   getUnit: () => UnitContext,
   current: PortfolioCurrentValues,
 ) {
-  return z
-    .object({
-      name: PATCH_SHAPE.name.unwrap(),
-      objective: PATCH_SHAPE.objective.unwrap(),
-      mode: PATCH_SHAPE.mode.unwrap(),
-      apply_mode: PATCH_SHAPE.apply_mode.unwrap(),
-      budget_source: PATCH_SHAPE.budget_source.unwrap(),
-      lookback_window: PATCH_SHAPE.lookback_window.unwrap(),
-      creative_analysis: PATCH_SHAPE.creative_analysis.unwrap(),
-      period_start: PATCH_SHAPE.period_start.unwrap(),
-      period_end: PATCH_SHAPE.period_end.unwrap(),
-      daily_total: numericField('daily_total', getUnit, current.daily_total),
-      period_budget: numericField('period_budget', getUnit, current.period_budget),
-      cpa_target: numericField('cpa_target', getUnit, current.cpa_target),
-      velocity_cap_pct: numericField('velocity_cap_pct', getUnit, current.velocity_cap_pct),
-      max_daily_apply_minor: numericField(
-        'max_daily_apply_minor',
-        getUnit,
-        current.max_daily_apply_minor,
-      ),
-      max_change_pct_per_cycle: numericField(
-        'max_change_pct_per_cycle',
-        getUnit,
-        current.max_change_pct_per_cycle,
-      ),
-    })
-    // The client mirror of optimizer_portfolios_autopilot_guardrails_chk. The DB refuses to
-    // STORE autopilot without both caps positive, so a form that let you submit it would
-    // only reach a failing save.
-    .superRefine((values, ctx) => {
-      if (values.apply_mode !== 'autopilot') return;
-      if (!values.max_daily_apply_minor || values.max_daily_apply_minor <= 0) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['max_daily_apply_minor'],
-          message: 'Autopilot needs a spend ceiling above 0.',
-        });
-      }
-      if (!values.max_change_pct_per_cycle || values.max_change_pct_per_cycle <= 0) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['max_change_pct_per_cycle'],
-          message: 'Autopilot needs a change cap above 0.',
-        });
-      }
-    });
+  return (
+    z
+      .object({
+        name: PATCH_SHAPE.name.unwrap(),
+        objective: PATCH_SHAPE.objective.unwrap(),
+        mode: PATCH_SHAPE.mode.unwrap(),
+        apply_mode: PATCH_SHAPE.apply_mode.unwrap(),
+        budget_source: PATCH_SHAPE.budget_source.unwrap(),
+        lookback_window: PATCH_SHAPE.lookback_window.unwrap(),
+        creative_analysis: PATCH_SHAPE.creative_analysis.unwrap(),
+        period_start: PATCH_SHAPE.period_start.unwrap(),
+        period_end: PATCH_SHAPE.period_end.unwrap(),
+        daily_total: numericField('daily_total', getUnit, current.daily_total),
+        period_budget: numericField('period_budget', getUnit, current.period_budget),
+        cpa_target: numericField('cpa_target', getUnit, current.cpa_target),
+        velocity_cap_pct: numericField('velocity_cap_pct', getUnit, current.velocity_cap_pct),
+        max_daily_apply_minor: numericField(
+          'max_daily_apply_minor',
+          getUnit,
+          current.max_daily_apply_minor,
+        ),
+        max_change_pct_per_cycle: numericField(
+          'max_change_pct_per_cycle',
+          getUnit,
+          current.max_change_pct_per_cycle,
+        ),
+      })
+      // The client mirror of optimizer_portfolios_autopilot_guardrails_chk. The DB refuses to
+      // STORE autopilot without both caps positive, so a form that let you submit it would
+      // only reach a failing save.
+      .superRefine((values, ctx) => {
+        if (values.apply_mode !== 'autopilot') return;
+        if (!values.max_daily_apply_minor || values.max_daily_apply_minor <= 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['max_daily_apply_minor'],
+            message: 'Autopilot needs a spend ceiling above 0.',
+          });
+        }
+        if (!values.max_change_pct_per_cycle || values.max_change_pct_per_cycle <= 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['max_change_pct_per_cycle'],
+            message: 'Autopilot needs a change cap above 0.',
+          });
+        }
+      })
+  );
 }
 
 export type PortfolioFormSchema = ReturnType<typeof createPortfolioFormSchema>;

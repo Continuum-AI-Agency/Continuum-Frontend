@@ -3,8 +3,8 @@
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import * as React from 'react';
-import { toast } from 'sonner';
 import { buttonVariants } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast-imperative';
 import { useApprove, useReject } from '@/lib/approvals/queries';
 import { useApprovalsStore } from '@/lib/approvals/store';
 import type { RuleAction } from '@/lib/approvals/types';

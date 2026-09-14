@@ -94,4 +94,36 @@ describe('evaluateTimelineScene', () => {
     expect(first.caption).toBeUndefined();
     expect(first.baseLayers[0].sourceTimeSec).toBe(5.5);
   });
+
+  test('samples overlay opacity at the playhead, not at time 0', () => {
+    const document: TimelineDocument = {
+      items: [],
+      overlayTracks: [
+        {
+          id: 'graphics',
+          kind: 'overlay',
+          items: [
+            {
+              id: 'fade',
+              order: 0,
+              sourceNodeId: 'image-logo',
+              kind: 'image',
+              startSec: 0,
+              durationSec: 2,
+              effects: {
+                opacity: 1,
+                opacityStops: [
+                  { t: 0, value: 0, interpolation: 'linear' },
+                  { t: 1, value: 1, interpolation: 'linear' },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    expect(evaluateTimelineScene(document, 0).overlayLayers[0]?.opacity).toBe(0);
+    expect(evaluateTimelineScene(document, 1).overlayLayers[0]?.opacity).toBe(0.5);
+    expect(evaluateTimelineScene(document, 1.999).overlayLayers[0]?.opacity).toBeCloseTo(1, 3);
+  });
 });

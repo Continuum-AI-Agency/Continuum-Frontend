@@ -1,9 +1,12 @@
 import {
   type CanvasTechniquePort,
+  type EditorPipelineConfiguration,
+  type EditorProjectSourceSlot,
   ELEMENT_CATEGORIES,
   type ElementCategory,
-  type PipelineAgentGuide,
+  editorProjectSourceSlots,
   isElementPersonCategory,
+  type PipelineAgentGuide,
   type PipelinePortBinding,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -30,6 +33,7 @@ import { ELEMENT_CATEGORY_LABEL } from '@/lib/ai-studio/elements';
 import { draftPipelineGuide, publishPipeline } from '@/lib/ai-studio/pipelines';
 import { formatMiB } from '@/lib/ai-studio/referenceDrop';
 import { createAiStudioWorkflowAction } from '@/lib/ai-studio/workflowActions';
+import { getVideoProject } from '@/lib/api/videoProjects.client';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
 import { inferTechniquePorts } from '../utils/techniqueFragment';
@@ -58,6 +62,9 @@ type SaveWorkflowFormValues = z.infer<typeof saveWorkflowSchema>;
 
 type PipelinePortDirection = 'input' | 'output';
 type PipelineBindings = Record<string, PipelinePortBinding>;
+type EditorPortConfiguration = EditorPipelineConfiguration & {
+  slots: EditorProjectSourceSlot[];
+};
 
 const bindingKey = (direction: PipelinePortDirection, portId: string) => `${direction}:${portId}`;
 
@@ -69,18 +76,34 @@ const lines = (value: string): string[] =>
 
 const canConfigurePipelinePort = (direction: PipelinePortDirection, port: CanvasTechniquePort) =>
   direction === 'input'
-    ? port.dataType === 'image' || port.dataType === 'media'
+    ? ['image', 'video', 'audio', 'media'].includes(port.dataType ?? '')
     : port.dataType === 'image';
+
+const bindingForPort = (
+  direction: PipelinePortDirection,
+  port: CanvasTechniquePort,
+  bindings: PipelineBindings,
+  editorConfigurations: Readonly<Record<string, EditorPortConfiguration>>,
+): PipelinePortBinding => {
+  const explicit = bindings[bindingKey(direction, port.id)];
+  if (explicit) return explicit;
+  const slot = direction === 'input' ? editorConfigurations[port.nodeRef]?.slots[0] : undefined;
+  return slot
+    ? { kind: 'editor_source', slotId: slot.slotId, mediaKind: slot.mediaKind }
+    : { kind: 'asset' };
+};
 
 function PipelinePortBindingEditor({
   direction,
   ports,
   bindings,
+  editorConfigurations,
   onChange,
 }: {
   direction: PipelinePortDirection;
   ports: CanvasTechniquePort[];
   bindings: PipelineBindings;
+  editorConfigurations: Readonly<Record<string, EditorPortConfiguration>>;
   onChange: (key: string, binding: PipelinePortBinding) => void;
 }) {
   const configurable = ports.filter((port) => canConfigurePipelinePort(direction, port));
@@ -93,8 +116,55 @@ function PipelinePortBindingEditor({
       </p>
       {configurable.map((port) => {
         const key = bindingKey(direction, port.id);
-        const binding = bindings[key] ?? { kind: 'asset' };
+        const binding = bindingForPort(direction, port, bindings, editorConfigurations);
         const label = port.label ?? port.handleId ?? port.id;
+        const editorConfiguration =
+          direction === 'input' ? editorConfigurations[port.nodeRef] : undefined;
+        if (editorConfiguration) {
+          return (
+            <div key={key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+              <span className="truncate text-muted-foreground">{label}</span>
+              {editorConfiguration.slots.length > 0 ? (
+                <Select
+                  value={binding.kind === 'editor_source' ? binding.slotId : undefined}
+                  onValueChange={(slotId) => {
+                    const slot = editorConfiguration.slots.find(
+                      (candidate) => candidate.slotId === slotId,
+                    );
+                    if (slot) {
+                      onChange(key, {
+                        kind: 'editor_source',
+                        slotId: slot.slotId,
+                        mediaKind: slot.mediaKind,
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="w-44"
+                    aria-label={`${label} editor source slot`}
+                  >
+                    <SelectValue
+                      items={Object.fromEntries(
+                        editorConfiguration.slots.map((slot) => [slot.slotId, slot.label]),
+                      )}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {editorConfiguration.slots.map((slot) => (
+                      <SelectItem key={slot.slotId} value={slot.slotId}>
+                        {slot.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="text-danger">No media clips to replace</span>
+              )}
+            </div>
+          );
+        }
         const semanticKind =
           binding.kind === 'element_candidate' ? 'element_candidate' : binding.kind;
         const category =
@@ -236,6 +306,10 @@ export function SaveWorkflowDialog({
   const [isDraftingGuide, setIsDraftingGuide] = React.useState(false);
   const [kind, setKind] = React.useState<SaveKind>('workflow');
   const [pipelineBindings, setPipelineBindings] = React.useState<PipelineBindings>({});
+  const [editorConfigurations, setEditorConfigurations] = React.useState<
+    Record<string, EditorPortConfiguration>
+  >({});
+  const [loadingEditorConfigurations, setLoadingEditorConfigurations] = React.useState(false);
   const [agentGuide, setAgentGuide] = React.useState<PipelineAgentGuide | null>(null);
 
   const isOpen = open ?? internalOpen;
@@ -249,6 +323,57 @@ export function SaveWorkflowDialog({
 
   const scopedNodes = selection?.length ? selection : nodes;
   const isSelectionScoped = Boolean(selection?.length);
+  const timelineProjects = React.useMemo(
+    () =>
+      scopedNodes.flatMap((node) => {
+        if (node.type !== 'timelineEditor') return [];
+        const projectId = (node.data as { videoProjectId?: unknown }).videoProjectId;
+        return typeof projectId === 'string' && projectId ? [{ nodeRef: node.id, projectId }] : [];
+      }),
+    [scopedNodes],
+  );
+
+  React.useEffect(() => {
+    if (!isOpen || kind !== 'pipeline' || timelineProjects.length === 0) {
+      setEditorConfigurations({});
+      setLoadingEditorConfigurations(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingEditorConfigurations(true);
+    void Promise.all(
+      timelineProjects.map(async ({ nodeRef, projectId }) => {
+        const project = await getVideoProject(projectId);
+        return [
+          nodeRef,
+          {
+            nodeRef,
+            projectId,
+            projectRevision: project.revision,
+            projectFingerprint: project.fingerprint,
+            slots: editorProjectSourceSlots(project),
+          },
+        ] as const;
+      }),
+    )
+      .then((entries) => {
+        if (!cancelled) setEditorConfigurations(Object.fromEntries(entries));
+      })
+      .catch((cause) => {
+        if (!cancelled) {
+          setEditorConfigurations({});
+          setError(
+            cause instanceof Error ? cause.message : 'Could not load the editor configuration.',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingEditorConfigurations(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, kind, timelineProjects]);
 
   // Only the edges wholly inside the selection are PERSISTED, so a captured subgraph
   // re-applies without dangling connections to nodes that were left behind.
@@ -275,11 +400,21 @@ export function SaveWorkflowDialog({
       kind: 'generation' as const,
       inputPorts: ports.inputPorts.map((port) =>
         canConfigurePipelinePort('input', port)
-          ? {
-              ...port,
-              pipelineBinding:
-                pipelineBindings[bindingKey('input', port.id)] ?? ({ kind: 'asset' } as const),
-            }
+          ? (() => {
+              const pipelineBinding = bindingForPort(
+                'input',
+                port,
+                pipelineBindings,
+                editorConfigurations,
+              );
+              return {
+                ...port,
+                ...(pipelineBinding.kind === 'editor_source'
+                  ? { dataType: pipelineBinding.mediaKind }
+                  : {}),
+                pipelineBinding,
+              };
+            })()
           : port,
       ),
       outputPorts: ports.outputPorts.map((port) =>
@@ -291,8 +426,14 @@ export function SaveWorkflowDialog({
             }
           : port,
       ),
+      editorConfigurations: timelineProjects.flatMap(({ nodeRef }) => {
+        const configuration = editorConfigurations[nodeRef];
+        if (!configuration) return [];
+        const { slots: _slots, ...pinned } = configuration;
+        return [pinned];
+      }),
     };
-  }, [pipelineBindings, ports]);
+  }, [editorConfigurations, pipelineBindings, ports, timelineProjects]);
 
   // A pipeline with no ports parses as published and then refuses every run — `readPipeline`
   // answers "it declares no input or output ports". The panel already SAYS that in red; it
@@ -312,6 +453,9 @@ export function SaveWorkflowDialog({
         !binding.rightsNote?.trim()
       );
     });
+  const editorConfigurationMissing = timelineProjects.some(
+    ({ nodeRef }) => !editorConfigurations[nodeRef]?.slots.length,
+  );
 
   const form = useForm<SaveWorkflowFormValues>({
     resolver: zodResolver(saveWorkflowSchema),
@@ -328,6 +472,7 @@ export function SaveWorkflowDialog({
     setError(null);
     setKind('workflow');
     setPipelineBindings({});
+    setEditorConfigurations({});
     setAgentGuide(null);
   }, [form, setOpen]);
 
@@ -387,6 +532,9 @@ export function SaveWorkflowDialog({
         });
       }
       if (kind === 'pipeline') {
+        if (loadingEditorConfigurations || editorConfigurationMissing) {
+          throw new Error('Choose a reusable editor source slot before publishing.');
+        }
         if (!pipelineMetadata || !agentGuide) {
           throw new Error('Draft or write the agent guide before publishing.');
         }
@@ -506,6 +654,7 @@ export function SaveWorkflowDialog({
                   direction="input"
                   ports={ports.inputPorts}
                   bindings={pipelineBindings}
+                  editorConfigurations={editorConfigurations}
                   onChange={(key, binding) =>
                     setPipelineBindings((current) => ({ ...current, [key]: binding }))
                   }
@@ -514,6 +663,7 @@ export function SaveWorkflowDialog({
                   direction="output"
                   ports={ports.outputPorts}
                   bindings={pipelineBindings}
+                  editorConfigurations={editorConfigurations}
                   onChange={(key, binding) =>
                     setPipelineBindings((current) => ({ ...current, [key]: binding }))
                   }
@@ -523,6 +673,11 @@ export function SaveWorkflowDialog({
                     More ports than a pipeline can declare — only the first 12 a side are kept.
                   </p>
                 )}
+                {loadingEditorConfigurations ? (
+                  <p className="mt-1 text-muted-foreground">
+                    Loading saved editor configuration...
+                  </p>
+                ) : null}
               </>
             ) : (
               // Publishing this would hand the optimizer a graph it can run but never
@@ -621,10 +776,7 @@ export function SaveWorkflowDialog({
                           return {
                             ...current,
                             input_guidance: event.target.value
-                              ? [
-                                  ...rest,
-                                  { input_id: port.id, instruction: event.target.value },
-                                ]
+                              ? [...rest, { input_id: port.id, instruction: event.target.value }]
                               : rest,
                           };
                         })
@@ -651,8 +803,8 @@ export function SaveWorkflowDialog({
             </>
           ) : (
             <p className="text-muted-foreground">
-              Draft the guide, then edit it before publication. If drafting fails, these fields
-              open with a manual starting point.
+              Draft the guide, then edit it before publication. If drafting fails, these fields open
+              with a manual starting point.
             </p>
           )}
         </div>
@@ -677,6 +829,8 @@ export function SaveWorkflowDialog({
             isSaving ||
             pipelineHasNoPorts ||
             pipelineCandidateNeedsRights ||
+            loadingEditorConfigurations ||
+            editorConfigurationMissing ||
             (kind === 'pipeline' && !agentGuide)
           }
           title={
@@ -686,9 +840,13 @@ export function SaveWorkflowDialog({
                 ? 'A pipeline needs at least one declared port.'
                 : pipelineCandidateNeedsRights
                   ? 'A person Element candidate needs a rights basis.'
-                  : kind === 'pipeline' && !agentGuide
-                    ? 'Draft and review the agent guide before publishing.'
-                  : undefined
+                  : loadingEditorConfigurations
+                    ? 'Loading the saved editor configuration.'
+                    : editorConfigurationMissing
+                      ? 'Choose a reusable editor source slot before publishing.'
+                      : kind === 'pipeline' && !agentGuide
+                        ? 'Draft and review the agent guide before publishing.'
+                        : undefined
           }
         >
           {isSaving

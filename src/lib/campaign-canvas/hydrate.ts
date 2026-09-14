@@ -69,8 +69,7 @@ const ROW = 260;
 const gateForLevel = (
   level: 'campaign' | 'adset' | 'ad' | 'creative',
   gates: Partial<Record<ScaffoldGateName, CanvasGate>>,
-): CanvasGate | null =>
-  (level === 'creative' ? gates.populate : gates.build) ?? null;
+): CanvasGate | null => (level === 'creative' ? gates.populate : gates.build) ?? null;
 
 /**
  * The status the object has ON META, as opposed to the row's own lifecycle.
@@ -159,15 +158,15 @@ const locationsOf = (targeting: Record<string, unknown>): string[] => {
     Array.isArray(value)
       ? value
           .map((entry) =>
-            typeof entry === 'string' ? entry : key ? readString(readRecord(entry), key) : undefined,
+            typeof entry === 'string'
+              ? entry
+              : key
+                ? readString(readRecord(entry), key)
+                : undefined,
           )
           .filter((entry): entry is string => Boolean(entry))
       : [];
-  return [
-    ...collect(geo.countries),
-    ...collect(geo.regions, 'key'),
-    ...collect(geo.cities, 'key'),
-  ];
+  return [...collect(geo.countries), ...collect(geo.regions, 'key'), ...collect(geo.cities, 'key')];
 };
 
 /** `[{ id, name }]` — the canvas shows the names, which is what a human recognises. */

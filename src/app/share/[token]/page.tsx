@@ -12,10 +12,16 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function SharePage({ params }: { params: Promise<{ token: string }> }) {
+export default function SharePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   return (
     <Suspense fallback={<ShareViewerSkeleton />}>
-      <ShareLoader paramsPromise={params} />
+      <ShareLoader paramsPromise={params} searchParamsPromise={searchParams} />
     </Suspense>
   );
 }

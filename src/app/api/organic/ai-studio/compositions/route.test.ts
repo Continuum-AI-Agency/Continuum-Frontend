@@ -62,10 +62,13 @@ describe('POST /api/organic/ai-studio/compositions', () => {
   it('forwards the session token and payload to the privileged Edge Function', async () => {
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof mock>;
     fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ composition: { id: 'composition-1' }, revisions: [], clips: [] }), {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' },
-      }),
+      new Response(
+        JSON.stringify({ composition: { id: 'composition-1' }, revisions: [], clips: [] }),
+        {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
     );
 
     const response = await POST(

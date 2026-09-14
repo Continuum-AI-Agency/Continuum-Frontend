@@ -46,25 +46,29 @@ export function ClientRenderInbox() {
   return (
     <>
       <Dialog open={queue.inboxOpen} onOpenChange={queue.setInboxOpen}>
-        <DialogTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="relative"
-              aria-label={`${queue.readyCount} render jobs ready`}
-              title="Ready to render"
-            >
-              <Cpu className="size-4" />
-              {queue.readyCount > 0 ? (
-                <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-4 text-primary-foreground">
-                  {queue.readyCount > 99 ? '99+' : queue.readyCount}
-                </span>
-              ) : null}
-            </Button>
-          }
-        />
+        {/* The count badge is a SIBLING of the button, not a child. Buttons carry
+            `overflow: hidden` (see `@utility btn-fill` in globals.css) so the hover fill stays
+            inside their rounded box — which also clips any child hanging off a corner. */}
+        <span className="relative inline-flex">
+          <DialogTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`${queue.readyCount} render jobs ready`}
+                title="Ready to render"
+              >
+                <Cpu className="size-4" />
+              </Button>
+            }
+          />
+          {queue.readyCount > 0 ? (
+            <span className="pointer-events-none absolute -right-1 -top-1 min-w-4 rounded-full bg-primary px-1 text-center text-2xs font-semibold leading-4 text-primary-foreground">
+              {queue.readyCount > 99 ? '99+' : queue.readyCount}
+            </span>
+          ) : null}
+        </span>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Ready to render</DialogTitle>
@@ -92,7 +96,7 @@ export function ClientRenderInbox() {
                           {job.phase ??
                             (job.state === 'ready' ? 'Waiting for an operator' : job.state)}
                         </div>
-                        <div className="mt-1 text-[11px] text-muted-foreground">
+                        <div className="mt-1 text-xs text-muted-foreground">
                           {job.inputs.length} durable input{job.inputs.length === 1 ? '' : 's'}
                         </div>
                       </div>

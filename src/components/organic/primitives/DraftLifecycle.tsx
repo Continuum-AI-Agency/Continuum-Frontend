@@ -226,7 +226,7 @@ function ReusableThumb({ item }: { item: ReusableMediaItem }) {
         <Image src={item.url} alt="" fill unoptimized sizes="64px" className="object-cover" />
       )}
       {item.source === 'blueprint' && (
-        <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-center text-[8px] font-semibold uppercase tracking-wide text-white">
+        <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-center text-3xs font-semibold uppercase tracking-wide text-white">
           Blueprint
         </span>
       )}

@@ -189,7 +189,7 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
             <SheetHeader>
               <div className="flex items-center gap-2">
                 <SheetTitle className="truncate">{automation.name}</SheetTitle>
-                {!automation.enabled && <Pill className="text-[10px]">Paused</Pill>}
+                {!automation.enabled && <Pill className="text-2xs">Paused</Pill>}
               </div>
               <SheetDescription>{describeSchedule(automation.schedule)}</SheetDescription>
             </SheetHeader>

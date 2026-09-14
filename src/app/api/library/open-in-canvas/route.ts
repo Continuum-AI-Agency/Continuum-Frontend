@@ -16,11 +16,10 @@ import {
 import { openInCanvasRequestSchema } from '@/lib/library/openInCanvas';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { mediaSchema } from '@/lib/media/supabase-media';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Json } from '@/lib/supabase/types';
 
-type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
+type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 type SeedAssetRow = {
   id: string;
@@ -31,11 +30,24 @@ type SeedAssetRow = {
   head_version_id: string | null;
 };
 
-// Service-role writes, exactly as the Backend canvas tools do: a canvas the user has
-// open drops realtime events it authored itself, so every write carries a fresh
-// editor_session_id or the browser would ignore the seed it is meant to receive.
-function canvasGraphStore(admin: AdminClient, brandId: string, userId: string): CanvasGraphStore {
-  const table = () => admin.schema('brand_profiles').from('canvas_sessions');
+function asFailure(error: unknown): string {
+  return error instanceof Error ? error.message : 'Internal server error';
+}
+
+function serviceUnavailable(message: string) {
+  return NextResponse.json({ error: message }, { status: 503 });
+}
+
+// User-scoped writes match the same boundary used for open-in-canvas on /ai-studio:
+// a canvas the user has open drops realtime events it authored itself, so every
+// write carries a fresh editor_session_id or the browser would ignore the seed it
+// is meant to receive.
+function canvasGraphStore(
+  supabase: SupabaseServerClient,
+  brandId: string,
+  userId: string,
+): CanvasGraphStore {
+  const table = () => supabase.schema('brand_profiles').from('canvas_sessions');
 
   const row = (roomId: string, graph: PersistedGraph) => ({
     brand_profile_id: brandId,
@@ -87,11 +99,11 @@ function canvasGraphStore(admin: AdminClient, brandId: string, userId: string): 
 }
 
 async function loadSeedAsset(
-  admin: AdminClient,
+  supabase: SupabaseServerClient,
   brandId: string,
   assetId: string,
 ): Promise<LibrarySeedAsset | null> {
-  const { data } = await mediaSchema(admin)
+  const { data } = await mediaSchema(supabase)
     .from('assets')
     .select('id, kind, bucket, storage_path, file_name, head_version_id')
     .eq('id', assetId)
@@ -116,43 +128,42 @@ async function loadSeedAsset(
 // resolveInitialCanvasRoomId is the same resolver /ai-studio uses on load, so the
 // seed and the page converge on one room without passing a room id through the URL.
 export async function POST(request: Request) {
-  const json = await request.json().catch(() => null);
-  const parsed = openInCanvasRequestSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 422 });
-  }
-  const { brandId, assetId, template } = parsed.data;
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  if (!(await callerHasBrandAccess(supabase, brandId))) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const admin = createSupabaseAdminClient();
-  const asset = await loadSeedAsset(admin, brandId, assetId);
-  if (!asset) {
-    return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
-  }
-  if (!templateSupportsAsset(template, asset.kind)) {
-    return NextResponse.json(
-      { error: `The "${template}" workflow needs an image asset.` },
-      { status: 422 },
-    );
-  }
-
-  const seedId = randomUUID().slice(0, 8);
-  const seed = buildLibraryCanvasTemplate({ template, asset, seedId });
-
   try {
+    const json = await request.json().catch(() => null);
+    const parsed = openInCanvasRequestSchema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.message }, { status: 422 });
+    }
+    const { brandId, assetId, template } = parsed.data;
+
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!(await callerHasBrandAccess(supabase, brandId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const asset = await loadSeedAsset(supabase, brandId, assetId);
+    if (!asset) {
+      return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
+    }
+    if (!templateSupportsAsset(template, asset.kind)) {
+      return NextResponse.json(
+        { error: `The "${template}" workflow needs an image asset.` },
+        { status: 422 },
+      );
+    }
+
+    const seedId = randomUUID().slice(0, 8);
+    const seed = buildLibraryCanvasTemplate({ template, asset, seedId });
+
     const roomId = await resolveInitialCanvasRoomId(brandId);
-    await seedCanvasGraph(canvasGraphStore(admin, brandId, user.id), roomId, seed);
+    await seedCanvasGraph(canvasGraphStore(supabase, brandId, user.id), roomId, seed);
     return NextResponse.json({
       roomId,
       seedId,
@@ -163,8 +174,8 @@ export async function POST(request: Request) {
     if (error instanceof CanvasSeedConflictError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
-    const message = error instanceof Error ? error.message : 'Could not open the canvas';
-    console.warn('[open-in-canvas] seeding failed', { assetId, template, error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    const message = asFailure(error);
+    console.warn('[open-in-canvas] failed', { error: message });
+    return serviceUnavailable('Service temporarily unavailable while opening this asset in canvas');
   }
 }

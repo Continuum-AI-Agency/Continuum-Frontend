@@ -60,7 +60,7 @@ export function CompetitorQuickSelectChips({
             title={handle}
           >
             <span
-              className="flex size-4 shrink-0 items-center justify-center rounded-full text-[9px] font-medium"
+              className="flex size-4 shrink-0 items-center justify-center rounded-full text-3xs font-medium"
               style={tileStyle(competitor.name)}
               aria-hidden
             >

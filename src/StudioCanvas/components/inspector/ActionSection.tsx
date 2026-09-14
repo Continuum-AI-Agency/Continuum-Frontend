@@ -12,7 +12,10 @@
 
 import { type ActionId, actionDef, isActionId } from '@continuum/contracts';
 
+import { Field, FieldContent, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Switch } from '@/components/ui/switch';
 import { ActionConfigFields } from '../../nodes/action/ActionConfigFields';
+import { useStudioStore } from '../../stores/useStudioStore';
 import type { ActionNodeData } from '../../types';
 import { configFieldsFor } from '../../utils/actions/actionConfig';
 import { InspectorNote, InspectorSection } from './controls';
@@ -43,6 +46,24 @@ export function ActionSection({ nodeId, data }: { nodeId: string; data: ActionNo
         ) : (
           <ActionConfigFields nodeId={nodeId} actionId={actionId} config={data.config} />
         )}
+      </InspectorSection>
+
+      <InspectorSection title="Library">
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor={`${nodeId}-keep`}>Keep in Library</FieldLabel>
+            <FieldDescription>
+              Always stored so it can be wired. Keep files it in the Canvas library.
+            </FieldDescription>
+          </FieldContent>
+          <Switch
+            id={`${nodeId}-keep`}
+            checked={data.keep === true}
+            onCheckedChange={(checked) =>
+              useStudioStore.getState().updateNodeData(nodeId, { keep: checked })
+            }
+          />
+        </Field>
       </InspectorSection>
     </>
   );

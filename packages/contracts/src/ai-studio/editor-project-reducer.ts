@@ -3,12 +3,15 @@ import {
   type EditorClip,
   type EditorCommand,
   type EditorCommandBatch,
+  type EditorKeyframe,
   type EditorProjectV2,
   type EditorShot,
+  type EditorSourceBinding,
   type EditorTake,
   editorCommandBatchSchema,
   editorProjectV2Schema,
 } from './editor-project-v2';
+import { compileMotionStyle, trimStyleInstance } from './motion-styles';
 
 export class EditorProjectConflictError extends Error {
   constructor(
@@ -42,6 +45,78 @@ export const fingerprintEditorProject = (project: EditorProjectV2): string => {
   }
   return `editor-v2-${(hash >>> 0).toString(16).padStart(8, '0')}`;
 };
+
+/** Replace only declared media slots; every edit, placement and effect stays untouched. */
+export function bindEditorProjectSources(
+  project: EditorProjectV2,
+  bindings: readonly EditorSourceBinding[],
+): EditorProjectV2 {
+  const bySlot = new Map<string, EditorSourceBinding>();
+  for (const binding of bindings) {
+    if (bySlot.has(binding.slotId))
+      throw new Error(`Editor source slot "${binding.slotId}" was bound twice.`);
+    bySlot.set(binding.slotId, binding);
+  }
+  const matched = new Set<string>();
+  const draft = editorProjectV2Schema.parse({
+    ...project,
+    tracks: project.tracks.map((track) => ({
+      ...track,
+      clips: track.clips.map((clip) => {
+        if (!('source' in clip)) return clip;
+        const slotId = clip.source.slotId ?? clip.id;
+        const binding = bySlot.get(slotId);
+        if (!binding) return clip;
+        matched.add(slotId);
+        return {
+          ...clip,
+          source: {
+            sourceType: 'library_asset',
+            assetId: binding.assetId,
+            renditionId: binding.versionId,
+            slotId,
+            ...(clip.source.sourceRole ? { sourceRole: clip.source.sourceRole } : {}),
+          },
+        };
+      }),
+    })),
+  });
+  const missing = bindings.filter((binding) => !matched.has(binding.slotId));
+  if (missing.length > 0) {
+    throw new Error(
+      `Unknown editor source slot(s): ${missing.map((binding) => binding.slotId).join(', ')}.`,
+    );
+  }
+  return editorProjectV2Schema.parse({ ...draft, fingerprint: fingerprintEditorProject(draft) });
+}
+
+export interface EditorProjectSourceSlot {
+  slotId: string;
+  label: string;
+  mediaKind: 'image' | 'video' | 'audio';
+}
+
+/** Public replacement points derived from the exact clips a person positioned in the editor. */
+export function editorProjectSourceSlots(project: EditorProjectV2): EditorProjectSourceSlot[] {
+  return project.tracks.flatMap((track) =>
+    track.clips.flatMap((clip) => {
+      if (!('source' in clip)) return [];
+      const mediaKind =
+        clip.kind === 'audio'
+          ? ('audio' as const)
+          : clip.kind === 'overlay'
+            ? clip.mediaKind === 'graphic'
+              ? 'image'
+              : clip.mediaKind
+            : clip.kind === 'video'
+              ? ('video' as const)
+              : null;
+      return mediaKind
+        ? [{ slotId: clip.source.slotId ?? clip.id, label: clip.name ?? clip.id, mediaKind }]
+        : [];
+    }),
+  );
+}
 
 export function createEditorProjectV2(input: {
   projectId: string;
@@ -359,6 +434,40 @@ const withDerivedTimelineDuration = (project: EditorProjectV2): EditorProjectV2 
   durationSec: deriveTimelineDuration(project.tracks),
 });
 
+const KEYFRAME_TIME_MATCH_SEC = 0.001;
+const MAX_CLIP_KEYFRAMES = 500;
+
+const upsertKeyframe = (
+  keyframes: readonly EditorKeyframe[],
+  incoming: EditorKeyframe,
+): EditorKeyframe[] => {
+  const byId = keyframes.findIndex((keyframe) => keyframe.id === incoming.id);
+  if (byId >= 0) {
+    return keyframes
+      .map((keyframe, index) => (index === byId ? incoming : keyframe))
+      .toSorted((left, right) => left.timeSec - right.timeSec);
+  }
+  const byTime = keyframes.findIndex(
+    (keyframe) =>
+      keyframe.property === incoming.property &&
+      Math.abs(keyframe.timeSec - incoming.timeSec) <= KEYFRAME_TIME_MATCH_SEC,
+  );
+  if (byTime >= 0) {
+    const existing = keyframes[byTime];
+    if (!existing) return [...keyframes, incoming];
+    return keyframes
+      .map((keyframe, index) => (index === byTime ? { ...incoming, id: existing.id } : keyframe))
+      .toSorted((left, right) => left.timeSec - right.timeSec);
+  }
+  if (keyframes.length >= MAX_CLIP_KEYFRAMES) {
+    throw new EditorProjectConflictError(
+      `Clip already has ${MAX_CLIP_KEYFRAMES} keyframes.`,
+      'invalid_command',
+    );
+  }
+  return [...keyframes, incoming].toSorted((left, right) => left.timeSec - right.timeSec);
+};
+
 const trimClipInternals = (clip: EditorClip, durationSec: number): EditorClip => {
   const keyframed =
     'keyframes' in clip
@@ -441,6 +550,7 @@ const GEOMETRY_COMMANDS = new Set<EditorCommand['commandType']>([
   'move_clip',
   'trim_clip',
   'split_clip',
+  'precompose_clips',
 ]);
 
 const OVERLAP_TRANSITION_TYPES = new Set(['crossfade', 'slide', 'wipe', 'zoom', 'custom']);
@@ -564,6 +674,15 @@ const applyTimelineCommand = (
       tracks.splice(index < 0 ? tracks.length : index, 0, selected);
       return { ...project, tracks: tracks.map((track, order) => ({ ...track, order })) };
     }
+    case 'set_track_state':
+      return updateTrack(project, command.trackId, (track) => ({
+        ...track,
+        ...(command.enabled === undefined ? {} : { enabled: command.enabled }),
+        ...(command.locked === undefined ? {} : { locked: command.locked }),
+        ...(command.muted === undefined ? {} : { muted: command.muted }),
+        ...(command.solo === undefined ? {} : { solo: command.solo }),
+        ...(command.order === undefined ? {} : { order: command.order }),
+      }));
     case 'upsert_clip': {
       const track = requireEditableTrack(project, command.trackId);
       const existing = track.clips.find((clip) => clip.id === command.clip.id);
@@ -738,6 +857,139 @@ const applyTimelineCommand = (
           }) as typeof track,
       );
     }
+    case 'upsert_keyframe': {
+      const { clip } = requireEditableClip(project, command.trackId, command.clipId);
+      if (!('keyframes' in clip)) {
+        throw new EditorProjectConflictError(
+          `Clip "${command.clipId}" does not support keyframes.`,
+          'invalid_command',
+        );
+      }
+      return updateTrack(
+        project,
+        command.trackId,
+        (track) =>
+          ({
+            ...track,
+            clips: track.clips.map((candidate) =>
+              candidate.id === command.clipId && 'keyframes' in candidate
+                ? { ...candidate, keyframes: upsertKeyframe(candidate.keyframes, command.keyframe) }
+                : candidate,
+            ),
+          }) as typeof track,
+      );
+    }
+    case 'apply_animation_style': {
+      const { clip } = requireEditableClip(project, command.trackId, command.clipId);
+      if (!('keyframes' in clip) || !('transform' in clip)) {
+        throw new EditorProjectConflictError(
+          `Clip "${command.clipId}" cannot take an animation style.`,
+          'invalid_command',
+        );
+      }
+      const compiled = compileMotionStyle({
+        styleId: command.styleId,
+        instanceId: command.instanceId,
+        timelineOffsetSec: command.timelineOffsetSec,
+        durationSec: command.durationSec,
+        base: clip.transform,
+      });
+      return updateTrack(
+        project,
+        command.trackId,
+        (track) =>
+          ({
+            ...track,
+            clips: track.clips.map((candidate) => {
+              if (candidate.id !== command.clipId || !('keyframes' in candidate)) return candidate;
+              let next = candidate.keyframes;
+              for (const keyframe of compiled) next = upsertKeyframe(next, keyframe);
+              return { ...candidate, keyframes: next };
+            }),
+          }) as typeof track,
+      );
+    }
+    case 'trim_animation_style': {
+      const { clip } = requireEditableClip(project, command.trackId, command.clipId);
+      if (!('keyframes' in clip)) {
+        throw new EditorProjectConflictError(
+          `Clip "${command.clipId}" does not support keyframes.`,
+          'invalid_command',
+        );
+      }
+      if (command.endSec <= command.startSec) {
+        throw new EditorProjectConflictError(
+          'Style span must be longer than zero.',
+          'invalid_command',
+        );
+      }
+      return updateTrack(project, command.trackId, (track) => ({
+        ...track,
+        clips: track.clips.map((candidate) =>
+          candidate.id === command.clipId && 'keyframes' in candidate
+            ? {
+                ...candidate,
+                keyframes: trimStyleInstance(
+                  candidate.keyframes,
+                  command.instanceId,
+                  command.startSec,
+                  command.endSec,
+                ),
+              }
+            : candidate,
+        ),
+      })) as typeof project;
+    }
+    case 'set_clip_parent': {
+      requireEditableClip(project, command.trackId, command.clipId);
+      if (command.parentClipId === command.clipId) {
+        throw new EditorProjectConflictError('A clip cannot parent itself.', 'invalid_command');
+      }
+      const ids = new Set(project.tracks.flatMap((track) => track.clips.map((clip) => clip.id)));
+      if (command.parentClipId && !ids.has(command.parentClipId)) {
+        throw new EditorProjectConflictError(
+          `Parent clip "${command.parentClipId}" was not found.`,
+          'invalid_command',
+        );
+      }
+      return updateTrack(project, command.trackId, (track) => ({
+        ...track,
+        clips: track.clips.map((candidate) =>
+          candidate.id === command.clipId
+            ? {
+                ...candidate,
+                parentClipId: command.parentClipId ?? undefined,
+              }
+            : candidate,
+        ),
+      })) as typeof project;
+    }
+    case 'remove_keyframes': {
+      const { clip } = requireEditableClip(project, command.trackId, command.clipId);
+      if (!('keyframes' in clip)) {
+        throw new EditorProjectConflictError(
+          `Clip "${command.clipId}" does not support keyframes.`,
+          'invalid_command',
+        );
+      }
+      const removing = new Set(command.keyframeIds);
+      return updateTrack(
+        project,
+        command.trackId,
+        (track) =>
+          ({
+            ...track,
+            clips: track.clips.map((candidate) =>
+              candidate.id === command.clipId && 'keyframes' in candidate
+                ? {
+                    ...candidate,
+                    keyframes: candidate.keyframes.filter((keyframe) => !removing.has(keyframe.id)),
+                  }
+                : candidate,
+            ),
+          }) as typeof track,
+      );
+    }
     case 'upsert_transition': {
       const track = requireEditableTrack(project, command.transition.trackId);
       const from = findClip(track, command.transition.fromClipId);
@@ -778,7 +1030,201 @@ const applyTimelineCommand = (
         durationSec: command.snapshot.durationSec,
         tracks: command.snapshot.tracks,
         transitions: command.snapshot.transitions,
+        nestedSequences: command.snapshot.nestedSequences,
       };
+    case 'set_nested_sequence': {
+      if (command.sequence.tracks.some((track) => track.kind === 'nested_sequence')) {
+        throw new EditorProjectConflictError(
+          'A nested sequence cannot contain another nested sequence.',
+          'invalid_command',
+        );
+      }
+      const existing = project.nestedSequences.some(
+        (sequence) => sequence.id === command.sequence.id,
+      );
+      return {
+        ...project,
+        nestedSequences: existing
+          ? project.nestedSequences.map((sequence) =>
+              sequence.id === command.sequence.id ? command.sequence : sequence,
+            )
+          : [...project.nestedSequences, command.sequence],
+      };
+    }
+    case 'precompose_clips': {
+      const selected: Array<{
+        trackId: string;
+        clip: Extract<EditorClip, { kind: 'overlay' | 'text' }>;
+      }> = [];
+      for (const track of project.tracks) {
+        if (track.kind !== 'overlay' && track.kind !== 'text') continue;
+        for (const clip of track.clips) {
+          if (!command.clipIds.includes(clip.id)) continue;
+          if (clip.kind !== 'overlay' && clip.kind !== 'text') {
+            throw new EditorProjectConflictError(
+              'Only overlay and text clips can be precomposed.',
+              'invalid_command',
+            );
+          }
+          if (clip.locked) {
+            throw new EditorProjectConflictError(`Clip "${clip.id}" is locked.`, 'invalid_command');
+          }
+          selected.push({ trackId: track.id, clip });
+        }
+      }
+      if (selected.length !== command.clipIds.length) {
+        throw new EditorProjectConflictError(
+          'Every precomposed clip must be an unlocked overlay or text clip.',
+          'invalid_command',
+        );
+      }
+      if (project.nestedSequences.some((sequence) => sequence.id === command.nestedSequenceId)) {
+        throw new EditorProjectConflictError(
+          `Nested sequence "${command.nestedSequenceId}" already exists.`,
+          'invalid_command',
+        );
+      }
+      if (
+        project.tracks
+          .flatMap((track) => track.clips)
+          .some((clip) => clip.id === command.instanceClipId)
+      ) {
+        throw new EditorProjectConflictError(
+          `Clip "${command.instanceClipId}" already exists.`,
+          'invalid_command',
+        );
+      }
+      const startSec = Math.min(...selected.map((entry) => entry.clip.timelineStartSec));
+      const endSec = Math.max(
+        ...selected.map((entry) => entry.clip.timelineStartSec + entry.clip.durationSec),
+      );
+      const durationSec = Math.max(0.1, endSec - startSec);
+      const overlayClips = selected
+        .filter((entry) => entry.clip.kind === 'overlay')
+        .map((entry) => ({
+          ...entry.clip,
+          timelineStartSec: entry.clip.timelineStartSec - startSec,
+        }));
+      const textClips = selected
+        .filter((entry) => entry.clip.kind === 'text')
+        .map((entry) => ({
+          ...entry.clip,
+          timelineStartSec: entry.clip.timelineStartSec - startSec,
+        }));
+      const nestedTracks: EditorProjectV2['nestedSequences'][number]['tracks'] = [];
+      if (overlayClips.length) {
+        nestedTracks.push({
+          id: `${command.nestedSequenceId}:overlays`,
+          name: 'Overlays',
+          order: 0,
+          enabled: true,
+          locked: false,
+          muted: false,
+          solo: false,
+          kind: 'overlay',
+          clips: overlayClips,
+        });
+      }
+      if (textClips.length) {
+        nestedTracks.push({
+          id: `${command.nestedSequenceId}:text`,
+          name: 'Text',
+          order: nestedTracks.length,
+          enabled: true,
+          locked: false,
+          muted: false,
+          solo: false,
+          kind: 'text',
+          clips: textClips,
+        });
+      }
+      const removing = new Set(command.clipIds);
+      let tracks = project.tracks.map((track) =>
+        track.kind === 'overlay' || track.kind === 'text'
+          ? ({
+              ...track,
+              clips: track.clips.filter((clip) => !removing.has(clip.id)),
+            } as typeof track)
+          : track,
+      );
+      const instanceTrack = tracks.find((track) => track.id === command.instanceTrackId);
+      const instanceClip = {
+        id: command.instanceClipId,
+        name: command.name,
+        kind: 'nested_sequence' as const,
+        sequenceId: command.nestedSequenceId,
+        timelineStartSec: startSec,
+        durationSec,
+        enabled: true,
+        locked: false,
+        tags: [] as string[],
+        sourceInSec: 0,
+        playbackRate: 1,
+        audioEnabled: true,
+        keyframes: [],
+        transform: {
+          position: { x: 0.5, y: 0.5, unit: 'normalized' as const },
+          scaleX: 1,
+          scaleY: 1,
+          rotationDeg: 0,
+          rotateXDeg: 0,
+          rotateYDeg: 0,
+          perspective: 0,
+          anchorX: 0.5,
+          anchorY: 0.5,
+          opacity: 1,
+        },
+      };
+      if (instanceTrack) {
+        if (instanceTrack.kind !== 'nested_sequence') {
+          throw new EditorProjectConflictError(
+            'Precompose instances must land on a nested_sequence track.',
+            'invalid_command',
+          );
+        }
+        if (instanceTrack.locked) {
+          throw new EditorProjectConflictError(
+            `Track "${instanceTrack.id}" is locked.`,
+            'invalid_command',
+          );
+        }
+        tracks = tracks.map((track) =>
+          track.id === command.instanceTrackId && track.kind === 'nested_sequence'
+            ? { ...track, clips: [...track.clips, instanceClip] }
+            : track,
+        );
+      } else {
+        tracks = [
+          ...tracks,
+          {
+            id: command.instanceTrackId,
+            name: 'Precomps',
+            order: tracks.reduce((max, track) => Math.max(max, track.order), -1) + 1,
+            enabled: true,
+            locked: false,
+            muted: false,
+            solo: false,
+            kind: 'nested_sequence',
+            clips: [instanceClip],
+          },
+        ];
+      }
+      return {
+        ...project,
+        tracks,
+        nestedSequences: [
+          ...project.nestedSequences,
+          {
+            id: command.nestedSequenceId,
+            name: command.name,
+            durationSec,
+            canvas: project.canvas,
+            tracks: nestedTracks,
+            transitions: [],
+          },
+        ],
+      };
+    }
     case 'set_export_settings':
       return { ...project, exportSettings: command.exportSettings };
     case 'set_project_metadata':
@@ -788,6 +1234,22 @@ const applyTimelineCommand = (
         durationSec: command.durationSec ?? project.durationSec,
         canvas: command.canvas ?? project.canvas,
         frameRate: command.frameRate ?? project.frameRate,
+      };
+    case 'upsert_marker':
+      return {
+        ...project,
+        markers: project.markers.some((marker) => marker.id === command.marker.id)
+          ? project.markers.map((marker) =>
+              marker.id === command.marker.id ? command.marker : marker,
+            )
+          : [...project.markers, command.marker].sort(
+              (left, right) => left.timeSec - right.timeSec,
+            ),
+      };
+    case 'remove_marker':
+      return {
+        ...project,
+        markers: project.markers.filter((marker) => marker.id !== command.markerId),
       };
     default:
       return project;
@@ -809,6 +1271,29 @@ const applyProductionCommand = (
         ...project,
         production: { ...project.production, references: command.references },
       };
+    case 'set_sound_plan': {
+      if (command.soundPlan.status === 'approved') requireUser(command.actor);
+      return {
+        ...project,
+        production: {
+          ...project.production,
+          soundPlan:
+            command.soundPlan.status === 'approved'
+              ? {
+                  ...command.soundPlan,
+                  approvedBy: command.actor,
+                  approvedAt: command.issuedAt,
+                  approvedRevision: project.revision + 1,
+                }
+              : {
+                  ...command.soundPlan,
+                  approvedBy: undefined,
+                  approvedAt: undefined,
+                  approvedRevision: undefined,
+                },
+        },
+      };
+    }
     case 'set_style_contract':
       if (command.styleContract.status !== 'draft') {
         throw new EditorProjectConflictError(

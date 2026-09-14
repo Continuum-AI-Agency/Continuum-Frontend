@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { MetaSelectableAssetsTree } from '@/components/integrations/MetaSelectableAssetsTree';
 import { Pill } from '@/components/kibo-ui/pill';
 import { PLATFORMS, type PlatformKey } from '@/components/onboarding/platforms';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useMetaAutoResync } from '@/hooks/useMetaAutoResync';
@@ -316,13 +317,9 @@ export function BrandAssetsForm({
     <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-base font-semibold tracking-tight">Brand Assets</h1>
-        <button
-          type="submit"
-          className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
-          disabled={isPending}
-        >
+        <Button type="submit" disabled={isPending}>
           Save
-        </button>
+        </Button>
       </div>
       <div className="text-sm text-slate-500">
         {selectableAssetsResponse.stale ? (
@@ -446,14 +443,9 @@ export function BrandAssetsForm({
               Trigger a manual regeneration when no strategic analysis data exists for this brand.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleStrategicAnalysisRun}
-            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-            disabled={isRunningAnalysis}
-          >
+          <Button type="button" onClick={handleStrategicAnalysisRun} disabled={isRunningAnalysis}>
             {isRunningAnalysis ? 'Queuing...' : 'Run analysis'}
-          </button>
+          </Button>
         </div>
       </div>
     </form>

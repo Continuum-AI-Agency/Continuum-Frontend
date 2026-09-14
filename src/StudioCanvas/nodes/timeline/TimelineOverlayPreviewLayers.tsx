@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
 import { hasShaderStack } from '../../utils/render/shaderStack';
+import type { NestedPreviewGroup } from './nestedSequencePreview';
 import type { OverlayPreviewLayer } from './overlayPreview';
 import { TimelineShaderPreview } from './TimelineShaderPreview';
 
@@ -92,15 +93,9 @@ function ImageLayer({ layer }: { layer: OverlayPreviewLayer }) {
   );
 }
 
-export function TimelineOverlayPreviewLayers({
-  layers,
-  isPlaying,
-}: {
-  layers: OverlayPreviewLayer[];
-  isPlaying: boolean;
-}) {
-  return layers.map((layer) => (
-    <div key={layer.id} className="pointer-events-none absolute inset-0">
+function OverlayLayer({ layer, isPlaying }: { layer: OverlayPreviewLayer; isPlaying: boolean }) {
+  return (
+    <div className="pointer-events-none absolute inset-0">
       {layer.kind === 'video' ? (
         <VideoLayer layer={layer} isPlaying={isPlaying} />
       ) : (
@@ -108,5 +103,35 @@ export function TimelineOverlayPreviewLayers({
       )}
       <TextOverlays overlays={layer.textOverlays} />
     </div>
-  ));
+  );
+}
+
+export function TimelineOverlayPreviewLayers({
+  layers,
+  groups,
+  isPlaying,
+}: {
+  layers: OverlayPreviewLayer[];
+  groups?: NestedPreviewGroup[];
+  isPlaying: boolean;
+}) {
+  return (
+    <>
+      {layers.map((layer) => (
+        <OverlayLayer key={layer.id} layer={layer} isPlaying={isPlaying} />
+      ))}
+      {(groups ?? []).map((group) => (
+        <div
+          key={group.id}
+          className="pointer-events-none absolute inset-0"
+          data-testid={`nested-preview-${group.id}`}
+          style={group.style}
+        >
+          {group.layers.map((layer) => (
+            <OverlayLayer key={layer.id} layer={layer} isPlaying={isPlaying} />
+          ))}
+        </div>
+      ))}
+    </>
+  );
 }

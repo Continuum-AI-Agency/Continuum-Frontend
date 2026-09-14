@@ -1,25 +1,29 @@
 'use client';
 
-import type {
-  LibraryBrowseQuery,
-  LibraryMediaType,
-  LibrarySavedView,
-  LibrarySort,
-  MediaCollection,
-  MediaReviewStatus,
+import {
+  canNestCollection,
+  type LibraryBrowseDestination,
+  type LibraryBrowseQuery,
+  type LibraryMediaType,
+  type LibrarySavedView,
+  type LibrarySort,
+  type MediaCollection,
+  type MediaReviewStatus,
+  orderCollectionsTree,
 } from '@continuum/contracts';
 import {
   Bookmark,
   BookmarkPlus,
-  Clock3,
   Film,
   Folder,
   FolderOpen,
   FolderPlus,
   HardDrive,
   ImageIcon,
+  Layers,
   LayoutGrid,
   LayoutTemplate,
+  Link2,
   Loader2,
   PackageOpen,
   Pencil,
@@ -40,20 +44,13 @@ import {
   deleteLibrarySavedViewOperation,
   updateLibraryCollectionOperation,
 } from '@/lib/library/creativeOperations';
+import { createShareLink } from '@/lib/library/share';
 import type { LibrarySection } from '@/lib/media/sections';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { ShareBoxDialog } from './ShareBoxDialog';
 
-export type LibraryBrowseDestination =
-  | 'all'
-  | 'recent'
-  | 'images'
-  | 'videos'
-  | 'templates'
-  | 'project_files'
-  | 'typography'
-  | 'pipelines'
-  | 'needs_review';
+export type { LibraryBrowseDestination };
 
 type Props = {
   brandId: string;
@@ -80,20 +77,17 @@ const BROWSE_FOLDERS: {
   label: string;
   icon: typeof Folder;
 }[] = [
-  { value: 'all', label: 'All assets', icon: LayoutGrid },
-  { value: 'recent', label: 'Recent', icon: Clock3 },
+  { value: 'home', label: 'Home', icon: LayoutGrid },
   { value: 'images', label: 'Images', icon: ImageIcon },
   { value: 'videos', label: 'Videos', icon: Film },
-  // Templates and Source files are the same rows seen two ways, and the split is the point.
-  // Templates shows what a file IS — ratios, slots, fonts — and is where you work. Source
-  // files shows the upload itself: bytes, checksum, versions, download. Without the split an
-  // .aep is a blank card in the middle of the creative grid.
+  { value: 'canvas', label: 'Canvas', icon: Sparkles },
+  { value: 'elements', label: 'Elements', icon: Layers },
+  { value: 'sources', label: 'Source files', icon: PackageOpen },
   { value: 'templates', label: 'Templates', icon: LayoutTemplate },
-  { value: 'project_files', label: 'Source files', icon: PackageOpen },
+  { value: 'review', label: 'Needs review', icon: ShieldAlert },
+  { value: 'everything', label: 'Everything', icon: HardDrive },
   { value: 'typography', label: 'Typography', icon: Type },
-  // Not media rows either — published canvases, listed for what they take and give.
   { value: 'pipelines', label: 'Pipelines', icon: Workflow },
-  { value: 'needs_review', label: 'Needs review', icon: ShieldAlert },
 ];
 
 function activeDestination(
@@ -102,23 +96,22 @@ function activeDestination(
   reviewStatuses: readonly MediaReviewStatus[],
   templateOnly: boolean,
   section: LibrarySection,
+  destination: LibraryBrowseDestination | undefined,
+  createdWith: readonly string[],
 ): LibraryBrowseDestination | null {
-  // Neither of these is a browse query — brand faces are licensed and never become
-  // media.assets rows, and a pipeline is a canvas_workflows row — so they win before any
-  // filter is read.
   if (section === 'typography') return 'typography';
   if (section === 'pipelines') return 'pipelines';
+  if (destination) return destination;
   if (reviewStatuses.includes('in_review') || reviewStatuses.includes('needs_changes')) {
-    return 'needs_review';
+    return 'review';
   }
-  // Before the media-type tests: a template IS a project file, so checking mediaType first
-  // would light up Source files whenever Templates is selected.
   if (templateOnly) return 'templates';
+  if (createdWith.length === 1 && createdWith[0] === 'canvas') return 'canvas';
   if (mediaType === 'image') return 'images';
   if (mediaType === 'video') return 'videos';
-  if (mediaType === 'project_file') return 'project_files';
-  if (mediaType === 'all' && sort === 'updated_desc') return 'recent';
-  if (mediaType === 'all') return 'all';
+  if (mediaType === 'project_file') return 'sources';
+  if (mediaType === 'all' && sort === 'updated_desc') return 'home';
+  if (mediaType === 'all') return 'everything';
   return null;
 }
 
@@ -139,14 +132,18 @@ function CollectionRow({
   selected,
   label,
   kind,
+  locked,
   onClick,
+  onShare,
   onRename,
   onDelete,
 }: {
   selected: boolean;
   label: string;
   kind: MediaCollection['kind'];
+  locked: boolean;
   onClick: () => void;
+  onShare: (() => void) | null;
   onRename: () => void;
   onDelete: () => void;
 }) {
@@ -169,22 +166,36 @@ function CollectionRow({
         )}
         <span className="truncate">{label}</span>
       </button>
-      <button
-        type="button"
-        onClick={onRename}
-        aria-label={`Rename collection ${label}`}
-        className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent group-focus-within:opacity-100 group-hover:opacity-100"
-      >
-        <Pencil className="size-3" />
-      </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        aria-label={`Delete collection ${label}`}
-        className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent hover:text-destructive group-focus-within:opacity-100 group-hover:opacity-100"
-      >
-        <Trash2 className="size-3" />
-      </button>
+      {onShare ? (
+        <button
+          type="button"
+          onClick={onShare}
+          aria-label={`Share collection ${label}`}
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent group-focus-within:opacity-100 group-hover:opacity-100"
+        >
+          <Link2 className="size-3" />
+        </button>
+      ) : null}
+      {locked ? null : (
+        <>
+          <button
+            type="button"
+            onClick={onRename}
+            aria-label={`Rename collection ${label}`}
+            className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent group-focus-within:opacity-100 group-hover:opacity-100"
+          >
+            <Pencil className="size-3" />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label={`Delete collection ${label}`}
+            className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent hover:text-destructive group-focus-within:opacity-100 group-hover:opacity-100"
+          >
+            <Trash2 className="size-3" />
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -243,12 +254,23 @@ export function LibrarySidebar({
   const [creatingSavedView, setCreatingSavedView] = useState(false);
   const [savedViewName, setSavedViewName] = useState('');
   const [savingView, setSavingView] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const visibleCollections = orderCollectionsTree(
+    collections.filter((collection) => !collection.systemKey),
+  );
+  const nestParent =
+    selectedCollectionId && createKind === 'manual'
+      ? visibleCollections.find((collection) => collection.id === selectedCollectionId)
+      : null;
+  const nestUnder = nestParent && canNestCollection(nestParent.depth) ? nestParent : null;
   const selectedDestination = activeDestination(
     selectedMediaType,
     selectedSort,
     selectedReviewStatuses,
     selectedTemplateOnly,
     section,
+    currentQuery.destination,
+    currentQuery.createdWith,
   );
 
   async function submitCreate() {
@@ -263,6 +285,7 @@ export function LibrarySidebar({
         brandId,
         name: trimmed,
         kind: createKind,
+        ...(nestUnder ? { parentId: nestUnder.id } : {}),
         ...(createKind === 'smart'
           ? { smartQuery: withoutCursor({ ...currentQuery, brandId }) }
           : {}),
@@ -331,6 +354,28 @@ export function LibrarySidebar({
       console.error('[LibrarySidebar] save view failed', error);
     } finally {
       setSavingView(false);
+    }
+  }
+
+  async function shareCollection(collection: MediaCollection) {
+    try {
+      const link = await createShareLink({
+        brandId,
+        scope: 'collection',
+        collectionId: collection.id,
+        versionMode: 'live',
+        allowComments: true,
+        allowApproval: false,
+        allowDownload: true,
+        showMetadata: true,
+        showCustomFields: false,
+        requireIdentity: false,
+      });
+      const url = link.url ?? `${window.location.origin}/share/${link.token}`;
+      await navigator.clipboard.writeText(url).catch(() => undefined);
+      setShareUrl(url);
+    } catch (error) {
+      console.error('[LibrarySidebar] share collection failed', error);
     }
   }
 
@@ -469,17 +514,17 @@ export function LibrarySidebar({
                 }
               }}
               onBlur={() => void submitCreate()}
-              placeholder="Collection name…"
+              placeholder={nestUnder ? `Inside ${nestUnder.name}…` : 'Collection name…'}
               className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm outline-none focus:border-border"
             />
           </div>
         )}
 
-        {collections.length === 0 && !creating ? (
+        {visibleCollections.length === 0 && !creating ? (
           <p className="px-2 py-1 text-xs text-muted-foreground/70">No collections yet.</p>
         ) : (
-          collections.map((col) => (
-            <div key={col.id}>
+          visibleCollections.map((col) => (
+            <div key={col.id} style={{ paddingLeft: `${(col.depth ?? 0) * 12}px` }}>
               {renamingId === col.id ? (
                 <input
                   ref={focusRenameInput}
@@ -497,7 +542,9 @@ export function LibrarySidebar({
                   selected={selectedCollectionId === col.id}
                   label={col.name}
                   kind={col.kind}
+                  locked={Boolean(col.systemKey)}
                   onClick={() => onSelectCollection(col.id)}
+                  onShare={col.kind === 'manual' ? () => void shareCollection(col) : null}
                   onRename={() => {
                     setRenamingId(col.id);
                     setRenameValue(col.name);
@@ -520,6 +567,13 @@ export function LibrarySidebar({
         )}
         <span className="tabular-nums">{formatBytes(storageUsedBytes)} used</span>
       </div>
+      <ShareBoxDialog
+        open={shareUrl !== null}
+        url={shareUrl}
+        onOpenChange={(open) => {
+          if (!open) setShareUrl(null);
+        }}
+      />
     </aside>
   );
 }

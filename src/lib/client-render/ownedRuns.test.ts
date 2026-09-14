@@ -83,9 +83,9 @@ describe('shouldAutoRunClientRenderJob', () => {
   // The in-memory set dies with the tab, which is how six jobs this person enqueued
   // became unrunnable after a reload. `createdBy` is the same consent, written down.
   it('renders a waiting job this viewer enqueued, after the tab that asked is gone', () => {
-    expect(
-      shouldAutoRunClientRenderJob(hyperframesJob({ createdBy: VIEWER_ID }), VIEWER_ID),
-    ).toBe(true);
+    expect(shouldAutoRunClientRenderJob(hyperframesJob({ createdBy: VIEWER_ID }), VIEWER_ID)).toBe(
+      true,
+    );
   });
 
   it('still leaves someone else’s job for the inbox to consent to', () => {

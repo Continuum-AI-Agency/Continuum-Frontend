@@ -1,6 +1,7 @@
 'use client';
 
-import type { MediaAsset } from '@continuum/contracts';
+import type { LibraryAspectRatioBin, LibraryPreviewFrame, MediaAsset } from '@continuum/contracts';
+import { libraryAspectRatioBin, placementPreviewCrops } from '@continuum/contracts';
 import {
   Check,
   ChevronLeft,
@@ -20,6 +21,7 @@ import { useEffect, useRef, useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { formatUsesCompanionPreview } from '@/lib/library/previewPlayable';
 import { seekVideoPreviewFrame } from '@/lib/library/videoPoster';
 import { SOURCE_LABEL } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
@@ -45,6 +47,8 @@ type Props = {
   onAssetChanged?: () => void;
   selected?: boolean;
   onToggleSelected?: (asset: MediaAsset) => void;
+  /** Cover-crop into a device frame. Native uses the asset's own ratio. */
+  previewFrame?: LibraryPreviewFrame;
 };
 
 const BADGE_BASE =
@@ -53,6 +57,27 @@ const BADGE_BASE =
 // Matches MediaGrid column breakpoints: 2-col mobile → 3-col sm → 4-col lg → 5-col xl
 const IMAGE_SIZES =
   '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw';
+
+const NATIVE_ASPECT_CLASS: Record<LibraryAspectRatioBin, string> = {
+  '9:16': 'aspect-[9/16]',
+  '4:5': 'aspect-[4/5]',
+  '1:1': 'aspect-square',
+  '16:9': 'aspect-video',
+  other: 'aspect-[4/3]',
+};
+
+const FRAME_ASPECT_CLASS: Record<Exclude<LibraryPreviewFrame, 'native'>, string> = {
+  story: 'aspect-[9/16]',
+  feed: 'aspect-[4/5]',
+  square: 'aspect-square',
+  landscape: 'aspect-video',
+};
+
+function cardAspectClass(asset: MediaAsset, previewFrame: LibraryPreviewFrame): string {
+  if (previewFrame !== 'native') return FRAME_ASPECT_CLASS[previewFrame];
+  const bin = asset.aspectRatio ?? libraryAspectRatioBin(asset.width, asset.height) ?? 'other';
+  return NATIVE_ASPECT_CLASS[bin];
+}
 
 // Defers assigning src to the video element until the card is near the viewport,
 // preventing preload="metadata" range requests for every off-screen video card.
@@ -201,7 +226,9 @@ function Thumbnail({
   const [mediaError, setMediaError] = useState(false);
   const preview = asset.preview?.state === 'ready' ? asset.preview : null;
 
-  if (asset.kind === 'file' && preview?.signedUrl) {
+  const companionFormat = formatUsesCompanionPreview(asset.fileName, asset.mimeType);
+
+  if ((asset.kind === 'file' || companionFormat) && preview?.signedUrl) {
     return preview.kind === 'video' ? (
       // biome-ignore lint/a11y/useMediaCaption: silent visual companion for a source project.
       <video
@@ -225,7 +252,7 @@ function Thumbnail({
     );
   }
 
-  if (asset.kind === 'file') {
+  if (asset.kind === 'file' || companionFormat) {
     const ext = fileExtension(asset.fileName);
     const isAfterEffects = ext === 'AEP';
     return (
@@ -233,6 +260,10 @@ function Thumbnail({
         {isAfterEffects ? (
           <span className="flex size-10 items-center justify-center rounded-lg bg-[#00005b] text-sm font-semibold tracking-tight text-[#9999ff]">
             Ae
+          </span>
+        ) : ext === 'PRPROJ' ? (
+          <span className="flex size-10 items-center justify-center rounded-lg bg-[#2d1b4e] text-sm font-semibold tracking-tight text-[#c9a0ff]">
+            Pr
           </span>
         ) : (
           <FileIcon className="size-8 text-muted-foreground/40" strokeWidth={1.5} />
@@ -247,6 +278,10 @@ function Thumbnail({
         </span>
         {isAfterEffects ? (
           <span className="text-2xs text-muted-foreground/60">After Effects project</span>
+        ) : ext === 'PRPROJ' ? (
+          <span className="text-2xs text-muted-foreground/60">Premiere project</span>
+        ) : ext === 'MXF' ? (
+          <span className="text-2xs text-muted-foreground/60">Broadcast MXF</span>
         ) : null}
         {asset.preview?.state === 'awaiting_companion' ? (
           <span className="text-2xs text-muted-foreground/60">Add companion preview</span>
@@ -544,6 +579,7 @@ export function MediaCard({
   onAssetChanged,
   selected = false,
   onToggleSelected,
+  previewFrame = 'native',
 }: Props) {
   const reduceMotion = useReducedMotion();
   const { generate, isGenerating, progress } = useGenerateClips();
@@ -620,7 +656,18 @@ export function MediaCard({
               whileHover={reduceMotion ? undefined : { y: -2 }}
               transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
             >
-              <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+              <div
+                className={cn(
+                  'relative w-full overflow-hidden bg-muted',
+                  cardAspectClass(asset, previewFrame),
+                )}
+              >
+                {previewFrame !== 'native' &&
+                placementPreviewCrops(asset.width, asset.height, previewFrame) ? (
+                  <span className="absolute bottom-1.5 right-1.5 z-10 rounded bg-black/60 px-1.5 py-0.5 text-2xs text-white">
+                    Cropped
+                  </span>
+                ) : null}
                 {onToggleSelected ? (
                   <button
                     type="button"

@@ -701,10 +701,21 @@ export interface ActionNodeData extends BaseNodeData {
   actionId: ActionId | null;
   /** Validated against `ACTION_DEFS[actionId].config` at run time, never at write time. */
   config: Record<string, unknown>;
+  /**
+   * File this node's durable output into the Library (Canvas partition).
+   * Off by default: bytes still persist so the graph can wire after reload.
+   */
+  keep?: boolean;
   generatedImage?: string;
   generatedImageUrl?: string;
+  generatedImageStoragePath?: string;
+  generatedImageBucket?: string;
   generatedVideo?: string | Blob;
   generatedVideoUrl?: string;
+  generatedVideoStoragePath?: string;
+  generatedVideoBucket?: string;
+  renderOutputAssetId?: string;
+  renderOutputAssetVersionId?: string;
   /** Persisted when a shader action defers baking so manual editors can consume it. */
   shaderStack?: ShaderStackV1;
   /** A text op's output. Same field a `string` node uses, so consumers need no new case. */
@@ -714,6 +725,15 @@ export interface ActionNodeData extends BaseNodeData {
   collectionItemType?: 'text' | 'image' | 'video';
   /** Every item of that collection as a renderable src — see `collectionPreviewSrcs`. */
   collectionItems?: string[];
+  /** Durable ordered pointers for re-signing a saved media collection. */
+  collectionAssets?: Array<{
+    type: 'image' | 'video';
+    mimeType: string;
+    storagePath: string;
+    storageBucket: string;
+    assetId: string;
+    assetVersionId: string;
+  }>;
 }
 
 /** A list of inputs the nodes downstream of it run once per item. Capped at 100. */
@@ -735,12 +755,19 @@ export interface RouterNodeData extends BaseNodeData {
   lockedType: StudioEmittedModality | null;
   generatedImage?: string;
   generatedImageUrl?: string;
+  generatedImageStoragePath?: string;
+  generatedImageBucket?: string;
   generatedVideo?: string | Blob;
   generatedVideoUrl?: string;
+  generatedVideoStoragePath?: string;
+  generatedVideoBucket?: string;
+  renderOutputAssetId?: string;
+  renderOutputAssetVersionId?: string;
   value?: string;
   collectionCount?: number;
   collectionItemType?: 'text' | 'image' | 'video';
   collectionItems?: string[];
+  collectionAssets?: ActionNodeData['collectionAssets'];
 }
 
 /** Terminal writer. The runtime lands in Wave 3; the shape is declared here. */
@@ -820,6 +847,18 @@ export interface LayerEditorLayer {
   rotation: number;
   /** 0..1, matching `globalAlpha` and `ClipEffectSpec.opacity`. AE stores 0..100. */
   opacity: number;
+  /** Optional composition duration for Motion mode. */
+  durationSec?: number;
+  /** Clip-local keys sampled by `sampledLayer`. */
+  keyframes?: Array<{
+    id: string;
+    property: 'position.x' | 'position.y' | 'scale.x' | 'scale.y' | 'rotation' | 'opacity';
+    timeSec: number;
+    value: number;
+    interpolation?: 'hold' | 'linear' | 'bezier' | 'spring';
+    easing?: { x1: number; y1: number; x2: number; y2: number };
+    spring?: { bounce: number };
+  }>;
   /** The existing seven-value union. Do NOT widen to AE's ~38 — see aep-interop §4.4. */
   blendMode: BlendMode;
   /** Curated per-layer effects, rendered by the shared vgpu preview/export path. */

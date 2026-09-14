@@ -14,6 +14,9 @@ export const canvasOriginRefSchema = z
     prompt: z.string().nullable().optional(),
     model: z.string().nullable().optional(),
     generator: z.string().nullable().optional(),
+    actionId: z.string().min(1).nullable().optional(),
+    /** Operator asked this node to land in the Library (Canvas partition). */
+    keep: z.boolean().optional(),
   })
   .strict();
 export type CanvasOriginRef = z.infer<typeof canvasOriginRefSchema>;

@@ -5,6 +5,7 @@
 // and keeps the scrubber's duration honest for the cut actually on screen.
 
 import type { MediaAsset, MediaAssetVersion, MediaKind } from '@continuum/contracts';
+import { assetShowsCompanionStage } from '@/lib/library/previewPlayable';
 
 export function stageKindForMimeType(mimeType: string): MediaKind {
   if (mimeType.startsWith('image/')) return 'image';
@@ -57,6 +58,15 @@ export function resolveStageMedia(params: {
         durationMs: headVersion.durationMs ?? asset.durationMs ?? null,
         label: asset.title ?? headVersion.fileName,
         key: `head-${headVersion.id}`,
+      };
+    }
+    if (assetShowsCompanionStage(asset)) {
+      return {
+        kind: 'file',
+        src: null,
+        durationMs: null,
+        label: asset.title ?? asset.fileName,
+        key: `head-companion-${asset.id}`,
       };
     }
     return {

@@ -36,7 +36,7 @@ export function AwarenessPostQuickLook({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
-        <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+        <span className="rounded bg-accent/15 px-1.5 py-0.5 text-2xs font-medium uppercase tracking-wide text-accent">
           {kind}
         </span>
         {captured ? <span className="text-2xs text-muted-foreground">{captured}</span> : null}

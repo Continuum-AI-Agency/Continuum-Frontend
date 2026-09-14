@@ -18,6 +18,7 @@ import { useApproveScheduleDraft } from '@/components/organic/hooks/useApproveSc
 import { useProgressAnimation } from '@/components/organic/hooks/useProgressAnimation';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
 import { useUnscheduleDraft } from '@/components/organic/hooks/useUnscheduleDraft';
+import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -785,13 +786,9 @@ export function CalendarDraftCard({
         />
         {timeError && <p className="mt-1 text-2xs text-destructive">{timeError}</p>}
         <div className="mt-2 flex gap-1.5">
-          <button
-            type="button"
-            onClick={applyCustomTime}
-            className="flex-1 rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-          >
+          <Button type="button" onClick={applyCustomTime} size="xs" className="flex-1">
             Set
-          </button>
+          </Button>
           <button
             type="button"
             onClick={() => {

@@ -29,11 +29,11 @@ import {
   type PipelineInvocationRequest,
   type PipelineManifest,
   type PipelineManifestListResponse,
-  type PipelineRunReceipt,
   type PipelinePublicationResponse,
+  type PipelineRunReceipt,
   parsePipelineMetadata,
-  pipelineCapabilityListResponseSchema,
   pipelineAgentGuideDraftResponseSchema,
+  pipelineCapabilityListResponseSchema,
   pipelineManifestListResponseSchema,
   pipelinePublicationCandidateSchema,
   pipelinePublicationRequestSchema,
@@ -137,9 +137,7 @@ export async function startPipelineRun(
   });
 }
 
-export async function draftPipelineGuide(
-  input: unknown,
-): Promise<PipelineAgentGuideDraftResponse> {
+export async function draftPipelineGuide(input: unknown): Promise<PipelineAgentGuideDraftResponse> {
   const candidate = pipelinePublicationCandidateSchema.parse(input);
   return request<PipelineAgentGuideDraftResponse>({
     path: PIPELINE_GUIDE_DRAFT_ROUTE,
@@ -150,9 +148,7 @@ export async function draftPipelineGuide(
   });
 }
 
-export async function publishPipeline(
-  input: unknown,
-): Promise<PipelinePublicationResponse> {
+export async function publishPipeline(input: unknown): Promise<PipelinePublicationResponse> {
   const publication = pipelinePublicationRequestSchema.parse(input);
   return request<PipelinePublicationResponse>({
     path: PIPELINE_PUBLICATIONS_ROUTE,

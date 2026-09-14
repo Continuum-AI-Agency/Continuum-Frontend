@@ -71,6 +71,7 @@ const mockSupabase: any = {
   auth: {
     getSession: mock(() => Promise.resolve({ data: { session: { access_token: 'test-token' } } })),
   },
+  realtime: { setAuth: mock(() => Promise.resolve()) },
   channel: mock(() => mockChannel),
   removeChannel: mock(() => {}),
   schema: mock(() => mockSupabase),

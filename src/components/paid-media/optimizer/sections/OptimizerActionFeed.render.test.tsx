@@ -102,9 +102,7 @@ describe('OptimizerActionFeed', () => {
 
   it('reads a status write as an unpause rather than a budget revert', () => {
     actionsState = {
-      data: [
-        action({ op: 'status', before: { status: 'ACTIVE' }, after: { status: 'PAUSED' } }),
-      ],
+      data: [action({ op: 'status', before: { status: 'ACTIVE' }, after: { status: 'PAUSED' } })],
       isLoading: false,
     };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);

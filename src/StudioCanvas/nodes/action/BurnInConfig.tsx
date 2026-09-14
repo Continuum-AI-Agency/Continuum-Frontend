@@ -168,7 +168,7 @@ function AnchorGrid({
             aria-pressed={isValue}
             data-snap-candidate={isCandidate ? 'true' : undefined}
             onClick={() => onPick(anchor)}
-            className={`h-6 rounded border text-[10px] transition-colors ${
+            className={`h-6 rounded border text-2xs transition-colors ${
               isCandidate
                 ? 'border-brand-primary bg-brand-primary/40 text-foreground'
                 : isValue

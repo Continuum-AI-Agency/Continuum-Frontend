@@ -2,6 +2,7 @@
 // Validated against mediaAssetSchema at the boundary so callers get a typed object.
 
 import type { AssetPreview, DetectedObject, MediaAsset } from '@continuum/contracts';
+import { libraryAspectRatioBin, libraryAspectRatioBinSchema } from '@continuum/contracts';
 import type { MediaAssetRow } from './schema';
 
 function parseDetectedObjects(raw: Record<string, unknown>[] | null): DetectedObject[] {
@@ -46,6 +47,10 @@ export function rowToMediaAsset(
     sizeBytes: row.size_bytes,
     width: row.width,
     height: row.height,
+    aspectRatio: (() => {
+      const parsed = libraryAspectRatioBinSchema.safeParse(row.aspect_ratio);
+      return parsed.success ? parsed.data : libraryAspectRatioBin(row.width, row.height);
+    })(),
     durationMs: row.duration_ms,
     source: row.source,
     originRef: row.origin_ref,

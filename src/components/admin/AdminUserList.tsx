@@ -949,7 +949,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         },
       );
       if (error)
-        throw new Error(await adminEdgeError(error, 'Unable to run first value report smoke test.'));
+        throw new Error(
+          await adminEdgeError(error, 'Unable to run first value report smoke test.'),
+        );
       const result = data ?? { status: 'unknown' };
       setReportSmokeResult(result);
       show({

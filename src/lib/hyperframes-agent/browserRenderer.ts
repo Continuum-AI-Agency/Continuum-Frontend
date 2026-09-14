@@ -1,6 +1,11 @@
 'use client';
 
-import type { ShaderStackV1 } from '@continuum/contracts';
+import type {
+  CompositionSpec,
+  HyperframesLayoutMetrics,
+  HyperframesTemporalMetrics,
+  ShaderStackV1,
+} from '@continuum/contracts';
 import {
   AUDIO_CHANNELS,
   AUDIO_SAMPLE_RATE,
@@ -11,6 +16,7 @@ import {
 
 export type HyperframesBrowserAsset = {
   assetId: string;
+  assetVersionId?: string;
   kind: 'image' | 'video' | 'audio';
   mimeType: string;
   url: string;
@@ -39,6 +45,65 @@ export type HyperframesRenderResult = {
 };
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
+const DUPLICATE_MAD = 1.5;
+const SCENE_CHANGE_MAD = 12;
+
+export function buildTemporalMetrics(
+  samples: readonly Uint8Array[],
+  sampleFps: number,
+  scenes: readonly { id: string; start_seconds: number; duration_seconds: number }[],
+): HyperframesTemporalMetrics {
+  const adjacentFrameMad = samples.slice(1).map((sample, index) => {
+    const previous = samples[index];
+    if (!previous || previous.length !== sample.length || sample.length === 0) return 0;
+    let difference = 0;
+    for (let pixel = 0; pixel < sample.length; pixel += 1) {
+      difference += Math.abs((sample[pixel] ?? 0) - (previous[pixel] ?? 0));
+    }
+    return difference / sample.length;
+  });
+  const frozenIntervals: HyperframesTemporalMetrics['frozenIntervals'] = [];
+  let frozenStart: number | null = null;
+  adjacentFrameMad.forEach((difference, index) => {
+    if (difference <= DUPLICATE_MAD && frozenStart === null) frozenStart = index / sampleFps;
+    if (difference > DUPLICATE_MAD && frozenStart !== null) {
+      frozenIntervals.push({
+        startSeconds: frozenStart,
+        durationSeconds: index / sampleFps - frozenStart,
+      });
+      frozenStart = null;
+    }
+  });
+  if (frozenStart !== null) {
+    frozenIntervals.push({
+      startSeconds: frozenStart,
+      durationSeconds: adjacentFrameMad.length / sampleFps - frozenStart,
+    });
+  }
+  const entranceMotionSceneIds = scenes.flatMap((scene) => {
+    const entranceEnd = scene.start_seconds + Math.min(1, scene.duration_seconds);
+    const moving = adjacentFrameMad.some((difference, index) => {
+      const timestamp = (index + 1) / sampleFps;
+      return (
+        timestamp >= scene.start_seconds && timestamp <= entranceEnd && difference > DUPLICATE_MAD
+      );
+    });
+    return moving ? [scene.id] : [];
+  });
+  return {
+    sampleFps,
+    adjacentFrameMad,
+    sceneChanges: adjacentFrameMad.filter((difference) => difference >= SCENE_CHANGE_MAD).length,
+    duplicateFrameCount: adjacentFrameMad.filter((difference) => difference <= DUPLICATE_MAD)
+      .length,
+    longestFrozenSeconds: Math.max(
+      0,
+      ...frozenIntervals.map((interval) => interval.durationSeconds),
+    ),
+    frozenIntervals,
+    entranceMotionSceneIds,
+  };
+}
 
 const throwIfAborted = (signal?: AbortSignal): void => {
   if (signal?.aborted) throw new DOMException('HyperFrames render aborted', 'AbortError');
@@ -78,34 +143,59 @@ export const withCrossOrigin = (html: string): string =>
     return `<${name}${attrs} crossorigin="anonymous"${selfClose}>`;
   });
 
-async function resolveCompositionHtml(
+export async function resolveCompositionHtml(
   composition: HyperframesBrowserComposition,
   signal?: AbortSignal,
 ): Promise<string> {
-  const response = await fetch(composition.htmlUrl, { signal, credentials: 'omit' });
+  const rawHtml = await fetchCompositionHtml(composition.htmlUrl, signal);
+  return resolveCompositionAssets(rawHtml, composition, signal);
+}
+
+async function fetchCompositionHtml(htmlUrl: string, signal?: AbortSignal): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch(htmlUrl, { signal, credentials: 'omit' });
+  } catch (error) {
+    throw new Error('Could not load the composition. Check your connection and retry.', {
+      cause: error,
+    });
+  }
   if (!response.ok) throw new Error(`Composition fetch failed (${response.status})`);
-  let html = await response.text();
+  return response.text();
+}
 
-  html = withCrossOrigin(html);
+async function resolveCompositionAssets(
+  rawHtml: string,
+  composition: HyperframesBrowserComposition,
+  signal?: AbortSignal,
+): Promise<string> {
+  let html = withCrossOrigin(rawHtml);
 
-  for (const asset of composition.assets) {
-    throwIfAborted(signal);
-    let replacement = asset.url;
-
-    // Images and video are inlined; audio is not. Audio never touches the canvas
-    // — `mixdownTimelineAudio` fetches it directly through mediabunny — so it
-    // cannot taint anything and inlining it would only bloat the HTML.
-    if (asset.kind === 'image' || asset.kind === 'video') {
-      const media = await fetch(asset.url, { signal, credentials: 'omit' });
+  const replacements = await Promise.all(
+    composition.assets.map(async (asset) => {
+      throwIfAborted(signal);
+      if (asset.kind === 'audio') return { asset, replacement: asset.url };
+      let media: Response;
+      try {
+        media = await fetch(asset.url, { signal, credentials: 'omit' });
+      } catch (error) {
+        throw new Error(
+          `Could not load attached ${asset.kind} ${asset.assetId}. Check your connection and retry.`,
+          { cause: error },
+        );
+      }
       if (!media.ok) throw new Error(`Attached ${asset.kind} fetch failed (${media.status})`);
       const blob = await media.blob();
-      if (asset.kind === 'image' || blob.size <= MAX_INLINE_VIDEO_BYTES) {
-        replacement = await blobToDataUrl(blob);
-      }
-      // Oversized video keeps its remote URL and relies on the crossorigin
-      // attribute applied above to stay untainted.
-    }
-
+      return {
+        asset,
+        replacement:
+          asset.kind === 'image' || blob.size <= MAX_INLINE_VIDEO_BYTES
+            ? await blobToDataUrl(blob)
+            : asset.url,
+      };
+    }),
+  );
+  for (const { asset, replacement } of replacements) {
     html = html.replace(new RegExp(`hf-asset://${escapeRegExp(asset.assetId)}`, 'g'), replacement);
   }
   if (html.includes('hf-asset://')) {
@@ -349,6 +439,40 @@ const createCanvas = (width: number, height: number): HTMLCanvasElement | Offscr
   return canvas;
 };
 
+export type PreparedHyperframesComposition = {
+  composition: HyperframesBrowserComposition;
+  rawHtml: string;
+  html: string;
+  iframe: HTMLIFrameElement;
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+  reset: () => Promise<void>;
+  dispose: () => void;
+};
+
+export async function prepareHyperframesComposition(
+  composition: HyperframesBrowserComposition,
+  signal?: AbortSignal,
+): Promise<PreparedHyperframesComposition> {
+  const rawHtml = await fetchCompositionHtml(composition.htmlUrl, signal);
+  const html = await resolveCompositionAssets(rawHtml, composition, signal);
+  const iframe = await loadIframe(html, composition.width, composition.height);
+  const canvas = createCanvas(composition.width, composition.height);
+  let disposed = false;
+  return {
+    composition,
+    rawHtml,
+    html,
+    iframe,
+    canvas,
+    reset: () => seekComposition(iframe, 0),
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      iframe.remove();
+    },
+  };
+}
+
 const applyShaderStack = async (
   canvas: HTMLCanvasElement | OffscreenCanvas,
   stack: ShaderStackV1 | undefined,
@@ -393,10 +517,11 @@ export async function captureHyperframesReviewFrames(params: {
   composition: HyperframesBrowserComposition;
   timestampsSeconds: number[];
   signal?: AbortSignal;
+  prepared?: PreparedHyperframesComposition;
 }): Promise<Blob[]> {
-  const html = await resolveCompositionHtml(params.composition, params.signal);
-  const iframe = await loadIframe(html, params.composition.width, params.composition.height);
-  const canvas = createCanvas(params.composition.width, params.composition.height);
+  const prepared =
+    params.prepared ?? (await prepareHyperframesComposition(params.composition, params.signal));
+  const { iframe, canvas } = prepared;
   try {
     const frames: Blob[] = [];
     for (const timestamp of params.timestampsSeconds) {
@@ -408,7 +533,170 @@ export async function captureHyperframesReviewFrames(params: {
     }
     return frames;
   } finally {
-    iframe.remove();
+    if (!params.prepared) prepared.dispose();
+  }
+}
+
+const canvasLuma = (source: HTMLCanvasElement | OffscreenCanvas): Uint8Array => {
+  const sample = createCanvas(32, 18);
+  const context = sample.getContext('2d');
+  if (!context) throw new Error('Review sample context is unavailable.');
+  context.drawImage(source, 0, 0, 32, 18);
+  const pixels = context.getImageData(0, 0, 32, 18).data;
+  const luma = new Uint8Array(32 * 18);
+  for (let index = 0; index < luma.length; index += 1) {
+    const offset = index * 4;
+    luma[index] = Math.round(
+      (pixels[offset] ?? 0) * 0.2126 +
+        (pixels[offset + 1] ?? 0) * 0.7152 +
+        (pixels[offset + 2] ?? 0) * 0.0722,
+    );
+  }
+  return luma;
+};
+
+const parseRgb = (value: string): [number, number, number] | null => {
+  const channels = value
+    .match(/[\d.]+/g)
+    ?.slice(0, 3)
+    .map(Number);
+  return channels?.length === 3 ? (channels as [number, number, number]) : null;
+};
+
+const relativeLuminance = ([red, green, blue]: [number, number, number]): number =>
+  [red, green, blue]
+    .map((channel) => channel / 255)
+    .map((channel) => (channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4))
+    .reduce((sum, channel, index) => sum + channel * ([0.2126, 0.7152, 0.0722][index] ?? 0), 0);
+
+const contrastRatio = (foreground: string, background: string): number | null => {
+  const foregroundRgb = parseRgb(foreground);
+  const backgroundRgb = parseRgb(background);
+  if (!foregroundRgb || !backgroundRgb) return null;
+  const [bright, dark] = [relativeLuminance(foregroundRgb), relativeLuminance(backgroundRgb)].sort(
+    (left, right) => right - left,
+  );
+  return ((bright ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+};
+
+const measureLayout = (iframe: HTMLIFrameElement): HyperframesLayoutMetrics => {
+  const doc = iframe.contentDocument;
+  const view = iframe.contentWindow;
+  if (!doc || !view) throw new Error('Composition document is unavailable for layout review.');
+  const clippedTextIds = new Set<string>();
+  const lowContrastTextIds = new Set<string>();
+  for (const element of Array.from(doc.querySelectorAll<HTMLElement>('[data-hf-copy]'))) {
+    const id = element.dataset.hfId ?? element.id;
+    const rect = element.getBoundingClientRect();
+    if (
+      rect.left < 0 ||
+      rect.top < 0 ||
+      rect.right > view.innerWidth ||
+      rect.bottom > view.innerHeight
+    ) {
+      clippedTextIds.add(id);
+    }
+    const style = view.getComputedStyle(element);
+    let background = 'rgb(255, 255, 255)';
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+      const candidate = view.getComputedStyle(parent).backgroundColor;
+      if (candidate && candidate !== 'rgba(0, 0, 0, 0)' && candidate !== 'transparent') {
+        background = candidate;
+        break;
+      }
+    }
+    const ratio = contrastRatio(style.color, background);
+    if (ratio !== null && ratio < 3) lowContrastTextIds.add(id);
+  }
+  return {
+    clippedTextIds: [...clippedTextIds],
+    lowContrastTextIds: [...lowContrastTextIds],
+    missingFontFamilies: doc.fonts.status === 'loaded' ? [] : ['document-fonts'],
+  };
+};
+
+export async function captureHyperframesReviewEvidence(params: {
+  composition: HyperframesBrowserComposition;
+  spec: CompositionSpec;
+  timestampsSeconds: number[];
+  signal?: AbortSignal;
+  prepared?: PreparedHyperframesComposition;
+}): Promise<{
+  frames: Blob[];
+  frameTimestampsSeconds: number[];
+  motionStrip: Blob;
+  temporalMetrics: HyperframesTemporalMetrics;
+  layoutMetrics: HyperframesLayoutMetrics;
+}> {
+  const prepared =
+    params.prepared ?? (await prepareHyperframesComposition(params.composition, params.signal));
+  const sampleFps = 10;
+  const last = Math.max(0, params.composition.durationSeconds - 1 / sampleFps);
+  const denseTimestamps = Array.from(
+    { length: Math.max(1, Math.ceil(params.composition.durationSeconds * sampleFps)) },
+    (_, index) => Math.min(last, index / sampleFps),
+  );
+  const timestamps = [...new Set([...denseTimestamps, ...params.timestampsSeconds])].sort(
+    (left, right) => left - right,
+  );
+  const frameTimestampsSeconds = params.timestampsSeconds
+    .filter((_, index, values) => index === 0 || index === values.length - 1 || index % 2 === 1)
+    .slice(0, 4);
+  const requested = new Map(frameTimestampsSeconds.map((timestamp, index) => [timestamp, index]));
+  const dense = new Set(denseTimestamps);
+  const stripIndexes = new Set(
+    Array.from({ length: 8 }, (_, index) => Math.round(((denseTimestamps.length - 1) * index) / 7)),
+  );
+  const strip = createCanvas(1280, 90);
+  const stripContext = strip.getContext('2d');
+  if (!stripContext) throw new Error('Review motion-strip context is unavailable.');
+  const frames: Array<Blob | undefined> = Array(frameTimestampsSeconds.length).fill(undefined);
+  const samples: Uint8Array[] = [];
+  const clippedTextIds = new Set<string>();
+  const lowContrastTextIds = new Set<string>();
+  const missingFontFamilies = new Set<string>();
+  try {
+    for (const timestamp of timestamps) {
+      throwIfAborted(params.signal);
+      await seekComposition(prepared.iframe, timestamp);
+      await rasterizeFrame(
+        prepared.iframe,
+        prepared.canvas,
+        params.composition.width,
+        params.composition.height,
+      );
+      await applyShaderStack(prepared.canvas, params.composition.shaderStack, timestamp);
+      if (dense.has(timestamp)) {
+        const sampleIndex = samples.length;
+        samples.push(canvasLuma(prepared.canvas));
+        if (stripIndexes.has(sampleIndex)) {
+          const stripIndex = [...stripIndexes].indexOf(sampleIndex);
+          stripContext.drawImage(prepared.canvas, stripIndex * 160, 0, 160, 90);
+        }
+      }
+      const frameIndex = requested.get(timestamp);
+      if (frameIndex !== undefined) {
+        frames[frameIndex] = await canvasToPng(prepared.canvas);
+        const measured = measureLayout(prepared.iframe);
+        for (const id of measured.clippedTextIds) clippedTextIds.add(id);
+        for (const id of measured.lowContrastTextIds) lowContrastTextIds.add(id);
+        for (const family of measured.missingFontFamilies) missingFontFamilies.add(family);
+      }
+    }
+    if (frames.some((frame) => !frame)) throw new Error('Review frame capture was incomplete.');
+    return {
+      frames: frames as Blob[],
+      frameTimestampsSeconds,
+      motionStrip: await canvasToPng(strip),
+      temporalMetrics: buildTemporalMetrics(samples, sampleFps, params.spec.scenes),
+      layoutMetrics: {
+        clippedTextIds: [...clippedTextIds],
+        lowContrastTextIds: [...lowContrastTextIds],
+        missingFontFamilies: [...missingFontFamilies],
+      },
+    };
+  } finally {
+    if (!params.prepared) prepared.dispose();
   }
 }
 
@@ -441,20 +729,16 @@ export async function renderHyperframesVideo(params: {
   composition: HyperframesBrowserComposition;
   signal?: AbortSignal;
   onProgress?: (progress: number) => void;
+  prepared?: PreparedHyperframesComposition;
 }): Promise<HyperframesRenderResult> {
   const mb = await import('mediabunny');
   const capabilities = await probeHyperframesCapabilities();
   if (!capabilities.avc) throw new Error('H.264 encoding is unavailable in this browser.');
 
-  const rawHtmlResponse = await fetch(params.composition.htmlUrl, {
-    signal: params.signal,
-    credentials: 'omit',
-  });
-  if (!rawHtmlResponse.ok) throw new Error(`Composition fetch failed (${rawHtmlResponse.status})`);
-  const rawHtml = await rawHtmlResponse.text();
-  const html = await resolveCompositionHtml(params.composition, params.signal);
-  const iframe = await loadIframe(html, params.composition.width, params.composition.height);
-  const canvas = createCanvas(params.composition.width, params.composition.height);
+  const prepared =
+    params.prepared ?? (await prepareHyperframesComposition(params.composition, params.signal));
+  await prepared.reset();
+  const { rawHtml, iframe, canvas } = prepared;
   const output = new mb.Output({
     format: new mb.Mp4OutputFormat(),
     target: new mb.BufferTarget(),
@@ -534,7 +818,7 @@ export async function renderHyperframesVideo(params: {
       durationSeconds: params.composition.durationSeconds,
     };
   } finally {
-    iframe.remove();
+    if (!params.prepared) prepared.dispose();
     for (const input of inputs) input.dispose();
   }
 }

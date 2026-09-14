@@ -28,6 +28,8 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
   const previewInputRef = useRef<HTMLInputElement>(null);
   const ext = fileExtension(asset.fileName);
   const isAfterEffects = ext === 'AEP';
+  const isPremiere = ext === 'PRPROJ';
+  const isMxf = ext === 'MXF';
 
   const download = async () => {
     setDownloading(true);
@@ -74,6 +76,10 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
           <span className="flex size-20 items-center justify-center rounded-2xl bg-[#00005b] text-2xl font-semibold tracking-tight text-[#9999ff] shadow-sm">
             Ae
           </span>
+        ) : isPremiere ? (
+          <span className="flex size-20 items-center justify-center rounded-2xl bg-[#2d1b4e] text-2xl font-semibold tracking-tight text-[#c9a0ff] shadow-sm">
+            Pr
+          </span>
         ) : (
           <FileIcon className="size-16 text-muted-foreground/40" strokeWidth={1.25} />
         )}
@@ -91,6 +97,12 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
         </p>
         {isAfterEffects ? (
           <p className="text-xs font-medium text-foreground/80">Adobe After Effects project</p>
+        ) : isPremiere ? (
+          <p className="text-xs font-medium text-foreground/80">Adobe Premiere Pro project</p>
+        ) : isMxf ? (
+          <p className="text-xs font-medium text-foreground/80">
+            Broadcast MXF — plays via H.264 proxy
+          </p>
         ) : null}
         <p className="text-xs text-muted-foreground/70">
           Modified{' '}
@@ -101,9 +113,11 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
           {asset.createdBy ? ` · Uploader ${asset.createdBy.slice(0, 8)}` : ''}
         </p>
         <p className="text-xs text-muted-foreground/60">
-          {asset.preview?.state === 'awaiting_companion'
-            ? 'Add a PNG, JPEG, WebP, or MP4 companion to review this source in Continuum.'
-            : 'No preview is available yet. The original remains downloadable.'}
+          {asset.preview?.errorCode === 'proxy_transcode_pending'
+            ? 'Building an H.264 proxy, or drop a same-stem MP4 (clip.mxf + clip.mp4).'
+            : asset.preview?.state === 'awaiting_companion'
+              ? 'Add a PNG, JPEG, WebP, or MP4 companion to review this source in Continuum.'
+              : 'No preview is available yet. The original remains downloadable.'}
         </p>
       </div>
 

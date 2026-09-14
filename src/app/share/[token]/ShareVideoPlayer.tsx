@@ -29,14 +29,24 @@ type Props = {
   label: string;
   durationMsHint: number | null;
   markers: ShareTimeMarker[];
+  initialSelectedId?: string | null;
+  initialTimeMs?: number | null;
 };
 
-export function ShareVideoPlayer({ src, posterUrl, label, durationMsHint, markers }: Props) {
+export function ShareVideoPlayer({
+  src,
+  posterUrl,
+  label,
+  durationMsHint,
+  markers,
+  initialSelectedId = null,
+  initialTimeMs = null,
+}: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
   const [durationMs, setDurationMs] = useState(durationMsHint ?? 0);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [hydrated, setHydrated] = useState(false);
 
   const seekTo = useCallback((ms: number) => {
@@ -63,6 +73,12 @@ export function ShareVideoPlayer({ src, posterUrl, label, durationMsHint, marker
   }, []);
 
   useEffect(() => setHydrated(true), []);
+
+  useEffect(() => {
+    if (initialSelectedId) return;
+    if (initialTimeMs == null) return;
+    seekTo(initialTimeMs);
+  }, [initialSelectedId, initialTimeMs, seekTo]);
 
   const selectMarker = (marker: ShareTimeMarker) => {
     videoRef.current?.pause();

@@ -103,7 +103,7 @@ export function IdentityPanel({
             <SubsectionHeader title="First impression" />
             {firstImpression ? (
               <p className="flex items-start gap-1.5 text-sm italic leading-snug text-foreground">
-                <Sparkle className="mt-0.5 h-3 w-3 shrink-0 text-[var(--cs-violet,#5a39ff)]" />
+                <Sparkle className="mt-0.5 h-3 w-3 shrink-0 text-[var(--primary)]" />
                 <span className="min-w-0">{firstImpression}</span>
               </p>
             ) : firstImpressionStatus === 'running' ? (

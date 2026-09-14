@@ -11,6 +11,7 @@ import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec, ResolvedTextOverlay } from '../../utils/render/effectSpec';
 import { hasShaderStack } from '../../utils/render/shaderStack';
 import type { CaptionCue } from '../../utils/splice/captionCues';
+import type { NestedPreviewGroup } from './nestedSequencePreview';
 import type { OverlayPreviewLayer } from './overlayPreview';
 import { TimelineOverlayPreviewLayers } from './TimelineOverlayPreviewLayers';
 import { TimelineShaderPreview } from './TimelineShaderPreview';
@@ -132,6 +133,8 @@ export function TimelinePreview({
   fadeOverlay,
   crossfade,
   overlayLayers,
+  nestedGroups,
+  motionPath,
   mediaMuted,
   mediaVolume,
   caption,
@@ -166,6 +169,8 @@ export function TimelinePreview({
     effectTimeSec: number;
   };
   overlayLayers?: OverlayPreviewLayer[];
+  nestedGroups?: NestedPreviewGroup[];
+  motionPath?: React.ReactNode;
   mediaMuted?: boolean;
   mediaVolume?: number;
   caption?: CaptionCue;
@@ -228,6 +233,7 @@ export function TimelinePreview({
           timeSec={shaderTimeSec}
           style={mediaStyle}
         />
+        {motionPath}
 
         {crossfade && crossfade.opacity > 0 ? (
           <TimelineOverlayPreviewLayers
@@ -273,7 +279,11 @@ export function TimelinePreview({
           </div>
         ))}
 
-        <TimelineOverlayPreviewLayers layers={overlayLayers ?? []} isPlaying={isPlaying} />
+        <TimelineOverlayPreviewLayers
+          layers={overlayLayers ?? []}
+          groups={nestedGroups}
+          isPlaying={isPlaying}
+        />
 
         {fadeOverlay && fadeOverlay.alpha > 0 ? (
           <div

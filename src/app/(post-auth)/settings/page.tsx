@@ -4,6 +4,7 @@ import { MyConnectionsSharingSection } from '@/components/integrations/MyConnect
 import { ChatConnectionsSection } from '@/components/settings/account/ChatConnectionsSection';
 import { McpActivityTable } from '@/components/settings/account/McpActivityTable';
 import { McpConnectionsSection } from '@/components/settings/account/McpConnectionsSection';
+import { OptimizerNotificationsSection } from '@/components/settings/account/OptimizerNotificationsSection';
 import { UserBrandsPanel } from '@/components/settings/account/UserBrandsPanel';
 import { UserConnectionsSwitcher } from '@/components/settings/account/UserConnectionsSwitcher';
 import { UserProfileSection } from '@/components/settings/account/UserProfileSection';
@@ -391,6 +392,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           description="Slack and Microsoft Teams identities that can receive Goal questions. Choose the preferred route for this brand."
         >
           <ChatConnectionsSection brandId={activeBrandId} brandName={defaultBrandName} />
+        </SettingsSection>
+        <SettingsSection
+          title="Optimizer notifications"
+          description="Whether Continuum messages you in Slack when it moves this brand's ad set budgets, and where."
+        >
+          <OptimizerNotificationsSection brandId={activeBrandId} brandName={defaultBrandName} />
         </SettingsSection>
         <SettingsSection
           title="Connected apps"

@@ -37,7 +37,7 @@ export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps
                   'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
                   step.state === 'done' && 'bg-primary text-primary-foreground',
                   step.state === 'active' &&
-                    'bg-[var(--cs-violet,#5a39ff)] text-white ring-4 ring-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_18%,transparent)]',
+                    'bg-[var(--primary)] text-white ring-4 ring-[color-mix(in_srgb,var(--primary)_18%,transparent)]',
                   step.state === 'pending' &&
                     'border border-border bg-white text-muted-foreground dark:bg-card',
                 )}

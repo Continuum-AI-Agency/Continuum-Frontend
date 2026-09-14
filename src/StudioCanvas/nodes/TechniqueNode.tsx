@@ -43,7 +43,7 @@ function PortColumn({ ports, side }: { ports: CanvasTechniquePort[]; side: 'inpu
       {ports.map((port, index) => (
         <div
           key={port.id}
-          className={`pointer-events-none absolute flex items-center gap-1 text-[10px] text-muted-foreground ${
+          className={`pointer-events-none absolute flex items-center gap-1 text-2xs text-muted-foreground ${
             isInput ? 'left-2' : 'right-2 flex-row-reverse'
           }`}
           style={{ top: FIRST_PORT_TOP + index * PORT_ROW_HEIGHT - 7 }}
@@ -93,7 +93,7 @@ export function TechniqueNode({ data, selected }: NodeProps<ReactFlowNode<Collap
           </button>
         </NodeTitleBar>
         <NodeContent className="px-1.5 py-1">
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             {data.memberCount} {data.memberCount === 1 ? 'node' : 'nodes'} folded
           </p>
         </NodeContent>

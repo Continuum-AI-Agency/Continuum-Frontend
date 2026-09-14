@@ -11,6 +11,7 @@ import type { PublicShareComment } from '@continuum/contracts';
 import { formatTimecode } from '@/components/library/detail/annotationGeometry';
 import { initialsFor } from '@/lib/library/comments';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
+import { ShareCopyLink } from './ShareCopyLink';
 
 export type PublicShareThread = { root: PublicShareComment; replies: PublicShareComment[] };
 
@@ -77,7 +78,13 @@ function CommentBody({ comment }: { comment: PublicShareComment }) {
   );
 }
 
-export function ShareCommentThreads({ threads }: { threads: PublicShareThread[] }) {
+export function ShareCommentThreads({
+  threads,
+  commentHref,
+}: {
+  threads: PublicShareThread[];
+  commentHref?: (comment: PublicShareComment) => string;
+}) {
   if (threads.length === 0) return null;
 
   return (
@@ -88,6 +95,11 @@ export function ShareCommentThreads({ threads }: { threads: PublicShareThread[] 
       {threads.map((thread) => (
         <div key={thread.root.id} className="rounded-lg border border-border/60 bg-card p-2.5">
           <CommentBody comment={thread.root} />
+          {commentHref ? (
+            <div className="mt-1.5">
+              <ShareCopyLink href={commentHref(thread.root)} />
+            </div>
+          ) : null}
           {thread.replies.length > 0 ? (
             <div className="mt-2 flex flex-col gap-2 border-l border-border/60 pl-3">
               {thread.replies.map((reply) => (

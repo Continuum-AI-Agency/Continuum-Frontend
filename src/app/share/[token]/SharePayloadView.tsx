@@ -8,11 +8,13 @@
 // composer on this page and no mutation seam to reach one.
 
 import type {
+  CommentDeepLink,
   MediaAsset,
   PublicShareAsset,
   PublicShareComment,
   PublicSharePayload,
 } from '@continuum/contracts';
+import { buildShareDeepLinkHref, commentDeepLinkFromAnnotation } from '@continuum/contracts';
 import { Download, FileArchive } from 'lucide-react';
 import { initialsFor } from '@/lib/library/comments';
 import { withForcedDownload } from '@/lib/media/downloadUrl';
@@ -143,10 +145,12 @@ function AssetPreview({
   asset,
   markers,
   comments,
+  deepLink,
 }: {
   asset: MediaAsset;
   markers: ShareTimeMarker[];
   comments: PublicShareComment[];
+  deepLink?: CommentDeepLink;
 }) {
   if (asset.carousel && asset.carousel.slides.length > 1) {
     return (
@@ -224,7 +228,7 @@ function AssetPreview({
   if (asset.kind === 'video' && asset.signedUrl) {
     // A video nobody commented on gets the native player, so a plain share stays
     // free of client JS; time-pinned feedback is what earns the custom transport.
-    if (markers.length === 0) {
+    if (markers.length === 0 && !deepLink?.commentId && deepLink?.timeMs == null) {
       return (
         <video
           src={asset.signedUrl}
@@ -243,6 +247,8 @@ function AssetPreview({
         label={asset.title ?? asset.fileName}
         durationMsHint={asset.durationMs ?? null}
         markers={markers}
+        initialSelectedId={deepLink?.commentId ?? null}
+        initialTimeMs={deepLink?.timeMs ?? null}
       />
     );
   }
@@ -271,6 +277,7 @@ function SharedAssetTile({
   hasIdentity,
   hasPasscode,
   allowApproval,
+  deepLink,
 }: {
   sharedAsset: PublicShareAsset;
   comments: PublicShareComment[];
@@ -281,6 +288,7 @@ function SharedAssetTile({
   hasIdentity: boolean;
   hasPasscode: boolean;
   allowApproval: boolean;
+  deepLink?: CommentDeepLink;
 }) {
   const { asset, versionId, versionNumber, isHead } = sharedAsset;
   const threads = buildPublicShareThreads(comments);
@@ -290,7 +298,7 @@ function SharedAssetTile({
 
   return (
     <div className="flex flex-col gap-2">
-      <AssetPreview asset={asset} markers={markers} comments={comments} />
+      <AssetPreview asset={asset} markers={markers} comments={comments} deepLink={deepLink} />
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm text-foreground">{asset.title ?? asset.fileName}</p>
@@ -307,7 +315,15 @@ function SharedAssetTile({
           {formatBytes(asset.sizeBytes) ? ` · ${formatBytes(asset.sizeBytes)}` : ''}
         </p>
       ) : null}
-      <ShareCommentThreads threads={threads} />
+      <ShareCommentThreads
+        threads={threads}
+        commentHref={(comment) =>
+          buildShareDeepLinkHref({
+            token,
+            deepLink: commentDeepLinkFromAnnotation(comment.id, comment.annotation),
+          })
+        }
+      />
       {allowComments ? (
         <ExternalCommentComposer
           token={token}
@@ -343,9 +359,11 @@ function commentsByAsset(comments: PublicShareComment[]): Map<string, PublicShar
 export function SharePayloadView({
   token,
   payload,
+  deepLink,
 }: {
   token: string;
   payload: PublicSharePayload;
+  deepLink?: CommentDeepLink;
 }) {
   const heading =
     payload.scope === 'collection'
@@ -367,6 +385,7 @@ export function SharePayloadView({
       hasIdentity={Boolean(payload.reviewer)}
       hasPasscode={payload.policy.hasPasscode}
       allowApproval={payload.policy.allowApproval}
+      deepLink={deepLink}
     />
   ));
 

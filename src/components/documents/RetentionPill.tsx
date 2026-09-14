@@ -10,7 +10,7 @@ import { formatRetentionCountdown, isArchived, isEphemeral } from './types';
 export function RetentionPill({ doc, now }: { doc: DocumentView; now: number }) {
   if (isArchived(doc)) {
     return (
-      <Pill variant="secondary" className="shrink-0 text-[11px]">
+      <Pill variant="secondary" className="shrink-0 text-xs">
         Archived
       </Pill>
     );
@@ -20,7 +20,7 @@ export function RetentionPill({ doc, now }: { doc: DocumentView; now: number }) 
 
   const countdown = formatRetentionCountdown(doc.expiresAt, now);
   return (
-    <Pill variant="outline" className="shrink-0 gap-1 text-[11px]">
+    <Pill variant="outline" className="shrink-0 gap-1 text-xs">
       <PillIndicator variant="warning" />
       {countdown ? `Temporary · ${countdown}` : 'Temporary'}
     </Pill>

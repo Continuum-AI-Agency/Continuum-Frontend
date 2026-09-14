@@ -8,54 +8,7 @@ This document outlines the architectural and code quality rules specific to the 
 
 ---
 
-## 1. Core Philosophy & Professionalism
-
-Our approach is governed by the principles of software craftsmanship:
-
-* **Readability is Priority #1:** Code is read far more often than it is written. We strive to make our code as clear, expressive, and direct as good prose. If it's hard to read, it's hard to maintain.
-* **Commitment to Quality:** We are professionals. Code is only "done" when it is clean, fully tested, and passing all checks. We never check in code that we are not proud of.
-* **The Boy Scout Rule (No Broken Windows):** If you find messy code, fix it. Continuous, minor refactoring is mandatory. **Always leave the code cleaner than you found it.**
-* **Testing Mindset:** We follow a **Test-Driven Development (TDD) mindset**: a test fails, we write the minimal code to make it pass, and then we refactor. **Never write production code without an automated test.**
-* **Defend Boundaries:** We treat external code (libraries, APIs) as boundaries. We must **wrap these external dependencies** (e.g., Supabase SDK) to limit their impact on our core domain logic. The wrapping layer must be clean and easily swapped.
-* **Honest Estimates:** When asked for an estimate, it must be a **commitment** based on analysis and preparation, not a guess. We are responsible for communicating potential risks and honoring our commitments.
-
----
-
-## 2. Code Quality (Clean Code)
-
-These rules apply universally to all TypeScript, React, and Next.js code.
-
-### Naming
-
-* **Clarity over Brevity:** Use names that clearly articulate their purpose, location (Client/Server), and type. Avoid single-letter variables unless they are loop counters in trivial scopes.
-    * **Good:** `calculateUserBmi`, `fetchUserDataFromServer`, `useAuthSession`
-    * **Bad:** `calc`, `getData`, `auth`
-* **Component Naming:** Components must be **PascalCase** and include a clear, descriptive noun (e.g., `SettingsModal`, `UserProfileCard`).
-* **Server vs. Client Demarcation:** Functions responsible for Server Actions or Server-Side logic must be clearly named (e.g., `createPostAction`, `getServerPosts`).
-
-### Functions & Components
-
-* **Single Responsibility Principle (SRP):** Functions, components, and server actions must **do one thing, and one thing only**, and do it well. If a function's name contains "and," "or," or "handle," it's likely doing too much.
-* **Smallness:** Functions should be small—ideally no more than **60 lines** of executable code. Components should aim to fit on a single screen.
-* **Argument Count:** Functions should have the fewest arguments possible, ideally **zero or one**. Avoid three or more arguments unless a strong, specific case can be made (**prefer passing an object**).
-* **Side Effects:** Functions must not contain hidden side effects.
-
-### Comments
-
-* **Code Should Be Self-Documenting:** Comments are a sign of failure to express intent in code. We only use comments for:
-    * **Legal/License Notices.**
-    * **Explanation of Intent/Why:** Explaining the reason for a non-obvious decision, **not what the code does.**
-    * **TODOs/FIXMEs:** Used sparingly and removed as soon as the task is addressed.
-* **Avoid Commenting Out Code:** **Delete old code.** Version control exists for a reason.
-
-### Error Handling & TypeScript
-
-* **Graceful Errors:** Do not return `null` or raw error codes from functions. Use `try/catch` blocks for expected failures and **throw custom, meaningful `Error` objects** that provide context.
-* **Strict Typing:** All code must be strongly typed. Avoid `any`; use `unknown` or specific generics when type uncertainty is unavoidable. Enforce **Zod schemas strictly** on both client and server boundaries.
-
----
-
-## 3. Architecture (Next.js / App Router)
+## 1. Architecture (Next.js / App Router)
 
 ### Server-First Principle & Rendering
 
@@ -92,7 +45,7 @@ Frontend response interpreters that parse Backend agent outputs (NDJSON stream f
 
 ---
 
-## 4. UI/UX and Dependencies
+## 2. UI/UX and Dependencies
 
 ### Styling & Accessibility
 
@@ -108,37 +61,18 @@ Frontend response interpreters that parse Backend agent outputs (NDJSON stream f
 
 ---
 
-## 5. Linear Workflow & Project Operations
+## 3. Linear Workflow
 
-Our Linear workspace is the source of truth for delivery planning. Treat every interaction as a professional contract with the team.
+Our Linear workspace is the source of truth for delivery planning. Estimation scale, issue chunking, project/status flow and close-the-loop rules: the `linear-workflow` skill.
 
-### Estimation Discipline
-
-* **Always estimate:** Every issue and sub-issue must carry an estimate from the team scale (`1, 2, 4, 8, 16`). Add or adjust the estimate before work begins.
-* **Anchor on scope, not hope:** Estimate only after clarifying acceptance criteria, risks, and dependencies. Escalate unknowns instead of guessing.
-* **Refine continuously:** Update estimates when scope changes. Communicate deltas in the issue comments and relevant standups.
-
-### Issue Shape & Chunking
-
-* **Right-size work:** Break initiatives into issues that fit within a single sprint window (≤16 points). Split anything larger into sequenced sub-issues.
-* **Single outcome per issue:** Each issue should deliver one testable outcome. Use clear titles (`Verb + Object`) and maintain crisp acceptance criteria.
-* **Connect the tree:** Use parent issues or projects to show hierarchy. Ensure sub-issues reference their parent so burndown and rollups stay accurate.
-
-### Projects, Status, and Flow
-
-* **Projects as umbrellas:** Every major initiative belongs to a Linear project. Keep project documents, milestones, and health updated weekly.
-* **Status is signal:** Move issues through the workflow promptly (`Backlog → In Progress → Review → Done`). Leave a comment when blocking or handing off.
-* **Link the work:** Attach related PRs, docs, analytics dashboards, or Looms directly to the issue. Cross-link dependent issues so risk can be tracked.
-* **Close the loop:** Before marking an issue Done, confirm acceptance criteria, tests, and documentation updates are complete. Summarize outcomes in the final comment.
-
-## 6. MCP Usage
+## 4. MCP Usage
 
 * **Purpose:** MCP tools are for reference and guidance only; they must not mutate production data or state.
 * **Supabase MCP (Read-Only):** Use it for looking up schemas, tables, migrations, and query behavior to inform frontend work. Do not run write operations or migrations unless explicitly requested and approved. This is the only MCP server configured in the repo's `.mcp.json`.
 * **shadcn + registry first:** Prefer shadcn `ui/*` and registry components (Kibo/BasedKit/Supabase, built on Base UI) over custom equivalents. Fit registry recipes to `docs/styleguide.md`.
 * **Document Gaps:** If MCP data is missing or unclear, state assumptions and ask for clarification rather than guessing.
 
-## 7. Tests
+## 5. Tests
 
 * **Don't cheat, don't be lazy, just be Honest.** Write tests that cover TRUE functionality. NEVER simulate a pass condition, and it should always attempt the function's intended behavior.
 * **Tests are Atomized** Tests should cover the smallest amount of functions at a time, to give clarity on what is breaking. A test can have multiple calls/arguments at a time, but it should be for the function they are covering.

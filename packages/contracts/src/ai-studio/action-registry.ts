@@ -755,7 +755,7 @@ export const ACTION_DEFS = {
     id: 'video.reverse',
     family: 'video',
     label: 'Reverse',
-    description: 'Plays the clip backwards. Audio is dropped — reversed PCM is not implemented.',
+    description: 'Plays the clip and its audio backwards.',
     group: 'Time',
     execution: 'worker',
     inputs: singleVideoIn,

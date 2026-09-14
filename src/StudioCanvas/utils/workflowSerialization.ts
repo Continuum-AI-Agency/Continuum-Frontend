@@ -92,6 +92,7 @@ const expiringOutputKeys = [
   'generatedImageUrl',
   'generatedVideo',
   'generatedVideoUrl',
+  'collectionItems',
 ] as const;
 
 function stripRuntimeNodeData(

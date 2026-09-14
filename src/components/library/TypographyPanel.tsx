@@ -3,10 +3,10 @@
 import type { TemplateSource } from '@continuum/contracts';
 import { Loader2, Type, Upload } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { NO_SPECIMEN_NOTE, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast-imperative';
 import {
   type BrandFontSummary,
   fetchBrandFonts,

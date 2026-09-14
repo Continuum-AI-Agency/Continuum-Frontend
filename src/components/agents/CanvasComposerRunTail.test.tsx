@@ -82,7 +82,7 @@ mock.module('@/lib/auth/getBrowserAccessToken', () => ({
   getBrowserAccessToken: async () => null,
 }));
 
-import { CanvasComposerRunTail } from './CanvasComposerRunTail';
+import { CanvasComposerRunTail, DurableAiStudioRunTail } from './CanvasComposerRunTail';
 
 const run: AgentRunDto = {
   runId: '28f1aa84-4c34-4c7c-9cdd-2009f58ceacb',
@@ -114,6 +114,20 @@ describe('CanvasComposerRunTail realtime subscriptions', () => {
     expect(bindings).toContainEqual({
       event: 'UPDATE',
       table: 'ai_studio_canvas_composer_runs',
+    });
+  });
+
+  it('tails the HyperFrames event log and authoritative run row', () => {
+    render(<DurableAiStudioRunTail run={{ ...run, agent: 'hyperframes' }} />);
+
+    const bindings = channels.flatMap((channel) => channel.bindings);
+    expect(bindings).toContainEqual({
+      event: 'INSERT',
+      table: 'ai_studio_hyperframe_run_events',
+    });
+    expect(bindings).toContainEqual({
+      event: 'UPDATE',
+      table: 'ai_studio_hyperframe_runs',
     });
   });
 

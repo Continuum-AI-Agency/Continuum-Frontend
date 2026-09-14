@@ -1,10 +1,12 @@
 export type LibraryFormatFamily =
   | 'raster_image'
   | 'video'
+  | 'broadcast_video'
   | 'design_source'
   | 'document'
   | 'after_effects'
   | 'after_effects_package'
+  | 'premiere_project'
   | 'font';
 
 export type LibraryPreviewStrategy =
@@ -13,6 +15,11 @@ export type LibraryPreviewStrategy =
   | 'browser_raster'
   | 'companion'
   /**
+   * Server writes an H.264 `preview_video` into `media-previews`. The original
+   * (MXF, oversized ProRes) stays in `media-source` and is not the player source.
+   */
+  | 'proxy_transcode'
+  /**
    * Nothing is ever drawn. A brand face is licensed to the brand and the font store never
    * mints a URL for one, so a browser cannot have the file — `fontFamily` would silently
    * fall through to the app's own typeface under a label carrying the brand's name. See
@@ -20,12 +27,19 @@ export type LibraryPreviewStrategy =
    */
   | 'none';
 
+export type LibraryStorageBucket = 'media-library' | 'media-source';
+
 export type LibraryFormatDefinition = {
   family: LibraryFormatFamily;
   extensions: readonly string[];
   mimeTypes: readonly string[];
   originalKind: 'image' | 'video' | 'file';
   previewStrategy: LibraryPreviewStrategy;
+  /**
+   * Broadcast / project files exceed the viewer bucket's 500MB object cap.
+   * Omit and the kind decides: `file` → media-source, else media-library.
+   */
+  storageBucket?: LibraryStorageBucket;
 };
 
 export const LIBRARY_FORMATS: readonly LibraryFormatDefinition[] = [
@@ -42,6 +56,25 @@ export const LIBRARY_FORMATS: readonly LibraryFormatDefinition[] = [
     mimeTypes: ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v'],
     originalKind: 'video',
     previewStrategy: 'browser_video',
+  },
+  {
+    // Premiere / broadcast camera files. Playable only after a proxy; the original
+    // is often larger than the viewer bucket, so it lives next to AEP in media-source.
+    family: 'broadcast_video',
+    extensions: ['mxf'],
+    mimeTypes: ['application/mxf', 'video/mxf'],
+    originalKind: 'video',
+    previewStrategy: 'proxy_transcode',
+    storageBucket: 'media-source',
+  },
+  {
+    // Premiere project XML/bin — not a movie. Preview is a sidecar MP4 only.
+    family: 'premiere_project',
+    extensions: ['prproj'],
+    mimeTypes: ['application/vnd.adobe.premierepro.project'],
+    originalKind: 'file',
+    previewStrategy: 'companion',
+    storageBucket: 'media-source',
   },
   {
     family: 'design_source',
@@ -161,3 +194,45 @@ export const LIBRARY_ACCEPT_ATTRIBUTE = Array.from(
     LIBRARY_FORMATS.flatMap((format) => format.extensions.map((extension) => `.${extension}`)),
   ),
 ).join(',');
+
+export function libraryStorageBucket(format: LibraryFormatDefinition): LibraryStorageBucket {
+  return (
+    format.storageBucket ?? (format.originalKind === 'file' ? 'media-source' : 'media-library')
+  );
+}
+
+const PLAYABLE_SIDECAR_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'm4v']);
+const SIDECAR_SOURCE_FAMILIES = new Set([
+  'after_effects',
+  'after_effects_package',
+  'broadcast_video',
+  'premiere_project',
+]);
+
+function fileStem(fileName: string): string {
+  const name = fileName.trim().toLowerCase();
+  const slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+  const base = slash >= 0 ? name.slice(slash + 1) : name;
+  const dot = base.lastIndexOf('.');
+  return dot > 0 ? base.slice(0, dot) : base;
+}
+
+/**
+ * A playable preview for a source that the browser cannot decode: same stem
+ * MP4/MOV, or `{stem}_preview`. Applies to After Effects, Premiere, and MXF.
+ * Forge/aerender/ffmpeg of the original is a separate worker.
+ */
+export function isPlayableSidecarPreview(input: {
+  sourceFileName: string;
+  companionFileName: string;
+}): boolean {
+  const source = classifyLibraryFile({ fileName: input.sourceFileName });
+  const companion = classifyLibraryFile({ fileName: input.companionFileName });
+  if (!source.accepted || !SIDECAR_SOURCE_FAMILIES.has(source.family)) return false;
+  if (!companion.accepted || companion.family !== 'video') return false;
+  const companionExt = extensionOf(input.companionFileName);
+  if (!PLAYABLE_SIDECAR_EXTENSIONS.has(companionExt)) return false;
+  const sourceStem = fileStem(input.sourceFileName);
+  const companionStem = fileStem(input.companionFileName);
+  return companionStem === sourceStem || companionStem === `${sourceStem}_preview`;
+}

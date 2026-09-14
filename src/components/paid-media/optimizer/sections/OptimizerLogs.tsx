@@ -13,10 +13,11 @@
 // Each event renders its own shape (readLifecycleRow) rather than the first four keys of its
 // `fields` bag printed as monospace `key: value`.
 
-import type { OptimizerLogRow } from '@continuum/contracts';
+import type { OptimizerFeedWindowDays, OptimizerLogRow } from '@continuum/contracts';
 import { ScrollTextIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { EmptyState } from '@/components/shared/state/EmptyState';
+import { Button } from '@/components/ui/button';
 import { useOptimizerLogs } from '../useOptimizerData';
 import { FeedFooter, FeedSkeleton, PortfolioFilter, RowHeader } from './feedChrome';
 import {
@@ -28,7 +29,10 @@ import {
 } from './logFilters';
 import { OptimizerReadError } from './OptimizerReadError';
 
-type OptimizerLogsProps = { brandId: string };
+type OptimizerLogsProps = {
+  brandId: string;
+  windowDays?: OptimizerFeedWindowDays;
+};
 
 const LEVEL_STYLES: Record<OptimizerLogRow['level'], string> = {
   info: 'border-border/70 bg-muted/40 text-muted-foreground',
@@ -101,9 +105,18 @@ export function LifecycleLogRow({ row }: { row: OptimizerLogRow }) {
   );
 }
 
-export function OptimizerLogs({ brandId }: OptimizerLogsProps) {
-  const logsQuery = useOptimizerLogs(brandId);
+export function OptimizerLogs({ brandId, windowDays = 7 }: OptimizerLogsProps) {
+  const logsQuery = useOptimizerLogs(brandId, windowDays);
   const [portfolio, setPortfolio] = useState<string>(ALL_PORTFOLIOS);
+  const [archiveRequested, setArchiveRequested] = useState(false);
+  const archiveQuery = useOptimizerLogs(brandId, 30, {
+    archive: true,
+    enabled: archiveRequested,
+  });
+
+  useEffect(() => {
+    setArchiveRequested(false);
+  }, [windowDays]);
 
   if (logsQuery.isLoading) return <FeedSkeleton />;
 
@@ -120,7 +133,14 @@ export function OptimizerLogs({ brandId }: OptimizerLogsProps) {
   }
 
   const logs = logsQuery.data;
-  if (logs.length === 0) {
+  const archiveRows = archiveRequested ? archiveQuery.data : [];
+  const nothingLoaded = logs.length === 0 && archiveRows.length === 0;
+  const archiveExhaustedEmpty =
+    archiveRequested &&
+    !archiveQuery.isLoading &&
+    !archiveQuery.isError &&
+    archiveRows.length === 0;
+  if (nothingLoaded && (windowDays !== 30 || archiveExhaustedEmpty)) {
     return (
       <EmptyState
         headline="The optimizer has not run yet"
@@ -130,11 +150,13 @@ export function OptimizerLogs({ brandId }: OptimizerLogsProps) {
     );
   }
 
-  const portfolioNames = distinctPortfolioNames(logs);
+  const combined = archiveRequested ? [...logs, ...archiveRows] : logs;
+  const portfolioNames = distinctPortfolioNames(combined);
   // A previously-chosen portfolio can vanish after a refetch; fall back to "all"
   // so the feed never silently renders empty against a stale selection.
   const effectivePortfolio = portfolioNames.includes(portfolio) ? portfolio : ALL_PORTFOLIOS;
-  const visible = filterByPortfolio(logs, effectivePortfolio);
+  const visible = filterByPortfolio(combined, effectivePortfolio);
+  const showLoadOlder = windowDays === 30 && !logsQuery.hasNextPage && !archiveRequested;
 
   return (
     <div className="space-y-3">
@@ -146,24 +168,60 @@ export function OptimizerLogs({ brandId }: OptimizerLogsProps) {
           label="Filter the server log by portfolio"
         />
       </div>
-      {visible.length === 0 ? (
+      {visible.length === 0 && combined.length > 0 ? (
         <p className="rounded-lg border border-border/70 bg-muted/30 px-3 py-6 text-center text-xs text-muted-foreground">
           No events for this portfolio in what has loaded.
         </p>
-      ) : (
+      ) : visible.length === 0 ? null : (
         <ul className="space-y-2">
           {visible.map((row) => (
-            <LifecycleLogRow key={row.id} row={row} />
+            <LifecycleLogRow key={`${row.id}-${row.ts}`} row={row} />
           ))}
         </ul>
       )}
       <FeedFooter
-        loaded={logs.length}
-        hasMore={logsQuery.hasNextPage}
-        isFetchingMore={logsQuery.isFetchingNextPage}
-        onLoadMore={() => void logsQuery.fetchNextPage()}
+        loaded={combined.length}
+        hasMore={logsQuery.hasNextPage || (archiveRequested && Boolean(archiveQuery.hasNextPage))}
+        isFetchingMore={
+          logsQuery.isFetchingNextPage ||
+          (archiveRequested && Boolean(archiveQuery.isFetchingNextPage))
+        }
+        onLoadMore={() => {
+          if (logsQuery.hasNextPage) {
+            void logsQuery.fetchNextPage();
+            return;
+          }
+          if (archiveRequested && archiveQuery.hasNextPage) {
+            void archiveQuery.fetchNextPage();
+          }
+        }}
         noun="events"
       />
+      {showLoadOlder ? (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => setArchiveRequested(true)}
+          >
+            Load older history
+          </Button>
+        </div>
+      ) : null}
+      {archiveRequested && archiveQuery.isError ? (
+        <p className="text-2xs text-destructive">
+          Older history could not be loaded. The last 30 days are still available.
+        </p>
+      ) : null}
+      {archiveRequested &&
+      !archiveQuery.isLoading &&
+      !archiveQuery.isError &&
+      archiveRows.length === 0 &&
+      !archiveQuery.hasNextPage ? (
+        <p className="text-2xs text-muted-foreground">No events older than 30 days.</p>
+      ) : null}
     </div>
   );
 }

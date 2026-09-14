@@ -2,8 +2,8 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
-import { toast } from 'sonner';
 import { z } from 'zod';
+import { toast } from '@/components/ui/toast-imperative';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 

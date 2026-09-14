@@ -179,7 +179,7 @@ export function UnsplashBrowser({ brandProfileId, onPick, onClose }: UnsplashBro
                   style={{ backgroundColor: photo.color }}
                 />
               </button>
-              <figcaption className="truncate text-[11px] leading-tight text-muted-foreground">
+              <figcaption className="truncate text-xs leading-tight text-muted-foreground">
                 <a
                   href={photo.photographerUrl}
                   target="_blank"

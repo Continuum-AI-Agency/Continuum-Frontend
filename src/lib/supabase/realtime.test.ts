@@ -48,7 +48,11 @@ const makeChannel = (topic: string, options?: unknown): FakeChannel => {
   return channel;
 };
 
+let setAuthImpl: () => Promise<unknown> = () => Promise.resolve();
+const setAuth = mock(() => setAuthImpl());
+
 const fakeClient = {
+  realtime: { setAuth },
   channel: (topic: string, options?: unknown): FakeChannel => {
     const existing = channels.find((candidate) => candidate.topic === topic);
     if (existing) return existing;
@@ -61,6 +65,13 @@ const fakeClient = {
     const index = channels.indexOf(channel);
     if (index >= 0) channels.splice(index, 1);
   },
+};
+
+/** setAuth → catch → subscribe is two microtasks when setAuth is already resolved. */
+const flushAuth = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 };
 
 mock.module('@/lib/supabase/client', () => ({
@@ -81,6 +92,9 @@ afterEach(() => {
   channels.length = 0;
   removed.length = 0;
   nextStatuses = null;
+  setAuthImpl = () => Promise.resolve();
+  setAuth.mockClear();
+  fakeClient.realtime = { setAuth };
 });
 
 describe('subscribeToPostgresChanges', () => {
@@ -103,7 +117,7 @@ describe('subscribeToPostgresChanges', () => {
     second();
   });
 
-  it('binds before subscribing, so a second binding never hits the joined guard', () => {
+  it('binds before subscribing, so a second binding never hits the joined guard', async () => {
     expect(() =>
       subscribeToPostgresChanges({
         label: 'agent-run:canvas:run_1',
@@ -115,6 +129,7 @@ describe('subscribeToPostgresChanges', () => {
     ).not.toThrow();
 
     expect(channels[0]?.filters).toHaveLength(2);
+    await flushAuth();
     expect(channels[0]?.joining).toBe(true);
   });
 
@@ -179,7 +194,7 @@ describe('subscribeToPostgresChanges', () => {
     expect(channels[0]?.options).toBeUndefined();
   });
 
-  it('reports every status to onStatus but only SUBSCRIBED to onSubscribed', () => {
+  it('reports every status to onStatus but only SUBSCRIBED to onSubscribed', async () => {
     nextStatuses = ['CHANNEL_ERROR', 'SUBSCRIBED', 'CLOSED'];
     const statuses: string[] = [];
     let backfills = 0;
@@ -192,12 +207,13 @@ describe('subscribeToPostgresChanges', () => {
         backfills += 1;
       },
     });
+    await flushAuth();
 
     expect(statuses).toEqual(['CHANNEL_ERROR', 'SUBSCRIBED', 'CLOSED']);
     expect(backfills).toBe(1);
   });
 
-  it('runs onSubscribed once the channel is live', () => {
+  it('runs onSubscribed once the channel is live', async () => {
     let live = false;
     subscribeToPostgresChanges({
       label: 'rows',
@@ -206,6 +222,7 @@ describe('subscribeToPostgresChanges', () => {
         live = true;
       },
     });
+    await flushAuth();
 
     expect(live).toBe(true);
   });
@@ -236,5 +253,60 @@ describe('subscribeToPostgresChanges', () => {
     channelBeforeTeardown?.handlers[0]?.({ eventType: 'INSERT', new: { seq: 1 }, old: {} });
 
     expect(seen).toEqual([]);
+  });
+
+  it('does not subscribe until setAuth resolves, so the join is not anon', async () => {
+    let release: (() => void) | undefined;
+    setAuthImpl = () =>
+      new Promise((resolve) => {
+        release = () => resolve(undefined);
+      });
+
+    subscribeToPostgresChanges({ label: 'rows', bindings: [binding(() => {})] });
+
+    expect(setAuth).toHaveBeenCalledTimes(1);
+    expect(channels[0]?.joining).toBe(false);
+
+    release?.();
+    await flushAuth();
+
+    expect(channels[0]?.joining).toBe(true);
+  });
+
+  it('still subscribes when setAuth rejects, so a missing session does not mute the channel forever', async () => {
+    setAuthImpl = () => Promise.reject(new Error('no session'));
+
+    subscribeToPostgresChanges({ label: 'rows', bindings: [binding(() => {})] });
+    await flushAuth();
+
+    expect(channels[0]?.joining).toBe(true);
+  });
+
+  it('joins immediately when the client has no setAuth, so a partial mock does not throw', () => {
+    (fakeClient as { realtime?: { setAuth: typeof setAuth } }).realtime = undefined;
+
+    expect(() =>
+      subscribeToPostgresChanges({ label: 'rows', bindings: [binding(() => {})] }),
+    ).not.toThrow();
+    expect(channels[0]?.joining).toBe(true);
+  });
+
+  it('skips subscribe when torn down before setAuth resolves', async () => {
+    let release: (() => void) | undefined;
+    setAuthImpl = () =>
+      new Promise((resolve) => {
+        release = () => resolve(undefined);
+      });
+
+    const teardown = subscribeToPostgresChanges({
+      label: 'rows',
+      bindings: [binding(() => {})],
+    });
+    const channel = channels[0];
+    teardown();
+    release?.();
+    await flushAuth();
+
+    expect(channel?.joining).toBe(false);
   });
 });

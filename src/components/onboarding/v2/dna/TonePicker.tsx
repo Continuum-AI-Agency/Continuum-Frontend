@@ -17,7 +17,7 @@ export function TonePicker() {
       {tags.map((tag) => (
         <span
           key={tag}
-          className="group inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_20%,transparent)] bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] px-2.5 py-1 text-xs font-medium text-[var(--cs-violet,#5a39ff)]"
+          className="group inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--primary)_20%,transparent)] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] px-2.5 py-1 text-xs font-medium text-[var(--primary)]"
         >
           {tag}
           <button
@@ -57,7 +57,7 @@ export function TonePicker() {
                   }}
                   className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors ${
                     active
-                      ? 'bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] text-[var(--cs-violet,#5a39ff)]'
+                      ? 'bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] text-[var(--primary)]'
                       : 'hover:bg-muted text-foreground'
                   }`}
                 >

@@ -53,7 +53,7 @@ export default async function AutomationsPage() {
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10 text-violet-500">
                     <Workflow className="h-4 w-4" />
                   </span>
-                  <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <span className="rounded-full border px-2 py-0.5 text-2xs uppercase tracking-wider text-muted-foreground">
                     Workflow
                   </span>
                 </div>

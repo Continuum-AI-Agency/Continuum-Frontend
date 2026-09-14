@@ -61,7 +61,7 @@ mock.module('@/hooks/useSession', () => ({
   }),
 }));
 
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast-imperative', () => ({
   toast: {
     error: mockToastError,
   },

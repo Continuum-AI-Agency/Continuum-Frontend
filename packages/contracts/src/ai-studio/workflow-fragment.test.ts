@@ -348,6 +348,37 @@ describe('canvas pipeline metadata', () => {
     });
   });
 
+  it('pins an editor revision and maps a public port to one reusable source slot', () => {
+    const parsed = canvasPipelineMetadataSchema.parse({
+      version: 1,
+      kind: 'assembly',
+      editorConfigurations: [
+        {
+          nodeRef: 'cut',
+          projectId: '11111111-1111-4111-8111-111111111111',
+          projectRevision: 7,
+          projectFingerprint: 'fingerprint-7',
+        },
+      ],
+      inputPorts: [
+        {
+          id: 'product',
+          nodeRef: 'cut',
+          dataType: 'image',
+          pipelineBinding: { kind: 'editor_source', slotId: 'product-shot', mediaKind: 'image' },
+        },
+      ],
+      outputPorts: [{ id: 'master', nodeRef: 'cut', dataType: 'video' }],
+    });
+
+    expect(parsed.inputPorts[0]?.pipelineBinding).toEqual({
+      kind: 'editor_source',
+      slotId: 'product-shot',
+      mediaKind: 'image',
+    });
+    expect(parsed.editorConfigurations?.[0]?.projectRevision).toBe(7);
+  });
+
   it('rejects Element candidates declared on input ports', () => {
     const parsed = canvasPipelineMetadataSchema.safeParse({
       version: 1,

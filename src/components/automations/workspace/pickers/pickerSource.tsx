@@ -67,7 +67,7 @@ export function RawIdFallbackField({
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
       />
-      <p className="text-[11px] leading-4 text-muted-foreground">{reason}</p>
+      <p className="text-xs leading-4 text-muted-foreground">{reason}</p>
     </div>
   );
 }

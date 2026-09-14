@@ -282,7 +282,7 @@ export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNod
             </span>
             <div className="min-w-0">
               <NodeTitle className="truncate text-sm">{node.label}</NodeTitle>
-              <NodeDescription className="mt-0.5 truncate text-[11px]">
+              <NodeDescription className="mt-0.5 truncate text-xs">
                 {catalogItem.label}
               </NodeDescription>
             </div>
@@ -299,7 +299,7 @@ export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNod
             {node.description || catalogItem.description}
           </p>
           <div className="workflow-node-meta flex items-center justify-between gap-2 border-t border-border/60 pt-2">
-            <span className="truncate text-[11px] text-muted-foreground">{nodeDetail(node)}</span>
+            <span className="truncate text-xs text-muted-foreground">{nodeDetail(node)}</span>
             <div className="flex shrink-0 items-center gap-1">
               {unavailable ? (
                 <Badge variant="destructive">Unavailable</Badge>
@@ -322,7 +322,7 @@ export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNod
             />
             {executionState.label}
           </Pill>
-          <span className="font-mono text-[10px] text-muted-foreground">
+          <span className="font-mono text-2xs text-muted-foreground">
             {inputs.length} in · {outputs.length} out
           </span>
         </NodeFooter>

@@ -1,12 +1,7 @@
 import type { Connection } from '@xyflow/react';
 import type { CampaignCanvasEdge, CampaignCanvasNode, CampaignNodeType } from '../types';
 
-type ChildNodeTypeWithSingleParent =
-  | 'ad-set'
-  | 'ad'
-  | 'creative'
-  | 'openai-ad-group'
-  | 'openai-ad';
+type ChildNodeTypeWithSingleParent = 'ad-set' | 'ad' | 'creative' | 'openai-ad-group' | 'openai-ad';
 
 interface SingleParentIssue {
   childId: string;

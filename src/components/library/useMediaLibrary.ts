@@ -266,7 +266,7 @@ export function useMediaLibrary(params: {
           ...scoped,
           event: 'INSERT',
           onRow: (row) => {
-            // Only auto-surface inserts in the unfiltered "All Media" view; a
+            // Only auto-surface inserts in the unfiltered Everything dump; a
             // collection view shows only its members, which a raw insert is not.
             // Likewise respect active source/type/tag chips so a filtered view
             // never gains a non-matching row. A custom-field filter cannot be

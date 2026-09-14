@@ -330,6 +330,14 @@ export const clientRenderMutationResponseSchema = z.object({ job: clientRenderJo
 export const hyperframesClientRenderWorkSchema = z.discriminatedUnion('kind', [
   z
     .object({
+      kind: z.literal('finalize'),
+      revisionId: databaseUuidSchema,
+      fingerprint: z.string().length(64),
+      assetId: databaseUuidSchema,
+    })
+    .strict(),
+  z
+    .object({
       kind: z.literal('review'),
       revisionId: databaseUuidSchema,
       fingerprint: z.string().length(64),

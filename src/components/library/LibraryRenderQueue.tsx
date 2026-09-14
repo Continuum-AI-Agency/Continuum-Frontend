@@ -1,7 +1,7 @@
 'use client';
 
 import type { ClientRenderJob } from '@continuum/contracts';
-import { Cpu, ExternalLink, Film, Loader2, RotateCcw, Square } from 'lucide-react';
+import { ChevronDown, Cpu, ExternalLink, Film, Loader2, RotateCcw, Square } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -37,10 +37,12 @@ export function LibraryRenderQueue() {
   const router = useRouter();
   const [consentJob, setConsentJob] = useState<ClientRenderJob | null>(null);
   const [starting, setStarting] = useState(false);
+  const [open, setOpen] = useState(false);
   const jobs = useMemo(
     () => queue.jobs.filter((job) => VISIBLE_STATES.has(job.state)),
     [queue.jobs],
   );
+  const failed = jobs.filter((job) => job.state === 'failed').length;
 
   if (jobs.length === 0) return null;
 
@@ -60,22 +62,32 @@ export function LibraryRenderQueue() {
 
   return (
     <>
-      <section aria-labelledby="library-render-queue-title" className="space-y-3">
-        <div className="flex items-end justify-between gap-4">
-          <div>
+      <section aria-labelledby="library-render-queue-title" className="rounded-xl border bg-card">
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 px-4 py-3 text-left"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <ChevronDown
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? '' : '-rotate-90'}`}
+          />
+          <div className="min-w-0 flex-1">
             <h2 id="library-render-queue-title" className="text-sm font-semibold">
-              Ready to render
+              Jobs
             </h2>
             <p className="text-xs text-muted-foreground">
-              Pending media artifacts waiting for an operator to use this device.
+              {failed > 0
+                ? `${failed} failed · ${jobs.length} on this device`
+                : `${jobs.length} waiting on this device`}
             </p>
           </div>
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {jobs.length} job{jobs.length === 1 ? '' : 's'}
-          </span>
-        </div>
+          <span className="text-xs tabular-nums text-muted-foreground">{jobs.length}</span>
+        </button>
 
-        <div className="grid grid-cols-2 gap-[var(--app-shell-gap)] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div
+          className={`grid grid-cols-2 gap-[var(--app-shell-gap)] border-t px-4 py-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 ${open ? '' : 'hidden'}`}
+        >
           {jobs.map((job) => {
             const active = ['claimed', 'rendering', 'saving'].includes(job.state);
             const local = queue.isRunningLocally(job);
@@ -87,7 +99,7 @@ export function LibraryRenderQueue() {
                   ) : (
                     <Film className="size-8 text-muted-foreground/45" />
                   )}
-                  <span className="absolute left-2 top-2 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-medium shadow-sm">
+                  <span className="absolute left-2 top-2 rounded-full bg-background/90 px-2 py-0.5 text-2xs font-medium shadow-sm">
                     {KIND_LABEL[job.kind]}
                   </span>
                 </div>
@@ -95,7 +107,7 @@ export function LibraryRenderQueue() {
                 <div className="space-y-2 p-3">
                   <div>
                     <h3 className="truncate text-sm font-semibold">{job.title}</h3>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       {job.inputs.length} durable input{job.inputs.length === 1 ? '' : 's'} ·{' '}
                       {job.phase ?? (job.state === 'ready' ? 'Waiting for an operator' : job.state)}
                     </p>
@@ -111,7 +123,7 @@ export function LibraryRenderQueue() {
                   ) : null}
 
                   {job.errorMessage ? (
-                    <p className="line-clamp-2 text-[11px] text-destructive">{job.errorMessage}</p>
+                    <p className="line-clamp-2 text-xs text-destructive">{job.errorMessage}</p>
                   ) : null}
 
                   <div className="flex items-center gap-1">
@@ -161,7 +173,7 @@ export function LibraryRenderQueue() {
                       </Button>
                     ) : null}
                     {active && !local ? (
-                      <span className="ml-auto text-[11px] text-muted-foreground">
+                      <span className="ml-auto text-xs text-muted-foreground">
                         On another device
                       </span>
                     ) : null}

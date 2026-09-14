@@ -138,7 +138,7 @@ export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: P
           Cancel
         </Button>
         <Button
-          variant="brand"
+          variant="default"
           size="sm"
           disabled={!canSave}
           aria-busy={saving || undefined}

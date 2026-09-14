@@ -1,10 +1,16 @@
 'use client';
 
-import type { MediaAsset, MediaSearchFilters, MediaSearchResultItem } from '@continuum/contracts';
+import type {
+  LibraryBrowseDestination,
+  MediaAsset,
+  MediaSearchFilters,
+  MediaSearchResultItem,
+} from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  buildLibraryQuery,
+  buildLibraryBrowseParams,
   type KindFilterValue,
+  kindToMediaType,
   type SourceFilterValue,
   toContractKind,
   toContractSource,
@@ -13,10 +19,65 @@ import {
 const PAGE_SIZE = 36;
 const SEARCH_DEBOUNCE_MS = 400;
 
+export const STUDIO_LIBRARY_DESTINATIONS: {
+  value: LibraryBrowseDestination;
+  label: string;
+}[] = [
+  { value: 'home', label: 'Home' },
+  { value: 'canvas', label: 'Canvas' },
+  { value: 'elements', label: 'Elements' },
+  { value: 'sources', label: 'Sources' },
+];
+
 export type StudioLibraryFilters = {
   source: SourceFilterValue;
   kind: KindFilterValue;
+  destination: LibraryBrowseDestination;
 };
+
+/** Same destination mapping the Library sidebar uses, so Studio Home is not Sources. */
+export function buildStudioLibraryBrowseParams(
+  brandId: string,
+  filters: StudioLibraryFilters,
+  cursor: string | null,
+  limit = PAGE_SIZE,
+): URLSearchParams | null {
+  if (filters.destination === 'elements') return null;
+  const kind = toContractKind(filters.kind);
+  const source = toContractSource(filters.source);
+  const destination = filters.destination;
+  const mediaType = destination === 'sources' ? 'project_file' : kindToMediaType(kind ?? null);
+  const createdWith =
+    destination === 'canvas' ? (source ? [source] : ['canvas']) : source ? [source] : [];
+  return buildLibraryBrowseParams(
+    {
+      brandId,
+      destination,
+      mediaType,
+      createdWith,
+      placements: [],
+      tags: [],
+      reviewStatuses: [],
+      ownerIds: [],
+      campaignIds: [],
+      projectIds: [],
+      usageRights: [],
+      leadingOnly: false,
+      templateOnly: false,
+      aspectRatios: [],
+      ratios: [],
+      fonts: [],
+      search: '',
+      sort: destination === 'home' ? 'updated_desc' : 'created_desc',
+      performanceWindow: 'd30',
+      layout: 'grid',
+      boardGroupBy: 'review_status',
+      limit,
+      cursor,
+    },
+    { includeBrandId: true, cursor },
+  );
+}
 
 export type UseStudioLibraryBrowserResult = {
   assets: MediaAsset[];
@@ -36,9 +97,9 @@ export type UseStudioLibraryBrowserResult = {
 };
 
 // Browses the unified media library from inside the ai-studio sheet. Lists via
-// GET /api/library/assets (paginated) and switches to POST /api/library/search
-// (text mode) when a query is present. Both honor the source/type chips. The
-// endpoints already return signed MediaAsset[], so there is no client mapping.
+// GET /api/library/browse (the same RPC /library uses) and switches to POST
+// /api/library/search (text mode) when a query is present. Destinations match
+// the Library sidebar so Studio Home is not a dump of source files.
 export function useStudioLibraryBrowser(
   brandId: string,
   options?: {
@@ -67,43 +128,44 @@ export function useStudioLibraryBrowser(
   const [filters, setFiltersState] = useState<StudioLibraryFilters>({
     source: options?.initialFilters?.source ?? 'all',
     kind: options?.initialFilters?.kind ?? 'all',
+    destination: options?.initialFilters?.destination ?? 'home',
   });
 
-  const offsetRef = useRef(0);
+  const cursorRef = useRef<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guards against stale async responses overwriting a newer request.
   const requestIdRef = useRef(0);
 
   const runListPage = useCallback(
-    async (offset: number) => {
+    async (cursor: string | null) => {
       const requestId = ++requestIdRef.current;
       setLoading(true);
       try {
-        const sp = buildLibraryQuery({
-          brandId,
-          source: filters.source,
-          kind: filters.kind,
-          offset,
-          limit: PAGE_SIZE,
-        });
-        const resp = await fetch(`/api/library/assets?${sp.toString()}`);
+        const sp = buildStudioLibraryBrowseParams(brandId, filters, cursor);
+        if (!sp) {
+          setAssets([]);
+          setHasMore(false);
+          setError(null);
+          return;
+        }
+        const resp = await fetch(`/api/library/browse?${sp.toString()}`);
         if (!resp.ok) {
           throw new Error(`Library request failed (${resp.status})`);
         }
         const data = (await resp.json()) as {
           items?: MediaAsset[];
-          nextOffset?: number | null;
+          nextCursor?: string | null;
         };
         if (requestId !== requestIdRef.current) return;
         setError(null);
         const incoming = data.items ?? [];
         setAssets((prev) => {
-          if (offset === 0) return incoming;
+          if (!cursor) return incoming;
           const seen = new Set(prev.map((a) => a.id));
           return [...prev, ...incoming.filter((a) => !seen.has(a.id))];
         });
-        offsetRef.current = offset + incoming.length;
-        setHasMore(data.nextOffset != null);
+        cursorRef.current = data.nextCursor ?? null;
+        setHasMore(Boolean(data.nextCursor));
       } catch (err) {
         if (requestId === requestIdRef.current) {
           console.error('[useStudioLibraryBrowser] list failed', err);
@@ -114,7 +176,7 @@ export function useStudioLibraryBrowser(
         if (requestId === requestIdRef.current) setLoading(false);
       }
     },
-    [brandId, filters.source, filters.kind],
+    [brandId, filters.source, filters.kind, filters.destination],
   );
 
   const runSearch = useCallback(
@@ -155,7 +217,7 @@ export function useStudioLibraryBrowser(
         if (requestId === requestIdRef.current) setLoading(false);
       }
     },
-    [brandId, filters.source, filters.kind],
+    [brandId, filters.source, filters.kind, filters.destination],
   );
 
   // Re-run whenever brand, filters, or the (debounced) query changes.
@@ -164,8 +226,8 @@ export function useStudioLibraryBrowser(
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const trimmed = query.trim();
     if (!trimmed) {
-      offsetRef.current = 0;
-      void runListPage(0);
+      cursorRef.current = null;
+      void runListPage(null);
       return;
     }
     debounceRef.current = setTimeout(() => void runSearch(trimmed), SEARCH_DEBOUNCE_MS);
@@ -178,7 +240,7 @@ export function useStudioLibraryBrowser(
 
   const loadMore = useCallback(() => {
     if (loading || !hasMore || query.trim()) return;
-    void runListPage(offsetRef.current);
+    void runListPage(cursorRef.current);
   }, [loading, hasMore, query, runListPage]);
 
   const refresh = useCallback(() => {
@@ -187,8 +249,8 @@ export function useStudioLibraryBrowser(
       void runSearch(trimmed);
       return;
     }
-    offsetRef.current = 0;
-    void runListPage(0);
+    cursorRef.current = null;
+    void runListPage(null);
   }, [query, runListPage, runSearch]);
 
   const setQuery = useCallback((value: string) => setQueryState(value), []);

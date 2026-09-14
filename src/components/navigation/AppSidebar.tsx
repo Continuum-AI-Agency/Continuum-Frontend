@@ -185,7 +185,7 @@ function AppSidebarInner({
                   aria-label={disabledName}
                   tabIndex={-1}
                   size="default"
-                  className="group relative cursor-not-allowed opacity-50 text-[var(--sidebar-muted)] hover:bg-transparent hover:text-[var(--sidebar-muted)]"
+                  className="group relative cursor-not-allowed opacity-50 text-[var(--sidebar-muted)] [--btn-fill:transparent] hover:bg-transparent hover:text-[var(--sidebar-muted)]"
                 >
                   <DisabledIcon className="!h-[18px] !w-[18px] stroke-[1.8] text-[var(--sidebar-muted)]" />
                   <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
@@ -245,7 +245,7 @@ function AppSidebarInner({
               tooltip={item.label}
               size="default"
               className={cn(
-                'group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]',
+                'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
                 active || isSubActive
                   ? 'text-[var(--sidebar-foreground)]'
                   : 'text-[var(--sidebar-muted)]',
@@ -332,7 +332,7 @@ function AppSidebarInner({
                           isActive={active || isSubActive}
                           onMouseEnter={() => router.prefetch(item.href)}
                           className={cn(
-                            'group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]',
+                            'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
                             active || isSubActive
                               ? 'text-[var(--sidebar-foreground)]'
                               : 'text-[var(--sidebar-muted)]',
@@ -384,7 +384,7 @@ function AppSidebarInner({
                           size="md"
                           onMouseEnter={() => router.prefetch(subItem.href)}
                           className={cn(
-                            'group relative text-[var(--sidebar-muted)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)] data-[active=true]:text-[var(--sidebar-foreground)] data-[active=true]:bg-[var(--sidebar-active-bg)]',
+                            'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-muted)] hover:text-[var(--sidebar-foreground)] data-[active=true]:text-[var(--sidebar-foreground)] data-[active=true]:bg-[var(--sidebar-active-bg)]',
                             'group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0',
                           )}
                         >
@@ -422,7 +422,7 @@ function AppSidebarInner({
           size="default"
           onMouseEnter={() => router.prefetch(item.href)}
           className={cn(
-            'group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]',
+            'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
             active ? 'text-[var(--sidebar-foreground)]' : 'text-[var(--sidebar-muted)]',
           )}
         >
@@ -465,7 +465,7 @@ function AppSidebarInner({
                     <button
                       type="button"
                       onClick={() => openPalette(true)}
-                      className="flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]"
+                      className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] hover:text-[var(--sidebar-foreground)]"
                       aria-label="Search (⌘K)"
                     >
                       <Search className="h-[14px] w-[14px]" />
@@ -535,7 +535,7 @@ function AppSidebarInner({
                     size="default"
                     onMouseEnter={() => router.prefetch(item.href)}
                     className={cn(
-                      'group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]',
+                      'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
                       active ? 'text-[var(--sidebar-foreground)]' : 'text-[var(--sidebar-muted)]',
                     )}
                   >
@@ -563,7 +563,7 @@ function AppSidebarInner({
                 size="default"
                 disabled={isPending}
                 onClick={() => logout()}
-                className="group text-[var(--destructive)] hover:bg-[var(--sidebar-destructive-bg)] hover:text-[var(--destructive)] transition-all duration-150"
+                className="group btn-fill [--btn-fill:var(--sidebar-destructive-bg)] text-[var(--destructive)] hover:text-[var(--destructive)]"
               >
                 <LogOut className="!h-[18px] !w-[18px] stroke-[1.8]" />
                 <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
@@ -580,7 +580,7 @@ function AppSidebarInner({
                 tooltip={appearance === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
                 size="default"
                 onClick={toggle}
-                className="group text-[var(--sidebar-muted)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)] transition-all duration-150"
+                className="group btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-muted)] hover:text-[var(--sidebar-foreground)]"
               >
                 <span className="relative inline-flex h-[18px] w-[18px] items-center justify-center">
                   <AnimatePresence initial={false} mode="popLayout">
@@ -610,12 +610,15 @@ function AppSidebarInner({
             <SidebarMenuItem>
               <SidebarMenuButton
                 size="lg"
-                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               >
-                <div className="flex items-center justify-center w-8">
-                  <CurrentUserAvatar size={32} />
+                {/* Collapsed, the row is 27px with no padding, so a 32px avatar overflows and
+                    SidebarMenuButton's own overflow-hidden crops it flat top and bottom. The
+                    important modifier is needed because the size arrives as an inline style. */}
+                <div className="flex items-center justify-center w-8 group-data-[collapsible=icon]:w-auto">
+                  <CurrentUserAvatar size={32} className="group-data-[collapsible=icon]:!size-6" />
                 </div>
-                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                   <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">
                     {userDisplayName}
                   </span>

@@ -28,12 +28,12 @@ export function RunProgressBanner({ buckets, running, onRetry }: RunProgressBann
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
       {running ? (
         <span className="inline-flex items-center gap-1.5 text-foreground">
-          <CircleNotch className="h-3 w-3 animate-spin text-[var(--cs-violet,#5a39ff)]" />
+          <CircleNotch className="h-3 w-3 animate-spin text-[var(--primary)]" />
           Analyzing {counts.done + counts.running} of {TOTAL}…
         </span>
       ) : (
         <span className="inline-flex items-center gap-1.5 text-foreground">
-          <CheckCircle className="h-3 w-3 text-[var(--cs-success,#53a88a)]" />
+          <CheckCircle className="h-3 w-3 text-[var(--success)]" />
           {counts.done} of {TOTAL} sections complete
         </span>
       )}

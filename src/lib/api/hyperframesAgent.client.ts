@@ -19,6 +19,7 @@ const revisionResponseSchema = z.object({
   assets: z.array(
     z.object({
       assetId: z.string().min(1),
+      assetVersionId: z.string().min(1),
       kind: z.enum(['image', 'video', 'audio']),
       mimeType: z.string().min(1),
       url: z.string().url(),

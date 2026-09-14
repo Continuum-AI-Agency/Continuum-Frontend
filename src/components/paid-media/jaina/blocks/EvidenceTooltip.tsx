@@ -88,9 +88,7 @@ export function EvidenceTooltip({ provenance, datasetId }: EvidenceTooltipProps)
               ))}
             </dl>
           ) : null}
-          {id ? (
-            <p className="mt-1.5 font-mono text-[10px] text-muted-foreground/70">{id}</p>
-          ) : null}
+          {id ? <p className="mt-1.5 font-mono text-2xs text-muted-foreground/70">{id}</p> : null}
         </TooltipContent>
       </Tooltip>
       <span id={descriptionId} className="sr-only">

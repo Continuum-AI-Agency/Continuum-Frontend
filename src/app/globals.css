@@ -322,7 +322,7 @@ html {
   --popover: #0b1220;
   --popover-foreground: #e5e7eb;
   --primary: #7c6fff;
-  --primary-foreground: #ffffff;
+  --primary-foreground: #0b1020; /* white on dark --primary #7c6fff is 3.77:1 */
   --secondary: #0ea5e9;
   --secondary-foreground: #0f172a;
   --muted: #0f172a;
@@ -346,7 +346,7 @@ html {
   --sidebar: #0b1220;
   --sidebar-foreground: #e5e7eb;
   --sidebar-primary: #7c6fff;
-  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary-foreground: #0b1020;
   --sidebar-accent: #0f172a;
   --sidebar-accent-foreground: #e5e7eb;
   --sidebar-border: rgba(255, 255, 255, 0.1);
@@ -409,7 +409,7 @@ html {
     --popover: #0b1220;
     --popover-foreground: #e5e7eb;
     --primary: #7c6fff;
-    --primary-foreground: #ffffff;
+    --primary-foreground: #0b1020; /* white on dark --primary #7c6fff is 3.77:1 */
     --secondary: #0ea5e9;
     --secondary-foreground: #0f172a;
     --muted: #0f172a;
@@ -433,7 +433,7 @@ html {
     --sidebar: #0b1220;
     --sidebar-foreground: #e5e7eb;
     --sidebar-primary: #7c6fff;
-    --sidebar-primary-foreground: #ffffff;
+    --sidebar-primary-foreground: #0b1020;
     --sidebar-accent: #0f172a;
     --sidebar-accent-foreground: #e5e7eb;
     --sidebar-border: rgba(255, 255, 255, 0.1);
@@ -1047,11 +1047,22 @@ body {
   }
 }
 
-/* Motion and perf guardrails */
+/* Motion and perf guardrails.
+   .wave-layer carries no animation of its own — the 90/120/150s drifts live on
+   .layer-1/2/3, so guarding only the parent left all three running under reduce. */
 @media (prefers-reduced-motion: reduce) {
   .wave-layer {
-    animation: none !important;
     filter: blur(calc(var(--waves-blur) * 0.5));
+  }
+  .layer-1,
+  .layer-2,
+  .layer-3,
+  .particle-layer.top,
+  .particle-layer.bottom,
+  .sidebar-gradient-bg,
+  .selected-by-other,
+  .animate-pulse-glow {
+    animation: none !important;
   }
 }
 
@@ -1222,7 +1233,8 @@ body {
     color 120ms linear 110ms,
     background-color 200ms ease,
     border-color 200ms ease,
-    box-shadow 200ms ease;
+    box-shadow 200ms ease,
+    transform 120ms ease;
 
   &::before {
     content: "";

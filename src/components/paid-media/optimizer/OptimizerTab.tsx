@@ -19,6 +19,7 @@ import {
   ScrollTextIcon,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { OptimizerNotificationsSection } from '@/components/settings/account/OptimizerNotificationsSection';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -377,6 +378,15 @@ export function OptimizerTab({
 
         <TabsContent value="logs" className="min-h-0 overflow-y-auto p-2">
           <OptimizerActivity brandId={brandId} currency={currency} />
+          <div className="mt-4 border-t border-border/60 pt-4">
+            <SectionHeader title="Notifications" />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Get a Slack message when the optimizer moves budget, instead of checking this log.
+            </p>
+            <div className="mt-3">
+              <OptimizerNotificationsSection brandId={brandId} />
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </section>

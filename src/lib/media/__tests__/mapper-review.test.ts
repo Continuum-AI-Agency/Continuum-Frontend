@@ -50,6 +50,11 @@ describe('rowToMediaAsset review workflow columns', () => {
     expect(asset.checksum).toBeNull();
   });
 
+  it('maps stored aspect_ratio and infers 16:9 from pixels when the column is absent', () => {
+    expect(rowToMediaAsset({ ...baseRow, aspect_ratio: '9:16' }).aspectRatio).toBe('9:16');
+    expect(rowToMediaAsset(baseRow).aspectRatio).toBe('16:9');
+  });
+
   it("tolerates kind 'file' rows", () => {
     const row: MediaAssetRow = {
       ...baseRow,

@@ -43,7 +43,6 @@ import {
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Connection as CanvasConnection } from '@/components/ai-elements/connection';
 import { Controls as CanvasControls } from '@/components/ai-elements/controls';
@@ -62,6 +61,7 @@ import {
 } from '@/components/ui/command';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast-imperative';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   fetchAutomation,
@@ -193,7 +193,7 @@ function NodePalette({
             heading={group.label}
             className="px-2 pb-2 [&_[cmdk-group-heading]]:pt-2"
           >
-            <p className="px-2 pb-1.5 text-[11px] leading-4 text-muted-foreground">
+            <p className="px-2 pb-1.5 text-xs leading-4 text-muted-foreground">
               {group.description}
             </p>
             {group.items.map((item) => {
@@ -224,7 +224,7 @@ function NodePalette({
                         <Badge variant="muted">Preview</Badge>
                       ) : null}
                     </span>
-                    <span className="mt-0.5 block line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+                    <span className="mt-0.5 block line-clamp-2 text-xs leading-4 text-muted-foreground">
                       {item.description}
                     </span>
                   </span>
@@ -902,7 +902,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                   enabled={automation.enabled}
                 />
               </div>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 {saveState === 'saving'
                   ? 'Saving draft…'
                   : saveState === 'saved'
@@ -1090,7 +1090,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                 {leftOpen ? (
                   <div className="min-w-0 px-2">
                     <h2 className="text-xs font-medium">Node library</h2>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {AUTOMATION_NODE_CATALOG.flatMap((group) => group.items).length} typed steps
                     </p>
                   </div>
@@ -1313,14 +1313,14 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                       position="top-right"
                       className="flex items-center gap-0 overflow-hidden rounded-lg border-border/80 bg-card/92 p-0 shadow-sm backdrop-blur"
                     >
-                      <span className="px-2.5 py-2 font-mono text-[10px] text-muted-foreground">
+                      <span className="px-2.5 py-2 font-mono text-2xs text-muted-foreground">
                         {nodes.length} nodes
                       </span>
-                      <span className="border-l border-border/70 px-2.5 py-2 font-mono text-[10px] text-muted-foreground">
+                      <span className="border-l border-border/70 px-2.5 py-2 font-mono text-2xs text-muted-foreground">
                         {edges.length} connections
                       </span>
                       {locked ? (
-                        <span className="flex items-center gap-1.5 border-l border-border/70 px-2.5 py-2 text-[10px] font-medium text-muted-foreground">
+                        <span className="flex items-center gap-1.5 border-l border-border/70 px-2.5 py-2 text-2xs font-medium text-muted-foreground">
                           <Lock aria-hidden="true" />
                           Read only
                         </span>

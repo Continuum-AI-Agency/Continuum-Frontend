@@ -437,10 +437,7 @@ test('admin brand picker shows every match in full and scrolls to the rest', asy
     for (const query of VIVO_QUERIES) {
       await searchBox.fill(query);
       const match = options.filter({ hasText: VIVO_BRAND_NAME });
-      await expect(
-        match.first(),
-        `#278: "${query}" must find ${VIVO_BRAND_NAME}`,
-      ).toBeVisible();
+      await expect(match.first(), `#278: "${query}" must find ${VIVO_BRAND_NAME}`).toBeVisible();
       await expect(page.getByText('No brands found.')).toBeHidden();
     }
 

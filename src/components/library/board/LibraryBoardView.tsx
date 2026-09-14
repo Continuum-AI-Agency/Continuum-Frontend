@@ -30,7 +30,6 @@ import {
 } from '@dnd-kit/core';
 import { ChevronDown, Columns3 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/components/ui/toast-imperative';
 import { serializeFieldFilters, setAssetFieldValue } from '@/lib/library/customFields';
 import { isGroupableField } from '@/lib/library/customFieldValue';
 import { transitionReviewStatus } from '@/lib/library/review';

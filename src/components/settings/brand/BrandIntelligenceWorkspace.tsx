@@ -85,7 +85,7 @@ function Lifecycle({ overview }: { overview: BrandIntelligenceOverview }) {
           <span className="min-w-0 flex-1 truncate text-xs capitalize">
             {section.replaceAll('_', ' ')}
           </span>
-          <span className="font-mono text-[10px] uppercase text-muted-foreground">{status}</span>
+          <span className="font-mono text-2xs uppercase text-muted-foreground">{status}</span>
         </div>
       ))}
     </div>
@@ -203,7 +203,7 @@ export function BrandIntelligenceWorkspace({
           <div className="max-w-2xl space-y-2">
             <div className="flex items-center gap-2">
               <Radar className="size-4 text-indigo-300" />
-              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-200">
+              <span className="font-mono text-xs uppercase tracking-[0.18em] text-indigo-200">
                 Brand Kit intelligence
               </span>
             </div>

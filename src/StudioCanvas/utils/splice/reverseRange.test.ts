@@ -9,7 +9,7 @@
 // last source frame from DECODED pixels.
 
 import { describe, expect, it } from 'bun:test';
-import { reverseChunks } from './reverseRange';
+import { reverseChunks, reversePlanarAudio } from './reverseRange';
 
 describe('reverseChunks', () => {
   it('walks the range from its END back to its start', () => {
@@ -50,5 +50,13 @@ describe('reverseChunks', () => {
     for (const bad of [0, -1, Number.NaN]) {
       expect(reverseChunks(0, 1, bad).length).toBe(2);
     }
+  });
+});
+
+describe('reversePlanarAudio', () => {
+  it('reverses frames without swapping stereo channels', () => {
+    expect(
+      Array.from(reversePlanarAudio([new Float32Array([1, 2, 3]), new Float32Array([10, 20, 30])])),
+    ).toEqual([3, 2, 1, 30, 20, 10]);
   });
 });

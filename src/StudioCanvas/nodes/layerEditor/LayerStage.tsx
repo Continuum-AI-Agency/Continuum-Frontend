@@ -34,6 +34,7 @@ import {
   type Point,
   type Rect,
   rectsIntersect,
+  sampledLayer,
   unionBounds,
 } from '../../utils/layers/layerTransform';
 import { ShaderLayerImage } from './ShaderLayerImage';
@@ -111,6 +112,8 @@ export interface LayerStageProps {
   onDropFiles?: (files: File[]) => void;
   /** Alignment snapping to the frame and to the other layers' edges and centres. */
   snapEnabled: boolean;
+  /** Motion playhead, seconds. Layers with keyframes are sampled here. */
+  motionTimeSec?: number;
 }
 
 export function LayerStage({
@@ -125,6 +128,7 @@ export function LayerStage({
   background,
   onDropFiles,
   snapEnabled,
+  motionTimeSec = 0,
 }: LayerStageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -771,23 +775,25 @@ export function LayerStage({
             isolation: 'isolate',
           }}
         >
-          {layers.map((layer) =>
-            layer.visible && sources.has(layer.id) ? (
+          {layers.map((layer) => {
+            if (!layer.visible || !sources.has(layer.id)) return null;
+            const drawn = sampledLayer(layer, motionTimeSec);
+            return (
               <ShaderLayerImage
                 key={layer.id}
-                layer={layer}
+                layer={drawn}
                 src={sources.get(layer.id) ?? ''}
                 style={{
-                  width: layer.sourceWidth,
-                  height: layer.sourceHeight,
+                  width: drawn.sourceWidth,
+                  height: drawn.sourceHeight,
                   transformOrigin: '0 0',
-                  transform: layerTransformCss(layer),
-                  opacity: layer.opacity,
-                  mixBlendMode: layer.blendMode === 'normal' ? undefined : layer.blendMode,
+                  transform: layerTransformCss(drawn),
+                  opacity: drawn.opacity,
+                  mixBlendMode: drawn.blendMode === 'normal' ? undefined : drawn.blendMode,
                 }}
               />
-            ) : null,
-          )}
+            );
+          })}
 
           {/* Gizmo. In composition coordinates, with non-scaling strokes so the outline
               is one screen pixel whatever the zoom. */}

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { configure, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type React from 'react';
 import type { ReactNode } from 'react';
-import React from 'react';
 
 // The real Select is a Base UI popup; a native select drives the same
 // `onValueChange` and lets the test change category without a portal dance.
@@ -101,9 +101,7 @@ describe('ElementCreateForm', () => {
       expect(screen.getByText(`${ELEMENT_MEMBER_LIMIT}/${ELEMENT_MEMBER_LIMIT}`)).toBeTruthy();
     });
     expect(
-      screen.getByText(
-        `An Element holds at most ${ELEMENT_MEMBER_LIMIT} images — 2 not added.`,
-      ),
+      screen.getByText(`An Element holds at most ${ELEMENT_MEMBER_LIMIT} images — 2 not added.`),
     ).toBeTruthy();
   });
 

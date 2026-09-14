@@ -14,6 +14,7 @@ export const createLibraryCollectionOperationSchema = z
     ...collectionCommandBase,
     name: z.string().trim().min(1).max(120),
     kind: z.enum(['manual', 'smart']).default('manual'),
+    parentId: z.string().uuid().nullable().optional(),
     smartQuery: libraryBrowseQuerySchema.omit({ cursor: true }).optional(),
   })
   .strict()
@@ -24,6 +25,13 @@ export const createLibraryCollectionOperationSchema = z
     if (value.smartQuery && value.smartQuery.brandId !== value.brandId) {
       context.addIssue({ code: 'custom', message: 'smartQuery brandId must match brandId' });
     }
+    if (value.kind === 'smart' && value.parentId) {
+      context.addIssue({
+        code: 'custom',
+        path: ['parentId'],
+        message: 'smart collections are root boards',
+      });
+    }
   });
 
 export const updateLibraryCollectionOperationSchema = z
@@ -32,12 +40,17 @@ export const updateLibraryCollectionOperationSchema = z
     ...collectionCommandBase,
     collectionId: z.string().uuid(),
     name: z.string().trim().min(1).max(120).optional(),
+    parentId: z.string().uuid().nullable().optional(),
     smartQuery: libraryBrowseQuerySchema.omit({ cursor: true }).nullable().optional(),
   })
   .strict()
-  .refine((value) => value.name !== undefined || value.smartQuery !== undefined, {
-    message: 'name or smartQuery is required',
-  });
+  .refine(
+    (value) =>
+      value.name !== undefined || value.smartQuery !== undefined || value.parentId !== undefined,
+    {
+      message: 'name, smartQuery, or parentId is required',
+    },
+  );
 
 export const deleteLibraryCollectionOperationSchema = z
   .object({

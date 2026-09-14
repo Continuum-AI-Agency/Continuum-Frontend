@@ -669,7 +669,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(
         page.getByText(/\d+ actions (loaded — there are older ones\.|— that is all of them\.)/),
       ).not.toHaveText(beforeText, { timeout: 60_000 });
-      console.log(`[optimizer-bench] action feed footer after Load more: "${await page.getByText(/\d+ actions /).first().innerText()}"`);
+      console.log(
+        `[optimizer-bench] action feed footer after Load more: "${await page
+          .getByText(/\d+ actions /)
+          .first()
+          .innerText()}"`,
+      );
 
       await shoot(page, '14-activity-actions');
 

@@ -198,9 +198,9 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
           />
         </label>
         <p className="max-w-sm text-xs text-muted-foreground">
-          Optional. After the end date the project stays selectable and its assets stay
-          scoped, but the agent stops being told the brief — a brief written for a finished
-          campaign is not old advice, it is the wrong advice.
+          Optional. After the end date the project stays selectable and its assets stay scoped, but
+          the agent stops being told the brief — a brief written for a finished campaign is not old
+          advice, it is the wrong advice.
         </p>
       </div>
 
@@ -239,7 +239,7 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
           Cancel
         </Button>
         <Button
-          variant="brand"
+          variant="default"
           size="sm"
           disabled={!canSave}
           aria-busy={saving || undefined}

@@ -13,7 +13,16 @@
 
 import type { MediaComment } from '@continuum/contracts';
 import { splitCommentBodyForRender } from '@continuum/contracts';
-import { CheckCircle2, ChevronDown, ChevronRight, History, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  History,
+  Link2,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -46,6 +55,7 @@ type Props = {
   onReply: (parentId: string, body: string) => void;
   onResolve: (commentId: string, resolved: boolean) => void;
   onDelete: (commentId: string) => void;
+  commentHref?: (comment: MediaComment) => string;
 };
 
 function authorLabel(comment: MediaComment): string {
@@ -122,6 +132,7 @@ function ThreadCard({
   onReply,
   onResolve,
   onDelete,
+  href,
 }: {
   brandId?: string;
   thread: CommentThread;
@@ -138,8 +149,10 @@ function ThreadCard({
   onReply: (body: string) => void;
   onResolve: (resolved: boolean) => void;
   onDelete: (commentId: string) => void;
+  href?: string;
 }) {
   const [replying, setReplying] = useState(false);
+  const [copied, setCopied] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -215,6 +228,23 @@ function ThreadCard({
             Reply
           </Button>
         )}
+        {href ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 px-1.5 text-2xs text-muted-foreground"
+            onClick={() => {
+              void navigator.clipboard.writeText(href).then(() => {
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1500);
+              });
+            }}
+          >
+            {copied ? <Check className="size-3" /> : <Link2 className="size-3" />}
+            {copied ? 'Copied' : 'Copy link'}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"
@@ -299,6 +329,7 @@ export function CommentThreads({
   onReply,
   onResolve,
   onDelete,
+  commentHref,
 }: Props) {
   const [showResolved, setShowResolved] = useState(false);
   const [showOtherVersions, setShowOtherVersions] = useState(false);
@@ -351,6 +382,7 @@ export function CommentThreads({
           onReply={(body) => onReply(thread.root.id, body)}
           onResolve={(resolved) => onResolve(thread.root.id, resolved)}
           onDelete={onDelete}
+          href={commentHref?.(thread.root)}
         />
       ))}
 
@@ -375,6 +407,7 @@ export function CommentThreads({
                 onReply={(body) => onReply(thread.root.id, body)}
                 onResolve={(resolved) => onResolve(thread.root.id, resolved)}
                 onDelete={onDelete}
+                href={commentHref?.(thread.root)}
               />
             ))}
         </>
@@ -410,6 +443,7 @@ export function CommentThreads({
                   onReply={(body) => onReply(thread.root.id, body)}
                   onResolve={(resolved) => onResolve(thread.root.id, resolved)}
                   onDelete={onDelete}
+                  href={commentHref?.(thread.root)}
                 />
               );
             })}

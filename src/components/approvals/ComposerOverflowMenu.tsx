@@ -2,8 +2,6 @@
 
 import { Ban, Copy, FileJson, MoreHorizontal, SkipForward } from 'lucide-react';
 import * as React from 'react';
-import { toast } from 'sonner';
-
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -13,6 +11,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/toast-imperative';
 import type { RuleAction } from '@/lib/approvals/types';
 
 type Props = {

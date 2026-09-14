@@ -82,11 +82,11 @@ export function PaidPortfolioPicker({
         </SelectContent>
       </Select>
       {!isLoading && options.length === 0 ? (
-        <p className="text-[11px] leading-4 text-muted-foreground">
+        <p className="text-xs leading-4 text-muted-foreground">
           This brand has no optimizer portfolios yet. Create one in Paid Media first.
         </p>
       ) : selected === null ? (
-        <p className="text-[11px] leading-4 text-muted-foreground">
+        <p className="text-xs leading-4 text-muted-foreground">
           This step cannot run or publish until a portfolio is chosen.
         </p>
       ) : null}

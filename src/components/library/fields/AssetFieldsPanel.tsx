@@ -11,9 +11,9 @@
 import type { AssetFieldValue, CustomField, CustomFieldValue } from '@continuum/contracts';
 import { Loader2, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/components/ui/toast-imperative';
 import { listAssetFieldValues, setAssetFieldValue } from '@/lib/library/customFields';
 import { validateCustomFieldValue, valuesByFieldId } from '@/lib/library/customFieldValue';
 import { CustomFieldManagerDialog } from './CustomFieldManagerDialog';

@@ -186,6 +186,13 @@ export const elementOriginRefSchema = z
     product: elementProductFactsSchema.optional(),
     facts: z.array(elementFactSchema).max(ELEMENT_FACT_LIMIT).default([]),
     motionAssetId: z.string().uuid().nullable().default(null),
+    motionRecipe: z
+      .object({
+        durationSec: z.number().finite().positive().max(86_400),
+        keyframes: z.array(z.unknown()).max(500),
+      })
+      .nullable()
+      .optional(),
     referenceHistory: z.array(z.string().uuid()).default([]),
     defaultReferenceAssetId: z.string().uuid().nullable().default(null),
     revisions: z.array(elementRevisionSchema).default([]),
@@ -213,6 +220,13 @@ export const elementRecordSchema = z
     product: elementProductFactsSchema.nullable().optional(),
     facts: z.array(elementFactSchema).max(ELEMENT_FACT_LIMIT).optional(),
     motionAssetId: z.string().uuid().nullable().optional(),
+    motionRecipe: z
+      .object({
+        durationSec: z.number().finite().positive().max(86_400),
+        keyframes: z.array(z.unknown()).max(500),
+      })
+      .nullable()
+      .optional(),
     members: z.array(elementMemberSchema).max(ELEMENT_MEMBER_LIMIT),
     referenceHistory: z.array(z.string().uuid()),
     defaultReferenceAssetId: z.string().uuid().nullable(),
@@ -261,6 +275,13 @@ export const createElementRequestSchema = z
     product: elementProductFactsSchema.optional(),
     facts: z.array(elementFactSchema).max(ELEMENT_FACT_LIMIT).default([]),
     motionAssetId: z.string().uuid().nullable().optional(),
+    motionRecipe: z
+      .object({
+        durationSec: z.number().finite().positive().max(86_400),
+        keyframes: z.array(z.unknown()).max(500),
+      })
+      .nullable()
+      .optional(),
     memberAssetIds: memberIdsSchema,
   })
   .strict();
@@ -276,6 +297,13 @@ export const updateElementRequestSchema = z
     product: elementProductFactsSchema.nullable().optional(),
     facts: z.array(elementFactSchema).max(ELEMENT_FACT_LIMIT).optional(),
     motionAssetId: z.string().uuid().nullable().optional(),
+    motionRecipe: z
+      .object({
+        durationSec: z.number().finite().positive().max(86_400),
+        keyframes: z.array(z.unknown()).max(500),
+      })
+      .nullable()
+      .optional(),
     memberAssetIds: memberIdsSchema.optional(),
     expectedUpdatedAt: z.string().optional(),
   })

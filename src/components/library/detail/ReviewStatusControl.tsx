@@ -9,7 +9,6 @@
 import type { AssetReviewEvent, MediaAsset, MediaReviewStatus } from '@continuum/contracts';
 import { ChevronDown, History, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toast-imperative';
 import { listReviewEvents, transitionReviewStatus } from '@/lib/library/review';
 import {
   normalizeReviewStatus,

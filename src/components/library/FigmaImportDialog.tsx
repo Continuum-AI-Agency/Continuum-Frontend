@@ -3,9 +3,7 @@
 import type { FigmaFile, FigmaFrame, FigmaProject } from '@continuum/contracts';
 import { Check, Loader2, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { FigmaIcon } from '@/components/shared/icons';
-
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -23,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast-imperative';
 import {
   beginFigmaConnection,
   importFigmaFrames,

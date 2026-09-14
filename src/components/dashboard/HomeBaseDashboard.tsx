@@ -88,7 +88,7 @@ export function HomeBaseDashboard({
               <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {activeConfig.title}
               </h1>
-              <p className="min-w-0 truncate text-[11px] text-muted-foreground/80">
+              <p className="min-w-0 truncate text-xs text-muted-foreground/80">
                 {activeConfig.microcopy}
               </p>
             </div>

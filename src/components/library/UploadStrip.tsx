@@ -79,7 +79,7 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel }: P
               style={{ width: `${u.progress}%` }}
             />
           </div>
-          <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground">
+          <div className="mt-1 flex items-center justify-between text-2xs text-muted-foreground">
             <span>{formatSize(u.sizeBytes)}</span>
             <span className="capitalize">{u.status}</span>
           </div>

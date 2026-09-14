@@ -2,13 +2,13 @@
 
 import type { Project } from '@continuum/contracts';
 import { Check, FolderOpen } from 'lucide-react';
-import { toast } from 'sonner';
 import {
   DropdownMenuItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/toast-imperative';
 import { useProjectMemberships, useProjectMutations, useProjects } from '@/lib/projects/hooks';
 import type { DocumentView } from './types';
 

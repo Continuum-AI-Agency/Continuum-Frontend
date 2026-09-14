@@ -8,6 +8,7 @@ import {
 } from '@continuum/contracts';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { requestLibraryPreviewProxy } from './previewProxy';
 import { writeAssetSourceMetadata } from './sourceMetadata';
 import { generateVideoPoster } from './videoPoster';
 
@@ -173,14 +174,26 @@ export async function attachAssetPreview(params: {
   if (format.previewStrategy === 'browser_video') {
     const poster = await generateVideoPoster(params.file);
     if (!poster) {
+      const wantsProxy = params.file.name.toLowerCase().endsWith('.mov');
       await markPreviewState({
         ...params,
         client,
-        state: 'failed',
-        errorCode: 'browser_decode_failed',
-        errorMessage: 'This browser could not decode a representative video frame.',
+        state: wantsProxy ? 'awaiting_companion' : 'failed',
+        errorCode: wantsProxy ? 'proxy_transcode_pending' : 'browser_decode_failed',
+        errorMessage: wantsProxy
+          ? 'This MOV is not browser-playable. Building an H.264 proxy, or add an MP4 companion.'
+          : 'This browser could not decode a representative video frame.',
       });
-      return 'failed';
+      if (wantsProxy) {
+        void requestLibraryPreviewProxy({
+          brandId: params.brandId,
+          assetId: params.assetId,
+          assetVersionId: params.assetVersionId,
+        }).catch((error: unknown) => {
+          console.error('[assetPreview] MOV proxy request failed', error);
+        });
+      }
+      return wantsProxy ? 'awaiting_companion' : 'failed';
     }
     await persistAssetRendition({
       ...params,
@@ -208,6 +221,25 @@ export async function attachAssetPreview(params: {
       },
     });
     return 'ready';
+  }
+
+  if (format.previewStrategy === 'proxy_transcode') {
+    await markPreviewState({
+      ...params,
+      client,
+      state: 'awaiting_companion',
+      errorCode: 'proxy_transcode_pending',
+      errorMessage:
+        'Building an H.264 proxy so this can play in Continuum. You can also drop a same-stem MP4.',
+    });
+    void requestLibraryPreviewProxy({
+      brandId: params.brandId,
+      assetId: params.assetId,
+      assetVersionId: params.assetVersionId,
+    }).catch((error: unknown) => {
+      console.error('[assetPreview] MXF proxy request failed', error);
+    });
+    return 'awaiting_companion';
   }
 
   if (format.previewStrategy === 'browser_raster') {

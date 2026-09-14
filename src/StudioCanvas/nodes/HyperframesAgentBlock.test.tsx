@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { useAgentRunStore } from '@/lib/agents/runStore';
 import { ClientRenderContext } from '@/lib/client-render/ClientRenderProvider';
 import {
   markRenderStartedHere,
@@ -124,6 +125,7 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
       return element;
     }) as typeof document.createElement;
     useStudioStore.setState({ brandId: undefined, nodes: [], edges: [] });
+    useAgentRunStore.getState().reset();
     resetRendersStartedHere();
   });
 
@@ -233,5 +235,162 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
       queueWith([RENDER_JOB], { isRunningLocally: () => true }),
     );
     expect(getByText(/rendering continues in this tab/i)).not.toBeNull();
+  });
+
+  it('projects durable model and media feedback into a production timeline', () => {
+    useAgentRunStore.getState().upsertRun({
+      runId: RENDER_JOB.sourceId,
+      agent: 'hyperframes',
+      sessionId: 'session-1',
+      brandId: RENDER_JOB.brandId,
+      status: 'running',
+      createdAt: '2026-09-10T00:00:00.000Z',
+      title: 'HyperFrames Agent',
+    });
+    useAgentRunStore.getState().appendEvents(RENDER_JOB.sourceId, [
+      {
+        eventId: 'event-0',
+        seq: 0,
+        ts: '2026-09-10T00:00:01.000Z',
+        type: 'hyperframes.agent.step',
+        data: { phase: 'drafting', message: 'Designing the composition', pass: 0 },
+      },
+      {
+        eventId: 'event-1',
+        seq: 1,
+        ts: '2026-09-10T00:00:02.000Z',
+        type: 'hyperframes.composition.revision',
+        data: {
+          revisionId: 'revision-1',
+          revisionNumber: 1,
+          fingerprint: 'f'.repeat(64),
+          compositionStorage: { bucket: 'compositions', path: 'revision-1.html' },
+          feedback: {
+            summary: 'A three-beat introduction led by the portrait.',
+            assetDecisions: [
+              {
+                assetId: 'image-asset',
+                role: 'used',
+                note: 'The portrait anchors the opening beat.',
+              },
+            ],
+          },
+        },
+      },
+      {
+        eventId: 'event-2',
+        seq: 2,
+        ts: '2026-09-10T00:00:03.000Z',
+        type: 'hyperframes.visual_review.completed',
+        data: { revisionId: 'revision-1', accepted: true, warnings: [], pass: 0, craftScore: 8 },
+      },
+    ]);
+
+    const { getByText } = renderNode(
+      hyperData({
+        activeRunId: RENDER_JOB.sourceId,
+        status: 'reviewing',
+        isExecuting: true,
+      }),
+      queueWith([{ ...RENDER_JOB, state: 'claimed', phase: 'Agent checking review' }]),
+    );
+
+    expect(getByText('Inputs')).not.toBeNull();
+    expect(getByText('Draft')).not.toBeNull();
+    expect(getByText('Review')).not.toBeNull();
+    expect(getByText('Render')).not.toBeNull();
+    expect(getByText('A three-beat introduction led by the portrait.')).not.toBeNull();
+    expect(getByText('The portrait anchors the opening beat.')).not.toBeNull();
+    expect(getByText(/Craft 8\/10/i)).not.toBeNull();
+  });
+
+  it('shows persisted quality and turns a scene blocker into a targeted revision', () => {
+    const { getByLabelText, getByText } = renderNode(
+      hyperData({
+        sessionId: 'session-1',
+        status: 'completed',
+        qualitySummary: {
+          revisionId: 'revision-1',
+          gate: 'failed',
+          advisoryScore: 0.82,
+          criticGating: 'advisory-only',
+          blockers: [
+            { sceneId: 'cta', criterionId: 'motion', message: 'Make the CTA entrance legible.' },
+          ],
+          rubric: [],
+          scenes: [
+            {
+              id: 'hook',
+              role: 'hook',
+              start_seconds: 0,
+              duration_seconds: 5,
+              layout: 'media-fullbleed',
+              copy: { title: 'Open' },
+              intentional_hold: false,
+              motion: {
+                verb: 'rise',
+                entrance_ease: 'ease-out',
+                body_ease: 'linear',
+                exit_ease: 'ease-in',
+              },
+            },
+            {
+              id: 'cta',
+              role: 'cta',
+              start_seconds: 5,
+              duration_seconds: 5,
+              layout: 'outro',
+              copy: { title: 'Try it' },
+              intentional_hold: false,
+              motion: {
+                verb: 'fade',
+                entrance_ease: 'ease-out',
+                body_ease: 'linear',
+                exit_ease: 'ease-in',
+              },
+            },
+          ],
+          modelProvenance: {
+            draftModelId: 'gemini-3.5-flash-lite',
+            repairModelIds: [],
+            criticModelId: 'gemini-3.5-flash-lite',
+          },
+        },
+      }),
+    );
+
+    expect(getByText(/Production slate · needs revision/i)).not.toBeNull();
+    expect(getByText(/8.2\/10 advisory/i)).not.toBeNull();
+    expect(getByText(/Critic gemini-3.5-flash-lite \(advisory\)/i)).not.toBeNull();
+    fireEvent.click(getByLabelText('Revise cta scene'));
+
+    expect(node()?.data).toMatchObject({
+      prompt: 'Make the CTA entrance legible.',
+      status: 'idle',
+      revisionTarget: {
+        revisionId: 'revision-1',
+        sceneId: 'cta',
+        criterionId: 'motion',
+      },
+    });
+  });
+
+  it('shows the render failure over a stale queued node and retries the same job', () => {
+    const retried: unknown[] = [];
+    const failed = {
+      ...RENDER_JOB,
+      state: 'failed' as const,
+      phase: 'Loading composition',
+      errorMessage: 'Could not load the composition. Check your connection and retry.',
+    };
+    const { getByText, queryByText } = renderNode(
+      hyperData({ status: 'queued', isExecuting: true }),
+      queueWith([failed], { retry: async (target: unknown) => void retried.push(target) }),
+    );
+
+    expect(queryByText(/^Queued$/)).toBeNull();
+    expect(getByText(/Could not load the composition/i)).not.toBeNull();
+    fireEvent.click(getByText('Retry'));
+    expect(retried).toEqual([failed]);
   });
 });

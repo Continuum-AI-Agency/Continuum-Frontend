@@ -1,7 +1,9 @@
 'use client';
 
+import type { MediaAsset } from '@continuum/contracts';
 import { ImageIcon, Layers, Loader2, Plus, Redo2, Undo2, Upload } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { LibraryMediaPickerDialog } from '@/components/library/editor/LibraryMediaPickerDialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -19,7 +21,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import type { MediaAsset } from '@continuum/contracts';
 import type { LayerEditorLayer } from '../../types';
 import {
   compositeLayers,
@@ -27,7 +28,6 @@ import {
   measureSource,
 } from '../../utils/layers/compositeLayers';
 import { type Frame, writeFrame } from '../../utils/layers/frameModel';
-import { LibraryMediaPickerDialog } from '@/components/library/editor/LibraryMediaPickerDialog';
 import {
   isPlaceableImage,
   layerSourceFromAsset,
@@ -58,6 +58,7 @@ import {
 } from '../../utils/layers/layerOps';
 import type { LayerSource } from '../../utils/layers/layerSources';
 import { LayerInspector } from './LayerInspector';
+import { LayerMotionDock } from './LayerMotionDock';
 import { LayerStage } from './LayerStage';
 import { LayersPanel } from './LayersPanel';
 import { useLayerEditorKeymap } from './useLayerEditorKeymap';
@@ -127,6 +128,7 @@ export function LayerEditorDialog({
   }, []);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const [motionTimeSec, setMotionTimeSec] = useState(0);
   const [composing, setComposing] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const seededRef = useRef(false);
@@ -192,7 +194,6 @@ export function LayerEditorDialog({
    * one — so keying the signing effect on it would re-sign the whole document sixty times
    * a second during a drag. Nothing about a layer's source changes when it moves.
    */
-
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `assetKey` IS the dependency
   // — it is the part of `doc.layers` this effect reads, taken through a ref so that
@@ -720,10 +721,7 @@ export function LayerEditorDialog({
                     Upload an image…
                   </DropdownMenuItem>
                   {brandId ? (
-                    <DropdownMenuItem
-                      className="text-2xs"
-                      onSelect={() => setLibraryOpen(true)}
-                    >
+                    <DropdownMenuItem className="text-2xs" onSelect={() => setLibraryOpen(true)}>
                       <ImageIcon className="mr-2 h-3 w-3" />
                       From the Library…
                     </DropdownMenuItem>
@@ -798,19 +796,27 @@ export function LayerEditorDialog({
               />
             </aside>
 
-            <LayerStage
-              frame={doc.frame}
-              layers={doc.layers}
-              sources={displayUrls}
-              background={doc.background}
-              selectedIds={selectedIds}
-              onSelectionChange={setSelectedIds}
-              onBegin={() => dispatch({ type: 'begin' })}
-              onPreview={(next) => dispatch({ type: 'preview', doc: { ...doc, layers: next } })}
-              onCancel={() => dispatch({ type: 'cancel' })}
-              onDropFiles={(files) => void placeFiles(files)}
-              snapEnabled={snapEnabled}
-            />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <LayerStage
+                frame={doc.frame}
+                layers={doc.layers}
+                sources={displayUrls}
+                background={doc.background}
+                selectedIds={selectedIds}
+                onSelectionChange={setSelectedIds}
+                onBegin={() => dispatch({ type: 'begin' })}
+                onPreview={(next) => dispatch({ type: 'preview', doc: { ...doc, layers: next } })}
+                onCancel={() => dispatch({ type: 'cancel' })}
+                onDropFiles={(files) => void placeFiles(files)}
+                snapEnabled={snapEnabled}
+                motionTimeSec={motionTimeSec}
+              />
+              <LayerMotionDock
+                layers={doc.layers}
+                timeSec={motionTimeSec}
+                onSeek={setMotionTimeSec}
+              />
+            </div>
 
             <aside className="w-64 shrink-0 overflow-y-auto border-l border-border/60">
               <LayerInspector

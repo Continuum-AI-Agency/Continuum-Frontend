@@ -69,6 +69,23 @@ describe('resolveStageMedia', () => {
     expect(stage).toMatchObject({ kind: 'video', src: 'https://storage.test/aep-preview.mp4' });
   });
 
+  it('does not put an MXF original on the player', () => {
+    const mxf = {
+      ...HEAD_ASSET,
+      fileName: 'camera.mxf',
+      mimeType: 'application/mxf',
+      preview: {
+        assetVersionId: '11111111-1111-4111-8111-111111111111',
+        state: 'awaiting_companion' as const,
+        kind: null,
+        signedUrl: null,
+      },
+    };
+    const stage = resolveStageMedia({ asset: mxf, viewedVersion: null });
+    expect(stage.kind).toBe('file');
+    expect(stage.src).toBeNull();
+  });
+
   it('shows the head asset when no older version is picked', () => {
     const stage = resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null });
 

@@ -1,8 +1,93 @@
 import { describe, expect, test } from 'bun:test';
-import { applyEditorCommandBatch, createEditorProjectV2, type EditorCommandBatch } from './index';
+import {
+  applyEditorCommandBatch,
+  bindEditorProjectSources,
+  createEditorProjectV2,
+  type EditorCommandBatch,
+  editorProjectSourceSlots,
+} from './index';
 
 const user = { actorId: 'user-1', actorType: 'user' as const };
 const system = { actorId: 'generation-worker', actorType: 'system' as const };
+
+test('pipeline source binding changes only the pinned source and fingerprint', () => {
+  const project = createEditorProjectV2({
+    projectId: 'project-bind',
+    title: 'Bound creative',
+    width: 1080,
+    height: 1080,
+  });
+  const withClip = {
+    ...project,
+    durationSec: 6,
+    tracks: [
+      {
+        id: 'overlay-track',
+        name: 'Overlay',
+        kind: 'overlay' as const,
+        order: 0,
+        enabled: true,
+        locked: false,
+        muted: false,
+        solo: false,
+        clips: [
+          {
+            id: 'product-shot',
+            name: 'Product',
+            kind: 'overlay' as const,
+            mediaKind: 'image' as const,
+            timelineStartSec: 2,
+            durationSec: 4,
+            enabled: true,
+            locked: false,
+            tags: [],
+            source: {
+              sourceType: 'library_asset' as const,
+              assetId: 'old-asset',
+              renditionId: 'old-version',
+              slotId: 'product',
+            },
+            transform: {
+              position: { x: 0.72, y: 0.31, unit: 'normalized' as const },
+              scaleX: 0.4,
+              scaleY: 0.4,
+              rotationDeg: 8,
+              anchorX: 0.5,
+              anchorY: 0.5,
+              opacity: 1,
+            },
+            crop: { left: 0, top: 0, right: 0, bottom: 0 },
+            blendMode: 'normal' as const,
+            effects: [],
+            keyframes: [],
+          },
+        ],
+      },
+    ],
+  };
+  const bound = bindEditorProjectSources(withClip, [
+    { slotId: 'product', assetId: 'new-asset', versionId: 'new-version' },
+  ]);
+  const clip = bound.tracks[0]?.clips[0];
+  expect(editorProjectSourceSlots(withClip)).toEqual([
+    { slotId: 'product', label: 'Product', mediaKind: 'image' },
+  ]);
+  expect(clip && 'source' in clip ? clip.source : null).toMatchObject({
+    assetId: 'new-asset',
+    renditionId: 'new-version',
+  });
+  expect(clip && 'transform' in clip ? clip.transform.position : null).toEqual({
+    x: 0.72,
+    y: 0.31,
+    unit: 'normalized',
+  });
+  expect(bound.fingerprint).not.toBe(project.fingerprint);
+  expect(() =>
+    bindEditorProjectSources(withClip, [
+      { slotId: 'missing', assetId: 'new-asset', versionId: 'new-version' },
+    ]),
+  ).toThrow('Unknown editor source slot');
+});
 
 const command = (
   project: ReturnType<typeof createEditorProjectV2>,
@@ -549,6 +634,169 @@ describe('editor project reducer', () => {
     });
   });
 
+  test('upserts a keyframe by property and time, keeping the existing id', () => {
+    const seeded = projectWithTimeline();
+    const project = applyEditorCommandBatch(
+      seeded,
+      command(seeded, {
+        commandType: 'upsert_keyframe',
+        trackId: 'video-main',
+        clipId: 'clip-left',
+        keyframe: {
+          id: 'opacity-start',
+          property: 'transform.opacity',
+          timeSec: 0.5,
+          value: 0.2,
+          interpolation: 'linear',
+        },
+      }),
+    );
+    const keyed = applyEditorCommandBatch(
+      project,
+      command(project, {
+        commandType: 'upsert_keyframe',
+        trackId: 'video-main',
+        clipId: 'clip-left',
+        keyframe: {
+          id: 'opacity-start-again',
+          property: 'transform.opacity',
+          timeSec: 0.5,
+          value: 0.9,
+          interpolation: 'spring',
+          spring: { bounce: 0.4 },
+        },
+      }),
+    );
+    const clip = keyed.tracks[0]?.clips[0];
+    expect(clip && 'keyframes' in clip ? clip.keyframes : []).toEqual([
+      expect.objectContaining({
+        id: 'opacity-start',
+        property: 'transform.opacity',
+        timeSec: 0.5,
+        value: 0.9,
+        interpolation: 'spring',
+        spring: { bounce: 0.4 },
+      }),
+    ]);
+  });
+
+  test('trim_animation_style stretches compiled keys and set_clip_parent rejects a self-parent', () => {
+    const seeded = projectWithTimeline();
+    const faded = applyEditorCommandBatch(
+      seeded,
+      command(seeded, {
+        commandType: 'apply_animation_style',
+        trackId: 'video-main',
+        clipId: 'clip-left',
+        styleId: 'fade',
+        instanceId: 'fade-1',
+        timelineOffsetSec: 0,
+        durationSec: 0.4,
+      }),
+    );
+    const trimmed = applyEditorCommandBatch(
+      faded,
+      command(faded, {
+        commandType: 'trim_animation_style',
+        trackId: 'video-main',
+        clipId: 'clip-left',
+        instanceId: 'fade-1',
+        startSec: 0,
+        endSec: 2,
+      }),
+    );
+    const keys = trimmed.tracks[0]?.clips[0];
+    const times =
+      keys && 'keyframes' in keys ? keys.keyframes.map((keyframe) => keyframe.timeSec) : [];
+    expect(Math.max(...times)).toBeCloseTo(2);
+    expect(() =>
+      applyEditorCommandBatch(
+        trimmed,
+        command(trimmed, {
+          commandType: 'set_clip_parent',
+          trackId: 'video-main',
+          clipId: 'clip-left',
+          parentClipId: 'clip-left',
+        }),
+      ),
+    ).toThrow('parent itself');
+    const parented = applyEditorCommandBatch(
+      trimmed,
+      command(trimmed, {
+        commandType: 'set_clip_parent',
+        trackId: 'video-main',
+        clipId: 'clip-right',
+        parentClipId: 'clip-left',
+      }),
+    );
+    expect(parented.tracks[0]?.clips[1]?.parentClipId).toBe('clip-left');
+  });
+
+  test('apply_animation_style compiles a fade onto the clip transform', () => {
+    const seeded = projectWithTimeline();
+    const next = applyEditorCommandBatch(
+      seeded,
+      command(seeded, {
+        commandType: 'apply_animation_style',
+        trackId: 'video-main',
+        clipId: 'clip-left',
+        styleId: 'fade',
+        instanceId: 'fade-1',
+        timelineOffsetSec: 0,
+        durationSec: 0.4,
+      }),
+    );
+    const clip = next.tracks[0]?.clips[0];
+    const keys = clip && 'keyframes' in clip ? clip.keyframes : [];
+    expect(keys.map((keyframe) => keyframe.property)).toEqual([
+      'transform.opacity',
+      'transform.opacity',
+    ]);
+    expect(keys[0]).toMatchObject({ timeSec: 0, value: 0, interpolation: 'bezier' });
+    expect(keys[1]).toMatchObject({ timeSec: 0.4, value: 1 });
+  });
+
+  test('remove_keyframes drops the named stops and leaves the rest', () => {
+    const seeded = projectWithTimeline();
+    const project = applyEditorCommandBatch(
+      seeded,
+      command(seeded, {
+        commandType: 'set_keyframes',
+        trackId: 'video-main',
+        clipId: 'clip-left',
+        keyframes: [
+          {
+            id: 'keep',
+            property: 'transform.opacity',
+            timeSec: 0,
+            value: 0,
+            interpolation: 'linear',
+          },
+          {
+            id: 'drop',
+            property: 'transform.opacity',
+            timeSec: 1,
+            value: 1,
+            interpolation: 'linear',
+          },
+        ],
+      }),
+    );
+    const next = applyEditorCommandBatch(
+      project,
+      command(project, {
+        commandType: 'remove_keyframes',
+        trackId: 'video-main',
+        clipId: 'clip-left',
+        keyframeIds: ['drop'],
+      }),
+    );
+    const clip = next.tracks[0]?.clips[0];
+    expect(
+      clip && 'keyframes' in clip ? clip.keyframes.map((keyframe) => keyframe.id) : [],
+    ).toEqual(['keep']);
+  });
+
   test('accounts for playback rate when splitting source media', () => {
     const project = projectWithTimeline({ playbackRate: 2 });
 
@@ -727,5 +975,196 @@ describe('editor project reducer', () => {
       ]),
     );
     expect(removed.durationSec).toBe(8);
+  });
+
+  test('updates track state, typed beat markers, and the sound plan atomically', () => {
+    const empty = createEditorProjectV2({
+      projectId: 'project-sound',
+      title: 'Sound project',
+      width: 1920,
+      height: 1080,
+      now: '2026-09-11T00:00:00.000Z',
+    });
+    const project = applyEditorCommandBatch(
+      empty,
+      commandBatch(empty, [
+        {
+          commandType: 'add_track',
+          track: {
+            id: 'audio-main',
+            name: 'Audio',
+            order: 0,
+            enabled: true,
+            locked: false,
+            muted: false,
+            solo: false,
+            kind: 'audio',
+            clips: [],
+          },
+        },
+      ]),
+    );
+    const next = applyEditorCommandBatch(
+      project,
+      commandBatch(project, [
+        { commandType: 'set_track_state', trackId: 'audio-main', muted: true, solo: true },
+        {
+          commandType: 'upsert_marker',
+          marker: { id: 'beat-1', kind: 'beat', timeSec: 0.5, label: 'Beat 1', beatIndex: 0 },
+        },
+        {
+          commandType: 'set_sound_plan',
+          soundPlan: {
+            status: 'draft',
+            narrationText: 'Read this.',
+            voiceId: 'Aoede',
+            musicPrompt: 'Sparse percussion',
+            negativePrompt: 'No vocals',
+            bpm: 120,
+            beatOffsetSec: 0.5,
+            beatConfidence: 0.9,
+            ducking: { enabled: true, reductionDb: -12, attackSec: 0.08, releaseSec: 0.3 },
+            takes: [],
+          },
+        },
+      ]),
+    );
+    expect(next.revision).toBe(project.revision + 1);
+    expect(next.tracks[0]).toMatchObject({ muted: true, solo: true });
+    expect(next.markers[0]).toMatchObject({ kind: 'beat', beatIndex: 0 });
+    expect(next.production.soundPlan).toMatchObject({ bpm: 120, musicPrompt: 'Sparse percussion' });
+
+    const removed = applyEditorCommandBatch(
+      next,
+      command(next, { commandType: 'remove_marker', markerId: 'beat-1' }),
+    );
+    expect(removed.markers).toEqual([]);
+  });
+
+  test('precompose_clips moves overlay clips into a nested sequence and leaves one instance', () => {
+    const empty = createEditorProjectV2({
+      projectId: 'project-precompose',
+      title: 'Precompose',
+      width: 1080,
+      height: 1920,
+      now: '2026-09-11T00:00:00.000Z',
+    });
+    const seeded = applyEditorCommandBatch(
+      empty,
+      commandBatch(empty, [
+        { commandType: 'set_project_metadata', durationSec: 4 },
+        {
+          commandType: 'add_track',
+          track: {
+            id: 'overlays',
+            name: 'Overlays',
+            order: 0,
+            enabled: true,
+            locked: false,
+            muted: false,
+            solo: false,
+            kind: 'overlay',
+            clips: [
+              {
+                id: 'logo',
+                name: 'Logo',
+                kind: 'overlay',
+                mediaKind: 'image',
+                timelineStartSec: 1,
+                durationSec: 2,
+                enabled: true,
+                locked: false,
+                tags: [],
+                source: {
+                  sourceType: 'library_asset',
+                  assetId: 'logo-asset',
+                  renditionId: 'logo-v',
+                },
+                transform: {
+                  position: { x: 0.8, y: 0.2, unit: 'normalized' },
+                  scaleX: 0.25,
+                  scaleY: 0.25,
+                  rotationDeg: 0,
+                  rotateXDeg: 0,
+                  rotateYDeg: 0,
+                  perspective: 0,
+                  anchorX: 0.5,
+                  anchorY: 0.5,
+                  opacity: 1,
+                },
+                crop: { left: 0, top: 0, right: 0, bottom: 0 },
+                blendMode: 'normal',
+                effects: [],
+                keyframes: [
+                  {
+                    id: 'op-0',
+                    property: 'transform.opacity',
+                    timeSec: 0.2,
+                    value: 0,
+                    interpolation: 'linear',
+                  },
+                  {
+                    id: 'op-1',
+                    property: 'transform.opacity',
+                    timeSec: 1,
+                    value: 1,
+                    interpolation: 'linear',
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ]),
+    );
+    const nested = applyEditorCommandBatch(
+      seeded,
+      command(seeded, {
+        commandType: 'precompose_clips',
+        clipIds: ['logo'],
+        nestedSequenceId: 'nest-endcard',
+        instanceClipId: 'nest-instance',
+        instanceTrackId: 'precomps',
+        name: 'End card',
+      }),
+    );
+    expect(nested.tracks.find((track) => track.kind === 'overlay')?.clips).toEqual([]);
+    const instance = nested.tracks.find((track) => track.kind === 'nested_sequence')?.clips[0];
+    expect(instance).toMatchObject({
+      id: 'nest-instance',
+      sequenceId: 'nest-endcard',
+      timelineStartSec: 1,
+      durationSec: 2,
+    });
+    const child = nested.nestedSequences[0];
+    expect(child?.id).toBe('nest-endcard');
+    expect(child?.tracks[0]?.clips[0]).toMatchObject({
+      id: 'logo',
+      timelineStartSec: 0,
+    });
+    expect(() =>
+      applyEditorCommandBatch(
+        nested,
+        command(nested, {
+          commandType: 'set_nested_sequence',
+          sequence: {
+            ...child!,
+            tracks: [
+              {
+                id: 'illegal',
+                name: 'Nest',
+                order: 0,
+                enabled: true,
+                locked: false,
+                muted: false,
+                solo: false,
+                kind: 'nested_sequence',
+                clips: [],
+              },
+            ],
+          },
+        }),
+      ),
+    ).toThrow('cannot contain another nested sequence');
   });
 });

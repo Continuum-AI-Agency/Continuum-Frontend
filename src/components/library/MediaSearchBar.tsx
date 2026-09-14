@@ -132,7 +132,7 @@ export function MediaSearchBar({
         )}
       </form>
       {strategy === 'lexical' && !searching && (
-        <p className="px-1 text-[11px] leading-tight text-muted-foreground/70">
+        <p className="px-1 text-xs leading-tight text-muted-foreground/70">
           Keyword results — this media hasn't been analyzed yet.
         </p>
       )}

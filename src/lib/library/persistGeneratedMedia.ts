@@ -23,6 +23,48 @@ import { attachVideoPoster, isVideoMimeType } from './videoPoster';
  * Two lanes producing two differently-shaped rows is a difference nobody would notice
  * until they tried to trace one.
  */
+export type StoredGeneratedMedia = {
+  bucket: string;
+  storagePath: string;
+  signedUrl: string;
+  sizeBytes: number;
+  mimeType: string;
+};
+
+/**
+ * Bytes in a brand bucket, no Library row. Canvas action outputs that are not
+ * Keep / Export / API Render stay here so they remain wirable after reload.
+ */
+export async function storeGeneratedMediaBytes(params: {
+  blob: Blob;
+  brandId: string;
+  fileName: string;
+  kind: 'image' | 'video';
+}): Promise<StoredGeneratedMedia> {
+  const supabase = createSupabaseBrowserClient();
+  const mimeType = params.blob.type || (params.kind === 'video' ? 'video/mp4' : 'image/png');
+  const file = new File([params.blob], params.fileName, { type: mimeType });
+  const ticket = await signLibraryUpload(supabase, {
+    brandId: params.brandId,
+    fileName: params.fileName,
+    mimeType,
+  });
+  await uploadToLibraryTicket(supabase, ticket, file);
+  const { data, error } = await supabase.storage
+    .from(ticket.bucket)
+    .createSignedUrl(ticket.path, 60 * 60);
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message ?? 'Could not sign the stored canvas output');
+  }
+  return {
+    bucket: ticket.bucket,
+    storagePath: ticket.path,
+    signedUrl: data.signedUrl,
+    sizeBytes: file.size,
+    mimeType,
+  };
+}
+
 export async function persistGeneratedMedia(params: {
   blob: Blob;
   brandId: string;
@@ -37,21 +79,20 @@ export async function persistGeneratedMedia(params: {
   durationMs?: number | null;
 }): Promise<RegisterGeneratedAssetResponse & { bucket: string; storagePath: string }> {
   const supabase = createSupabaseBrowserClient();
-  const mimeType = params.blob.type || (params.kind === 'video' ? 'video/mp4' : 'image/png');
-  const file = new File([params.blob], params.fileName, { type: mimeType });
-
-  const ticket = await signLibraryUpload(supabase, {
+  const stored = await storeGeneratedMediaBytes({
+    blob: params.blob,
     brandId: params.brandId,
     fileName: params.fileName,
-    mimeType,
+    kind: params.kind,
   });
-  await uploadToLibraryTicket(supabase, ticket, file);
+  const mimeType = stored.mimeType;
+  const file = new File([params.blob], params.fileName, { type: mimeType });
 
   const registration: Omit<RegisterGeneratedAssetOperation, 'action'> = {
     brandId: params.brandId,
     kind: params.kind,
-    bucket: ticket.bucket,
-    storagePath: ticket.path,
+    bucket: stored.bucket,
+    storagePath: stored.storagePath,
     fileName: params.fileName,
     mimeType,
     width: params.width ?? null,
@@ -67,7 +108,7 @@ export async function persistGeneratedMedia(params: {
     integrityState: 'unknown',
     // Idempotent on the object identity, so a retried render that re-uploaded the
     // same path registers once rather than minting a second asset for one result.
-    idempotencyKey: `generated:${ticket.bucket}:${ticket.path}`,
+    idempotencyKey: `generated:${stored.bucket}:${stored.storagePath}`,
   };
   const registered = await registerGeneratedAssetOperation(supabase, registration);
 
@@ -86,5 +127,5 @@ export async function persistGeneratedMedia(params: {
     }
   }
 
-  return { ...registered, bucket: ticket.bucket, storagePath: ticket.path };
+  return { ...registered, bucket: stored.bucket, storagePath: stored.storagePath };
 }

@@ -90,7 +90,7 @@ function layerFor(input: {
     localOutputSec,
     sourceTimeSec,
     normalizedTime,
-    opacity: opacityFor(input.item.effects),
+    opacity: opacityFor(input.item.effects, normalizedTime),
     transform: resolveTransformAt(input.item.effects, normalizedTime),
     adjustments: resolveAdjustments(input.item.effects),
     textOverlays: resolveTextOverlays(input.item.effects),

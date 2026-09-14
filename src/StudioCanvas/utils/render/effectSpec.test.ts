@@ -28,9 +28,14 @@ describe('resolveTransformAt', () => {
   it('returns the static transform when there is no Ken Burns', () => {
     expect(resolveTransformAt({ transform: { scale: 1.5 } }, 0.5)).toEqual({
       scale: 1.5,
+      scaleX: 1.5,
+      scaleY: 1.5,
       offsetX: 0,
       offsetY: 0,
       rotate: 0,
+      rotateX: 0,
+      rotateY: 0,
+      perspective: 0,
     });
   });
 
@@ -52,6 +57,9 @@ describe('clipEffectsToCss', () => {
     );
     expect(css.filter).toBe('brightness(1.1)');
     expect(css.transform).toBe('rotate(90deg) scale(1.2, 1.2)');
+    expect(
+      clipEffectsToCss({ transform: { rotateX: 20, rotateY: -10, perspective: 1 } }, 0).transform,
+    ).toBe('perspective(1000px) rotateX(20deg) rotateY(-10deg)');
     expect(css.opacity).toBe(0.5);
   });
 
@@ -75,6 +83,70 @@ describe('scalars', () => {
     expect(opacityFor({ opacity: -1 })).toBe(0);
     expect(opacityFor({ opacity: 2 })).toBe(1);
     expect(opacityFor(undefined)).toBe(1);
+  });
+
+  it('opacityFor samples independent opacity stops at normalized time', () => {
+    const spec = {
+      opacity: 1,
+      opacityStops: [
+        { t: 0, value: 0, interpolation: 'linear' as const },
+        { t: 1, value: 1, interpolation: 'linear' as const },
+      ],
+    };
+    expect(opacityFor(spec, 0)).toBe(0);
+    expect(opacityFor(spec, 0.5)).toBe(0.5);
+    expect(opacityFor(spec, 1)).toBe(1);
+  });
+});
+
+describe('resolveTransformAt — independent channels', () => {
+  it('samples scaleX without dragging scaleY', () => {
+    const spec = {
+      transform: { scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0, rotate: 0 },
+      motionChannels: {
+        scaleX: [
+          { t: 0, value: 1, interpolation: 'linear' as const },
+          { t: 1, value: 2, interpolation: 'linear' as const },
+        ],
+      },
+    };
+    const mid = resolveTransformAt(spec, 0.5);
+    expect(mid.scaleX).toBeCloseTo(1.5);
+    expect(mid.scaleY).toBe(1);
+  });
+
+  it('honors bezier easing on offsetX', () => {
+    const spec = {
+      transform: { offsetX: 0, offsetY: 0, scale: 1, rotate: 0 },
+      motionChannels: {
+        offsetX: [
+          {
+            t: 0,
+            value: 0,
+            interpolation: 'bezier' as const,
+            easing: { x1: 0, y1: 0, x2: 1, y2: 1 },
+          },
+          { t: 1, value: 1, interpolation: 'linear' as const },
+        ],
+      },
+    };
+    expect(resolveTransformAt(spec, 0.5).offsetX).toBeCloseTo(0.5, 3);
+  });
+
+  it('samples rotateX independently of rotateY', () => {
+    const spec = {
+      transform: { rotateX: 0, rotateY: 10, perspective: 1 },
+      motionChannels: {
+        rotateX: [
+          { t: 0, value: 0, interpolation: 'linear' as const },
+          { t: 1, value: 40, interpolation: 'linear' as const },
+        ],
+      },
+    };
+    const mid = resolveTransformAt(spec, 0.5);
+    expect(mid.rotateX).toBeCloseTo(20);
+    expect(mid.rotateY).toBe(10);
+    expect(mid.perspective).toBe(1);
   });
 });
 

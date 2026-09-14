@@ -191,7 +191,7 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
           {/* A native select is as wide as its widest option, and "Specimen + tokens" left
               the node's own title with 90px to render "Design Reference" in (Airtable #283). */}
           <select
-            className="nodrag h-5 rounded-sm border border-border/60 bg-background px-1 text-[10px]"
+            className="nodrag h-5 rounded-sm border border-border/60 bg-background px-1 text-2xs"
             value={mode}
             aria-label="What this reference emits"
             title="What this reference emits"
@@ -213,7 +213,7 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
                 size="sm"
                 variant={section === preset.section ? 'default' : 'outline'}
                 title={preset.hint}
-                className="nodrag h-6 flex-1 px-1 text-[10px]"
+                className="nodrag h-6 flex-1 px-1 text-2xs"
                 onClick={() => updateNodeData(id, { section: preset.section, mode: preset.mode })}
               >
                 {preset.label}
@@ -221,7 +221,7 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
             ))}
           </div>
           <select
-            className="nodrag h-6 rounded-sm border border-border/60 bg-background px-1 text-[11px]"
+            className="nodrag h-6 rounded-sm border border-border/60 bg-background px-1 text-xs"
             value={section ?? ''}
             aria-label="Design system section"
             onChange={(event) =>
@@ -271,7 +271,7 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
                   type="button"
                   size="sm"
                   variant="secondary"
-                  className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-[10px] opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
+                  className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-2xs opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
                   disabled={!section || !brandId || isGenerating}
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={() => void generateSpecimen()}
@@ -319,7 +319,7 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
         {/* Airtable #289. Stated only once a section is chosen, because an unconfigured
             node promises nothing yet. */}
         {section ? (
-          <p className="shrink-0 border-t border-border/60 px-1.5 py-1 text-left text-[10px] leading-tight text-muted-foreground">
+          <p className="shrink-0 border-t border-border/60 px-1.5 py-1 text-left text-2xs leading-tight text-muted-foreground">
             Informs the generation and its critique. Not enforced on the result.
           </p>
         ) : null}

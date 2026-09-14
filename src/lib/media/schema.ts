@@ -4,6 +4,7 @@
 
 import type {
   AssetIntegrityState,
+  LibraryAspectRatioBin,
   MediaKind,
   MediaReviewStatus,
   MediaSource,
@@ -23,6 +24,7 @@ export type MediaAssetRow = {
   size_bytes: number | null;
   width: number | null;
   height: number | null;
+  aspect_ratio?: LibraryAspectRatioBin | null;
   duration_ms: number | null;
   source: MediaSource;
   origin_ref: Record<string, unknown> | null;
@@ -61,7 +63,7 @@ export type MediaAssetRow = {
 // mapper never needs. Use this instead of select("*") on list/search queries.
 export const MEDIA_ASSET_SELECT =
   'id, brand_id, created_by, kind, bucket, storage_path, file_name, mime_type, ' +
-  'size_bytes, width, height, duration_ms, source, origin_ref, status, ' +
+  'size_bytes, width, height, aspect_ratio, duration_ms, source, origin_ref, status, ' +
   'review_status, head_version_id, integrity_state, checksum, ' +
   'progress_step, error_code, error_message, title, description, tags, ' +
   'ad_creative_analysis, detected_objects, video_insights, thumbnail_path, embedding_model, has_image_embedding, ' +
@@ -74,6 +76,9 @@ export type MediaCollectionRow = {
   kind: 'manual' | 'smart';
   smart_query: Record<string, unknown> | null;
   cover_asset_id: string | null;
+  parent_id?: string | null;
+  depth?: number;
+  system_key?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

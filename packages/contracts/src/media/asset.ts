@@ -4,6 +4,7 @@
 // maps between them.
 
 import { z } from 'zod';
+import { libraryAspectRatioBinSchema } from './aspect-ratio';
 import { assetPreviewSchema } from './asset-renditions';
 import { assetIntegrityStateSchema } from './creative-operations';
 
@@ -180,6 +181,7 @@ export const mediaAssetSchema = z
     sizeBytes: z.number().int().nonnegative().nullable().optional(),
     width: z.number().int().positive().nullable().optional(),
     height: z.number().int().positive().nullable().optional(),
+    aspectRatio: libraryAspectRatioBinSchema.nullable().optional(),
     durationMs: z.number().int().nonnegative().nullable().optional(),
     source: mediaSourceSchema,
     originRef: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -251,6 +253,12 @@ export const mediaCollectionSchema = z
     smartQuery: z.record(z.string(), z.unknown()).nullable().optional(),
     coverAssetId: z.string().nullable().optional(),
     itemCount: z.number().int().nonnegative().default(0),
+    /** Null on a root board. Same brand, no cycles, depth ≤ 5. */
+    parentId: z.string().uuid().nullable().optional(),
+    /** 0 = root. A row at 5 cannot grow children. */
+    depth: z.number().int().min(0).max(5).default(0),
+    /** Product-owned boards (`canvas_outputs`). Null on operator-created ones. */
+    systemKey: z.string().min(1).max(64).nullable().optional(),
     createdBy: z.string().nullable().optional(),
     createdAt: z.string(),
     updatedAt: z.string(),

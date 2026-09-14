@@ -14,6 +14,7 @@ const OrganicAgentPanelDynamic = dynamic(
 type OrganicAgentPanelLazyProps = {
   brandId: string;
   platformAccountIds: Record<string, string>;
+  platformAccountOptions?: Record<string, Array<{ id: string; label: string }>>;
   mentionContext?: OrganicAgentMentionContext;
   initialSessionId?: string | null;
 };

@@ -104,7 +104,7 @@ export function PipelinePicker({
         </SelectContent>
       </Select>
       {items.length === 0 && !isLoading ? (
-        <p className="text-[11px] leading-4 text-muted-foreground">
+        <p className="text-xs leading-4 text-muted-foreground">
           This brand has no published pipelines. Publish a canvas from AI Studio to run it on a
           schedule.
         </p>

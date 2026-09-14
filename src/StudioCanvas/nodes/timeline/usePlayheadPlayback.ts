@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { nextPlayhead, type PlaybackMode } from './motion/motionChrome';
 import type { TimelineAudioPreviewController } from './useTimelineAudioPreview';
 import { clipAtTime, type TimelineLayout } from './useTimelineEditorModel';
 
@@ -58,6 +59,8 @@ export interface PlayheadPlayback {
   playheadSec: number;
   isPlaying: boolean;
   isPreparing: boolean;
+  playbackMode: PlaybackMode;
+  cyclePlaybackMode: () => void;
   seek: (sec: number) => void;
   play: () => void;
   pause: () => void;
@@ -243,6 +246,9 @@ export function usePlayheadPlayback(params: {
   const [playheadSec, setPlayheadSecState] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('once');
+  const playbackModeRef = useRef<PlaybackMode>('once');
+  const directionRef = useRef<1 | -1>(1);
 
   const playheadRef = useRef(0);
   const rafRef = useRef<number | null>(null);
@@ -310,36 +316,30 @@ export function usePlayheadPlayback(params: {
     (ts: number) => {
       const last = lastTsRef.current ?? ts;
       lastTsRef.current = ts;
-
+      const dtSec = ((ts - last) / 1000) * directionRef.current;
       const audioTime = audioPreviewRef.current?.currentTimelineTime() ?? null;
-      const frame =
-        audioTime === null
-          ? advancePlayhead({
-              layout: layoutRef.current,
-              mediaFor: mediaForRef.current,
-              video: videoRef.current,
-              playheadSec: playheadRef.current,
-              dtSec: (ts - last) / 1000,
-              cue: cueRef.current,
-            })
-          : {
-              playheadSec: audioTime,
-              cue: syncVideoToTimelineTime({
-                layout: layoutRef.current,
-                mediaFor: mediaForRef.current,
-                video: videoRef.current,
-                timelineSec: audioTime,
-                cue: cueRef.current,
-              }),
-            };
-      cueRef.current = frame.cue;
-
-      if (frame.playheadSec >= layoutRef.current.totalSec) {
-        setPlayhead(layoutRef.current.totalSec);
+      const stepped = nextPlayhead({
+        playheadSec: playheadRef.current,
+        dtSec: audioTime === null ? Math.abs(dtSec) : 0,
+        totalSec: layoutRef.current.totalSec,
+        mode: playbackModeRef.current,
+        direction: directionRef.current,
+      });
+      const nextSec = audioTime ?? stepped.playheadSec;
+      directionRef.current = audioTime === null ? stepped.direction : 1;
+      if (audioTime === null && stepped.stop) {
+        setPlayhead(stepped.playheadSec);
         stop();
         return;
       }
-      setPlayhead(frame.playheadSec);
+      cueRef.current = syncVideoToTimelineTime({
+        layout: layoutRef.current,
+        mediaFor: mediaForRef.current,
+        video: videoRef.current,
+        timelineSec: nextSec,
+        cue: cueRef.current,
+      });
+      setPlayhead(nextSec);
       rafRef.current = requestAnimationFrame(tick);
     },
     [setPlayhead, stop],
@@ -396,5 +396,25 @@ export function usePlayheadPlayback(params: {
     [],
   );
 
-  return { videoRef, playheadSec, isPlaying, isPreparing, seek, play, pause, toggle };
+  const cyclePlayback = useCallback(() => {
+    setPlaybackMode((current) => {
+      const next = current === 'once' ? 'loop' : current === 'loop' ? 'pingpong' : 'once';
+      playbackModeRef.current = next;
+      if (next !== 'pingpong') directionRef.current = 1;
+      return next;
+    });
+  }, []);
+
+  return {
+    videoRef,
+    playheadSec,
+    isPlaying,
+    isPreparing,
+    playbackMode,
+    cyclePlaybackMode: cyclePlayback,
+    seek,
+    play,
+    pause,
+    toggle,
+  };
 }

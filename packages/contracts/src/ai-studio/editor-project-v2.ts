@@ -9,6 +9,26 @@ const unitIntervalSchema = z.number().finite().min(0).max(1);
 const signedUnitSchema = z.number().finite().min(-1).max(1);
 const colorSchema = z.string().min(1).max(100);
 
+export const editorSourceRoleSchema = z.enum([
+  'primary',
+  'b_roll',
+  'overlay',
+  'voiceover',
+  'music',
+  'sound_effect',
+  'reference',
+]);
+export type EditorSourceRole = z.infer<typeof editorSourceRoleSchema>;
+
+export const editorSourceBindingSchema = z
+  .object({
+    slotId: editorIdSchema,
+    assetId: editorIdSchema,
+    versionId: editorIdSchema,
+  })
+  .strict();
+export type EditorSourceBinding = z.infer<typeof editorSourceBindingSchema>;
+
 export const editorActorRefSchema = z
   .object({
     actorId: editorIdSchema,
@@ -43,6 +63,8 @@ export const editorMediaSourceRefSchema = z.discriminatedUnion('sourceType', [
       nodeId: editorIdSchema,
       assetId: editorIdSchema.optional(),
       renditionId: editorIdSchema.optional(),
+      sourceRole: editorSourceRoleSchema.optional(),
+      slotId: editorIdSchema.optional(),
     })
     .strict(),
   z
@@ -50,6 +72,8 @@ export const editorMediaSourceRefSchema = z.discriminatedUnion('sourceType', [
       sourceType: z.literal('library_asset'),
       assetId: editorIdSchema,
       renditionId: editorIdSchema.optional(),
+      sourceRole: editorSourceRoleSchema.optional(),
+      slotId: editorIdSchema.optional(),
     })
     .strict(),
   z
@@ -57,6 +81,8 @@ export const editorMediaSourceRefSchema = z.discriminatedUnion('sourceType', [
       sourceType: z.literal('upload'),
       uploadId: editorIdSchema,
       fileName: z.string().min(1).max(500),
+      sourceRole: editorSourceRoleSchema.optional(),
+      slotId: editorIdSchema.optional(),
     })
     .strict(),
   z
@@ -65,6 +91,8 @@ export const editorMediaSourceRefSchema = z.discriminatedUnion('sourceType', [
       generationId: editorIdSchema,
       assetId: editorIdSchema.optional(),
       sourceNodeId: editorIdSchema.optional(),
+      sourceRole: editorSourceRoleSchema.optional(),
+      slotId: editorIdSchema.optional(),
     })
     .strict(),
   z
@@ -72,6 +100,8 @@ export const editorMediaSourceRefSchema = z.discriminatedUnion('sourceType', [
       sourceType: z.literal('external_url'),
       url: z.string().url().max(4_096),
       cacheKey: editorIdSchema.optional(),
+      sourceRole: editorSourceRoleSchema.optional(),
+      slotId: editorIdSchema.optional(),
     })
     .strict(),
 ]);
@@ -90,6 +120,9 @@ export const editorTransformSchema = z
     scaleX: z.number().finite().min(-20).max(20).default(1),
     scaleY: z.number().finite().min(-20).max(20).default(1),
     rotationDeg: z.number().finite().min(-36_000).max(36_000).default(0),
+    rotateXDeg: z.number().finite().min(-360).max(360).default(0),
+    rotateYDeg: z.number().finite().min(-360).max(360).default(0),
+    perspective: z.number().finite().min(0).max(8).default(0),
     anchorX: z.number().finite().min(-4).max(4).default(0.5),
     anchorY: z.number().finite().min(-4).max(4).default(0.5),
     opacity: unitIntervalSchema.default(1),
@@ -101,6 +134,9 @@ const defaultEditorTransform: EditorTransform = {
   scaleX: 1,
   scaleY: 1,
   rotationDeg: 0,
+  rotateXDeg: 0,
+  rotateYDeg: 0,
+  perspective: 0,
   anchorX: 0.5,
   anchorY: 0.5,
   opacity: 1,
@@ -119,6 +155,45 @@ export const editorCropSchema = z
   });
 export type EditorCrop = z.infer<typeof editorCropSchema>;
 const defaultEditorCrop: EditorCrop = { left: 0, top: 0, right: 0, bottom: 0 };
+
+export const editorMaskSchema = z
+  .object({
+    id: editorIdSchema,
+    shape: z.enum(['rectangle', 'ellipse', 'polygon']),
+    points: z
+      .array(z.object({ x: unitIntervalSchema, y: unitIntervalSchema }).strict())
+      .min(2)
+      .max(100),
+    feather: unitIntervalSchema.default(0),
+    invert: z.boolean().default(false),
+    enabled: z.boolean().default(true),
+  })
+  .strict()
+  .refine((mask) => mask.shape !== 'polygon' || mask.points.length >= 3, {
+    path: ['points'],
+    message: 'polygon masks require at least three points',
+  });
+export type EditorMask = z.infer<typeof editorMaskSchema>;
+
+export const editorTimeRemapPointSchema = z
+  .object({
+    timeSec: secondsSchema,
+    sourceSec: secondsSchema,
+    interpolation: z.enum(['hold', 'linear', 'bezier']).default('linear'),
+  })
+  .strict();
+export type EditorTimeRemapPoint = z.infer<typeof editorTimeRemapPointSchema>;
+
+export const editorAudioAutomationPointSchema = z
+  .object({
+    id: editorIdSchema,
+    property: z.enum(['gain', 'pan']),
+    timeSec: secondsSchema,
+    value: z.number().finite().min(-4).max(4),
+    interpolation: z.enum(['hold', 'linear', 'bezier']).default('linear'),
+  })
+  .strict();
+export type EditorAudioAutomationPoint = z.infer<typeof editorAudioAutomationPointSchema>;
 
 export const editorParameterValueSchema = z.union([
   z.string().max(2_000),
@@ -150,6 +225,26 @@ export const editorKeyframeValueSchema = z.union([
 ]);
 export type EditorKeyframeValue = z.infer<typeof editorKeyframeValueSchema>;
 
+export const editorKeyframeEasingSchema = z
+  .object({
+    x1: unitIntervalSchema,
+    y1: z.number().finite().min(-4).max(4),
+    x2: unitIntervalSchema,
+    y2: z.number().finite().min(-4).max(4),
+  })
+  .strict();
+export type EditorKeyframeEasing = z.infer<typeof editorKeyframeEasingSchema>;
+
+export const editorKeyframeSpringSchema = z
+  .object({
+    bounce: unitIntervalSchema,
+    mass: z.number().finite().positive().max(20).optional(),
+    stiffness: z.number().finite().positive().max(10_000).optional(),
+    damping: z.number().finite().nonnegative().max(1_000).optional(),
+  })
+  .strict();
+export type EditorKeyframeSpring = z.infer<typeof editorKeyframeSpringSchema>;
+
 export const editorKeyframeSchema = z
   .object({
     id: editorIdSchema,
@@ -158,6 +253,8 @@ export const editorKeyframeSchema = z
       'transform.scaleX',
       'transform.scaleY',
       'transform.rotationDeg',
+      'transform.rotateXDeg',
+      'transform.rotateYDeg',
       'transform.opacity',
       'audio.volume',
       'audio.pan',
@@ -168,16 +265,10 @@ export const editorKeyframeSchema = z
     parameterName: z.string().min(1).max(200).optional(),
     timeSec: secondsSchema,
     value: editorKeyframeValueSchema,
-    interpolation: z.enum(['hold', 'linear', 'bezier']),
-    easing: z
-      .object({
-        x1: unitIntervalSchema,
-        y1: z.number().finite().min(-4).max(4),
-        x2: unitIntervalSchema,
-        y2: z.number().finite().min(-4).max(4),
-      })
-      .strict()
-      .optional(),
+    interpolation: z.enum(['hold', 'linear', 'bezier', 'spring']),
+    easing: editorKeyframeEasingSchema.optional(),
+    spring: editorKeyframeSpringSchema.optional(),
+    expression: z.string().max(200).optional(),
   })
   .strict()
   .superRefine((keyframe, context) => {
@@ -186,6 +277,13 @@ export const editorKeyframeSchema = z
         code: z.ZodIssueCode.custom,
         path: ['easing'],
         message: 'bezier keyframes require easing control points',
+      });
+    }
+    if (keyframe.interpolation === 'spring' && keyframe.spring === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['spring'],
+        message: 'spring keyframes require a bounce value',
       });
     }
     if (keyframe.property === 'effect.parameter' && keyframe.parameterName === undefined) {
@@ -229,6 +327,7 @@ const editorClipBaseShape = {
   enabled: z.boolean().default(true),
   locked: z.boolean().default(false),
   tags: z.array(z.string().min(1).max(100)).max(40).default([]),
+  parentClipId: editorIdSchema.optional(),
 };
 
 export const editorVideoClipSchema = z
@@ -239,8 +338,10 @@ export const editorVideoClipSchema = z
     sourceInSec: secondsSchema.default(0),
     playbackRate: z.number().finite().min(0.05).max(20).default(1),
     reverse: z.boolean().default(false),
+    timeRemap: z.array(editorTimeRemapPointSchema).max(500).optional(),
     transform: editorTransformSchema.default(defaultEditorTransform),
     crop: editorCropSchema.default(defaultEditorCrop),
+    masks: z.array(editorMaskSchema).max(20).optional(),
     blendMode: z
       .enum(['normal', 'multiply', 'screen', 'overlay', 'lighten', 'darken', 'difference'])
       .default('normal'),
@@ -259,6 +360,7 @@ export const editorAudioClipSchema = z
     sourceInSec: secondsSchema.default(0),
     playbackRate: z.number().finite().min(0.05).max(20).default(1),
     reverse: z.boolean().default(false),
+    timeRemap: z.array(editorTimeRemapPointSchema).max(500).optional(),
     volume: z.number().finite().min(0).max(4).default(1),
     pan: signedUnitSchema.default(0),
     muted: z.boolean().default(false),
@@ -266,6 +368,7 @@ export const editorAudioClipSchema = z
     fadeOutSec: secondsSchema.default(0),
     effects: z.array(editorEffectInstanceSchema).max(50).default([]),
     keyframes: z.array(editorKeyframeSchema).max(500).default([]),
+    automation: z.array(editorAudioAutomationPointSchema).max(1_000).optional(),
   })
   .strict()
   .refine((clip) => clip.fadeInSec <= clip.durationSec && clip.fadeOutSec <= clip.durationSec, {
@@ -282,6 +385,7 @@ export const editorOverlayClipSchema = z
     sourceInSec: secondsSchema.optional(),
     transform: editorTransformSchema.default(defaultEditorTransform),
     crop: editorCropSchema.default(defaultEditorCrop),
+    masks: z.array(editorMaskSchema).max(20).optional(),
     blendMode: z
       .enum(['normal', 'multiply', 'screen', 'overlay', 'lighten', 'darken', 'difference'])
       .default('normal'),
@@ -372,9 +476,11 @@ export const editorNestedSequenceClipSchema = z
   .object({
     ...editorClipBaseShape,
     kind: z.literal('nested_sequence'),
-    projectId: editorIdSchema,
+    /** Absent or equal to the host project: resolve `sequenceId` in `nestedSequences`. */
+    projectId: editorIdSchema.optional(),
     sequenceId: editorIdSchema,
-    sourceRevision: revisionNumberSchema,
+    /** Absent on a local nest means live (always the current child tracks). */
+    sourceRevision: revisionNumberSchema.optional(),
     sourceInSec: secondsSchema.default(0),
     playbackRate: z.number().finite().min(0.05).max(20).default(1),
     transform: editorTransformSchema.default(defaultEditorTransform),
@@ -494,6 +600,19 @@ export const editorTransitionSchema = z
   });
 export type EditorTransition = z.infer<typeof editorTransitionSchema>;
 
+/** An in-document precomp. Clips on the host point here by `sequenceId`. */
+export const editorNestedSequenceSchema = z
+  .object({
+    id: editorIdSchema,
+    name: editorLabelSchema,
+    durationSec: secondsSchema,
+    canvas: editorCanvasSchema,
+    tracks: z.array(editorTrackSchema).max(200),
+    transitions: z.array(editorTransitionSchema).max(2_000).default([]),
+  })
+  .strict();
+export type EditorNestedSequence = z.infer<typeof editorNestedSequenceSchema>;
+
 export const editorExportSettingsSchema = z
   .object({
     presetId: editorIdSchema.optional(),
@@ -521,6 +640,7 @@ export const editorTimelineSnapshotSchema = z
     durationSec: secondsSchema,
     tracks: z.array(editorTrackSchema).max(200),
     transitions: z.array(editorTransitionSchema).max(2_000),
+    nestedSequences: z.array(editorNestedSequenceSchema).max(32).default([]),
   })
   .strict();
 export type EditorTimelineSnapshot = z.infer<typeof editorTimelineSnapshotSchema>;
@@ -659,6 +779,58 @@ export const editorTakeSchema = z
   });
 export type EditorTake = z.infer<typeof editorTakeSchema>;
 
+export const editorSoundTakeSchema = z
+  .object({
+    id: editorIdSchema,
+    kind: z.enum(['narration', 'music']),
+    status: z.enum(['pending', 'generating', 'ready', 'failed', 'stale']),
+    verdict: z.enum(['undecided', 'approved', 'rejected']).default('undecided'),
+    prompt: z.string().min(1).max(20_000),
+    model: z.string().min(1).max(200),
+    settings: z.record(z.string().min(1).max(200), editorParameterValueSchema).default({}),
+    parentTakeId: editorIdSchema.optional(),
+    changedVariable: z.string().min(1).max(200).optional(),
+    jobId: editorIdSchema.optional(),
+    asset: editorPinnedAssetRefSchema.optional(),
+    durationSec: positiveSecondsSchema.optional(),
+    error: z.string().min(1).max(2_000).optional(),
+    createdAt: z.string().datetime(),
+    createdBy: editorActorRefSchema,
+    reviewedAt: z.string().datetime().optional(),
+    reviewedBy: editorActorRefSchema.optional(),
+  })
+  .strict();
+export type EditorSoundTake = z.infer<typeof editorSoundTakeSchema>;
+
+export const editorSoundPlanSchema = z
+  .object({
+    status: z.enum(['draft', 'approved']).default('draft'),
+    narrationText: z.string().max(50_000).default(''),
+    voiceId: z.string().min(1).max(200).default('Aoede'),
+    musicPrompt: z.string().max(20_000).default(''),
+    negativePrompt: z.string().max(10_000).default(''),
+    bpm: z.number().finite().min(30).max(300).nullable().default(null),
+    beatOffsetSec: secondsSchema.default(0),
+    beatConfidence: unitIntervalSchema.nullable().default(null),
+    ducking: z
+      .object({
+        enabled: z.boolean().default(true),
+        reductionDb: z.number().finite().min(-60).max(0).default(-12),
+        attackSec: secondsSchema.default(0.08),
+        releaseSec: secondsSchema.default(0.3),
+      })
+      .strict()
+      .default({ enabled: true, reductionDb: -12, attackSec: 0.08, releaseSec: 0.3 }),
+    takes: z.array(editorSoundTakeSchema).max(100).default([]),
+    selectedNarrationTakeId: editorIdSchema.optional(),
+    selectedMusicTakeId: editorIdSchema.optional(),
+    approvedBy: editorActorRefSchema.optional(),
+    approvedAt: z.string().datetime().optional(),
+    approvedRevision: revisionNumberSchema.optional(),
+  })
+  .strict();
+export type EditorSoundPlan = z.infer<typeof editorSoundPlanSchema>;
+
 export const editorShotSchema = z
   .object({
     id: editorIdSchema,
@@ -712,6 +884,7 @@ export const editorProductionSchema = z
     references: z.array(editorProductionReferenceSchema).max(50).default([]),
     styleContract: editorStyleContractSchema.nullable().default(null),
     shots: z.array(editorShotSchema).max(200).default([]),
+    soundPlan: editorSoundPlanSchema.nullable().default(null),
     failureReason: z.string().min(1).max(2_000).optional(),
   })
   .strict()
@@ -720,8 +893,22 @@ export const editorProductionSchema = z
     references: [],
     styleContract: null,
     shots: [],
+    soundPlan: null,
   });
 export type EditorProduction = z.infer<typeof editorProductionSchema>;
+
+export const editorMarkerSchema = z
+  .object({
+    id: editorIdSchema,
+    kind: z.enum(['timeline', 'beat']).default('timeline'),
+    timeSec: secondsSchema,
+    label: z.string().min(1).max(500),
+    color: colorSchema.optional(),
+    beatIndex: z.number().int().nonnegative().optional(),
+    barIndex: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+export type EditorMarker = z.infer<typeof editorMarkerSchema>;
 
 export const editorProjectV2Schema = z
   .object({
@@ -736,21 +923,10 @@ export const editorProjectV2Schema = z
     frameRate: editorFrameRateSchema,
     sampleRateHz: z.number().int().min(8_000).max(192_000),
     tracks: z.array(editorTrackSchema).max(200),
+    nestedSequences: z.array(editorNestedSequenceSchema).max(32).default([]),
     transitions: z.array(editorTransitionSchema).max(2_000).default([]),
     production: editorProductionSchema,
-    markers: z
-      .array(
-        z
-          .object({
-            id: editorIdSchema,
-            timeSec: secondsSchema,
-            label: z.string().min(1).max(500),
-            color: colorSchema.optional(),
-          })
-          .strict(),
-      )
-      .max(2_000)
-      .default([]),
+    markers: z.array(editorMarkerSchema).max(2_000).default([]),
     exportSettings: editorExportSettingsSchema,
     legacyTimelineFingerprint: z.string().min(1).max(500).optional(),
     createdAt: z.string().datetime(),
@@ -803,6 +979,56 @@ export const editorProjectV2Schema = z
         });
       }
     }
+    const nestedIds = new Set<string>();
+    for (const [nestedIndex, nested] of project.nestedSequences.entries()) {
+      if (nestedIds.has(nested.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['nestedSequences', nestedIndex, 'id'],
+          message: `duplicate nested sequence id "${nested.id}"`,
+        });
+      }
+      nestedIds.add(nested.id);
+      for (const [trackIndex, track] of nested.tracks.entries()) {
+        if (track.kind === 'nested_sequence') {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['nestedSequences', nestedIndex, 'tracks', trackIndex, 'kind'],
+            message: 'a nested sequence cannot contain another nested sequence',
+          });
+        }
+        for (const [clipIndex, clip] of track.clips.entries()) {
+          if (clip.timelineStartSec + clip.durationSec > nested.durationSec + 0.001) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [
+                'nestedSequences',
+                nestedIndex,
+                'tracks',
+                trackIndex,
+                'clips',
+                clipIndex,
+                'durationSec',
+              ],
+              message: `clip "${clip.id}" extends past the nested sequence duration`,
+            });
+          }
+        }
+      }
+    }
+    for (const [trackIndex, track] of project.tracks.entries()) {
+      if (track.kind !== 'nested_sequence') continue;
+      for (const [clipIndex, clip] of track.clips.entries()) {
+        const local = !clip.projectId || clip.projectId === project.projectId;
+        if (local && !nestedIds.has(clip.sequenceId)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['tracks', trackIndex, 'clips', clipIndex, 'sequenceId'],
+            message: `nested sequence "${clip.sequenceId}" was not found`,
+          });
+        }
+      }
+    }
   });
 export type EditorProjectV2 = z.infer<typeof editorProjectV2Schema>;
 
@@ -838,6 +1064,27 @@ export const editorCommandSchema = z.discriminatedUnion('commandType', [
       beforeTrackId: editorIdSchema.optional(),
     })
     .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('set_track_state'),
+      trackId: editorIdSchema,
+      enabled: z.boolean().optional(),
+      locked: z.boolean().optional(),
+      muted: z.boolean().optional(),
+      solo: z.boolean().optional(),
+      order: z.number().int().nonnegative().optional(),
+    })
+    .strict()
+    .refine(
+      (command) =>
+        command.enabled !== undefined ||
+        command.locked !== undefined ||
+        command.muted !== undefined ||
+        command.solo !== undefined ||
+        command.order !== undefined,
+      { message: 'set_track_state requires at least one state field' },
+    ),
   z
     .object({
       ...editorCommandMetadataShape,
@@ -897,6 +1144,74 @@ export const editorCommandSchema = z.discriminatedUnion('commandType', [
   z
     .object({
       ...editorCommandMetadataShape,
+      commandType: z.literal('upsert_keyframe'),
+      trackId: editorIdSchema,
+      clipId: editorIdSchema,
+      keyframe: editorKeyframeSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('remove_keyframes'),
+      trackId: editorIdSchema,
+      clipId: editorIdSchema,
+      keyframeIds: z.array(editorIdSchema).min(1).max(500),
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('apply_animation_style'),
+      trackId: editorIdSchema,
+      clipId: editorIdSchema,
+      styleId: z.enum(['fade', 'move', 'scale', 'rotate']),
+      instanceId: editorIdSchema,
+      timelineOffsetSec: secondsSchema.default(0),
+      durationSec: positiveSecondsSchema.default(0.4),
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('trim_animation_style'),
+      trackId: editorIdSchema,
+      clipId: editorIdSchema,
+      instanceId: editorIdSchema,
+      startSec: secondsSchema,
+      endSec: positiveSecondsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('set_clip_parent'),
+      trackId: editorIdSchema,
+      clipId: editorIdSchema,
+      parentClipId: editorIdSchema.nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('precompose_clips'),
+      clipIds: z.array(editorIdSchema).min(1).max(32),
+      nestedSequenceId: editorIdSchema,
+      instanceClipId: editorIdSchema,
+      instanceTrackId: editorIdSchema,
+      name: editorLabelSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('set_nested_sequence'),
+      sequence: editorNestedSequenceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
       commandType: z.literal('upsert_transition'),
       transition: editorTransitionSchema,
     })
@@ -923,6 +1238,20 @@ export const editorCommandSchema = z.discriminatedUnion('commandType', [
       durationSec: secondsSchema.optional(),
       canvas: editorCanvasSchema.optional(),
       frameRate: editorFrameRateSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('upsert_marker'),
+      marker: editorMarkerSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('remove_marker'),
+      markerId: editorIdSchema,
     })
     .strict(),
   z
@@ -1005,6 +1334,13 @@ export const editorCommandSchema = z.discriminatedUnion('commandType', [
       commandType: z.literal('set_production_stage'),
       workflowStage: editorProductionStageSchema,
       failureReason: z.string().min(1).max(2_000).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('set_sound_plan'),
+      soundPlan: editorSoundPlanSchema,
     })
     .strict(),
 ]);

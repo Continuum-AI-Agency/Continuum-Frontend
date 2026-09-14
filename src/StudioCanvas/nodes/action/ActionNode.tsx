@@ -11,6 +11,8 @@ import {
   getAllowedSourceHandles,
   getAllowedTargetHandles,
   isActionId,
+  STUDIO_NODE_REGISTRY,
+  type StudioNodeType,
 } from '@continuum/contracts';
 import {
   Handle,
@@ -19,7 +21,7 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
-import { Loader2, Wand2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, Wand2 } from 'lucide-react';
 import { useCallback } from 'react';
 
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -36,10 +38,23 @@ import { NodeDownloadButton } from '../NodeDownloadButton';
 import { ActionBrandNote } from './ActionBrandNote';
 import { ActionConfigPopover } from './ActionConfigPopover';
 
+const sourceLabel = (node: { type?: string; data?: unknown } | undefined): string => {
+  const nodeData = (node?.data ?? {}) as Record<string, unknown>;
+  if (typeof nodeData.label === 'string' && nodeData.label.trim()) return nodeData.label.trim();
+  if (typeof nodeData.fileName === 'string' && nodeData.fileName.trim()) {
+    return nodeData.fileName.trim();
+  }
+  const action = actionDef(nodeData.actionId);
+  if (action) return action.label;
+  return STUDIO_NODE_REGISTRY[node?.type as StudioNodeType]?.label ?? 'Input';
+};
+
 export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<ActionNodeData>>) {
   const executionControls = useWorkflowExecution();
   const brandId = useStudioStore((state) => state.brandId);
   const roomId = useStudioStore((state) => state.activeRoomId);
+  const nodes = useStudioStore((state) => state.nodes);
+  const edges = useStudioStore((state) => state.edges);
 
   const run = useCallback(async () => {
     await executeWorkflow(executionControls, {
@@ -65,6 +80,27 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
   const heldBack = def?.comingSoon;
   const implemented = actionId ? isImplementedAction(actionId) && !heldBack : false;
   const hasConfig = actionId ? configFieldsFor(actionId).length > 0 : false;
+  const orderedPort = def?.inputs.find((port) => (port.max ?? 1) > 1);
+  const orderedEdges = orderedPort
+    ? edges.filter((edge) => edge.target === id && edge.targetHandle === orderedPort.handle)
+    : [];
+
+  const moveInput = (edgeId: string, delta: -1 | 1) => {
+    const store = useStudioStore.getState();
+    const positions = store.edges.flatMap((edge, index) =>
+      edge.target === id && edge.targetHandle === orderedPort?.handle ? [index] : [],
+    );
+    const current = positions.findIndex((index) => store.edges[index]?.id === edgeId);
+    const destination = current + delta;
+    if (current < 0 || destination < 0 || destination >= positions.length) return;
+    const next = [...store.edges];
+    [next[positions[current]], next[positions[destination]]] = [
+      next[positions[destination]],
+      next[positions[current]],
+    ];
+    store.setEdges(next);
+    store.triggerSave();
+  };
 
   return (
     <div className="relative size-full min-h-[180px] min-w-[200px]">
@@ -106,8 +142,50 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
                       `${def.label} is not available yet — no runner has shipped for it.`)
                 }
               />
+              {orderedEdges.length > 0 ? (
+                <div className="nodrag absolute bottom-1.5 left-1.5 z-10 max-w-[calc(100%-4.5rem)] space-y-0.5 rounded-md border border-border/60 bg-background/95 p-1 shadow-sm">
+                  {orderedEdges.map((edge, index) => {
+                    const label = sourceLabel(nodes.find((node) => node.id === edge.source));
+                    const position =
+                      orderedEdges.length === 1
+                        ? ' · First · Last'
+                        : index === 0
+                          ? ' · First'
+                          : index === orderedEdges.length - 1
+                            ? ' · Last'
+                            : '';
+                    return (
+                      <div key={edge.id} className="flex min-w-0 items-center gap-0.5 text-2xs">
+                        <span className="min-w-0 flex-1 truncate">{`${index + 1} · ${label}${position}`}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-5"
+                          aria-label={`Move ${label} earlier`}
+                          disabled={index === 0}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={() => moveInput(edge.id, -1)}
+                        >
+                          <ChevronUp className="size-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-5"
+                          aria-label={`Move ${label} later`}
+                          disabled={index === orderedEdges.length - 1}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={() => moveInput(edge.id, 1)}
+                        >
+                          <ChevronDown className="size-3" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
               <Button
-                className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-[11px] opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
+                className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-xs opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
                 size="sm"
                 disabled={!implemented || data.isExecuting}
                 onMouseDown={(event) => event.stopPropagation()}

@@ -135,7 +135,9 @@ describe('revertState gates undo on the SERVER, never on the row shape', () => {
   });
 
   it('reports an already-undone write instead of offering the button twice', () => {
-    expect(revertState(action({ reversible: true, reverted_by: 'cccccccc' })).kind).toBe('reverted');
+    expect(revertState(action({ reversible: true, reverted_by: 'cccccccc' })).kind).toBe(
+      'reverted',
+    );
   });
 
   it('offers nothing when there is no portfolio for the revert edge to scope against', () => {

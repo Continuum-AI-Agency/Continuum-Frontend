@@ -132,9 +132,7 @@ export function BrandBookMilestoneCard({
                 Voice, creative, trends, and reporting are grounded in your brand.
               </p>
             )}
-            {age ? (
-              <p className="mt-0.5 text-[11px] text-muted-foreground/80">Updated {age}</p>
-            ) : null}
+            {age ? <p className="mt-0.5 text-xs text-muted-foreground/80">Updated {age}</p> : null}
           </div>
         </div>
         <ViewButton />

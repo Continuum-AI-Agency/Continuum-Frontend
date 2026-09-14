@@ -3243,9 +3243,12 @@ export type Database = {
       ai_studio_hyperframe_revisions: {
         Row: {
           aspect_ratio: string
+          composition_spec: Json | null
           composition_bucket: string
           composition_path: string
           created_at: string
+          design_fingerprint: string | null
+          design_snapshot: Json | null
           duration_seconds: number
           fingerprint: string
           fps: number
@@ -3253,8 +3256,10 @@ export type Database = {
           id: string
           lint_warnings: Json
           model: string
+          model_provenance: Json | null
           parent_revision_id: string | null
           revision_number: number
+          quality_evaluation: Json | null
           run_id: string
           session_id: string
           source_asset_ids: string[]
@@ -3263,9 +3268,12 @@ export type Database = {
         }
         Insert: {
           aspect_ratio: string
+          composition_spec?: Json | null
           composition_bucket?: string
           composition_path: string
           created_at?: string
+          design_fingerprint?: string | null
+          design_snapshot?: Json | null
           duration_seconds: number
           fingerprint: string
           fps?: number
@@ -3273,8 +3281,10 @@ export type Database = {
           id?: string
           lint_warnings?: Json
           model: string
+          model_provenance?: Json | null
           parent_revision_id?: string | null
           revision_number: number
+          quality_evaluation?: Json | null
           run_id: string
           session_id: string
           source_asset_ids?: string[]
@@ -3283,9 +3293,12 @@ export type Database = {
         }
         Update: {
           aspect_ratio?: string
+          composition_spec?: Json | null
           composition_bucket?: string
           composition_path?: string
           created_at?: string
+          design_fingerprint?: string | null
+          design_snapshot?: Json | null
           duration_seconds?: number
           fingerprint?: string
           fps?: number
@@ -3293,8 +3306,10 @@ export type Database = {
           id?: string
           lint_warnings?: Json
           model?: string
+          model_provenance?: Json | null
           parent_revision_id?: string | null
           revision_number?: number
+          quality_evaluation?: Json | null
           run_id?: string
           session_id?: string
           source_asset_ids?: string[]
@@ -3328,6 +3343,7 @@ export type Database = {
       ai_studio_hyperframe_run_events: {
         Row: {
           data: Json
+          dedupe_key: string | null
           event_id: string
           run_id: string
           seq: number
@@ -3336,6 +3352,7 @@ export type Database = {
         }
         Insert: {
           data?: Json
+          dedupe_key?: string | null
           event_id?: string
           run_id: string
           seq: number
@@ -3344,6 +3361,7 @@ export type Database = {
         }
         Update: {
           data?: Json
+          dedupe_key?: string | null
           event_id?: string
           run_id?: string
           seq?: number
@@ -11614,6 +11632,25 @@ export type Database = {
       }
       purge_automation_workflow_evidence: { Args: never; Returns: Json }
       purge_email_delivery_history: { Args: never; Returns: Json }
+      append_hyperframe_run_event: {
+        Args: {
+          p_data: Json
+          p_dedupe_key?: string | null
+          p_event_id: string
+          p_run_id: string
+          p_ts: string
+          p_type: string
+        }
+        Returns: {
+          data: Json
+          dedupe_key: string | null
+          event_id: string
+          run_id: string
+          seq: number
+          ts: string
+          type: string
+        }[]
+      }
       reap_expired_hyperframe_runs: { Args: never; Returns: number }
       record_audience_group_member_result: {
         Args: {
@@ -16033,6 +16070,7 @@ export type Database = {
       assets: {
         Row: {
           ad_creative_analysis: Json | null
+          aspect_ratio: string | null
           brand_id: string
           bucket: string
           checksum: string | null
@@ -16075,6 +16113,7 @@ export type Database = {
         }
         Insert: {
           ad_creative_analysis?: Json | null
+          aspect_ratio?: string | null
           brand_id: string
           bucket?: string
           checksum?: string | null
@@ -16117,6 +16156,7 @@ export type Database = {
         }
         Update: {
           ad_creative_analysis?: Json | null
+          aspect_ratio?: string | null
           brand_id?: string
           bucket?: string
           checksum?: string | null
@@ -16302,10 +16342,13 @@ export type Database = {
           cover_asset_id: string | null
           created_at: string
           created_by: string | null
+          depth: number
           id: string
           kind: string
           name: string
+          parent_id: string | null
           smart_query: Json | null
+          system_key: string | null
           updated_at: string
         }
         Insert: {
@@ -16313,10 +16356,13 @@ export type Database = {
           cover_asset_id?: string | null
           created_at?: string
           created_by?: string | null
+          depth?: number
           id?: string
           kind?: string
           name: string
+          parent_id?: string | null
           smart_query?: Json | null
+          system_key?: string | null
           updated_at?: string
         }
         Update: {
@@ -16324,10 +16370,13 @@ export type Database = {
           cover_asset_id?: string | null
           created_at?: string
           created_by?: string | null
+          depth?: number
           id?: string
           kind?: string
           name?: string
+          parent_id?: string | null
           smart_query?: Json | null
+          system_key?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -16336,6 +16385,13 @@ export type Database = {
             columns: ["cover_asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
             referencedColumns: ["id"]
           },
         ]
@@ -17943,6 +17999,10 @@ export type Database = {
     Functions: {
       _assert_brand: { Args: { p_brand_id: string }; Returns: undefined }
       _window_metrics: { Args: { w: Json }; Returns: Json }
+      aspect_ratio_bin: {
+        Args: { p_height: number; p_width: number }
+        Returns: string
+      }
       asset_in_brand: {
         Args: { p_asset_id: string; p_brand_id: string }
         Returns: boolean
@@ -18484,9 +18544,11 @@ export type Database = {
       }
       library_browse_facets: {
         Args: {
+          p_aspect_ratios?: string[]
           p_brand_id: string
           p_campaign_ids?: string[]
           p_collection_id?: string
+          p_destination?: string
           p_fonts?: string[]
           p_leading_only?: boolean
           p_media_type?: string
@@ -18512,10 +18574,12 @@ export type Database = {
       }
       library_browse_page: {
         Args: {
+          p_aspect_ratios?: string[]
           p_brand_id: string
           p_campaign_ids?: string[]
           p_collection_id?: string
           p_cursor?: Json
+          p_destination?: string
           p_fonts?: string[]
           p_leading_only?: boolean
           p_limit?: number
@@ -25056,6 +25120,7 @@ export type Database = {
         Args: { p_job_id: string }
         Returns: undefined
       }
+      optimizer_archive_hot_window: { Args: never; Returns: Json }
       optimizer_archive_portfolio: {
         Args: { p_portfolio_id: string }
         Returns: undefined
@@ -25368,7 +25433,12 @@ export type Database = {
         }[]
       }
       optimizer_list_actions: {
-        Args: { p_before?: string; p_brand_id: string; p_limit?: number }
+        Args: {
+          p_before?: string
+          p_brand_id: string
+          p_limit?: number
+          p_since?: string
+        }
         Returns: {
           actor_id: string
           actor_kind: string
@@ -25394,7 +25464,13 @@ export type Database = {
         Returns: Json
       }
       optimizer_list_logs: {
-        Args: { p_before?: string; p_brand_id: string; p_limit?: number }
+        Args: {
+          p_archive?: boolean
+          p_before?: string
+          p_brand_id: string
+          p_limit?: number
+          p_since?: string
+        }
         Returns: {
           event: string
           fields: Json

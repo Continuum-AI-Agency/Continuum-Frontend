@@ -93,9 +93,7 @@ describe('canvas PromptInput context grabber', () => {
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit.mock.calls[0]?.[0]).toBe(
-      'Use the attached media as a visual reference.',
-    );
+    expect(onSubmit.mock.calls[0]?.[0]).toBe('Use the attached media as a visual reference.');
     expect(onSubmit.mock.calls[0]?.[1]).toEqual([
       expect.objectContaining({ assetId: 'asset-1', status: 'ready' }),
     ]);

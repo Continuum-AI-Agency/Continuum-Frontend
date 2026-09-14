@@ -59,6 +59,15 @@ describe('TimelineEditorBlock render destination', () => {
 
   afterEach(cleanup);
 
+  it('exposes a motion door that is distinct from the production funnel', () => {
+    const { getByText } = renderNode({
+      items: [],
+      videoProjectId: '11111111-1111-4111-8111-111111111111',
+    });
+    expect(getByText('Motion')).toBeTruthy();
+    expect(getByText('Open editor')).toBeTruthy();
+  });
+
   it('names the Library and links to the asset once a render commits', () => {
     const { getByTestId } = renderNode({
       items: [],

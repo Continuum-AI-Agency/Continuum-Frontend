@@ -89,7 +89,7 @@ export function LibraryCollectionPicker({
           ))}
         </SelectContent>
       </Select>
-      <p className="text-[11px] leading-4 text-muted-foreground">
+      <p className="text-xs leading-4 text-muted-foreground">
         Collections are flat. Library root files the output with no collection.
       </p>
     </div>

@@ -35,7 +35,7 @@ function makeSupabase(opts: {
       }),
     },
     functions: {
-      invoke: async (name: string, options: InvokeCall["options"]) => {
+      invoke: async (name: string, options: InvokeCall['options']) => {
         invokes.push({ name, options });
         return { data: null, error: opts.invokeError ?? null };
       },

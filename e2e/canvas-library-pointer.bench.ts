@@ -311,7 +311,7 @@ async function main(): Promise<void> {
   note(
     'NOT covered end to end: the ladder rungs that MINT a missing pointer ' +
       '(/api/library/register-canvas, library-upload) need a browser session, so they are ' +
-      'covered by src/StudioCanvas/utils/nodeAssetRef.test.ts only. The rung this bench ' +
+      'covered by nodeAssetRef and persistActionOutput tests. The rung this bench ' +
       'proves is the one the bug report is about: a node that already came from the Library.',
   );
   finish();

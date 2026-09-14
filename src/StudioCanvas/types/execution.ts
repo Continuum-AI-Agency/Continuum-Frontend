@@ -45,6 +45,7 @@ export type NodeOutput =
   | {
       type: 'video';
       url: string;
+      mimeType?: string;
       posterBase64?: string;
       storagePath?: string;
       storageBucket?: string;

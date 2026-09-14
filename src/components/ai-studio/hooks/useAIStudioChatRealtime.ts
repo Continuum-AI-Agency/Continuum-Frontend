@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/toast-imperative';
 import { useSession } from '@/hooks/useSession';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';

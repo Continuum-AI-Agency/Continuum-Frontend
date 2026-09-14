@@ -142,16 +142,9 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
           <Button
             type="submit"
             size="lg"
+            variant="cta"
             disabled={isPending}
-            style={{
-              width: '100%',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              backgroundColor: 'var(--primary)',
-              color: 'var(--primary-foreground)',
-            }}
-            className="min-h-11 rounded-xl py-3 font-semibold shadow-[0_14px_28px_-14px_rgba(17,24,39,0.55)] transition-[filter,box-shadow,transform] duration-200 hover:brightness-110 hover:shadow-[0_18px_36px_-16px_rgba(17,24,39,0.65)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100"
+            className="w-full min-h-11 rounded-xl py-3 font-semibold shadow-[0_14px_28px_-14px_rgba(17,24,39,0.55)] hover:shadow-[0_18px_36px_-16px_rgba(17,24,39,0.65)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isPending ? (
               <span className="flex items-center justify-center gap-2">

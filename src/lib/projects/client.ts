@@ -14,14 +14,14 @@ import {
   type ProjectEntityType,
   type ProjectListFilter,
   type ProjectMembership,
+  type ProjectTagRequest,
+  type ProjectUntagRequest,
+  type ProjectUpdateRequest,
   projectListResponseSchema,
   projectMembershipListResponseSchema,
-  type ProjectTagRequest,
-  projectTagResponseSchema,
-  type ProjectUntagRequest,
-  projectUntagResponseSchema,
-  type ProjectUpdateRequest,
   projectResponseSchema,
+  projectTagResponseSchema,
+  projectUntagResponseSchema,
 } from '@continuum/contracts';
 
 const ROUTE = '/api/projects';

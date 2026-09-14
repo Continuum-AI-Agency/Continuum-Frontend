@@ -4,6 +4,7 @@ import {
   claimClientRenderJobRequestSchema,
   clientRenderExecutionSpecSchema,
   clientRenderJobSchema,
+  hyperframesClientRenderWorkSchema,
 } from './client-render';
 
 describe('client render contracts', () => {
@@ -215,5 +216,21 @@ describe('client render contracts', () => {
       completedAt: new Date().toISOString(),
     });
     expect(result.success).toBe(true);
+  });
+
+  it('can resume finalization from an already registered HyperFrames output', () => {
+    expect(
+      hyperframesClientRenderWorkSchema.parse({
+        kind: 'finalize',
+        revisionId: '11111111-1111-4111-8111-111111111111',
+        fingerprint: 'f'.repeat(64),
+        assetId: '22222222-2222-4222-8222-222222222222',
+      }),
+    ).toEqual({
+      kind: 'finalize',
+      revisionId: '11111111-1111-4111-8111-111111111111',
+      fingerprint: 'f'.repeat(64),
+      assetId: '22222222-2222-4222-8222-222222222222',
+    });
   });
 });

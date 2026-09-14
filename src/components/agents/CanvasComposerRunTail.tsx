@@ -1,7 +1,7 @@
 'use client';
 
-// Tail for a Canvas Composer run. The row supplies terminal status, while the shared
-// event tail restores narration missed during navigation or a dropped connection.
+// Tail for AI Studio runs whose row supplies terminal status, while the shared event
+// tail restores narration missed during navigation or a dropped connection.
 
 import { type AgentRunDto, normalizeAgentRunStatus } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -11,8 +11,10 @@ import { useAgentRunStore } from '@/lib/agents/runStore';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
-const CANVAS_RUNS_SCHEMA = 'brand_profiles';
-const CANVAS_RUNS_TABLE = 'ai_studio_canvas_composer_runs';
+const RUN_TABLE = {
+  canvas: 'ai_studio_canvas_composer_runs',
+  hyperframes: 'ai_studio_hyperframe_runs',
+} as const;
 
 const runFromRow = (row: Record<string, unknown>, current: AgentRunDto): AgentRunDto => ({
   ...current,
@@ -26,8 +28,13 @@ const runChanged = (next: AgentRunDto, current: AgentRunDto): boolean =>
   next.errorMessage !== current.errorMessage ||
   next.finishedAt !== current.finishedAt;
 
-export function CanvasComposerRunTail({ run }: { run: AgentRunDto }) {
-  useAgentRunStream(run.runId, 'canvas');
+export function DurableAiStudioRunTail({ run }: { run: AgentRunDto }) {
+  if (run.agent !== 'canvas' && run.agent !== 'hyperframes') {
+    throw new Error(`DurableAiStudioRunTail cannot tail ${run.agent}.`);
+  }
+  const agent = run.agent;
+  const table = RUN_TABLE[agent];
+  useAgentRunStream(run.runId, agent);
   const upsertRun = useAgentRunStore((state) => state.upsertRun);
   // The latest run rides a ref so the subscription is keyed on runId alone — depending
   // on the run object would resubscribe (and re-fetch) on every store fold of itself.
@@ -44,12 +51,12 @@ export function CanvasComposerRunTail({ run }: { run: AgentRunDto }) {
     // run has TWO subscriptions, and sharing a topic between them is what used to crash
     // the app to the global 500 boundary.
     return subscribeToPostgresChanges({
-      label: `agent-run-row:canvas:${run.runId}`,
+      label: `agent-run-row:${agent}:${run.runId}`,
       bindings: [
         {
           event: 'UPDATE',
-          schema: CANVAS_RUNS_SCHEMA,
-          table: CANVAS_RUNS_TABLE,
+          schema: 'brand_profiles',
+          table,
           filter: `run_id=eq.${run.runId}`,
           onRow: fold,
         },
@@ -62,8 +69,8 @@ export function CanvasComposerRunTail({ run }: { run: AgentRunDto }) {
         // field-by-field in runFromRow regardless.
         try {
           const { data } = await (createSupabaseBrowserClient() as unknown as SupabaseClient)
-            .schema(CANVAS_RUNS_SCHEMA)
-            .from(CANVAS_RUNS_TABLE)
+            .schema('brand_profiles')
+            .from(table)
             .select('status,error_message,finished_at')
             .eq('run_id', run.runId)
             .maybeSingle();
@@ -73,7 +80,11 @@ export function CanvasComposerRunTail({ run }: { run: AgentRunDto }) {
         }
       },
     });
-  }, [run.runId, upsertRun]);
+  }, [agent, run.runId, table, upsertRun]);
 
   return null;
+}
+
+export function CanvasComposerRunTail({ run }: { run: AgentRunDto }) {
+  return <DurableAiStudioRunTail run={run} />;
 }

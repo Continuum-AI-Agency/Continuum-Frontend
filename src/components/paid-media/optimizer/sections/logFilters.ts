@@ -17,7 +17,9 @@ export const ALL_PORTFOLIOS = '__all__';
 
 /** The portfolio names actually present in the loaded window — feeds the portfolio
  *  Select with zero extra reads. Sorted, de-duped, nulls dropped. */
-export function distinctPortfolioNames(rows: readonly { portfolio_name: string | null }[]): string[] {
+export function distinctPortfolioNames(
+  rows: readonly { portfolio_name: string | null }[],
+): string[] {
   const names = new Set<string>();
   for (const row of rows) {
     if (row.portfolio_name) names.add(row.portfolio_name);

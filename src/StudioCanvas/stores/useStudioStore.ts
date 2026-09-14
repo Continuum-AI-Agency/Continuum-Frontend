@@ -12,8 +12,8 @@ import {
   type OnNodesChange,
 } from '@xyflow/react';
 import type { CSSProperties } from 'react';
-import { toast } from 'sonner';
 import { create } from 'zustand';
+import { toast } from '@/components/ui/toast-imperative';
 import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
 import type { StudioNode } from '../types';
 import { type EdgeSourceNode, resolveEdgeDataType } from '../utils/handleResolution';

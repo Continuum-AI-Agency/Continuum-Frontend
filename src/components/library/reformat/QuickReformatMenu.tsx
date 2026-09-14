@@ -12,8 +12,6 @@ import {
 import { Crop, Expand, Loader2, Scaling } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
-
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +23,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/toast-imperative';
 import { runImageReformat } from '@/lib/library/reformatImage';
 
 const LABELS: Record<ImageReformatPreset, string> = {

@@ -419,7 +419,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
           {refusals.length > 0 ? (
             <div
               data-testid="batch-node-refusal"
-              className="shrink-0 rounded border border-destructive/40 bg-destructive/5 p-1.5 text-[10px] leading-snug text-destructive"
+              className="shrink-0 rounded border border-destructive/40 bg-destructive/5 p-1.5 text-2xs leading-snug text-destructive"
             >
               {refusals.map((reason) => (
                 <p key={reason}>{reason}</p>
@@ -429,7 +429,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
 
           <div className="nodrag -mx-1 min-h-0 flex-1 overflow-y-auto border-y border-border/60 bg-muted/20">
             {items.length === 0 ? (
-              <p className="p-2 text-center text-[11px] leading-snug text-muted-foreground">
+              <p className="p-2 text-center text-xs leading-snug text-muted-foreground">
                 Add items to fan every node downstream out over them.
               </p>
             ) : (
@@ -460,7 +460,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                         <track kind="captions" />
                       </video>
                     ) : null}
-                    <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-foreground">
+                    <span className="min-w-0 flex-1 truncate font-mono text-2xs text-foreground">
                       {batchItemLabel(item, index)}
                     </span>
                     <button
@@ -489,7 +489,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 onChange={(event) => setCsvText(event.target.value)}
                 onMouseDown={stopDrag}
                 placeholder="Paste your prompts — one per line"
-                className="nodrag h-14 resize-none text-[10px]"
+                className="nodrag h-14 resize-none text-2xs"
               />
               {/* Native on purpose: three options inside a node this small, and the
                   duration control on the video node already reads this way. */}
@@ -498,7 +498,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 value={pasteMode}
                 onChange={(event) => setPasteMode(event.target.value as BatchPasteMode)}
                 onMouseDown={stopDrag}
-                className="nodrag h-6 w-full rounded-md border border-input bg-transparent px-2 text-[10px]"
+                className="nodrag h-6 w-full rounded-md border border-input bg-transparent px-2 text-2xs"
               >
                 {PASTE_MODES.map((mode) => (
                   <option key={mode} value={mode}>
@@ -509,7 +509,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
               <Button
                 variant="secondary"
                 size="sm"
-                className="nodrag h-6 w-full text-[10px]"
+                className="nodrag h-6 w-full text-2xs"
                 onMouseDown={stopDrag}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -525,7 +525,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
             <Button
               variant="outline"
               size="sm"
-              className="nodrag h-6 flex-1 gap-1 text-[10px]"
+              className="nodrag h-6 flex-1 gap-1 text-2xs"
               onMouseDown={stopDrag}
               onClick={(event) => {
                 event.stopPropagation();
@@ -538,7 +538,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
             <Button
               variant="outline"
               size="sm"
-              className="nodrag h-6 flex-1 gap-1 text-[10px]"
+              className="nodrag h-6 flex-1 gap-1 text-2xs"
               onMouseDown={stopDrag}
               onClick={(event) => {
                 event.stopPropagation();
@@ -569,7 +569,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
               >
                 <SelectTrigger
                   size="sm"
-                  className="nodrag h-6 flex-1 text-[10px]"
+                  className="nodrag h-6 flex-1 text-2xs"
                   onMouseDown={stopDrag}
                 >
                   <SelectValue items={SPLIT_MODE_LABEL} />
@@ -591,7 +591,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                     updateNodeData(id, { splitSeparator: event.target.value });
                     triggerSave();
                   }}
-                  className="nodrag h-6 w-16 rounded border bg-background px-1 text-[10px]"
+                  className="nodrag h-6 w-16 rounded border bg-background px-1 text-2xs"
                 />
               ) : null}
             </div>
@@ -609,7 +609,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 <SelectTrigger
                   size="sm"
                   data-testid="batch-node-combine"
-                  className="nodrag h-6 w-full text-[10px]"
+                  className="nodrag h-6 w-full text-2xs"
                   onMouseDown={stopDrag}
                 >
                   <SelectValue />
@@ -626,13 +626,13 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
               {pairing ? (
                 <p
                   data-testid="batch-node-pairs"
-                  className={`text-[10px] leading-snug ${pairing.over ? 'text-destructive' : 'text-muted-foreground'}`}
+                  className={`text-2xs leading-snug ${pairing.over ? 'text-destructive' : 'text-muted-foreground'}`}
                 >
                   {pairing.text}
                 </p>
               ) : null}
               {partnerDetached ? (
-                <p className="text-[10px] leading-snug text-muted-foreground">
+                <p className="text-2xs leading-snug text-muted-foreground">
                   The other batch feeds the pairing — wire it downstream too for it to appear in the
                   render.
                 </p>

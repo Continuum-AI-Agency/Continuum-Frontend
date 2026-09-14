@@ -57,7 +57,7 @@ export function FrameExtractBlock({
       >
         <NodeTitleBar icon={Camera} label="Continuity Frame">
           <select
-            className="nodrag h-5 rounded-sm border border-border/60 bg-background px-1 text-[10px]"
+            className="nodrag h-5 rounded-sm border border-border/60 bg-background px-1 text-2xs"
             value={selector}
             aria-label="Which frame to extract"
             onChange={(event) =>
@@ -97,7 +97,7 @@ export function FrameExtractBlock({
             </span>
           )}
           <Button
-            className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-[11px] opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
+            className="nodrag absolute right-1.5 bottom-1.5 z-10 h-6 px-2 text-xs opacity-70 transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
             size="sm"
             disabled={!hasVideo || data.isExecuting}
             onMouseDown={(event) => event.stopPropagation()}

@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  ForgeLineageView,
   RenderWorkspace,
   TemplateFontStatus,
   TemplateForgeNeed,
@@ -252,6 +253,16 @@ export type TemplateRunRow = {
   root_table: string | null;
   application: string | null;
 };
+
+export async function fetchTemplateLineage(
+  brandId: string,
+  assetId: string,
+): Promise<ForgeLineageView> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${assetId}/lineage?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return unwrap<ForgeLineageView>(response, 'Template lineage');
+}
 
 export async function fetchTemplateRun(
   brandId: string,

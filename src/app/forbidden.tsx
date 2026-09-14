@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { buttonVariants } from '@/components/ui/button';
 
 export default function Forbidden() {
   return (
@@ -11,10 +12,7 @@ export default function Forbidden() {
         <p className="mb-8 text-sm text-zinc-500 dark:text-zinc-400">
           You do not have permission to view this resource.
         </p>
-        <Link
-          href="/dashboard"
-          className="inline-flex h-10 items-center rounded-lg bg-[#5A48F9] px-6 text-sm font-medium text-white transition-colors hover:bg-[#4a3ad4]"
-        >
+        <Link href="/dashboard" className={buttonVariants({ size: 'lg' })}>
           Back to dashboard
         </Link>
       </div>

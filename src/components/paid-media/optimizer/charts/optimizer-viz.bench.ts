@@ -32,11 +32,11 @@ import { resolveAdsetName } from '../adsetName';
 import { itemToRow, kpiColumns } from '../kpiColumns';
 import {
   adSetRoasSeries,
+  bindTimelineEvents,
   buildConfidenceRadar,
   buildConversionFunnel,
   buildCpaHeroPoints,
   buildCpaProjection,
-  bindTimelineEvents,
   mergeAdDailyByMetric,
   pacingSnapshot,
   projectionEndpoint,

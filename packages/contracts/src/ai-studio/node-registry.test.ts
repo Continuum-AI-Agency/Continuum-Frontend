@@ -154,13 +154,14 @@ describe('generation signature recipes', () => {
     expect(studioNodeDefinition('nanoGen').signatureFields).toEqual(NANO_GEN_SIGNATURE_FIELDS);
   });
 
-  it('gives every video generator the same recipe, and only the tracked types one', () => {
+  it('gives generators and actions their exact recipes, and only tracked types one', () => {
     for (const type of ['videoGen', 'veoDirector', 'veoFast'] as const) {
       expect(studioNodeDefinition(type).signatureFields).toEqual(VIDEO_GENERATOR_SIGNATURE_FIELDS);
     }
+    expect(studioNodeDefinition('action').signatureFields).toEqual(['actionId', 'config']);
     const tracked = STUDIO_NODE_TYPES.filter(
       (type: StudioNodeType) => studioNodeDefinition(type).signatureFields !== undefined,
     );
-    expect(sorted(tracked)).toEqual(['nanoGen', 'veoDirector', 'veoFast', 'videoGen']);
+    expect(sorted(tracked)).toEqual(['action', 'nanoGen', 'veoDirector', 'veoFast', 'videoGen']);
   });
 });

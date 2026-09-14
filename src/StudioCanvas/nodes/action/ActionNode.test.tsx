@@ -8,7 +8,7 @@ import {
   getAllowedSourceHandles,
   getAllowedTargetHandles,
 } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 
 import { ToastProvider } from '@/components/ui/ToastProvider';
@@ -138,5 +138,33 @@ describe('ActionNode', () => {
       expect(handleIds(container, 'right')).toEqual(getAllowedSourceHandles(graphNode));
       cleanup();
     }
+  });
+
+  it('shows and persists the order of every clip wired to a multi-input port', () => {
+    useStudioStore.setState({
+      nodes: [
+        { id: 'clip-a', type: 'video', position: { x: 0, y: 0 }, data: { fileName: 'A.mp4' } },
+        { id: 'clip-b', type: 'video', position: { x: 0, y: 0 }, data: { fileName: 'B.mp4' } },
+        {
+          id: 'action-1',
+          type: 'action',
+          position: { x: 0, y: 0 },
+          data: { actionId: 'video.stitch', config: {} },
+        },
+      ],
+      edges: [
+        { id: 'e-a', source: 'clip-a', target: 'action-1', targetHandle: 'in' },
+        { id: 'e-b', source: 'clip-b', target: 'action-1', targetHandle: 'in' },
+      ],
+    });
+
+    const { getByText, getByRole } = renderNode(nodeData({ actionId: 'video.stitch' }));
+
+    expect(getByText('1 · A.mp4 · First')).toBeDefined();
+    expect(getByText('2 · B.mp4 · Last')).toBeDefined();
+    fireEvent.click(getByRole('button', { name: 'Move B.mp4 earlier' }));
+
+    expect(useStudioStore.getState().edges.map((edge) => edge.id)).toEqual(['e-b', 'e-a']);
+    expect(triggerSave).toHaveBeenCalledTimes(1);
   });
 });

@@ -11,15 +11,14 @@ import type { SpliceProgress, SpliceResult } from './spliceClips';
 // should not grow a "hold every frame in memory" branch that its four other callers
 // would carry forever.
 //
-// AUDIO IS DROPPED. Reversing PCM means decoding the whole audio track, reversing the
-// sample buffer and re-encoding it; sped/slowed clips already play silent for the same
-// class of reason (`appendRange.ts:188`), and the op's own catalog description says so
-// before the user runs it. The output still carries a silent AAC track so the two
-// streams stay the same length.
+// Audio follows the same buffer-and-reverse rule as video. Samples are decoded into
+// planar PCM, emitted in reverse chunk/frame order, and padded only when the source has
+// no audio or codec padding leaves the audio fractionally shorter than the video.
 
 type MediabunnyModule = Awaited<ReturnType<typeof loadMediabunny>>;
 type MbInput = InstanceType<MediabunnyModule['Input']>;
 type MbCanvasSource = InstanceType<MediabunnyModule['CanvasSource']>;
+type MbAudioSampleSource = InstanceType<MediabunnyModule['AudioSampleSource']>;
 
 const DEFAULT_VIDEO_BITRATE = 6_000_000;
 const DEFAULT_AUDIO_BITRATE = 192_000;
@@ -40,6 +39,20 @@ const EPSILON = 1e-6;
 export interface ReverseChunk {
   startSec: number;
   endSec: number;
+}
+
+/** Concatenate planar channels after reversing frame order inside each channel. */
+export function reversePlanarAudio(planes: readonly Float32Array[]): Float32Array {
+  const frameCount = planes[0]?.length ?? 0;
+  const reversed = new Float32Array(frameCount * planes.length);
+  for (const [channel, plane] of planes.entries()) {
+    if (plane.length !== frameCount) throw new Error('Audio channel lengths do not match');
+    const offset = channel * frameCount;
+    for (let frame = 0; frame < frameCount; frame += 1) {
+      reversed[offset + frame] = plane[frameCount - frame - 1];
+    }
+  }
+  return reversed;
 }
 
 /**
@@ -137,6 +150,62 @@ export async function appendReversedRange(params: AppendReversedRangeParams): Pr
   return emitted;
 }
 
+async function appendReversedAudioRange(params: {
+  mb: MediabunnyModule;
+  input: MbInput;
+  audioSource: MbAudioSampleSource;
+  range: { startSec: number; endSec: number };
+  cumulativeOffset: number;
+  signal?: AbortSignal;
+}): Promise<number | null> {
+  const audioTrack = await params.input.getPrimaryAudioTrack();
+  if (!audioTrack) return null;
+
+  const decoded: Array<{
+    planes: Float32Array[];
+    sampleRate: number;
+    numberOfChannels: number;
+  }> = [];
+  const sink = new params.mb.AudioSampleSink(audioTrack);
+  for await (const sample of sink.samples(params.range.startSec, params.range.endSec)) {
+    throwIfAborted(params.signal);
+    try {
+      const planes = Array.from({ length: sample.numberOfChannels }, (_, planeIndex) => {
+        const plane = new Float32Array(sample.numberOfFrames);
+        sample.copyTo(plane, { planeIndex, format: 'f32-planar' });
+        return plane;
+      });
+      decoded.push({
+        planes,
+        sampleRate: sample.sampleRate,
+        numberOfChannels: sample.numberOfChannels,
+      });
+    } finally {
+      sample.close();
+    }
+  }
+
+  let emitted = 0;
+  for (let index = decoded.length - 1; index >= 0; index -= 1) {
+    throwIfAborted(params.signal);
+    const chunk = decoded[index];
+    const output = new params.mb.AudioSample({
+      data: reversePlanarAudio(chunk.planes),
+      format: 'f32-planar',
+      sampleRate: chunk.sampleRate,
+      numberOfChannels: chunk.numberOfChannels,
+      timestamp: params.cumulativeOffset + emitted,
+    });
+    try {
+      await params.audioSource.add(output);
+      emitted += output.duration;
+    } finally {
+      output.close();
+    }
+  }
+  return emitted;
+}
+
 export interface RenderReverseOptions {
   blob: Blob;
   /** Play the clip forward first, then backward. */
@@ -231,10 +300,8 @@ export async function renderReverse(options: RenderReverseOptions): Promise<Spli
         targetWidth,
         targetHeight,
         cumulativeOffset: 0,
-        muteAudio: true,
-        // One silence fill covers BOTH passes at the end; letting the forward pass emit
-        // its own would leave a gap exactly where the reverse pass starts.
-        skipAudio: true,
+        muteAudio: false,
+        skipAudio: false,
         signal,
         onRangeProgress: (processed) => report(processed, 0),
       });
@@ -242,6 +309,7 @@ export async function renderReverse(options: RenderReverseOptions): Promise<Spli
     }
 
     if (reverseSpan > 0) {
+      const reverseOffset = emitted;
       const reversed = await appendReversedRange({
         mb,
         input,
@@ -256,9 +324,25 @@ export async function renderReverse(options: RenderReverseOptions): Promise<Spli
         onRangeProgress: (processed) => report(emitted + processed, options.boomerang ? 1 : 0),
       });
       emitted += reversed;
+      const reversedAudio = await appendReversedAudioRange({
+        mb,
+        input,
+        audioSource,
+        range: { startSec: 0, endSec: reverseSpan },
+        cumulativeOffset: reverseOffset,
+        signal,
+      });
+      const audioDuration = reversedAudio ?? 0;
+      if (audioDuration < reversed) {
+        await fillSilence(
+          mb,
+          audioSource,
+          reversed - audioDuration,
+          reverseOffset + audioDuration,
+          signal,
+        );
+      }
     }
-
-    await fillSilence(mb, audioSource, emitted, 0, signal);
     throwIfAborted(signal);
 
     await output.finalize();

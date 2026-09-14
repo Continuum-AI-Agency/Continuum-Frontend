@@ -133,12 +133,27 @@ export function subscribeToPostgresChanges({
     });
   }
 
-  channel.subscribe((status) => {
+  // Bindings are registered before this join. The join itself waits for setAuth so
+  // the first frame is not `claims_role = anon` — a channel that reports SUBSCRIBED
+  // and then delivers nothing until the next heartbeat. Measured on the render
+  // queue; the helper is the one owner, so every postgres_changes subscriber gets it.
+  const join = () => {
     if (closed) return;
-    onStatus?.(status);
-    if (status !== 'SUBSCRIBED') return;
-    void onSubscribed?.();
-  });
+    channel.subscribe((status) => {
+      if (closed) return;
+      onStatus?.(status);
+      if (status !== 'SUBSCRIBED') return;
+      void onSubscribed?.();
+    });
+  };
+  const pending = supabase.realtime?.setAuth?.();
+  if (pending != null && typeof (pending as PromiseLike<unknown>).then === 'function') {
+    void Promise.resolve(pending)
+      .catch(() => undefined)
+      .then(join);
+  } else {
+    join();
+  }
 
   return () => {
     if (closed) return;

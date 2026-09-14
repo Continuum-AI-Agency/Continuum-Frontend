@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { animatedCssProperties, withCrossOrigin } from './browserRenderer';
+import {
+  animatedCssProperties,
+  buildTemporalMetrics,
+  resolveCompositionHtml,
+  withCrossOrigin,
+} from './browserRenderer';
 
 /**
  * `crossorigin` is what opts a media fetch into CORS mode. Without it the browser
@@ -66,9 +71,9 @@ describe('withCrossOrigin', () => {
  */
 describe('animatedCssProperties', () => {
   it('converts camelCased keyframe properties to CSS names', () => {
-    expect(animatedCssProperties([{ backgroundColor: 'red' }, { backgroundColor: 'blue' }])).toEqual(
-      ['background-color'],
-    );
+    expect(
+      animatedCssProperties([{ backgroundColor: 'red' }, { backgroundColor: 'blue' }]),
+    ).toEqual(['background-color']);
   });
 
   it('drops keyframe metadata, which is not a style property', () => {
@@ -90,5 +95,50 @@ describe('animatedCssProperties', () => {
 
   it('returns nothing for a keyframe set that animates nothing', () => {
     expect(animatedCssProperties([{ offset: 0 }, { offset: 1 }])).toEqual([]);
+  });
+});
+
+describe('resolveCompositionHtml errors', () => {
+  it('names the failed stage when the composition request never returns', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (() => Promise.reject(new TypeError('Failed to fetch'))) as typeof fetch;
+    try {
+      expect(
+        resolveCompositionHtml({
+          htmlUrl: 'https://example.com/composition.html',
+          assets: [],
+          width: 1920,
+          height: 1080,
+          durationSeconds: 10,
+          fps: 30,
+        }),
+      ).rejects.toThrow('Could not load the composition');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('buildTemporalMetrics', () => {
+  it('measures duplicates, scene changes, frozen intervals, and entrance motion', () => {
+    const metrics = buildTemporalMetrics(
+      [
+        new Uint8Array([0, 0]),
+        new Uint8Array([0, 0]),
+        new Uint8Array([20, 20]),
+        new Uint8Array([20, 20]),
+        new Uint8Array([40, 40]),
+      ],
+      2,
+      [
+        { id: 'hook', start_seconds: 0, duration_seconds: 1.5 },
+        { id: 'payoff', start_seconds: 1.5, duration_seconds: 1 },
+      ],
+    );
+
+    expect(metrics.duplicateFrameCount).toBe(2);
+    expect(metrics.sceneChanges).toBe(2);
+    expect(metrics.longestFrozenSeconds).toBe(0.5);
+    expect(metrics.entranceMotionSceneIds).toEqual(['hook', 'payoff']);
   });
 });

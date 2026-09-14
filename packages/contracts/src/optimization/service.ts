@@ -1724,6 +1724,22 @@ export const OptimizerLogsResponseSchema = z.object({
 });
 export type OptimizerLogsResponse = z.infer<typeof OptimizerLogsResponseSchema>;
 
+/** Hot-window lengths the Activity feeds offer. 7 is the default; 14/30 still
+ *  read Postgres. Older than 30 days is a separate archive request. */
+export const OPTIMIZER_FEED_WINDOW_DAYS = [7, 14, 30] as const;
+export type OptimizerFeedWindowDays = (typeof OPTIMIZER_FEED_WINDOW_DAYS)[number];
+
+export function isOptimizerFeedWindowDays(value: unknown): value is OptimizerFeedWindowDays {
+  return value === 7 || value === 14 || value === 30;
+}
+
+export function optimizerFeedSinceIso(
+  windowDays: OptimizerFeedWindowDays,
+  now: Date = new Date(),
+): string {
+  return new Date(now.getTime() - windowDays * 86_400_000).toISOString();
+}
+
 /** Which audit table an action row came from, and therefore what it means.
  *  'money'    — a write that touched the ad account (optimizer.apply_audits)
  *  'settings' — a portfolio config change (optimizer.portfolio_audits)

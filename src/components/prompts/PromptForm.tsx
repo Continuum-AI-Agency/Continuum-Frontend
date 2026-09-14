@@ -119,7 +119,7 @@ export function PromptForm({ brandId, initial, onCancelAction, onSavedAction }: 
           Cancel
         </Button>
         <Button
-          variant="brand"
+          variant="default"
           size="sm"
           disabled={!canSave}
           aria-busy={saving || undefined}

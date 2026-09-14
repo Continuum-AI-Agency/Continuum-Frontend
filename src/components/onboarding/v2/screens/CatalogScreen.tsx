@@ -183,7 +183,7 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
     <div className="flex flex-1 justify-center px-4 py-12 md:px-8">
       <div className="w-full max-w-3xl">
         <div className="mb-8 text-center">
-          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_22%,transparent)] bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] px-3 py-1 text-xs font-semibold text-[var(--cs-violet,#5a39ff)]">
+          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--primary)_22%,transparent)] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] px-3 py-1 text-xs font-semibold text-[var(--primary)]">
             <Package className="h-3 w-3" />
             Step 3 of {totalSteps}
           </div>
@@ -228,7 +228,7 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
           className={cn(
             'rounded-lg border border-dashed border-border p-6 text-center motion-safe:transition-colors',
             dragActive &&
-              'border-[var(--cs-violet,#5a39ff)] bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_6%,transparent)]',
+              'border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_6%,transparent)]',
           )}
         >
           <input

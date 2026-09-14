@@ -1,6 +1,6 @@
 'use client';
 
-import type { MediaAsset } from '@continuum/contracts';
+import type { LibraryPreviewFrame, MediaAsset } from '@continuum/contracts';
 import { ImagePlus, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion, type Variants } from 'motion/react';
 import { useEffect, useRef } from 'react';
@@ -23,6 +23,7 @@ type Props = {
   onAssetChanged?: () => void;
   selectedAssetIds?: ReadonlySet<string>;
   onToggleSelected?: (asset: MediaAsset) => void;
+  previewFrame?: LibraryPreviewFrame;
 };
 
 const cardVariants: Variants = {
@@ -33,6 +34,15 @@ const cardVariants: Variants = {
 
 const GRID_CLASS =
   'grid grid-cols-2 gap-[var(--app-shell-gap)] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+
+const FRAME_GRID_CLASS: Record<Exclude<LibraryPreviewFrame, 'native'>, string> = {
+  story: 'grid grid-cols-3 gap-[var(--app-shell-gap)] sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8',
+  feed: 'grid grid-cols-2 gap-[var(--app-shell-gap)] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
+  square:
+    'grid grid-cols-2 gap-[var(--app-shell-gap)] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
+  landscape:
+    'grid grid-cols-1 gap-[var(--app-shell-gap)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
+};
 
 export function MediaGrid({
   brandId,
@@ -48,6 +58,7 @@ export function MediaGrid({
   onAssetChanged,
   selectedAssetIds,
   onToggleSelected,
+  previewFrame = 'native',
 }: Props) {
   const reduceMotion = useReducedMotion();
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -85,10 +96,12 @@ export function MediaGrid({
     );
   }
 
+  const gridClass = previewFrame === 'native' ? GRID_CLASS : FRAME_GRID_CLASS[previewFrame];
+
   return (
     <div className="flex flex-col gap-4">
       {reduceMotion ? (
-        <div className={cn(GRID_CLASS, className)}>
+        <div className={cn(gridClass, className)}>
           {assets.map((asset, i) => (
             <MediaCard
               key={asset.id}
@@ -101,12 +114,13 @@ export function MediaGrid({
               onAssetChanged={onAssetChanged}
               selected={selectedAssetIds?.has(asset.id)}
               onToggleSelected={onToggleSelected}
+              previewFrame={previewFrame}
             />
           ))}
         </div>
       ) : (
         <motion.div
-          className={cn(GRID_CLASS, className)}
+          className={cn(gridClass, className)}
           variants={stagger}
           initial="hidden"
           animate="visible"
@@ -124,6 +138,7 @@ export function MediaGrid({
                   onAssetChanged={onAssetChanged}
                   selected={selectedAssetIds?.has(asset.id)}
                   onToggleSelected={onToggleSelected}
+                  previewFrame={previewFrame}
                 />
               </motion.div>
             ))}

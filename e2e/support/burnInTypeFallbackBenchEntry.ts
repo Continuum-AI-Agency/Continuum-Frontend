@@ -21,10 +21,10 @@
 import {
   type BrandTypeInputs,
   type BrandTypeSource,
-  FALLBACK_INK_DARK,
-  FALLBACK_INK_LIGHT,
   type DesignSystemSnapshot,
   EMPTY_ADHERENCE,
+  FALLBACK_INK_DARK,
+  FALLBACK_INK_LIGHT,
   type PixelBuffer,
   PRELOADED_TYPE_FACES,
   type Rgb,
@@ -36,9 +36,9 @@ import {
 import { captionFontFaceCss, ensureCaptionFonts } from '../../src/lib/clips/captionFonts';
 import { canvasToDataUrl } from '../../src/StudioCanvas/utils/actions/imageOps';
 import {
+  deriveHeadlineInk,
   describeHeadlineFaces,
   describeHeadlineInk,
-  deriveHeadlineInk,
   renderHeadline,
   resolveHeadlineFaces,
   resolveHeadlineInk,

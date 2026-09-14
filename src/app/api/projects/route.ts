@@ -26,9 +26,7 @@ const UNIQUE_VIOLATION = '23505';
 
 type AuthorizedCaller = { userId: string };
 
-async function authorize(
-  brandId: string,
-): Promise<AuthorizedCaller | NextResponse> {
+async function authorize(brandId: string): Promise<AuthorizedCaller | NextResponse> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -120,7 +118,10 @@ export async function POST(request: Request) {
 
   if (error) {
     if ((error as { code?: string }).code === UNIQUE_VIOLATION) {
-      return NextResponse.json({ error: 'A project with that name already exists' }, { status: 409 });
+      return NextResponse.json(
+        { error: 'A project with that name already exists' },
+        { status: 409 },
+      );
     }
     console.error('[api/projects] create failed', error);
     return NextResponse.json({ error: 'Create failed' }, { status: 500 });
@@ -171,7 +172,10 @@ export async function PATCH(request: Request) {
 
   if (error) {
     if ((error as { code?: string }).code === UNIQUE_VIOLATION) {
-      return NextResponse.json({ error: 'A project with that name already exists' }, { status: 409 });
+      return NextResponse.json(
+        { error: 'A project with that name already exists' },
+        { status: 409 },
+      );
     }
     console.error('[api/projects] update failed', error);
     return NextResponse.json({ error: 'Update failed' }, { status: 500 });

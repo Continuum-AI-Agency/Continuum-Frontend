@@ -1,15 +1,20 @@
-import type {
-  EditorAudioClip,
-  EditorClip,
-  EditorCommand,
-  EditorMediaSourceRef,
-  EditorOverlayClip,
-  EditorProjectV2,
-  EditorTextClip,
-  EditorTrack,
-  EditorTransition,
-  EditorVideoClip,
-  MediaAssetVersion,
+import {
+  applyEditorCommandBatch,
+  applyMotionRecipe,
+  type EditorAudioClip,
+  type EditorClip,
+  type EditorCommand,
+  type EditorKeyframe,
+  type EditorMediaSourceRef,
+  type EditorNestedSequence,
+  type EditorOverlayClip,
+  type EditorProjectV2,
+  type EditorTextClip,
+  type EditorTrack,
+  type EditorTransition,
+  type EditorVideoClip,
+  type MediaAssetVersion,
+  type MotionRecipe,
 } from '@continuum/contracts';
 import type { TimelineInputSource, TimelineItem } from '../../types';
 import {
@@ -611,6 +616,10 @@ export function upsertOverlayOperation(
     y?: number;
     scale?: number;
     opacity?: number;
+    rotationDeg?: number;
+    rotateXDeg?: number;
+    rotateYDeg?: number;
+    perspective?: number;
   },
 ): EditorAssemblyOperation {
   const existingTrack = project.tracks.find(
@@ -654,12 +663,17 @@ export function upsertOverlayOperation(
       },
       scaleX: scale,
       scaleY: scale,
+      rotationDeg: input.rotationDeg ?? existing?.transform.rotationDeg ?? 0,
+      rotateXDeg: input.rotateXDeg ?? existing?.transform.rotateXDeg ?? 0,
+      rotateYDeg: input.rotateYDeg ?? existing?.transform.rotateYDeg ?? 0,
+      perspective: input.perspective ?? existing?.transform.perspective ?? 0,
       opacity: Math.max(0, Math.min(1, input.opacity ?? existing?.transform.opacity ?? 1)),
     },
     crop: existing?.crop ?? { left: 0, top: 0, right: 0, bottom: 0 },
     blendMode: existing?.blendMode ?? 'normal',
     effects: existing?.effects ?? [],
     keyframes: existing?.keyframes ?? [],
+    parentClipId: existing?.parentClipId,
   };
   const forward: EditorCommandDraft[] = [];
   if (!existingTrack) {
@@ -692,6 +706,266 @@ export function upsertOverlayOperation(
               ] as EditorCommandDraft[])
             : []),
         ],
+  };
+}
+
+export function applyAnimationStyleOperation(
+  project: EditorProjectV2,
+  input: {
+    trackId: string;
+    clipId: string;
+    styleId: 'fade' | 'move' | 'scale' | 'rotate';
+    timelineOffsetSec: number;
+    durationSec?: number;
+  },
+): EditorAssemblyOperation {
+  const track = project.tracks.find((candidate) => candidate.id === input.trackId);
+  const clip = track?.clips.find((candidate) => candidate.id === input.clipId);
+  const previous = clip && 'keyframes' in clip ? clip.keyframes : [];
+  return {
+    label: `Apply ${input.styleId} style`,
+    forward: [
+      {
+        commandType: 'apply_animation_style',
+        trackId: input.trackId,
+        clipId: input.clipId,
+        styleId: input.styleId,
+        instanceId: crypto.randomUUID(),
+        timelineOffsetSec: input.timelineOffsetSec,
+        durationSec: input.durationSec ?? 0.4,
+      },
+    ],
+    inverse: [
+      {
+        commandType: 'set_keyframes',
+        trackId: input.trackId,
+        clipId: input.clipId,
+        keyframes: previous,
+      },
+    ],
+  };
+}
+
+export function trimAnimationStyleOperation(
+  project: EditorProjectV2,
+  input: {
+    trackId: string;
+    clipId: string;
+    instanceId: string;
+    startSec: number;
+    endSec: number;
+  },
+): EditorAssemblyOperation {
+  const track = project.tracks.find((candidate) => candidate.id === input.trackId);
+  const clip = track?.clips.find((candidate) => candidate.id === input.clipId);
+  const previous = clip && 'keyframes' in clip ? clip.keyframes : [];
+  return {
+    label: 'Trim animation style',
+    forward: [
+      {
+        commandType: 'trim_animation_style',
+        trackId: input.trackId,
+        clipId: input.clipId,
+        instanceId: input.instanceId,
+        startSec: input.startSec,
+        endSec: input.endSec,
+      },
+    ],
+    inverse: [
+      {
+        commandType: 'set_keyframes',
+        trackId: input.trackId,
+        clipId: input.clipId,
+        keyframes: previous,
+      },
+    ],
+  };
+}
+
+export function setClipParentOperation(
+  project: EditorProjectV2,
+  input: { trackId: string; clipId: string; parentClipId: string | null },
+): EditorAssemblyOperation {
+  const track = project.tracks.find((candidate) => candidate.id === input.trackId);
+  const clip = track?.clips.find((candidate) => candidate.id === input.clipId);
+  return {
+    label: 'Set clip parent',
+    forward: [
+      {
+        commandType: 'set_clip_parent',
+        trackId: input.trackId,
+        clipId: input.clipId,
+        parentClipId: input.parentClipId,
+      },
+    ],
+    inverse: [
+      {
+        commandType: 'set_clip_parent',
+        trackId: input.trackId,
+        clipId: input.clipId,
+        parentClipId: clip && 'parentClipId' in clip ? (clip.parentClipId ?? null) : null,
+      },
+    ],
+  };
+}
+
+export function applyMotionRecipeOperation(
+  project: EditorProjectV2,
+  input: { trackId: string; clipId: string; recipe: MotionRecipe },
+): EditorAssemblyOperation {
+  const track = project.tracks.find((candidate) => candidate.id === input.trackId);
+  const clip = track?.clips.find((candidate) => candidate.id === input.clipId);
+  const previous = clip && 'keyframes' in clip ? clip.keyframes : [];
+  const next = clip ? applyMotionRecipe(clip, input.recipe).keyframes : input.recipe.keyframes;
+  return {
+    label: 'Place motion Element',
+    forward: [
+      {
+        commandType: 'set_keyframes',
+        trackId: input.trackId,
+        clipId: input.clipId,
+        keyframes: next,
+      },
+    ],
+    inverse: [
+      {
+        commandType: 'set_keyframes',
+        trackId: input.trackId,
+        clipId: input.clipId,
+        keyframes: previous,
+      },
+    ],
+  };
+}
+
+export function upsertKeyframeOperation(
+  project: EditorProjectV2,
+  input: { trackId: string; clipId: string; keyframe: EditorKeyframe },
+): EditorAssemblyOperation {
+  const track = project.tracks.find((candidate) => candidate.id === input.trackId);
+  const clip = track?.clips.find((candidate) => candidate.id === input.clipId);
+  const previous = clip && 'keyframes' in clip ? clip.keyframes : [];
+  return {
+    label: 'Set keyframe',
+    forward: [
+      {
+        commandType: 'upsert_keyframe',
+        trackId: input.trackId,
+        clipId: input.clipId,
+        keyframe: input.keyframe,
+      },
+    ],
+    inverse: [
+      {
+        commandType: 'set_keyframes',
+        trackId: input.trackId,
+        clipId: input.clipId,
+        keyframes: previous,
+      },
+    ],
+  };
+}
+
+export function precomposeClipsOperation(
+  project: EditorProjectV2,
+  input: { clipIds: string[]; name?: string },
+): EditorAssemblyOperation {
+  const nestedSequenceId = crypto.randomUUID();
+  const instanceClipId = crypto.randomUUID();
+  const existingTrack = project.tracks.find((track) => track.kind === 'nested_sequence');
+  const instanceTrackId = existingTrack?.id ?? `${project.sequenceId}:precomps`;
+  const first = project.tracks
+    .flatMap((track) => track.clips)
+    .find((clip) => input.clipIds.includes(clip.id));
+  return {
+    label: 'Precompose',
+    forward: [
+      {
+        commandType: 'precompose_clips',
+        clipIds: input.clipIds,
+        nestedSequenceId,
+        instanceClipId,
+        instanceTrackId,
+        name: input.name ?? first?.name ?? 'Precomp',
+      },
+    ],
+    inverse: [
+      {
+        commandType: 'restore_timeline_snapshot',
+        snapshot: {
+          sourceRevision: project.revision,
+          sourceFingerprint: project.fingerprint,
+          durationSec: project.durationSec,
+          tracks: project.tracks,
+          transitions: project.transitions,
+          nestedSequences: project.nestedSequences,
+        },
+      },
+    ],
+  };
+}
+
+export function viewProjectForSequence(
+  project: EditorProjectV2,
+  sequenceId: string | null,
+): EditorProjectV2 {
+  if (!sequenceId) return project;
+  const nested = project.nestedSequences.find((sequence) => sequence.id === sequenceId);
+  if (!nested) return project;
+  return {
+    ...project,
+    durationSec: nested.durationSec,
+    canvas: nested.canvas,
+    tracks: nested.tracks,
+    transitions: nested.transitions,
+  };
+}
+
+export function applyNestedSequenceEdit(
+  project: EditorProjectV2,
+  sequenceId: string,
+  operation: EditorAssemblyOperation,
+): EditorAssemblyOperation {
+  const nested = project.nestedSequences.find((sequence) => sequence.id === sequenceId);
+  if (!nested) return operation;
+  const view = viewProjectForSequence(project, sequenceId);
+  const issuedAt = '2026-01-01T00:00:00.000Z';
+  const actor = { actorId: 'assembly', actorType: 'user' as const };
+  const apply = (base: EditorProjectV2, drafts: EditorAssemblyOperation['forward']) =>
+    applyEditorCommandBatch(base, {
+      batchId: `nested-${base.revision}`,
+      projectId: base.projectId,
+      sequenceId: base.sequenceId,
+      idempotencyKey: `nested-key-${base.revision}-${drafts.length}`,
+      expectedRevision: base.revision,
+      expectedFingerprint: base.fingerprint,
+      atomic: true,
+      issuedAt,
+      actor,
+      commands: drafts.map(
+        (draft, index) =>
+          ({
+            ...draft,
+            commandId: `nested-cmd-${base.revision}-${index}`,
+            idempotencyKey: `nested-cmd-key-${base.revision}-${index}`,
+            expectedRevision: base.revision,
+            issuedAt,
+            actor,
+          }) as EditorCommand,
+      ),
+    });
+  const nextView = apply(view, operation.forward);
+  const nextSequence: EditorNestedSequence = {
+    ...nested,
+    durationSec: nextView.durationSec,
+    canvas: nextView.canvas,
+    tracks: nextView.tracks,
+    transitions: nextView.transitions,
+  };
+  return {
+    label: operation.label,
+    forward: [{ commandType: 'set_nested_sequence', sequence: nextSequence }],
+    inverse: [{ commandType: 'set_nested_sequence', sequence: nested }],
   };
 }
 

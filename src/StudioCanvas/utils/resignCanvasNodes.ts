@@ -40,6 +40,13 @@ function collectSignItems(nodes: StudioNode[]): CanvasMediaCoordinate[] {
     const vidBucket = data.generatedVideoBucket;
     addSignItem(items, vidBucket, vidPath);
 
+    const collectionAssets = Array.isArray(data.collectionAssets)
+      ? (data.collectionAssets as Array<Record<string, unknown>>)
+      : [];
+    for (const asset of collectionAssets) {
+      addSignItem(items, asset.storageBucket, asset.storagePath);
+    }
+
     // Uploaded reference nodes (image/video). sourcePath + bucket re-sign into the
     // node's media value so a saved/broadcast reference renders after its signed
     // URL has expired.
@@ -221,6 +228,18 @@ function applySignedUrls(
         ? versionUrlMap.get(versionRefKey(data.assetId, data.assetVersionId))
         : undefined;
     const mediaUrl = refUrl ?? versionUrl;
+    const collectionAssets = Array.isArray(data.collectionAssets)
+      ? (data.collectionAssets as Array<Record<string, unknown>>)
+      : [];
+    const signedCollection = collectionAssets.map((asset) =>
+      typeof asset.storageBucket === 'string' && typeof asset.storagePath === 'string'
+        ? urlMap.get(signKey(asset.storageBucket, asset.storagePath))
+        : undefined,
+    );
+    const collectionItems = signedCollection.every((url): url is string => typeof url === 'string')
+      ? signedCollection
+      : [];
+    const collectionChanged = collectionItems.length > 0;
 
     // Re-sign document entries that have durable storage coordinates.
     if (node.type === 'document') {
@@ -271,7 +290,7 @@ function applySignedUrls(
       };
     }
 
-    if (!imgUrl && !vidUrl && !mediaUrl) return node;
+    if (!imgUrl && !vidUrl && !mediaUrl && !collectionChanged) return node;
 
     const refField = node.type === 'video' ? 'video' : 'image';
     return {
@@ -288,6 +307,15 @@ function applySignedUrls(
         // is the markup baseline; writing an expiring URL there would freeze a link the
         // next load has no way to refresh.
         ...(mediaUrl ? { [refField]: mediaUrl, sourceUrl: mediaUrl } : {}),
+        ...(collectionChanged
+          ? {
+              collectionItems,
+              ...(data.collectionItemType === 'video'
+                ? { generatedVideo: collectionItems[0] }
+                : { generatedImage: collectionItems[0] }),
+              isComplete: true,
+            }
+          : {}),
       } as StudioNode['data'],
     };
   });

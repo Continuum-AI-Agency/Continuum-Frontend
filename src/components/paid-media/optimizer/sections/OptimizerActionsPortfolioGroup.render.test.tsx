@@ -656,7 +656,6 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
   });
 });
 
-
 // Approving a change and undoing it belong to the same moment. The confirm dialogs used to
 // end with "revert it from the activity log" — a different page, found by hand. The writes
 // this queue made now sit under it with their undo attached.
@@ -675,7 +674,7 @@ describe('undo is one click from the queue that made the write', () => {
     ...over,
   });
 
-  it('lists this portfolio\'s recent ad-account writes with a revert', () => {
+  it("lists this portfolio's recent ad-account writes with a revert", () => {
     recentActions = [moneyAction()];
     renderGroup();
     expect(screen.getByText('Recently applied')).toBeTruthy();
@@ -698,7 +697,12 @@ describe('undo is one click from the queue that made the write', () => {
 
   it('never offers undo for a setting change — that is not one write against Meta', () => {
     recentActions = [
-      moneyAction({ family: 'settings', op: 'setting', entity_id: 'daily_total', reversible: false }),
+      moneyAction({
+        family: 'settings',
+        op: 'setting',
+        entity_id: 'daily_total',
+        reversible: false,
+      }),
     ];
     renderGroup();
     expect(screen.queryByText('Recently applied')).toBeNull();

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CAROUSEL_SLIDE_TAG } from '../competitor-spy/saveToLibrary';
+import { libraryAspectRatioBinSchema, libraryPreviewFrameSchema } from './aspect-ratio';
 import { mediaAssetSchema, mediaReviewStatusSchema, mediaSourceSchema } from './asset';
 import { ELEMENT_REFERENCE_TAG } from './element';
 
@@ -32,6 +33,25 @@ export type LibraryPerformanceWindow = z.infer<typeof libraryPerformanceWindowSc
 export const libraryLayoutSchema = z.enum(['grid', 'board']);
 export type LibraryLayout = z.infer<typeof libraryLayoutSchema>;
 
+/**
+ * Role views. `everything` is the old "All assets" creatives-only dump — not the
+ * landing. `jobs` is a tray, not a browse destination.
+ */
+export const libraryBrowseDestinationSchema = z.enum([
+  'home',
+  'canvas',
+  'elements',
+  'sources',
+  'templates',
+  'review',
+  'everything',
+  'images',
+  'videos',
+  'typography',
+  'pipelines',
+]);
+export type LibraryBrowseDestination = z.infer<typeof libraryBrowseDestinationSchema>;
+
 export const libraryBrowseQuerySchema = z
   .object({
     brandId: z.string().uuid(),
@@ -62,6 +82,18 @@ export const libraryBrowseQuerySchema = z
      * is a project file plus what is inside it.
      */
     templateOnly: z.boolean().default(false),
+    /**
+     * Role view. Absent means the caller is still on the legacy mediaType/sort
+     * URL; the page maps that onto a destination. New navigation sends this.
+     */
+    destination: libraryBrowseDestinationSchema.optional(),
+    /** Home shelves for creatives (not template comps — those stay `ratios`). */
+    aspectRatios: z.array(libraryAspectRatioBinSchema).default([]),
+    /**
+     * Cover-crop the grid into a device frame. Independent of `aspectRatios`
+     * (native-size filter) and of `placements` (where the creative ran as an ad).
+     */
+    previewFrame: libraryPreviewFrameSchema.default('native'),
     /** Aspect-ratio labels a template must carry ('9:16'), matched as overlap. */
     ratios: z.array(z.string().min(1)).default([]),
     /** Font families a template uses, matched as overlap. */

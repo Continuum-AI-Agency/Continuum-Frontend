@@ -7,6 +7,7 @@ import {
   layerBounds,
   layerCorners,
   layerTransformCss,
+  sampledLayer,
   sourceToComposition,
 } from './layerTransform';
 
@@ -126,5 +127,21 @@ describe('preview == export', () => {
     const [topLeft] = layerCorners(placed);
     expect(topLeft).toEqual({ x: 10, y: 20 });
     expect(layerTransformCss(placed)).toContain('translate(0px, 0px)');
+  });
+});
+
+describe('sampledLayer', () => {
+  test('interpolates opacity keys at the playhead', () => {
+    const drawn = sampledLayer(
+      layer({
+        opacity: 1,
+        keyframes: [
+          { id: 'a', property: 'opacity', timeSec: 0, value: 0, interpolation: 'linear' },
+          { id: 'b', property: 'opacity', timeSec: 2, value: 1, interpolation: 'linear' },
+        ],
+      }),
+      1,
+    );
+    expect(drawn.opacity).toBe(0.5);
   });
 });

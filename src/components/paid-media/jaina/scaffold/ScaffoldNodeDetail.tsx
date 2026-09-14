@@ -90,7 +90,7 @@ const audienceRows = (derived: ScaffoldDerived | undefined): DetailRow[] => {
 };
 
 const idRow = (label: string, id: string | null | undefined): DetailRow[] =>
-  id ? [{ label, value: <span className="font-mono text-[11px]">{id}</span> }] : [];
+  id ? [{ label, value: <span className="font-mono text-xs">{id}</span> }] : [];
 
 export type ScaffoldCampaignDetail = {
   choices?: ScaffoldChoices;

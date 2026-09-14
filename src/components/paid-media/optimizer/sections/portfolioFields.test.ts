@@ -69,7 +69,10 @@ describe('toFormValues — every field seeded from the portfolio, no keep-curren
 });
 
 describe('createPortfolioFormSchema — the resolver, derived from the contracts patch', () => {
-  const parse = (over: Record<string, unknown>, currentOver: Partial<PortfolioCurrentValues> = {}) =>
+  const parse = (
+    over: Record<string, unknown>,
+    currentOver: Partial<PortfolioCurrentValues> = {},
+  ) =>
     createPortfolioFormSchema(() => usd, current(currentOver)).safeParse({
       ...toFormValues(current(currentOver), usd),
       ...over,
@@ -111,7 +114,10 @@ describe('createPortfolioFormSchema — the resolver, derived from the contracts
 
 describe('buildPatch — the diff is the dirty fields, in contract units', () => {
   const parsed = (over: Record<string, unknown>) =>
-    createPortfolioFormSchema(() => usd, current()).parse({ ...toFormValues(current(), usd), ...over });
+    createPortfolioFormSchema(() => usd, current()).parse({
+      ...toFormValues(current(), usd),
+      ...over,
+    });
 
   it('patches only what changed', () => {
     const values = parsed({ name: 'Renamed' });

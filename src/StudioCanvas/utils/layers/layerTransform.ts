@@ -1,3 +1,4 @@
+import { sampleNumericTrack } from '@continuum/contracts';
 import type { LayerEditorLayer } from '../../types';
 
 /**
@@ -62,6 +63,38 @@ export function applyLayerTransform(
  * `applyLayerTransform` builds. The trailing `translate(-anchor)` is the CSS spelling
  * of drawing at `(-anchor.x, -anchor.y)`.
  */
+export function sampledLayer(layer: LayerEditorLayer, timeSec = 0): LayerEditorLayer {
+  const keys = layer.keyframes ?? [];
+  if (keys.length === 0) return layer;
+  const numeric = (property: string, fallback: number) =>
+    sampleNumericTrack(
+      keys
+        .filter((keyframe) => keyframe.property === property && typeof keyframe.value === 'number')
+        .map((keyframe) => ({
+          timeSec: keyframe.timeSec,
+          value: keyframe.value as number,
+          interpolation: keyframe.interpolation ?? 'linear',
+          easing: keyframe.easing,
+          spring: keyframe.spring,
+        })),
+      timeSec,
+      fallback,
+    );
+  return {
+    ...layer,
+    position: {
+      x: numeric('position.x', layer.position.x),
+      y: numeric('position.y', layer.position.y),
+    },
+    scale: {
+      x: numeric('scale.x', layer.scale.x),
+      y: numeric('scale.y', layer.scale.y),
+    },
+    rotation: numeric('rotation', layer.rotation),
+    opacity: numeric('opacity', layer.opacity),
+  };
+}
+
 export function layerTransformCss(layer: LayerEditorLayer): string {
   return [
     `translate(${layer.position.x}px, ${layer.position.y}px)`,

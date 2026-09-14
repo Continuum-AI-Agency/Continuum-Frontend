@@ -28,7 +28,7 @@ export function PromptList({ prompts, onNewAction, onEditAction, onArchiveAction
 
   return (
     <div className="flex flex-col gap-3">
-      <Button variant="brand" size="sm" className="w-full justify-center" onClick={onNewAction}>
+      <Button variant="default" size="sm" className="w-full justify-center" onClick={onNewAction}>
         <Plus className="h-3.5 w-3.5" />
         New prompt
       </Button>

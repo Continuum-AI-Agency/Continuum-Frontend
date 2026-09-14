@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   type ConsentBrandOption,
@@ -242,14 +243,9 @@ export function ConsentContent({ authorizationId }: { authorizationId: string | 
       )}
 
       <div className="space-y-2 pt-1">
-        <button
-          type="button"
-          onClick={approve}
-          disabled={submitting}
-          className="w-full rounded-lg bg-[#5A48F9] hover:bg-[#4a38e9] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 px-4 transition-colors"
-        >
+        <Button type="button" onClick={approve} disabled={submitting} size="lg" className="w-full">
           {submitting ? 'Authorizing…' : 'Allow access'}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={deny}

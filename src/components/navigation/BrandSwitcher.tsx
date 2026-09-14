@@ -64,7 +64,7 @@ export function BrandSwitcher() {
               <SidebarMenuButton
                 size="lg"
                 aria-label="Switch brand"
-                className="text-[var(--sidebar-foreground)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-foreground)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               >
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground overflow-hidden">
                   {typeof TeamLogo === 'string' ? (

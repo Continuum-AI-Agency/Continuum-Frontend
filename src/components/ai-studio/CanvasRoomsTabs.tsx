@@ -101,7 +101,7 @@ export function CanvasRoomsTabs({
               <div className="flex items-center gap-2">
                 <span className="whitespace-nowrap">{room.name}</span>
                 {room.kind === 'planner' ? (
-                  <span className="rounded border border-border/70 px-1 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                  <span className="rounded border border-border/70 px-1 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
                     Planner
                   </span>
                 ) : null}

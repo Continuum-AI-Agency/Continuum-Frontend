@@ -11,8 +11,10 @@
 // chatter has no revert. The split is the server's (optimizer_list_actions vs the narrowed
 // optimizer_list_logs); this only chooses which of the two to render.
 
+import type { OptimizerFeedWindowDays } from '@continuum/contracts';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { FeedWindowControl } from './feedChrome';
 import { OptimizerActionFeed } from './OptimizerActionFeed';
 import { OptimizerLogs } from './OptimizerLogs';
 
@@ -31,33 +33,37 @@ export function OptimizerActivity({
   currency: string | null;
 }) {
   const [feed, setFeed] = useState<ActivityFeed>('actions');
+  const [windowDays, setWindowDays] = useState<OptimizerFeedWindowDays>(7);
 
   return (
     <div className="space-y-3">
-      <fieldset className="flex flex-wrap items-center gap-1 border-0 p-0">
-        <legend className="sr-only">Choose a feed</legend>
-        {FEEDS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={feed === option.value}
-            onClick={() => setFeed(option.value)}
-            className={cn(
-              'inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium transition-colors',
-              feed === option.value
-                ? 'border-primary/40 bg-primary/10 text-primary'
-                : 'border-border/70 bg-card text-muted-foreground hover:bg-muted/50',
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </fieldset>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <fieldset className="flex flex-wrap items-center gap-1 border-0 p-0">
+          <legend className="sr-only">Choose a feed</legend>
+          {FEEDS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={feed === option.value}
+              onClick={() => setFeed(option.value)}
+              className={cn(
+                'inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium transition-colors',
+                feed === option.value
+                  ? 'border-primary/40 bg-primary/10 text-primary'
+                  : 'border-border/70 bg-card text-muted-foreground hover:bg-muted/50',
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </fieldset>
+        <FeedWindowControl value={windowDays} onChange={setWindowDays} />
+      </div>
 
       {feed === 'actions' ? (
-        <OptimizerActionFeed brandId={brandId} currency={currency} />
+        <OptimizerActionFeed brandId={brandId} currency={currency} windowDays={windowDays} />
       ) : (
-        <OptimizerLogs brandId={brandId} />
+        <OptimizerLogs brandId={brandId} windowDays={windowDays} />
       )}
     </div>
   );

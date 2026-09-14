@@ -17,6 +17,7 @@ import {
 } from '@xyflow/react';
 import {
   Copy,
+  Diamond,
   Download,
   ExternalLink,
   Library,
@@ -25,6 +26,7 @@ import {
   Trash2,
   Video,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -42,6 +44,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { studioVideoHref } from '@/lib/ai-studio/studioVideoHref';
 import {
   applyVideoProjectCommands,
   createVideoProject,
@@ -55,15 +58,14 @@ import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { TimelineEditorNodeData } from '../types';
 import { downloadAsset } from '../utils/downloadAsset';
-import { TimelineEditorDialog } from './timeline/TimelineEditorDialog';
 import { useCanvasTimelineAdapter } from './timeline/useCanvasTimelineAdapter';
 import { useTimelineRender } from './timeline/useTimelineRender';
-import { VideoProductionWorkspaceDialog } from './timeline/VideoProductionWorkspaceDialog';
 
 // Compact launcher for the Video Editor (timelineEditor) break-point node. The
-// real editing happens in a full-screen dialog (TimelineEditorDialog); the node
-// surfaces the input pool, a clip count, the awaiting gate, and the rendered
-// output. Inputs land on a single multi-connection `media-in` pool handle.
+// real editing happens at `/studio/video/[projectId]`. The node surfaces the
+// input pool, a clip count, the awaiting gate, and the rendered output. Inputs
+// land on a single multi-connection `media-in` pool handle. `view=motion` opens
+// Assembly on the property timeline; `view=assembly` skips the production funnel.
 
 const LimitedHandle = ({
   maxConnections,
@@ -97,6 +99,7 @@ export function TimelineEditorBlock({
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const { show } = useToast();
+  const router = useRouter();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   // The editor runs against a host adapter, not the canvas store. The canvas one
   // is built here and shared by the node's Render button and the editor dialog.
@@ -110,12 +113,21 @@ export function TimelineEditorBlock({
   } = useTimelineRender(adapter);
 
   const [isHovered, setIsHovered] = useState(false);
-  const [editorOpen, setEditorOpen] = useState(false);
   const projectSetup = useRef(false);
   const seedSetup = useRef(false);
   const handledRenderRequests = useRef(new Set<string>());
 
   const edges = useEdges();
+  const openStudio = (view: 'assembly' | 'motion' = 'assembly') => {
+    if (!data.videoProjectId) return;
+    router.push(
+      studioVideoHref({
+        projectId: data.videoProjectId,
+        origin: 'canvas',
+        view,
+      }),
+    );
+  };
 
   useEffect(() => {
     if (!adapter.brandId || data.videoProjectId || projectSetup.current) return;
@@ -415,7 +427,7 @@ export function TimelineEditorBlock({
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => {
-                    setEditorOpen(true);
+                    openStudio('assembly');
                   }}
                   title="Open editor"
                 >
@@ -426,8 +438,20 @@ export function TimelineEditorBlock({
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => {
+                    openStudio('motion');
+                  }}
+                  disabled={!data.videoProjectId}
+                  title="Edit motion"
+                >
+                  <Diamond className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
                     if (data.videoProjectId) {
-                      setEditorOpen(true);
+                      openStudio();
                       return;
                     }
                     void render();
@@ -448,7 +472,7 @@ export function TimelineEditorBlock({
                   className="flex h-full w-full flex-col gap-2 p-3"
                   onDoubleClick={(event) => {
                     event.stopPropagation();
-                    setEditorOpen(true);
+                    openStudio();
                   }}
                 >
                   <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
@@ -528,7 +552,7 @@ export function TimelineEditorBlock({
                       <button
                         type="button"
                         onClick={() => {
-                          setEditorOpen(true);
+                          openStudio();
                         }}
                         className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
                       >
@@ -567,17 +591,32 @@ export function TimelineEditorBlock({
                     </a>
                   ) : null}
 
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-8 w-full justify-center text-xs"
-                    onClick={() => {
-                      setEditorOpen(true);
-                    }}
-                  >
-                    <SquarePen className="mr-1 h-3.5 w-3.5" />
-                    {production ? 'Open production' : 'Open editor'}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="h-8 flex-1 justify-center text-xs"
+                      onClick={() => {
+                        openStudio('assembly');
+                      }}
+                    >
+                      <SquarePen className="mr-1 h-3.5 w-3.5" />
+                      {production ? 'Open production' : 'Open editor'}
+                    </Button>
+                    {data.videoProjectId ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 justify-center text-xs"
+                        onClick={() => {
+                          openStudio('motion');
+                        }}
+                      >
+                        <Diamond className="mr-1 h-3.5 w-3.5" />
+                        Motion
+                      </Button>
+                    ) : null}
+                  </div>
                 </NodeContent>
               </CanvasNode>
 
@@ -629,13 +668,17 @@ export function TimelineEditorBlock({
         <ContextMenuContent className="w-56">
           <ContextMenuLabel>Video Editor</ContextMenuLabel>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => setEditorOpen(true)}>
+          <ContextMenuItem onClick={() => openStudio('assembly')} disabled={!data.videoProjectId}>
             <SquarePen className="mr-2 h-4 w-4" />
             Open editor
           </ContextMenuItem>
+          <ContextMenuItem onClick={() => openStudio('motion')} disabled={!data.videoProjectId}>
+            <Diamond className="mr-2 h-4 w-4" />
+            Edit motion
+          </ContextMenuItem>
           <ContextMenuItem
             onClick={() => {
-              if (data.videoProjectId) setEditorOpen(true);
+              if (data.videoProjectId) openStudio();
               else void render();
             }}
             disabled={data.videoProjectId ? false : renderDisabled}
@@ -664,20 +707,6 @@ export function TimelineEditorBlock({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-
-      {editorOpen ? (
-        data.videoProjectId && adapter.brandId ? (
-          <VideoProductionWorkspaceDialog
-            projectId={data.videoProjectId}
-            brandId={adapter.brandId}
-            pool={adapter.pool}
-            open={editorOpen}
-            onOpenChange={setEditorOpen}
-          />
-        ) : (
-          <TimelineEditorDialog adapter={adapter} open={editorOpen} onOpenChange={setEditorOpen} />
-        )
-      ) : null}
     </TooltipProvider>
   );
 }

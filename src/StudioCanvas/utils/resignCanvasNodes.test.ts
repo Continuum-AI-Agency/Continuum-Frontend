@@ -217,4 +217,36 @@ describe('resignCanvasNodes — asset + exact version references', () => {
     expect(signCalls).toEqual([]);
     expect(backendCalls).toEqual([]);
   });
+
+  test('re-signs every saved collection item in its original order', async () => {
+    backendItems = [
+      { bucket: 'media-library', path: 'brand/a.png', signedUrl: 'https://fresh/a.png' },
+      { bucket: 'media-library', path: 'brand/b.png', signedUrl: 'https://fresh/b.png' },
+    ];
+    const [node] = await resignCanvasNodes(
+      [
+        {
+          id: 'action',
+          type: 'action',
+          position: { x: 0, y: 0 },
+          data: {
+            actionId: 'image.flip',
+            config: {},
+            collectionItemType: 'image',
+            collectionAssets: [
+              { storageBucket: 'media-library', storagePath: 'brand/a.png' },
+              { storageBucket: 'media-library', storagePath: 'brand/b.png' },
+            ],
+          },
+        } as never,
+      ],
+      BRAND_ID,
+    );
+
+    expect((node.data as Record<string, unknown>).collectionItems).toEqual([
+      'https://fresh/a.png',
+      'https://fresh/b.png',
+    ]);
+    expect((node.data as Record<string, unknown>).generatedImage).toBe('https://fresh/a.png');
+  });
 });

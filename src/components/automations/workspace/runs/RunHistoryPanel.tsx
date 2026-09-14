@@ -81,17 +81,17 @@ function RunHistoryRow({
               {status.label}
             </Pill>
             {focused ? <Badge variant="outline">On canvas</Badge> : null}
-            <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
+            <span className="ml-auto shrink-0 font-mono text-2xs text-muted-foreground">
               {run.runId.slice(0, 8)}
             </span>
           </span>
-          <span className="block w-full truncate text-[11px] text-muted-foreground">
+          <span className="block w-full truncate text-xs text-muted-foreground">
             {describeAutomationRun(run)}
           </span>
         </button>
 
         <div className="flex items-center gap-2 border-t border-border/60 px-3 py-1.5">
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {AUTOMATION_EMAIL_STATUS_LABEL[run.emailStatus]}
           </span>
           {run.status === 'completed' ? (
@@ -99,7 +99,7 @@ function RunHistoryRow({
               type="button"
               size="sm"
               variant="ghost"
-              className="ml-auto h-6 px-2 text-[11px]"
+              className="ml-auto h-6 px-2 text-xs"
               onClick={onToggleReport}
             >
               {expanded ? (
@@ -113,7 +113,7 @@ function RunHistoryRow({
         </div>
 
         {run.status === 'failed' && run.errorMessage ? (
-          <p className="border-t border-border/60 px-3 py-2 text-[11px] text-destructive">
+          <p className="border-t border-border/60 px-3 py-2 text-xs text-destructive">
             {run.errorMessage}
           </p>
         ) : null}
@@ -128,7 +128,7 @@ function RunHistoryRow({
             ) : reportText.trim() ? (
               <SafeMarkdown content={reportText} className="text-xs leading-5 text-foreground" />
             ) : (
-              <p className="text-[11px] text-muted-foreground">This run has no report body.</p>
+              <p className="text-xs text-muted-foreground">This run has no report body.</p>
             )}
           </div>
         ) : null}
@@ -158,7 +158,7 @@ export function RunHistoryPanel({
         <History className="size-3.5 text-muted-foreground" aria-hidden="true" />
         <div className="min-w-0">
           <h2 className="text-xs font-medium">Run history</h2>
-          <p className="truncate text-[11px] text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {isLoading
               ? 'Loading runs…'
               : `${ordered.length} run${ordered.length === 1 ? '' : 's'}`}

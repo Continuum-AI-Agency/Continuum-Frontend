@@ -13,14 +13,19 @@ import {
   Sparkles,
 } from 'lucide-react';
 import React from 'react';
+import { LibraryElementsGrid } from '@/components/library/LibraryElementsGrid';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { QuickReformatMenu } from '@/components/library/reformat/QuickReformatMenu';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { setStudioAssetDragData } from '@/lib/creative-assets/studioAssetDrop';
-import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
+import {
+  STUDIO_LIBRARY_DESTINATIONS,
+  useStudioLibraryBrowser,
+} from '@/lib/creative-assets/useStudioLibraryBrowser';
 import { SOURCE_LABEL } from '@/lib/media/filters';
 import { streamInspirations } from '@/lib/onboarding/inspirationsClient';
+import { cn } from '@/lib/utils';
 
 type Props = {
   brandProfileId: string;
@@ -73,13 +78,34 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <LibraryFilterBar
-          variant="compact"
-          source={filters.source}
-          kind={filters.kind}
-          onSourceChange={(value) => setFilters({ source: value })}
-          onKindChange={(value) => setFilters({ kind: value })}
-        />
+        <div className="flex flex-wrap gap-1" role="tablist" aria-label="Library destinations">
+          {STUDIO_LIBRARY_DESTINATIONS.map((destination) => (
+            <button
+              key={destination.value}
+              type="button"
+              role="tab"
+              aria-selected={filters.destination === destination.value}
+              onClick={() => setFilters({ destination: destination.value })}
+              className={cn(
+                'rounded-md px-2 py-1 text-xs font-medium',
+                filters.destination === destination.value
+                  ? 'bg-white/10 text-white'
+                  : 'text-gray-400 hover:text-white',
+              )}
+            >
+              {destination.label}
+            </button>
+          ))}
+        </div>
+        {filters.destination === 'elements' ? null : (
+          <LibraryFilterBar
+            variant="compact"
+            source={filters.source}
+            kind={filters.kind}
+            onSourceChange={(value) => setFilters({ source: value })}
+            onKindChange={(value) => setFilters({ kind: value })}
+          />
+        )}
 
         {isInspiration && assets.length > 0 ? (
           <InspirationPullButton label="Regenerate" pull={pull} />
@@ -87,7 +113,9 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
-        {assets.length === 0 && loading ? (
+        {filters.destination === 'elements' ? (
+          <LibraryElementsGrid brandId={brandProfileId} />
+        ) : assets.length === 0 && loading ? (
           <div className="flex h-32 items-center justify-center text-sm text-gray-400">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
           </div>

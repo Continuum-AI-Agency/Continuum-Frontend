@@ -97,7 +97,9 @@ describe('toSearchRpcFilters', () => {
   });
 
   it('always excludes carousel slides so slide rows never rank', () => {
-    expect(toSearchRpcFilters({ kind: 'image' }).filter_exclude_tags).toEqual([...HIDDEN_LIBRARY_TAGS]);
+    expect(toSearchRpcFilters({ kind: 'image' }).filter_exclude_tags).toEqual([
+      ...HIDDEN_LIBRARY_TAGS,
+    ]);
   });
 });
 

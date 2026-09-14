@@ -437,7 +437,7 @@ export function WebhookManager({
                   Create endpoint for {selectedWebhook.label}
                 </Button>
                 {blockedReason ? (
-                  <p className="text-[11px] leading-4 text-muted-foreground">{blockedReason}</p>
+                  <p className="text-xs leading-4 text-muted-foreground">{blockedReason}</p>
                 ) : null}
               </div>
             )
@@ -491,7 +491,7 @@ export function WebhookManager({
                     </div>
                   </div>
                   <div className="mt-2 flex items-center gap-1.5">
-                    <code className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
+                    <code className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
                       {deliveryUrl}
                     </code>
                     <IconButton
@@ -506,7 +506,7 @@ export function WebhookManager({
               );
             })}
             {resources.endpoints.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground">No inbound endpoints yet.</p>
+              <p className="text-xs text-muted-foreground">No inbound endpoints yet.</p>
             ) : null}
           </div>
         </section>
@@ -609,7 +609,7 @@ export function WorkflowInspector({
         )}
         <div className="min-w-0">
           <h2 className="text-xs font-medium">Inspector</h2>
-          <p className="truncate text-[11px] text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {selected ? selected.label : 'Select a node'}
           </p>
         </div>
@@ -640,7 +640,7 @@ export function WorkflowInspector({
                   {catalogItem.description}
                 </p>
                 {capability?.reason ? (
-                  <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                  <p className="mt-1 text-xs leading-4 text-muted-foreground">
                     {capability.reason}
                   </p>
                 ) : null}
@@ -713,7 +713,7 @@ export function WorkflowInspector({
                   onMessage(null);
                 }}
               />
-              <p className="text-[11px] leading-4 text-muted-foreground">
+              <p className="text-xs leading-4 text-muted-foreground">
                 Typed validation runs locally, again on the server, and once more before publishing.
               </p>
             </div>
@@ -721,7 +721,7 @@ export function WorkflowInspector({
             <div className="flex items-center justify-between gap-4 rounded-md border p-3">
               <div>
                 <Label htmlFor={`node-disabled-${selected.id}`}>Disable node</Label>
-                <p className="mt-1 text-[11px] text-muted-foreground">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Keep the step in the graph without running it.
                 </p>
               </div>
@@ -785,7 +785,7 @@ export function WorkflowInspector({
                     </Tool>
                   ))}
                   {evidence.length === 0 && nodeRuns.length === 0 ? (
-                    <p className="text-[11px] leading-4 text-muted-foreground">
+                    <p className="text-xs leading-4 text-muted-foreground">
                       This step reported no evidence.
                     </p>
                   ) : null}

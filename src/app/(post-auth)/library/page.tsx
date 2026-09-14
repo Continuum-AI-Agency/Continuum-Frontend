@@ -1,13 +1,17 @@
 import {
+  libraryAspectRatioBinSchema,
+  libraryBrowseDestinationSchema,
   libraryBrowseQuerySchema,
   libraryLayoutSchema,
   libraryMediaTypeSchema,
   libraryPerformanceWindowSchema,
   libraryPlacementSchema,
+  libraryPreviewFrameSchema,
   librarySortSchema,
   mediaKindSchema,
   mediaReviewStatusSchema,
   mediaSourceSchema,
+  parseCommentDeepLink,
 } from '@continuum/contracts';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
@@ -86,9 +90,25 @@ function parseBrowseQuery(brandId: string, params: LibrarySearchParams) {
   );
   const layout = libraryLayoutSchema.safeParse(first(params.layout));
   const collection = first(params.collection);
+  const destination = libraryBrowseDestinationSchema.safeParse(first(params.destination));
+  const defaultHome =
+    !destination.success &&
+    !first(params.mediaType) &&
+    !first(params.sort) &&
+    !collection &&
+    !first(params.section);
 
   return libraryBrowseQuerySchema.parse({
     brandId,
+    destination: destination.success ? destination.data : defaultHome ? 'home' : undefined,
+    previewFrame: libraryPreviewFrameSchema.safeParse(first(params.frame)).success
+      ? libraryPreviewFrameSchema.parse(first(params.frame))
+      : undefined,
+    aspectRatios: enumList(
+      params.aspectRatios,
+      (candidate): candidate is (typeof libraryAspectRatioBinSchema)['_output'] =>
+        libraryAspectRatioBinSchema.safeParse(candidate).success,
+    ),
     mediaType: mediaType.success
       ? mediaType.data
       : kindToMediaType(legacyKind.success ? legacyKind.data : undefined),
@@ -122,7 +142,7 @@ function parseBrowseQuery(brandId: string, params: LibrarySearchParams) {
     ratios: parseTagsParam(first(params.ratios)),
     fonts: parseTagsParam(first(params.fonts)),
     search: first(params.search),
-    sort: sort.success ? sort.data : undefined,
+    sort: sort.success ? sort.data : defaultHome ? 'updated_desc' : undefined,
     performanceWindow: performanceWindow.success ? performanceWindow.data : undefined,
     layout: layout.success ? layout.data : undefined,
     boardGroupBy: first(params.boardGroupBy),
@@ -164,6 +184,12 @@ async function LibraryContent({ searchParams }: { searchParams: LibrarySearchPar
 
   const browseQuery = parseBrowseQuery(activeBrandId, searchParams);
   const requestedAssetId = first(searchParams.assetId);
+  const overlayParams = new URLSearchParams();
+  for (const key of ['comment', 't', 'end'] as const) {
+    const value = first(searchParams[key]);
+    if (value) overlayParams.set(key, value);
+  }
+  const initialDeepLink = parseCommentDeepLink(overlayParams);
   const [page, collections, savedViews, storageUsedBytes, brandStyle, requestedAssets] =
     await Promise.all([
       fetchLibraryBrowsePage(supabase, browseQuery),
@@ -189,6 +215,7 @@ async function LibraryContent({ searchParams }: { searchParams: LibrarySearchPar
       section={parseLibrarySection(first(searchParams.section))}
       initialBrowseQuery={browseQuery}
       initialDetailAsset={requestedAssets[0] ?? null}
+      initialDeepLink={initialDeepLink}
     />
   );
 }

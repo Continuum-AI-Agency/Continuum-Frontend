@@ -319,6 +319,37 @@ describe('workflowSerialization', () => {
     expect(data.generatedImageBucket).toBe('brand-profile-assets');
   });
 
+  it('persists collection pointers but not their expiring preview URLs', () => {
+    const node = buildNode({
+      id: 'action',
+      type: 'action',
+      data: {
+        actionId: 'image.flip',
+        config: {},
+        collectionItems: ['https://x.supabase.co/sign/a.png?token=t'],
+        collectionAssets: [
+          {
+            type: 'image',
+            mimeType: 'image/png',
+            storagePath: 'brand/a.png',
+            storageBucket: 'media-library',
+            assetId: 'asset-a',
+            assetVersionId: 'version-a',
+          },
+        ],
+      } as any,
+    });
+
+    const data = serializeWorkflowSnapshot([node], [], 'bezier').nodes[0].data as Record<
+      string,
+      unknown
+    >;
+    expect(data.collectionItems).toBeUndefined();
+    expect(data.collectionAssets).toEqual([
+      expect.objectContaining({ storagePath: 'brand/a.png', assetVersionId: 'version-a' }),
+    ]);
+  });
+
   it('broadcast mode keeps signed URLs (and durable pointers) but still drops base64', () => {
     const node = buildNode({
       id: 'gen',

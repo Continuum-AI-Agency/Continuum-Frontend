@@ -125,6 +125,26 @@ export async function listVideoGenerationBatches(
   return response.batches;
 }
 
+export async function cancelVideoGeneration(projectId: string, batchId: string) {
+  const response = await http.request<{ batch: EditorGenerationBatch }>({
+    path: `${base(projectId)}/generation-batches/${encodeURIComponent(batchId)}/cancel`,
+    method: 'POST',
+    schema: editorGenerationBatchResponseSchema,
+    cache: 'no-store',
+  });
+  return response.batch;
+}
+
+export async function retryVideoGeneration(projectId: string, jobId: string) {
+  const response = await http.request<{ batch: EditorGenerationBatch }>({
+    path: `${base(projectId)}/generation-jobs/${encodeURIComponent(jobId)}/retry`,
+    method: 'POST',
+    schema: editorGenerationBatchResponseSchema,
+    cache: 'no-store',
+  });
+  return response.batch;
+}
+
 export async function enqueueVideoProjectRender(projectId: string): Promise<ClientRenderJob> {
   const response = await http.request<{ job: ClientRenderJob }>({
     path: `${base(projectId)}/render`,

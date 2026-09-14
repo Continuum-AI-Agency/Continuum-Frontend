@@ -229,6 +229,57 @@ describe('EditorProjectV2', () => {
     expect(parsed.transitions[0]?.alignment).toBe('centered');
     expect(parsed.production.workflowStage).toBe('assembly');
     expect(parsed.production.shots).toEqual([]);
+    expect(parsed.nestedSequences).toEqual([]);
+  });
+
+  test('rejects a local nested clip that points at a missing sequence', () => {
+    expect(() =>
+      editorProjectV2Schema.parse({
+        ...projectFixture(),
+        transitions: [],
+        tracks: [
+          {
+            id: 'nested-track',
+            name: 'Nests',
+            order: 0,
+            kind: 'nested_sequence' as const,
+            clips: [
+              {
+                ...clipBase('nested-1'),
+                kind: 'nested_sequence' as const,
+                sequenceId: 'missing',
+                transform,
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/nested sequence .*missing.*was not found/);
+  });
+
+  test('rejects a nest that contains another nest', () => {
+    expect(() =>
+      editorProjectV2Schema.parse({
+        ...projectFixture(),
+        nestedSequences: [
+          {
+            id: 'child',
+            name: 'Child',
+            durationSec: 2,
+            canvas: { width: 1080, height: 1920 },
+            tracks: [
+              {
+                id: 'inner',
+                name: 'Inner',
+                order: 0,
+                kind: 'nested_sequence' as const,
+                clips: [],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/cannot contain another nested sequence/);
   });
 
   test('models a gated style, frame, motion, and master production', () => {

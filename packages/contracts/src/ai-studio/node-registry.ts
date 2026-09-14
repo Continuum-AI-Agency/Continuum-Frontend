@@ -92,6 +92,9 @@ export const VIDEO_GENERATOR_SIGNATURE_FIELDS = [
   'referenceMode',
 ] as const;
 
+/** An action result is reusable until its selected operation or validated knobs change. */
+export const ACTION_SIGNATURE_FIELDS = ['actionId', 'config'] as const;
+
 export const STUDIO_NODE_REGISTRY = {
   // ── text ───────────────────────────────────────────────────────────────────
   string: {
@@ -300,6 +303,7 @@ export const STUDIO_NODE_REGISTRY = {
     // `ACTION_DEFS[data.actionId].output`, never off this flag — this flag exists only so
     // the derived MEDIA_NODE_TYPES set behaves for the common case.
     producesMedia: true,
+    signatureFields: ACTION_SIGNATURE_FIELDS,
   },
   batch: {
     label: 'Batch',

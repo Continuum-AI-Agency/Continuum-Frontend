@@ -114,9 +114,7 @@ export function useAiStudioRoomSource(
  *  run headlessly. Filtered on the publish flag, not on "has ports": a saved
  *  Technique is a person's building block, and offering one here would let a
  *  schedule run a canvas nobody promised a machine could run. */
-export function usePipelineSource(
-  brandId: string | undefined,
-): PickerSourceState<PipelineItem> {
+export function usePipelineSource(brandId: string | undefined): PickerSourceState<PipelineItem> {
   const query = useQuery({
     queryKey: ['automation-picker', 'pipelines', brandId],
     queryFn: () => fetchBrandPipelines(brandId as string),

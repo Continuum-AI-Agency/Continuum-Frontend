@@ -1,13 +1,18 @@
 'use client';
 
-import type {
-  EditorAudioClip,
-  EditorOverlayClip,
-  EditorProjectV2,
-  EditorTextClip,
-  EditorTrack,
-  EditorTransition,
-  EditorVideoClip,
+import {
+  type EditorAudioClip,
+  type EditorOverlayClip,
+  type EditorProjectV2,
+  type EditorTextClip,
+  type EditorTrack,
+  type EditorTransition,
+  type EditorVideoClip,
+  MOTION_BEZIER_PRESETS,
+  MOTION_SPRING_PRESETS,
+  motionRecipeFromClip,
+  parentPositionDelta,
+  parseMotionRecipe,
 } from '@continuum/contracts';
 import {
   closestCenter,
@@ -18,7 +23,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Plus, Redo2, Trash2, Type, Undo2 } from 'lucide-react';
+import { Diamond, Plus, Redo2, Trash2, Type, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
@@ -26,6 +31,7 @@ import { Input } from '@/components/ui/input';
 import { NumberScrubField } from '@/components/ui/number-field';
 import { SliderField } from '@/components/ui/slider-field';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useElementMutations, useElements } from '@/lib/ai-studio/elements';
 import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
 import { captionAnimationFromEditorId, captionMotionTransform } from '@/lib/clips/captionAnimation';
 import { listAssetVersions } from '@/lib/library/versions';
@@ -34,6 +40,9 @@ import { clipEffectsToCss, type ResolvedTextOverlay } from '../../utils/render/e
 import { mergeClipShaderEffects } from '../../utils/render/shaderStack';
 import { AUDIO_DROP_ID, AudioTracks } from './AudioTracks';
 import {
+  applyAnimationStyleOperation,
+  applyMotionRecipeOperation,
+  applyNestedSequenceEdit,
   type EditorAssemblyOperation,
   editorProjectV2CommentPlacements,
   exactVersionPreviewUrl,
@@ -41,19 +50,29 @@ import {
   patchAudioOperation,
   placeAudioOperation,
   placeVideoOperation,
+  precomposeClipsOperation,
   primaryVideoTrack,
   removeClipOperation,
   removeTransitionOperation,
   reorderVideoOperation,
+  setClipParentOperation,
   splitClipOperation,
+  trimAnimationStyleOperation,
   trimClipOperation,
+  upsertKeyframeOperation,
   upsertOverlayOperation,
   upsertTextOperation,
   upsertTransitionOperation,
   videoLayout,
+  viewProjectForSequence,
 } from './editorProjectV2AssemblyModel';
 import { BIN_DRAG_PREFIX, MediaBin } from './MediaBin';
 import { probeAudioDuration, probeVideoDuration } from './mediaProbe';
+import { KeyframeDiamond } from './motion/KeyframeDiamond';
+import { MotionPathOverlay } from './motion/MotionPathOverlay';
+import { MotionTimeline } from './motion/MotionTimeline';
+import { currentPropertyValue, type MotionPropertyName } from './motion/motionLayers';
+import { nestedPreviewGroups } from './nestedSequencePreview';
 import type { OverlayPreviewLayer } from './overlayPreview';
 import { CLIP_DRAG_PREFIX } from './TimelineClipBlock';
 import { TimelineCommentLayer } from './TimelineCommentLayer';
@@ -99,8 +118,12 @@ const probeSourceDuration = (
     .catch(() => undefined);
 
 /** Clips placed straight off the canvas preview through the media bin's own URL. */
+function allProjectTracks(project: EditorProjectV2): EditorProjectV2['tracks'] {
+  return [...project.tracks, ...project.nestedSequences.flatMap((sequence) => sequence.tracks)];
+}
+
 function canvasNodeClipIds(project: EditorProjectV2): Array<{ clipId: string; nodeId: string }> {
-  return project.tracks.flatMap((track) =>
+  return allProjectTracks(project).flatMap((track) =>
     track.clips.flatMap((clip) =>
       'source' in clip && clip.source.sourceType === 'canvas_node'
         ? [{ clipId: clip.id, nodeId: clip.source.nodeId }]
@@ -116,7 +139,7 @@ function useExactPreviewUrls(
 ): ReadonlyMap<string, string> {
   const [urls, setUrls] = useState<Map<string, string>>(new Map());
   const coordinates = useMemo(() => {
-    const values = project.tracks.flatMap((track) =>
+    const values = allProjectTracks(project).flatMap((track) =>
       track.clips.flatMap((clip) => {
         if (clip.kind !== 'video' && clip.kind !== 'audio' && clip.kind !== 'overlay') return [];
         const source = sourceCoordinates(clip);
@@ -124,7 +147,7 @@ function useExactPreviewUrls(
       }),
     );
     return values;
-  }, [project.tracks]);
+  }, [project]);
   const canvasClips = useMemo(() => canvasNodeClipIds(project), [project]);
 
   useEffect(() => {
@@ -398,11 +421,15 @@ function MediaOverlayEditor({
   project,
   overlayTrack,
   urls,
+  playheadSec,
+  autoKey,
   onApply,
 }: {
   project: EditorProjectV2;
   overlayTrack?: OverlayTrack;
   urls: ReadonlyMap<string, string>;
+  playheadSec: number;
+  autoKey: boolean;
   onApply: (operation: EditorAssemblyOperation) => void;
 }) {
   return (
@@ -415,6 +442,8 @@ function MediaOverlayEditor({
           trackId={overlayTrack?.id as string}
           clip={clip}
           previewUrl={urls.get(clip.id)}
+          playheadSec={playheadSec}
+          autoKey={autoKey}
           onApply={onApply}
         />
       ))}
@@ -427,17 +456,42 @@ function MediaOverlayEditor({
   );
 }
 
+function writeOverlayKeyframe(
+  project: EditorProjectV2,
+  trackId: string,
+  clip: EditorOverlayClip,
+  property: MotionPropertyName,
+  timeSec: number,
+  value: EditorOverlayClip['keyframes'][number]['value'],
+) {
+  return upsertKeyframeOperation(project, {
+    trackId,
+    clipId: clip.id,
+    keyframe: {
+      id: crypto.randomUUID(),
+      property,
+      timeSec,
+      value,
+      interpolation: 'linear',
+    },
+  });
+}
+
 function MediaOverlayRow({
   project,
   trackId,
   clip,
   previewUrl,
+  playheadSec,
+  autoKey,
   onApply,
 }: {
   project: EditorProjectV2;
   trackId: string;
   clip: EditorOverlayClip;
   previewUrl?: string;
+  playheadSec: number;
+  autoKey: boolean;
   onApply: (operation: EditorAssemblyOperation) => void;
 }) {
   const [start, setStart] = useState(clip.timelineStartSec);
@@ -445,6 +499,11 @@ function MediaOverlayRow({
   const [x, setX] = useState(clip.transform.position.x);
   const [y, setY] = useState(clip.transform.position.y);
   const [scale, setScale] = useState(clip.transform.scaleX);
+  const [rotation, setRotation] = useState(clip.transform.rotationDeg);
+  const [rotateX, setRotateX] = useState(clip.transform.rotateXDeg ?? 0);
+  const [rotateY, setRotateY] = useState(clip.transform.rotateYDeg ?? 0);
+  const [perspective, setPerspective] = useState(clip.transform.perspective ?? 0);
+  const [anchorX, setAnchorX] = useState(clip.transform.anchorX);
   const [opacity, setOpacity] = useState(clip.transform.opacity);
   useEffect(() => {
     setStart(clip.timelineStartSec);
@@ -452,8 +511,26 @@ function MediaOverlayRow({
     setX(clip.transform.position.x);
     setY(clip.transform.position.y);
     setScale(clip.transform.scaleX);
+    setRotation(clip.transform.rotationDeg);
+    setRotateX(clip.transform.rotateXDeg ?? 0);
+    setRotateY(clip.transform.rotateYDeg ?? 0);
+    setPerspective(clip.transform.perspective ?? 0);
+    setAnchorX(clip.transform.anchorX);
     setOpacity(clip.transform.opacity);
   }, [clip]);
+  const localSec = Math.max(0, Math.min(clip.durationSec, playheadSec - clip.timelineStartSec));
+  const playheadOnClip =
+    playheadSec >= clip.timelineStartSec && playheadSec <= clip.timelineStartSec + clip.durationSec;
+  const opacityKeyed = clip.keyframes.some(
+    (keyframe) =>
+      keyframe.property === 'transform.opacity' && Math.abs(keyframe.timeSec - localSec) <= 0.05,
+  );
+  const opacityKeys = clip.keyframes
+    .filter((keyframe) => keyframe.property === 'transform.opacity')
+    .toSorted((left, right) => left.timeSec - right.timeSec);
+  const departingOpacity = [...opacityKeys]
+    .reverse()
+    .find((keyframe) => keyframe.timeSec <= localSec + 0.001);
   const source = clip.source;
   if (source.sourceType !== 'library_asset' || !source.renditionId) return null;
   const versionId = source.renditionId;
@@ -496,6 +573,17 @@ function MediaOverlayRow({
           step={0.05}
           value={x}
           onChange={setX}
+          onCommit={(value) => {
+            setX(value);
+            if (autoKey && playheadOnClip) {
+              onApply(
+                writeOverlayKeyframe(project, trackId, clip, 'transform.position', localSec, {
+                  x: value,
+                  y,
+                }),
+              );
+            }
+          }}
         />
         <SliderField
           format={{ style: 'percent', maximumFractionDigits: 0 }}
@@ -505,6 +593,17 @@ function MediaOverlayRow({
           step={0.05}
           value={y}
           onChange={setY}
+          onCommit={(value) => {
+            setY(value);
+            if (autoKey && playheadOnClip) {
+              onApply(
+                writeOverlayKeyframe(project, trackId, clip, 'transform.position', localSec, {
+                  x,
+                  y: value,
+                }),
+              );
+            }
+          }}
         />
         <SliderField
           label="Scale"
@@ -514,16 +613,267 @@ function MediaOverlayRow({
           suffix="x"
           value={scale}
           onChange={setScale}
+          onCommit={(value) => {
+            setScale(value);
+            if (autoKey && playheadOnClip) {
+              onApply(
+                writeOverlayKeyframe(project, trackId, clip, 'transform.scaleX', localSec, value),
+              );
+              onApply(
+                writeOverlayKeyframe(project, trackId, clip, 'transform.scaleY', localSec, value),
+              );
+            }
+          }}
         />
         <SliderField
-          format={{ style: 'percent', maximumFractionDigits: 0 }}
-          label="Opacity"
-          max={1}
+          label="Rotation"
+          max={360}
+          min={-360}
+          step={1}
+          suffix="°"
+          value={rotation}
+          onChange={setRotation}
+          onCommit={(value) => {
+            setRotation(value);
+            if (autoKey && playheadOnClip) {
+              onApply(
+                writeOverlayKeyframe(
+                  project,
+                  trackId,
+                  clip,
+                  'transform.rotationDeg',
+                  localSec,
+                  value,
+                ),
+              );
+            }
+          }}
+        />
+        <SliderField
+          label="Rotate X"
+          max={90}
+          min={-90}
+          step={1}
+          suffix="°"
+          value={rotateX}
+          onChange={setRotateX}
+          onCommit={(value) => {
+            setRotateX(value);
+            if (autoKey && playheadOnClip) {
+              onApply(
+                writeOverlayKeyframe(
+                  project,
+                  trackId,
+                  clip,
+                  'transform.rotateXDeg',
+                  localSec,
+                  value,
+                ),
+              );
+            }
+          }}
+        />
+        <SliderField
+          label="Rotate Y"
+          max={90}
+          min={-90}
+          step={1}
+          suffix="°"
+          value={rotateY}
+          onChange={setRotateY}
+          onCommit={(value) => {
+            setRotateY(value);
+            if (autoKey && playheadOnClip) {
+              onApply(
+                writeOverlayKeyframe(
+                  project,
+                  trackId,
+                  clip,
+                  'transform.rotateYDeg',
+                  localSec,
+                  value,
+                ),
+              );
+            }
+          }}
+        />
+        <SliderField
+          label="Perspective"
+          max={4}
           min={0}
           step={0.05}
-          value={opacity}
-          onChange={setOpacity}
+          value={perspective}
+          onChange={setPerspective}
         />
+        <label className="col-span-2 flex items-center justify-between gap-2 text-2xs">
+          <span className="text-muted-foreground">Parent</span>
+          <select
+            aria-label="Parent clip"
+            className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-1.5 text-xs"
+            value={clip.parentClipId ?? ''}
+            onChange={(event) =>
+              onApply(
+                setClipParentOperation(project, {
+                  trackId,
+                  clipId: clip.id,
+                  parentClipId: event.target.value || null,
+                }),
+              )
+            }
+          >
+            <option value="">None</option>
+            {project.tracks
+              .flatMap((track) => track.clips)
+              .filter((candidate) => candidate.id !== clip.id)
+              .map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.name ?? candidate.id}
+                </option>
+              ))}
+          </select>
+        </label>
+        <div className="flex items-end gap-1">
+          <SliderField
+            format={{ style: 'percent', maximumFractionDigits: 0 }}
+            label="Anchor"
+            max={1}
+            min={0}
+            step={0.05}
+            value={anchorX}
+            onChange={setAnchorX}
+            className="min-w-0 flex-1"
+          />
+          <KeyframeDiamond
+            labeled="rotation"
+            keyed={clip.keyframes.some(
+              (keyframe) =>
+                keyframe.property === 'transform.rotationDeg' &&
+                Math.abs(keyframe.timeSec - localSec) <= 0.05,
+            )}
+            disabled={!playheadOnClip}
+            onToggle={() =>
+              onApply(
+                writeOverlayKeyframe(
+                  project,
+                  trackId,
+                  clip,
+                  'transform.rotationDeg',
+                  localSec,
+                  rotation,
+                ),
+              )
+            }
+          />
+        </div>
+        <div className="col-span-2 flex items-end gap-1">
+          <SliderField
+            format={{ style: 'percent', maximumFractionDigits: 0 }}
+            label="Opacity"
+            max={1}
+            min={0}
+            step={0.05}
+            value={opacity}
+            onChange={setOpacity}
+            className="min-w-0 flex-1"
+            onCommit={(value) => {
+              setOpacity(value);
+              if (autoKey && playheadOnClip) {
+                onApply(
+                  writeOverlayKeyframe(
+                    project,
+                    trackId,
+                    clip,
+                    'transform.opacity',
+                    localSec,
+                    value,
+                  ),
+                );
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="mb-0.5 size-7 shrink-0"
+            disabled={!playheadOnClip}
+            aria-label={
+              opacityKeyed
+                ? 'Update opacity keyframe at playhead'
+                : 'Add opacity keyframe at playhead'
+            }
+            aria-pressed={opacityKeyed}
+            onClick={() =>
+              onApply(
+                upsertKeyframeOperation(project, {
+                  trackId,
+                  clipId: clip.id,
+                  keyframe: {
+                    id: crypto.randomUUID(),
+                    property: 'transform.opacity',
+                    timeSec: localSec,
+                    value: opacity,
+                    interpolation: 'linear',
+                  },
+                }),
+              )
+            }
+          >
+            <Diamond className={opacityKeyed ? 'size-3.5 fill-current' : 'size-3.5'} />
+          </Button>
+        </div>
+        {opacityKeys.length >= 2 &&
+        departingOpacity &&
+        typeof departingOpacity.value === 'number' ? (
+          <label className="col-span-2 flex items-center justify-between gap-2 text-2xs">
+            <span className="text-muted-foreground">Opacity easing</span>
+            <select
+              className="h-7 rounded-md border border-input bg-background px-1.5 text-xs"
+              value={
+                departingOpacity.interpolation === 'bezier'
+                  ? 'easeOutBack'
+                  : departingOpacity.interpolation === 'spring'
+                    ? 'spring'
+                    : departingOpacity.interpolation
+              }
+              onChange={(event) => {
+                const next = event.target.value;
+                const interpolation =
+                  next === 'hold'
+                    ? 'hold'
+                    : next === 'spring'
+                      ? 'spring'
+                      : next === 'easeOutBack'
+                        ? 'bezier'
+                        : 'linear';
+                onApply(
+                  upsertKeyframeOperation(project, {
+                    trackId,
+                    clipId: clip.id,
+                    keyframe: {
+                      id: departingOpacity.id,
+                      property: 'transform.opacity',
+                      timeSec: departingOpacity.timeSec,
+                      value: departingOpacity.value,
+                      interpolation,
+                      ...(interpolation === 'bezier'
+                        ? { easing: MOTION_BEZIER_PRESETS.easeOutBack }
+                        : {}),
+                      ...(interpolation === 'spring'
+                        ? { spring: { bounce: MOTION_SPRING_PRESETS.gentle } }
+                        : {}),
+                    },
+                  }),
+                );
+              }}
+            >
+              <option value="linear">Linear</option>
+              <option value="hold">Hold</option>
+              <option value="easeOutBack">Ease out back</option>
+              <option value="spring">Spring</option>
+            </select>
+          </label>
+        ) : null}
       </div>
       <div className="flex justify-end gap-1">
         <Button
@@ -552,6 +902,10 @@ function MediaOverlayRow({
                 y,
                 scale,
                 opacity,
+                rotationDeg: rotation,
+                rotateXDeg: rotateX,
+                rotateYDeg: rotateY,
+                perspective,
               }),
             )
           }
@@ -714,6 +1068,7 @@ export function EditorProjectV2Assembly({
   canUndo,
   canRedo,
   canRender,
+  initialTimelineMode = 'edit',
   onApply,
   onUndo,
   onRedo,
@@ -726,6 +1081,7 @@ export function EditorProjectV2Assembly({
   canUndo: boolean;
   canRedo: boolean;
   canRender: boolean;
+  initialTimelineMode?: 'edit' | 'motion';
   onApply: (operation: EditorAssemblyOperation) => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -733,9 +1089,39 @@ export function EditorProjectV2Assembly({
 }) {
   const { show } = useToast();
   const [pxPerSec, setPxPerSec] = useState(PX_PER_SEC);
+  const [timelineMode, setTimelineMode] = useState<'edit' | 'motion'>(initialTimelineMode);
+  const [autoKey, setAutoKey] = useState(false);
+  const [selectedMotionClipId, setSelectedMotionClipId] = useState<string | null>(null);
+  const [editingSequenceId, setEditingSequenceId] = useState<string | null>(null);
+  const viewProject = viewProjectForSequence(project, editingSequenceId);
+  const commit = (operation: EditorAssemblyOperation) => {
+    onApply(
+      editingSequenceId
+        ? applyNestedSequenceEdit(project, editingSequenceId, operation)
+        : operation,
+    );
+  };
+  const { elements } = useElements(brandId);
+  const elementMutations = useElementMutations(brandId);
+  const motionElements = useMemo(
+    () =>
+      elements
+        .filter(
+          (element) =>
+            Boolean(element.motionRecipe) &&
+            (element.category === 'animation' || element.category === 'effect'),
+        )
+        .map((element) => ({ id: element.id, name: element.name })),
+    [elements],
+  );
   const [selectedVideoId, setSelectedVideoId] = useState<string>();
   const [selectedAudioId, setSelectedAudioId] = useState<string>();
-  const layout = useMemo(() => videoLayout(project, pxPerSec), [project, pxPerSec]);
+  const layout = useMemo(() => {
+    const computed = videoLayout(viewProject, pxPerSec);
+    return computed.totalSec >= viewProject.durationSec
+      ? computed
+      : { ...computed, totalSec: viewProject.durationSec };
+  }, [pxPerSec, viewProject]);
   const videoTrack = primaryVideoTrack(project);
   const clips = useMemo(() => orderedVideoClips(videoTrack), [videoTrack]);
   const clipById = useMemo(() => new Map(clips.map((clip) => [clip.id, clip] as const)), [clips]);
@@ -814,43 +1200,65 @@ export function EditorProjectV2Assembly({
         translateYEm: motion.dy / clip.style.fontSizePx,
       };
     });
-  const overlayTrack = project.tracks.find(
+  const overlayTrack = viewProject.tracks.find(
     (track): track is OverlayTrack => track.kind === 'overlay',
   );
-  const overlayLayers: OverlayPreviewLayer[] = (overlayTrack?.clips ?? []).flatMap((clip) => {
+  const overlayLayerAt = (
+    clip: EditorOverlayClip,
+    playheadSec: number,
+    space: EditorProjectV2,
+  ): OverlayPreviewLayer | null => {
     const url = urls.get(clip.id);
     if (
       !url ||
       !clip.enabled ||
-      playback.playheadSec < clip.timelineStartSec ||
-      playback.playheadSec >= clip.timelineStartSec + clip.durationSec
+      playheadSec < clip.timelineStartSec ||
+      playheadSec >= clip.timelineStartSec + clip.durationSec
     )
-      return [];
-    const effectTimeSec = playback.playheadSec - clip.timelineStartSec;
+      return null;
+    const effectTimeSec = playheadSec - clip.timelineStartSec;
     const effects = mergeClipShaderEffects(
       clipEffectSpecFromEditorClip(clip),
       poolSourceForClip(clip, pool)?.shaderStack,
     );
-    return [
-      {
-        id: clip.id,
-        kind: clip.mediaKind === 'video' ? 'video' : 'image',
-        url,
-        sourceSec: (clip.sourceInSec ?? 0) + playback.playheadSec - clip.timelineStartSec,
-        playbackRate: 1,
-        muted: true,
-        volume: 0,
-        effects,
-        effectTimeSec,
-        mediaStyle: {
-          opacity: clip.transform.opacity,
-          transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
-          transform: `translate(${(clip.transform.position.x - 0.5) * 100}%, ${(clip.transform.position.y - 0.5) * 100}%) scale(${clip.transform.scaleX}, ${clip.transform.scaleY}) rotate(${clip.transform.rotationDeg}deg)`,
-        },
-        textOverlays: [],
+    const css = clipEffectsToCss(
+      effects,
+      clip.durationSec > 0 ? effectTimeSec / clip.durationSec : 0,
+    );
+    const parentDelta = parentPositionDelta(space, clip.id, playheadSec);
+    const parentTranslate =
+      parentDelta.x || parentDelta.y
+        ? `translate(${parentDelta.x * 100}%, ${parentDelta.y * 100}%)`
+        : '';
+    return {
+      id: clip.id,
+      kind: clip.mediaKind === 'video' ? 'video' : 'image',
+      url,
+      sourceSec: (clip.sourceInSec ?? 0) + playheadSec - clip.timelineStartSec,
+      playbackRate: 1,
+      muted: true,
+      volume: 0,
+      effects,
+      effectTimeSec,
+      mediaStyle: {
+        ...css,
+        transform: [parentTranslate, css.transform].filter(Boolean).join(' ') || undefined,
+        transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
       },
-    ];
+      textOverlays: [],
+    };
+  };
+  const overlayLayers: OverlayPreviewLayer[] = (overlayTrack?.clips ?? []).flatMap((clip) => {
+    const layer = overlayLayerAt(clip, playback.playheadSec, viewProject);
+    return layer ? [layer] : [];
   });
+  const nestedGroups = editingSequenceId
+    ? []
+    : nestedPreviewGroups({
+        project,
+        playheadSec: playback.playheadSec,
+        overlayLayerFor: (clip, timeSec) => overlayLayerAt(clip, timeSec, project),
+      });
 
   const audioTracks = project.tracks.filter(
     (track): track is AudioTrack => track.kind === 'audio' && !track.id.endsWith(':audio'),
@@ -1086,49 +1494,285 @@ export function EditorProjectV2Assembly({
             shaderTimeSec={activeEffectTimeSec}
             textOverlays={activeText}
             overlayLayers={overlayLayers}
+            nestedGroups={nestedGroups}
+            motionPath={
+              overlayTrack?.clips.find((clip) => clip.id === selectedMotionClipId) ? (
+                <MotionPathOverlay
+                  clip={
+                    overlayTrack.clips.find(
+                      (clip) => clip.id === selectedMotionClipId,
+                    ) as NonNullable<(typeof overlayTrack.clips)[number]>
+                  }
+                />
+              ) : null
+            }
             mediaMuted={
               audioPreview.active || (active ? !clipById.get(active.item.id)?.audioEnabled : true)
             }
           />
-          <TimelineTrack
-            layout={layout}
-            pxPerSec={pxPerSec}
-            onZoomChange={setPxPerSec}
-            playheadSec={playback.playheadSec}
-            onSeek={playback.seek}
-            selectedItemId={selectedVideoId}
-            onSelectItem={setSelectedVideoId}
-            labelFor={(clipId) => clipById.get(clipId)?.name ?? 'Approved master'}
-            previewUrlFor={(clipId) => urls.get(clipId)}
-            onTrim={(clipId, range) => {
-              if (!videoTrack) return;
-              const clip = clipById.get(clipId);
-              if (!clip) return;
-              const sourceInSec = range.startSec ?? clip.sourceInSec;
-              const sourceEnd =
-                range.endSec ?? clip.sourceInSec + clip.durationSec * clip.playbackRate;
-              onApply(
-                trimClipOperation(project, videoTrack.id, clipId, {
-                  sourceInSec,
-                  durationSec: (sourceEnd - sourceInSec) / clip.playbackRate,
-                }),
-              );
-            }}
-            onRemove={(clipId) => {
-              if (videoTrack) onApply(removeClipOperation(project, videoTrack.id, clipId));
-            }}
-            onSplit={(clipId, localSec) => {
-              if (!videoTrack) return;
-              const operation = splitClipOperation(
-                project,
-                videoTrack.id,
-                clipId,
-                localSec,
-                crypto.randomUUID(),
-              );
-              if (operation) onApply(operation);
-            }}
-          />
+          <div className="flex min-h-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={timelineMode === 'edit' ? 'default' : 'outline'}
+                className="h-7 text-2xs"
+                onClick={() => setTimelineMode('edit')}
+              >
+                Edit
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={timelineMode === 'motion' ? 'default' : 'outline'}
+                className="h-7 text-2xs"
+                onClick={() => setTimelineMode('motion')}
+              >
+                Motion
+              </Button>
+              {editingSequenceId ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-2xs"
+                  onClick={() => setEditingSequenceId(null)}
+                >
+                  Main /{' '}
+                  {project.nestedSequences.find((sequence) => sequence.id === editingSequenceId)
+                    ?.name ?? 'Precomp'}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 text-2xs"
+                disabled={
+                  Boolean(editingSequenceId) ||
+                  !selectedMotionClipId ||
+                  !viewProject.tracks.some((track) =>
+                    track.clips.some(
+                      (clip) =>
+                        clip.id === selectedMotionClipId &&
+                        (clip.kind === 'overlay' || clip.kind === 'text'),
+                    ),
+                  )
+                }
+                onClick={() => {
+                  if (!selectedMotionClipId) return;
+                  commit(
+                    precomposeClipsOperation(viewProject, { clipIds: [selectedMotionClipId] }),
+                  );
+                  setSelectedMotionClipId(null);
+                }}
+              >
+                Precompose
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 text-2xs"
+                disabled={
+                  Boolean(editingSequenceId) ||
+                  !project.tracks.some(
+                    (track) =>
+                      track.kind === 'nested_sequence' &&
+                      track.clips.some((clip) => clip.id === selectedMotionClipId),
+                  )
+                }
+                onClick={() => {
+                  const nest = project.tracks
+                    .flatMap((track) => (track.kind === 'nested_sequence' ? track.clips : []))
+                    .find((clip) => clip.id === selectedMotionClipId);
+                  if (nest?.kind === 'nested_sequence') {
+                    setEditingSequenceId(nest.sequenceId);
+                    playback.seek(0);
+                  }
+                }}
+              >
+                Open nest
+              </Button>
+            </div>
+            {timelineMode === 'motion' ? (
+              <MotionTimeline
+                project={viewProject}
+                playheadSec={playback.playheadSec}
+                pxPerSec={pxPerSec}
+                autoKey={autoKey}
+                playbackMode={playback.playbackMode}
+                isPlaying={playback.isPlaying}
+                selectedClipId={selectedMotionClipId}
+                canSaveElement={Boolean(
+                  (() => {
+                    const clip = project.tracks
+                      .flatMap((track) => track.clips)
+                      .find((candidate) => candidate.id === selectedMotionClipId);
+                    return (
+                      clip &&
+                      'keyframes' in clip &&
+                      clip.keyframes.length > 0 &&
+                      'source' in clip &&
+                      clip.source.sourceType === 'library_asset'
+                    );
+                  })(),
+                )}
+                savingElement={elementMutations.create.isPending}
+                motionElements={motionElements}
+                onSelectClip={setSelectedMotionClipId}
+                onSeek={playback.seek}
+                onToggleAutoKey={() => setAutoKey((current) => !current)}
+                onTogglePlay={playback.toggle}
+                onCyclePlayback={playback.cyclePlaybackMode}
+                onPatchKeyframe={({ trackId, clipId, keyframe }) =>
+                  commit(upsertKeyframeOperation(viewProject, { trackId, clipId, keyframe }))
+                }
+                onAddKeyframe={({ trackId, clipId, property, timeSec }) => {
+                  const track = viewProject.tracks.find((candidate) => candidate.id === trackId);
+                  const clip = track?.clips.find((candidate) => candidate.id === clipId);
+                  if (!clip || !('transform' in clip)) return;
+                  commit(
+                    upsertKeyframeOperation(viewProject, {
+                      trackId,
+                      clipId,
+                      keyframe: {
+                        id: crypto.randomUUID(),
+                        property,
+                        timeSec,
+                        value: currentPropertyValue(clip.transform, property),
+                        interpolation: 'linear',
+                      },
+                    }),
+                  );
+                }}
+                onApplyStyle={({ trackId, clipId, styleId }) => {
+                  const clip = viewProject.tracks
+                    .find((track) => track.id === trackId)
+                    ?.clips.find((candidate) => candidate.id === clipId);
+                  commit(
+                    applyAnimationStyleOperation(viewProject, {
+                      trackId,
+                      clipId,
+                      styleId,
+                      timelineOffsetSec: clip
+                        ? Math.max(0, playback.playheadSec - clip.timelineStartSec)
+                        : 0,
+                    }),
+                  );
+                }}
+                onTrimStyle={({ trackId, clipId, instanceId, startSec, endSec }) =>
+                  commit(
+                    trimAnimationStyleOperation(viewProject, {
+                      trackId,
+                      clipId,
+                      instanceId,
+                      startSec,
+                      endSec,
+                    }),
+                  )
+                }
+                onSaveElement={() => {
+                  const clip = viewProject.tracks
+                    .flatMap((track) => track.clips)
+                    .find((candidate) => candidate.id === selectedMotionClipId);
+                  if (!clip || !('keyframes' in clip) || !('source' in clip)) return;
+                  if (clip.source.sourceType !== 'library_asset') {
+                    show({
+                      title: 'Needs a Library overlay',
+                      description: 'Save Element uses the overlay image as the Element member.',
+                      variant: 'warning',
+                    });
+                    return;
+                  }
+                  const recipe = motionRecipeFromClip(clip);
+                  if (!recipe) return;
+                  void elementMutations.create
+                    .mutateAsync({
+                      name: `${clip.name ?? 'Motion'} motion`,
+                      category: 'animation',
+                      memberAssetIds: [clip.source.assetId],
+                      motionRecipe: recipe,
+                    })
+                    .then(() => {
+                      show({
+                        title: 'Saved Element',
+                        description: 'Place it onto any overlay from Motion.',
+                      });
+                    })
+                    .catch((error: unknown) => {
+                      show({
+                        title: 'Could not save Element',
+                        description:
+                          error instanceof Error
+                            ? error.message
+                            : 'The Element could not be created.',
+                        variant: 'warning',
+                      });
+                    });
+                }}
+                onPlaceElement={(elementId) => {
+                  const clip = viewProject.tracks
+                    .flatMap((track) => track.clips)
+                    .find((candidate) => candidate.id === selectedMotionClipId);
+                  const track = viewProject.tracks.find((candidate) =>
+                    candidate.clips.some((item) => item.id === selectedMotionClipId),
+                  );
+                  const recipe = parseMotionRecipe(
+                    elements.find((element) => element.id === elementId)?.motionRecipe,
+                  );
+                  if (!clip || !track || !recipe) return;
+                  commit(
+                    applyMotionRecipeOperation(viewProject, {
+                      trackId: track.id,
+                      clipId: clip.id,
+                      recipe,
+                    }),
+                  );
+                }}
+              />
+            ) : (
+              <TimelineTrack
+                layout={layout}
+                pxPerSec={pxPerSec}
+                onZoomChange={setPxPerSec}
+                playheadSec={playback.playheadSec}
+                onSeek={playback.seek}
+                selectedItemId={selectedVideoId}
+                onSelectItem={setSelectedVideoId}
+                labelFor={(clipId) => clipById.get(clipId)?.name ?? 'Approved master'}
+                previewUrlFor={(clipId) => urls.get(clipId)}
+                onTrim={(clipId, range) => {
+                  if (!videoTrack) return;
+                  const clip = clipById.get(clipId);
+                  if (!clip) return;
+                  const sourceInSec = range.startSec ?? clip.sourceInSec;
+                  const sourceEnd =
+                    range.endSec ?? clip.sourceInSec + clip.durationSec * clip.playbackRate;
+                  onApply(
+                    trimClipOperation(project, videoTrack.id, clipId, {
+                      sourceInSec,
+                      durationSec: (sourceEnd - sourceInSec) / clip.playbackRate,
+                    }),
+                  );
+                }}
+                onRemove={(clipId) => {
+                  if (videoTrack) onApply(removeClipOperation(project, videoTrack.id, clipId));
+                }}
+                onSplit={(clipId, localSec) => {
+                  if (!videoTrack) return;
+                  const operation = splitClipOperation(
+                    project,
+                    videoTrack.id,
+                    clipId,
+                    localSec,
+                    crypto.randomUUID(),
+                  );
+                  if (operation) onApply(operation);
+                }}
+              />
+            )}
+          </div>
           <div className="overflow-x-auto rounded-lg border border-border/60 bg-card px-3 py-2">
             <div className="mb-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
               Review · comments persist on the source
@@ -1207,6 +1851,8 @@ export function EditorProjectV2Assembly({
             project={project}
             overlayTrack={overlayTrack}
             urls={urls}
+            playheadSec={playback.playheadSec}
+            autoKey={autoKey}
             onApply={onApply}
           />
           <TransitionEditor

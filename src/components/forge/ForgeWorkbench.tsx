@@ -9,6 +9,7 @@ import {
 import { FileUp, Hammer, Loader2, RefreshCw, Rocket, Send, TestTube2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
+import { LineagePanel } from '@/components/forge/LineagePanel';
 import { PendingApprovals } from '@/components/forge/PendingApprovals';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
@@ -434,6 +435,8 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
                   ))}
                 </div>
               </header>
+
+              {selected ? <LineagePanel brandId={brandId} assetId={selected} /> : null}
 
               {run ? (
                 <div className="rounded-lg border p-4">

@@ -577,11 +577,7 @@ export function OptimizerActionsPortfolioGroup({
         </AlertDialogContent>
       </AlertDialog>
 
-      <PortfolioRecentActions
-        brandId={brandId}
-        portfolioId={portfolio.id}
-        currency={null}
-      />
+      <PortfolioRecentActions brandId={brandId} portfolioId={portfolio.id} currency={null} />
 
       {/* Nothing above clears selection on refetch — a mutation's invalidate rebuilds the rows,
           and a stale key would silently point at nothing. */}
@@ -1197,8 +1193,7 @@ function BudgetDetail({
       ) : null}
       {cpa != null ? (
         <p>
-          <span className="font-medium text-foreground">Cost:</span>{' '}
-          {formatCurrency(cpa, currency)}
+          <span className="font-medium text-foreground">Cost:</span> {formatCurrency(cpa, currency)}
           {typeof ci?.lo === 'number' && typeof ci?.hi === 'number'
             ? ` (likely ${formatCurrency(ci.lo, currency)}–${formatCurrency(ci.hi, currency)})`
             : ''}

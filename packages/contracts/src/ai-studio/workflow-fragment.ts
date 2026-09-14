@@ -137,6 +137,13 @@ export const pipelinePortBindingSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('asset') }).strict(),
   z
     .object({
+      kind: z.literal('editor_source'),
+      slotId: z.string().min(1).max(120),
+      mediaKind: z.enum(['image', 'video', 'audio']),
+    })
+    .strict(),
+  z
+    .object({
       kind: z.literal('element'),
       allowedCategories: z.array(elementCategorySchema).min(1),
     })
@@ -151,6 +158,16 @@ export const pipelinePortBindingSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export type PipelinePortBinding = z.infer<typeof pipelinePortBindingSchema>;
+
+export const editorPipelineConfigurationSchema = z
+  .object({
+    nodeRef: z.string().min(1).max(120),
+    projectId: z.string().uuid(),
+    projectRevision: z.number().int().nonnegative(),
+    projectFingerprint: z.string().min(1).max(256),
+  })
+  .strict();
+export type EditorPipelineConfiguration = z.infer<typeof editorPipelineConfigurationSchema>;
 
 export const canvasPipelinePortSchema = canvasTechniquePortSchema.extend({
   /** Explicit pipeline contract semantics. Never inferred from a label. */
@@ -189,10 +206,23 @@ export const canvasPipelineMetadataSchema = canvasTechniqueMetadataSchema
     familyId: z.string().uuid().optional(),
     /** Bumped only when the pipeline is deliberately republished. */
     revision: z.number().int().positive().optional(),
+    /** Exact editor revisions whose saved transforms are reused by future runs. */
+    editorConfigurations: z.array(editorPipelineConfigurationSchema).max(12).optional(),
     agentGuide: canvasPipelineAgentGuideSchema.optional(),
   })
   .superRefine((metadata, context) => {
     const inputIds = new Set(metadata.inputPorts.map((port) => port.id));
+    const editorNodes = new Set<string>();
+    metadata.editorConfigurations?.forEach((configuration, index) => {
+      if (editorNodes.has(configuration.nodeRef)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['editorConfigurations', index, 'nodeRef'],
+          message: 'Each editor node may pin only one configuration',
+        });
+      }
+      editorNodes.add(configuration.nodeRef);
+    });
     const guidedIds = new Set<string>();
     metadata.agentGuide?.inputGuidance.forEach((guidance, index) => {
       if (!inputIds.has(guidance.inputId)) {
@@ -230,6 +260,13 @@ export const canvasPipelineMetadataSchema = canvasTechniqueMetadataSchema
           message: 'Element inputs require an image-compatible port',
         });
       }
+      if (port.pipelineBinding?.kind === 'editor_source' && !editorNodes.has(port.nodeRef)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['inputPorts', index, 'pipelineBinding'],
+          message: 'Editor source inputs require a pinned editor configuration',
+        });
+      }
     });
     metadata.outputPorts.forEach((port, index) => {
       if (port.pipelineBinding?.kind === 'element') {
@@ -237,6 +274,13 @@ export const canvasPipelineMetadataSchema = canvasTechniqueMetadataSchema
           code: 'custom',
           path: ['outputPorts', index, 'pipelineBinding'],
           message: 'Element inputs may only be declared on input ports',
+        });
+      }
+      if (port.pipelineBinding?.kind === 'editor_source') {
+        context.addIssue({
+          code: 'custom',
+          path: ['outputPorts', index, 'pipelineBinding'],
+          message: 'Editor source slots may only be declared on input ports',
         });
       }
       if (port.pipelineBinding?.kind === 'element_candidate' && port.dataType !== 'image') {

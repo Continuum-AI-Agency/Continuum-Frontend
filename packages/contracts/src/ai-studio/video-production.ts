@@ -166,8 +166,74 @@ export const editorGenerationKindSchema = z.enum([
   'frame',
   'motion_draft',
   'motion_master',
+  'narration',
+  'music',
 ]);
 export type EditorGenerationKind = z.infer<typeof editorGenerationKindSchema>;
+
+const creativePromptSchema = z.string().min(1).max(20_000);
+export const editorCreativeProRequestSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('frame'),
+      prompt: creativePromptSchema,
+      negativePrompt: z.string().max(10_000).optional(),
+      model: z.string().min(1).max(200),
+      references: z.array(editorPinnedAssetRefSchema).max(20).default([]),
+      aspect: z.enum(['16:9', '9:16', '1:1', '4:5']),
+      imageSize: z.enum(['512', '1K', '2K', '4K']),
+      seed: z.number().int().nonnegative().optional(),
+      variantCount: z.number().int().min(1).max(4).default(4),
+      parentTakeId: z.string().min(1).max(200).optional(),
+      changedVariable: z.string().min(1).max(200).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.enum(['motion_draft', 'motion_master']),
+      prompt: creativePromptSchema,
+      negativePrompt: z.string().max(10_000).optional(),
+      model: z.string().min(1).max(200),
+      references: z.array(editorPinnedAssetRefSchema).max(20).default([]),
+      aspect: z.enum(['16:9', '9:16', '1:1', '4:5']),
+      durationSec: z.number().finite().min(1).max(30),
+      resolution: z.enum(['720p', '1080p', '4K']),
+      seed: z.number().int().nonnegative().optional(),
+      variantCount: z.number().int().min(1).max(4).default(1),
+      parentTakeId: z.string().min(1).max(200).optional(),
+      changedVariable: z.string().min(1).max(200).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('narration'),
+      prompt: creativePromptSchema,
+      negativePrompt: z.string().max(10_000).optional(),
+      model: z.string().min(1).max(200),
+      references: z.array(editorPinnedAssetRefSchema).max(20).default([]),
+      voiceId: z.string().min(1).max(200),
+      seed: z.number().int().nonnegative().optional(),
+      variantCount: z.number().int().min(1).max(4).default(1),
+      parentTakeId: z.string().min(1).max(200).optional(),
+      changedVariable: z.string().min(1).max(200).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('music'),
+      prompt: creativePromptSchema,
+      negativePrompt: z.string().max(10_000).optional(),
+      model: z.string().min(1).max(200),
+      references: z.array(editorPinnedAssetRefSchema).max(20).default([]),
+      durationSec: z.number().finite().min(1).max(180).optional(),
+      seed: z.number().int().nonnegative().optional(),
+      variantCount: z.number().int().min(1).max(4).default(1),
+      parentTakeId: z.string().min(1).max(200).optional(),
+      changedVariable: z.string().min(1).max(200).optional(),
+    })
+    .strict(),
+]);
+export type EditorCreativeProRequest = z.infer<typeof editorCreativeProRequestSchema>;
 
 export const createEditorGenerationBatchRequestSchema = z
   .object({
@@ -176,21 +242,29 @@ export const createEditorGenerationBatchRequestSchema = z
   })
   .strict()
   .superRefine((request, context) => {
-    if (request.kind !== 'style_extract' && request.shotId === undefined) {
+    const projectScoped = ['style_extract', 'narration', 'music'].includes(request.kind);
+    if (!projectScoped && request.shotId === undefined) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['shotId'],
         message: 'shotId is required for frame and motion generation',
       });
     }
-    if (request.kind === 'style_extract' && request.shotId !== undefined) {
+    if (projectScoped && request.shotId !== undefined) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['shotId'],
-        message: 'style extraction is project-scoped',
+        message: `${request.kind} generation is project-scoped`,
       });
     }
   });
+
+export const editorGenerationMutationParamsSchema = z
+  .object({
+    projectId: databaseUuidSchema,
+    generationId: databaseUuidSchema,
+  })
+  .strict();
 
 export const editorGenerationJobSchema = z
   .object({

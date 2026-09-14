@@ -492,7 +492,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                     type="button"
                     aria-pressed={variationCount === count}
                     className={cn(
-                      'h-5 min-w-[1.25rem] rounded px-1 text-[10px] font-medium transition-colors',
+                      'h-5 min-w-[1.25rem] rounded px-1 text-2xs font-medium transition-colors',
                       variationCount === count
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground',
@@ -647,7 +647,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                     className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                   />
                   {outputHandleIds.length > 1 ? (
-                    <span className="studio-handle-pill absolute right-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                    <span className="studio-handle-pill absolute right-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
                       {`Variation ${index + 1}`}
                     </span>
                   ) : null}

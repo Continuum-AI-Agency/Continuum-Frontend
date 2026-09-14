@@ -12,7 +12,18 @@
 // — are withdrawn while an older version is on screen rather than silently
 // operating on a file the reviewer is not looking at.
 
-import type { CommentAnnotation, MediaAsset, MediaComment } from '@continuum/contracts';
+import type {
+  CommentAnnotation,
+  CommentDeepLink,
+  LibraryPreviewFrame,
+  MediaAsset,
+  MediaComment,
+} from '@continuum/contracts';
+import {
+  buildLibraryAssetHref,
+  commentDeepLinkFromAnnotation,
+  previewFrameSpec,
+} from '@continuum/contracts';
 import { ChevronLeft, ChevronRight, Layers3 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -26,12 +37,12 @@ import { AssetFieldsPanel } from '../fields/AssetFieldsPanel';
 import { fileExtension, formatBytes } from './assetFileMeta';
 import { CommentComposer } from './CommentComposer';
 import { CommentThreads } from './CommentThreads';
-import { DeleteAssetButton } from './DeleteAssetButton';
 import {
   anchorVersionId,
   countThreadCommentsByVersion,
   partitionThreadsByVersion,
 } from './commentVersions';
+import { DeleteAssetButton } from './DeleteAssetButton';
 import { FilePreviewStage } from './FilePreviewStage';
 import { ImageAnnotationLayer } from './ImageAnnotationLayer';
 import { OlderFileStage } from './OlderFileStage';
@@ -63,6 +74,9 @@ export type AssetDetailModalProps = {
   onClose: () => void;
   /** Called after a mutation (version upload, review transition) so the grid refreshes. */
   onAssetChanged?: () => void;
+  initialDeepLink?: CommentDeepLink;
+  previewFrame?: LibraryPreviewFrame;
+  onDeepLinkChange?: (link: CommentDeepLink) => void;
 };
 
 // Performance and Fields are further sidebar destinations alongside the two the
@@ -123,6 +137,9 @@ export function AssetDetailModal({
   asset,
   onClose,
   onAssetChanged,
+  initialDeepLink,
+  previewFrame,
+  onDeepLinkChange,
 }: AssetDetailModalProps) {
   if (!asset) return null;
   // Keyed per asset so comments, selection, drafts, and the viewed version never
@@ -134,6 +151,9 @@ export function AssetDetailModal({
       asset={asset}
       onClose={onClose}
       onAssetChanged={onAssetChanged}
+      initialDeepLink={initialDeepLink}
+      previewFrame={previewFrame}
+      onDeepLinkChange={onDeepLinkChange}
     />
   );
 }
@@ -143,6 +163,9 @@ function AssetDetailDialog({
   asset,
   onClose,
   onAssetChanged,
+  initialDeepLink,
+  previewFrame = 'native',
+  onDeepLinkChange,
 }: AssetDetailModalProps & { asset: MediaAsset }) {
   const {
     comments,
@@ -290,13 +313,33 @@ function AssetDetailDialog({
   const onSelectThread = useCallback(
     (root: MediaComment) => {
       setSelectedCommentId(root.id);
+      onDeepLinkChange?.(commentDeepLinkFromAnnotation(root.id, root.annotation));
       // Only a thread written on the version on screen may move the playhead: an
       // older timeMs lands on the wrong frame of a different cut.
       const onViewedVersion = anchorVersionId(root, headVersionId) === viewedVersionId;
       if (onViewedVersion && root.annotation?.kind === 'time') seekTo(root.annotation.timeMs);
     },
-    [seekTo, headVersionId, viewedVersionId],
+    [seekTo, headVersionId, viewedVersionId, onDeepLinkChange],
   );
+
+  const appliedDeepLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading) return;
+    const key = `${initialDeepLink?.commentId ?? ''}:${initialDeepLink?.timeMs ?? ''}`;
+    if (!key.replace(':', '') || appliedDeepLink.current === key) return;
+    if (initialDeepLink?.commentId) {
+      const match = comments.find((comment) => comment.id === initialDeepLink.commentId);
+      if (!match) return;
+      appliedDeepLink.current = key;
+      setSelectedCommentId(match.id);
+      if (match.annotation?.kind === 'time') seekTo(match.annotation.timeMs);
+      return;
+    }
+    if (initialDeepLink?.timeMs != null) {
+      appliedDeepLink.current = key;
+      seekTo(initialDeepLink.timeMs);
+    }
+  }, [comments, initialDeepLink, loading, seekTo]);
 
   const viewVersion = useCallback(
     (versionId: string) => {
@@ -339,6 +382,9 @@ function AssetDetailDialog({
             </DialogTitle>
             <DialogDescription className="truncate text-xs text-muted-foreground">
               {assetMetaLine(asset)}
+              {previewFrame !== 'native' && previewFrameSpec(previewFrame)
+                ? ` · as ${previewFrameSpec(previewFrame)?.label} · ${previewFrameSpec(previewFrame)?.surface}`
+                : ''}
             </DialogDescription>
           </div>
           {/* The header carries only the DELIBERATE workflow verdicts — what this
@@ -595,6 +641,14 @@ function AssetDetailDialog({
                     onReply={(parentId, body) => void post({ body, parentCommentId: parentId })}
                     onResolve={(commentId, resolved) => void setResolved(commentId, resolved)}
                     onDelete={(commentId) => void removeComment(commentId)}
+                    commentHref={(comment) =>
+                      buildLibraryAssetHref({
+                        origin: window.location.origin,
+                        assetId: asset.id,
+                        browse: window.location.search,
+                        deepLink: commentDeepLinkFromAnnotation(comment.id, comment.annotation),
+                      })
+                    }
                   />
                 </div>
 

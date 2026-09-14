@@ -144,11 +144,11 @@ export function TeamInviteSection() {
   };
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_18%,var(--border))] bg-card/80 shadow-[0_1px_3px_oklch(0%_0_0/0.06),inset_0_1px_0_oklch(100%_0_0/0.6)] text-foreground">
+    <div className="relative overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--primary)_18%,var(--border))] bg-card/80 shadow-[0_1px_3px_oklch(0%_0_0/0.06),inset_0_1px_0_oklch(100%_0_0/0.6)] text-foreground">
       <div className="flex items-start justify-between gap-3 px-5 pt-5">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Users className="h-4 w-4 text-[var(--cs-violet,#5a39ff)]" />
+            <Users className="h-4 w-4 text-[var(--primary)]" />
             Invite your team
           </div>
           <p className="text-sm leading-snug text-muted-foreground">
@@ -184,7 +184,7 @@ export function TeamInviteSection() {
                 color: emailValid ? '#ffffff' : 'var(--muted-foreground)',
                 borderColor: emailValid
                   ? 'transparent'
-                  : 'color-mix(in srgb, var(--cs-violet,#5a39ff) 18%, var(--border))',
+                  : 'color-mix(in srgb, var(--primary) 18%, var(--border))',
               }}
               transition={{ duration: 0.18, ease: ENTER_EASE }}
               className={cn(
@@ -227,7 +227,7 @@ export function TeamInviteSection() {
                   className={cn(
                     'relative flex-1 rounded-full px-3 py-1.5 text-sm font-medium',
                     'motion-safe:transition-colors motion-safe:duration-150',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cs-violet,#5a39ff)] focus-visible:ring-offset-1',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-1',
                     selected ? 'text-white' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
@@ -235,7 +235,7 @@ export function TeamInviteSection() {
                     <motion.span
                       layoutId="role-pill-active"
                       transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                      className="absolute inset-0 -z-0 rounded-full bg-[var(--cs-violet,#5a39ff)] shadow-[0_1px_2px_oklch(0%_0_0/0.18),inset_0_1px_0_oklch(100%_0_0/0.22)]"
+                      className="absolute inset-0 -z-0 rounded-full bg-[var(--primary)] shadow-[0_1px_2px_oklch(0%_0_0/0.18),inset_0_1px_0_oklch(100%_0_0/0.22)]"
                     />
                   ) : null}
                   <span className="relative">{ROLE_LABEL[option]}</span>
@@ -308,10 +308,10 @@ export function TeamInviteSection() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex items-center gap-2.5 rounded-lg bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_5%,transparent)] px-3 py-2.5"
+                className="flex items-center gap-2.5 rounded-lg bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] px-3 py-2.5"
               >
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_12%,transparent)]">
-                  <Users className="h-3.5 w-3.5 text-[var(--cs-violet,#5a39ff)]" />
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]">
+                  <Users className="h-3.5 w-3.5 text-[var(--primary)]" />
                 </div>
                 <p className="text-xs leading-snug text-muted-foreground">
                   No invites yet. Add teammates now or later from Settings.
@@ -352,7 +352,7 @@ export function TeamInviteSection() {
                           <span className="truncate text-sm text-foreground">{invite.email}</span>
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
-                          <span className="rounded-full bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_10%,transparent)] px-2 py-0.5 text-2xs font-medium uppercase tracking-wide text-[var(--cs-violet,#5a39ff)]">
+                          <span className="rounded-full bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] px-2 py-0.5 text-2xs font-medium uppercase tracking-wide text-[var(--primary)]">
                             {ROLE_LABEL[inviteRole] ?? invite.role}
                           </span>
                           <Button

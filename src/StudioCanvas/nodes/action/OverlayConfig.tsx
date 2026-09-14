@@ -117,7 +117,7 @@ function PositionPicker({
             aria-label={POSITION_LABEL[position]}
             aria-pressed={value === position}
             onClick={() => onChange(position)}
-            className={`h-7 rounded border text-[10px] ${
+            className={`h-7 rounded border text-2xs ${
               value === position
                 ? 'border-brand-primary bg-brand-primary/15 text-foreground'
                 : 'border-border/60 text-muted-foreground hover:bg-muted/60'

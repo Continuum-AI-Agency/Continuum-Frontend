@@ -24,7 +24,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function SurfaceBadge({ surface }: { surface: Skill['surface'] }) {
   const label = surface === 'visual' ? 'Visual' : surface === 'both' ? 'Both' : 'Copy';
   return (
-    <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+    <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
       {label}
     </span>
   );
@@ -52,7 +52,7 @@ export function SkillList({
 
   return (
     <div className="flex flex-col gap-3">
-      <Button variant="brand" size="sm" className="w-full justify-center" onClick={onNewAction}>
+      <Button variant="default" size="sm" className="w-full justify-center" onClick={onNewAction}>
         <Plus className="h-3.5 w-3.5" />
         New skill
       </Button>

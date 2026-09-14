@@ -133,12 +133,12 @@ function PostRow({ post }: { post: OrganicPostSummary }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span
-            className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+            className="rounded-full px-1.5 py-0.5 text-2xs font-semibold leading-none text-white"
             style={{ backgroundColor: CONTENT_TYPE_COLOR[type] }}
           >
             {CONTENT_TYPE_LABEL[type]}
           </span>
-          {time ? <span className="text-[11px] text-muted-foreground">{time}</span> : null}
+          {time ? <span className="text-xs text-muted-foreground">{time}</span> : null}
         </div>
         {caption ? (
           <p className="mt-1 line-clamp-2 text-xs text-foreground/90">{caption.slice(0, 120)}</p>
@@ -150,7 +150,7 @@ function PostRow({ post }: { post: OrganicPostSummary }) {
             href={post.permalink}
             target="_blank"
             rel="noreferrer"
-            className="mt-1 inline-block text-[11px] font-medium text-primary hover:underline"
+            className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
           >
             View post ↗
           </a>
@@ -186,7 +186,7 @@ function PostFlagLabel(props: { viewBox?: LabelViewBox; day: AnnotatedDailyTrend
               <button
                 type="button"
                 aria-label={`${count} post${count === 1 ? '' : 's'} published on ${day.date}`}
-                className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none text-white shadow-sm ring-1 ring-white/60 outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-3xs font-bold leading-none text-white shadow-sm ring-1 ring-white/60 outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                 style={{ backgroundColor: color }}
               >
                 {count > 1 ? count : ''}
@@ -196,7 +196,7 @@ function PostFlagLabel(props: { viewBox?: LabelViewBox; day: AnnotatedDailyTrend
           <HoverCardContent side="top" align="center" className="w-72 overflow-hidden p-0">
             <div className="border-b border-border/70 bg-muted/30 px-3 py-2">
               <p className="text-xs font-semibold text-foreground">{formatDayHeading(day.date)}</p>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {count} post{count === 1 ? '' : 's'} published
               </p>
             </div>

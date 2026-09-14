@@ -93,7 +93,12 @@ const read = (overrides: Partial<CanvasScaffoldRead> = {}): CanvasScaffoldRead =
       memberCount: 2,
       targeting: { age_min: 25, age_max: 50, geo_locations: { countries: ['MX'] } },
       includedKeys: ['seed'],
-      gate: { gate: 'audience_group_publish', status: 'denied', approvedBy: null, approvedAt: null },
+      gate: {
+        gate: 'audience_group_publish',
+        status: 'denied',
+        approvedBy: null,
+        approvedAt: null,
+      },
     },
   ],
   ...overrides,
@@ -103,12 +108,7 @@ describe('buildHydratedCanvasGraph', () => {
   it('maps a scaffold to a campaign -> ad set -> ad graph with its audience group', () => {
     const graph = buildHydratedCanvasGraph(read());
 
-    expect(graph.nodes.map((node) => node.type)).toEqual([
-      'campaign',
-      'ad-set',
-      'ad',
-      'audience',
-    ]);
+    expect(graph.nodes.map((node) => node.type)).toEqual(['campaign', 'ad-set', 'ad', 'audience']);
     expect(graph.edges.map((edge) => `${edge.source}->${edge.target}`)).toEqual([
       'campaign->adset',
       'adset->ad',

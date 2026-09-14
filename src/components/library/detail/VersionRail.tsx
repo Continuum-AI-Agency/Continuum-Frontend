@@ -23,7 +23,6 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { Pill } from '@/components/kibo-ui/pill';
 import {
   AlertDialog,
@@ -38,6 +37,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/components/ui/toast-imperative';
 import {
   rollbackAssetVersion,
   uploadNewAssetVersion,

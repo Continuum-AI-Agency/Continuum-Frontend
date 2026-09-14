@@ -13,7 +13,11 @@ import {
   DEFAULT_CAPTION_STYLE,
 } from '@/lib/clips/clipCaptionStyle';
 import { persistTimelineRender } from '@/StudioCanvas/utils/persistTimelineRender';
-import type { ClipEffectSpec } from '@/StudioCanvas/utils/render/effectSpec';
+import type {
+  ClipEffectSpec,
+  ClipMotionChannels,
+  ClipPropertyStop,
+} from '@/StudioCanvas/utils/render/effectSpec';
 import type { ClipTransition } from '@/StudioCanvas/utils/render/transitions';
 import { overlapInSecFor } from '@/StudioCanvas/utils/render/transitions';
 import { type CaptionCue, wordsForCaptionText } from '@/StudioCanvas/utils/splice/captionCues';
@@ -109,6 +113,85 @@ const transformKeyframesFor = (clip: {
   return keyframes.length >= 2 ? keyframes : undefined;
 };
 
+type EditorClipKeyframe = {
+  property: string;
+  timeSec: number;
+  value: unknown;
+  interpolation?: ClipPropertyStop['interpolation'];
+  easing?: ClipPropertyStop['easing'];
+  spring?: ClipPropertyStop['spring'];
+};
+
+const toStop = (
+  keyframe: EditorClipKeyframe,
+  durationSec: number,
+  value: number,
+): ClipPropertyStop => ({
+  t: Math.max(0, Math.min(1, keyframe.timeSec / durationSec)),
+  value,
+  interpolation: keyframe.interpolation ?? 'linear',
+  ...(keyframe.easing ? { easing: keyframe.easing } : {}),
+  ...(keyframe.spring ? { spring: keyframe.spring } : {}),
+});
+
+const numericStopsFor = (
+  clip: { durationSec: number; keyframes?: EditorClipKeyframe[] },
+  property: string,
+): ClipPropertyStop[] | undefined => {
+  if (clip.durationSec <= 0) return undefined;
+  const stops: ClipPropertyStop[] = [];
+  for (const keyframe of clip.keyframes ?? []) {
+    if (keyframe.property !== property || typeof keyframe.value !== 'number') continue;
+    stops.push(toStop(keyframe, clip.durationSec, keyframe.value));
+  }
+  return stops.length > 0 ? stops : undefined;
+};
+
+const opacityStopsFor = (clip: {
+  durationSec: number;
+  keyframes?: EditorClipKeyframe[];
+}): ClipPropertyStop[] | undefined => numericStopsFor(clip, 'transform.opacity');
+
+const motionChannelsFor = (clip: {
+  durationSec: number;
+  keyframes?: EditorClipKeyframe[];
+}): ClipMotionChannels | undefined => {
+  if (clip.durationSec <= 0) return undefined;
+  const offsetX: ClipPropertyStop[] = [];
+  const offsetY: ClipPropertyStop[] = [];
+  for (const keyframe of clip.keyframes ?? []) {
+    if (keyframe.property !== 'transform.position' || typeof keyframe.value !== 'object') continue;
+    if (
+      !keyframe.value ||
+      !('x' in keyframe.value) ||
+      !('y' in keyframe.value) ||
+      typeof keyframe.value.x !== 'number' ||
+      typeof keyframe.value.y !== 'number'
+    ) {
+      continue;
+    }
+    offsetX.push(toStop(keyframe, clip.durationSec, keyframe.value.x - 0.5));
+    offsetY.push(toStop(keyframe, clip.durationSec, keyframe.value.y - 0.5));
+  }
+  const scaleX = numericStopsFor(clip, 'transform.scaleX');
+  const scaleY = numericStopsFor(clip, 'transform.scaleY');
+  const rotate = numericStopsFor(clip, 'transform.rotationDeg');
+  const rotateX = numericStopsFor(clip, 'transform.rotateXDeg');
+  const rotateY = numericStopsFor(clip, 'transform.rotateYDeg');
+  const opacity = opacityStopsFor(clip);
+  const channels: ClipMotionChannels = {
+    ...(opacity ? { opacity } : {}),
+    ...(offsetX.length ? { offsetX } : {}),
+    ...(offsetY.length ? { offsetY } : {}),
+    ...(scaleX ? { scaleX } : {}),
+    ...(scaleY ? { scaleY } : {}),
+    ...(rotate ? { rotate } : {}),
+    ...(rotateX ? { rotateX } : {}),
+    ...(rotateY ? { rotateY } : {}),
+  };
+  return Object.keys(channels).length > 0 ? channels : undefined;
+};
+
 /**
  * A V2 clip's effect instances back into the render spec `composeTimeline` consumes.
  *
@@ -127,6 +210,9 @@ export const clipEffectSpecFromEditorClip = (clip: {
     scaleX: number;
     scaleY: number;
     rotationDeg: number;
+    rotateXDeg?: number;
+    rotateYDeg?: number;
+    perspective?: number;
     opacity: number;
   };
   blendMode?: ClipEffectSpec['blendMode'];
@@ -136,7 +222,7 @@ export const clipEffectSpecFromEditorClip = (clip: {
     effectId: string;
     parameters: Record<string, unknown>;
   }>;
-  keyframes?: Array<{ property: string; timeSec: number; value: unknown }>;
+  keyframes?: EditorClipKeyframe[];
 }): ClipEffectSpec => ({
   ...(clip.playbackRate && clip.playbackRate !== 1 ? { speed: clip.playbackRate } : {}),
   ...(clip.transform
@@ -144,9 +230,14 @@ export const clipEffectSpecFromEditorClip = (clip: {
         opacity: clip.transform.opacity,
         transform: {
           scale: Math.max(Math.abs(clip.transform.scaleX), Math.abs(clip.transform.scaleY)),
+          scaleX: Math.abs(clip.transform.scaleX),
+          scaleY: Math.abs(clip.transform.scaleY),
           offsetX: clip.transform.position.x - 0.5,
           offsetY: clip.transform.position.y - 0.5,
           rotate: clip.transform.rotationDeg,
+          rotateX: clip.transform.rotateXDeg ?? 0,
+          rotateY: clip.transform.rotateYDeg ?? 0,
+          perspective: clip.transform.perspective ?? 0,
         },
         flipH: clip.transform.scaleX < 0,
         flipV: clip.transform.scaleY < 0,
@@ -244,6 +335,8 @@ export const clipEffectSpecFromEditorClip = (clip: {
     return radiusFrac !== undefined && radiusFrac > 0 ? { cornerRadiusFrac: radiusFrac } : {};
   })(),
   ...(transformKeyframesFor(clip) ? { keyframes: transformKeyframesFor(clip) } : {}),
+  ...(opacityStopsFor(clip) ? { opacityStops: opacityStopsFor(clip) } : {}),
+  ...(motionChannelsFor(clip) ? { motionChannels: motionChannelsFor(clip) } : {}),
 });
 
 const effectsFor = clipEffectSpecFromEditorClip;
@@ -387,8 +480,12 @@ export async function buildTimelineEditorRenderPlan(input: {
 }): Promise<RenderPlan> {
   assertSupportedTimelineEditorExport(input.project);
   const inputByClip = new Map(input.jobInputs.map((entry) => [entry.sourceId, entry]));
+  const allTracks = [
+    ...input.project.tracks,
+    ...input.project.nestedSequences.flatMap((sequence) => sequence.tracks),
+  ];
   const pinByClip = new Map(
-    input.project.tracks.flatMap((track) =>
+    allTracks.flatMap((track) =>
       track.clips.flatMap((clip) =>
         'source' in clip && clip.source.sourceType === 'library_asset'
           ? [
@@ -471,11 +568,38 @@ export async function buildTimelineEditorRenderPlan(input: {
     })),
   );
 
+  const nestedOverlayClips = input.project.tracks
+    .filter((track) => track.kind === 'nested_sequence' && track.enabled && !track.muted)
+    .flatMap((track) =>
+      track.clips.flatMap((instance) => {
+        if (instance.kind !== 'nested_sequence' || !instance.enabled) return [];
+        const nested = input.project.nestedSequences.find(
+          (sequence) => sequence.id === instance.sequenceId,
+        );
+        if (!nested) return [];
+        const rate = instance.playbackRate > 0 ? instance.playbackRate : 1;
+        return nested.tracks
+          .filter(isOverlayTrack)
+          .filter((childTrack) => childTrack.enabled && !childTrack.muted)
+          .flatMap((childTrack) =>
+            childTrack.clips
+              .filter((clip) => clip.enabled)
+              .map((clip) => ({
+                ...clip,
+                timelineStartSec:
+                  instance.timelineStartSec +
+                  Math.max(0, clip.timelineStartSec - instance.sourceInSec) / rate,
+                durationSec: Math.min(instance.durationSec, clip.durationSec / rate),
+              })),
+          );
+      }),
+    );
   const overlayClips = [
     ...input.project.tracks
       .filter(isOverlayTrack)
       .filter((track) => track.enabled && !track.muted)
       .flatMap((track) => track.clips),
+    ...nestedOverlayClips,
     ...videoTracks
       .slice(1)
       .flatMap((track) => track.clips.map((clip) => ({ ...clip, mediaKind: 'video' as const }))),

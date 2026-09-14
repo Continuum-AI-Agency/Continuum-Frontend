@@ -124,7 +124,9 @@ describe('navigation structure', () => {
     expect(forge!.locked).toBeUndefined();
     // Tier 3 is enforced at the page (TierAccessRedirect) and on the server
     // (assertTemplateForgeTier), the same shape /ai-studio and /scale use.
-    expect(APP_NAVIGATION_GROUPS.flatMap((g) => g.items).find((i) => i.label === 'Developers')).toBeUndefined();
+    expect(
+      APP_NAVIGATION_GROUPS.flatMap((g) => g.items).find((i) => i.label === 'Developers'),
+    ).toBeUndefined();
   });
 
   it('footer is Settings + admin-gated Admin', () => {

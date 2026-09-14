@@ -17,7 +17,9 @@ mock.module('@/lib/supabase/client', () => ({
 mock.module('@/lib/library/creativeOperations', () => ({
   createAssetCommentOperation: async (...args: unknown[]) => {
     const input = args[1] as Record<string, unknown>;
-    const body = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+    const body = Object.fromEntries(
+      Object.entries(input).filter(([, value]) => value !== undefined),
+    );
     const now = '2026-07-06T00:00:00.000Z';
     calls.push({ url: '/api/library/comments', method: 'POST', body });
     return {

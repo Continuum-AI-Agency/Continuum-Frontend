@@ -12,7 +12,10 @@ const PATH_PREFIX = `${BRAND_ID}/canvas-creations/reel/planner-composition-edge-
 
 function requireLocalEnv(name: string): string {
   const value = process.env[name]?.trim();
-  if (!value) throw new Error(`[planner:composition:e2e:bench] Missing ${name}. Run bun run supabase:env:local.`);
+  if (!value)
+    throw new Error(
+      `[planner:composition:e2e:bench] Missing ${name}. Run bun run supabase:env:local.`,
+    );
   return value;
 }
 
@@ -53,7 +56,10 @@ async function invoke(path: string, init: RequestInit, token?: string): Promise<
 }
 
 try {
-  const signedIn = await user.auth.signInWithPassword({ email: OWNER_EMAIL, password: OWNER_PASSWORD });
+  const signedIn = await user.auth.signInWithPassword({
+    email: OWNER_EMAIL,
+    password: OWNER_PASSWORD,
+  });
   assert(
     !signedIn.error && signedIn.data.session?.access_token && signedIn.data.user,
     'mints a real local owner JWT',
@@ -91,35 +97,55 @@ try {
   }
   console.log('✓ writes temporary private reel clips');
 
-  const inserted = await service.schema('organic').from('organic_calendar_drafts').insert({
-    id: DRAFT_ID,
-    brand_id: BRAND_ID,
-    user_id: signedIn.data.user.id,
-    client_key: `planner-composition-edge-${RUN_ID}`,
-    platform: 'instagram',
-    platform_account_id: 'unassigned',
-    status: 'draft',
-    scheduled_date: '2026-08-10T12:00:00.000Z',
-    media_stage: 'realized',
-    slot_data: { weekStart: '2026-08-10', dayId: '2026-08-10', platform: 'instagram' },
-    content_json: {
-      creative: {
-        mediaSuggestion: {
-          mediaStatus: 'ready',
-          reel: {
-            scenes: [
-              { index: 0, role: 'hook', durationSec: 3, bucket: BUCKET, clipUrl: scenePaths[0], signedClipUrl: 'https://stale.example/0' },
-              { index: 1, role: 'cta', durationSec: 3, bucket: BUCKET, clipUrl: scenePaths[1], signedClipUrl: 'https://stale.example/1' },
-            ],
+  const inserted = await service
+    .schema('organic')
+    .from('organic_calendar_drafts')
+    .insert({
+      id: DRAFT_ID,
+      brand_id: BRAND_ID,
+      user_id: signedIn.data.user.id,
+      client_key: `planner-composition-edge-${RUN_ID}`,
+      platform: 'instagram',
+      platform_account_id: 'unassigned',
+      status: 'draft',
+      scheduled_date: '2026-08-10T12:00:00.000Z',
+      media_stage: 'realized',
+      slot_data: { weekStart: '2026-08-10', dayId: '2026-08-10', platform: 'instagram' },
+      content_json: {
+        creative: {
+          mediaSuggestion: {
+            mediaStatus: 'ready',
+            reel: {
+              scenes: [
+                {
+                  index: 0,
+                  role: 'hook',
+                  durationSec: 3,
+                  bucket: BUCKET,
+                  clipUrl: scenePaths[0],
+                  signedClipUrl: 'https://stale.example/0',
+                },
+                {
+                  index: 1,
+                  role: 'cta',
+                  durationSec: 3,
+                  bucket: BUCKET,
+                  clipUrl: scenePaths[1],
+                  signedClipUrl: 'https://stale.example/1',
+                },
+              ],
+            },
           },
         },
       },
-    },
-  });
+    });
   if (inserted.error) throw inserted.error;
   console.log('✓ persists a temporary Planner draft with durable reel coordinates');
 
-  const unauthorized = await invoke('', { method: 'POST', body: JSON.stringify({ brandId: BRAND_ID, draftId: DRAFT_ID }) });
+  const unauthorized = await invoke('', {
+    method: 'POST',
+    body: JSON.stringify({ brandId: BRAND_ID, draftId: DRAFT_ID }),
+  });
   assert(unauthorized.status === 401, 'rejects an Edge Function request without a user JWT');
 
   const prepared = await invoke(
@@ -127,24 +153,45 @@ try {
     { method: 'POST', body: JSON.stringify({ brandId: BRAND_ID, draftId: DRAFT_ID }) },
     accessToken,
   );
-  const preparedBody = await prepared.json() as {
+  const preparedBody = (await prepared.json()) as {
     composition?: { id?: string; roomId?: string; status?: string; sourceFingerprint?: string };
     clips?: Array<{ signedUrl?: string }>;
     created?: boolean;
     error?: string;
   };
-  assert(prepared.status === 201, `creates the composition through Edge Function (${preparedBody.error ?? 'ok'})`);
-  assert(preparedBody.created === true && preparedBody.composition?.id && preparedBody.composition.roomId, 'returns the durable composition identity');
-  assert(preparedBody.composition.status === 'clips_ready', 'marks the persisted composition clips_ready');
-  assert(preparedBody.clips?.length === 2 && preparedBody.clips.every((clip) => Boolean(clip.signedUrl)), 'returns freshly signed private clip URLs');
+  assert(
+    prepared.status === 201,
+    `creates the composition through Edge Function (${preparedBody.error ?? 'ok'})`,
+  );
+  assert(
+    preparedBody.created === true &&
+      preparedBody.composition?.id &&
+      preparedBody.composition.roomId,
+    'returns the durable composition identity',
+  );
+  assert(
+    preparedBody.composition.status === 'clips_ready',
+    'marks the persisted composition clips_ready',
+  );
+  assert(
+    preparedBody.clips?.length === 2 && preparedBody.clips.every((clip) => Boolean(clip.signedUrl)),
+    'returns freshly signed private clip URLs',
+  );
   if (!plannerRoomId) {
     plannerRoomId = preparedBody.composition.roomId;
     createdPlannerRoom = true;
   }
 
-  const listed = await invoke(`?brandId=${BRAND_ID}&draftId=${DRAFT_ID}`, { method: 'GET' }, accessToken);
-  const listedBody = await listed.json() as { current?: { id?: string; status?: string } | null };
-  assert(listed.status === 200 && listedBody.current?.id === preparedBody.composition.id, 'reads back the current composition through Edge Function');
+  const listed = await invoke(
+    `?brandId=${BRAND_ID}&draftId=${DRAFT_ID}`,
+    { method: 'GET' },
+    accessToken,
+  );
+  const listedBody = (await listed.json()) as { current?: { id?: string; status?: string } | null };
+  assert(
+    listed.status === 200 && listedBody.current?.id === preparedBody.composition.id,
+    'reads back the current composition through Edge Function',
+  );
 
   const canvas = await service
     .schema('brand_profiles')
@@ -154,22 +201,41 @@ try {
     .eq('room_id', preparedBody.composition.roomId)
     .single();
   if (canvas.error) throw canvas.error;
-  const nodes = Array.isArray(canvas.data.nodes) ? canvas.data.nodes as Array<{ data?: { plannerCompositionId?: string } }> : [];
-  assert(nodes.some((node) => node.data?.plannerCompositionId === preparedBody.composition?.id), 'persists the editable Canvas graph under the Planner room');
+  const nodes = Array.isArray(canvas.data.nodes)
+    ? (canvas.data.nodes as Array<{ data?: { plannerCompositionId?: string } }>)
+    : [];
+  assert(
+    nodes.some((node) => node.data?.plannerCompositionId === preparedBody.composition?.id),
+    'persists the editable Canvas graph under the Planner room',
+  );
 
   const updated = await invoke(
     '',
-    { method: 'PATCH', body: JSON.stringify({ brandId: BRAND_ID, compositionId: preparedBody.composition.id, status: 'editing' }) },
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        brandId: BRAND_ID,
+        compositionId: preparedBody.composition.id,
+        status: 'editing',
+      }),
+    },
     accessToken,
   );
-  assert(updated.status === 200, 'updates composition status through the same authorized Edge boundary');
+  assert(
+    updated.status === 200,
+    'updates composition status through the same authorized Edge boundary',
+  );
 } finally {
   if (plannerRoomId) {
     if (priorSession) {
       await service
         .schema('brand_profiles')
         .from('canvas_sessions')
-        .update({ nodes: priorSession.nodes, edges: priorSession.edges, editor_user_id: priorSession.editor_user_id })
+        .update({
+          nodes: priorSession.nodes,
+          edges: priorSession.edges,
+          editor_user_id: priorSession.editor_user_id,
+        })
         .eq('brand_profile_id', BRAND_ID)
         .eq('room_id', plannerRoomId);
     } else {
@@ -182,7 +248,9 @@ try {
     }
   }
   await service.schema('organic').from('organic_calendar_drafts').delete().eq('id', DRAFT_ID);
-  await service.storage.from(BUCKET).remove([`${PATH_PREFIX}/scene-0.mp4`, `${PATH_PREFIX}/scene-1.mp4`]);
+  await service.storage
+    .from(BUCKET)
+    .remove([`${PATH_PREFIX}/scene-0.mp4`, `${PATH_PREFIX}/scene-1.mp4`]);
   if (plannerRoomId && !priorSession && createdPlannerRoom) {
     // The function created this room; it is isolated to the local fixture and safe to remove.
     await service.schema('brand_profiles').from('canvas_rooms').delete().eq('id', plannerRoomId);

@@ -93,7 +93,7 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
   return (
     <div className="flex max-w-2xl flex-col gap-3">
       <Button
-        variant="brand"
+        variant="default"
         size="sm"
         className="w-full justify-center"
         onClick={() => setScreen({ kind: 'form', project: null })}
@@ -123,21 +123,21 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
           {/* The solo case is the common one: every project is yours, `theirs` is empty, and
               rendering "Other projects" over an empty body is a heading pointing at nothing. */}
           {mine.length === 0 || theirs.length > 0 ? (
-          <ProjectRows
-            // Only worth a second heading once there is something to contrast it with.
-            heading={mine.length > 0 ? 'Other projects' : 'Projects'}
-            projects={theirs}
-            emptyLabel={
-              mine.length > 0
-                ? ''
-                : 'No projects yet. Create one to scope a direction — a brief, a colour, and the ad accounts it covers.'
-            }
-            busyId={busyId}
-            currentUserId={user?.id ?? null}
-            onEditAction={(project) => setScreen({ kind: 'form', project })}
-            onStatusAction={(project) => setStatus(project, 'archived')}
-            onLeadAction={setLead}
-          />
+            <ProjectRows
+              // Only worth a second heading once there is something to contrast it with.
+              heading={mine.length > 0 ? 'Other projects' : 'Projects'}
+              projects={theirs}
+              emptyLabel={
+                mine.length > 0
+                  ? ''
+                  : 'No projects yet. Create one to scope a direction — a brief, a colour, and the ad accounts it covers.'
+              }
+              busyId={busyId}
+              currentUserId={user?.id ?? null}
+              onEditAction={(project) => setScreen({ kind: 'form', project })}
+              onStatusAction={(project) => setStatus(project, 'archived')}
+              onLeadAction={setLead}
+            />
           ) : null}
           {archived.length > 0 ? (
             <ProjectRows
@@ -168,7 +168,7 @@ function ProjectWindowBadge({ project }: { project: Project }) {
   const state = projectTimeState(project, isoToday());
   if (state === 'live') return null;
   return (
-    <span className="rounded-full border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">
+    <span className="rounded-full border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
       {state === 'ended'
         ? `Ended ${project.endsOn} — brief not sent to the agent`
         : `Starts ${project.startsOn} — brief not sent to the agent yet`}
@@ -239,7 +239,10 @@ function ProjectRows({
                       : `Take the lead of ${project.name}`
                   }
                   onClick={() =>
-                    onLeadAction(project, project.leadUserId === currentUserId ? null : currentUserId)
+                    onLeadAction(
+                      project,
+                      project.leadUserId === currentUserId ? null : currentUserId,
+                    )
                   }
                   className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                 >

@@ -21,6 +21,9 @@ describe('readNodeAssetRef', () => {
     expect(
       readNodeAssetRef({ renderOutputAssetId: ASSET, renderOutputAssetVersionId: VERSION }),
     ).toEqual({ assetId: ASSET, versionId: VERSION });
+    expect(
+      readNodeAssetRef({ generatedVideoAssetId: ASSET, renderOutputAssetVersionId: VERSION }),
+    ).toEqual({ assetId: ASSET, versionId: VERSION });
   });
 
   it("prefers a node's own render output over a reference it also holds", () => {

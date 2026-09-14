@@ -75,7 +75,7 @@ const postPulled = (id: string): OnboardingInspirationsStreamFrame =>
     data: { competitorName: 'Rival Co', post: { id, imageUrl: `https://example.test/${id}.jpg` } },
   }) as unknown as OnboardingInspirationsStreamFrame;
 
-// Sequenced list responses: each call to GET /api/library/assets pops the next
+// Sequenced list responses: each call to GET /api/library/browse pops the next
 // page from this queue, so a re-read after a pull can return different rows.
 let listPages: MediaAsset[][] = [];
 let listRequests: string[] = [];
@@ -88,7 +88,7 @@ const installFetch = () => {
     return {
       ok: true,
       status: 200,
-      json: async () => ({ items, nextOffset: null }),
+      json: async () => ({ items, nextCursor: null }),
     } as unknown as Response;
   };
 };
@@ -125,7 +125,8 @@ describe('StudioMediaLibraryPanel — Inspiration folder (#251)', () => {
     await selectInspiration(getByTestId);
     await settle();
 
-    expect(listRequests.some((url) => url.includes('source=inspiration'))).toBe(true);
+    expect(listRequests.some((url) => url.includes('createdWith=inspiration'))).toBe(true);
+    expect(listRequests.some((url) => url.includes('/api/library/browse'))).toBe(true);
     expect(getAllByRole('img').length).toBe(4);
     expect(queryByTestId('studio-inspiration-empty')).toBeNull();
     // A populated folder still offers the tester's "regenerate" affordance.

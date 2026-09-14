@@ -6,6 +6,7 @@ import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { ClientOnly } from '@/components/ui/ClientOnly';
 import { VersionBanner } from '@/components/version-banner';
+import { PointerOrigin } from '../components/shared/PointerOrigin';
 import { ThemeProvider } from '../components/theme-provider';
 
 export const metadata: Metadata = {
@@ -70,6 +71,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <ThemeProvider>
+          <PointerOrigin />
           <VersionBanner />
           <div className="relative z-10">{children}</div>
         </ThemeProvider>

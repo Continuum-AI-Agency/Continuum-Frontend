@@ -7,17 +7,12 @@ import {
   type EditorTake,
   editorCommandBatchSchema,
 } from '@continuum/contracts';
-import { Check, ImageIcon, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Check, ImageIcon, Loader2, Sparkles, Waves } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -29,7 +24,9 @@ import {
   restoreVideoProjectTimeline,
 } from '@/lib/api/videoProjects.client';
 import { listAssetVersions } from '@/lib/library/versions';
+import { cn } from '@/lib/utils';
 import type { TimelineInputSource } from '../../types';
+import { buildBeatMarkers } from '../../utils/audio/beatAnalysis';
 import { EditorProjectV2Assembly } from './EditorProjectV2Assembly';
 import {
   type EditorAssemblyOperation,
@@ -41,6 +38,7 @@ const STAGES = [
   { id: 'frames', label: 'Frames' },
   { id: 'motion', label: 'Motion' },
   { id: 'masters', label: 'Masters' },
+  { id: 'sound', label: 'Sound' },
   { id: 'assembly', label: 'Assembly' },
 ] as const;
 type WorkspaceStage = (typeof STAGES)[number]['id'];
@@ -99,25 +97,31 @@ function TakePreview({ take, brandId }: { take: EditorTake; brandId: string }) {
   );
 }
 
-export function VideoProductionWorkspaceDialog({
+export function VideoStudioWorkspace({
   projectId,
   brandId,
   pool,
-  open,
-  onOpenChange,
+  origin,
+  view,
 }: {
   projectId: string;
   brandId: string;
   pool: TimelineInputSource[];
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  origin: 'canvas' | 'library';
+  view?: 'assembly' | 'motion';
 }) {
   const { show } = useToast();
   const [project, setProject] = useState<EditorProjectV2 | null>(null);
-  const [activeStage, setActiveStage] = useState<WorkspaceStage>('style');
+  const [activeStage, setActiveStage] = useState<WorkspaceStage>(
+    view || origin === 'canvas' ? 'assembly' : 'style',
+  );
   const [busy, setBusy] = useState<string | null>(null);
   const [scriptText, setScriptText] = useState('');
   const [styleText, setStyleText] = useState('');
+  const [narrationText, setNarrationText] = useState('');
+  const [musicPrompt, setMusicPrompt] = useState('');
+  const [bpm, setBpm] = useState('120');
+  const [beatOffset, setBeatOffset] = useState('0');
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const [redoStack, setRedoStack] = useState<RedoEntry[]>([]);
 
@@ -126,6 +130,12 @@ export function VideoProductionWorkspaceDialog({
     setProject(next);
     setScriptText(next.production.sourceScript ?? '');
     setStyleText(next.production.styleContract?.lockedText ?? '');
+    setNarrationText(
+      next.production.soundPlan?.narrationText ?? next.production.sourceScript ?? '',
+    );
+    setMusicPrompt(next.production.soundPlan?.musicPrompt ?? '');
+    setBpm(String(next.production.soundPlan?.bpm ?? 120));
+    setBeatOffset(String(next.production.soundPlan?.beatOffsetSec ?? 0));
     setActiveStage((current) =>
       current === 'style' && next.revision === 0 ? stageFor(next) : current,
     );
@@ -133,7 +143,6 @@ export function VideoProductionWorkspaceDialog({
   }, [projectId]);
 
   useEffect(() => {
-    if (!open) return;
     void refresh().catch((error) =>
       show({
         title: 'Could not open video production',
@@ -143,7 +152,7 @@ export function VideoProductionWorkspaceDialog({
     );
     const interval = window.setInterval(() => void refresh().catch(() => undefined), 3_000);
     return () => window.clearInterval(interval);
-  }, [open, refresh, show]);
+  }, [refresh, show]);
 
   const commitCommands = useCallback(
     async (commands: EditorCommandDraft[], label: string) => {
@@ -179,6 +188,8 @@ export function VideoProductionWorkspaceDialog({
         setProject(next);
         setScriptText(next.production.sourceScript ?? '');
         setStyleText(next.production.styleContract?.lockedText ?? '');
+        setNarrationText(next.production.soundPlan?.narrationText ?? '');
+        setMusicPrompt(next.production.soundPlan?.musicPrompt ?? '');
         return next;
       } finally {
         setBusy(null);
@@ -372,6 +383,30 @@ export function VideoProductionWorkspaceDialog({
 
   if (!project) return null;
   const style = project.production.styleContract;
+  const soundPlan = project.production.soundPlan;
+  const soundDraft = (status: 'draft' | 'approved' = 'draft') => ({
+    status,
+    narrationText,
+    voiceId: soundPlan?.voiceId ?? 'Aoede',
+    musicPrompt,
+    negativePrompt: soundPlan?.negativePrompt ?? '',
+    bpm: Number.isFinite(Number(bpm)) ? Number(bpm) : null,
+    beatOffsetSec: Math.max(0, Number(beatOffset) || 0),
+    beatConfidence: soundPlan?.beatConfidence ?? null,
+    ducking: soundPlan?.ducking ?? {
+      enabled: true,
+      reductionDb: -12,
+      attackSec: 0.08,
+      releaseSec: 0.3,
+    },
+    takes: soundPlan?.takes ?? [],
+    selectedNarrationTakeId: soundPlan?.selectedNarrationTakeId,
+    selectedMusicTakeId: soundPlan?.selectedMusicTakeId,
+  });
+  const generateSound = async (kind: 'narration' | 'music') => {
+    await commit({ commandType: 'set_sound_plan', soundPlan: soundDraft() });
+    await generate(kind);
+  };
 
   const takeGrid = (kind: EditorTake['kind'], generationKind: EditorGenerationKind) => (
     <div className="space-y-4">
@@ -456,260 +491,378 @@ export function VideoProductionWorkspaceDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        overlayClassName="md:left-[var(--app-sidebar-width,3.5rem)]"
-        className="left-4 right-4 top-4 bottom-4 z-50 flex h-auto max-h-none w-auto max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-xl border border-border/60 p-0 shadow-2xl sm:max-w-none md:left-[calc(var(--app-sidebar-width,3.5rem)+1rem)]"
-      >
-        <DialogHeader className="flex flex-row items-center justify-between border-b border-border/60 px-5 py-4 text-left">
-          <div>
-            <DialogTitle>{project.title}</DialogTitle>
-            <DialogDescription>
-              Human-directed production · revision {project.revision}
-            </DialogDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{project.production.workflowStage.replaceAll('_', ' ')}</Badge>
-            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-              Done
-            </Button>
-          </div>
-        </DialogHeader>
+    <div className="flex h-[var(--app-content-h)] min-h-[600px] w-full flex-col overflow-hidden bg-background">
+      <header className="flex flex-row items-center justify-between border-b border-border/60 px-5 py-4 text-left">
+        <div>
+          <h1 className="text-sm font-semibold tracking-tight">{project.title}</h1>
+          <p className="text-xs text-muted-foreground">
+            Human-directed production · revision {project.revision}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{project.production.workflowStage.replaceAll('_', ' ')}</Badge>
+          <Link
+            href={origin === 'library' ? '/library' : '/ai-studio'}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5')}
+          >
+            <ArrowLeft className="size-3.5" /> Back to {origin === 'library' ? 'Library' : 'Canvas'}
+          </Link>
+        </div>
+      </header>
 
-        <nav className="grid grid-cols-5 border-b border-border/60 bg-muted/20 px-5">
-          {STAGES.map((stage, index) => {
-            const completed =
-              stage.id === 'style'
-                ? style?.status === 'approved'
-                : stage.id === 'frames'
-                  ? counts.shots > 0 && counts.frames === counts.shots
-                  : stage.id === 'motion'
-                    ? counts.shots > 0 && counts.motion === counts.shots
-                    : stage.id === 'masters'
-                      ? counts.shots > 0 && counts.masters === counts.shots
+      <nav className="grid grid-cols-3 border-b border-border/60 bg-muted/20 px-5 sm:grid-cols-6">
+        {STAGES.map((stage, index) => {
+          const completed =
+            stage.id === 'style'
+              ? style?.status === 'approved'
+              : stage.id === 'frames'
+                ? counts.shots > 0 && counts.frames === counts.shots
+                : stage.id === 'motion'
+                  ? counts.shots > 0 && counts.motion === counts.shots
+                  : stage.id === 'masters'
+                    ? counts.shots > 0 && counts.masters === counts.shots
+                    : stage.id === 'sound'
+                      ? soundPlan?.status === 'approved'
                       : project.production.workflowStage === 'complete';
-            return (
-              <button
-                key={stage.id}
-                type="button"
-                onClick={() => setActiveStage(stage.id)}
-                className={`flex items-center justify-center gap-2 border-b-2 px-3 py-3 text-xs transition-colors ${activeStage === stage.id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          return (
+            <button
+              key={stage.id}
+              type="button"
+              onClick={() => setActiveStage(stage.id)}
+              className={`flex items-center justify-center gap-2 border-b-2 px-3 py-3 text-xs transition-colors ${activeStage === stage.id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              <span
+                className={`flex size-5 items-center justify-center rounded-full text-2xs ${completed ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
               >
-                <span
-                  className={`flex size-5 items-center justify-center rounded-full text-2xs ${completed ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+                {completed ? <Check className="size-3" /> : index + 1}
+              </span>
+              {stage.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <main className="min-h-0 flex-1 overflow-y-auto bg-muted/10 p-5">
+        {activeStage === 'style' ? (
+          <div className="mx-auto max-w-4xl space-y-4">
+            <div className="rounded-xl border border-border/60 bg-card p-5">
+              <h2 className="font-medium">Script</h2>
+              <Textarea
+                className="mt-4"
+                value={scriptText}
+                onChange={(event) => setScriptText(event.target.value)}
+                rows={8}
+                placeholder="Paste or write the source script"
+              />
+              <div className="mt-3 flex justify-end">
+                <Button
+                  variant="outline"
+                  disabled={Boolean(busy)}
+                  onClick={() =>
+                    void commit({
+                      commandType: 'set_production_script',
+                      sourceScript: scriptText,
+                    })
+                  }
                 >
-                  {completed ? <Check className="size-3" /> : index + 1}
-                </span>
-                {stage.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        <main className="min-h-0 flex-1 overflow-y-auto bg-muted/10 p-5">
-          {activeStage === 'style' ? (
-            <div className="mx-auto max-w-4xl space-y-4">
-              <div className="rounded-xl border border-border/60 bg-card p-5">
-                <h2 className="font-medium">Script</h2>
-                <Textarea
-                  className="mt-4"
-                  value={scriptText}
-                  onChange={(event) => setScriptText(event.target.value)}
-                  rows={8}
-                  placeholder="Paste or write the source script"
-                />
-                <div className="mt-3 flex justify-end">
-                  <Button
-                    variant="outline"
-                    disabled={Boolean(busy)}
-                    onClick={() =>
-                      void commit({
-                        commandType: 'set_production_script',
-                        sourceScript: scriptText,
-                      })
-                    }
-                  >
-                    Save script
-                  </Button>
-                </div>
-              </div>
-              <div className="rounded-xl border border-border/60 bg-card p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="font-medium">Style contract</h2>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Lock the lens, light, palette, texture, blocking, and atmosphere before
-                      spending on motion.
-                    </p>
-                  </div>
-                  <Badge>{style?.status ?? 'not extracted'}</Badge>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {pinnedPool.map((source) => (
-                    <Badge key={source.nodeId} variant="outline">
-                      {source.label}
-                    </Badge>
-                  ))}
-                  {pinnedPool.length === 0 ? (
-                    <span className="text-xs text-muted-foreground">
-                      Connect pinned Library images to the node first.
-                    </span>
-                  ) : null}
-                </div>
-                {project.production.references.map((reference) => (
-                  <label
-                    key={reference.id}
-                    className="mt-2 flex items-center justify-between gap-3 text-xs"
-                  >
-                    <span>{reference.label ?? reference.id}</span>
-                    <select
-                      aria-label={`Role for ${reference.label ?? reference.id}`}
-                      className="h-8 rounded-md border bg-background px-2"
-                      value={reference.role}
-                      onChange={(event) =>
-                        void commit({
-                          commandType: 'set_production_references',
-                          references: project.production.references.map((item) =>
-                            item.id === reference.id
-                              ? { ...item, role: event.target.value as typeof item.role }
-                              : item,
-                          ),
-                        })
-                      }
-                    >
-                      {['style', 'character', 'location', 'product', 'score', 'ambience'].map(
-                        (role) => (
-                          <option key={role} value={role}>
-                            {role}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                  </label>
-                ))}
-                <div className="mt-4 flex gap-2">
-                  <Button
-                    variant="outline"
-                    disabled={pinnedPool.length === 0 || Boolean(busy)}
-                    onClick={() =>
-                      void commit({
-                        commandType: 'set_production_references',
-                        references: pinnedPool.map((source) => {
-                          const existing = project.production.references.find(
-                            (reference) => reference.id === source.nodeId,
-                          );
-                          return {
-                            id: source.nodeId,
-                            role: existing?.role ?? ('style' as const),
-                            asset: {
-                              assetId: source.sourceAssetId as string,
-                              versionId: source.sourceVersionId as string,
-                            },
-                            label: source.label,
-                          };
-                        }),
-                      })
-                    }
-                  >
-                    Pin connected references
-                  </Button>
-                  <Button
-                    disabled={
-                      !project.production.references.some(
-                        (reference) => reference.role === 'style',
-                      ) || Boolean(busy)
-                    }
-                    onClick={() => void generate('style_extract')}
-                  >
-                    {busy === 'style_extract:project' ? (
-                      <Loader2 className="animate-spin" />
-                    ) : (
-                      <Sparkles />
-                    )}
-                    Extract style
-                  </Button>
-                </div>
-              </div>
-              {style ? (
-                <div className="rounded-xl border border-border/60 bg-card p-5">
-                  <Textarea
-                    value={styleText}
-                    onChange={(event) => setStyleText(event.target.value)}
-                    rows={8}
-                    disabled={style.status === 'approved'}
-                  />
-                  <div className="mt-3 flex justify-end gap-2">
-                    {style.status === 'draft' ? (
-                      <>
-                        <Button
-                          variant="outline"
-                          disabled={!styleText.trim() || Boolean(busy)}
-                          onClick={() =>
-                            void commit({
-                              commandType: 'set_style_contract',
-                              styleContract: { ...style, lockedText: styleText, status: 'draft' },
-                            })
-                          }
-                        >
-                          Save edits
-                        </Button>
-                        <Button
-                          disabled={Boolean(busy)}
-                          onClick={() => void commit({ commandType: 'approve_style_contract' })}
-                        >
-                          <Check /> Approve style
-                        </Button>
-                      </>
-                    ) : (
-                      <Badge>
-                        <Check /> Human approved
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {activeStage === 'frames' ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="font-medium">Frames first</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Explore composition cheaply, then choose one keeper per shot.
-                  </p>
-                </div>
-                <Button variant="outline" onClick={addShot} disabled={Boolean(busy)}>
-                  <ImageIcon /> Add shot
+                  Save script
                 </Button>
               </div>
-              {takeGrid('frame', 'frame')}
             </div>
-          ) : null}
-          {activeStage === 'motion' ? takeGrid('motion_draft', 'motion_draft') : null}
-          {activeStage === 'masters' ? takeGrid('motion_master', 'motion_master') : null}
-          {activeStage === 'assembly' ? (
-            <EditorProjectV2Assembly
-              project={project}
-              brandId={brandId}
-              // The WHOLE connected pool, not just the Library-pinned part: the media bin
-              // is where a wired clip has to become visible, and filtering it to pinned
-              // sources is what made a connected video invisible in Assembly (#294).
-              pool={pool}
-              busy={Boolean(busy)}
-              canUndo={undoStack.at(-1)?.appliedFingerprint === project.fingerprint}
-              canRedo={redoStack.at(-1)?.redoFingerprint === project.fingerprint}
-              canRender={counts.shots > 0 && counts.masters === counts.shots}
-              onApply={(operation) => void applyAssemblyOperation(operation)}
-              onUndo={() => void undoAssembly()}
-              onRedo={() => void redoAssembly()}
-              onRender={queueRender}
-            />
-          ) : null}
-        </main>
-      </DialogContent>
-    </Dialog>
+            <div className="rounded-xl border border-border/60 bg-card p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="font-medium">Style contract</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Lock the lens, light, palette, texture, blocking, and atmosphere before spending
+                    on motion.
+                  </p>
+                </div>
+                <Badge>{style?.status ?? 'not extracted'}</Badge>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {pinnedPool.map((source) => (
+                  <Badge key={source.nodeId} variant="outline">
+                    {source.label}
+                  </Badge>
+                ))}
+                {pinnedPool.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">
+                    Connect pinned Library images to the node first.
+                  </span>
+                ) : null}
+              </div>
+              {project.production.references.map((reference) => (
+                <label
+                  key={reference.id}
+                  className="mt-2 flex items-center justify-between gap-3 text-xs"
+                >
+                  <span>{reference.label ?? reference.id}</span>
+                  <select
+                    aria-label={`Role for ${reference.label ?? reference.id}`}
+                    className="h-8 rounded-md border bg-background px-2"
+                    value={reference.role}
+                    onChange={(event) =>
+                      void commit({
+                        commandType: 'set_production_references',
+                        references: project.production.references.map((item) =>
+                          item.id === reference.id
+                            ? { ...item, role: event.target.value as typeof item.role }
+                            : item,
+                        ),
+                      })
+                    }
+                  >
+                    {['style', 'character', 'location', 'product', 'score', 'ambience'].map(
+                      (role) => (
+                        <option key={role} value={role}>
+                          {role}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+              ))}
+              <div className="mt-4 flex gap-2">
+                <Button
+                  variant="outline"
+                  disabled={pinnedPool.length === 0 || Boolean(busy)}
+                  onClick={() =>
+                    void commit({
+                      commandType: 'set_production_references',
+                      references: pinnedPool.map((source) => {
+                        const existing = project.production.references.find(
+                          (reference) => reference.id === source.nodeId,
+                        );
+                        return {
+                          id: source.nodeId,
+                          role: existing?.role ?? ('style' as const),
+                          asset: {
+                            assetId: source.sourceAssetId as string,
+                            versionId: source.sourceVersionId as string,
+                          },
+                          label: source.label,
+                        };
+                      }),
+                    })
+                  }
+                >
+                  Pin connected references
+                </Button>
+                <Button
+                  disabled={
+                    !project.production.references.some(
+                      (reference) => reference.role === 'style',
+                    ) || Boolean(busy)
+                  }
+                  onClick={() => void generate('style_extract')}
+                >
+                  {busy === 'style_extract:project' ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Sparkles />
+                  )}
+                  Extract style
+                </Button>
+              </div>
+            </div>
+            {style ? (
+              <div className="rounded-xl border border-border/60 bg-card p-5">
+                <Textarea
+                  value={styleText}
+                  onChange={(event) => setStyleText(event.target.value)}
+                  rows={8}
+                  disabled={style.status === 'approved'}
+                />
+                <div className="mt-3 flex justify-end gap-2">
+                  {style.status === 'draft' ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        disabled={!styleText.trim() || Boolean(busy)}
+                        onClick={() =>
+                          void commit({
+                            commandType: 'set_style_contract',
+                            styleContract: { ...style, lockedText: styleText, status: 'draft' },
+                          })
+                        }
+                      >
+                        Save edits
+                      </Button>
+                      <Button
+                        disabled={Boolean(busy)}
+                        onClick={() => void commit({ commandType: 'approve_style_contract' })}
+                      >
+                        <Check /> Approve style
+                      </Button>
+                    </>
+                  ) : (
+                    <Badge>
+                      <Check /> Human approved
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {activeStage === 'frames' ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-medium">Frames first</h2>
+                <p className="text-xs text-muted-foreground">
+                  Explore composition cheaply, then choose one keeper per shot.
+                </p>
+              </div>
+              <Button variant="outline" onClick={addShot} disabled={Boolean(busy)}>
+                <ImageIcon /> Add shot
+              </Button>
+            </div>
+            {takeGrid('frame', 'frame')}
+          </div>
+        ) : null}
+        {activeStage === 'motion' ? takeGrid('motion_draft', 'motion_draft') : null}
+        {activeStage === 'masters' ? takeGrid('motion_master', 'motion_master') : null}
+        {activeStage === 'sound' ? (
+          <div className="mx-auto grid max-w-5xl gap-px border border-border/60 bg-border/60 lg:grid-cols-2">
+            <section className="space-y-4 bg-background p-5">
+              <div>
+                <h2 className="font-medium">Voiceover</h2>
+                <p className="text-xs text-muted-foreground">
+                  Generate a WAV take from the approved script.
+                </p>
+              </div>
+              <Textarea
+                value={narrationText}
+                onChange={(event) => setNarrationText(event.target.value)}
+                rows={8}
+              />
+              <Button
+                disabled={!narrationText.trim() || Boolean(busy)}
+                onClick={() => void generateSound('narration')}
+              >
+                <Sparkles /> Generate narration
+              </Button>
+            </section>
+            <section className="space-y-4 bg-background p-5">
+              <div>
+                <h2 className="font-medium">Music and beat grid</h2>
+                <p className="text-xs text-muted-foreground">
+                  Set musical direction, then correct BPM and offset before syncing cuts.
+                </p>
+              </div>
+              <Textarea
+                value={musicPrompt}
+                onChange={(event) => setMusicPrompt(event.target.value)}
+                rows={4}
+                placeholder="Percussive, restrained, no vocals"
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  aria-label="BPM"
+                  type="number"
+                  min="30"
+                  max="300"
+                  value={bpm}
+                  onChange={(event) => setBpm(event.target.value)}
+                />
+                <Input
+                  aria-label="Beat offset seconds"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={beatOffset}
+                  onChange={(event) => setBeatOffset(event.target.value)}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  disabled={!musicPrompt.trim() || Boolean(busy)}
+                  onClick={() => void generateSound('music')}
+                >
+                  <Sparkles /> Generate music
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={!Number(bpm) || Boolean(busy)}
+                  onClick={() => {
+                    const beats = buildBeatMarkers({
+                      durationSec: project.durationSec,
+                      bpm: Number(bpm),
+                      offsetSec: Number(beatOffset) || 0,
+                    });
+                    void commitCommands(
+                      [
+                        ...project.markers
+                          .filter((marker) => marker.kind === 'beat')
+                          .map((marker) => ({
+                            commandType: 'remove_marker' as const,
+                            markerId: marker.id,
+                          })),
+                        ...beats.map((marker) => ({
+                          commandType: 'upsert_marker' as const,
+                          marker,
+                        })),
+                        {
+                          commandType: 'set_sound_plan' as const,
+                          soundPlan: { ...soundDraft(), beatConfidence: 1 },
+                        },
+                      ],
+                      'Beat Sync',
+                    );
+                  }}
+                >
+                  <Waves /> Beat Sync
+                </Button>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-border/60 pt-4">
+                <Button
+                  variant="outline"
+                  disabled={Boolean(busy)}
+                  onClick={() =>
+                    void commit({ commandType: 'set_sound_plan', soundPlan: soundDraft() })
+                  }
+                >
+                  Save sound plan
+                </Button>
+                <Button
+                  disabled={Boolean(busy)}
+                  onClick={() =>
+                    void commit({
+                      commandType: 'set_sound_plan',
+                      soundPlan: soundDraft('approved'),
+                    })
+                  }
+                >
+                  <Check /> Approve sound
+                </Button>
+              </div>
+            </section>
+          </div>
+        ) : null}
+        {activeStage === 'assembly' ? (
+          <EditorProjectV2Assembly
+            project={project}
+            brandId={brandId}
+            // The WHOLE connected pool, not just the Library-pinned part: the media bin
+            // is where a wired clip has to become visible, and filtering it to pinned
+            // sources is what made a connected video invisible in Assembly (#294).
+            pool={pool}
+            busy={Boolean(busy)}
+            canUndo={undoStack.at(-1)?.appliedFingerprint === project.fingerprint}
+            canRedo={redoStack.at(-1)?.redoFingerprint === project.fingerprint}
+            canRender={counts.shots > 0 && counts.masters === counts.shots}
+            initialTimelineMode={view === 'motion' ? 'motion' : 'edit'}
+            onApply={(operation) => void applyAssemblyOperation(operation)}
+            onUndo={() => void undoAssembly()}
+            onRedo={() => void redoAssembly()}
+            onRender={queueRender}
+          />
+        ) : null}
+      </main>
+    </div>
   );
 }

@@ -99,10 +99,7 @@ try {
     surfaced === 'Forbidden',
     `surfaces the function's own reason to the toast (got "${surfaced}")`,
   );
-  assert(
-    (await readTier()) === originalTier,
-    'a refused call leaves the brand tier untouched',
-  );
+  assert((await readTier()) === originalTier, 'a refused call leaves the brand tier untouched');
 
   admin = await sessionFor(ADMIN_EMAIL);
   const accepted = await admin.functions.invoke('admin-update-tier', {

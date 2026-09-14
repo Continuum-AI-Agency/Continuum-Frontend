@@ -3,10 +3,10 @@
 import { type MediaAsset, type TemplateSource, templateNameProblem } from '@continuum/contracts';
 import { AlertTriangle, Clock3, Layers, Loader2, Send, Type } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import { TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast-imperative';
 import {
   fetchTemplateFonts,
   sendTemplateToForge,

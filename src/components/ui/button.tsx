@@ -1,5 +1,24 @@
-// base-nova (Base UI) button. `brand` and `success` are Continuum variants with no upstream
+// base-nova (Base UI) button. `success` and `cta` are Continuum variants with no upstream
 // equivalent; everything else tracks the shadcn base-nova registry so future `shadcn add` diffs stay small.
+//
+// Filled variants are quiet at rest — a 14% tint, a hairline, and a coloured label — and a
+// muted brand colour blooms in from the pointer on hover. See `@utility btn-fill` in
+// globals.css for the choreography and `PointerOrigin` for the bloom's origin. `cta` is the
+// one exception: marketing CTAs stay solid at rest, so the bloom only deepens them.
+//
+// Every mix target here is hue-neutral (#808080, black, white) on purpose. Mixing toward
+// `--muted-foreground` or light-mode `--foreground` LOOKS equivalent and is not: both carry
+// violet chroma, and in oklch that rotates hue — it turned the destructive fill pink and the
+// success fill teal. Dark mode's `--foreground` is near-neutral, so it is safe there only.
+//
+// Two label colours here look wrong and are not. `text-primary` and `text-secondary` are
+// CUSTOM utilities in globals.css (near-black and grey); the Tailwind token utilities of the
+// same name lose to them. A variant that wants the actual brand hue must spell it
+// `text-[var(--primary)]` or the label silently renders as body text.
+//
+// `--primary-foreground` is #0b1020 in dark, not white: white on dark `--primary` (#7c6fff)
+// measures 3.77:1 against a 4.5:1 floor. That is fixed at the token in globals.css, so every
+// `bg-primary` surface inherits it — this file needs no per-variant dark override.
 //
 // The disabled fade is gated on `not-aria-busy`. Element-wide opacity dims a filled button's
 // label and its fill together, so their contrast with each other collapses toward 1:1 — at 40%
@@ -14,24 +33,24 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:not-aria-busy:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap btn-fill outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:not-aria-busy:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/80',
+        default:
+          'border-primary/20 bg-primary/14 text-[color-mix(in_oklch,var(--primary),var(--foreground)_22%)] [--btn-fill:color-mix(in_oklch,var(--primary),#808080_22%)] hover:text-primary-foreground',
         outline:
-          'border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50',
+          'border-border bg-background [--btn-fill:var(--muted)] hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30',
         secondary:
-          'bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
+          'border-secondary/20 bg-secondary/14 text-[color-mix(in_oklch,var(--secondary),var(--foreground)_40%)] [--btn-fill:color-mix(in_oklch,var(--secondary),#808080_22%)] hover:text-secondary-foreground aria-expanded:bg-secondary/14',
         ghost:
-          'hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50',
+          '[--btn-fill:var(--muted)] hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground',
         destructive:
-          'bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40',
-        link: 'text-primary underline-offset-4 hover:underline',
-        brand:
-          'bg-[var(--cs-violet,#5a39ff)] text-white hover:bg-[var(--cs-violet,#5a39ff)]/90 focus-visible:ring-[var(--cs-violet,#5a39ff)]/20',
+          'border-destructive/20 bg-destructive/14 text-[color-mix(in_oklch,var(--destructive),black_26%)] [--btn-fill:color-mix(in_oklch,color-mix(in_oklch,var(--destructive),#808080_22%),black_14%)] hover:text-destructive-foreground focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:text-[color-mix(in_oklch,var(--destructive),var(--foreground)_18%)] dark:[--btn-fill:color-mix(in_oklch,var(--destructive),#808080_22%)] dark:focus-visible:ring-destructive/40',
         success:
-          'bg-[var(--cs-success,#53a88a)] text-white hover:bg-[var(--cs-success,#53a88a)]/90',
+          'border-success/20 bg-success/14 text-[color-mix(in_oklch,var(--success),black_22%)] [--btn-fill:color-mix(in_oklch,color-mix(in_oklch,var(--success),#808080_22%),black_14%)] hover:text-success-foreground dark:text-[color-mix(in_oklch,var(--success),var(--foreground)_18%)] dark:[--btn-fill:color-mix(in_oklch,var(--success),#808080_22%)]',
+        link: 'text-[var(--primary)] underline-offset-4 hover:underline',
+        cta: 'bg-primary text-primary-foreground [--btn-fill:color-mix(in_oklch,var(--primary),black_10%)] dark:[--btn-fill:color-mix(in_oklch,var(--primary),white_10%)]',
       },
       size: {
         default:
@@ -67,6 +86,7 @@ function Button({
   return (
     <ButtonPrimitive
       data-slot="button"
+      data-variant={variant}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

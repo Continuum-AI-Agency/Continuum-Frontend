@@ -3,8 +3,11 @@
 import { classifyLibraryFile, isLibraryFontFile } from '@continuum/contracts';
 import { useCallback, useRef, useState } from 'react';
 
+import { uploadCompanionPreview } from '@/lib/library/assetPreview';
+import { partitionSidecarUploads } from '@/lib/library/sidecarUploads';
 import { uploadBrandFont } from '@/lib/library/templateSources';
 import { type UploadResumeState, uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 const MAX_CONCURRENCY = 3;
 export type UploadItem = {
@@ -71,7 +74,7 @@ export function useMediaUpload(brandId: string) {
           setTimeout(() => setUploads((prev) => prev.filter((u) => u.id !== id)), 2500);
           return;
         }
-        await uploadMediaAsset({
+        const uploaded = await uploadMediaAsset({
           file,
           brandId,
           signal: controller.signal,
@@ -86,6 +89,7 @@ export function useMediaUpload(brandId: string) {
         jobs.current.delete(id);
         // Drop the chip a moment after success so the strip self-clears.
         setTimeout(() => setUploads((prev) => prev.filter((u) => u.id !== id)), 2500);
+        return uploaded;
       } catch (err) {
         if (job.cancelled) return;
         if ((err as { name?: string }).name === 'AbortError') {
@@ -105,10 +109,12 @@ export function useMediaUpload(brandId: string) {
       const files = Array.from(fileList ?? []).filter(isAcceptedUploadFile);
       if (files.length === 0) return;
 
+      const { pairs, rest } = partitionSidecarUploads(files);
       const queued = files.map((file) => {
         counter.current += 1;
         return { file, id: `up-${counter.current}` };
       });
+      const idFor = new Map(queued.map((item) => [item.file, item.id]));
       setUploads((prev) => [
         ...queued.map(({ file, id }) => ({
           id,
@@ -123,18 +129,51 @@ export function useMediaUpload(brandId: string) {
         jobs.current.set(id, { file, resume: null, controller: null, cancelled: false });
       }
 
-      // Drain the queue with a fixed number of workers.
+      const work: Array<() => Promise<void>> = [
+        ...pairs.map((pair) => async () => {
+          const sourceId = idFor.get(pair.source);
+          const companionId = idFor.get(pair.companion);
+          if (!sourceId || !companionId) return;
+          const uploaded = await uploadOne(pair.source, sourceId);
+          if (!uploaded?.assetId || !uploaded.versionId) {
+            patch(companionId, { status: 'error', error: 'Could not attach sidecar preview' });
+            return;
+          }
+          try {
+            await uploadCompanionPreview({
+              file: pair.companion,
+              brandId,
+              assetId: uploaded.assetId,
+              assetVersionId: uploaded.versionId,
+              client: createSupabaseBrowserClient(),
+            });
+            patch(companionId, { status: 'done', progress: 100 });
+            jobs.current.delete(companionId);
+            setTimeout(() => setUploads((prev) => prev.filter((u) => u.id !== companionId)), 2500);
+          } catch (err) {
+            patch(companionId, {
+              status: 'error',
+              error: err instanceof Error ? err.message : 'Could not attach sidecar preview',
+            });
+          }
+        }),
+        ...rest.map((file) => async () => {
+          const id = idFor.get(file);
+          if (id) await uploadOne(file, id);
+        }),
+      ];
+
       let cursor = 0;
       const worker = async () => {
-        while (cursor < queued.length) {
-          const current = queued[cursor];
+        while (cursor < work.length) {
+          const current = work[cursor];
           cursor += 1;
-          await uploadOne(current.file, current.id);
+          await current();
         }
       };
-      await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, queued.length) }, worker));
+      await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, work.length) }, worker));
     },
-    [uploadOne],
+    [brandId, patch, uploadOne],
   );
 
   const pauseUpload = useCallback((id: string) => {

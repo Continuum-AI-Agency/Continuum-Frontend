@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react';
 
+import { Button } from '@/components/ui/button';
+
 export default function PrimitivesError({
   error,
   reset,
@@ -21,12 +23,9 @@ export default function PrimitivesError({
       <p className="max-w-md text-center text-sm text-zinc-500 dark:text-zinc-400">
         Primitives encountered an error. Your data is safe.
       </p>
-      <button
-        onClick={reset}
-        className="inline-flex h-9 items-center rounded-lg bg-[#5A48F9] px-4 text-sm font-medium text-white transition-colors hover:bg-[#4a3ad4]"
-      >
+      <Button onClick={reset} size="lg">
         Try again
-      </button>
+      </Button>
     </div>
   );
 }

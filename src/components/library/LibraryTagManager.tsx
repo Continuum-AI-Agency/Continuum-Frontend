@@ -2,7 +2,6 @@
 
 import { Tags } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast-imperative';
 import {
   mergeLibraryTagsOperation,
   renameLibraryTagOperation,

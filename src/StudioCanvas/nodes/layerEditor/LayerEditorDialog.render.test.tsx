@@ -78,6 +78,14 @@ function open() {
   return { view, frame: view.getByTestId('layer-frame') };
 }
 
+describe('layer motion dock', () => {
+  it('is always on the stage so sampled layers have a playhead', () => {
+    const { view } = open();
+    expect(view.getByTestId('layer-motion-dock')).toBeTruthy();
+    expect(view.getByLabelText('Layer motion playhead')).toBeTruthy();
+  });
+});
+
 /** Press first: that selects, which legitimately changes the panel's props exactly once. */
 const pressLayer = (frame: Element) =>
   fireEvent.pointerDown(frame, { pointerId: 1, clientX: 100, clientY: 100, button: 0 });

@@ -147,7 +147,9 @@ describe('PipelineContract', () => {
       />,
     );
 
-    expect(screen.getByText('Turns an approved product reference into two launch heroes.')).toBeDefined();
+    expect(
+      screen.getByText('Turns an approved product reference into two launch heroes.'),
+    ).toBeDefined();
     expect(screen.getByText(/The user needs launch hero images/)).toBeDefined();
     expect(screen.getByText(/State the audience and campaign objective/)).toBeDefined();
     cleanup();

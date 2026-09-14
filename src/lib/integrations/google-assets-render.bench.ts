@@ -14,9 +14,9 @@
 // than the ambient environment: Bun auto-loads .env.local, which points at the
 // local stack and would green this bench against a DB holding none of these rows.
 
-import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createClient } from '@supabase/supabase-js';
 
 import { assetFallbackLabel, formatGoogleCustomerId, resolveAssetLabel } from './assetLabel';
 
@@ -184,9 +184,8 @@ if (yt.length > 0) {
 // `if (!platformKey) continue`. Minting a real session is the only way to grade
 // what the page actually receives.
 const ownerId = ads[0]?.integration_id
-  ? (
-      await db.from('user_integrations').select('user_id').eq('id', ads[0].integration_id).single()
-    ).data?.user_id
+  ? (await db.from('user_integrations').select('user_id').eq('id', ads[0].integration_id).single())
+      .data?.user_id
   : undefined;
 
 // The shared map is the thing both RPCs delegate to, so grade it over EVERY type

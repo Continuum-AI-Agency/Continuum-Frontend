@@ -12,6 +12,7 @@
 // and a row that has already been undone renders as "reverted" instead of offering the button
 // again.
 
+import type { OptimizerFeedWindowDays } from '@continuum/contracts';
 import { ArrowRightIcon, ListChecksIcon, Undo2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { EmptyState } from '@/components/shared/state/EmptyState';
@@ -25,13 +26,7 @@ import {
   revertScopeOf,
   revertState,
 } from './actionRows';
-import {
-  FeedFooter,
-  FeedSkeleton,
-  PortfolioFilter,
-  ReceiptToken,
-  RowHeader,
-} from './feedChrome';
+import { FeedFooter, FeedSkeleton, PortfolioFilter, ReceiptToken, RowHeader } from './feedChrome';
 import { ALL_PORTFOLIOS, distinctPortfolioNames, filterByPortfolio } from './logFilters';
 import { OptimizerReadError } from './OptimizerReadError';
 import { RevertApplyDialog } from './RevertApplyDialog';
@@ -43,6 +38,7 @@ type OptimizerActionFeedProps = {
    *  currency of the account being viewed — not one carried per row. formatCurrency falls
    *  back to the USD symbol when it is null; the amounts themselves are always exact. */
   currency: string | null;
+  windowDays?: OptimizerFeedWindowDays;
 };
 
 const FAMILY_LABEL: Record<string, string> = {
@@ -141,8 +137,12 @@ export function ActionRow({
   );
 }
 
-export function OptimizerActionFeed({ brandId, currency }: OptimizerActionFeedProps) {
-  const actionsQuery = useOptimizerActions(brandId);
+export function OptimizerActionFeed({
+  brandId,
+  currency,
+  windowDays = 7,
+}: OptimizerActionFeedProps) {
+  const actionsQuery = useOptimizerActions(brandId, windowDays);
   const [portfolio, setPortfolio] = useState<string>(ALL_PORTFOLIOS);
 
   if (actionsQuery.isLoading) return <FeedSkeleton />;

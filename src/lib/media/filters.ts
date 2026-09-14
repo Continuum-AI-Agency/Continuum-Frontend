@@ -164,6 +164,11 @@ export function buildLibraryBrowseParams(
   }
   if (query.leadingOnly) params.set('leadingOnly', 'true');
   if (query.templateOnly) params.set('templateOnly', 'true');
+  if (query.destination) params.set('destination', query.destination);
+  setList(params, 'aspectRatios', query.aspectRatios);
+  if (query.previewFrame && query.previewFrame !== 'native') {
+    params.set('frame', query.previewFrame);
+  }
   setList(params, 'ratios', query.ratios);
   setList(params, 'fonts', query.fonts);
   if (query.search) params.set('search', query.search);

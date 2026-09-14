@@ -20,11 +20,11 @@ export function ExemplarQuickLook({ exemplar }: { exemplar: ExemplarView }) {
     <div className="flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+          <span className="rounded bg-accent/15 px-1.5 py-0.5 text-2xs font-medium uppercase tracking-wide text-accent">
             {exemplar.kind}
           </span>
           {exemplar.surface ? (
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="text-2xs uppercase tracking-wide text-muted-foreground">
               {exemplar.surface}
             </span>
           ) : null}

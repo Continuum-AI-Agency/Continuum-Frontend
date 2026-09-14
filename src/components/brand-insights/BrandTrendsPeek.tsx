@@ -23,7 +23,7 @@ export function BrandTrendsPeek({
   return (
     <div className="flex flex-col gap-2 p-3">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-muted-foreground text-[10px] font-semibold tracking-wide uppercase">
+        <p className="text-muted-foreground text-2xs font-semibold tracking-wide uppercase">
           Brand insights
         </p>
         {weekLabel ? (

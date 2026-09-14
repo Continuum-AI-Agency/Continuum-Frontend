@@ -1,9 +1,14 @@
 import { z } from 'zod';
+import {
+  compositionSpecSchema,
+  hyperframesEnergySchema,
+  sceneSpecSchema,
+} from '../streaming/hyperframes';
 import { brandBookPieceKindSchema } from './brand-enforcement';
 import { shaderStackV1Schema } from './shader-stack';
 
 export const HYPERFRAMES_AGENT_NODE_TYPE = 'hyperframesAgent' as const;
-export const HYPERFRAMES_AGENT_MODEL = 'gemini-3.5-flash-lite' as const;
+export const HYPERFRAMES_AGENT_MODEL = 'gemini-3.8-flash' as const;
 export const HYPERFRAMES_AGENT_MEDIA_LIMIT = 20;
 /** Creative-direction skills a single turn may carry, matching the other generator nodes. */
 export const HYPERFRAMES_AGENT_SKILL_LIMIT = 3;
@@ -32,16 +37,69 @@ export type HyperframesStoragePointer = z.infer<typeof hyperframesStoragePointer
 export const hyperframesAgentAssetRefSchema = z
   .object({
     assetId: z.string().min(1),
+    assetVersionId: z.string().min(1).optional(),
     kind: z.enum(['image', 'video', 'audio']),
   })
   .strict();
 export type HyperframesAgentAssetRef = z.infer<typeof hyperframesAgentAssetRefSchema>;
+
+export const hyperframesRevisionTargetSchema = z
+  .object({
+    revisionId: z.string().min(1),
+    sceneId: z.string().min(1),
+    criterionId: z.string().min(1),
+    blocker: z.string().trim().min(1).max(1_000),
+  })
+  .strict();
+export type HyperframesRevisionTarget = z.infer<typeof hyperframesRevisionTargetSchema>;
+
+export const hyperframesModelProvenanceSchema = z
+  .object({
+    draftModelId: z.string().min(1),
+    repairModelIds: z.array(z.string().min(1)).max(2),
+    criticModelId: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+export type HyperframesModelProvenance = z.infer<typeof hyperframesModelProvenanceSchema>;
+
+export const hyperframesQualityBlockerSchema = z
+  .object({
+    sceneId: z.string().min(1).nullable(),
+    criterionId: z.string().min(1),
+    message: z.string().trim().min(1).max(1_000),
+  })
+  .strict();
+export type HyperframesQualityBlocker = z.infer<typeof hyperframesQualityBlockerSchema>;
+
+export const hyperframesRubricVerdictSchema = z
+  .object({
+    criterionId: z.string().min(1),
+    label: z.string().min(1),
+    score: z.number().min(0).max(1),
+    observation: z.string().max(2_000),
+  })
+  .strict();
+
+export const hyperframesQualitySummarySchema = z
+  .object({
+    revisionId: z.string().min(1),
+    gate: z.enum(['passed', 'failed']),
+    blockers: z.array(hyperframesQualityBlockerSchema).max(50),
+    advisoryScore: z.number().min(0).max(1).nullable(),
+    criticGating: z.literal('advisory-only'),
+    rubric: z.array(hyperframesRubricVerdictSchema).max(10).default([]),
+    scenes: z.array(sceneSpecSchema).max(8),
+    modelProvenance: hyperframesModelProvenanceSchema,
+  })
+  .strict();
+export type HyperframesQualitySummary = z.infer<typeof hyperframesQualitySummarySchema>;
 
 export const hyperframesAgentNodeDataSchema = z
   .object({
     label: z.string().min(1).default('HyperFrames Agent'),
     model: z.literal(HYPERFRAMES_AGENT_MODEL).default(HYPERFRAMES_AGENT_MODEL),
     prompt: z.string().default(''),
+    energy: hyperframesEnergySchema.default('balanced'),
     aspectRatio: hyperframesAspectRatioSchema.default('16:9'),
     durationSeconds: z.number().int().min(5).max(30).default(10),
     fps: z.literal(30).default(30),
@@ -64,6 +122,8 @@ export const hyperframesAgentNodeDataSchema = z
     generatedVideoUrl: z.string().url().optional(),
     progress: z.number().min(0).max(1).optional(),
     error: z.string().optional(),
+    qualitySummary: hyperframesQualitySummarySchema.optional(),
+    revisionTarget: hyperframesRevisionTargetSchema.optional(),
   })
   .passthrough();
 export type HyperframesAgentNodeData = z.infer<typeof hyperframesAgentNodeDataSchema>;
@@ -85,10 +145,12 @@ export const hyperframesAgentTurnRequestSchema = z
     // `resolveHyperframesSkillIds` reads empty as "use the default skill"; the two
     // fields look alike and mean opposite things when empty.
     brandBookPieces: z.array(brandBookPieceKindSchema).max(8).optional(),
+    energy: hyperframesEnergySchema.default('balanced'),
     aspectRatio: hyperframesAspectRatioSchema.default('16:9'),
     durationSeconds: z.number().int().min(5).max(30).default(10),
     resolution: hyperframesResolutionSchema.default('1080p'),
     shaderStack: shaderStackV1Schema.optional(),
+    revisionTarget: hyperframesRevisionTargetSchema.optional(),
     idempotencyKey: z.string().min(8).max(200).optional(),
   })
   .strict();
@@ -124,6 +186,10 @@ export const hyperframesCompositionRevisionSchema = z
     sourceAssetIds: z.array(z.string().min(1)).max(HYPERFRAMES_AGENT_MEDIA_LIMIT),
     lintWarnings: z.array(z.string()),
     visualWarnings: z.array(z.string()),
+    compositionSpec: compositionSpecSchema.optional(),
+    qualityEvaluation: hyperframesQualitySummarySchema.optional(),
+    modelProvenance: hyperframesModelProvenanceSchema.optional(),
+    designFingerprint: z.string().length(64).optional(),
     createdAt: z.string(),
   })
   .strict();
@@ -133,14 +199,46 @@ const reviewFrameSchema = z
   .object({
     timestampSeconds: z.number().nonnegative(),
     storage: hyperframesStoragePointerSchema,
+    kind: z.enum(['frame', 'motion_strip']).default('frame'),
   })
   .strict();
+
+export const hyperframesTemporalMetricsSchema = z
+  .object({
+    sampleFps: z.number().int().min(5).max(30),
+    adjacentFrameMad: z.array(z.number().nonnegative()).max(900),
+    sceneChanges: z.number().int().nonnegative(),
+    duplicateFrameCount: z.number().int().nonnegative(),
+    longestFrozenSeconds: z.number().nonnegative(),
+    frozenIntervals: z
+      .array(
+        z.object({
+          startSeconds: z.number().nonnegative(),
+          durationSeconds: z.number().positive(),
+        }),
+      )
+      .max(30),
+    entranceMotionSceneIds: z.array(z.string().min(1)).max(8),
+  })
+  .strict();
+export type HyperframesTemporalMetrics = z.infer<typeof hyperframesTemporalMetricsSchema>;
+
+export const hyperframesLayoutMetricsSchema = z
+  .object({
+    clippedTextIds: z.array(z.string().min(1)).max(50),
+    lowContrastTextIds: z.array(z.string().min(1)).max(50),
+    missingFontFamilies: z.array(z.string().min(1)).max(20),
+  })
+  .strict();
+export type HyperframesLayoutMetrics = z.infer<typeof hyperframesLayoutMetricsSchema>;
 
 export const hyperframesBrowserReviewRequestSchema = z
   .object({
     revisionId: z.string().min(1),
     fingerprint: z.string().length(64),
     frames: z.array(reviewFrameSchema).min(1).max(5),
+    temporalMetrics: hyperframesTemporalMetricsSchema.optional(),
+    layoutMetrics: hyperframesLayoutMetricsSchema.optional(),
     capabilities: z
       .object({
         avc: z.boolean(),
@@ -179,21 +277,45 @@ export const hyperframesRenderCompleteRequestSchema = z
     revisionId: z.string().min(1),
     fingerprint: z.string().length(64),
     assetId: z.string().min(1),
-    storage: hyperframesStoragePointerSchema,
-    durationSeconds: z.number().positive(),
-    width: z.number().int().positive(),
-    height: z.number().int().positive(),
+    // Optional for crash recovery: the Backend can reload durable media metadata by assetId.
+    storage: hyperframesStoragePointerSchema.optional(),
+    durationSeconds: z.number().positive().optional(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
   })
   .strict();
 export type HyperframesRenderCompleteRequest = z.infer<
   typeof hyperframesRenderCompleteRequestSchema
 >;
 
+export const hyperframesAssetDecisionSchema = z
+  .object({
+    assetId: z.string().min(1),
+    role: z.enum(['used', 'reference_only', 'not_used']),
+    note: z.string().trim().min(1).max(500),
+  })
+  .strict();
+export type HyperframesAssetDecision = z.infer<typeof hyperframesAssetDecisionSchema>;
+
+export const hyperframesAgentFeedbackSchema = z
+  .object({
+    summary: z.string().trim().min(1).max(1_000),
+    assetDecisions: z.array(hyperframesAssetDecisionSchema).max(HYPERFRAMES_AGENT_MEDIA_LIMIT),
+  })
+  .strict();
+export type HyperframesAgentFeedback = z.infer<typeof hyperframesAgentFeedbackSchema>;
+
 const revisionEventDataSchema = z.object({
   revisionId: z.string().min(1),
   revisionNumber: z.number().int().positive(),
   fingerprint: z.string().length(64),
   compositionStorage: hyperframesStoragePointerSchema,
+  // Optional so durable events written before model feedback shipped still replay.
+  feedback: hyperframesAgentFeedbackSchema.optional(),
+  compositionSpec: compositionSpecSchema.optional(),
+  qualityEvaluation: hyperframesQualitySummarySchema.optional(),
+  modelProvenance: hyperframesModelProvenanceSchema.optional(),
+  designFingerprint: z.string().length(64).optional(),
 });
 
 export const hyperframesAgentEventSchema = z.discriminatedUnion('type', [
@@ -238,6 +360,7 @@ export const hyperframesAgentEventSchema = z.discriminatedUnion('type', [
       // measurable when it fails, and two runs cannot be compared. Optional so
       // events written before this field stay replayable.
       craftScore: z.number().int().min(1).max(10).optional(),
+      qualitySummary: hyperframesQualitySummarySchema.optional(),
     }),
   }),
   z.object({
@@ -256,6 +379,7 @@ export const hyperframesAgentEventSchema = z.discriminatedUnion('type', [
     data: z.object({
       revisionId: z.string().min(1),
       assetId: z.string().min(1),
+      qualitySummary: hyperframesQualitySummarySchema.optional(),
       storage: hyperframesStoragePointerSchema,
     }),
   }),
@@ -266,6 +390,7 @@ export const hyperframesAgentEventSchema = z.discriminatedUnion('type', [
       sessionId: z.string().min(1),
       revisionId: z.string().min(1),
       assetId: z.string().min(1),
+      qualitySummary: hyperframesQualitySummarySchema.optional(),
     }),
   }),
   z.object({

@@ -5,6 +5,8 @@
 // (plain JSON, no React) so it serializes into the canvas node blob + the
 // splice worker message, and so it is unit-testable.
 
+import { type ShaderStackV1, sampleNumericTrack } from '@continuum/contracts';
+
 export interface ClipAdjustments {
   /** 1 = unchanged. Maps to CSS/canvas `brightness()`. */
   brightness?: number;
@@ -25,15 +27,34 @@ export interface ClipAdjustments {
 }
 
 export interface ClipTransform {
-  /** 1 = fit. Scales the frame around its center. */
+  /** 1 = fit. Scales the frame around its center. Used when scaleX/scaleY are omitted. */
   scale?: number;
+  /** Independent X scale. Wins over `scale` when set. */
+  scaleX?: number;
+  /** Independent Y scale. Wins over `scale` when set. */
+  scaleY?: number;
   /** Fraction of frame width, 0 = centered. Maps to CSS translate %. */
   offsetX?: number;
   /** Fraction of frame height, 0 = centered. */
   offsetY?: number;
   /** Clockwise degrees. */
   rotate?: number;
+  rotateX?: number;
+  rotateY?: number;
+  perspective?: number;
 }
+
+export type ResolvedClipTransform = {
+  scale: number;
+  scaleX: number;
+  scaleY: number;
+  offsetX: number;
+  offsetY: number;
+  rotate: number;
+  rotateX: number;
+  rotateY: number;
+  perspective: number;
+};
 
 export interface TextOverlay {
   id: string;
@@ -75,8 +96,6 @@ export const FILTER_PRESET_LABELS: Record<FilterPreset, string> = {
   dream: 'Dream',
 };
 
-import type { ShaderStackV1 } from '@continuum/contracts';
-
 export interface ClipEffectSpec {
   /** 0..1. Default 1. */
   opacity?: number;
@@ -106,6 +125,10 @@ export interface ClipEffectSpec {
    * stops. Takes precedence over kenBurns when present (>= 2 stops).
    */
   keyframes?: TransformKeyframe[];
+  /** Independent opacity track. Sampled at normalized clip time by `opacityFor`. */
+  opacityStops?: ClipPropertyStop[];
+  /** Independent geometric channels. Win over bundled `keyframes` when present. */
+  motionChannels?: ClipMotionChannels;
   /** Playback rate, 1 = normal. >1 faster, <1 slower. Video only. */
   speed?: number;
   text?: TextOverlay[];
@@ -171,6 +194,38 @@ export interface TransformKeyframe {
   transform?: ClipTransform;
 }
 
+/**
+ * One stop on an independent property track (opacity first). `t` is normalized
+ * clip time. Interpolation/easing/spring are sampled by `sampleNumericTrack`.
+ */
+export interface ClipPropertyStop {
+  t: number;
+  value: number;
+  interpolation?: 'hold' | 'linear' | 'bezier' | 'spring';
+  easing?: { x1: number; y1: number; x2: number; y2: number };
+  spring?: { bounce: number };
+}
+
+export type ClipMotionChannel =
+  | 'opacity'
+  | 'offsetX'
+  | 'offsetY'
+  | 'scaleX'
+  | 'scaleY'
+  | 'rotate'
+  | 'rotateX'
+  | 'rotateY';
+export interface ClipMotionChannels {
+  opacity?: ClipPropertyStop[];
+  offsetX?: ClipPropertyStop[];
+  offsetY?: ClipPropertyStop[];
+  scaleX?: ClipPropertyStop[];
+  scaleY?: ClipPropertyStop[];
+  rotate?: ClipPropertyStop[];
+  rotateX?: ClipPropertyStop[];
+  rotateY?: ClipPropertyStop[];
+}
+
 // The subset of composite/blend modes shared by canvas `globalCompositeOperation`
 // and CSS `mix-blend-mode` (identical names), so preview == export.
 export type BlendMode =
@@ -218,12 +273,50 @@ export function resolveAdjustments(spec: ClipEffectSpec | undefined): ClipAdjust
   return { ...base, ...spec.adjustments };
 }
 
-const IDENTITY_TRANSFORM: Required<ClipTransform> = { scale: 1, offsetX: 0, offsetY: 0, rotate: 0 };
+const IDENTITY_TRANSFORM: ResolvedClipTransform = {
+  scale: 1,
+  scaleX: 1,
+  scaleY: 1,
+  offsetX: 0,
+  offsetY: 0,
+  rotate: 0,
+  rotateX: 0,
+  rotateY: 0,
+  perspective: 0,
+};
 
 const lerp = (a: number, b: number, u: number): number => a + (b - a) * u;
 
-function resolveTransform(transform: ClipTransform | undefined): Required<ClipTransform> {
-  return { ...IDENTITY_TRANSFORM, ...transform };
+function resolveTransform(transform: ClipTransform | undefined): ResolvedClipTransform {
+  const scale = transform?.scale ?? 1;
+  const scaleX = transform?.scaleX ?? scale;
+  const scaleY = transform?.scaleY ?? scale;
+  return {
+    scale: Math.max(Math.abs(scaleX), Math.abs(scaleY)),
+    scaleX,
+    scaleY,
+    offsetX: transform?.offsetX ?? 0,
+    offsetY: transform?.offsetY ?? 0,
+    rotate: transform?.rotate ?? 0,
+    rotateX: transform?.rotateX ?? 0,
+    rotateY: transform?.rotateY ?? 0,
+    perspective: transform?.perspective ?? 0,
+  };
+}
+
+function sampleStops(stops: ClipPropertyStop[] | undefined, u: number, fallback: number): number {
+  if (!stops?.length) return fallback;
+  return sampleNumericTrack(
+    stops.map((stop) => ({
+      timeSec: stop.t,
+      value: stop.value,
+      interpolation: stop.interpolation ?? 'linear',
+      ...(stop.easing ? { easing: stop.easing } : {}),
+      ...(stop.spring ? { spring: stop.spring } : {}),
+    })),
+    u,
+    fallback,
+  );
 }
 
 /** Effective playback rate; always > 0. */
@@ -232,10 +325,12 @@ export function speedFor(spec: ClipEffectSpec | undefined): number {
   return speed && speed > 0 ? speed : 1;
 }
 
-/** Opacity clamped to 0..1. */
-export function opacityFor(spec: ClipEffectSpec | undefined): number {
-  const value = spec?.opacity;
-  return value === undefined ? 1 : Math.max(0, Math.min(1, value));
+/** Opacity clamped to 0..1. `u` is normalized clip time when opacity stops exist. */
+export function opacityFor(spec: ClipEffectSpec | undefined, u = 0): number {
+  const fallback = spec?.opacity;
+  const base = fallback === undefined ? 1 : Math.max(0, Math.min(1, fallback));
+  const stops = spec?.motionChannels?.opacity ?? spec?.opacityStops;
+  return Math.max(0, Math.min(1, sampleStops(stops, u, base)));
 }
 
 /**
@@ -243,23 +338,56 @@ export function opacityFor(spec: ClipEffectSpec | undefined): number {
  * (from → to) when present, otherwise returns the static transform.
  */
 function lerpTransform(
-  a: Required<ClipTransform>,
-  b: Required<ClipTransform>,
+  a: ResolvedClipTransform,
+  b: ResolvedClipTransform,
   k: number,
-): Required<ClipTransform> {
+): ResolvedClipTransform {
+  const scaleX = lerp(a.scaleX, b.scaleX, k);
+  const scaleY = lerp(a.scaleY, b.scaleY, k);
   return {
-    scale: lerp(a.scale, b.scale, k),
+    scale: Math.max(Math.abs(scaleX), Math.abs(scaleY)),
+    scaleX,
+    scaleY,
     offsetX: lerp(a.offsetX, b.offsetX, k),
     offsetY: lerp(a.offsetY, b.offsetY, k),
     rotate: lerp(a.rotate, b.rotate, k),
+    rotateX: lerp(a.rotateX, b.rotateX, k),
+    rotateY: lerp(a.rotateY, b.rotateY, k),
+    perspective: lerp(a.perspective, b.perspective, k),
   };
 }
 
 export function resolveTransformAt(
   spec: ClipEffectSpec | undefined,
   u: number,
-): Required<ClipTransform> {
+): ResolvedClipTransform {
   const clamped = Math.max(0, Math.min(1, u));
+  const channels = spec?.motionChannels;
+  const hasGeometricChannels = Boolean(
+    channels?.offsetX?.length ||
+      channels?.offsetY?.length ||
+      channels?.scaleX?.length ||
+      channels?.scaleY?.length ||
+      channels?.rotate?.length ||
+      channels?.rotateX?.length ||
+      channels?.rotateY?.length,
+  );
+  if (hasGeometricChannels) {
+    const base = resolveTransform(spec?.transform);
+    const scaleX = sampleStops(channels?.scaleX, clamped, base.scaleX);
+    const scaleY = sampleStops(channels?.scaleY, clamped, base.scaleY);
+    return {
+      scale: Math.max(Math.abs(scaleX), Math.abs(scaleY)),
+      scaleX,
+      scaleY,
+      offsetX: sampleStops(channels?.offsetX, clamped, base.offsetX),
+      offsetY: sampleStops(channels?.offsetY, clamped, base.offsetY),
+      rotate: sampleStops(channels?.rotate, clamped, base.rotate),
+      rotateX: sampleStops(channels?.rotateX, clamped, base.rotateX),
+      rotateY: sampleStops(channels?.rotateY, clamped, base.rotateY),
+      perspective: base.perspective,
+    };
+  }
   const keyframes = spec?.keyframes;
   if (keyframes && keyframes.length >= 2) {
     const sorted = [...keyframes].sort((a, b) => a.t - b.t);
@@ -281,12 +409,7 @@ export function resolveTransformAt(
     const from = resolveTransform(spec.kenBurns.from);
     const to = resolveTransform(spec.kenBurns.to);
     const k = Math.max(0, Math.min(1, u));
-    return {
-      scale: lerp(from.scale, to.scale, k),
-      offsetX: lerp(from.offsetX, to.offsetX, k),
-      offsetY: lerp(from.offsetY, to.offsetY, k),
-      rotate: lerp(from.rotate, to.rotate, k),
-    };
+    return lerpTransform(from, to, k);
   }
   return resolveTransform(spec?.transform);
 }
@@ -369,13 +492,16 @@ export function clipEffectsToCss(spec: ClipEffectSpec | undefined, u: number): C
   if (t.offsetX || t.offsetY) {
     transformParts.push(`translate(${t.offsetX * 100}%, ${t.offsetY * 100}%)`);
   }
+  if (t.perspective) transformParts.push(`perspective(${t.perspective * 1000}px)`);
+  if (t.rotateX) transformParts.push(`rotateX(${t.rotateX}deg)`);
+  if (t.rotateY) transformParts.push(`rotateY(${t.rotateY}deg)`);
   if (t.rotate) transformParts.push(`rotate(${t.rotate}deg)`);
-  const sx = t.scale * (spec.flipH ? -1 : 1);
-  const sy = t.scale * (spec.flipV ? -1 : 1);
+  const sx = t.scaleX * (spec.flipH ? -1 : 1);
+  const sy = t.scaleY * (spec.flipV ? -1 : 1);
   if (sx !== 1 || sy !== 1) transformParts.push(`scale(${sx}, ${sy})`);
   const transform = transformParts.length ? transformParts.join(' ') : undefined;
 
-  const opacity = opacityFor(spec);
+  const opacity = opacityFor(spec, u);
   const mixBlendMode = spec.blendMode && spec.blendMode !== 'normal' ? spec.blendMode : undefined;
   // A percentage border-radius is per-axis, which is exactly the ellipse
   // `drawEffectFrame` clips with — the same geometry on both sides, not an approximation.
@@ -399,7 +525,7 @@ export function clipEffectsToCss(spec: ClipEffectSpec | undefined, u: number): C
  */
 export function applyCanvasTransform(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-  transform: Required<ClipTransform>,
+  transform: ResolvedClipTransform,
   targetWidth: number,
   targetHeight: number,
   flip?: { h?: boolean; v?: boolean },
@@ -408,8 +534,8 @@ export function applyCanvasTransform(
   const cy = targetHeight / 2;
   ctx.translate(cx + transform.offsetX * targetWidth, cy + transform.offsetY * targetHeight);
   if (transform.rotate) ctx.rotate((transform.rotate * Math.PI) / 180);
-  const sx = transform.scale * (flip?.h ? -1 : 1);
-  const sy = transform.scale * (flip?.v ? -1 : 1);
+  const sx = transform.scaleX * (flip?.h ? -1 : 1);
+  const sy = transform.scaleY * (flip?.v ? -1 : 1);
   if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
   ctx.translate(-cx, -cy);
 }

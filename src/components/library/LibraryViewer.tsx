@@ -1,11 +1,15 @@
 'use client';
 
 import type {
+  CommentDeepLink,
   CustomFieldFilter,
+  LibraryAspectRatioBin,
+  LibraryBrowseDestination,
   LibraryBrowseFacets,
   LibraryBrowseQuery,
   LibraryLayout,
   LibraryMediaType,
+  LibraryPreviewFrame,
   LibrarySavedView,
   LibrarySort,
   MediaAsset,
@@ -13,7 +17,7 @@ import type {
   MediaSearchResultItem,
   TemplateSource,
 } from '@continuum/contracts';
-import { LIBRARY_ACCEPT_ATTRIBUTE } from '@continuum/contracts';
+import { LIBRARY_ACCEPT_ATTRIBUTE, libraryAspectRatioBin } from '@continuum/contracts';
 import { Columns3, LayoutGrid, ScanSearch, Upload } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useRouter } from 'next/navigation';
@@ -30,7 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
-import { useProjects } from '@/lib/projects';
+import { librarySearchPath } from '@/lib/library/libraryHref';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
 import {
   buildLibraryBrowseParams,
@@ -43,19 +47,23 @@ import {
   type SourceFilterValue,
 } from '@/lib/media/filters';
 import type { LibrarySection } from '@/lib/media/sections';
+import { useProjects } from '@/lib/projects';
 import { cn } from '@/lib/utils';
 import { LibraryBoardView } from './board/LibraryBoardView';
 import { AssetDetailModal } from './detail/AssetDetailModal';
 import { useCustomFields } from './fields/useCustomFields';
 import { LibraryBulkToolbar } from './LibraryBulkToolbar';
+import { LibraryElementsGrid } from './LibraryElementsGrid';
 import { LibraryFilterBar } from './LibraryFilterBar';
 import { LibraryRenderQueue } from './LibraryRenderQueue';
-import { type LibraryBrowseDestination, LibrarySidebar } from './LibrarySidebar';
+import { LibrarySidebar } from './LibrarySidebar';
 import { LibraryTagManager } from './LibraryTagManager';
 import { McpUploadIntentPanel } from './McpUploadIntentPanel';
 import { MediaGrid } from './MediaGrid';
 import { MediaSearchBar } from './MediaSearchBar';
 import { PipelinePanel } from './PipelinePanel';
+import { PlacementBar } from './PlacementBar';
+import { RatioShelves } from './RatioShelves';
 import { TemplateGrid } from './TemplateGrid';
 import { TypographyPanel } from './TypographyPanel';
 import { UploadStrip } from './UploadStrip';
@@ -74,6 +82,7 @@ type Props = {
   storageUsedBytes: number;
   captionStyle: CaptionStyle;
   section: LibrarySection;
+  initialDeepLink?: CommentDeepLink;
 };
 
 export function LibraryViewer({
@@ -88,6 +97,7 @@ export function LibraryViewer({
   storageUsedBytes,
   captionStyle,
   section,
+  initialDeepLink,
 }: Props) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
@@ -167,6 +177,9 @@ export function LibraryViewer({
 
   const [view, setView] = useState<'media' | 'inspiration'>('media');
   const [detailAsset, setDetailAsset] = useState<MediaAsset | null>(initialDetailAsset);
+  const [deepLink, setDeepLink] = useState<CommentDeepLink>(
+    initialDeepLink ?? { commentId: null, timeMs: null, endMs: null },
+  );
   const [assetRevision, setAssetRevision] = useState(0);
   // Loaded for the Templates and Typography panels. Typography needs them too: "which
   // families do your templates ask for" is the whole reason the two sections sit together.
@@ -187,18 +200,40 @@ export function LibraryViewer({
       : filteredProjectNames.length > 1
         ? 'Nothing in these projects yet. Select assets and use Tag to add them.'
         : undefined;
-  const displayedAssets = isSearching ? searchResults!.map((r) => r.asset) : assets;
+  const displayedAssets = (() => {
+    const rows = isSearching ? searchResults!.map((r) => r.asset) : assets;
+    const bins = initialBrowseQuery.aspectRatios;
+    if (bins.length === 0) return rows;
+    const allowed = new Set(bins);
+    return rows.filter((asset) => {
+      const bin = asset.aspectRatio ?? libraryAspectRatioBin(asset.width, asset.height);
+      return bin != null && allowed.has(bin);
+    });
+  })();
   const activeCollection = selectedCollectionId
     ? initialCollections.find((c) => c.id === selectedCollectionId)
     : null;
+  const destinationTitle: Record<string, string> = {
+    home: 'Home',
+    canvas: 'Canvas',
+    elements: 'Elements',
+    sources: 'Source files',
+    templates: 'Templates',
+    review: 'Needs review',
+    everything: 'Everything',
+    images: 'Images',
+    videos: 'Videos',
+  };
   const browseTitle =
-    optimisticMediaType === 'carousel'
+    destinationTitle[initialBrowseQuery.destination ?? ''] ??
+    (optimisticMediaType === 'carousel'
       ? 'Carousels'
-      : KIND_FILTERS.find((option) => option.value === optimisticKind)?.label;
+      : KIND_FILTERS.find((option) => option.value === optimisticKind)?.label);
 
   const showTemplates = initialBrowseQuery.templateOnly;
   const showTypography = section === 'typography';
   const showPipelines = section === 'pipelines';
+  const showElements = initialBrowseQuery.destination === 'elements';
   // Only fetched for the two panels that read it — the creative grid must not pay for a
   // template list nobody asked for.
   const needsTemplateSources = showTemplates || showTypography;
@@ -239,6 +274,9 @@ export function LibraryViewer({
       mediaType?: LibraryMediaType;
       tags?: string[];
       projectIds?: string[];
+      destination?: LibraryBrowseQuery['destination'];
+      previewFrame?: LibraryPreviewFrame;
+      aspectRatios?: LibraryBrowseQuery['aspectRatios'];
       sort?: LibrarySort;
       layout?: LibraryLayout;
       reviewStatuses?: LibraryBrowseQuery['reviewStatuses'];
@@ -294,14 +332,17 @@ export function LibraryViewer({
         sort: nextSort,
         layout: nextLayout,
         boardGroupBy: next.boardGroupBy ?? initialBrowseQuery.boardGroupBy,
+        destination: next.destination ?? initialBrowseQuery.destination,
+        previewFrame: next.previewFrame ?? initialBrowseQuery.previewFrame,
+        aspectRatios:
+          next.aspectRatios !== undefined
+            ? next.aspectRatios
+            : next.previewFrame && next.previewFrame !== 'native'
+              ? []
+              : initialBrowseQuery.aspectRatios,
         cursor: null,
       };
       if (nextQuery.sort === 'manual' && !nextCollectionId) nextQuery.sort = 'created_desc';
-      const params = buildLibraryBrowseParams(nextQuery, {
-        includeBrandId: false,
-        cursor: null,
-      });
-      const qs = params.toString();
       startFilterTransition(() => {
         setOptimisticSource(nextSource);
         setOptimisticCreatedWith(nextCreatedWith);
@@ -312,11 +353,18 @@ export function LibraryViewer({
         setOptimisticSort(nextSort);
         setOptimisticLayout(nextLayout);
         setOptimisticReviewStatuses(nextQuery.reviewStatuses);
-        router.push(qs ? `/library?${qs}` : '/library');
+        router.push(
+          librarySearchPath(nextQuery, {
+            assetId: detailAsset?.id,
+            deepLink: detailAsset ? deepLink : null,
+          }),
+        );
       });
     },
     [
       router,
+      detailAsset,
+      deepLink,
       selectedCollectionId,
       optimisticSource,
       optimisticCreatedWith,
@@ -352,11 +400,72 @@ export function LibraryViewer({
     [pushFilters],
   );
 
+  const openDetail = useCallback(
+    (asset: MediaAsset, link: CommentDeepLink | null = null) => {
+      setDetailAsset(asset);
+      setDeepLink(link ?? { commentId: null, timeMs: null, endMs: null });
+      router.replace(
+        librarySearchPath(initialBrowseQuery, {
+          assetId: asset.id,
+          deepLink: link,
+        }),
+        { scroll: false },
+      );
+    },
+    [initialBrowseQuery, router],
+  );
+
+  const closeDetail = useCallback(() => {
+    setDetailAsset(null);
+    setDeepLink({ commentId: null, timeMs: null, endMs: null });
+    router.replace(librarySearchPath(initialBrowseQuery), { scroll: false });
+  }, [initialBrowseQuery, router]);
+
+  const onDeepLinkChange = useCallback(
+    (link: CommentDeepLink) => {
+      setDeepLink(link);
+      if (!detailAsset) return;
+      router.replace(
+        librarySearchPath(initialBrowseQuery, { assetId: detailAsset.id, deepLink: link }),
+        { scroll: false },
+      );
+    },
+    [detailAsset, initialBrowseQuery, router],
+  );
+
+  const onSelectPreviewFrame = useCallback(
+    (frame: LibraryPreviewFrame) => {
+      pushFilters({
+        previewFrame: frame,
+        aspectRatios: frame === 'native' ? initialBrowseQuery.aspectRatios : [],
+      });
+    },
+    [pushFilters, initialBrowseQuery.aspectRatios],
+  );
+
+  const onSelectRatioBin = useCallback(
+    (bin: LibraryAspectRatioBin) => {
+      pushFilters({
+        previewFrame: 'native',
+        aspectRatios: [bin],
+        destination: 'home',
+      });
+    },
+    [pushFilters],
+  );
+
   const onSelectDestination = useCallback(
     (destination: LibraryBrowseDestination) => {
-      const common = { collectionId: null, source: 'all' as const, reviewStatuses: [] };
+      const common = {
+        collectionId: null,
+        source: 'all' as const,
+        reviewStatuses: [] as LibraryBrowseQuery['reviewStatuses'],
+        createdWith: [] as LibraryBrowseQuery['createdWith'],
+        destination,
+        templateOnly: false,
+      };
       switch (destination) {
-        case 'recent':
+        case 'home':
           pushFilters({ ...common, mediaType: 'all', sort: 'updated_desc' });
           return;
         case 'images':
@@ -365,9 +474,15 @@ export function LibraryViewer({
         case 'videos':
           pushFilters({ ...common, mediaType: 'video', sort: 'created_desc' });
           return;
+        case 'canvas':
+          pushFilters({
+            ...common,
+            mediaType: 'all',
+            createdWith: ['canvas'],
+            sort: 'updated_desc',
+          });
+          return;
         case 'templates':
-          // Still mediaType 'project_file' underneath — a template IS a project file — plus
-          // the templateOnly flag, which is what excludes the ones nothing has read yet.
           pushFilters({
             ...common,
             mediaType: 'project_file',
@@ -375,19 +490,16 @@ export function LibraryViewer({
             sort: 'created_desc',
           });
           return;
-        case 'project_files':
+        case 'sources':
           pushFilters({ ...common, mediaType: 'project_file', sort: 'created_desc' });
           return;
         case 'typography':
-          // Not a browse query: fonts are not media.assets rows. Section lives in the URL so
-          // a refresh and a shared link land on the same panel.
           startFilterTransition(() => router.push('/library?section=typography'));
           return;
         case 'pipelines':
-          // Same exception: a published pipeline is a canvas_workflows row, not an asset.
           startFilterTransition(() => router.push('/library?section=pipelines'));
           return;
-        case 'needs_review':
+        case 'review':
           pushFilters({
             ...common,
             mediaType: 'all',
@@ -395,7 +507,10 @@ export function LibraryViewer({
             sort: 'updated_desc',
           });
           return;
-        case 'all':
+        case 'elements':
+          pushFilters({ ...common, mediaType: 'all', sort: 'updated_desc' });
+          return;
+        case 'everything':
           pushFilters({ ...common, mediaType: 'all', sort: 'created_desc' });
       }
     },
@@ -502,7 +617,7 @@ export function LibraryViewer({
                     ? 'Pipelines'
                     : showTemplates
                       ? 'Templates'
-                      : (activeCollection?.name ?? browseTitle ?? 'All Media')
+                      : (activeCollection?.name ?? browseTitle ?? 'Home')
               }
               action={
                 <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
@@ -534,7 +649,7 @@ export function LibraryViewer({
                     >
                       <FigmaIcon className="size-4" />
                       <span className="hidden sm:inline">Figma</span>
-                      <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <span className="rounded bg-muted px-1 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                         WIP
                       </span>
                     </Button>
@@ -600,6 +715,16 @@ export function LibraryViewer({
                   setFieldFilters(next);
                 }}
               />
+              {view === 'media' &&
+              !showTemplates &&
+              !showTypography &&
+              !showPipelines &&
+              !showElements ? (
+                <PlacementBar
+                  value={initialBrowseQuery.previewFrame}
+                  onChange={onSelectPreviewFrame}
+                />
+              ) : null}
               {tagOptions.length > 0 ? (
                 <LibraryTagManager
                   brandId={brandId}
@@ -746,6 +871,8 @@ export function LibraryViewer({
                 <TypographyPanel brandId={brandId} templateSources={templateSources} />
               ) : showPipelines ? (
                 <PipelinePanel brandId={brandId} />
+              ) : showElements ? (
+                <LibraryElementsGrid brandId={brandId} />
               ) : showTemplates ? (
                 <TemplateGrid
                   brandId={brandId}
@@ -763,23 +890,54 @@ export function LibraryViewer({
                       p_project_ids on the listing route, which is not this change. */}
                   {initialBrowseQuery.projectIds.length > 0 ? (
                     <p className="rounded-md border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
-                      Board view doesn&apos;t filter by project yet — switch to Grid to see
-                      only this project&apos;s assets.
+                      Board view doesn&apos;t filter by project yet — switch to Grid to see only
+                      this project&apos;s assets.
                     </p>
                   ) : null}
-                <LibraryBoardView
+                  <LibraryBoardView
+                    brandId={brandId}
+                    filters={{
+                      source: selectedSource,
+                      kind: selectedKind,
+                      tags: selectedTags,
+                      collectionId: selectedCollectionId,
+                      fieldFilters,
+                    }}
+                    customFields={customFields ?? []}
+                    assetsOverride={isSearching ? displayedAssets : null}
+                    refreshKey={assetRevision}
+                    onOpenDetail={openDetail}
+                    selectedAssetIds={selectedAssetIds}
+                    onToggleSelected={(asset) =>
+                      setSelectedAssetIds((current) => {
+                        const next = new Set(current);
+                        if (next.has(asset.id)) next.delete(asset.id);
+                        else next.add(asset.id);
+                        return next;
+                      })
+                    }
+                    groupBy={initialBrowseQuery.boardGroupBy}
+                    onGroupByChange={(boardGroupBy) => pushFilters({ boardGroupBy })}
+                  />
+                </>
+              ) : initialBrowseQuery.destination === 'home' &&
+                !isSearching &&
+                initialBrowseQuery.previewFrame === 'native' ? (
+                <RatioShelves
                   brandId={brandId}
-                  filters={{
-                    source: selectedSource,
-                    kind: selectedKind,
-                    tags: selectedTags,
-                    collectionId: selectedCollectionId,
-                    fieldFilters,
+                  assets={displayedAssets}
+                  showBoundingBoxes={showBoundingBoxes}
+                  captionStyle={captionStyle}
+                  emptyHint={emptyHint}
+                  onLoadMore={loadMore}
+                  hasMore={hasMore}
+                  loadingMore={loadingMore}
+                  onOpenDetail={openDetail}
+                  onSelectBin={onSelectRatioBin}
+                  onAssetChanged={() => {
+                    setAssetRevision((revision) => revision + 1);
+                    router.refresh();
                   }}
-                  customFields={customFields ?? []}
-                  assetsOverride={isSearching ? displayedAssets : null}
-                  refreshKey={assetRevision}
-                  onOpenDetail={setDetailAsset}
                   selectedAssetIds={selectedAssetIds}
                   onToggleSelected={(asset) =>
                     setSelectedAssetIds((current) => {
@@ -789,10 +947,7 @@ export function LibraryViewer({
                       return next;
                     })
                   }
-                  groupBy={initialBrowseQuery.boardGroupBy}
-                  onGroupByChange={(boardGroupBy) => pushFilters({ boardGroupBy })}
                 />
-                </>
               ) : (
                 <MediaGrid
                   brandId={brandId}
@@ -803,7 +958,8 @@ export function LibraryViewer({
                   onLoadMore={isSearching ? undefined : loadMore}
                   hasMore={isSearching ? false : hasMore}
                   loadingMore={loadingMore}
-                  onOpenDetail={setDetailAsset}
+                  previewFrame={initialBrowseQuery.previewFrame}
+                  onOpenDetail={openDetail}
                   onAssetChanged={() => {
                     setAssetRevision((revision) => revision + 1);
                     router.refresh();
@@ -824,7 +980,10 @@ export function LibraryViewer({
             <AssetDetailModal
               brandId={brandId}
               asset={detailAsset}
-              onClose={() => setDetailAsset(null)}
+              initialDeepLink={deepLink}
+              previewFrame={initialBrowseQuery.previewFrame}
+              onDeepLinkChange={onDeepLinkChange}
+              onClose={closeDetail}
               onAssetChanged={() => {
                 // The grid re-seeds from the RSC; the board holds its own fetch,
                 // so it needs an explicit revision bump to re-read the lanes.

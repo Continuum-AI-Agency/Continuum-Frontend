@@ -1,3 +1,4 @@
+import { parseCommentDeepLink } from '@continuum/contracts';
 import { cookies } from 'next/headers';
 import { loadSharePayload } from './loadSharePayload';
 import { reviewerSessionCookieName } from './reviewerSession.server';
@@ -10,10 +11,20 @@ import { ShareUnavailableCard } from './ShareUnavailableCard';
 // route emitting a 0-byte shell.
 export async function ShareLoader({
   paramsPromise,
+  searchParamsPromise,
 }: {
   paramsPromise: Promise<{ token: string }>;
+  searchParamsPromise?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { token } = await paramsPromise;
+  const search = searchParamsPromise ? await searchParamsPromise : {};
+  const overlay = new URLSearchParams();
+  for (const key of ['comment', 't', 'end'] as const) {
+    const raw = search[key];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (value) overlay.set(key, value);
+  }
+  const deepLink = parseCommentDeepLink(overlay);
   const cookieStore = await cookies();
   const reviewerSession = cookieStore.get(reviewerSessionCookieName(token))?.value;
   const result = await loadSharePayload(token, reviewerSession);
@@ -27,5 +38,5 @@ export async function ShareLoader({
     );
   }
   if (!result.ok) return <ShareUnavailableCard reason={result.reason} />;
-  return <SharePayloadView token={token} payload={result.payload} />;
+  return <SharePayloadView token={token} payload={result.payload} deepLink={deepLink} />;
 }

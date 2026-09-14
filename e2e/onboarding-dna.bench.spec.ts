@@ -43,7 +43,8 @@ import { type LocalBackend, startLocalBackend } from './support/localBackend';
 //     why NO specimen may be drawn here for ANY family.
 
 const OWNER_PASSWORD = 'onboarding-dna-bench';
-const SCREENSHOT_DIR = process.env.ONBOARDING_DNA_SCREENSHOT_DIR ?? 'e2e/__screenshots__/onboarding-dna';
+const SCREENSHOT_DIR =
+  process.env.ONBOARDING_DNA_SCREENSHOT_DIR ?? 'e2e/__screenshots__/onboarding-dna';
 
 const HAS_LOCAL_STACK = Boolean(
   /127\.0\.0\.1|localhost/.test(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') &&
@@ -214,14 +215,8 @@ async function teardown(fixture: Fixture | null): Promise<void> {
   // real result of the run.
   const attempts: Array<Promise<unknown>> = [
     brandProfiles(supabase).from('preview_runs').delete().eq('brand_id', fixture.brandId),
-    brandProfiles(supabase)
-      .from('user_onboarding_states')
-      .delete()
-      .eq('user_id', fixture.userId),
-    brandProfiles(supabase)
-      .from('permissions')
-      .delete()
-      .eq('brand_profile_id', fixture.brandId),
+    brandProfiles(supabase).from('user_onboarding_states').delete().eq('user_id', fixture.userId),
+    brandProfiles(supabase).from('permissions').delete().eq('brand_profile_id', fixture.brandId),
     brandProfiles(supabase).from('brand_profiles').delete().eq('id', fixture.brandId),
   ];
   for (const attempt of attempts) {
@@ -318,9 +313,7 @@ test.describe('onboarding brand reveal — honesty', () => {
       const { page } = opened;
 
       const card = page.getByTestId('reveal-typography');
-      await card
-        .screenshot({ path: `${SCREENSHOT_DIR}/typography.png` })
-        .catch(() => undefined);
+      await card.screenshot({ path: `${SCREENSHOT_DIR}/typography.png` }).catch(() => undefined);
 
       // The name IS shown — this is not "hide the typography section".
       const primary = page.locator('[data-testid="reveal-typeface"][data-slot="Primary"]');
@@ -344,9 +337,9 @@ test.describe('onboarding brand reveal — honesty', () => {
       // A recorded role becomes the rule, verbatim from the role the run recorded.
       const rows = page.getByTestId('reveal-colour');
       expect(await rows.count()).toBe(Object.keys(ROLED_PALETTE).length);
-      await expect(
-        page.locator('[data-testid="reveal-colour"][data-hex="#ffaa1c"]'),
-      ).toContainText('Read from the site as the accent colour.');
+      await expect(page.locator('[data-testid="reveal-colour"][data-hex="#ffaa1c"]')).toContainText(
+        'Read from the site as the accent colour.',
+      );
       expect(
         await page.locator('[data-testid="reveal-colour"][data-recorded="false"]').count(),
       ).toBe(0);
@@ -369,9 +362,7 @@ test.describe('onboarding brand reveal — honesty', () => {
         root?.appendChild(substitute);
       }, READ_FAMILY);
       expect((await specimenViolations(page, [READ_FAMILY])).length).toBeGreaterThan(0);
-      await page.evaluate(() =>
-        document.getElementById('negative-control-specimen')?.remove(),
-      );
+      await page.evaluate(() => document.getElementById('negative-control-specimen')?.remove());
       expect(await specimenViolations(page, [READ_FAMILY])).toEqual([]);
     } finally {
       await context?.close();

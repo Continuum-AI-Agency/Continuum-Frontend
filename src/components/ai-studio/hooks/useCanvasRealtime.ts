@@ -564,16 +564,27 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
           leftPresences.forEach((p: any) => delete next[p.user_id]);
           return next;
         });
-      })
-      .subscribe((subStatus, err) => {
-        console.log('[Canvas Sync] Broadcast channel status:', subStatus);
-        if (err) console.error('[Canvas Sync] Broadcast error:', err);
-        setStatus(normalizeRealtimeStatus(subStatus));
+      });
+
+    let cancelled = false;
+    // Same race as postgres_changes: a join before setAuth is `anon` and presence
+    // / broadcast stay silent until the heartbeat. Bindings stay above; only the
+    // join waits.
+    void Promise.resolve(supabase.realtime.setAuth())
+      .catch(() => undefined)
+      .then(() => {
+        if (cancelled) return;
+        channel.subscribe((subStatus, err) => {
+          console.log('[Canvas Sync] Broadcast channel status:', subStatus);
+          if (err) console.error('[Canvas Sync] Broadcast error:', err);
+          setStatus(normalizeRealtimeStatus(subStatus));
+        });
       });
 
     broadcastChannelRef.current = channel;
 
     return () => {
+      cancelled = true;
       console.log('[Canvas Sync] Tearing down broadcast channel');
       supabase.removeChannel(channel);
       broadcastChannelRef.current = null;

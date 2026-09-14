@@ -131,6 +131,22 @@ describe('OptimizerLogs — the SERVER LOG feed', () => {
 
   // "100 rows" used to be presented as the world. The footer now says what is loaded and
   // whether there is more, and the RPC's own cursor decides which.
+  it('offers older history only on the 30-day window after the hot feed is exhausted', () => {
+    logsState = { data: [COMPLETE], isLoading: false, hasNextPage: false };
+    const { unmount } = render(<OptimizerLogs brandId="brand-1" windowDays={7} />);
+    expect(screen.queryByRole('button', { name: 'Load older history' })).toBeNull();
+    unmount();
+
+    render(<OptimizerLogs brandId="brand-1" windowDays={30} />);
+    expect(screen.getByRole('button', { name: 'Load older history' })).toBeTruthy();
+  });
+
+  it('does not fetch older history until the operator asks', () => {
+    logsState = { data: [COMPLETE], isLoading: false, hasNextPage: false };
+    render(<OptimizerLogs brandId="brand-1" windowDays={30} />);
+    expect(screen.queryByText('No events older than 30 days.')).toBeNull();
+  });
+
   it('says how much is loaded and offers more only when the cursor says there is more', () => {
     logsState = { data: [COMPLETE, DRIFT], isLoading: false, hasNextPage: false };
     const { unmount } = render(<OptimizerLogs brandId="brand-1" />);

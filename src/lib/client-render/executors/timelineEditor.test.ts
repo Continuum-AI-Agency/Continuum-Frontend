@@ -1,13 +1,99 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { createEditorProjectV2, editorProjectV2Schema } from '@continuum/contracts';
+import { opacityFor } from '@/StudioCanvas/utils/render/effectSpec';
 import {
   assertSupportedTimelineEditorExport,
   buildTimelineEditorRenderPlan,
+  clipEffectSpecFromEditorClip,
 } from './timelineEditor';
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
+});
+
+describe('clipEffectSpecFromEditorClip', () => {
+  it('maps transform.opacity keys onto sampled opacityStops', () => {
+    const spec = clipEffectSpecFromEditorClip({
+      timelineStartSec: 0,
+      durationSec: 2,
+      transform: {
+        position: { x: 0.5, y: 0.5 },
+        scaleX: 1,
+        scaleY: 1,
+        rotationDeg: 0,
+        opacity: 1,
+      },
+      keyframes: [
+        {
+          property: 'transform.opacity',
+          timeSec: 0,
+          value: 0,
+          interpolation: 'linear',
+        },
+        {
+          property: 'transform.opacity',
+          timeSec: 2,
+          value: 1,
+          interpolation: 'linear',
+        },
+      ],
+    });
+    expect(spec.opacityStops).toEqual([
+      { t: 0, value: 0, interpolation: 'linear' },
+      { t: 1, value: 1, interpolation: 'linear' },
+    ]);
+    expect(opacityFor(spec, 0.5)).toBe(0.5);
+  });
+
+  it('keeps scaleX and scaleY on independent motion channels', () => {
+    const spec = clipEffectSpecFromEditorClip({
+      timelineStartSec: 0,
+      durationSec: 1,
+      transform: {
+        position: { x: 0.5, y: 0.5 },
+        scaleX: 1,
+        scaleY: 1,
+        rotationDeg: 0,
+        opacity: 1,
+      },
+      keyframes: [
+        { property: 'transform.scaleX', timeSec: 0, value: 1, interpolation: 'linear' },
+        { property: 'transform.scaleX', timeSec: 1, value: 2, interpolation: 'linear' },
+        { property: 'transform.scaleY', timeSec: 0, value: 1, interpolation: 'linear' },
+        { property: 'transform.scaleY', timeSec: 1, value: 1, interpolation: 'linear' },
+      ],
+    });
+    expect(spec.motionChannels?.scaleX?.map((stop) => stop.value)).toEqual([1, 2]);
+    expect(spec.motionChannels?.scaleY?.map((stop) => stop.value)).toEqual([1, 1]);
+  });
+
+  it('maps rotateX/rotateY keys onto independent 3D channels', () => {
+    const spec = clipEffectSpecFromEditorClip({
+      timelineStartSec: 0,
+      durationSec: 1,
+      transform: {
+        position: { x: 0.5, y: 0.5 },
+        scaleX: 1,
+        scaleY: 1,
+        rotationDeg: 0,
+        rotateXDeg: 0,
+        rotateYDeg: 0,
+        perspective: 1,
+        opacity: 1,
+      },
+      keyframes: [
+        { property: 'transform.rotateXDeg', timeSec: 0, value: 0, interpolation: 'linear' },
+        { property: 'transform.rotateXDeg', timeSec: 1, value: 30, interpolation: 'linear' },
+        { property: 'transform.rotateYDeg', timeSec: 0, value: 0, interpolation: 'linear' },
+        { property: 'transform.rotateYDeg', timeSec: 1, value: -20, interpolation: 'linear' },
+      ],
+    });
+    expect(spec.transform?.rotateX).toBe(0);
+    expect(spec.transform?.perspective).toBe(1);
+    expect(spec.motionChannels?.rotateX?.map((stop) => stop.value)).toEqual([0, 30]);
+    expect(spec.motionChannels?.rotateY?.map((stop) => stop.value)).toEqual([0, -20]);
+  });
 });
 
 describe('timeline editor client render executor', () => {

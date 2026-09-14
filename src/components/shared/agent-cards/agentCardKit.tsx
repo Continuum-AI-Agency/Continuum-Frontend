@@ -265,7 +265,7 @@ export function AgentButton({
 }: AgentButtonProps) {
   return (
     <Button
-      variant={variant === 'primary' ? 'brand' : 'ghost'}
+      variant={variant === 'primary' ? 'default' : 'ghost'}
       size="sm"
       disabled={disabled || loading}
       aria-busy={loading || undefined}

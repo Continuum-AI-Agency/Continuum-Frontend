@@ -36,6 +36,32 @@ const draftPipelineGuide = mock(async () => ({
 }));
 mock.module('@/lib/ai-studio/pipelines', () => ({ draftPipelineGuide, publishPipeline }));
 
+const VIDEO_PROJECT_ID = '33333333-3333-4333-8333-333333333333';
+const getVideoProject = mock(async () => ({
+  projectId: VIDEO_PROJECT_ID,
+  revision: 7,
+  fingerprint: 'editor-fingerprint-7',
+  tracks: [
+    {
+      clips: [
+        {
+          id: 'product-clip',
+          name: 'Product image',
+          kind: 'overlay',
+          mediaKind: 'image',
+          source: {
+            sourceType: 'library_asset',
+            assetId: 'asset-old',
+            renditionId: 'version-old',
+            slotId: 'product-shot',
+          },
+        },
+      ],
+    },
+  ],
+}));
+mock.module('@/lib/api/videoProjects.client', () => ({ getVideoProject }));
+
 // The REAL store, seeded per test. Mocking the store MODULE instead leaks into every file
 // that runs after this one in the same `bun test` invocation — it took the whole
 // StudioCanvas/components directory from 3 failures to 38.
@@ -84,6 +110,7 @@ beforeEach(() => {
   createWorkflow.mockClear();
   draftPipelineGuide.mockClear();
   publishPipeline.mockClear();
+  getVideoProject.mockClear();
 });
 
 afterEach(() => {
@@ -178,6 +205,56 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
       kind: 'element_candidate',
       category: 'character',
       rightsNote: 'Brand-owned fictional character.',
+    });
+  });
+
+  it('publishes the selected editor source slot with an exact project configuration', async () => {
+    const cut = {
+      id: 'cut',
+      type: 'timelineEditor',
+      position: { x: 0, y: 0 },
+      data: { videoProjectId: VIDEO_PROJECT_ID, items: [] },
+    } as StoreNode;
+    const edge = {
+      id: 'ref->cut',
+      source: 'ref',
+      target: 'cut',
+      targetHandle: 'media-in',
+    } as StoreEdge;
+    useStudioStore.setState({ brandId: BRAND, nodes: [cut, REF], edges: [edge] });
+    render(
+      <SaveWorkflowDialog brandProfileId={BRAND} open showTrigger={false} selection={[cut]} />,
+    );
+    const pipeline = screen.getByRole('button', { name: 'Pipeline' });
+    fireEvent.pointerDown(pipeline);
+    fireEvent.pointerUp(pipeline);
+    fireEvent.click(pipeline);
+
+    expect(await screen.findByRole('combobox', { name: /editor source slot/i })).toBeDefined();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Product cutdown' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
+    await screen.findByDisplayValue('A launch needs character imagery.');
+    fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));
+
+    await waitFor(() => expect(publishPipeline).toHaveBeenCalledTimes(1));
+    const payload = publishPipeline.mock.calls[0]?.[0] as unknown as {
+      pipeline: {
+        editorConfigurations: unknown[];
+        inputPorts: Array<{ pipelineBinding?: unknown }>;
+      };
+    };
+    expect(payload.pipeline.editorConfigurations).toEqual([
+      {
+        nodeRef: 'cut',
+        projectId: VIDEO_PROJECT_ID,
+        projectRevision: 7,
+        projectFingerprint: 'editor-fingerprint-7',
+      },
+    ]);
+    expect(payload.pipeline.inputPorts[0]?.pipelineBinding).toEqual({
+      kind: 'editor_source',
+      slotId: 'product-shot',
+      mediaKind: 'image',
     });
   });
 });

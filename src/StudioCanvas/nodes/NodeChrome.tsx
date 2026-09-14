@@ -47,7 +47,7 @@ export function NodeTitleBar({
   return (
     <div
       className={cn(
-        'flex h-6 shrink-0 items-center gap-1.5 border-b border-border/60 bg-muted/40 pr-0.5 pl-1.5 text-[11px] font-medium',
+        'flex h-6 shrink-0 items-center gap-1.5 border-b border-border/60 bg-muted/40 pr-0.5 pl-1.5 text-xs font-medium',
         className,
       )}
     >
@@ -71,7 +71,7 @@ export function NodeBadge({ className, children, title, ...props }: React.Compon
     <ThemedHoverText content={title}>
       <span
         className={cn(
-          'shrink-0 rounded-sm bg-muted px-1 text-[10px] font-medium text-muted-foreground',
+          'shrink-0 rounded-sm bg-muted px-1 text-2xs font-medium text-muted-foreground',
           className,
         )}
         {...props}
@@ -95,7 +95,7 @@ export function NodeOverlayNote({
   return (
     <div
       className={cn(
-        'pointer-events-none absolute inset-x-0 bottom-0 z-10 px-1.5 py-1 text-[10px] leading-snug backdrop-blur-sm',
+        'pointer-events-none absolute inset-x-0 bottom-0 z-10 px-1.5 py-1 text-2xs leading-snug backdrop-blur-sm',
         tone === 'destructive'
           ? 'bg-destructive/85 text-destructive-foreground'
           : 'bg-background/85 text-muted-foreground',

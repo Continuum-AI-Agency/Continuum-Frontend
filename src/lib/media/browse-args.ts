@@ -33,5 +33,7 @@ export function libraryBrowseRpcArgs(query: LibraryBrowseQuery) {
     p_fonts: query.fonts.length > 0 ? query.fonts : null,
     p_search: query.search || null,
     p_performance_window: query.performanceWindow,
+    p_destination: query.destination ?? null,
+    p_aspect_ratios: query.aspectRatios.length > 0 ? query.aspectRatios : null,
   };
 }

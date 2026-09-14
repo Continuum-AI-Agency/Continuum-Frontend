@@ -1,15 +1,18 @@
 'use client';
 
-import type {
-  CustomField,
-  CustomFieldValue,
-  MediaCollection,
-  Project,
+import {
+  type CustomField,
+  type CustomFieldValue,
+  ELEMENT_MEMBER_LIMIT,
+  type MediaCollection,
+  type Project,
 } from '@continuum/contracts';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Check,
   FolderInput,
   FolderOpen,
+  Layers,
   Link2,
   ListPlus,
   Loader2,
@@ -46,6 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { createElement, elementsQueryKey } from '@/lib/ai-studio/elements';
 import {
   bulkDeleteAssetsOperation,
   bulkSetAssetFieldValueOperation,
@@ -56,6 +60,7 @@ import {
 import { createShareLink } from '@/lib/library/share';
 import { useProjectMutations } from '@/lib/projects';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { ShareBoxDialog } from './ShareBoxDialog';
 
 /** Sentinel value for the inline "New project…" row; never a real project id. */
 const NEW_PROJECT = '__new_project__';
@@ -97,6 +102,8 @@ export function LibraryBulkToolbar({
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const client = () => createSupabaseBrowserClient();
   // Tagging is what makes the Library's Project filter mean anything: without it the filter
   // can only ever narrow to nothing.
@@ -454,7 +461,7 @@ export function LibraryBulkToolbar({
         variant="outline"
         disabled={Boolean(busy)}
         onClick={() =>
-          void run('Share link copied', async () => {
+          void run('Share box ready', async () => {
             const link = await createShareLink({
               brandId,
               scope: 'selection',
@@ -469,11 +476,35 @@ export function LibraryBulkToolbar({
             });
             const url = link.url ?? `${window.location.origin}/share/${link.token}`;
             await navigator.clipboard.writeText(url);
+            setShareUrl(url);
           })
         }
       >
         <Link2 className="size-3.5" />
-        Share
+        Share box
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={Boolean(busy) || assetIds.length === 0}
+        onClick={() =>
+          void run('Marked as Element', async () => {
+            await createElement({
+              brandId,
+              name:
+                assetIds.length === 1
+                  ? 'Library Element'
+                  : `Library Element (${Math.min(assetIds.length, ELEMENT_MEMBER_LIMIT)})`,
+              category: 'general',
+              memberAssetIds: assetIds.slice(0, ELEMENT_MEMBER_LIMIT),
+            });
+            await queryClient.invalidateQueries({ queryKey: elementsQueryKey(brandId) });
+          })
+        }
+      >
+        <Layers className="size-3.5" />
+        Mark as Element
       </Button>
       <Button
         type="button"
@@ -529,6 +560,13 @@ export function LibraryBulkToolbar({
       >
         <X className="size-3.5" />
       </Button>
+      <ShareBoxDialog
+        open={shareUrl !== null}
+        url={shareUrl}
+        onOpenChange={(open) => {
+          if (!open) setShareUrl(null);
+        }}
+      />
     </div>
   );
 }

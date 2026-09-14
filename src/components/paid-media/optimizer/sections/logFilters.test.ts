@@ -123,9 +123,9 @@ describe('readLifecycleRow gives each lifecycle event a shape', () => {
   });
 
   it('reports a persist failure with the error the service recorded', () => {
-    expect(readLifecycleRow(row('apply_results_persist_failed', { error: 'timeout' })).summary).toBe(
-      'timeout',
-    );
+    expect(
+      readLifecycleRow(row('apply_results_persist_failed', { error: 'timeout' })).summary,
+    ).toBe('timeout');
   });
 
   it('quantifies dropped snapshot rows', () => {

@@ -256,7 +256,7 @@ export function OmniGenDialog({
                         !
                       </span>
                     )}
-                    <span className="absolute bottom-0 left-0 right-0 truncate bg-black/55 px-1 py-0.5 text-[9px] leading-tight text-white">
+                    <span className="absolute bottom-0 left-0 right-0 truncate bg-black/55 px-1 py-0.5 text-3xs leading-tight text-white">
                       {index === 0 ? 'Original' : `v${index + 1}`}
                     </span>
                   </button>

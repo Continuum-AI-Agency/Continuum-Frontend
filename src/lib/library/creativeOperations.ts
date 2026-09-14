@@ -402,6 +402,7 @@ export async function createLibraryCollectionOperation(
     brandId: string;
     name: string;
     kind?: 'manual' | 'smart';
+    parentId?: string | null;
     smartQuery?: Omit<LibraryBrowseQuery, 'cursor'>;
   },
 ): Promise<MediaCollection> {
@@ -423,6 +424,7 @@ export async function updateLibraryCollectionOperation(
     brandId: string;
     collectionId: string;
     name?: string;
+    parentId?: string | null;
     smartQuery?: Omit<LibraryBrowseQuery, 'cursor'> | null;
   },
 ): Promise<MediaCollection> {

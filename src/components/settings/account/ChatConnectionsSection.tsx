@@ -29,6 +29,7 @@ import {
   listChatConnections,
   revokeChatConnection,
   setPreferredChatConnection,
+  startSlackInstall,
 } from '@/lib/api/chatConnections.client';
 import {
   type ChatConnection,
@@ -59,6 +60,25 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
   const [state, setState] = useState<LoadState>('loading');
   const [connections, setConnections] = useState<ChatConnection[]>([]);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
+  const [installing, setInstalling] = useState(false);
+
+  // Installing is a full-page hand-off to Slack's consent screen, so the browser leaves
+  // this page; `installing` only has to survive until it does.
+  const beginInstall = useCallback(async () => {
+    setInstalling(true);
+    try {
+      window.location.assign(
+        await startSlackInstall(`${window.location.pathname}${window.location.search}`),
+      );
+    } catch {
+      setInstalling(false);
+      show({
+        title: 'Could not start the Slack install',
+        description: 'Slack is not configured for this environment yet.',
+        variant: 'error',
+      });
+    }
+  }, [show]);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -170,9 +190,18 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
         <MessageSquareText className="mx-auto size-5 text-muted-foreground" />
         <p className="mt-2 text-sm font-medium">No chat identity linked</p>
         <p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-muted-foreground">
-          Sign in to Continuum from Slack or Microsoft Teams to link your identity. Until then,
-          teammate requests stay available in the Goal case file.
+          Add Continuum to your Slack workspace, then message the bot to link your identity. Until
+          then, teammate requests stay available in the Goal case file.
         </p>
+        <Button
+          type="button"
+          size="sm"
+          className="mt-4"
+          disabled={installing}
+          onClick={() => void beginInstall()}
+        >
+          {installing ? 'Opening Slack…' : 'Add to Slack'}
+        </Button>
       </div>
     );
   }

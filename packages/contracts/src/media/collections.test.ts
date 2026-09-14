@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import {
   bulkDeleteAssetsOperationSchema,
-  bulkUpdateAssetTagsOperationSchema,
   bulkSetAssetFieldValueOperationSchema,
   bulkTransitionAssetReviewOperationSchema,
+  bulkUpdateAssetTagsOperationSchema,
   createLibraryCollectionOperationSchema,
   mergeLibraryTagsOperationSchema,
   mutateCollectionMembershipOperationSchema,
@@ -15,6 +15,30 @@ const ASSET = 'de229024-d9fd-4306-bae6-389b79108554';
 const COLLECTION = '23ab8326-76ab-4f09-9291-b9a5bff59371';
 
 describe('Library collection commands', () => {
+  it('nests a manual collection under a parent board', () => {
+    expect(
+      createLibraryCollectionOperationSchema.parse({
+        action: 'create_library_collection',
+        brandId: BRAND,
+        name: 'Cuts',
+        parentId: COLLECTION,
+      }).parentId,
+    ).toBe(COLLECTION);
+  });
+
+  it('refuses to nest a smart collection', () => {
+    expect(
+      createLibraryCollectionOperationSchema.safeParse({
+        action: 'create_library_collection',
+        brandId: BRAND,
+        name: 'Needs review',
+        kind: 'smart',
+        parentId: COLLECTION,
+        smartQuery: { brandId: BRAND },
+      }).success,
+    ).toBe(false);
+  });
+
   it('requires a canonical browse query for smart collections', () => {
     expect(
       createLibraryCollectionOperationSchema.safeParse({

@@ -9,6 +9,8 @@ import {
 } from '@continuum/contracts';
 import type { TimelineInputSource } from '../../types';
 import {
+  applyAnimationStyleOperation,
+  applyMotionRecipeOperation,
   type EditorAssemblyOperation,
   editorProjectV2CommentPlacements,
   exactVersionPreviewUrl,
@@ -16,12 +18,16 @@ import {
   patchAudioOperation,
   placeAudioOperation,
   placeVideoOperation,
+  precomposeClipsOperation,
   primaryVideoTrack,
   removeClipOperation,
   removeTransitionOperation,
   reorderVideoOperation,
+  setClipParentOperation,
   splitClipOperation,
+  trimAnimationStyleOperation,
   trimClipOperation,
+  upsertKeyframeOperation,
   upsertOverlayOperation,
   upsertTextOperation,
   upsertTransitionOperation,
@@ -271,6 +277,132 @@ describe('canonical EditorProjectV2 assembly operations', () => {
       scaleX: 0.25,
       opacity: 0.8,
     });
+
+    const overlayTrackId = withOverlay.tracks.find((track) => track.kind === 'overlay')?.id;
+    expect(overlayTrackId).toBeTruthy();
+    const keyed = applyDrafts(
+      withOverlay,
+      upsertKeyframeOperation(withOverlay, {
+        trackId: overlayTrackId as string,
+        clipId: overlay?.id as string,
+        keyframe: {
+          id: 'logo-fade',
+          property: 'transform.opacity',
+          timeSec: 0,
+          value: 0,
+          interpolation: 'linear',
+        },
+      }).forward,
+    );
+    const keyedClip = keyed.tracks.find((track) => track.kind === 'overlay')?.clips[0];
+    expect(keyedClip && 'keyframes' in keyedClip ? keyedClip.keyframes : []).toEqual([
+      expect.objectContaining({
+        id: 'logo-fade',
+        property: 'transform.opacity',
+        value: 0,
+      }),
+    ]);
+    const styled = applyDrafts(
+      keyed,
+      applyAnimationStyleOperation(keyed, {
+        trackId: overlayTrackId as string,
+        clipId: overlay?.id as string,
+        styleId: 'fade',
+        timelineOffsetSec: 0,
+        durationSec: 0.4,
+      }).forward,
+    );
+    const styledClip = styled.tracks.find((track) => track.kind === 'overlay')?.clips[0];
+    expect(
+      styledClip && 'keyframes' in styledClip
+        ? styledClip.keyframes.some((keyframe) => keyframe.property === 'transform.opacity')
+        : false,
+    ).toBe(true);
+
+    const styledFresh = applyDrafts(
+      withOverlay,
+      applyAnimationStyleOperation(withOverlay, {
+        trackId: overlayTrackId as string,
+        clipId: overlay?.id as string,
+        styleId: 'fade',
+        timelineOffsetSec: 0,
+        durationSec: 0.4,
+      }).forward,
+    );
+    const styledFreshClip = styledFresh.tracks.find((track) => track.kind === 'overlay')?.clips[0];
+    const styleInstance =
+      styledFreshClip && 'keyframes' in styledFreshClip
+        ? (styledFreshClip.keyframes
+            .find((keyframe) => keyframe.id.includes(':'))
+            ?.id.split(':')[0] ?? '')
+        : '';
+    const trimmedStyle = applyDrafts(
+      styledFresh,
+      trimAnimationStyleOperation(styledFresh, {
+        trackId: overlayTrackId as string,
+        clipId: overlay?.id as string,
+        instanceId: styleInstance,
+        startSec: 0.2,
+        endSec: 1.2,
+      }).forward,
+    );
+    const trimmedClip = trimmedStyle.tracks.find((track) => track.kind === 'overlay')?.clips[0];
+    const trimmedTimes =
+      trimmedClip && 'keyframes' in trimmedClip
+        ? trimmedClip.keyframes
+            .filter((keyframe) => keyframe.id.startsWith(`${styleInstance}:`))
+            .map((keyframe) => keyframe.timeSec)
+            .toSorted((left, right) => left - right)
+        : [];
+    expect(trimmedTimes[0]).toBeCloseTo(0.2);
+    expect(trimmedTimes.at(-1)).toBeCloseTo(1.2);
+
+    const parented = applyDrafts(
+      withOverlay,
+      setClipParentOperation(withOverlay, {
+        trackId: overlayTrackId as string,
+        clipId: overlay?.id as string,
+        parentClipId: 'clip-a',
+      }).forward,
+    );
+    expect(parented.tracks.find((track) => track.kind === 'overlay')?.clips[0]?.parentClipId).toBe(
+      'clip-a',
+    );
+
+    const placed = applyDrafts(
+      withOverlay,
+      applyMotionRecipeOperation(withOverlay, {
+        trackId: overlayTrackId as string,
+        clipId: overlay?.id as string,
+        recipe: {
+          durationSec: 2,
+          keyframes: [
+            {
+              id: 'recipe-op',
+              property: 'transform.opacity',
+              timeSec: 1,
+              value: 0.25,
+              interpolation: 'linear',
+            },
+          ],
+        },
+      }).forward,
+    );
+    const placedClip = placed.tracks.find((track) => track.kind === 'overlay')?.clips[0];
+    expect(placedClip && 'keyframes' in placedClip ? placedClip.keyframes[0]?.timeSec : null).toBe(
+      2,
+    );
+
+    const precomposed = applyDrafts(
+      withOverlay,
+      precomposeClipsOperation(withOverlay, { clipIds: [overlay?.id as string], name: 'Logo nest' })
+        .forward,
+    );
+    expect(precomposed.nestedSequences[0]?.name).toBe('Logo nest');
+    expect(
+      precomposed.tracks.find((track) => track.kind === 'nested_sequence')?.clips[0]?.kind,
+    ).toBe('nested_sequence');
+    expect(precomposed.tracks.find((track) => track.kind === 'overlay')?.clips).toEqual([]);
 
     const withAudio = applyDrafts(
       withOverlay,

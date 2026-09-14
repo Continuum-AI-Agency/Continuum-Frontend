@@ -84,7 +84,7 @@ function WorkflowMapNode({ node }: { node: WorkflowNode }) {
         )}
         {node.title}
       </span>
-      <span className="text-[11px] text-muted-foreground">{node.description}</span>
+      <span className="text-xs text-muted-foreground">{node.description}</span>
     </Link>
   );
 }

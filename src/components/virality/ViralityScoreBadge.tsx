@@ -31,7 +31,7 @@ export function ViralityScoreBadge({
       title={`Virality ${overall}/100 · ${grade}`}
     >
       <span className="font-semibold">{overall}</span>
-      <span className="text-[10px] uppercase tracking-wide">{grade}</span>
+      <span className="text-2xs uppercase tracking-wide">{grade}</span>
     </span>
   );
 }

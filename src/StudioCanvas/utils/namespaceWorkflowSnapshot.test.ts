@@ -49,7 +49,9 @@ describe('node ids stored INSIDE data move with the nodes', () => {
             position: { x: 400, y: 0 },
             data: {
               frame: { width: 2048, height: 2048 },
-              layers: [{ id: 'l1', name: 'Logo', sourceNodeId: 'logo', position: { x: 10, y: 20 } }],
+              layers: [
+                { id: 'l1', name: 'Logo', sourceNodeId: 'logo', position: { x: 10, y: 20 } },
+              ],
             },
           },
         ],
@@ -76,7 +78,13 @@ describe('node ids stored INSIDE data move with the nodes', () => {
             position: { x: 0, y: 0 },
             data: {
               layers: [
-                { id: 'l1', name: 'Hero', sourceNodeId: 'a', position: { x: 512, y: 256 }, rotation: 45 },
+                {
+                  id: 'l1',
+                  name: 'Hero',
+                  sourceNodeId: 'a',
+                  position: { x: 512, y: 256 },
+                  rotation: 45,
+                },
               ],
             },
           },
@@ -110,9 +118,9 @@ describe('node ids stored INSIDE data move with the nodes', () => {
       'module:reel',
     );
 
-    expect((result.nodes[1].data as { items: { sourceNodeId: string }[] }).items[0].sourceNodeId).toBe(
-      'module:reel:clip',
-    );
+    expect(
+      (result.nodes[1].data as { items: { sourceNodeId: string }[] }).items[0].sourceNodeId,
+    ).toBe('module:reel:clip');
   });
 
   it('leaves a source that is not part of the snapshot alone', () => {
@@ -131,8 +139,8 @@ describe('node ids stored INSIDE data move with the nodes', () => {
       'module:partial',
     );
 
-    expect((result.nodes[0].data as { layers: { sourceNodeId: string }[] }).layers[0].sourceNodeId).toBe(
-      'outside-the-selection',
-    );
+    expect(
+      (result.nodes[0].data as { layers: { sourceNodeId: string }[] }).layers[0].sourceNodeId,
+    ).toBe('outside-the-selection');
   });
 });

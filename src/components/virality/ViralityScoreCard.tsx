@@ -70,7 +70,7 @@ export function ViralityScoreCard({
         </span>
         <span
           className={cn(
-            'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+            'rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide',
             VIRALITY_GRADE_STYLES[grade],
           )}
         >

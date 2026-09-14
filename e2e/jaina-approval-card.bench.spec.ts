@@ -154,7 +154,11 @@ function denialStreamBody(): string {
   const frames = [
     {
       type: 'response.created',
-      data: { id: `resp_deny_${RUN_ID}`, object: 'realtime.response' as const, status: 'completed' },
+      data: {
+        id: `resp_deny_${RUN_ID}`,
+        object: 'realtime.response' as const,
+        status: 'completed',
+      },
     },
     {
       type: 'tool.approval_resolved',
@@ -194,7 +198,8 @@ async function rememberAndSelectBrand(): Promise<void> {
     .from('permissions')
     .select('user_id,email')
     .eq('brand_profile_id', CLIENT_BRAND_ID);
-  if (membersError) throw new Error(`[approval-card-bench] permissions read: ${membersError.message}`);
+  if (membersError)
+    throw new Error(`[approval-card-bench] permissions read: ${membersError.message}`);
   const userId = (members ?? [])
     .map((row) => row as { user_id: string; email: string | null })
     .find((row) => row.email?.toLowerCase() === CLIENT_OWNER_EMAIL)?.user_id;
@@ -206,7 +211,8 @@ async function rememberAndSelectBrand(): Promise<void> {
     .select('active_brand_id')
     .eq('user_id', userId)
     .maybeSingle();
-  previousBrandId = (existing as { active_brand_id?: string | null } | null)?.active_brand_id ?? null;
+  previousBrandId =
+    (existing as { active_brand_id?: string | null } | null)?.active_brand_id ?? null;
 
   const { error } = await brandProfiles()
     .from('user_brand_preferences')
@@ -219,16 +225,14 @@ async function rememberAndSelectBrand(): Promise<void> {
 
 async function restoreBrand(): Promise<void> {
   if (!benchUserId || previousBrandId === undefined) return;
-  await brandProfiles()
-    .from('user_brand_preferences')
-    .upsert(
-      {
-        user_id: benchUserId,
-        active_brand_id: previousBrandId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' },
-    );
+  await brandProfiles().from('user_brand_preferences').upsert(
+    {
+      user_id: benchUserId,
+      active_brand_id: previousBrandId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' },
+  );
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -420,9 +424,10 @@ test.describe('jaina tool approval card', () => {
     expect(graphCalls, `unexpected Meta Graph traffic: ${JSON.stringify(graphCalls)}`).toHaveLength(
       0,
     );
-    expect(backendCalls, `unexpected Backend traffic: ${JSON.stringify(backendCalls)}`).toHaveLength(
-      0,
-    );
+    expect(
+      backendCalls,
+      `unexpected Backend traffic: ${JSON.stringify(backendCalls)}`,
+    ).toHaveLength(0);
     expect(streamCalls).toHaveLength(2);
     grade('no_write', true, '0 graph.facebook.com, 0 Backend, exactly 2 chat-stream POSTs');
 
@@ -431,12 +436,16 @@ test.describe('jaina tool approval card', () => {
         requestLog
           .filter((entry) => entry.method !== 'GET' && entry.method !== 'OPTIONS')
           .filter((entry) => !entry.url.includes('/api/agents/jaina/chat/'))
-          .map((entry) => `${entry.method} ${new URL(entry.url).origin}${new URL(entry.url).pathname}`),
+          .map(
+            (entry) => `${entry.method} ${new URL(entry.url).origin}${new URL(entry.url).pathname}`,
+          ),
       ),
     ];
-    notes.push(`other non-GET requests observed (page background, not this feature): ${
-      otherWrites.length === 0 ? 'none' : otherWrites.join(', ')
-    }`);
+    notes.push(
+      `other non-GET requests observed (page background, not this feature): ${
+        otherWrites.length === 0 ? 'none' : otherWrites.join(', ')
+      }`,
+    );
     notes.push(
       'UN-EXERCISED: a real Backend `tool.approval_required` frame. This bench fulfils the ' +
         'chat-stream route locally and spawns no Fastify — the Backend emit side is covered by ' +

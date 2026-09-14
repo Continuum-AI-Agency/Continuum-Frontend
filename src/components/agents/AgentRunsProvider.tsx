@@ -27,7 +27,7 @@ import { type RunEventAgentKind, useAgentRunStream } from '@/hooks/useAgentRunSt
 import { selectLiveRuns, useAgentRunStore } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
-import { CanvasComposerRunTail } from './CanvasComposerRunTail';
+import { DurableAiStudioRunTail } from './CanvasComposerRunTail';
 
 function EventLogRunTail({ run, agent }: { run: AgentRunDto; agent: RunEventAgentKind }) {
   useAgentRunStream(run.runId, agent);
@@ -38,12 +38,12 @@ function EventLogRunTail({ run, agent }: { run: AgentRunDto; agent: RunEventAgen
  * One tail per live run. React forbids calling a hook in a loop, so each run gets its own
  * mounted component — that is the whole reason this renders nothing.
  *
- * Canvas uses a specialized tail because it follows both its durable event log and
- * the run row that drives app-wide terminal status.
+ * AI Studio runs use a specialized tail because they follow both their durable event
+ * log and the run row that drives app-wide terminal status.
  */
 function RunTail({ run }: { run: AgentRunDto }) {
   const { agent } = run;
-  if (agent === 'canvas') return <CanvasComposerRunTail run={run} />;
+  if (agent === 'canvas' || agent === 'hyperframes') return <DurableAiStudioRunTail run={run} />;
   return <EventLogRunTail run={run} agent={agent} />;
 }
 

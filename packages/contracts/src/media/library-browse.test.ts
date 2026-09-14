@@ -54,4 +54,20 @@ describe('libraryBrowseQuerySchema', () => {
       false,
     );
   });
+
+  test('accepts Home destinations and creative aspect-ratio shelves', () => {
+    const query = libraryBrowseQuerySchema.parse({
+      brandId,
+      destination: 'home',
+      aspectRatios: ['9:16', '1:1'],
+    });
+    expect(query.destination).toBe('home');
+    expect(query.aspectRatios).toEqual(['9:16', '1:1']);
+    expect(libraryBrowseQuerySchema.safeParse({ brandId, destination: 'jobs' }).success).toBe(
+      false,
+    );
+    expect(libraryBrowseQuerySchema.safeParse({ brandId, aspectRatios: ['1.91:1'] }).success).toBe(
+      false,
+    );
+  });
 });

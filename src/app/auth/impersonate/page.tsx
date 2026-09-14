@@ -3,6 +3,7 @@
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export default function ImpersonatePage() {
@@ -152,12 +153,9 @@ export default function ImpersonatePage() {
             ))}
           </div>
 
-          <button
-            onClick={() => router.push('/login')}
-            className="mt-6 w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors shadow-lg"
-          >
+          <Button onClick={() => router.push('/login')} size="lg" className="mt-6 w-full">
             Return to Login
-          </button>
+          </Button>
         </div>
       </div>
     );

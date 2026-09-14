@@ -132,6 +132,7 @@ describe('isSignatureTracked', () => {
     expect(isSignatureTracked('nanoGen')).toBe(true);
     expect(isSignatureTracked('videoGen')).toBe(true);
     expect(isSignatureTracked('veoFast')).toBe(true);
+    expect(isSignatureTracked('action')).toBe(true);
     expect(isSignatureTracked('extendVideo')).toBe(false);
     expect(isSignatureTracked('timelineEditor')).toBe(false);
     expect(isSignatureTracked('image')).toBe(false);
@@ -274,12 +275,34 @@ describe('sig2 recipes are the registry recipes', () => {
     // action or a batch is a different question (see nodeHasUsableOutput in the
     // executor), and answering it here by accident would reuse a stale action output.
     const tracked = STUDIO_NODE_TYPES.filter((type) => isSignatureTracked(type));
-    expect([...tracked].sort()).toEqual(['nanoGen', 'veoDirector', 'veoFast', 'videoGen']);
+    expect([...tracked].sort()).toEqual([
+      'action',
+      'nanoGen',
+      'veoDirector',
+      'veoFast',
+      'videoGen',
+    ]);
   });
 
   it('leaves the Canvas V3 types untracked', () => {
-    for (const type of ['action', 'router', 'batch', 'export', 'layerEditor'] as const) {
+    for (const type of ['router', 'batch', 'export', 'layerEditor'] as const) {
       expect(isSignatureTracked(type), type).toBe(false);
     }
+  });
+
+  it('changes an action signature when its operation or config changes', () => {
+    const action = (actionId: string, config: Record<string, unknown>): StudioNode => ({
+      id: 'a',
+      position: { x: 0, y: 0 },
+      type: 'action',
+      data: { actionId, config },
+    });
+    const base = action('image.flip', { horizontal: true });
+    expect(computeGenerationSignature(base, [], lookup(base))).not.toBe(
+      computeGenerationSignature(action('image.rotate', { horizontal: true }), [], lookup(base)),
+    );
+    expect(computeGenerationSignature(base, [], lookup(base))).not.toBe(
+      computeGenerationSignature(action('image.flip', { horizontal: false }), [], lookup(base)),
+    );
   });
 });

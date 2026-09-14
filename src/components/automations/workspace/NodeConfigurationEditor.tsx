@@ -23,7 +23,6 @@ import {
 } from '@continuum/contracts';
 import { Copy, Expand, Lightbulb, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
-import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -61,14 +60,15 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toast-imperative';
 import { getApiUrl } from '@/lib/api/config';
 import { buildAutomationSourceOptions } from '@/lib/automations/source-options';
 import { cn } from '@/lib/utils';
 import { AiStudioRoomPicker } from './pickers/AiStudioRoomPicker';
-import { PipelinePicker } from './pickers/PipelinePicker';
 import { LibraryCollectionPicker } from './pickers/LibraryCollectionPicker';
 import { OrganicPublishTargetPicker } from './pickers/OrganicPublishTargetPicker';
 import { PaidPortfolioPicker } from './pickers/PaidPortfolioPicker';
+import { PipelinePicker } from './pickers/PipelinePicker';
 import { PlannerTargetPicker } from './pickers/PlannerTargetPicker';
 
 type WorkflowConfig = AutomationWorkflowNode['config'];
@@ -201,7 +201,7 @@ function ActionCapabilityNotice({
       <Badge variant="warning">
         {capability.availability === 'needs_connection' ? 'Needs connection' : 'Limited'}
       </Badge>
-      <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+      <p className="mt-2 text-xs leading-4 text-muted-foreground">
         {capability.reason ??
           'This action is not fully available in this environment yet. A run may fail preflight.'}
       </p>
@@ -249,7 +249,7 @@ function PromptField({
         onChange={(event) => onChange(event.target.value)}
       />
       <InputGroupAddon align="block-end" className="justify-between border-t">
-        <InputGroupText className="font-mono text-[10px]">
+        <InputGroupText className="font-mono text-2xs">
           {wordCount} {wordCount === 1 ? 'word' : 'words'}
         </InputGroupText>
         <div className="flex items-center gap-1">
@@ -281,7 +281,7 @@ function PromptField({
                   <Lightbulb aria-hidden="true" />
                   <span>
                     <span className="block text-xs font-medium">{starter.label}</span>
-                    <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 text-muted-foreground">
+                    <span className="mt-0.5 line-clamp-2 block text-xs leading-4 text-muted-foreground">
                       {starter.text}
                     </span>
                   </span>
@@ -334,7 +334,7 @@ function PromptField({
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>{label}</Label>
       {description ? (
-        <p className="text-[11px] leading-4 text-muted-foreground">{description}</p>
+        <p className="text-xs leading-4 text-muted-foreground">{description}</p>
       ) : null}
       {editor()}
     </div>
@@ -476,9 +476,7 @@ function Toggle({
     <div className="flex items-center justify-between gap-3 rounded-md border p-3">
       <div>
         <Label>{label}</Label>
-        {description ? (
-          <p className="mt-1 text-[11px] text-muted-foreground">{description}</p>
-        ) : null}
+        {description ? <p className="mt-1 text-xs text-muted-foreground">{description}</p> : null}
       </div>
       <Switch checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />
     </div>
@@ -557,7 +555,7 @@ function SourceEditor({
               {capability.availability.replace('_', ' ')}
             </Badge>
           </div>
-          <p className="mt-2 text-[11px] leading-4 text-muted-foreground">{capability.reason}</p>
+          <p className="mt-2 text-xs leading-4 text-muted-foreground">{capability.reason}</p>
         </div>
       ) : null}
       <Choice
@@ -889,7 +887,7 @@ function ManagedEndpointSummary({
         <Label>Managed endpoint</Label>
         <div className="rounded-md border border-warning/30 bg-warning/5 p-3">
           <Badge variant="warning">Not attached</Badge>
-          <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+          <p className="mt-2 text-xs leading-4 text-muted-foreground">
             Open Webhooks in the workspace header and create an endpoint for this node. Publishing
             is blocked until one is attached.
           </p>
@@ -906,13 +904,13 @@ function ManagedEndpointSummary({
       <div className="rounded-md border p-3">
         <div className="flex items-center gap-2">
           <Badge variant="success">Attached</Badge>
-          <span className="truncate text-[11px] text-muted-foreground">
+          <span className="truncate text-xs text-muted-foreground">
             {endpoint?.name ?? endpointId}
           </span>
         </div>
         {deliveryUrl ? (
           <div className="mt-2 flex items-center gap-1.5">
-            <code className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
+            <code className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
               {deliveryUrl}
             </code>
             <Button
@@ -926,7 +924,7 @@ function ManagedEndpointSummary({
             </Button>
           </div>
         ) : (
-          <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+          <p className="mt-2 text-xs leading-4 text-muted-foreground">
             This endpoint belongs to another brand or was deleted. Create a new one from Webhooks.
           </p>
         )}
@@ -1044,7 +1042,7 @@ export function NodeConfigurationEditor({
             disabled={disabled}
             onChange={(argumentsValue) => onChange({ ...node.config, arguments: argumentsValue })}
           />
-          <p className="font-mono text-[11px] text-muted-foreground">
+          <p className="font-mono text-xs text-muted-foreground">
             Schema {node.config.schemaHash.slice(0, 12)}
           </p>
         </>
@@ -1131,7 +1129,7 @@ export function NodeConfigurationEditor({
                   });
                 }}
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Custom schemas require explicit types, closed objects, required properties, bounded
                 arrays, and no recursive references.
               </p>
@@ -1172,7 +1170,7 @@ export function NodeConfigurationEditor({
             disabled={disabled}
             onChange={(title) => onChange({ ...node.config, title })}
           />
-          <p className="text-[11px] leading-4 text-muted-foreground">
+          <p className="text-xs leading-4 text-muted-foreground">
             The title heads the rendered report. Objective, audience and sections describe the
             report you want written — they shape the upstream formatter&rsquo;s target rather than
             this step. A formatter that returns complete markdown is passed through as authored.
@@ -1547,14 +1545,14 @@ export function NodeConfigurationEditor({
           {node.config.destinationId ? null : (
             <div className="rounded-md border border-warning/30 bg-warning/5 p-3">
               <Badge variant="warning">Needs setup</Badge>
-              <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+              <p className="mt-2 text-xs leading-4 text-muted-foreground">
                 {(webhookDestinations ?? []).length === 0
                   ? 'No signed destinations exist yet. Open Webhooks in the workspace header to create one.'
                   : 'Select a signed destination. This step cannot run or publish until one is chosen.'}
               </p>
             </div>
           )}
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             The destination owns its URL, method, signing secret, and retry ledger.
           </p>
         </>
@@ -1649,7 +1647,7 @@ export function NodeConfigurationEditor({
               })
             }
           />
-          <p className="text-[11px] leading-4 text-muted-foreground">
+          <p className="text-xs leading-4 text-muted-foreground">
             Approved drafts scheduled within the lookahead are published. A past-due draft is caught
             up, which is why there is no lower bound.
           </p>
@@ -1697,7 +1695,9 @@ export function NodeConfigurationEditor({
             />
           )}
           <PromptField
-            label={onPipeline ? "Text sent to the pipeline's input ports" : 'Generation instructions'}
+            label={
+              onPipeline ? "Text sent to the pipeline's input ports" : 'Generation instructions'
+            }
             value={request.instructions}
             disabled={disabled}
             placeholder="Describe the asset to create, including format, composition, and constraints."
@@ -1725,7 +1725,7 @@ export function NodeConfigurationEditor({
               onChange={(roomId) => onChange({ ...request, roomId })}
             />
           )}
-          <p className="text-[11px] leading-4 text-muted-foreground">
+          <p className="text-xs leading-4 text-muted-foreground">
             {onPipeline
               ? 'This text is written to every text input port the pipeline declares. The pipeline runs in a workspace created for the run and deleted after it, and it decides what it generates.'
               : 'An automation runs headless, so it can only reach the image and video generators. A saved Studio workflow is replayed by the canvas in a browser and cannot be scheduled — publish it as a pipeline to run it here.'}
@@ -1764,7 +1764,7 @@ export function NodeConfigurationEditor({
             placeholder="No cap"
             onChange={(raw) => onChange({ ...target, maxBudgetDeltaPct: boundedPercent(raw) })}
           />
-          <p className="text-[11px] leading-4 text-muted-foreground">
+          <p className="text-xs leading-4 text-muted-foreground">
             Pausing an ad is human-only and there is no entity-addressed budget write, so an
             automation either runs a cycle or applies what a human already approved.
           </p>

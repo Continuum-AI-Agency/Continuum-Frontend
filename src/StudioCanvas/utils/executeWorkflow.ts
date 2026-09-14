@@ -55,6 +55,8 @@ import type {
 } from '../types';
 import type { ImageOutputItem, NodeOutput } from '../types/execution';
 import { collectionPreviewSrcs } from './actions/collectionPreview';
+import { nodeWiredToLibrarySink } from './actions/nodeWiredToLibrarySink';
+import { persistActionOutput } from './actions/persistActionOutput';
 import { type ResolvedActionInput, runAction } from './actions/runAction';
 import { fanOut } from './batch/fanout';
 import {
@@ -690,6 +692,20 @@ const actionInputFromOutput = (output: NodeOutput, handle: string): ResolvedActi
   return { handle };
 };
 
+const inputAssetIds = (inputs: ResolvedActionInput[]): string[] =>
+  inputs.flatMap((input) => (input.assetId ? [input.assetId] : []));
+
+const outputAssetIds = (output: NodeOutput): string[] => {
+  if (output.type === 'image' || output.type === 'video') {
+    return output.assetId ? [output.assetId] : [];
+  }
+  if (output.type === 'images') {
+    return output.items.flatMap((item) => (item.assetId ? [item.assetId] : []));
+  }
+  if (output.type === 'collection') return output.items.flatMap(outputAssetIds);
+  return [];
+};
+
 /** Items to fan an action over, when one of its inputs resolved to a collection. */
 const collectionInputFor = (
   def: ActionDef,
@@ -1301,17 +1317,24 @@ const nodeHasUsableOutput = (node: StudioNode): boolean => {
   if (node.type === 'string' || node.type === 'videoDecode') {
     return normalizeText(data.value as string | undefined) !== undefined;
   }
-  // The Canvas V3 pass-throughs always re-run. They are not signature-tracked — the
-  // registry pins `signatureFields` to the four generator types — so an edited
-  // `actionId`, `config` or batch item would otherwise go undetected and the stale
-  // output be reused. Re-running a deterministic local op costs compute, not credits.
-  //
-  // ponytail: blanket re-run. Signature-track them if a slow op (video.speed
-  // re-encodes a whole clip) makes the recompute hurt.
-  if (node.type === 'action' || node.type === 'router' || node.type === 'batch') return false;
+  // Routers and batches are cheap pass-throughs. Actions are signature-tracked and may
+  // reuse their Library output; forcing them to rerun discarded the durable pointer and
+  // made a connected downstream node report that nothing readable came through.
+  if (node.type === 'router' || node.type === 'batch') return false;
   if (data.error) return false;
+  if (node.type === 'action' && actionOutputModality(data.actionId) === 'text') {
+    return normalizeText(data.value as string | undefined) !== undefined;
+  }
+  if (node.type === 'action' && Array.isArray(data.collectionAssets)) {
+    return data.collectionAssets.length > 0;
+  }
   return Boolean(
-    data.generatedImage || data.generatedImageUrl || data.generatedVideo || data.generatedVideoUrl,
+    data.generatedImage ||
+      data.generatedImageUrl ||
+      data.generatedImageStoragePath ||
+      data.generatedVideo ||
+      data.generatedVideoUrl ||
+      data.generatedVideoStoragePath,
   );
 };
 
@@ -1497,20 +1520,6 @@ const collectDownstreamClosure = (
   return closure;
 };
 
-const REFERENCE_INPUT_HANDLES = new Set([
-  'ref-image',
-  'ref-images',
-  'ref-video',
-  'first-frame',
-  'last-frame',
-  'image',
-  'video',
-]);
-
-const isReferenceInputHandle = (handle?: string | null): boolean =>
-  typeof handle === 'string' &&
-  (REFERENCE_INPUT_HANDLES.has(handle) || handle.startsWith('frame-'));
-
 const asTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 // A reference whose media is not already inline base64 needs hydration: fetch a
@@ -1557,12 +1566,9 @@ async function ensureReferenceMediaHydrated(
   const candidateIds = new Set<string>();
   for (const edge of edges) {
     if (!executableNodeIds.has(edge.target)) continue;
-    if (!isReferenceInputHandle(edge.targetHandle)) continue;
     const source = nodeById.get(edge.source);
     if (!source) continue;
-    if (source.type === 'image' || source.type === 'video' || isMediaNodeType(source.type)) {
-      candidateIds.add(source.id);
-    }
+    if (referenceNeedsHydration(source)) candidateIds.add(source.id);
   }
 
   const candidates = nodes.filter(
@@ -1814,11 +1820,16 @@ export async function executeWorkflow(
         imageNodePromises.push(promise);
       } else {
         const parsed = parseDataUrl(imageData.image);
+        const ref = readNodeAssetRef(imageData);
+        const assetRef = ref
+          ? { assetId: ref.assetId, ...(ref.versionId ? { assetVersionId: ref.versionId } : {}) }
+          : {};
         if (parsed?.base64) {
           resolvedOutputs.set(node.id, {
             type: 'image',
             base64: parsed.base64,
             mimeType: parsed.mimeType,
+            ...assetRef,
           });
         } else if (isHttpUrl(imageData.image)) {
           // URL reference (uploaded asset signed URL, or an Instagram grab not yet
@@ -1832,6 +1843,7 @@ export async function executeWorkflow(
             url: imageData.image,
             storagePath: imageData.sourcePath,
             storageBucket: (imageData as any).bucket,
+            ...assetRef,
           });
         } else if (isHttpUrl(imageData.sourceUrl)) {
           // Saved canvases strip the inline base64 from `image`; only the durable
@@ -1845,6 +1857,7 @@ export async function executeWorkflow(
             url: imageData.sourceUrl,
             storagePath: imageData.sourcePath,
             storageBucket: (imageData as any).bucket,
+            ...assetRef,
           });
         }
       }
@@ -1859,14 +1872,19 @@ export async function executeWorkflow(
       };
       const rawVideo = videoData.video ?? videoData.sourceUrl;
       const parsed = parseDataUrl(rawVideo);
+      const ref = readNodeAssetRef(node.data as Record<string, unknown>);
+      const assetRef = ref
+        ? { assetId: ref.assetId, ...(ref.versionId ? { assetVersionId: ref.versionId } : {}) }
+        : {};
       if (parsed?.base64) {
-        resolvedOutputs.set(node.id, { type: 'video', url: rawVideo! });
+        resolvedOutputs.set(node.id, { type: 'video', url: rawVideo!, ...assetRef });
       } else if (isHttpUrl(rawVideo)) {
         resolvedOutputs.set(node.id, {
           type: 'video',
           url: rawVideo,
           storagePath: videoData.sourcePath,
           storageBucket: videoData.bucket,
+          ...assetRef,
         });
       }
     }
@@ -1874,7 +1892,33 @@ export async function executeWorkflow(
     // Reuse a node's existing output (feed it to downstream consumers) when the
     // node is not slated to regenerate and already holds usable content.
     if (!mustRegenerate.has(node.id) && nodeHasUsableOutput(node)) {
-      if (node.type === 'nanoGen' || node.type === 'frameExtract' || node.type === 'layerEditor') {
+      const reusableActionModality =
+        node.type === 'action' ? actionOutputModality(node.data.actionId) : undefined;
+      const collectionAssets = Array.isArray(node.data.collectionAssets)
+        ? node.data.collectionAssets
+        : [];
+      if (node.type === 'action' && collectionAssets.length > 0) {
+        const urls = Array.isArray(node.data.collectionItems) ? node.data.collectionItems : [];
+        const items = collectionAssets.flatMap((asset, index): NodeOutput[] => {
+          const url = urls[index];
+          if (!url) return [];
+          return asset.type === 'video'
+            ? [{ type: 'video', url, ...asset }]
+            : [{ type: 'image', url, base64: '', ...asset }];
+        });
+        if (items.length > 0) {
+          resolvedOutputs.set(node.id, {
+            type: 'collection',
+            itemType: node.data.collectionItemType ?? collectionAssets[0].type,
+            items,
+          });
+        }
+      } else if (
+        node.type === 'nanoGen' ||
+        node.type === 'frameExtract' ||
+        node.type === 'layerEditor' ||
+        reusableActionModality === 'image'
+      ) {
         const genImage = (node.data as any).generatedImage as string | undefined;
         const genImageUrl = (node.data as any).generatedImageUrl as string | undefined;
         const durableImageUrl = isHttpUrl(genImage) ? genImage : genImageUrl;
@@ -1907,6 +1951,10 @@ export async function executeWorkflow(
               base64: parsed.base64,
               mimeType: parsed.mimeType,
               url: genImageUrl,
+              storagePath: (node.data as any).generatedImageStoragePath,
+              storageBucket: (node.data as any).generatedImageBucket,
+              assetId: (node.data as any).renderOutputAssetId,
+              assetVersionId: (node.data as any).renderOutputAssetVersionId,
             });
           } else if (durableImageUrl) {
             resolvedOutputs.set(node.id, {
@@ -1916,6 +1964,9 @@ export async function executeWorkflow(
               url: durableImageUrl,
               storagePath: (node.data as any).generatedImageStoragePath,
               storageBucket: (node.data as any).generatedImageBucket,
+              assetId: (node.data as any).renderOutputAssetId,
+              assetVersionId: (node.data as any).renderOutputAssetVersionId,
+              shaderStack: (node.data as any).shaderStack,
             });
           }
         } else if (durableImageUrl) {
@@ -1926,6 +1977,9 @@ export async function executeWorkflow(
             url: durableImageUrl,
             storagePath: (node.data as any).generatedImageStoragePath,
             storageBucket: (node.data as any).generatedImageBucket,
+            assetId: (node.data as any).renderOutputAssetId,
+            assetVersionId: (node.data as any).renderOutputAssetVersionId,
+            shaderStack: (node.data as any).shaderStack,
           });
         }
       } else if (
@@ -1933,7 +1987,8 @@ export async function executeWorkflow(
         node.type === 'omniGen' ||
         node.type === 'extendVideo' ||
         node.type === 'hyperframesAgent' ||
-        node.type === 'timelineEditor'
+        node.type === 'timelineEditor' ||
+        reusableActionModality === 'video'
       ) {
         const genVideo =
           ((node.data as any).generatedVideo as string | undefined) ??
@@ -2099,7 +2154,12 @@ export async function executeWorkflow(
     };
   };
 
-  const setNodeOutput = (nodeId: string, output: NodeOutput) => {
+  const setNodeOutput = (
+    nodeId: string,
+    output: NodeOutput,
+    options?: { registerLibrary?: boolean },
+  ) => {
+    const registerLibrary = options?.registerLibrary !== false;
     resolvedOutputs.set(nodeId, output);
     if (output.type === 'images') {
       const variations = output.items
@@ -2129,7 +2189,7 @@ export async function executeWorkflow(
         // (bucket, storage_path) — a second call returns the same pair rather than a
         // second asset. Skipping on a half-identified item leaves the node unable to feed
         // an API Render, reported as "needs a Library asset" about an asset already there.
-        if ((item.assetId && item.assetVersionId) || !variations[index]) return;
+        if (!registerLibrary || (item.assetId && item.assetVersionId) || !variations[index]) return;
         registerCanvasIfDurable(
           nodeId,
           {
@@ -2184,7 +2244,7 @@ export async function executeWorkflow(
             ? (updatedNode?.data as any).generatedImage.slice(0, 48)
             : undefined,
       });
-      if (!output.assetId || !output.assetVersionId) {
+      if (registerLibrary && (!output.assetId || !output.assetVersionId)) {
         registerCanvasIfDurable(nodeId, {
           kind: 'image',
           bucket: output.storageBucket,
@@ -2209,14 +2269,16 @@ export async function executeWorkflow(
         isExecuting: false,
       });
       useStudioStore.getState().triggerSave();
-      registerCanvasIfDurable(nodeId, {
-        kind: 'video',
-        bucket: output.storageBucket,
-        storagePath: output.storagePath,
-        url: persistentUrl,
-        mimeType: 'video/mp4',
-        sizeBytes: output.sizeBytes,
-      });
+      if (registerLibrary && (!output.assetId || !output.assetVersionId)) {
+        registerCanvasIfDurable(nodeId, {
+          kind: 'video',
+          bucket: output.storageBucket,
+          storagePath: output.storagePath,
+          url: persistentUrl,
+          mimeType: output.mimeType ?? 'video/mp4',
+          sizeBytes: output.sizeBytes,
+        });
+      }
     } else if (output.type === 'text') {
       useStudioStore.getState().updateNodeData(nodeId, {
         value: output.value,
@@ -2232,10 +2294,32 @@ export async function executeWorkflow(
       // URLs on the way to the canvas row, exactly as it does for a single image.
       const srcs = collectionPreviewSrcs(output);
       const [first] = srcs;
+      const collectionAssets = output.items.flatMap((item) => {
+        if (
+          (item.type !== 'image' && item.type !== 'video') ||
+          !item.storagePath ||
+          !item.storageBucket ||
+          !item.assetId ||
+          !item.assetVersionId
+        ) {
+          return [];
+        }
+        return [
+          {
+            type: item.type,
+            mimeType: item.type === 'image' ? item.mimeType : (item.mimeType ?? 'video/mp4'),
+            storagePath: item.storagePath,
+            storageBucket: item.storageBucket,
+            assetId: item.assetId,
+            assetVersionId: item.assetVersionId,
+          },
+        ];
+      });
       useStudioStore.getState().updateNodeData(nodeId, {
         collectionCount: output.items.length,
         collectionItemType: output.itemType,
         collectionItems: srcs,
+        collectionAssets,
         ...(first
           ? output.itemType === 'video'
             ? { generatedVideo: first }
@@ -2868,6 +2952,7 @@ export async function executeWorkflow(
         const controller = controls.registerController(nodeId);
 
         let output: NodeOutput;
+        let sourceAssetIds: string[] = [];
         try {
           const collectionPort = collectionInputFor(def, nodeId, edges, resolvedOutputs);
           if (collectionPort) {
@@ -2887,6 +2972,7 @@ export async function executeWorkflow(
               resolvedOutputs,
               nodeById,
             );
+            sourceAssetIds = [...inputAssetIds(shared), ...items.flatMap(outputAssetIds)];
             const fan = await fanOut(items, async (item) =>
               runAction({
                 actionId,
@@ -2913,9 +2999,17 @@ export async function executeWorkflow(
             }
             output = { type: 'collection', itemType: def.output, items: produced };
           } else {
+            const inputs = await resolveActionInputsFor(
+              def,
+              nodeId,
+              edges,
+              resolvedOutputs,
+              nodeById,
+            );
+            sourceAssetIds = inputAssetIds(inputs);
             output = await runAction({
               actionId,
-              inputs: await resolveActionInputsFor(def, nodeId, edges, resolvedOutputs, nodeById),
+              inputs,
               config,
               brand,
               signal: controller.signal,
@@ -2932,7 +3026,31 @@ export async function executeWorkflow(
           controls.releaseController(nodeId, controller);
         }
 
-        setNodeOutput(nodeId, output);
+        try {
+          const typeById = new Map([...nodeById.entries()].map(([id, n]) => [id, n.type] as const));
+          output = await persistActionOutput({
+            output,
+            actionId,
+            brandId: workflowBrandId,
+            nodeId,
+            roomId: options.roomId,
+            sourceAssetIds,
+            keep: data.keep === true,
+            wiredToLibrarySink: nodeWiredToLibrarySink(nodeId, edges, typeById),
+          });
+        } catch (error) {
+          // The media operation succeeded; keep that session preview visible even if
+          // Library persistence did not. Failed status keeps Run available for retry.
+          setNodeOutput(nodeId, output);
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            error instanceof Error ? error.message : String(error),
+          );
+          return false;
+        }
+
+        setNodeOutput(nodeId, output, { registerLibrary: false });
         updateNodeStatus(nodeId, 'completed');
         return true;
       }

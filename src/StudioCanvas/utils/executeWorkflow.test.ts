@@ -3,6 +3,7 @@ import type { Edge } from '@xyflow/react';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
 import * as spliceWorkerClientModule from '../workers/spliceWorkerClient';
+import * as removeBackgroundOpModule from './actions/removeBackgroundOp';
 import {
   collectDownstreamLeafIds,
   collectPublisherHandoffs,
@@ -61,6 +62,8 @@ describe('executeWorkflow', () => {
     executeEnrichment,
     cancel: () => {},
     reset: () => {},
+    registerController: () => new AbortController(),
+    releaseController: () => {},
     isExecuting: true,
     error: null,
   });
@@ -1444,6 +1447,53 @@ describe('executeWorkflow', () => {
     expect((imgNode?.data as any).image).toBe(freshBase64);
   });
 
+  it('hydrates a durable Action output feeding a generic in port', async () => {
+    const freshUrl = 'https://cdn.example.com/fresh-action.png';
+    const hydrateAction = mock(async (input: StudioNode[]) =>
+      input.map((node) => ({
+        ...node,
+        data: { ...node.data, generatedImage: freshUrl, generatedImageUrl: freshUrl },
+      })),
+    );
+    mock.module('./rehydrateWorkflowMedia', () => ({ rehydrateWorkflowMediaNodes: hydrateAction }));
+
+    useStudioStore.getState().setNodes([
+      {
+        id: 'saved-action',
+        position: { x: 0, y: 0 },
+        type: 'action',
+        data: {
+          actionId: 'image.removeBackground',
+          config: {},
+          generatedImageStoragePath: 'brand/cutout.png',
+          generatedImageBucket: 'media-library',
+          renderOutputAssetId: 'asset-cutout',
+          renderOutputAssetVersionId: 'version-cutout',
+        },
+      },
+      {
+        id: 'filter',
+        position: { x: 200, y: 0 },
+        type: 'action',
+        data: { actionId: 'image.filter', config: {} },
+      },
+    ] as StudioNode[]);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e1',
+        source: 'saved-action',
+        sourceHandle: 'out',
+        target: 'filter',
+        targetHandle: 'in',
+      },
+    ]);
+
+    await executeWorkflow(buildControls(mock()) as never, { targetNodeId: 'filter' });
+
+    expect(hydrateAction).toHaveBeenCalledTimes(1);
+    expect(hydrateAction.mock.calls[0][0].map((node) => node.id)).toEqual(['saved-action']);
+  });
+
   it('parks the run at an uncommitted Video Editor break-point without failing downstream', async () => {
     // vid -> (media) -> timelineEditor -> (video) -> extendVideo. The editor is a
     // manual gate: with no committed render, the run must HALT at it — the editor
@@ -1832,6 +1882,60 @@ describe('executeWorkflow', () => {
         storage_bucket: 'brand-profile-assets',
         storage_path: 'brand/generated.png',
       });
+    });
+
+    it('reuses a saved Action output as a durable reference instead of rerunning it', async () => {
+      const durableUrl = 'https://storage.example.com/cutout.png?token=fresh';
+      useStudioStore.getState().setNodes([
+        {
+          id: 'cutout',
+          position: { x: 0, y: 0 },
+          type: 'action',
+          data: {
+            actionId: 'image.removeBackground',
+            config: {},
+            generatedImage: durableUrl,
+            generatedImageUrl: durableUrl,
+            generatedImageStoragePath: 'brand/cutout.png',
+            generatedImageBucket: 'media-library',
+            renderOutputAssetId: 'asset-cutout',
+            renderOutputAssetVersionId: 'version-cutout',
+          },
+        },
+        {
+          id: 'consumer',
+          position: { x: 200, y: 0 },
+          type: 'nanoGen',
+          data: { model: 'nano-banana', positivePrompt: 'use the cutout' },
+        },
+      ] as StudioNode[]);
+      useStudioStore.getState().setEdges([
+        {
+          id: 'e1',
+          source: 'cutout',
+          sourceHandle: 'out',
+          target: 'consumer',
+          targetHandle: 'ref-image',
+        },
+      ]);
+
+      const executeGeneration = mock(async () => ({
+        success: true,
+        output: { type: 'image', base64: 'next', mimeType: 'image/png' },
+      }));
+      await executeWorkflow(buildControls(executeGeneration) as never, {
+        targetNodeId: 'consumer',
+      });
+
+      expect(executeGeneration).toHaveBeenCalledTimes(1);
+      expect(executeGeneration.mock.calls[0][1].reference_images?.[0]).toMatchObject({
+        image_url: durableUrl,
+        storage_bucket: 'media-library',
+        storage_path: 'brand/cutout.png',
+      });
+      expect(
+        useStudioStore.getState().nodes.find((node) => node.id === 'cutout')?.data.error,
+      ).toBeUndefined();
     });
 
     it('Run-all reuses every node that already has content (no regeneration)', async () => {
@@ -3037,5 +3141,57 @@ describe('an edge that exists is never reported as missing', () => {
 
     expect(String(nodeById('join')?.data.error ?? '')).not.toMatch(/not ready|missing/i);
     expect(nodeById('join')?.data.value).toBe('hello canvas');
+  });
+
+  it('passes a Library reference pointer through the executor into an action', async () => {
+    const runRemoveImageBackground = mock(
+      async (args: { inputs: Array<{ assetId?: string; assetVersionId?: string }> }) => {
+        expect(args.inputs[0]).toMatchObject({
+          assetId: 'asset-source',
+          assetVersionId: 'version-source',
+        });
+        return {
+          type: 'image' as const,
+          mimeType: 'image/png',
+          url: 'https://cdn.example.com/cutout.png',
+          storagePath: 'brand/cutout.png',
+          storageBucket: 'media-library',
+          assetId: 'asset-cutout',
+          assetVersionId: 'version-cutout',
+        };
+      },
+    );
+    mock.module('./actions/removeBackgroundOp', () => ({
+      ...removeBackgroundOpModule,
+      runRemoveImageBackground,
+    }));
+    useStudioStore.getState().setNodes([
+      {
+        id: 'source',
+        type: 'image',
+        position: { x: 0, y: 0 },
+        data: {
+          image: 'https://cdn.example.com/source.png',
+          sourcePath: 'brand/source.png',
+          bucket: 'media-library',
+          assetId: 'asset-source',
+          assetVersionId: 'version-source',
+        },
+      },
+      {
+        id: 'cutout',
+        type: 'action',
+        position: { x: 0, y: 0 },
+        data: { actionId: 'image.removeBackground', config: {} },
+      },
+    ] as StudioNode[]);
+    useStudioStore
+      .getState()
+      .setEdges([{ id: 'e1', source: 'source', target: 'cutout', targetHandle: 'in' }]);
+
+    await executeWorkflow(controls() as never, { targetNodeId: 'cutout' });
+
+    expect(runRemoveImageBackground).toHaveBeenCalledTimes(1);
+    expect(nodeById('cutout')?.data.renderOutputAssetId).toBe('asset-cutout');
   });
 });

@@ -15,7 +15,7 @@
 import type { MediaAsset, TimelineDraftStatus } from '@continuum/contracts';
 import { getTimelineDraftResponseSchema } from '@continuum/contracts';
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/toast-imperative';
 import { saveFileAsNewVersion } from '@/lib/library/quickLook';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import type {

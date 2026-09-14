@@ -188,11 +188,11 @@ export function OrganicPublishTargetPicker({
         </PopoverContent>
       </Popover>
       {!isLoading && items.length === 0 ? (
-        <p className="text-[11px] leading-4 text-muted-foreground">
+        <p className="text-xs leading-4 text-muted-foreground">
           This brand has no connected Instagram, Facebook, or LinkedIn account to publish to.
         </p>
       ) : (
-        <p className="text-[11px] leading-4 text-muted-foreground">
+        <p className="text-xs leading-4 text-muted-foreground">
           Choosing an account sets the platform with it, so the two can never disagree.
         </p>
       )}

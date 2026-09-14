@@ -17,9 +17,13 @@ async function forwardToEdge(request: Request): Promise<Response> {
 
   const url = edgeUrl(request);
   const publishableKey =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !publishableKey) {
-    return NextResponse.json({ error: 'Supabase Edge Function is not configured.' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Supabase Edge Function is not configured.' },
+      { status: 500 },
+    );
   }
 
   const response = await fetch(url, {

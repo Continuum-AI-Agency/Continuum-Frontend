@@ -17,6 +17,12 @@ describe('video production API', () => {
     expect(
       createEditorGenerationBatchRequestSchema.safeParse({ kind: 'motion_draft' }).success,
     ).toBe(false);
+    expect(createEditorGenerationBatchRequestSchema.safeParse({ kind: 'narration' }).success).toBe(
+      true,
+    );
+    expect(createEditorGenerationBatchRequestSchema.safeParse({ kind: 'music' }).success).toBe(
+      true,
+    );
   });
 
   test('exposes a compact agent and Canvas summary', () => {

@@ -72,12 +72,12 @@ function AxisHeader({ entry }: { entry: MatrixAxisEntry }) {
 function CellBody({ preview }: { preview: CellPreview }) {
   if (preview.kind === 'text') {
     return (
-      <p className="line-clamp-6 p-2 text-left text-[11px] leading-snug whitespace-pre-wrap">
+      <p className="line-clamp-6 p-2 text-left text-xs leading-snug whitespace-pre-wrap">
         {preview.text}
       </p>
     );
   }
-  if (!preview.src) return <span className="text-[11px] text-muted-foreground">no preview</span>;
+  if (!preview.src) return <span className="text-xs text-muted-foreground">no preview</span>;
   if (preview.kind === 'video') {
     return (
       <video src={preview.src} preload="metadata" muted className="size-full object-cover">
@@ -117,15 +117,15 @@ export function MatrixResultsDialog({
 
     if (!cell || cell.capped) {
       return (
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {cell ? `not run (${MAX_BATCH_ITEMS} cap)` : ''}
         </span>
       );
     }
-    if (!cell.output) return <span className="text-[11px] text-destructive">failed</span>;
+    if (!cell.output) return <span className="text-xs text-destructive">failed</span>;
 
     const preview = previewOf(cell.output);
-    if (!preview) return <span className="text-[11px] text-muted-foreground">no preview</span>;
+    if (!preview) return <span className="text-xs text-muted-foreground">no preview</span>;
 
     return (
       <>

@@ -224,7 +224,9 @@ describe('sameToThePanel', () => {
   });
 
   it('notices a rename, a visibility flip and a lock', () => {
-    expect(sameToThePanel(props(), props({ layers: [layer('a'), { ...layer('b'), name: 'X' }] }))).toBe(false);
+    expect(
+      sameToThePanel(props(), props({ layers: [layer('a'), { ...layer('b'), name: 'X' }] })),
+    ).toBe(false);
     expect(
       sameToThePanel(props(), props({ layers: [layer('a'), { ...layer('b'), visible: false }] })),
     ).toBe(false);

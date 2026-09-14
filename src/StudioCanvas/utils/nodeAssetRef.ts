@@ -3,7 +3,8 @@
 // The pointer is written under three different keys depending on how the media
 // reached the canvas — `assetId` (dragged from the Library panel, uploaded),
 // `libraryAssetId` (seeded by `buildLibraryCanvasTemplate` / "Open in Canvas"),
-// `renderOutputAssetId` (a generation registered by `registerCanvasIfDurable`).
+// `renderOutputAssetId` (a generation registered by `registerCanvasIfDurable`),
+// `generatedVideoAssetId` (a durable HyperFrames completion).
 // Every reader that only knew one of them reported "not saved to the Library"
 // about an asset that was already there. This is the one read.
 //
@@ -27,6 +28,7 @@ export interface NodeAssetRef {
 // carries no version, so it pins nothing and callers fall back to the asset head.
 const KEY_PAIRS = [
   ['renderOutputAssetId', 'renderOutputAssetVersionId'],
+  ['generatedVideoAssetId', 'renderOutputAssetVersionId'],
   ['assetId', 'assetVersionId'],
   ['libraryAssetId', null],
 ] as const;

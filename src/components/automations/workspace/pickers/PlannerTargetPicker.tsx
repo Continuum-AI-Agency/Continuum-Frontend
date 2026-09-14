@@ -115,12 +115,12 @@ export function PlannerTargetPicker({
             </SelectContent>
           </Select>
           {!isLoading && accountOptions.length === 0 ? (
-            <p className="text-[11px] leading-4 text-muted-foreground">
+            <p className="text-xs leading-4 text-muted-foreground">
               No connected accounts for this platform. Connect one in Settings first.
             </p>
           ) : null}
           {accountId === null ? (
-            <p className="text-[11px] leading-4 text-muted-foreground">
+            <p className="text-xs leading-4 text-muted-foreground">
               This step cannot run or publish until an account is chosen.
             </p>
           ) : null}

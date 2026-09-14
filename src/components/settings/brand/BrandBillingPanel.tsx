@@ -1,6 +1,6 @@
-import { CreditCard, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { CreditCard, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 type BrandBillingPanelProps = {
   tier: number;
@@ -35,11 +35,7 @@ export function BrandBillingPanel({ tier }: BrandBillingPanelProps) {
           <span className="font-mono text-xs text-muted-foreground">— / — credits</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full bg-primary/40"
-            style={{ width: "0%" }}
-            aria-hidden
-          />
+          <div className="h-full bg-primary/40" style={{ width: '0%' }} aria-hidden />
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           Credit metering ships with the next billing release.

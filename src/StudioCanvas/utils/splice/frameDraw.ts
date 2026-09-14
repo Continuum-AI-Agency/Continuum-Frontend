@@ -224,11 +224,36 @@ async function prepareSource(
   effects: ClipEffectSpec | undefined,
   timeSec: number,
 ): Promise<CanvasImageSource> {
-  if (!hasShaderStack(effects)) return source;
   if (sourceWidth <= 0 || sourceHeight <= 0) return source;
+  const hasPixels = Boolean(
+    effects?.chromaKey ||
+      effects?.chromaticAberration?.amount ||
+      effects?.vhs?.amount ||
+      effects?.filmGrain?.amount ||
+      effects?.vignette?.amount ||
+      effects?.pixelate?.blockPx,
+  );
+  if (!hasPixels && !hasShaderStack(effects)) return source;
+
+  let prepared = source;
+  if (hasPixels && effects) {
+    const buffer = scratchContext(sourceWidth, sourceHeight);
+    if (buffer) {
+      buffer.drawImage(source, 0, 0, sourceWidth, sourceHeight);
+      if (effects.pixelate?.blockPx) {
+        pixelateScratch(buffer, sourceWidth, sourceHeight, effects.pixelate.blockPx);
+      }
+      const image = buffer.getImageData(0, 0, sourceWidth, sourceHeight);
+      applyPixelEffects(image, effects, sourceWidth, sourceHeight, timeSec);
+      buffer.putImageData(image, 0, 0);
+      prepared = scratch as OffscreenCanvas;
+    }
+  }
+
+  if (!hasShaderStack(effects)) return prepared;
   const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
   return renderShaderStackFrame({
-    source,
+    source: prepared,
     width: sourceWidth,
     height: sourceHeight,
     stack: shaderStackFromClipEffects(effects),
@@ -256,7 +281,7 @@ export async function drawEffectFrame(
   ctx.save();
   let prepared: CanvasImageSource = source;
   try {
-    ctx.globalAlpha = (effects ? opacityFor(effects) : 1) * alphaMul;
+    ctx.globalAlpha = (effects ? opacityFor(effects, t) : 1) * alphaMul;
     if (effects?.blendMode && effects.blendMode !== 'normal') {
       ctx.globalCompositeOperation = effects.blendMode;
     }

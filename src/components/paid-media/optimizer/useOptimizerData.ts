@@ -42,12 +42,13 @@ import {
   type EnrollRequest,
   type EnrollResult,
   EnrollResultSchema,
+  OptimizerActionRowSchema,
   OptimizerAdsetInventoryEnvelopeSchema,
   type OptimizerAdsetInventoryItem,
+  type OptimizerFeedWindowDays,
   type OptimizerInsightRequest,
   type OptimizerInsightResponse,
   OptimizerInsightResponseSchema,
-  OptimizerActionRowSchema,
   type OptimizerLogRow,
   OptimizerLogsResponseSchema,
   type PaidAdAngle,
@@ -154,8 +155,10 @@ export const optimizerQueryKeys = {
   performance: (portfolioId: string) => ['optimizer', 'performance', portfolioId] as const,
   cpaSeries: (portfolioId: string) => ['optimizer', 'efficiency-series', portfolioId] as const,
   renewals: (brandId: string) => ['optimizer', 'renewals', brandId] as const,
-  logs: (brandId: string) => ['optimizer', 'logs', brandId] as const,
-  actions: (brandId: string) => ['optimizer', 'actions', brandId] as const,
+  logs: (brandId: string, windowDays: OptimizerFeedWindowDays = 7, archive = false) =>
+    ['optimizer', 'logs', brandId, windowDays, archive ? 'archive' : 'hot'] as const,
+  actions: (brandId: string, windowDays: OptimizerFeedWindowDays = 7) =>
+    ['optimizer', 'actions', brandId, windowDays] as const,
   suggestions: (brandId: string, adAccountId: string | null, level: PortfolioLevel = 'adset') =>
     ['optimizer', 'suggestions', brandId, adAccountId ?? 'all', level] as const,
   accountSnapshots: (
@@ -377,9 +380,18 @@ const OptimizerActionFeedPageSchema = z.object({
 async function fetchLogsPage(
   brandId: string,
   before: string | null,
+  windowDays: OptimizerFeedWindowDays,
+  archive: boolean,
 ): Promise<FeedPage<OptimizerLogRow>> {
   const { data, error } = await getClient().functions.invoke('optimizer-status', {
-    body: { view: 'logs', brand_id: brandId, limit: OPTIMIZER_FEED_PAGE_SIZE, before },
+    body: {
+      view: 'logs',
+      brand_id: brandId,
+      limit: OPTIMIZER_FEED_PAGE_SIZE,
+      before,
+      window_days: windowDays,
+      archive,
+    },
   });
   if (error) throw new Error('optimizer-status logs unreachable');
   const parsed = OptimizerLogsResponseSchema.safeParse(data);
@@ -400,9 +412,16 @@ async function fetchLogsPage(
 async function fetchActionsPage(
   brandId: string,
   before: string | null,
+  windowDays: OptimizerFeedWindowDays,
 ): Promise<FeedPage<OptimizerActionFeedRow>> {
   const { data, error } = await getClient().functions.invoke('optimizer-status', {
-    body: { view: 'actions', brand_id: brandId, limit: OPTIMIZER_FEED_PAGE_SIZE, before },
+    body: {
+      view: 'actions',
+      brand_id: brandId,
+      limit: OPTIMIZER_FEED_PAGE_SIZE,
+      before,
+      window_days: windowDays,
+    },
   });
   if (error) throw new Error('optimizer-status actions unreachable');
   const parsed = OptimizerActionFeedPageSchema.safeParse(data);
@@ -1175,23 +1194,28 @@ function useOptimizerPagedRead<TRow extends { id: string | number }>({
 /** The brand's LIFECYCLE feed — "the machine ran". Money writes, config changes and
  *  recommendation decisions are NOT here; they are actions, and they live in
  *  useOptimizerActions with a before, an after and a revert. */
-export function useOptimizerLogs(brandId: string) {
+export function useOptimizerLogs(
+  brandId: string,
+  windowDays: OptimizerFeedWindowDays = 7,
+  options: { archive?: boolean; enabled?: boolean } = {},
+) {
+  const archive = options.archive === true;
   return useOptimizerPagedRead({
-    queryKey: optimizerQueryKeys.logs(brandId),
-    fetchPage: (before) => fetchLogsPage(brandId, before),
+    queryKey: optimizerQueryKeys.logs(brandId, windowDays, archive),
+    fetchPage: (before) => fetchLogsPage(brandId, before, windowDays, archive),
     empty: EMPTY_LOGS,
-    enabled: Boolean(brandId),
+    enabled: Boolean(brandId) && options.enabled !== false,
     staleTime: 30_000,
-    refetchInterval: 30_000,
+    refetchInterval: archive ? false : 30_000,
   });
 }
 
 /** The brand's ACTION feed — every state change with a before and an after, across money
  *  writes, portfolio settings and recommendation decisions. */
-export function useOptimizerActions(brandId: string) {
+export function useOptimizerActions(brandId: string, windowDays: OptimizerFeedWindowDays = 7) {
   return useOptimizerPagedRead({
-    queryKey: optimizerQueryKeys.actions(brandId),
-    fetchPage: (before) => fetchActionsPage(brandId, before),
+    queryKey: optimizerQueryKeys.actions(brandId, windowDays),
+    fetchPage: (before) => fetchActionsPage(brandId, before, windowDays),
     empty: EMPTY_ACTIONS,
     enabled: Boolean(brandId),
     staleTime: 30_000,

@@ -120,7 +120,7 @@ export function BrandTrendsHeaderModule({
                   {trends.length > 0 ? (
                     <Badge
                       variant="secondary"
-                      className="h-4 px-1 text-[10px] tabular-nums"
+                      className="h-4 px-1 text-2xs tabular-nums"
                       aria-label={`${trends.length} trends available`}
                     >
                       {trends.length}

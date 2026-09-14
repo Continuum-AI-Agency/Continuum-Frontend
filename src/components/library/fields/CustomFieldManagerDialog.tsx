@@ -21,7 +21,6 @@ import {
 } from '@continuum/contracts';
 import { ChevronDown, ChevronUp, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +48,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toast-imperative';
 import {
   createCustomField,
   deleteCustomField,
