@@ -34,6 +34,7 @@ describe('organicUgcSpecSchema', () => {
       sceneCount: 4,
       targetDurationSeconds: 20,
       captionsEnabled: true,
+      continuity: 'cut',
     });
   });
 
@@ -104,6 +105,52 @@ describe('reelVideoBatchFrameSchema', () => {
     for (const frame of frames) {
       expect(reelVideoBatchFrameSchema.safeParse(frame).success).toBe(true);
     }
+  });
+
+  it('round-trips a reel_ready Library receipt', () => {
+    const frame = {
+      type: 'reel_ready' as const,
+      draftId: 'd1',
+      mp4Url: 'https://signed/url.mp4',
+      mp4Path: 'organic/brand/d1.mp4',
+      mp4Bucket: 'organic-reels',
+      durationSec: 18,
+      assetId: '11111111-1111-1111-1111-111111111111',
+      versionId: '22222222-2222-2222-2222-222222222222',
+    };
+
+    expect(reelVideoBatchFrameSchema.parse(frame)).toEqual(frame);
+  });
+
+  it('keeps older reel_ready frames without a Library receipt valid', () => {
+    expect(
+      reelVideoBatchFrameSchema.safeParse({
+        type: 'reel_ready',
+        draftId: 'd1',
+        mp4Url: 'https://signed/url.mp4',
+        mp4Path: 'organic/brand/d1.mp4',
+        mp4Bucket: 'organic-reels',
+        durationSec: 18,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects malformed reel_ready Library receipt identifiers', () => {
+    const frame = {
+      type: 'reel_ready' as const,
+      draftId: 'd1',
+      mp4Url: 'https://signed/url.mp4',
+      mp4Path: 'organic/brand/d1.mp4',
+      mp4Bucket: 'organic-reels',
+      durationSec: 18,
+    };
+
+    expect(reelVideoBatchFrameSchema.safeParse({ ...frame, assetId: 'not-a-uuid' }).success).toBe(
+      false,
+    );
+    expect(reelVideoBatchFrameSchema.safeParse({ ...frame, versionId: 'not-a-uuid' }).success).toBe(
+      false,
+    );
   });
 
   it('accepts reel_started with an optional backend jobId (and without it)', () => {

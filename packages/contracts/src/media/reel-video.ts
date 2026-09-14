@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { databaseUuidSchema } from './database-uuid';
 import { mediaPreviewApprovalSchema } from './preview-approval';
 
 /**
@@ -131,6 +132,10 @@ export const reelVideoBatchFrameSchema = z.discriminatedUnion('type', [
       mp4Path: z.string(),
       mp4Bucket: z.string(),
       durationSec: z.number().nonnegative(),
+      // Present only when the server-headless path has registered the final MP4
+      // in Library. Existing browser-stitch frames omit this receipt.
+      assetId: databaseUuidSchema.optional(),
+      versionId: databaseUuidSchema.optional(),
     })
     .strict(),
   z
