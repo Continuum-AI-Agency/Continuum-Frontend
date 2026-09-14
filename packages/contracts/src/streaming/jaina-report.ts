@@ -177,6 +177,9 @@ export const chartBlockBaseSchema = blockBaseSchema.extend({
   x_axis_label: z.string().nullable().default(null),
   y_axis_label: z.string().nullable().default(null),
   value_format: z.enum(['number', 'currency', 'percent', 'multiplier']).default('number'),
+  // ISO currency code supplied by the source data. Null/absent preserves legacy
+  // charts without inventing a currency.
+  currency_code: z.string().nullable().default(null),
   annotation: z.string().nullable().default(null),
   description: z.string().nullable().default(null),
   // Data-harness provenance: when set, `data` was deterministically materialized

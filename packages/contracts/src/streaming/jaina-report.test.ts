@@ -50,21 +50,24 @@ describe('dataset-ref additive fields', () => {
     category_key: 'date',
   };
 
-  it('defaults dataset_id and data_meta to null when absent (back-compat)', () => {
+  it('defaults dataset_id, data_meta, and currency_code to null when absent (back-compat)', () => {
     const parsed = chartBlockSchema.parse(validChart);
     expect(parsed.dataset_id).toBeNull();
     expect(parsed.data_meta).toBeNull();
+    expect(parsed.currency_code).toBeNull();
   });
 
-  it('carries dataset_id + per-point data_meta on a chart block', () => {
+  it('carries an explicit currency_code on a chart block', () => {
     const parsed = chartBlockSchema.parse({
       ...validChart,
+      currency_code: 'EUR',
       dataset_id: 'ds_spend_acct_30d',
       data_meta: [
         { date: '2026-05-11', campaign_id: 'c1' },
         { date: '2026-05-12', campaign_id: 'c1' },
       ],
     });
+    expect(parsed.currency_code).toBe('EUR');
     expect(parsed.dataset_id).toBe('ds_spend_acct_30d');
     expect(parsed.data_meta?.[0]).toMatchObject({ campaign_id: 'c1' });
   });
