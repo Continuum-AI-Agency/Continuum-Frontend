@@ -277,8 +277,8 @@ export const dataTableBlockBaseSchema = blockBaseSchema.extend({
   card_fields: creativeCardFieldsSchema.nullable().default(null),
 });
 
-const addDataTableInvariantIssues = (
-  block: z.infer<typeof dataTableBlockBaseSchema>,
+export const addDataTableInvariantIssues = (
+  block: Pick<z.infer<typeof dataTableBlockBaseSchema>, 'render_mode' | 'card_fields'>,
   ctx: z.RefinementCtx,
 ): void => {
   if (block.render_mode === 'creative_cards' && block.card_fields === null) {

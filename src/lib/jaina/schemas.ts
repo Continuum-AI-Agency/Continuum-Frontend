@@ -1,4 +1,5 @@
 import {
+  addDataTableInvariantIssues,
   agentAttachmentSchema,
   agentDelegatedFrameSchema,
   agentDocumentAttachmentSchema,
@@ -9,7 +10,7 @@ import {
   chartSeriesConfigSchema as contractChartSeriesConfigSchema,
   comparisonBlockSchema as contractComparisonBlockSchema,
   comparisonPairSchema as contractComparisonPairSchema,
-  dataTableBlockSchema as contractDataTableBlockSchema,
+  dataTableBlockBaseSchema as contractDataTableBlockBaseSchema,
   degradeToNarrativeBlockV2 as contractDegradeToNarrativeBlockV2,
   insightListBlockSchema as contractInsightListBlockSchema,
   insightListItemSchema as contractInsightListItemSchema,
@@ -511,10 +512,12 @@ export const tableColumnV2Schema = contractTableColumnSchema.extend({
 });
 export type TableColumnV2 = z.infer<typeof tableColumnV2Schema>;
 
-export const dataTableBlockV2Schema = contractDataTableBlockSchema.safeExtend({
-  priority: blockPriorityV2Schema,
-  columns: z.array(tableColumnV2Schema).min(1),
-});
+export const dataTableBlockV2Schema = contractDataTableBlockBaseSchema
+  .extend({
+    priority: blockPriorityV2Schema,
+    columns: z.array(tableColumnV2Schema).min(1),
+  })
+  .superRefine(addDataTableInvariantIssues);
 export type DataTableBlockV2 = z.infer<typeof dataTableBlockV2Schema>;
 
 // Render leniency: the contract requires non-empty rationale/impact (the

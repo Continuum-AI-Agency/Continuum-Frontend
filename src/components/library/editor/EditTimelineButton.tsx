@@ -139,7 +139,9 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
         );
       }
       onAssetChanged?.();
-      router.push(studioVideoHref({ projectId, origin: 'library', view: 'assembly' }));
+      router.push(
+        studioVideoHref({ projectId: project.projectId, origin: 'library', view: 'assembly' }),
+      );
     } catch (error) {
       show({
         title: 'Could not open video studio',

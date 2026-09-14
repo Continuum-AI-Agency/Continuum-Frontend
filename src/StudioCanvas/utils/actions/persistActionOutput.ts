@@ -208,7 +208,7 @@ function mediaFromStore(
     sizeBytes: stored.sizeBytes,
   };
   return kind === 'image'
-    ? { type: 'image', mimeType: blob.type || output.mimeType, ...common }
+    ? { type: 'image', mimeType: blob.type || output.mimeType || 'image/png', ...common }
     : { type: 'video', mimeType: blob.type || output.mimeType || 'video/mp4', ...common };
 }
 
@@ -228,6 +228,6 @@ function mediaFromLibrary(
     assetVersionId: saved.versionId,
   };
   return kind === 'image'
-    ? { type: 'image', mimeType: blob.type || output.mimeType, ...common }
+    ? { type: 'image', mimeType: blob.type || output.mimeType || 'image/png', ...common }
     : { type: 'video', mimeType: blob.type || output.mimeType || 'video/mp4', ...common };
 }

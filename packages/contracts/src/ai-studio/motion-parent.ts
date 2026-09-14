@@ -2,7 +2,7 @@ import type { EditorClip, EditorProjectV2 } from './editor-project-v2';
 import { positionKeysForProperty, samplePositionTrack } from './motion-eval';
 
 const findClip = (project: EditorProjectV2, clipId: string): EditorClip | undefined =>
-  project.tracks.flatMap((track) => track.clips).find((clip) => clip.id === clipId);
+  project.tracks.flatMap((track): EditorClip[] => track.clips).find((clip) => clip.id === clipId);
 
 /** World-space position delta contributed by ancestors at a project timeline time. */
 export function parentPositionDelta(

@@ -431,6 +431,8 @@ const canvasToPng = async (canvas: HTMLCanvasElement | OffscreenCanvas): Promise
   );
 };
 
+type Canvas2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
 const createCanvas = (width: number, height: number): HTMLCanvasElement | OffscreenCanvas => {
   if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(width, height);
   const canvas = document.createElement('canvas');
@@ -539,7 +541,7 @@ export async function captureHyperframesReviewFrames(params: {
 
 const canvasLuma = (source: HTMLCanvasElement | OffscreenCanvas): Uint8Array => {
   const sample = createCanvas(32, 18);
-  const context = sample.getContext('2d');
+  const context = sample.getContext('2d') as Canvas2D | null;
   if (!context) throw new Error('Review sample context is unavailable.');
   context.drawImage(source, 0, 0, 32, 18);
   const pixels = context.getImageData(0, 0, 32, 18).data;
@@ -648,7 +650,7 @@ export async function captureHyperframesReviewEvidence(params: {
     Array.from({ length: 8 }, (_, index) => Math.round(((denseTimestamps.length - 1) * index) / 7)),
   );
   const strip = createCanvas(1280, 90);
-  const stripContext = strip.getContext('2d');
+  const stripContext = strip.getContext('2d') as Canvas2D | null;
   if (!stripContext) throw new Error('Review motion-strip context is unavailable.');
   const frames: Array<Blob | undefined> = Array(frameTimestampsSeconds.length).fill(undefined);
   const samples: Uint8Array[] = [];

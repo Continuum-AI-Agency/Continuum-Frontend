@@ -2,6 +2,7 @@
 
 import {
   type EditorAudioClip,
+  type EditorClip,
   type EditorOverlayClip,
   type EditorProjectV2,
   type EditorTextClip,
@@ -723,7 +724,7 @@ function MediaOverlayRow({
           >
             <option value="">None</option>
             {project.tracks
-              .flatMap((track) => track.clips)
+              .flatMap((track): EditorClip[] => track.clips)
               .filter((candidate) => candidate.id !== clip.id)
               .map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
@@ -1607,7 +1608,7 @@ export function EditorProjectV2Assembly({
                 canSaveElement={Boolean(
                   (() => {
                     const clip = project.tracks
-                      .flatMap((track) => track.clips)
+                      .flatMap((track): EditorClip[] => track.clips)
                       .find((candidate) => candidate.id === selectedMotionClipId);
                     return (
                       clip &&
@@ -1674,7 +1675,7 @@ export function EditorProjectV2Assembly({
                 }
                 onSaveElement={() => {
                   const clip = viewProject.tracks
-                    .flatMap((track) => track.clips)
+                    .flatMap((track): EditorClip[] => track.clips)
                     .find((candidate) => candidate.id === selectedMotionClipId);
                   if (!clip || !('keyframes' in clip) || !('source' in clip)) return;
                   if (clip.source.sourceType !== 'library_asset') {
@@ -1713,7 +1714,7 @@ export function EditorProjectV2Assembly({
                 }}
                 onPlaceElement={(elementId) => {
                   const clip = viewProject.tracks
-                    .flatMap((track) => track.clips)
+                    .flatMap((track): EditorClip[] => track.clips)
                     .find((candidate) => candidate.id === selectedMotionClipId);
                   const track = viewProject.tracks.find((candidate) =>
                     candidate.clips.some((item) => item.id === selectedMotionClipId),

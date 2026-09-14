@@ -452,6 +452,9 @@ export function placeVideoOperation(
       scaleX: 1,
       scaleY: 1,
       rotationDeg: 0,
+      rotateXDeg: 0,
+      rotateYDeg: 0,
+      perspective: 0,
       anchorX: 0.5,
       anchorY: 0.5,
       opacity: 1,
@@ -551,6 +554,9 @@ export function upsertTextOperation(
         scaleX: 1,
         scaleY: 1,
         rotationDeg: 0,
+        rotateXDeg: 0,
+        rotateYDeg: 0,
+        perspective: 0,
         anchorX: 0.5,
         anchorY: 0.5,
         opacity: 1,
@@ -653,6 +659,9 @@ export function upsertOverlayOperation(
       ...(existing?.transform ?? {
         position: { x: 0.5, y: 0.5, unit: 'normalized' as const },
         rotationDeg: 0,
+        rotateXDeg: 0,
+        rotateYDeg: 0,
+        perspective: 0,
         anchorX: 0.5,
         anchorY: 0.5,
       }),
@@ -875,7 +884,7 @@ export function precomposeClipsOperation(
   const existingTrack = project.tracks.find((track) => track.kind === 'nested_sequence');
   const instanceTrackId = existingTrack?.id ?? `${project.sequenceId}:precomps`;
   const first = project.tracks
-    .flatMap((track) => track.clips)
+    .flatMap((track): EditorClip[] => track.clips)
     .find((clip) => input.clipIds.includes(clip.id));
   return {
     label: 'Precompose',

@@ -285,7 +285,7 @@ export const createElementRequestSchema = z
     memberAssetIds: memberIdsSchema,
   })
   .strict();
-export type CreateElementRequest = z.infer<typeof createElementRequestSchema>;
+export type CreateElementRequest = z.input<typeof createElementRequestSchema>;
 
 export const updateElementRequestSchema = z
   .object({

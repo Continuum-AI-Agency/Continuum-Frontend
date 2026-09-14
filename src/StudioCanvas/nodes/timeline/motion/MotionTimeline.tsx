@@ -1,6 +1,11 @@
 'use client';
 
-import type { EditorKeyframe, EditorProjectV2, MotionStyleId } from '@continuum/contracts';
+import type {
+  EditorClip,
+  EditorKeyframe,
+  EditorProjectV2,
+  MotionStyleId,
+} from '@continuum/contracts';
 import { ChevronDown, ChevronRight, Pause, Play } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -123,7 +128,7 @@ export function MotionTimeline({
   const widthPx = Math.max(project.durationSec * pxPerSec, 240);
   const selected = layers.find((layer) => layer.clipId === selectedClipId);
   const selectedClip = project.tracks
-    .flatMap((track) => track.clips)
+    .flatMap((track): EditorClip[] => track.clips)
     .find((clip) => clip.id === selectedClipId);
   const graphRow =
     selected?.properties.find((row) => row.keys.length > 0) ?? selected?.properties[0];

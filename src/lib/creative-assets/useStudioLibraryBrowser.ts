@@ -48,7 +48,7 @@ export function buildStudioLibraryBrowseParams(
   const destination = filters.destination;
   const mediaType = destination === 'sources' ? 'project_file' : kindToMediaType(kind ?? null);
   const createdWith =
-    destination === 'canvas' ? (source ? [source] : ['canvas']) : source ? [source] : [];
+    destination === 'canvas' ? (source ? [source] : ['canvas' as const]) : source ? [source] : [];
   return buildLibraryBrowseParams(
     {
       brandId,
@@ -66,6 +66,7 @@ export function buildStudioLibraryBrowseParams(
       templateOnly: false,
       aspectRatios: [],
       ratios: [],
+      previewFrame: 'native',
       fonts: [],
       search: '',
       sort: destination === 'home' ? 'updated_desc' : 'created_desc',

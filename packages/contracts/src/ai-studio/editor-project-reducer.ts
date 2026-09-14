@@ -263,6 +263,9 @@ const syncApprovedMasterTrack = (project: EditorProjectV2): EditorProjectV2 => {
           scaleX: 1,
           scaleY: 1,
           rotationDeg: 0,
+          rotateXDeg: 0,
+          rotateYDeg: 0,
+          perspective: 0,
           anchorX: 0.5,
           anchorY: 0.5,
           opacity: 1,
@@ -923,22 +926,27 @@ const applyTimelineCommand = (
           'invalid_command',
         );
       }
-      return updateTrack(project, command.trackId, (track) => ({
-        ...track,
-        clips: track.clips.map((candidate) =>
-          candidate.id === command.clipId && 'keyframes' in candidate
-            ? {
-                ...candidate,
-                keyframes: trimStyleInstance(
-                  candidate.keyframes,
-                  command.instanceId,
-                  command.startSec,
-                  command.endSec,
-                ),
-              }
-            : candidate,
-        ),
-      })) as typeof project;
+      return updateTrack(
+        project,
+        command.trackId,
+        (track) =>
+          ({
+            ...track,
+            clips: track.clips.map((candidate) =>
+              candidate.id === command.clipId && 'keyframes' in candidate
+                ? {
+                    ...candidate,
+                    keyframes: trimStyleInstance(
+                      candidate.keyframes,
+                      command.instanceId,
+                      command.startSec,
+                      command.endSec,
+                    ),
+                  }
+                : candidate,
+            ),
+          }) as typeof track,
+      );
     }
     case 'set_clip_parent': {
       requireEditableClip(project, command.trackId, command.clipId);
@@ -952,17 +960,22 @@ const applyTimelineCommand = (
           'invalid_command',
         );
       }
-      return updateTrack(project, command.trackId, (track) => ({
-        ...track,
-        clips: track.clips.map((candidate) =>
-          candidate.id === command.clipId
-            ? {
-                ...candidate,
-                parentClipId: command.parentClipId ?? undefined,
-              }
-            : candidate,
-        ),
-      })) as typeof project;
+      return updateTrack(
+        project,
+        command.trackId,
+        (track) =>
+          ({
+            ...track,
+            clips: track.clips.map((candidate) =>
+              candidate.id === command.clipId
+                ? {
+                    ...candidate,
+                    parentClipId: command.parentClipId ?? undefined,
+                  }
+                : candidate,
+            ),
+          }) as typeof track,
+      );
     }
     case 'remove_keyframes': {
       const { clip } = requireEditableClip(project, command.trackId, command.clipId);
@@ -1086,7 +1099,7 @@ const applyTimelineCommand = (
       }
       if (
         project.tracks
-          .flatMap((track) => track.clips)
+          .flatMap((track): EditorClip[] => track.clips)
           .some((clip) => clip.id === command.instanceClipId)
       ) {
         throw new EditorProjectConflictError(
@@ -1099,18 +1112,16 @@ const applyTimelineCommand = (
         ...selected.map((entry) => entry.clip.timelineStartSec + entry.clip.durationSec),
       );
       const durationSec = Math.max(0.1, endSec - startSec);
-      const overlayClips = selected
-        .filter((entry) => entry.clip.kind === 'overlay')
-        .map((entry) => ({
-          ...entry.clip,
-          timelineStartSec: entry.clip.timelineStartSec - startSec,
-        }));
-      const textClips = selected
-        .filter((entry) => entry.clip.kind === 'text')
-        .map((entry) => ({
-          ...entry.clip,
-          timelineStartSec: entry.clip.timelineStartSec - startSec,
-        }));
+      const overlayClips = selected.flatMap(({ clip }) =>
+        clip.kind === 'overlay'
+          ? [{ ...clip, timelineStartSec: clip.timelineStartSec - startSec }]
+          : [],
+      );
+      const textClips = selected.flatMap(({ clip }) =>
+        clip.kind === 'text'
+          ? [{ ...clip, timelineStartSec: clip.timelineStartSec - startSec }]
+          : [],
+      );
       const nestedTracks: EditorProjectV2['nestedSequences'][number]['tracks'] = [];
       if (overlayClips.length) {
         nestedTracks.push({

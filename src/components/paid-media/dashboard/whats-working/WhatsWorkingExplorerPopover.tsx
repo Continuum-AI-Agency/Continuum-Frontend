@@ -96,7 +96,7 @@ function buildColumns(): InsightColumn<CreativeWinRateRow>[] {
           {percent(row.winRate)}
         </span>
       ),
-      sortValue: (row) => row.winRate,
+      sortValue: (row) => row.winRate ?? -1,
     },
     {
       id: 'ads',
