@@ -229,15 +229,15 @@ describe('every field shows what the portfolio is running — no keep-current se
     expect(input(/Max move per ad set\/cycle/).value).toBe('35');
   });
 
-  it('fills the guardrail inputs from the suggestion chips', () => {
+  it('choosing the Autopilot card fills both guardrails with the suggested defaults', () => {
     renderPanel();
-    fireEvent.click(screen.getByRole('button', { name: /Set up autopilot/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Autopilot/ }));
 
-    // Max autopilot spend/day ≈ daily budget × 1.5 = 4200 × 1.5 = 6300.
-    fireEvent.click(screen.getByText('Suggest $6,300'));
+    // Max autopilot spend/day ≈ daily budget × 1.5 = 4200 × 1.5 = 6300; change cap 20%.
     expect(input(/Max autopilot spend\/day/).value).toBe('6300');
-
-    // Max change per cycle chip fills 20.
+    expect(input(/Max change per cycle/).value).toBe('20');
+    // The chips still re-fill a cleared field.
+    fireEvent.change(input(/Max change per cycle/), { target: { value: '' } });
     fireEvent.click(screen.getByText('Suggest 20%'));
     expect(input(/Max change per cycle/).value).toBe('20');
   });
@@ -247,7 +247,11 @@ describe('the guardrail section renders only when it is relevant', () => {
   it('stays out of the way on a portfolio that is not on autopilot', () => {
     renderPanel();
     expect(screen.queryByText('Autopilot guardrails')).toBeNull();
-    expect(screen.getByRole('button', { name: /Set up autopilot/ })).toBeDefined();
+    // The tier cards are always there, autopilot included — never greyed out.
+    expect(screen.getByRole('button', { name: /^Autopilot/ })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Recommend/ }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
   });
 
   it('is always on screen for a portfolio autopilot is already flying', () => {
@@ -263,7 +267,7 @@ describe('the guardrail section renders only when it is relevant', () => {
 
   it('opens on demand so the caps can be set in the first place', () => {
     renderPanel();
-    fireEvent.click(screen.getByRole('button', { name: /Set up autopilot/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Autopilot/ }));
     expect(screen.getByText('Autopilot guardrails')).toBeDefined();
   });
 });
@@ -271,11 +275,12 @@ describe('the guardrail section renders only when it is relevant', () => {
 describe('arming autopilot is staged: caps → preview → arm', () => {
   const openStaging = () => {
     renderPanel();
-    fireEvent.click(screen.getByRole('button', { name: /Set up autopilot/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Autopilot/ }));
   };
 
-  it('cannot preview or arm before both caps are set', () => {
+  it('cannot preview or arm once a cap is cleared', () => {
     openStaging();
+    fireEvent.change(input(/Max change per cycle/), { target: { value: '' } });
     expect(
       (screen.getByRole('button', { name: /Preview what autopilot would do/ }) as HTMLButtonElement)
         .disabled,
@@ -371,5 +376,62 @@ describe('arming autopilot is staged: caps → preview → arm', () => {
     fireEvent.change(input(/Max change per cycle/), { target: { value: '20' } });
 
     expect(document.body.textContent).toContain('autopilot would write nothing at all');
+  });
+});
+
+
+describe('target metric, plan granularity and the scale plan', () => {
+  it('offers the alternative pricing only where one exists, and labels the target by it', () => {
+    renderPanel({ objective: 'traffic', target_metric: 'link_clicks' });
+    expect(screen.getByLabelText(/Target metric/)).toBeDefined();
+    expect(input(/Target cost per link click/)).toBeDefined();
+  });
+
+  it('a purchase portfolio has one pricing and says so', () => {
+    renderPanel();
+    expect(document.body.textContent).toContain('Purchase is priced in CPA');
+    expect(input(/Target CPA/)).toBeDefined();
+  });
+
+  it('shows the growth plan only in scale mode and reads it back in typed units', () => {
+    renderPanel({
+      mode: 'scale',
+      scale_growth_pct: 0.1,
+      scale_cadence_days: 7,
+      scale_max_daily: 2500,
+    });
+    expect(input(/Grow by/).value).toBe('10');
+    expect(input(/Every \(days\)/).value).toBe('7');
+    expect(input(/Up to/).value).toBe('2500');
+    expect(document.body.textContent).toContain('Grow the budget 10% every 7 days');
+    cleanup();
+    renderPanel({ mode: 'balanced' });
+    expect(screen.queryByLabelText(/Grow by/)).toBeNull();
+  });
+
+  it('re-expresses the flight budget per day, per month or whole without changing it', () => {
+    renderPanel({
+      period_start: '2026-09-01',
+      period_end: '2026-09-30',
+      period_budget: 240_000,
+      budget_granularity: 'daily',
+    });
+    const budget = () => screen.getByLabelText(/^Budget \(\$\)/) as HTMLInputElement;
+    expect(budget().value).toBe('8000');
+    fireEvent.click(screen.getByRole('button', { name: 'Whole flight' }));
+    expect(budget().value).toBe('240000');
+    fireEvent.click(screen.getByRole('button', { name: 'Per month' }));
+    expect(budget().value).toBe('240000');
+    expect(document.body.textContent).toContain('= $240,000 for the flight');
+    expect(document.body.textContent).toContain('$8,000/day');
+  });
+
+  it('creative analysis is a switch with its state in words', () => {
+    renderPanel({ creative_analysis: 'on' });
+    expect(document.body.textContent).toContain('reads each creative');
+    const toggle = document.querySelector('[data-slot="switch"]') as HTMLElement | null;
+    expect(toggle).not.toBeNull();
+    fireEvent.click(toggle as HTMLElement);
+    expect(document.body.textContent).toContain('Off — ad-set level only');
   });
 });

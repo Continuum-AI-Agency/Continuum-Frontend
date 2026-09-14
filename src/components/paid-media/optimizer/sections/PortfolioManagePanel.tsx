@@ -25,11 +25,14 @@
 
 import {
   type AdSetSnapshot,
+  allowedTargetMetrics,
   type ApplyMode,
+  type BudgetGranularity,
   type BudgetSource,
   type CreativeAnalysis,
   type CycleItemRow,
   type CyclePreviewItem,
+  flightDays,
   getOptimizationMetricDefinition,
   LOOKBACK_LABEL,
   LOOKBACK_WINDOWS,
@@ -39,7 +42,9 @@ import {
   OptimizationObjectiveSchema,
   type PortfolioLevel,
   type PortfolioListItem,
+  portfolioMetric,
   recommendLookbackWindow,
+  type TargetMetric,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Archive, ChevronDown, Loader2, Pause, Play, SparklesIcon } from 'lucide-react';
@@ -61,6 +66,8 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   Select,
   SelectContent,
@@ -74,7 +81,7 @@ import { currencySymbol, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
 import { buildPortfolioPickerEntities } from '../picker/portfolioPickerEntities';
-import { applyModeExplainer, applyModePill, freezeLabel, parseReport } from '../reportModel';
+import { applyModeExplainer, freezeLabel, parseReport } from '../reportModel';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../suggestInput';
 import {
   useCyclePreview,
@@ -86,6 +93,7 @@ import {
   useOptimizerPerformance,
 } from '../useOptimizerData';
 import { type AutopilotForecast, forecastAutopilot } from './autopilotForecast';
+import { TierCards } from './fields/TierCards';
 import {
   buildPatch,
   createPortfolioFormSchema,
@@ -100,8 +108,15 @@ import {
 } from './portfolioFields';
 
 const MODES: OptimizationModeDto[] = ['efficiency', 'balanced', 'scale'];
-/** Bottom → top: observe (no Meta writes) · recommend (human apply) · autopilot. */
-const APPLY_MODES: ApplyMode[] = ['observe', 'recommend', 'autopilot'];
+const GRANULARITY_LABEL: Record<BudgetGranularity, string> = {
+  daily: 'Per day',
+  monthly: 'Per month',
+  total: 'Whole flight',
+};
+const SCALE_CADENCE_CHIPS: Array<{ label: string; days: number }> = [
+  { label: 'Every week', days: 7 },
+  { label: 'Every 2 weeks', days: 14 },
+];
 const OBJECTIVES = OptimizationObjectiveSchema.options;
 /** The period the pacing gauge estimates against when no period budget is set. */
 const PACING_PERIOD_DAYS = 30;
@@ -242,12 +257,17 @@ export function PortfolioManagePanel({
       creative_analysis: portfolio.creative_analysis === 'on' ? 'on' : 'off',
       period_start: portfolio.period_start,
       period_end: portfolio.period_end,
+      target_metric: portfolio.target_metric ?? portfolioRow?.target_metric ?? null,
+      budget_granularity: portfolio.budget_granularity ?? portfolioRow?.budget_granularity ?? 'daily',
       daily_total: portfolio.daily_total,
       period_budget: portfolio.period_budget,
-      cpa_target: portfolioRow?.cpa_target ?? null,
-      velocity_cap_pct: portfolioRow?.velocity_cap_pct ?? null,
+      cpa_target: portfolio.cpa_target ?? portfolioRow?.cpa_target ?? null,
+      velocity_cap_pct: portfolio.velocity_cap_pct ?? portfolioRow?.velocity_cap_pct ?? null,
       max_daily_apply_minor: portfolio.max_daily_apply_minor,
       max_change_pct_per_cycle: portfolio.max_change_pct_per_cycle,
+      scale_growth_pct: portfolio.scale_growth_pct ?? portfolioRow?.scale_growth_pct ?? null,
+      scale_cadence_days: portfolio.scale_cadence_days ?? portfolioRow?.scale_cadence_days ?? null,
+      scale_max_daily: portfolio.scale_max_daily ?? portfolioRow?.scale_max_daily ?? null,
     }),
     [portfolio, portfolioRow],
   );
@@ -258,11 +278,13 @@ export function PortfolioManagePanel({
   const seedUnit = useMemo<UnitContext>(
     () => ({
       currency,
-      denominatorMultiplier: getOptimizationMetricDefinition(
-        portfolio.objective as OptimizationObjective,
-      ).denominatorMultiplier,
+      // The stored target is priced in the stored target METRIC's unit (the objective's own
+      // when none is set) — the same rule the scheduler prices the engine on.
+      denominatorMultiplier: portfolioMetric(portfolio).denominatorMultiplier,
+      budgetGranularity: (currentValues.budget_granularity ?? 'daily') as BudgetGranularity,
+      flightDays: flightDays(portfolio.period_start, portfolio.period_end),
     }),
-    [currency, portfolio.objective],
+    [currency, portfolio, currentValues.budget_granularity],
   );
   const seededValues = useMemo(
     () => toFormValues(currentValues, seedUnit),
@@ -293,19 +315,51 @@ export function PortfolioManagePanel({
   const budgetSource = values.budget_source as BudgetSource;
   const lookbackWindow = values.lookback_window as LookbackWindow;
   const creativeAnalysis = (values.creative_analysis as CreativeAnalysis) ?? 'off';
-  // Metric follows the SELECTED objective so the target label + its unit conversion track it.
-  const metric = getOptimizationMetricDefinition(objective);
+  const budgetGranularity = (values.budget_granularity as BudgetGranularity) ?? 'daily';
+  // Which metrics this objective may be priced in; the stored choice only counts while it
+  // is still allowed (an objective change drops a now-foreign metric back to the default).
+  const allowedMetrics = allowedTargetMetrics(objective);
+  const selectedTargetMetric = values.target_metric as TargetMetric | null | undefined;
+  const effectiveTargetMetric =
+    selectedTargetMetric && allowedMetrics.includes(selectedTargetMetric)
+      ? selectedTargetMetric
+      : objective;
+  // Metric follows the SELECTED target metric so the target label, its unit conversion and
+  // the KPI the engine scores on (config.kpiField) all track it.
+  const metric = getOptimizationMetricDefinition(effectiveTargetMetric);
+  const flightLength = flightDays(values.period_start, values.period_end);
   const formUnit = useMemo<UnitContext>(
-    () => ({ currency, denominatorMultiplier: metric.denominatorMultiplier }),
-    [currency, metric.denominatorMultiplier],
+    () => ({
+      currency,
+      denominatorMultiplier: metric.denominatorMultiplier,
+      budgetGranularity,
+      flightDays: flightLength,
+    }),
+    [currency, metric.denominatorMultiplier, budgetGranularity, flightLength],
   );
   formUnitRef.current = formUnit;
+
+  // Re-expressing the same flight budget: the typed figure changes, the stored one does not.
+  function handleGranularityChange(next: BudgetGranularity) {
+    if (next === budgetGranularity) return;
+    const stored = toStored('period_budget', values.period_budget, formUnit);
+    form.setValue('budget_granularity', next, { shouldDirty: true });
+    if (stored != null) {
+      form.setValue(
+        'period_budget',
+        toInput('period_budget', stored, { ...formUnit, budgetGranularity: next }),
+        { shouldDirty: false },
+      );
+    }
+  }
 
   // Live reads of the two guardrails, through the SAME descriptor the resolver uses — the
   // gate below and the value submitted can never disagree about what "20" means.
   const capMinor = toStored('max_daily_apply_minor', values.max_daily_apply_minor, formUnit);
   const capPct = toStored('max_change_pct_per_cycle', values.max_change_pct_per_cycle, formUnit);
   const dailyNum = toStored('daily_total', values.daily_total, formUnit) ?? 0;
+  const hasDaily = dailyNum > 0;
+  const suggestedMaxDaily = hasDaily ? Math.round(dailyNum * 1.5) : null;
 
   const enrolledIds = useMemo(
     () => enrolledRead.data.map((row) => row.adset_id),
@@ -379,12 +433,24 @@ export function PortfolioManagePanel({
   const guardrailsRelevant = portfolio.apply_mode === 'autopilot' || isArmed || arming;
 
   // Flip to autopilot only through the staged flow; every other transition is immediate.
+  // Choosing the Autopilot card with no guardrails yet fills both with the same defaults the
+  // suggestion chips offer, so the tier is one click to reach instead of a dead option.
   function handleApplyModeChange(value: ApplyMode) {
     if (value === 'autopilot' && !isArmed) {
-      if (!guardrailsReady) return;
+      if (!guardrailsReady) {
+        if (!(capMinor && capMinor > 0) && suggestedMaxDaily != null) {
+          form.setValue('max_daily_apply_minor', String(suggestedMaxDaily), { shouldDirty: true });
+        }
+        if (!(capPct && capPct > 0)) {
+          form.setValue('max_change_pct_per_cycle', SUGGESTED_MAX_CHANGE_PCT, {
+            shouldDirty: true,
+          });
+        }
+      }
       setArming(true);
       return;
     }
+    setArming(false);
     form.setValue('apply_mode', value, { shouldDirty: true });
   }
 
@@ -469,7 +535,6 @@ export function PortfolioManagePanel({
   }
 
   const symbol = currencySymbol(currency);
-  const hasDaily = dailyNum > 0;
   const mismatchLabel = freezeLabel('kpi_mismatch')?.label ?? 'Held · different goal';
   const rootError = form.formState.errors.root?.message;
 
@@ -477,8 +542,15 @@ export function PortfolioManagePanel({
   // chip advertises is exactly the value Tab fills in.
   const suggestedDaily =
     budgetSource === 'fixed' && selectedBudgetSum > 0 ? Math.round(selectedBudgetSum) : null;
-  const suggestedMaxDaily = hasDaily ? Math.round(dailyNum * 1.5) : null;
   const suggestedPeriod = hasDaily ? Math.round(dailyNum * PACING_PERIOD_DAYS) : null;
+  const storedPeriodBudget = toStored('period_budget', values.period_budget, formUnit);
+  const impliedDaily =
+    storedPeriodBudget != null && flightLength != null && flightLength > 0
+      ? storedPeriodBudget / flightLength
+      : null;
+  const scaleGrowth = toStored('scale_growth_pct', values.scale_growth_pct, formUnit);
+  const scaleCadence = toStored('scale_cadence_days', values.scale_cadence_days, formUnit);
+  const scaleCeiling = toStored('scale_max_daily', values.scale_max_daily, formUnit);
 
   // What the staged preview scores: the selected roster, at the pool the cycle would run on.
   const previewSnapshots = useMemo(() => {
@@ -528,6 +600,53 @@ export function PortfolioManagePanel({
               </p>
             ) : null}
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`manage-target-metric-${portfolio.id}`}>Target metric</Label>
+            {allowedMetrics.length > 1 ? (
+              <Select
+                onValueChange={(value) =>
+                  form.setValue('target_metric', value === objective ? null : (value as TargetMetric), {
+                    shouldDirty: true,
+                  })
+                }
+                value={effectiveTargetMetric}
+              >
+                <SelectTrigger id={`manage-target-metric-${portfolio.id}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {allowedMetrics.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {getOptimizationMetricDefinition(value).costLabel}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p
+                className="flex h-9 items-center rounded-md border border-border/60 bg-muted/30 px-3 text-sm"
+                id={`manage-target-metric-${portfolio.id}`}
+              >
+                {metric.costLabel}
+              </p>
+            )}
+            <p className="text-2xs text-muted-foreground">
+              {allowedMetrics.length > 1
+                ? `Which cost the target is set in. Every ad set is scored on it.`
+                : `${humanize(objective)} is priced in ${metric.costLabel}.`}
+            </p>
+          </div>
+          <NumberField
+            control={form.control}
+            id={`manage-cpa-${portfolio.id}`}
+            label={`${metric.targetLabel} (${symbol})`}
+            name="cpa_target"
+          >
+            <p className="text-2xs text-muted-foreground">
+              Scale mode grows the budget only while the portfolio beats this. Blank means the
+              engine&rsquo;s default target, not &ldquo;no target&rdquo;.
+            </p>
+          </NumberField>
         </div>
       </Section>
 
@@ -554,41 +673,19 @@ export function PortfolioManagePanel({
             </Select>
             <p className="text-2xs text-muted-foreground">{modeExplainer(values.mode)}</p>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
             <Label>Autonomy tier</Label>
-            <Select
+            <TierCards
+              arming={arming}
+              onSelect={handleApplyModeChange}
               value={applyMode}
-              onValueChange={(value) => handleApplyModeChange(value as ApplyMode)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {APPLY_MODES.map((value) => (
-                  <SelectItem
-                    key={value}
-                    value={value}
-                    disabled={value === 'autopilot' && !guardrailsReady}
-                  >
-                    {applyModePill(value)?.label ?? humanize(value)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {/* applyModeExplainer describes the selected tier and re-runs as the select changes. */}
-            <p className="text-2xs text-muted-foreground">{applyModeExplainer(applyMode)}</p>
-            {!guardrailsRelevant ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 gap-1 px-1.5 text-2xs"
-                onClick={() => setArming(true)}
-              >
-                <SparklesIcon aria-hidden="true" className="size-3" />
-                Set up autopilot
-              </Button>
-            ) : null}
+            />
+            {/* applyModeExplainer describes the selected tier and re-runs as the choice changes. */}
+            <p className="text-2xs text-muted-foreground">
+              {arming && !isArmed
+                ? 'Check the guardrails below, preview the cycle, then arm.'
+                : applyModeExplainer(applyMode)}
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={`manage-budget-source-${portfolio.id}`}>Total budget</Label>
@@ -636,11 +733,65 @@ export function PortfolioManagePanel({
             ) : null}
           </NumberField>
         </div>
+        {values.mode === 'scale' ? (
+          <div className="space-y-2 rounded-md border border-border/60 bg-background/60 p-3">
+            <p className="text-2xs font-medium">
+              Grow the budget{' '}
+              <span className="text-foreground">
+                {scaleGrowth != null ? `${Math.round(scaleGrowth * 100)}%` : '…'}
+              </span>{' '}
+              every{' '}
+              <span className="text-foreground">
+                {scaleCadence != null ? `${scaleCadence} day${scaleCadence === 1 ? '' : 's'}` : '…'}
+              </span>{' '}
+              while the portfolio beats its target
+              {scaleCeiling != null ? `, up to ${formatCurrency(scaleCeiling, currency)}/day` : ''}.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <NumberField
+                control={form.control}
+                id={`manage-scale-growth-${portfolio.id}`}
+                label="Grow by (%)"
+                name="scale_growth_pct"
+                suggested="10"
+                suggestionLabel="Suggest 10%"
+              />
+              <NumberField
+                control={form.control}
+                id={`manage-scale-cadence-${portfolio.id}`}
+                label="Every (days)"
+                name="scale_cadence_days"
+              >
+                <div className="flex flex-wrap gap-1.5">
+                  {SCALE_CADENCE_CHIPS.map((chip) => (
+                    <SuggestionChip
+                      key={chip.days}
+                      label={chip.label}
+                      onClick={() =>
+                        form.setValue('scale_cadence_days', String(chip.days), { shouldDirty: true })
+                      }
+                    />
+                  ))}
+                </div>
+              </NumberField>
+              <NumberField
+                control={form.control}
+                id={`manage-scale-ceiling-${portfolio.id}`}
+                label={`Up to (${symbol}/day, optional)`}
+                name="scale_max_daily"
+              >
+                <p className="text-2xs text-muted-foreground">
+                  A ceiling for the daily total. Blank means no ceiling.
+                </p>
+              </NumberField>
+            </div>
+          </div>
+        ) : null}
       </Section>
 
       <Section
-        description="What period the optimizer reads and plans against. The lookback drives every metric on this portfolio; the flight window turns the period budget into real pacing instead of an estimate."
-        title="Reporting period"
+        description="A start date, an end date and a budget. With all three the optimizer paces spend to land on the budget; the lookback is the window every metric on this portfolio reads."
+        title="Plan"
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -686,8 +837,8 @@ export function PortfolioManagePanel({
             />
             <p className="text-2xs text-muted-foreground">
               {values.period_start && values.period_end
-                ? 'The period budget paces against these dates.'
-                : 'Set start and end dates to pace against the period budget.'}
+                ? `${flightLength} days. The budget below paces against these dates.`
+                : 'Set start and end dates to pace against the budget below.'}
             </p>
             {!(values.period_start && values.period_end) ? (
               <SuggestionChip
@@ -700,6 +851,60 @@ export function PortfolioManagePanel({
               />
             ) : null}
           </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label htmlFor={`manage-period-${portfolio.id}`}>
+                Budget ({symbol}) · {GRANULARITY_LABEL[budgetGranularity].toLowerCase()}
+              </Label>
+              <ToggleGroup
+                aria-label="Budget granularity"
+                onValueChange={(next) => {
+                  if (next) handleGranularityChange(next as BudgetGranularity);
+                }}
+                size="sm"
+                type="single"
+                value={budgetGranularity}
+                variant="outline"
+              >
+                {(Object.keys(GRANULARITY_LABEL) as BudgetGranularity[]).map((value) => (
+                  <ToggleGroupItem className="h-6 px-2 text-2xs" key={value} value={value}>
+                    {GRANULARITY_LABEL[value]}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <NumberField
+                control={form.control}
+                id={`manage-period-${portfolio.id}`}
+                label=""
+                name="period_budget"
+                suggested={
+                  budgetGranularity === 'daily'
+                    ? hasDaily
+                      ? Math.round(dailyNum)
+                      : null
+                    : budgetGranularity === 'total'
+                      ? suggestedPeriod
+                      : null
+                }
+                suggestionLabel={
+                  budgetGranularity === 'daily' && hasDaily
+                    ? `Match ${symbol}${Math.round(dailyNum).toLocaleString('en-US')}/day`
+                    : budgetGranularity === 'total' && suggestedPeriod != null
+                      ? `Suggest ${symbol}${suggestedPeriod.toLocaleString('en-US')} (${PACING_PERIOD_DAYS}d)`
+                      : undefined
+                }
+              />
+              <p className="self-end pb-2 text-2xs text-muted-foreground tabular-nums">
+                {storedPeriodBudget != null && flightLength != null
+                  ? `= ${formatCurrency(storedPeriodBudget, currency)} for the flight · ≈ ${formatCurrency(impliedDaily, currency)}/day`
+                  : storedPeriodBudget != null
+                    ? 'Set a flight window to pace this budget over it.'
+                    : 'Clear to leave the portfolio unpaced.'}
+              </p>
+            </div>
+          </div>
         </div>
       </Section>
 
@@ -707,22 +912,24 @@ export function PortfolioManagePanel({
         description="Off, the optimizer compares each creative against the others in its ad set — it can tell you one costs more than its neighbour. On, it also reads each creative's own 14-day trend, which is the only way to see a creative wearing out rather than simply losing. Recommendations still need your approval either way."
         title="Creative analysis"
       >
-        <div className="space-y-1.5 sm:max-w-sm">
-          <Label htmlFor={`manage-creative-analysis-${portfolio.id}`}>Ad-level analysis</Label>
-          <Select
-            onValueChange={(value) =>
-              form.setValue('creative_analysis', value as CreativeAnalysis, { shouldDirty: true })
-            }
-            value={creativeAnalysis}
-          >
-            <SelectTrigger id={`manage-creative-analysis-${portfolio.id}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="off">Off — ad-set level only</SelectItem>
-              <SelectItem value="on">On — read each creative's own trend</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="space-y-1.5 sm:max-w-md">
+          <div className="flex items-center gap-3">
+            <Switch
+              aria-label="Ad-level analysis"
+              checked={creativeAnalysis === 'on'}
+              id={`manage-creative-analysis-${portfolio.id}`}
+              onCheckedChange={(checked) =>
+                form.setValue('creative_analysis', (checked ? 'on' : 'off') as CreativeAnalysis, {
+                  shouldDirty: true,
+                })
+              }
+            />
+            <Label htmlFor={`manage-creative-analysis-${portfolio.id}`}>
+              {creativeAnalysis === 'on'
+                ? 'On — reads each creative’s own trend'
+                : 'Off — ad-set level only'}
+            </Label>
+          </div>
           <p className="text-2xs text-muted-foreground">
             {creativeAnalysis === 'on'
               ? 'This portfolio can flag a creative that is decaying, including in ad sets running a single creative — where there is nothing to compare against.'
@@ -827,28 +1034,6 @@ export function PortfolioManagePanel({
           }
         />
         <CollapsibleContent className="mt-2 grid gap-3 sm:grid-cols-3">
-          <NumberField
-            control={form.control}
-            id={`manage-cpa-${portfolio.id}`}
-            label={`${metric.targetLabel} (${symbol})`}
-            name="cpa_target"
-          />
-          <NumberField
-            control={form.control}
-            id={`manage-period-${portfolio.id}`}
-            label={`Period budget (${symbol})`}
-            name="period_budget"
-            suggested={suggestedPeriod}
-            suggestionLabel={
-              suggestedPeriod != null
-                ? `Suggest ${symbol}${suggestedPeriod.toLocaleString('en-US')} (${PACING_PERIOD_DAYS}d)`
-                : undefined
-            }
-          >
-            <p className="text-2xs text-muted-foreground">
-              Sets the pacing target. Clear it to estimate from the daily budget.
-            </p>
-          </NumberField>
           <NumberField
             control={form.control}
             id={`manage-velocity-${portfolio.id}`}
@@ -1261,7 +1446,7 @@ function NumberField({
   const accept = (value: string) => field.onChange(value);
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      {label ? <Label htmlFor={id}>{label}</Label> : null}
       <Input
         aria-invalid={fieldState.invalid || undefined}
         disabled={disabled}

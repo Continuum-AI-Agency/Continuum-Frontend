@@ -176,6 +176,85 @@ describe('PortfolioConfigSchema', () => {
       PortfolioConfigSchema.parse({ name: 'x', objective: 'vibes', daily_total: 1 }),
     ).toThrow();
   });
+  test('budget_granularity defaults to daily; plan/target/scale fields round-trip', () => {
+    const cfg = PortfolioConfigSchema.parse({
+      name: 'Traffic',
+      objective: 'traffic',
+      mode: 'scale',
+      daily_total: 100,
+      target_metric: 'link_clicks',
+      scale_growth_pct: 0.1,
+      scale_cadence_days: 7,
+      scale_max_daily: 500,
+      budget_granularity: 'monthly',
+    });
+    expect(cfg.budget_granularity).toBe('monthly');
+    expect(cfg.target_metric).toBe('link_clicks');
+    expect(cfg.scale_growth_pct).toBe(0.1);
+    expect(cfg.scale_cadence_days).toBe(7);
+    expect(cfg.scale_max_daily).toBe(500);
+    expect(
+      PortfolioConfigSchema.parse({ name: 'x', objective: 'lead', daily_total: 1 })
+        .budget_granularity,
+    ).toBe('daily');
+  });
+  test('autopilot at creation requires both guardrails (the DB check, said up front)', () => {
+    expect(() =>
+      PortfolioConfigSchema.parse({
+        name: 'x',
+        objective: 'lead',
+        daily_total: 100,
+        apply_mode: 'autopilot',
+      }),
+    ).toThrow(/max_daily_apply_minor/);
+    const ok = PortfolioConfigSchema.parse({
+      name: 'x',
+      objective: 'lead',
+      daily_total: 100,
+      apply_mode: 'autopilot',
+      max_daily_apply_minor: 20_000,
+      max_change_pct_per_cycle: 0.3,
+    });
+    expect(ok.apply_mode).toBe('autopilot');
+  });
+  test('scale growth step and cadence must be set together', () => {
+    expect(() =>
+      PortfolioConfigSchema.parse({
+        name: 'x',
+        objective: 'lead',
+        mode: 'scale',
+        daily_total: 100,
+        scale_growth_pct: 0.1,
+      }),
+    ).toThrow(/scale_cadence_days/);
+    // scale mode without any plan is still valid (grows nothing, as before)
+    expect(
+      PortfolioConfigSchema.parse({ name: 'x', objective: 'lead', mode: 'scale', daily_total: 1 })
+        .mode,
+    ).toBe('scale');
+  });
+  test('rejects an out-of-range growth step or cadence', () => {
+    expect(() =>
+      PortfolioConfigSchema.parse({
+        name: 'x',
+        objective: 'lead',
+        mode: 'scale',
+        daily_total: 1,
+        scale_growth_pct: 1.5,
+        scale_cadence_days: 7,
+      }),
+    ).toThrow();
+    expect(() =>
+      PortfolioConfigSchema.parse({
+        name: 'x',
+        objective: 'lead',
+        mode: 'scale',
+        daily_total: 1,
+        scale_growth_pct: 0.1,
+        scale_cadence_days: 0,
+      }),
+    ).toThrow();
+  });
 });
 
 describe('CreatePortfolioRequestSchema', () => {
@@ -217,6 +296,31 @@ describe('UpdatePortfolioPatchSchema', () => {
     const p = UpdatePortfolioPatchSchema.parse({ cpa_target: null, period_budget: null });
     expect(p.cpa_target).toBeNull();
     expect(p.period_budget).toBeNull();
+  });
+  test('plan/target/scale fields patch and clear', () => {
+    const set = UpdatePortfolioPatchSchema.parse({
+      target_metric: 'link_clicks',
+      budget_granularity: 'total',
+      scale_growth_pct: 0.2,
+      scale_cadence_days: 14,
+      scale_max_daily: 900,
+    });
+    expect(set).toMatchObject({
+      target_metric: 'link_clicks',
+      budget_granularity: 'total',
+      scale_growth_pct: 0.2,
+      scale_cadence_days: 14,
+      scale_max_daily: 900,
+    });
+    const clear = UpdatePortfolioPatchSchema.parse({
+      target_metric: null,
+      scale_growth_pct: null,
+      scale_cadence_days: null,
+      scale_max_daily: null,
+    });
+    expect(clear.target_metric).toBeNull();
+    expect(clear.scale_growth_pct).toBeNull();
+    expect(() => UpdatePortfolioPatchSchema.parse({ target_metric: 'vibes' })).toThrow();
   });
   test('rejects an empty patch', () => {
     expect(() => UpdatePortfolioPatchSchema.parse({})).toThrow();

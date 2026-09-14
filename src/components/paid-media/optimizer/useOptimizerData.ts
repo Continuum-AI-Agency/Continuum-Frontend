@@ -33,6 +33,8 @@ import {
   type CpaSeriesPoint,
   CpaSeriesPointSchema,
   type CreatePortfolioRequest,
+  type SpendByObjectiveRow,
+  SpendByObjectiveRowSchema,
   type CyclePreviewRequest,
   type CyclePreviewResponse,
   CyclePreviewResponseSchema,
@@ -154,6 +156,8 @@ export const optimizerQueryKeys = {
   adAccounts: (brandId: string) => ['optimizer', 'ad-accounts', brandId] as const,
   performance: (portfolioId: string) => ['optimizer', 'performance', portfolioId] as const,
   cpaSeries: (portfolioId: string) => ['optimizer', 'efficiency-series', portfolioId] as const,
+  spendByObjective: (brandId: string, days: number) =>
+    ['optimizer', 'spend-by-objective', brandId, days] as const,
   renewals: (brandId: string) => ['optimizer', 'renewals', brandId] as const,
   logs: (brandId: string, windowDays: OptimizerFeedWindowDays = 7, archive = false) =>
     ['optimizer', 'logs', brandId, windowDays, archive ? 'archive' : 'hot'] as const,
@@ -1006,6 +1010,7 @@ async function restorePortfolio(input: { portfolio_id: string; name: string }): 
 
 const EMPTY_ACCOUNTS: AdAccount[] = [];
 const EMPTY_CPA: CpaSeriesPoint[] = [];
+const EMPTY_SPEND_BY_OBJECTIVE: SpendByObjectiveRow[] = [];
 const EMPTY_RENEWALS: RenewalTask[] = [];
 const EMPTY_LOGS: OptimizerLogRow[] = [];
 const EMPTY_ACTIONS: OptimizerActionFeedRow[] = [];
@@ -1129,6 +1134,30 @@ export function useOptimizerPerformance(portfolioId: string | null) {
     queryFn: () => fetchPerformance(portfolioId as string),
     empty: null,
     enabled: Boolean(portfolioId),
+    staleTime: FIVE_MINUTES,
+  });
+}
+
+async function fetchSpendByObjective(brandId: string, days: number): Promise<SpendByObjectiveRow[]> {
+  const { data, error } = await getClient().rpc('optimizer_get_spend_by_objective', {
+    p_brand_id: brandId,
+    p_days: days,
+  });
+  if (error) throw new Error('optimizer_get_spend_by_objective unreachable');
+  return z
+    .array(SpendByObjectiveRowSchema)
+    .catch([])
+    .parse(data ?? []);
+}
+
+/** Daily spend per portfolio objective across the brand's enrolled ad sets, off the latest
+ *  snapshot daily series (no Meta call). Feeds the Overview's spend-by-objective stream. */
+export function useOptimizerSpendByObjective(brandId: string, days = 14) {
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.spendByObjective(brandId, days),
+    queryFn: () => fetchSpendByObjective(brandId, days),
+    empty: EMPTY_SPEND_BY_OBJECTIVE,
+    enabled: Boolean(brandId),
     staleTime: FIVE_MINUTES,
   });
 }

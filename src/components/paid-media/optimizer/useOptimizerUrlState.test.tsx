@@ -134,3 +134,37 @@ describe('useOptimizerUrlState', () => {
     expect(missing.result.current.section).toBe('performance');
   });
 });
+
+describe('useOptimizerUrlState — reporting range', () => {
+  it('defaults to 7 days and keeps the default out of the URL', () => {
+    const { result } = renderHook(() => useOptimizerUrlState());
+    expect(result.current.range).toEqual({ kind: 'preset', preset: 'd7' });
+    result.current.setRange({ kind: 'preset', preset: 'd7' });
+    expect(replaceState).toHaveBeenLastCalledWith(null, '', '/scale?tab=performance');
+  });
+
+  it('writes presets and custom windows with replaceState', () => {
+    const { result } = renderHook(() => useOptimizerUrlState());
+    result.current.setRange({ kind: 'preset', preset: 'flight' });
+    expect(replaceState).toHaveBeenLastCalledWith(null, '', '/scale?tab=performance&range=flight');
+    result.current.setRange({ kind: 'custom', from: '2026-08-01', to: '2026-08-14' });
+    expect(replaceState).toHaveBeenLastCalledWith(
+      null,
+      '',
+      '/scale?tab=performance&range=2026-08-01_2026-08-14',
+    );
+  });
+
+  it('reads a custom range back from the URL and shrugs off garbage', () => {
+    navigation.params = new URLSearchParams('tab=performance&range=2026-08-01_2026-08-14');
+    const custom = renderHook(() => useOptimizerUrlState());
+    expect(custom.result.current.range).toEqual({
+      kind: 'custom',
+      from: '2026-08-01',
+      to: '2026-08-14',
+    });
+    navigation.params = new URLSearchParams('tab=performance&range=yesterday');
+    const garbage = renderHook(() => useOptimizerUrlState());
+    expect(garbage.result.current.range).toEqual({ kind: 'preset', preset: 'd7' });
+  });
+});

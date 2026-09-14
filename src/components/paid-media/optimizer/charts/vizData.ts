@@ -245,6 +245,10 @@ export function goldilocksZone(targetCpa: number | null | undefined): Goldilocks
 // the pace ratio vs the ideal burn line, and the projected end-of-period spend.
 
 export type PacingInput = {
+  /** Where the run's number came from ('pacing' = a real flight verdict). Any other
+   *  value marks the snapshot estimated even when a budget figure is present: the
+   *  engine's flat fallback also reports on_track, and that must not read as a verdict. */
+  source?: string | null;
   actualSpendToDate?: number | null;
   idealCumulative?: number | null;
   pacingRatio?: number | null;
@@ -287,7 +291,10 @@ export function pacingSnapshot(input: PacingInput): PacingSnapshot {
   const estimateDays = periodDays ?? DEFAULT_PACING_PERIOD_DAYS;
   const estimatedBudget = dailyTotal != null && dailyTotal > 0 ? dailyTotal * estimateDays : null;
   const budget = realBudget != null && realBudget > 0 ? realBudget : estimatedBudget;
-  const estimated = !(realBudget != null && realBudget > 0) && budget != null;
+  const placeholderSource = input.source != null && input.source !== 'pacing';
+  const estimated =
+    (!(realBudget != null && realBudget > 0) && budget != null) ||
+    (placeholderSource && budget != null);
 
   const ratio =
     numeric(input.pacingRatio) ??
@@ -469,6 +476,34 @@ export function sumFunnelWindow(
     }
   }
   return out;
+}
+
+/** Sum the enrolled ad sets' DAILY series between two ISO dates (inclusive) into one
+ *  funnel window — the range the operator chose, not a window nobody picked. Null when
+ *  no enrolled snapshot carries a daily series, so the caller can fall back to the
+ *  engine window and SAY so. */
+export function sumFunnelRange(
+  snapshots: { id: string; daily?: Array<FunnelWindow & { date: string }> | null }[],
+  enrolledIds: Iterable<string>,
+  from: string,
+  to: string,
+): FunnelWindow | null {
+  const ids = new Set(enrolledIds);
+  const out: FunnelWindow = {};
+  let saw = false;
+  for (const snapshot of snapshots) {
+    if (!ids.has(snapshot.id)) continue;
+    const daily = snapshot.daily;
+    if (!daily || daily.length === 0) continue;
+    saw = true;
+    for (const day of daily) {
+      if (day.date < from || day.date > to) continue;
+      for (const key of FUNNEL_KEYS) {
+        out[key] = (out[key] ?? 0) + (day[key] ?? 0);
+      }
+    }
+  }
+  return saw ? out : null;
 }
 
 /** Aggregate per-ad daily trends into one ad-set ROAS series (Σvalue / Σspend per

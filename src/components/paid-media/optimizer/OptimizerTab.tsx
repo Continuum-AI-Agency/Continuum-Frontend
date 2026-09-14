@@ -99,6 +99,8 @@ export function OptimizerTab({
     openCreate,
     setAdset,
     setMetric,
+    range,
+    setRange,
     setSection,
     setView,
   } = useOptimizerUrlState();
@@ -281,9 +283,11 @@ export function OptimizerTab({
           chartMetric={metric}
           onClose={closePortfolio}
           onMetricChange={setMetric}
+          onRangeChange={setRange}
           onSectionChange={setSection}
           onSelectAdset={setAdset}
           portfolio={detailPortfolio}
+          range={range}
           section={section}
           selectedAdsetId={adsetId}
         />
@@ -340,6 +344,7 @@ export function OptimizerTab({
 
         <TabsContent value="overview" className="min-h-0 overflow-y-auto p-2">
           <OptimizerOverview
+            brandId={brandId}
             portfolios={portfolios}
             pendingCount={pendingCount}
             currency={currency}

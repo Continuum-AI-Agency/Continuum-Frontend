@@ -2,6 +2,7 @@
 
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
+import { parseRangeParam, type RangeSpec, serializeRange } from './sections/detail/rangeModel';
 
 const VIEWS = ['overview', 'portfolios', 'actions', 'create', 'logs'] as const;
 const SECTIONS = ['performance', 'manage', 'activity'] as const;
@@ -31,6 +32,7 @@ export function useOptimizerUrlState() {
     const view = searchParams.get('optimizerView');
     const metric = searchParams.get('metric');
     const section = searchParams.get('section');
+    const range = searchParams.get('range');
     return {
       view: isOneOf(view, VIEWS) ? view : 'overview',
       portfolioId: searchParams.get('portfolio'),
@@ -38,6 +40,8 @@ export function useOptimizerUrlState() {
       metric: isOneOf(metric, METRICS) ? metric : 'spend',
       // Performance is the implicit default so a bare `?portfolio=` link opens clean.
       section: isOneOf(section, SECTIONS) ? section : 'performance',
+      // The dashboard's ONE reporting range (rangeModel). Malformed → default, never a throw.
+      range: parseRangeParam(range),
     };
   }, [searchParams]);
 
@@ -117,6 +121,18 @@ export function useOptimizerUrlState() {
     [navigate],
   );
 
+  const setRange = useCallback(
+    (range: RangeSpec) => {
+      navigate((params) => {
+        // The default stays out of the URL so the canonical portfolio link stays bare.
+        const serialized = serializeRange(range);
+        if (serialized === 'd7') params.delete('range');
+        else params.set('range', serialized);
+      }, 'replace');
+    },
+    [navigate],
+  );
+
   const setMetric = useCallback(
     (metric: OptimizerAdMetric) => {
       navigate((params) => {
@@ -135,5 +151,6 @@ export function useOptimizerUrlState() {
     setSection,
     setAdset,
     setMetric,
+    setRange,
   };
 }

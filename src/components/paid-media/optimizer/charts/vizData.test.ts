@@ -397,3 +397,40 @@ describe('adSetRoasSeries', () => {
     expect(series[1].roas).toBeCloseTo(0.8); // 40 / 50
   });
 });
+
+describe('sumFunnelRange', () => {
+  const { sumFunnelRange } = require('./vizData') as typeof import('./vizData');
+  const snapshots = [
+    {
+      id: 'a',
+      daily: [
+        { date: '2026-09-01', impressions: 100, clicks: 10, leads: 1 },
+        { date: '2026-09-02', impressions: 100, clicks: 10, leads: 1 },
+        { date: '2026-09-03', impressions: 100, clicks: 10, leads: 1 },
+      ],
+    },
+    { id: 'b', daily: [{ date: '2026-09-02', impressions: 50, clicks: 5, leads: 0 }] },
+    { id: 'not-enrolled', daily: [{ date: '2026-09-02', impressions: 9999, clicks: 999, leads: 99 }] },
+  ];
+  it('sums enrolled ad sets inside the range only', () => {
+    const w = sumFunnelRange(snapshots, ['a', 'b'], '2026-09-02', '2026-09-03');
+    expect(w).toMatchObject({ impressions: 250, clicks: 25, leads: 2 });
+  });
+  it('is null when no enrolled snapshot has a daily series', () => {
+    expect(sumFunnelRange([{ id: 'a' }], ['a'], '2026-09-01', '2026-09-03')).toBeNull();
+  });
+});
+
+describe('pacingSnapshot — source', () => {
+  it('marks a placeholder-source row estimated even with a budget figure', () => {
+    const { pacingSnapshot } = require('./vizData') as typeof import('./vizData');
+    const real = pacingSnapshot({ source: 'pacing', periodBudget: 1000, actualSpendToDate: 300 });
+    expect(real.estimated).toBe(false);
+    const placeholder = pacingSnapshot({
+      source: 'observed',
+      periodBudget: 1000,
+      actualSpendToDate: 300,
+    });
+    expect(placeholder.estimated).toBe(true);
+  });
+});

@@ -19,3 +19,6 @@ export * from './mcp';
 export * from './onboarding';
 // Optimizer-service orchestration DTOs (enrollment, run requests, FE read model).
 export * from './service';
+// Target metric per objective + daily/monthly/period budget derivation, shared by the
+// wizard, Manage, MCP and the scheduler.
+export * from './targetMetric';

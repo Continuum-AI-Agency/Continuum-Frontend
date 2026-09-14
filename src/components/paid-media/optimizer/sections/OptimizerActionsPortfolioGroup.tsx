@@ -18,11 +18,13 @@
 // is never assumed from a mutation — it is read back from the drain's per-item results and
 // the refetch the mutations trigger.
 
-import type {
-  CycleItemRow,
-  ParsedCycleRunReport,
-  PortfolioListItem,
-  RecommendationRow,
+import {
+  type CycleItemRow,
+  getOptimizationMetricDefinition,
+  type ParsedCycleRunReport,
+  type PortfolioLevel,
+  type PortfolioListItem,
+  type RecommendationRow,
 } from '@continuum/contracts';
 import { ChevronDownIcon, ChevronRightIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react';
 import * as React from 'react';
@@ -46,6 +48,8 @@ import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
 import { attributeTransfers, type TransferAttribution } from '../charts/chartData';
+import { ReallocationStory } from '../charts/ReallocationStory';
+import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { formatCurrency } from '../format';
 import {
   actionRoute,
@@ -60,6 +64,7 @@ import {
 import {
   useApplyAdsetStatus,
   useApplyApproved,
+  useOptimizerAccountSnapshots,
   useOptimizerActions,
   useOptimizerEnrolledAdsets,
   useOptimizerMutations,
@@ -227,6 +232,13 @@ export function OptimizerActionsPortfolioGroup({
 }: OptimizerActionsPortfolioGroupProps) {
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
+  // The account snapshots price each ad set for the story chart (shared cache with the
+  // detail workspace, so opening the queue after the dashboard costs no second read).
+  const snapshotsQuery = useOptimizerAccountSnapshots(
+    brandId,
+    adAccountId,
+    (portfolio.level as PortfolioLevel) ?? 'adset',
+  );
   const { setStatus, setStatuses, requestApplyItems } = useOptimizerMutations(brandId, adAccountId);
   const applyApproved = useApplyApproved();
   const applyAdsetStatus = useApplyAdsetStatus();
@@ -289,6 +301,16 @@ export function OptimizerActionsPortfolioGroup({
     () => buildCounterparties(attribution, transferNameById),
     [attribution, transferNameById],
   );
+  const snapshotById = React.useMemo(
+    () => new Map(snapshotsQuery.data.map((snapshot) => [snapshot.id, snapshot])),
+    [snapshotsQuery.data],
+  );
+  const metric = getOptimizationMetricDefinition(portfolio.objective);
+  const targetDisplay =
+    portfolio.cpa_target != null && portfolio.cpa_target > 0
+      ? portfolio.cpa_target * metric.denominatorMultiplier
+      : null;
+  const hasBudgetRows = rows.some((row) => row.route === 'budget');
 
   const selectableBudgetRows = rows.filter((row) => row.route === 'budget' && isSelectableRow(row));
   const budgetGroupSelected =
@@ -513,6 +535,22 @@ export function OptimizerActionsPortfolioGroup({
         <p className="rounded-md border border-border/60 bg-muted/30 px-3 py-1.5 text-2xs text-muted-foreground">
           {executeNote}
         </p>
+      ) : null}
+
+      {/* Why the money is moving, before the list of moves: every ad set's cost per result
+          against the target beside its budget going from now to proposed. */}
+      {hasBudgetRows && report ? (
+        <div className="rounded-lg border border-border/70 bg-muted/10 p-3">
+          <ReallocationStory
+            currency={null}
+            defaultLookback={defaultStoryLookback(portfolio.lookback_window)}
+            items={report.latest_items}
+            metric={metric}
+            nameById={transferNameById}
+            snapshotById={snapshotById}
+            target={targetDisplay}
+          />
+        </div>
       ) : null}
 
       <ul className="space-y-2">
@@ -1003,6 +1041,11 @@ function QueueRowView({
               </Badge>
             ) : null}
           </div>
+          {row.route === 'budget' && row.item.reason ? (
+            <p className="mt-0.5 line-clamp-2 text-2xs text-muted-foreground" title={row.item.reason}>
+              <span className="font-medium text-foreground">Why:</span> {row.item.reason}
+            </p>
+          ) : null}
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <AdSetIdLabel id={row.adsetId} />
             {row.route !== 'budget' && row.rec.severity ? (
