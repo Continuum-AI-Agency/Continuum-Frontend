@@ -5,6 +5,10 @@ import {
   apiRenderPreflightResponseSchema,
   apiRenderTemplateContractSchema,
   apiRenderVariableKeySchema,
+  compactEncodeBlock,
+  encodeContainerOf,
+  encodeSettingsSchema,
+  mergeEncodeSettings,
   WATERMARK_LOGO_VARIABLE_KEY,
 } from './api-renders';
 import {
@@ -282,6 +286,104 @@ describe('API render contracts', () => {
     ).toBe(true);
     expect(
       apiRenderPreflightRequestSchema.safeParse(request(API_RENDER_MEDIA_LIST_MAX + 1)).success,
+    ).toBe(false);
+  });
+});
+
+describe('output settings', () => {
+  it('accepts the pinned bounds and refuses everything past them', () => {
+    const ok = [
+      { fps: 'comp' },
+      { fps: '30000/1001' },
+      { fps: 25 },
+      { fps: 120 },
+      { audio: { enabled: false, codec: 'pcm_s24le', sampleRate: 48000, channels: 8 } },
+      { audio: { bitrate: '32k' } },
+      { audio: { bitrate: '512k' } },
+      { video: { crf: 10, pixFmt: 'yuv422p10le', proresProfile: '4444xq' } },
+    ];
+    for (const value of ok) expect(encodeSettingsSchema.safeParse(value).success).toBe(true);
+    const bad = [
+      { fps: 0 },
+      { fps: 121 },
+      { fps: '121/1' },
+      { fps: '30/0' },
+      { fps: 'thirty' },
+      { audio: { bitrate: '31k' } },
+      { audio: { bitrate: '513k' } },
+      { audio: { bitrate: '128' } },
+      { audio: { sampleRate: 22050 } },
+      { audio: { channels: 0 } },
+      { audio: { channels: 1.5 } },
+      { audio: { codec: 'mp3' } },
+      { video: { crf: 41 } },
+      { video: { pixFmt: 'rgb24' } },
+      { video: { proresProfile: 'raw' } },
+      { video: { bogus: 1 } },
+      { gop: 12 },
+    ];
+    for (const value of bad) expect(encodeSettingsSchema.safeParse(value).success).toBe(false);
+  });
+
+  it('merges per leaf inside audio and video, later layers winning', () => {
+    expect(
+      mergeEncodeSettings(
+        { fps: 25, audio: { sampleRate: 44100, bitrate: '128k' } },
+        undefined,
+        { audio: { sampleRate: 48000 }, video: { crf: 18 } },
+      ),
+    ).toEqual({ fps: 25, audio: { sampleRate: 48000, bitrate: '128k' }, video: { crf: 18 } });
+    expect(mergeEncodeSettings({}, undefined)).toBeUndefined();
+    expect(compactEncodeBlock({ default: {}, outputs: { square: {} } })).toBeUndefined();
+  });
+
+  it('publishes optional template settings without breaking an older contract', () => {
+    const base = {
+      template: {
+        key: '133',
+        name: 'Hero',
+        environment: 'Continuum_app',
+        contractVersion: 'v1',
+        contractHash: 'hash',
+        contractSource: 'template_forge',
+        outputKinds: ['video'],
+        variableCount: 0,
+        previewUrl: null,
+        updatedAt: null,
+      },
+      variables: [],
+      outputs: [{ id: 'square', label: 'Square', ratio: '1:1' }],
+    };
+    expect(apiRenderTemplateContractSchema.parse(base).encode).toBeUndefined();
+    const parsed = apiRenderTemplateContractSchema.parse({
+      ...base,
+      outputs: [
+        {
+          id: 'square',
+          label: 'Square',
+          ratio: '1:1',
+          mediaType: 'MP4 Video (RGB)',
+          frameRate: 29.97,
+          encode: { fps: '30000/1001' },
+        },
+      ],
+      encode: {
+        stored: { default: { fps: 'comp' }, outputs: { square: { audio: { channels: 1 } } } },
+        defaults: { mp4: { fps: '30000/1001' }, mov: { fps: 25 } },
+      },
+    });
+    expect(parsed.outputs[0]?.frameRate).toBe(29.97);
+    expect(encodeContainerOf(parsed.outputs[0]?.mediaType)).toBe('mp4');
+    expect(encodeContainerOf('MOV Video (RGBA)')).toBe('mov');
+    expect(encodeContainerOf('JPG image (RGB)')).toBeNull();
+    expect(
+      apiRenderPreflightRequestSchema.safeParse({
+        brandId: '00000000-0000-4000-8000-000000000001',
+        templateKey: '133',
+        contractHash: 'hash',
+        variables: {},
+        encode: { outputs: { square: { fps: 500 } } },
+      }).success,
     ).toBe(false);
   });
 });

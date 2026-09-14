@@ -6,11 +6,14 @@ import {
   type TemplateSource,
   templateNameProblem,
 } from '@continuum/contracts';
-import { FileUp, Hammer, Loader2, RefreshCw, Rocket, Send, TestTube2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Hammer, Loader2, RefreshCw, Rocket, Send, TestTube2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ForgeProjectDrop } from '@/components/forge/ForgeProjectDrop';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { LineagePanel } from '@/components/forge/LineagePanel';
+import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
 import { PendingApprovals } from '@/components/forge/PendingApprovals';
+import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
 import { WorkspaceTemplates } from '@/components/forge/WorkspaceTemplates';
@@ -115,7 +118,7 @@ function TemplateRow({
       )}
       aria-current={active ? 'true' : undefined}
     >
-      <p className="truncate text-sm font-medium">{source.assetId}</p>
+      <p className="truncate text-sm font-medium">{source.parse?.filename ?? source.assetId}</p>
       <p className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
         <Badge variant="secondary" className="px-1 py-0 text-2xs">
           {source.parseState}
@@ -150,7 +153,6 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
   const [workspaceId, setWorkspaceId] = useState<string>('');
   const { uploads, uploadFiles, pauseUpload, resumeUpload, cancelUpload } = useMediaUpload(brandId);
   const { run, pushed, refresh: refreshRun } = useForgeRun(brandId, selected);
-  const fileInput = useRef<HTMLInputElement>(null);
 
   const loadSources = useCallback(async () => {
     try {
@@ -277,26 +279,14 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
 
       <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="space-y-3">
-          <input
-            ref={fileInput}
-            type="file"
-            multiple
-            accept=".aep,.aepx,.aet,.zip"
-            className="sr-only"
-            onChange={(event) => {
-              const files = Array.from(event.target.files ?? []);
-              if (files.length) void uploadFiles(files);
-              event.target.value = '';
-            }}
+          <ForgeProjectDrop
+            onFiles={(files) => void uploadFiles(files)}
+            onRejected={(files) =>
+              toast.error(
+                `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, or .zip files.`,
+              )
+            }
           />
-          <Button type="button" className="w-full gap-2" onClick={() => fileInput.current?.click()}>
-            <FileUp className="size-4" aria-hidden />
-            Upload a project
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            .aep, .aepx, .aet or a .zip package, up to 5 GB. It lands in your Library like any other
-            file.
-          </p>
 
           {uploads.length ? (
             <UploadStrip
@@ -338,7 +328,9 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
             <>
               <header className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <h2 className="truncate text-lg font-semibold">{current.assetId}</h2>
+                  <h2 className="truncate text-lg font-semibold">
+                    {current.parse?.filename ?? current.assetId}
+                  </h2>
                   <p className="text-xs text-muted-foreground">
                     {/*
                     A card never says "published" off a forge run alone: the fleet can finish a job
@@ -437,6 +429,21 @@ export function ForgeWorkbench({ brandId }: { brandId: string }) {
               </header>
 
               {selected ? <LineagePanel brandId={brandId} assetId={selected} /> : null}
+
+              {current.templateKey ? (
+                <OutputSettingsPanel brandId={brandId} templateKey={current.templateKey} />
+              ) : null}
+
+              {selected ? (
+                <SourceRebindPanel
+                  brandId={brandId}
+                  assetId={selected}
+                  expectedVersionId={current.versionId}
+                  onConfirmed={async () => {
+                    await Promise.all([loadSources(), loadVariables()]);
+                  }}
+                />
+              ) : null}
 
               {run ? (
                 <div className="rounded-lg border p-4">

@@ -1,0 +1,123 @@
+import { describe, expect, test } from 'bun:test';
+import { resolveForgeRenderSetRows } from './forge-render-sets';
+
+const rootId = '00000000-0000-4000-8000-000000000001';
+const childId = '00000000-0000-4000-8000-000000000002';
+
+describe('Forge render-set tree', () => {
+  test('inherits, explicitly clears, overrides, and reports ancestry', () => {
+    const resolved = resolveForgeRenderSetRows([
+      {
+        id: rootId,
+        parentId: null,
+        label: 'Root',
+        overrides: { headline: 'Root', price: 10 },
+        clearedKeys: [],
+        outputIds: ['square', 'story'],
+      },
+      {
+        id: childId,
+        parentId: rootId,
+        label: 'Child',
+        overrides: { headline: 'Child' },
+        clearedKeys: ['price'],
+        outputIds: [],
+      },
+    ]);
+
+    expect(resolved[1]).toEqual({
+      id: childId,
+      rootRowId: rootId,
+      parentRowId: rootId,
+      path: [rootId, childId],
+      variables: { headline: 'Child' },
+      outputIds: ['square', 'story'],
+    });
+  });
+
+  test('rejects orphaned and over-deep trees', () => {
+    expect(() =>
+      resolveForgeRenderSetRows([
+        {
+          id: rootId,
+          parentId: null,
+          label: 'Root',
+          overrides: {},
+          clearedKeys: [],
+          outputIds: [],
+        },
+        {
+          id: childId,
+          parentId: '00000000-0000-4000-8000-000000000099',
+          label: 'Lost',
+          overrides: {},
+          clearedKeys: [],
+          outputIds: [],
+        },
+      ]),
+    ).toThrow('render_set_orphan');
+
+    const chain = Array.from({ length: 5 }, (_, index) => ({
+      id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      parentId: index === 0 ? null : `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      label: String(index),
+      overrides: {},
+      clearedKeys: [],
+      outputIds: [],
+    }));
+    expect(() => resolveForgeRenderSetRows(chain)).toThrow('render_set_depth_exceeded');
+  });
+
+  test('supports several independent root render rows', () => {
+    const otherRoot = '00000000-0000-4000-8000-000000000003';
+    const resolved = resolveForgeRenderSetRows([
+      { id: rootId, parentId: null, label: 'A', overrides: {}, clearedKeys: [], outputIds: [] },
+      { id: otherRoot, parentId: null, label: 'B', overrides: {}, clearedKeys: [], outputIds: [] },
+    ]);
+    expect(resolved.map((row) => row.rootRowId)).toEqual([rootId, otherRoot]);
+  });
+});
+
+describe('Forge render-set output settings', () => {
+  const row = (over: Record<string, unknown>) => ({
+    id: rootId,
+    parentId: null,
+    label: 'Root',
+    overrides: {},
+    clearedKeys: [],
+    outputIds: [],
+    ...over,
+  });
+
+  test('a child inherits, overrides per leaf, clears to the template, and resets by omission', () => {
+    const grandchildId = '00000000-0000-4000-8000-000000000003';
+    const resolved = resolveForgeRenderSetRows([
+      row({
+        encode: {
+          default: { fps: 25, audio: { sampleRate: 48000, channels: 2 } },
+          outputs: { story: { video: { crf: 18 } } },
+        },
+      }),
+      row({
+        id: childId,
+        parentId: rootId,
+        label: 'Child',
+        encode: { default: { audio: { channels: 1 } } },
+        clearedEncodeKeys: { default: ['fps'], outputs: { story: ['video.crf'] } },
+      }),
+      // Authors nothing: a reset child is exactly its parent.
+      row({ id: grandchildId, parentId: childId, label: 'Grandchild' }),
+    ]);
+
+    expect(resolved[0]?.encode).toEqual({
+      default: { fps: 25, audio: { sampleRate: 48000, channels: 2 } },
+      outputs: { story: { video: { crf: 18 } } },
+    });
+    expect(resolved[1]?.encode).toEqual({ default: { audio: { sampleRate: 48000, channels: 1 } } });
+    expect(resolved[2]?.encode).toEqual(resolved[1]?.encode);
+  });
+
+  test('rows with no settings resolve to no settings', () => {
+    expect(resolveForgeRenderSetRows([row({})])[0]?.encode).toBeUndefined();
+  });
+});

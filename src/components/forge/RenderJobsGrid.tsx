@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiRenderJob } from '@continuum/contracts';
+import type { ApiRenderJob, ForgeRenderSet } from '@continuum/contracts';
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -16,14 +16,22 @@ import { DataGrid, selectColumn } from '@/components/forge/DataGrid';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { RenderJobCard } from '@/StudioCanvas/nodes/api-render/RenderJobCard';
 import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJobs';
 
@@ -38,7 +46,7 @@ import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJo
 // nothing, and the timer covers it.
 // ponytail: 30 s list refresh; the realtime channel makes foreign jobs land in under a second.
 
-const LIST_LIMIT = 50;
+const PAGE_SIZE = 50;
 
 /** How far from square an output is — 0 for a square, growing either way. Unknown sizes sort last. */
 const squareness = (output: { width: number | null; height: number | null; fileName: string }) => {
@@ -46,7 +54,8 @@ const squareness = (output: { width: number | null; height: number | null; fileN
   const ratio = /(\d+)[_x](\d+)/.exec(output.fileName);
   return ratio ? Math.abs(Math.log(Number(ratio[1]) / Number(ratio[2]))) : Number.POSITIVE_INFINITY;
 };
-const LIST_REFRESH_MS = 30_000;
+const CONNECTED_REFRESH_MS = 120_000;
+const DISCONNECTED_REFRESH_MS = 30_000;
 
 const STATUS_TONE: Record<ApiRenderJob['status'], 'muted' | 'warning' | 'success' | 'destructive'> =
   {
@@ -82,32 +91,42 @@ function verdictOf(job: ApiRenderJob): {
 }
 
 export function RenderJobsGrid({ brandId, active = true }: { brandId: string; active?: boolean }) {
-  const { jobs, refreshJobs, refreshOne } = useApiRenderJobs({
+  const [sets, setSets] = useState<ForgeRenderSet[]>([]);
+  const [renderSetId, setRenderSetId] = useState<string>('all');
+  const [pushed, setPushed] = useState(false);
+  const { jobs, refreshJobs, refreshOne, hasMore, loadMore } = useApiRenderJobs({
     brandId,
     trackedIds: [],
-    limit: LIST_LIMIT,
+    limit: PAGE_SIZE,
+    pollIntervalMs: pushed ? false : DISCONNECTED_REFRESH_MS,
+    ...(renderSetId === 'all' ? {} : { renderSetId }),
   });
   const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [pushed, setPushed] = useState(false);
 
   // Mount, every time the tab comes back, the window regains focus, and on a slow timer.
   useEffect(() => {
     if (!active) return;
-    const load = () =>
+    void apiRendersApi
+      .listRenderSets(brandId)
+      .then((response) => setSets(response.items))
+      .catch(() => undefined);
+    const load = () => {
+      if (!active || document.visibilityState !== 'visible') return;
       void refreshJobs()
         .catch(() => undefined)
         .finally(() => setLoaded(true));
+    };
     load();
     window.addEventListener('focus', load);
-    const timer = setInterval(load, LIST_REFRESH_MS);
+    const timer = setInterval(load, pushed ? CONNECTED_REFRESH_MS : DISCONNECTED_REFRESH_MS);
     return () => {
       window.removeEventListener('focus', load);
       clearInterval(timer);
     };
-  }, [active, refreshJobs]);
+  }, [active, pushed, refreshJobs]);
 
   // Realtime: a row change is a signal to re-read, never a row to merge — the relay is what
   // re-signs output URLs and runs the judge, and only the list read goes through it.
@@ -115,26 +134,23 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
     let cancelled = false;
     let unsubscribe: (() => void) | null = null;
     let debounce: ReturnType<typeof setTimeout> | null = null;
-    const onRow = () => {
+    const onRow = (row: Record<string, unknown>) => {
+      if (row.brand_id !== brandId) return;
       if (debounce) clearTimeout(debounce);
       debounce = setTimeout(() => void refreshJobs().catch(() => undefined), 400);
     };
-    void createSupabaseBrowserClient()
-      .realtime.setAuth()
-      .catch(() => undefined)
-      .then(() => {
-        if (cancelled) return;
-        unsubscribe = subscribeToPostgresChanges({
-          label: 'ad-render-jobs',
-          bindings: (['INSERT', 'UPDATE'] as const).map((event) => ({
-            event,
-            schema: 'media',
-            table: 'ad_render_jobs',
-            filter: `brand_id=eq.${brandId}`,
-            onRow,
-          })),
-          onStatus: (status) => setPushed(status === 'SUBSCRIBED'),
-        });
+    if (!cancelled)
+      unsubscribe = subscribeToPostgresChanges({
+        label: 'ad-render-jobs',
+        bindings: (['INSERT', 'UPDATE'] as const).map((event) => ({
+          event,
+          schema: 'media',
+          table: 'ad_render_jobs',
+          filter: `brand_id=eq.${brandId}`,
+          onRow,
+        })),
+        onSubscribed: () => refreshJobs().catch(() => undefined),
+        onStatus: (status) => setPushed(status === 'SUBSCRIBED'),
       });
     return () => {
       cancelled = true;
@@ -172,9 +188,30 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
         },
       },
       {
-        accessorKey: 'templateName',
-        header: 'Template',
-        cell: ({ getValue }) => <span className="font-medium">{getValue<string>()}</span>,
+        accessorKey: 'label',
+        header: 'Name',
+        cell: ({ row: { original: job } }) => {
+          const ancestry = (job.labelPath ?? []).slice(0, -1);
+          return (
+            <div className="min-w-40">
+              {ancestry.length ? (
+                <p className="truncate text-3xs text-muted-foreground">{ancestry.join(' / ')}</p>
+              ) : null}
+              <span className="font-medium">{job.label ?? job.templateName}</span>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'set',
+        header: 'Set',
+        cell: ({ row: { original: job } }) => (
+          <span className="text-muted-foreground">
+            {job.renderSetName ??
+              sets.find((set) => set.id === job.renderSetId)?.name ??
+              'Unassigned'}
+          </span>
+        ),
       },
       {
         accessorKey: 'status',
@@ -260,7 +297,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
           ) : null,
       },
     ],
-    [],
+    [jobs, sets],
   );
 
   const table = useReactTable({
@@ -287,10 +324,29 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-muted-foreground">
-          The last {LIST_LIMIT} renders for this brand, from here and from the canvas.
+          Renders for this brand, from here and from the canvas.
           {pushed ? '' : ' Live updates unavailable — refreshing on a timer.'}
         </p>
         <div className="ml-auto flex items-center gap-1.5">
+          <Select value={renderSetId} onValueChange={setRenderSetId}>
+            <SelectTrigger className="h-7 w-44 text-xs" aria-label="Filter by render set">
+              <SelectValue>
+                {renderSetId === 'all'
+                  ? 'All render sets'
+                  : (sets.find((set) => set.id === renderSetId)?.name ?? 'Render set')}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">All render sets</SelectItem>
+                {sets.map((set) => (
+                  <SelectItem key={set.id} value={set.id}>
+                    {set.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
           <Button
             type="button"
             size="sm"
@@ -298,7 +354,13 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
             className="gap-1.5"
             disabled={downloadable.length === 0}
             onClick={() => {
-              for (const output of downloadable) window.open(output.url, '_blank', 'noopener');
+              for (const output of downloadable) {
+                const anchor = document.createElement('a');
+                anchor.href = output.url;
+                anchor.download = output.fileName;
+                anchor.rel = 'noopener';
+                anchor.click();
+              }
             }}
           >
             <Download className="size-3.5" aria-hidden /> Download {downloadable.length || ''}
@@ -320,6 +382,13 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
         onRowClick={(job) => setOpenId(job.id)}
         empty={loaded ? 'No renders yet. Set some up on the Render tab.' : 'Loading…'}
       />
+      {hasMore ? (
+        <div className="flex justify-center">
+          <Button type="button" size="sm" variant="outline" onClick={() => void loadMore()}>
+            Load older renders
+          </Button>
+        </div>
+      ) : null}
       <Sheet open={open !== null} onOpenChange={(next) => (next ? undefined : setOpenId(null))}>
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
           {open ? (

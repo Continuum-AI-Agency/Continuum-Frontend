@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchTemplateRun, type TemplateRunRow } from '@/lib/library/templateSources';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 /**
@@ -16,73 +15,86 @@ export function useForgeRun(brandId: string, assetId: string | null) {
   const [run, setRun] = useState<TemplateRunRow | null>(null);
   const [pushed, setPushed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const assetRef = useRef(assetId);
-  assetRef.current = assetId;
+  const scope = `${brandId}:${assetId ?? ''}`;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const readSequence = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!assetId) {
       setRun(null);
       return;
     }
+    const sequence = ++readSequence.current;
     setLoading(true);
     try {
       const next = await fetchTemplateRun(brandId, assetId);
       // A late response for a template the user has already navigated away from must not
       // overwrite the one they are now looking at.
-      if (assetRef.current === assetId) setRun(next);
+      if (scopeRef.current === scope && sequence === readSequence.current) setRun(next);
     } catch {
       // A run that cannot be read is not a run that failed. Leave whatever is on screen.
     } finally {
-      setLoading(false);
+      if (scopeRef.current === scope && sequence === readSequence.current) setLoading(false);
     }
-  }, [brandId, assetId]);
+  }, [brandId, assetId, scope]);
 
   useEffect(() => {
     if (!assetId) return;
-    let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
-
-    // Push the viewer's token onto the socket BEFORE joining. A subscription created without it
-    // registers as `anon`, which the `to authenticated` policy never matches — the channel still
-    // reports SUBSCRIBED and then delivers nothing until the next heartbeat repairs it. Measured
-    // on the render queue, not theorised.
-    void createSupabaseBrowserClient()
-      .realtime.setAuth()
-      .catch(() => undefined)
-      .then(() => {
-        if (cancelled) return;
-        unsubscribe = subscribeToPostgresChanges({
-          label: `forge-run-${assetId}`,
-          // INSERT and UPDATE separately, never '*': Realtime broadcasts DELETE with a
-          // primary-key-only payload and no RLS check, and the only DELETE here is the cascade
-          // from a removed template source, which nothing on screen needs told about.
-          bindings: (['INSERT', 'UPDATE'] as const).map((event) => ({
-            event,
-            schema: 'media',
-            table: 'template_source_runs',
-            filter: `asset_id=eq.${assetId}`,
-            onRow: (row) => {
-              if (assetRef.current === assetId) setRun(row as unknown as TemplateRunRow);
-            },
-          })),
-          onSubscribed: refresh,
-          onStatus: (status) => setPushed(status === 'SUBSCRIBED'),
-        });
-      });
+    let pending: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToPostgresChanges({
+      label: `forge-run-${assetId}`,
+      // INSERT and UPDATE separately, never '*': Realtime broadcasts DELETE with a
+      // primary-key-only payload and no RLS check, and the only DELETE here is the cascade
+      // from a removed template source, which nothing on screen needs told about.
+      bindings: (['INSERT', 'UPDATE'] as const).map((event) => ({
+        event,
+        schema: 'media',
+        table: 'template_source_runs',
+        filter: `asset_id=eq.${assetId}`,
+        onRow: (row) => {
+          // Notifications are hints, not authoritative snapshots. This also prevents an
+          // older source run's late event from replacing the current run after a rebind.
+          if (row.asset_id !== assetId || row.brand_id !== brandId || pending) return;
+          pending = setTimeout(() => {
+            pending = undefined;
+            void refresh();
+          }, 150);
+        },
+      })),
+      onSubscribed: refresh,
+      onStatus: (status) => setPushed(status === 'SUBSCRIBED'),
+    });
 
     return () => {
-      cancelled = true;
+      clearTimeout(pending);
       setPushed(false);
-      unsubscribe?.();
+      unsubscribe();
     };
-  }, [assetId, refresh]);
+  }, [assetId, brandId, refresh]);
 
   // Unconditional, not just in `onSubscribed`. A browser whose channel never joins — a blocked
   // WebSocket, a publication missing in some environment — would otherwise show an empty run
   // forever and read as "nothing is happening" rather than "we cannot see".
   useEffect(() => {
+    setRun(null);
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!assetId) return;
+    const recover = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    window.addEventListener('focus', recover);
+    // Realtime is not a durable queue. A slow backfill covers missed events, with a
+    // shorter fallback when the socket cannot connect. Neither drives server-side work.
+    const timer = setInterval(recover, pushed ? 120_000 : 30_000);
+    return () => {
+      window.removeEventListener('focus', recover);
+      clearInterval(timer);
+    };
+  }, [assetId, pushed, refresh]);
 
   return { run, pushed, loading, refresh };
 }

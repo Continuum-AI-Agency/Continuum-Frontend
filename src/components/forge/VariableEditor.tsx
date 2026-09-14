@@ -1,6 +1,11 @@
 'use client';
 
-import { SLOT_ROLE_KIND, SLOT_ROLES, type SlotRole } from '@continuum/contracts';
+import {
+  apiRenderVariableLabel,
+  SLOT_ROLE_KIND,
+  SLOT_ROLES,
+  type SlotRole,
+} from '@continuum/contracts';
 import { Image as ImageIcon, Info, Loader2, Save } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
@@ -233,6 +238,7 @@ export function VariableEditor({
           </TableHeader>
           <TableBody>
             {variables.map((variable) => {
+              const displayLabel = apiRenderVariableLabel(variable);
               const role = resolve(draft, variable, 'role', variable.role) as string | null;
               const budget = resolve(draft, variable, 'charBudget', variable.charBudget) as
                 | number
@@ -243,9 +249,9 @@ export function VariableEditor({
                   <TableCell className="align-top">
                     <Input
                       className="h-7 text-xs"
-                      defaultValue={variable.label}
+                      defaultValue={displayLabel}
                       onChange={(event) => patch(variable.key, { publicName: event.target.value })}
-                      aria-label={`Name for ${variable.key}`}
+                      aria-label={`Public name for ${displayLabel}`}
                     />
                     <p className="mt-1 flex flex-wrap items-center gap-1 font-mono text-2xs text-muted-foreground">
                       <Badge variant="secondary" className="px-1 py-0 text-2xs">
@@ -254,6 +260,13 @@ export function VariableEditor({
                       {/* One slot in seven ratios is one slot — say which frames carry it. */}
                       {variable.comps.length ? `${variable.comps.length} comps` : null}
                     </p>
+                    <p className="mt-1 truncate text-2xs text-muted-foreground" title={variable.key}>
+                      AE binding: {variable.key}
+                      {variable.comps.length ? ` · ${variable.comps.join(', ')}` : ' · composition not detected'}
+                    </p>
+                    {variable.description ? (
+                      <p className="mt-1 text-2xs text-muted-foreground">{variable.description}</p>
+                    ) : null}
                   </TableCell>
 
                   <TableCell className="align-top">
@@ -265,7 +278,7 @@ export function VariableEditor({
                     >
                       <SelectTrigger
                         className="h-7 text-xs"
-                        aria-label={`Role for ${variable.label}`}
+                        aria-label={`Meaning for ${displayLabel}`}
                       >
                         <SelectValue placeholder="Unassigned" />
                       </SelectTrigger>
@@ -305,7 +318,7 @@ export function VariableEditor({
                           charBudget: event.target.value === '' ? null : Number(event.target.value),
                         })
                       }
-                      aria-label={`Character budget for ${variable.label}`}
+                      aria-label={`Character budget for ${displayLabel}`}
                       // Not a limit After Effects enforces — it is the designer's own composed
                       // length in the tightest comp, and the only honest budget without a render.
                       title="The designer's own composed length in the tightest frame"
@@ -320,7 +333,7 @@ export function VariableEditor({
                           | null) === true
                       }
                       onCheckedChange={(next) => patch(variable.key, { required: next })}
-                      aria-label={`${variable.label} is required`}
+                      aria-label={`${displayLabel} is required`}
                     />
                   </TableCell>
                 </TableRow>

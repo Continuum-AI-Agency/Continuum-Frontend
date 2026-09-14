@@ -66,6 +66,7 @@ export function selectColumn<T>(): ColumnDef<T> {
       <Checkbox
         aria-label="Select row"
         checked={row.getIsSelected()}
+        onClick={(event) => event.stopPropagation()}
         onCheckedChange={(checked) => row.toggleSelected(checked === true)}
       />
     ),

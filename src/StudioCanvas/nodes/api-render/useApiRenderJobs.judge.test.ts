@@ -55,3 +55,10 @@ describe('when it stops', () => {
     expect(__test__.isInFlight(job({ status: 'failed', fit: escalated }))).toBe(false);
   });
 });
+
+test('pagination preserves order, deduplicates and never replaces fresher progress', () => {
+  const current = job({ id: 'a', updatedAt: '2026-09-14T12:00:00Z' });
+  const stale = job({ id: 'a', status: 'queued', updatedAt: '2026-09-14T11:00:00Z' });
+  const older = job({ id: 'b' });
+  expect(__test__.mergePage([current], [stale, older])).toEqual([current, older]);
+});

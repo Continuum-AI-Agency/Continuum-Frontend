@@ -1,10 +1,13 @@
 import {
   API_RENDER_BATCH_PREFLIGHT_ROUTE,
   API_RENDER_BATCHES_ROUTE,
+  API_RENDER_DRIVE_SNAPSHOT_ROUTE,
   API_RENDER_ENVIRONMENTS_ROUTE,
+  API_RENDER_IMPORT_PREVIEW_ROUTE,
   API_RENDER_INPUT_SETS_ROUTE,
   API_RENDER_JOBS_ROUTE,
   API_RENDER_PREFLIGHT_ROUTE,
+  API_RENDER_SETS_ROUTE,
   API_RENDER_SUGGEST_ROWS_ROUTE,
   API_RENDER_TEMPLATES_ROUTE,
   type ApiRenderBatch,
@@ -35,6 +38,17 @@ import {
   apiRenderSuggestRowsResponseSchema,
   apiRenderTemplateContractSchema,
   apiRenderTemplateListResponseSchema,
+  type CreateForgeRenderSetRequest,
+  type ForgeRenderDriveSnapshot,
+  type ForgeRenderDriveSnapshotRequest,
+  type ForgeRenderImportPreview,
+  type ForgeRenderImportPreviewRequest,
+  type ForgeRenderSet,
+  forgeRenderDriveSnapshotSchema,
+  forgeRenderImportPreviewSchema,
+  forgeRenderSetListResponseSchema,
+  forgeRenderSetSchema,
+  type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
 import { http } from '@/lib/api/http';
 
@@ -42,6 +56,22 @@ const query = (input: Record<string, string | number>) =>
   new URLSearchParams(Object.entries(input).map(([key, value]) => [key, String(value)])).toString();
 
 export const apiRendersApi = {
+  previewImport(input: ForgeRenderImportPreviewRequest) {
+    return http.request<ForgeRenderImportPreview>({
+      path: API_RENDER_IMPORT_PREVIEW_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderImportPreviewSchema,
+    });
+  },
+  snapshotDriveFolder(input: ForgeRenderDriveSnapshotRequest) {
+    return http.request<ForgeRenderDriveSnapshot>({
+      path: API_RENDER_DRIVE_SNAPSHOT_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderDriveSnapshotSchema,
+    });
+  },
   // Which workspaces this brand can render into. Most brands answer with one — the picker
   // collapses to a label then — but a brand with several could previously reach only its
   // default and had no way to see that the others existed.
@@ -83,9 +113,14 @@ export const apiRendersApi = {
       schema: apiRenderJobSchema,
     });
   },
-  listJobs(brandId: string, limit = 10) {
+  listJobs(brandId: string, limit = 10, options?: { cursor?: string; renderSetId?: string }) {
     return http.request<ApiRenderJobListResponse>({
-      path: `${API_RENDER_JOBS_ROUTE}?${query({ brandId, limit })}`,
+      path: `${API_RENDER_JOBS_ROUTE}?${query({
+        brandId,
+        limit,
+        ...(options?.cursor ? { cursor: options.cursor } : {}),
+        ...(options?.renderSetId ? { renderSetId: options.renderSetId } : {}),
+      })}`,
       schema: apiRenderJobListResponseSchema,
     });
   },
@@ -127,6 +162,43 @@ export const apiRendersApi = {
   deleteInputSet(brandId: string, inputSetId: string) {
     return http.request<void>({
       path: `${API_RENDER_INPUT_SETS_ROUTE}/${encodeURIComponent(inputSetId)}?${query({ brandId })}`,
+      method: 'DELETE',
+    });
+  },
+
+  listRenderSets(brandId: string, templateKey?: string) {
+    return http.request<{ items: ForgeRenderSet[]; nextCursor: null }>({
+      path: `${API_RENDER_SETS_ROUTE}?${query(
+        templateKey ? { brandId, templateKey } : { brandId },
+      )}`,
+      schema: forgeRenderSetListResponseSchema,
+    });
+  },
+  getRenderSet(brandId: string, setId: string) {
+    return http.request<ForgeRenderSet>({
+      path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}?${query({ brandId })}`,
+      schema: forgeRenderSetSchema,
+    });
+  },
+  createRenderSet(input: CreateForgeRenderSetRequest) {
+    return http.request<ForgeRenderSet>({
+      path: API_RENDER_SETS_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderSetSchema,
+    });
+  },
+  updateRenderSet(setId: string, input: UpdateForgeRenderSetRequest) {
+    return http.request<ForgeRenderSet>({
+      path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}`,
+      method: 'PUT',
+      body: input,
+      schema: forgeRenderSetSchema,
+    });
+  },
+  deleteRenderSet(brandId: string, setId: string) {
+    return http.request<void>({
+      path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}?${query({ brandId })}`,
       method: 'DELETE',
     });
   },

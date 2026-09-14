@@ -91,20 +91,41 @@ const JOB = {
   environment: 'Continuum_app',
   fit: null,
   judge: null,
+  renderSetName: 'Campaign set',
+  labelPath: ['Root', 'Spain'],
 };
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
-    listEnvironments: async () => ({ items: [] }),
+    listEnvironments: async () => ({
+      items: [
+        {
+          bindingId: '44444444-4444-4444-8444-444444444444',
+          workspace: 'Continuum_app',
+          isDefault: true,
+        },
+      ],
+    }),
     listTemplates: async () => ({ items: [TEMPLATE], nextCursor: null }),
     getContract: async () => ({
       template: TEMPLATE,
       variables: VARIABLES,
+      outputs: [],
       fonts: [],
       layout: null,
       divergence: [],
     }),
     listInputSets: async () => ({ items: [], nextCursor: null }),
+    listRenderSets: async () => ({ items: [], nextCursor: null }),
+    createRenderSet: async (input: Record<string, unknown>) => ({
+      ...input,
+      id: '33333333-3333-4333-8333-333333333333',
+      revision: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+    batchPreflight: async () => ({ confirmationToken: 'batch-token' }),
+    createBatch: async () => ({ jobs: [JOB] }),
     preflight: preflightMock,
     listJobs: async () => ({ items: [JOB], nextCursor: null }),
     getJob: async () => JOB,
@@ -121,8 +142,9 @@ mock.module('@/components/organic/primitives/MediaSelectPopover', () => ({
   MediaSelectPopover: ({ anchor }: { anchor: React.ReactNode }) => <>{anchor}</>,
 }));
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
+import { ApiError } from '@/lib/api/errors';
 import { RenderJobsGrid } from './RenderJobsGrid';
 import { RenderRequestsGrid } from './RenderRequestsGrid';
 
@@ -135,6 +157,46 @@ afterEach(() => {
 });
 
 describe('RenderRequestsGrid', () => {
+  test('associates an authoritative guardrail refusal with its row and cell', async () => {
+    preflightMock.mockImplementationOnce(async () => {
+      throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+        detail: 'Use a permitted brand color.',
+        guardrails: [
+          {
+            code: 'BRAND_COLOR_OUTSIDE_PALETTE',
+            severity: 'block',
+            variableKey: 'headline',
+            message: 'Use a permitted brand color.',
+          },
+        ],
+      });
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByLabelText('Headline');
+    await waitFor(() => expect(screen.getByText(/BLOCKED · 0 ready · 1 blocked/)).toBeTruthy());
+    expect(
+      screen.getByLabelText('Headline').closest('[title="Use a permitted brand color."]'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ }).disabled).toBe(true);
+  });
+  test('refuses a whole paste above the fifty-row cap', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    const paste = (count: number) =>
+      fireEvent.paste(screen.getByRole('table'), {
+        clipboardData: {
+          getData: () =>
+            ['headline', ...Array.from({ length: count }, (_, index) => `Row ${index}`)].join('\n'),
+        },
+      });
+    paste(50);
+    expect(screen.getAllByLabelText('Select row')).toHaveLength(1);
+    paste(49);
+    expect(screen.getAllByLabelText('Select row')).toHaveLength(50);
+    paste(1);
+    expect(screen.getAllByLabelText('Select row')).toHaveLength(50);
+  });
   test('discovers the one template, seeds a row from the samples, and dry-runs it to Ready', async () => {
     localStorage.clear();
     render(<RenderRequestsGrid brandId={BRAND} />);
@@ -151,12 +213,49 @@ describe('RenderRequestsGrid', () => {
     // A media cell offers the Library and is not a text input.
     expect(screen.getByLabelText('Choose Hero')).toBeTruthy();
   });
+
+  test('forks an explicitly selected named row and distinguishes clear from reset to inheritance', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
+    expect(screen.getByText(/1 selected/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Fork' }));
+
+    expect(await screen.findByDisplayValue('Root fork')).toBeTruthy();
+    expect(screen.getByTitle('Root')).toBeTruthy();
+    expect(screen.getAllByDisplayValue('Hola mundo')).toHaveLength(2);
+    expect(screen.getByText(/1 selected/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear inherited Headline' }));
+    expect(screen.getAllByDisplayValue('Hola mundo')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Headline to inherited' }));
+    expect(screen.getAllByDisplayValue('Hola mundo')).toHaveLength(2);
+  });
+
+  test('keeps the named draft row after submitting its immutable set snapshot', async () => {
+    const originalPrompt = window.prompt;
+    window.prompt = () => 'Campaign set';
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
+    expect(screen.getByText(/1 selected/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
+    expect(screen.getByText(/READY · 1 ready · 0 blocked · 0 incomplete/)).toBeTruthy();
+    expect(
+      screen.getByText(/New fields, hierarchy, or unexposed layout changes require/),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Render 1/ }));
+    await waitFor(() => expect(screen.getByDisplayValue('Root')).toBeTruthy());
+    window.prompt = originalPrompt;
+  });
 });
 
 describe('RenderJobsGrid', () => {
   test('lists the brand’s renders', async () => {
     render(<RenderJobsGrid brandId={BRAND} />);
     expect(await screen.findByText('forge_bench_starcraft')).toBeTruthy();
+    expect(screen.getByText('Root')).toBeTruthy();
+    expect(screen.getByText('Campaign set')).toBeTruthy();
     expect(screen.getByText('finished')).toBeTruthy();
     expect(screen.getByText(/1 render • 1 finished • 0 in flight/)).toBeTruthy();
   });

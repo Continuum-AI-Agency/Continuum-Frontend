@@ -23,13 +23,13 @@ export function ForgeTabs({ brandId }: { brandId: string }) {
         <TabsTrigger value="renders">Renders</TabsTrigger>
       </TabsList>
       <TabsContent value="templates">
-        <ForgeWorkbench brandId={brandId} />
+        <ForgeWorkbench key={brandId} brandId={brandId} />
       </TabsContent>
       <TabsContent value="render">
-        <RenderRequestsGrid brandId={brandId} onFired={() => setTab('renders')} />
+        <RenderRequestsGrid key={brandId} brandId={brandId} onFired={() => setTab('renders')} />
       </TabsContent>
       <TabsContent value="renders">
-        <RenderJobsGrid brandId={brandId} active={tab === 'renders'} />
+        <RenderJobsGrid key={brandId} brandId={brandId} active={tab === 'renders'} />
       </TabsContent>
     </Tabs>
   );

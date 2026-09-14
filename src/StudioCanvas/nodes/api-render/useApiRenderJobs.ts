@@ -23,6 +23,17 @@ const isInFlight = (job: ApiRenderJob) =>
   job.status === 'rendering' ||
   (job.status === 'finished' && job.fit?.escalate === true && job.judge === null);
 
+function mergePage(current: ApiRenderJob[], incoming: ApiRenderJob[]): ApiRenderJob[] {
+  const byId = new Map(current.map((job) => [job.id, job]));
+  for (const job of incoming) {
+    const previous = byId.get(job.id);
+    if (!previous || Date.parse(job.updatedAt) >= Date.parse(previous.updatedAt)) {
+      byId.set(job.id, job);
+    }
+  }
+  return [...byId.values()];
+}
+
 /**
  * The node's view of its renders.
  *
@@ -44,43 +55,96 @@ export function useApiRenderJobs(args: {
   trackedIds: string[];
   /** How many recent rows the list read returns. The node wants a handful; a grid wants the cap. */
   limit?: number;
+  renderSetId?: string;
+  /** A connected push consumer disables per-job polling; other consumers retain recovery. */
+  pollIntervalMs?: number | false;
 }) {
   const { brandId } = args;
   const [jobs, setJobs] = useState<ApiRenderJob[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const scope = `${brandId ?? ''}:${args.renderSetId ?? ''}`;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const paging = useRef(false);
+  const paged = useRef(false);
+  const sequence = useRef(0);
+
+  useEffect(() => {
+    setJobs([]);
+    setError(null);
+    setNextCursor(null);
+    paged.current = false;
+    paging.current = false;
+  }, [scope]);
 
   // The tracked list is persisted node data and changes identity on every save; keying
   // effects off the array itself would refetch on each keystroke elsewhere in the node.
   const trackedKey = args.trackedIds.join(',');
 
-  const mergeJob = useCallback((fresh: ApiRenderJob) => {
-    setJobs((current) => {
-      const index = current.findIndex((item) => item.id === fresh.id);
-      if (index === -1) return [fresh, ...current];
-      const next = [...current];
-      next[index] = fresh;
-      return next;
-    });
-  }, []);
+  const mergeJob = useCallback(
+    (fresh: ApiRenderJob) => {
+      if (fresh.brandId !== brandId || (args.renderSetId && fresh.renderSetId !== args.renderSetId))
+        return;
+      setJobs((current) => {
+        const index = current.findIndex((item) => item.id === fresh.id);
+        if (index === -1) return [fresh, ...current];
+        const next = [...current];
+        if (Date.parse(fresh.updatedAt) >= Date.parse(next[index]!.updatedAt)) next[index] = fresh;
+        return next;
+      });
+    },
+    [brandId, args.renderSetId],
+  );
 
   const refreshJobs = useCallback(async () => {
     if (!brandId) return;
-    const response = await apiRendersApi.listJobs(brandId, args.limit ?? 8);
+    const requestSequence = ++sequence.current;
+    const response = await apiRendersApi.listJobs(brandId, args.limit ?? 8, {
+      renderSetId: args.renderSetId,
+    });
     const listed = new Set(response.items.map((item) => item.id));
     const missing = trackedKey ? trackedKey.split(',').filter((id) => id && !listed.has(id)) : [];
     // A tracked id the list did not return is fetched directly rather than dropped.
     const recovered = await Promise.all(
       missing.map((id) => apiRendersApi.getJob(brandId, id).catch(() => null)),
     );
-    setJobs([...response.items, ...recovered.filter((job): job is ApiRenderJob => job !== null)]);
-  }, [brandId, trackedKey, args.limit]);
+    if (scopeRef.current !== scope || sequence.current !== requestSequence) return;
+    const fresh = [
+      ...response.items,
+      ...recovered.filter(
+        (job): job is ApiRenderJob =>
+          job !== null && (!args.renderSetId || job.renderSetId === args.renderSetId),
+      ),
+    ];
+    setJobs((current) => mergePage(fresh, current));
+    if (!paged.current) setNextCursor(response.nextCursor);
+  }, [brandId, trackedKey, args.limit, args.renderSetId, scope]);
+
+  const loadMore = useCallback(async () => {
+    if (!brandId || !nextCursor || paging.current) return;
+    paging.current = true;
+    try {
+      const response = await apiRendersApi.listJobs(brandId, args.limit ?? 8, {
+        cursor: nextCursor,
+        renderSetId: args.renderSetId,
+      });
+      if (scopeRef.current !== scope) return;
+      setJobs((current) => mergePage(current, response.items));
+      setNextCursor(response.nextCursor);
+      paged.current = true;
+    } finally {
+      if (scopeRef.current === scope) paging.current = false;
+    }
+  }, [brandId, nextCursor, args.limit, args.renderSetId, scope]);
 
   const refreshOne = useCallback(
     async (jobId: string) => {
       if (!brandId) return;
-      mergeJob(await apiRendersApi.getJob(brandId, jobId));
+      const fresh = await apiRendersApi.getJob(brandId, jobId);
+      if (scopeRef.current === scope) mergeJob(fresh);
     },
-    [brandId, mergeJob],
+    [brandId, mergeJob, scope],
   );
 
   const jobsRef = useRef<ApiRenderJob[]>(jobs);
@@ -90,24 +154,48 @@ export function useApiRenderJobs(args: {
 
   const inFlight = jobs.some(isInFlight);
   useEffect(() => {
-    if (!inFlight || !brandId) return;
+    if (!inFlight || !brandId || args.pollIntervalMs === false) return;
+    let offset = 0;
+    let pending = false;
     const timer = setInterval(() => {
       // Three at a time keeps a burst of confirms — a batch confirm is exactly that —
       // from turning the poll into a fan-out; the rest advance on later ticks.
-      const active = jobsRef.current.filter(isInFlight).slice(0, 3);
+      if (pending || document.visibilityState !== 'visible') return;
+      const all = jobsRef.current.filter(isInFlight);
+      if (!all.length) return;
+      const active = Array.from(
+        { length: Math.min(3, all.length) },
+        (_, index) => all[(offset + index) % all.length]!,
+      );
+      offset = (offset + active.length) % all.length;
+      pending = true;
       void Promise.all(active.map((job) => apiRendersApi.getJob(brandId, job.id)))
         .then((fresh) => {
-          setJobs((current) => current.map((item) => fresh.find((f) => f.id === item.id) ?? item));
+          if (scopeRef.current === scope) setJobs((current) => mergePage(current, fresh));
         })
         .catch(() => {
           // A dropped poll is not a render failure; the next tick retries.
+        })
+        .finally(() => {
+          pending = false;
         });
-    }, 5_000);
+    }, args.pollIntervalMs ?? 30_000);
     return () => clearInterval(timer);
-  }, [brandId, inFlight]);
+  }, [brandId, inFlight, scope, args.pollIntervalMs]);
 
-  return { jobs, setJobs, error, setError, refreshJobs, refreshOne, mergeJob };
+  return {
+    jobs,
+    setJobs,
+    error,
+    setError,
+    refreshJobs,
+    refreshOne,
+    mergeJob,
+    nextCursor,
+    hasMore: nextCursor !== null,
+    loadMore,
+  };
 }
 
 /** Test seam: the polling predicate is the whole cost/latency rule, so it is asserted directly. */
-export const __test__ = { isInFlight };
+export const __test__ = { isInFlight, mergePage };

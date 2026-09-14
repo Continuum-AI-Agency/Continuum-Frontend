@@ -46,6 +46,7 @@ export * from './template-forge-run';
 export * from './template-name';
 export * from './template-source';
 export * from './template-source-slot';
+export * from './template-rebind';
 export * from './timeline-draft';
 export * from './transformations';
 export * from './unfurl';

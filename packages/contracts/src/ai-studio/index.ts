@@ -17,6 +17,8 @@ export * from './design-grounding';
 export * from './editor-project-reducer';
 export * from './editor-project-v2';
 export * from './export-formats';
+export * from './forge-render-imports';
+export * from './forge-render-sets';
 export * from './format-workflows';
 export * from './generation-error';
 export * from './hyperframes-agent';

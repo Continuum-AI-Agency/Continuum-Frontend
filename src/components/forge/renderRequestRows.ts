@@ -1,8 +1,12 @@
 import {
   API_RENDER_MEDIA_LIST_MAX,
+  type ApiRenderEncodeOverride,
   type ApiRenderFitReport,
   type ApiRenderInputValue,
   type ApiRenderVariable,
+  type ApiRenderPreflightResponse,
+  type ForgeRenderSetEncodeClear,
+  inheritEncodeBlock,
 } from '@continuum/contracts';
 
 // One row of the render-requests grid: the wire-shaped values for one render, plus what the
@@ -17,20 +21,52 @@ import {
 /** The largest batch the server signs in one token (`apiRenderBatchPreflightRequestSchema`). */
 export const MAX_BATCH_ROWS = 50;
 
+export const canImportRows = (existingRows: number, incomingRows: number): boolean =>
+  existingRows + incomingRows <= MAX_BATCH_ROWS;
+
+export function duplicateMappedVariable(
+  mappings: Record<string, string>,
+  skip = '__skip__',
+): string | null {
+  const seen = new Set<string>();
+  for (const key of Object.values(mappings)) {
+    if (key === skip) continue;
+    if (seen.has(key)) return key;
+    seen.add(key);
+  }
+  return null;
+}
+
 export type RequestRowCheck =
   | { state: 'idle' }
   | { state: 'checking' }
-  | { state: 'ready'; fit: ApiRenderFitReport | null; test: boolean }
-  | { state: 'error'; message: string };
+  | {
+      state: 'ready';
+      fit: ApiRenderFitReport | null;
+      test: boolean;
+      guardrails?: ApiRenderPreflightResponse['guardrails'];
+    }
+  | { state: 'error'; message: string; guardrails?: ApiRenderPreflightResponse['guardrails'] };
 
 export type RequestRowMedia = { w?: number; h?: number; thumbnailUrl?: string | null };
 
 export type RequestRow = {
   id: string;
+  parentId: string | null;
   label: string;
+  /** Only values authored on this row. Parent values are resolved at read/submit time. */
   values: Record<string, ApiRenderInputValue>;
+  /** Explicitly blank inherited values. Removing both this key and an override resets to inherit. */
+  clearedKeys: string[];
+  /** Empty on a child means inherit the parent's formats. */
+  outputIds: string[];
+  /** Output settings authored on this row, by output id. Absent means inherit everything. */
+  encode?: ApiRenderEncodeOverride;
+  /** Inherited settings blanked back to the template. Reset removes the key from both. */
+  clearedEncodeKeys?: ForgeRenderSetEncodeClear;
   media: Record<string, RequestRowMedia>;
   check: RequestRowCheck;
+  subRows?: RequestRow[];
 };
 
 export const newRowId = (): string => crypto.randomUUID();
@@ -60,19 +96,183 @@ function coerce(variable: ApiRenderVariable, raw: string): ApiRenderInputValue |
   }
 }
 
+export function rowsFromMappedImport(
+  sourceRows: Array<Record<string, string>>,
+  mappings: Record<string, string>,
+  variables: ApiRenderVariable[],
+): RequestRow[] {
+  if (duplicateMappedVariable(mappings)) throw new Error('render_import_duplicate_mapping');
+  const byKey = new Map(variables.map((variable) => [variable.key, variable]));
+  return sourceRows.map((source, index) => {
+    const row = seedRow([], source.Name?.trim() || source.Label?.trim() || `Imported ${index + 1}`);
+    for (const [header, key] of Object.entries(mappings)) {
+      const variable = byKey.get(key);
+      if (!variable || variable.kind === 'image' || variable.kind === 'video') continue;
+      const value = coerce(variable, source[header] ?? '');
+      if (value !== undefined) row.values[key] = value;
+    }
+    return row;
+  });
+}
+
 /**
  * A row seeded from the designer's own values, so the first render is the design as authored
  * rather than a table of blanks. Media is never seeded — a pin is a Library coordinate the
  * parse cannot supply — and reserved slots are the server's to fill.
  */
-export function seedRow(variables: ApiRenderVariable[], label = ''): RequestRow {
+export function seedRow(
+  variables: ApiRenderVariable[],
+  label = '',
+  parentId: string | null = null,
+): RequestRow {
   const values: Record<string, ApiRenderInputValue> = {};
   for (const variable of variables) {
     if (!isEditableScalar(variable) || variable.sample === null) continue;
     const value = coerce(variable, variable.sample);
     if (value !== undefined) values[variable.key] = value;
   }
-  return { id: newRowId(), label, values, media: {}, check: { state: 'idle' } };
+  return {
+    id: newRowId(),
+    parentId,
+    label,
+    values,
+    clearedKeys: [],
+    outputIds: [],
+    media: {},
+    check: { state: 'idle' },
+  };
+}
+
+export function rowDepth(rows: RequestRow[], id: string): number {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  let depth = 0;
+  let row = byId.get(id);
+  const seen = new Set<string>();
+  while (row?.parentId) {
+    if (seen.has(row.id)) return Number.POSITIVE_INFINITY;
+    seen.add(row.id);
+    depth += 1;
+    row = byId.get(row.parentId);
+  }
+  return row ? depth : Number.POSITIVE_INFINITY;
+}
+
+export function rowBreadcrumb(rows: RequestRow[], id: string): string[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const labels: string[] = [];
+  let row = byId.get(id);
+  const seen = new Set<string>();
+  while (row && !seen.has(row.id)) {
+    seen.add(row.id);
+    labels.unshift(row.label || 'Untitled');
+    row = row.parentId ? byId.get(row.parentId) : undefined;
+  }
+  return labels;
+}
+
+export function rootRowId(rows: RequestRow[], id: string): string {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  let row = byId.get(id);
+  const seen = new Set<string>();
+  while (row?.parentId && !seen.has(row.id)) {
+    seen.add(row.id);
+    row = byId.get(row.parentId);
+  }
+  return row?.id ?? id;
+}
+
+export function descendantsOf(rows: RequestRow[], ids: Iterable<string>): Set<string> {
+  const found = new Set(ids);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const row of rows) {
+      if (row.parentId && found.has(row.parentId) && !found.has(row.id)) {
+        found.add(row.id);
+        changed = true;
+      }
+    }
+  }
+  return found;
+}
+
+export function effectiveValues(
+  rows: RequestRow[],
+  id: string,
+): Record<string, ApiRenderInputValue> {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const chain: RequestRow[] = [];
+  let row = byId.get(id);
+  const seen = new Set<string>();
+  while (row && !seen.has(row.id)) {
+    seen.add(row.id);
+    chain.unshift(row);
+    row = row.parentId ? byId.get(row.parentId) : undefined;
+  }
+  const values: Record<string, ApiRenderInputValue> = {};
+  for (const item of chain) {
+    for (const key of item.clearedKeys) delete values[key];
+    Object.assign(values, item.values);
+  }
+  return values;
+}
+
+export function effectiveMedia(rows: RequestRow[], id: string): Record<string, RequestRowMedia> {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const chain: RequestRow[] = [];
+  let row = byId.get(id);
+  const seen = new Set<string>();
+  while (row && !seen.has(row.id)) {
+    seen.add(row.id);
+    chain.unshift(row);
+    row = row.parentId ? byId.get(row.parentId) : undefined;
+  }
+  const media: Record<string, RequestRowMedia> = {};
+  for (const item of chain) {
+    for (const key of item.clearedKeys) delete media[key];
+    Object.assign(media, item.media);
+  }
+  return media;
+}
+
+export function effectiveOutputIds(rows: RequestRow[], id: string): string[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  let row = byId.get(id);
+  const seen = new Set<string>();
+  while (row && !seen.has(row.id)) {
+    if (row.outputIds.length > 0) return row.outputIds;
+    seen.add(row.id);
+    row = row.parentId ? byId.get(row.parentId) : undefined;
+  }
+  return [];
+}
+
+/** The settings a row renders with: its ancestry's, then its own clears and overrides. */
+export function effectiveEncode(
+  rows: RequestRow[],
+  id: string,
+): ApiRenderEncodeOverride | undefined {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const chain: RequestRow[] = [];
+  for (let row = byId.get(id); row && !chain.includes(row); ) {
+    chain.unshift(row);
+    row = row.parentId ? byId.get(row.parentId) : undefined;
+  }
+  return chain.reduce<ApiRenderEncodeOverride | undefined>(inheritEncodeBlock, undefined);
+}
+
+export function nestRows(rows: RequestRow[]): RequestRow[] {
+  const children = new Map<string | null, RequestRow[]>();
+  for (const row of rows) {
+    const siblings = children.get(row.parentId) ?? [];
+    siblings.push(row);
+    children.set(row.parentId, siblings);
+  }
+  const visit = (row: RequestRow): RequestRow => ({
+    ...row,
+    subRows: (children.get(row.id) ?? []).map(visit),
+  });
+  return (children.get(null) ?? []).map(visit);
 }
 
 const pinCount = (value: ApiRenderInputValue | undefined): number =>

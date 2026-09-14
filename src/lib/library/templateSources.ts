@@ -5,9 +5,11 @@ import type {
   RenderWorkspace,
   TemplateFontStatus,
   TemplateForgeNeed,
+  TemplateRebindPreview,
   TemplateSource,
   WorkspaceTemplate,
 } from '@continuum/contracts';
+import { templateRebindPreviewSchema } from '@continuum/contracts';
 import { getApiUrl } from '@/lib/api/config';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -44,6 +46,34 @@ export async function fetchTemplateSources(brandId: string): Promise<TemplateSou
   );
   const body = await unwrap<{ items?: TemplateSource[] }>(response, 'Template list');
   return body.items ?? [];
+}
+
+export async function previewTemplateRebind(input: {
+  brandId: string;
+  assetId: string;
+  versionId: string;
+  expectedVersionId: string;
+}): Promise<TemplateRebindPreview> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(input.assetId)}/rebind/preview`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return templateRebindPreviewSchema.parse(await unwrap(response, 'Source revision preview'));
+}
+
+export async function confirmTemplateRebind(input: {
+  brandId: string;
+  assetId: string;
+  versionId: string;
+  expectedVersionId: string;
+  expectedChecksum: string;
+  acceptMissing: boolean;
+}): Promise<TemplateRebindPreview> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(input.assetId)}/rebind/confirm`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return templateRebindPreviewSchema.parse(await unwrap(response, 'Source revision update'));
 }
 
 export type TemplateFontReadiness = {

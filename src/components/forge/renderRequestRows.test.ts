@@ -1,6 +1,20 @@
 import { describe, expect, test } from 'bun:test';
 import type { ApiRenderVariable } from '@continuum/contracts';
-import { parseClipboardRows, seedRow, toVariableMap, validateRow } from './renderRequestRows';
+import {
+  canImportRows,
+  descendantsOf,
+  duplicateMappedVariable,
+  effectiveEncode,
+  effectiveOutputIds,
+  effectiveValues,
+  parseClipboardRows,
+  rowBreadcrumb,
+  rowDepth,
+  rowsFromMappedImport,
+  seedRow,
+  toVariableMap,
+  validateRow,
+} from './renderRequestRows';
 
 const variable = (over: Partial<ApiRenderVariable>): ApiRenderVariable => ({
   key: 'headline',
@@ -82,10 +96,98 @@ describe('parseClipboardRows', () => {
   });
 });
 
+describe('reviewed spreadsheet import', () => {
+  test('coerces mapped scalar columns and rejects whole imports above the set cap', () => {
+    const rows = rowsFromMappedImport(
+      [
+        {
+          Name: 'Autumn offer',
+          Headline: 'Hello',
+          Price: '12.50',
+          Hero: 'https://example.test/a.jpg',
+        },
+      ],
+      { Headline: 'headline', Price: 'price', Hero: 'hero' },
+      all,
+    );
+    expect(rows[0]?.label).toBe('Autumn offer');
+    expect(rows[0]?.values).toEqual({ headline: 'Hello', price: 12.5 });
+    expect(canImportRows(49, 1)).toBe(true);
+    expect(canImportRows(49, 2)).toBe(false);
+    expect(duplicateMappedVariable({ Headline: 'headline', Copy: 'headline' })).toBe('headline');
+    expect(() =>
+      rowsFromMappedImport(
+        [{ Headline: 'A', Copy: 'B' }],
+        { Headline: 'headline', Copy: 'headline' },
+        all,
+      ),
+    ).toThrow('render_import_duplicate_mapping');
+  });
+});
+
 describe('toVariableMap', () => {
   test('drops blanks and keeps typed values', () => {
     const row = seedRow([]);
     row.values = { headline: '', price: 0, on_sale: false, hero: { assetId: 'a' } };
     expect(toVariableMap(row)).toEqual({ price: 0, on_sale: false, hero: { assetId: 'a' } });
+  });
+});
+
+describe('fork rows', () => {
+  test('inherits through three levels, then applies clear and override in ancestry order', () => {
+    const root = seedRow([], 'Campaign');
+    root.values = { headline: 'Root', price: 10 };
+    root.outputIds = ['square', 'story'];
+    const market = seedRow([], 'Spain', root.id);
+    market.values = { headline: 'Hola' };
+    const offer = seedRow([], 'Sale', market.id);
+    offer.clearedKeys = ['price'];
+    offer.values = { on_sale: true };
+    const rows = [root, market, offer];
+
+    expect(effectiveValues(rows, offer.id)).toEqual({ headline: 'Hola', on_sale: true });
+    expect(effectiveOutputIds(rows, offer.id)).toEqual(['square', 'story']);
+    expect(rowDepth(rows, offer.id)).toBe(2);
+    expect(rowBreadcrumb(rows, offer.id)).toEqual(['Campaign', 'Spain', 'Sale']);
+  });
+
+  test('finds every descendant without selecting unrelated branches', () => {
+    const root = seedRow([], 'Root');
+    const a = seedRow([], 'A', root.id);
+    const a1 = seedRow([], 'A1', a.id);
+    const b = seedRow([], 'B', root.id);
+    expect(descendantsOf([root, a, a1, b], [a.id])).toEqual(new Set([a.id, a1.id]));
+  });
+});
+
+describe('effectiveEncode', () => {
+  test('a child inherits settings, overrides per leaf, clears to the template, and resets', () => {
+    const root = seedRow([], 'Campaign');
+    root.encode = { default: { fps: 25, audio: { sampleRate: 48000 } } };
+    const market = seedRow([], 'Spain', root.id);
+    market.encode = { outputs: { story: { audio: { channels: 1 } } } };
+    const offer = seedRow([], 'Sale', market.id);
+    const rows = [root, market, offer];
+
+    expect(effectiveEncode(rows, offer.id)).toEqual({
+      default: { fps: 25, audio: { sampleRate: 48000 } },
+      outputs: { story: { audio: { channels: 1 } } },
+    });
+
+    // Clear: the inherited frame rate is blanked, so the template's applies again.
+    offer.clearedEncodeKeys = { default: ['fps'] };
+    offer.encode = { default: { audio: { sampleRate: 44100 } } };
+    expect(effectiveEncode(rows, offer.id)).toEqual({
+      default: { audio: { sampleRate: 44100 } },
+      outputs: { story: { audio: { channels: 1 } } },
+    });
+    // The parent is untouched by the child's clear.
+    expect(effectiveEncode(rows, market.id)?.default).toEqual({ fps: 25, audio: { sampleRate: 48000 } });
+
+    // Reset: removing both the clear and the override inherits the parent again.
+    offer.clearedEncodeKeys = undefined;
+    offer.encode = undefined;
+    expect(effectiveEncode(rows, offer.id)).toEqual(effectiveEncode(rows, market.id));
+    expect(effectiveEncode([seedRow([], 'Bare')], 'missing')).toBeUndefined();
   });
 });

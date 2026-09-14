@@ -174,6 +174,145 @@ export const apiRenderTemplateFontSchema = z
   .strict();
 export type ApiRenderTemplateFont = z.infer<typeof apiRenderTemplateFontSchema>;
 
+// --- Output settings (frame rate, audio, video quality) ---------------------------------------
+//
+// One shape for the template default, a per-output override and a per-render override. Every
+// field is optional; an unset field keeps the fleet's own default. The render fleet re-sanitizes
+// by whitelist, so these bounds are an early, readable refusal — not the last line.
+// Container rules (pcm and prores are MOV only, crf is MP4 only) need the output's container,
+// which this schema does not know; the forge validator and the fleet apply them.
+
+const rationalFps = /^(\d+)\/(\d+)$/;
+export const encodeFpsSchema = z.union([
+  z.literal('comp'),
+  z.string().refine(
+    (value) => {
+      const match = rationalFps.exec(value);
+      if (!match) return false;
+      const rate = Number(match[1]) / Number(match[2]);
+      return Number(match[2]) > 0 && rate > 0 && rate <= 120;
+    },
+    { message: 'A frame rate is "comp", "N/D", or a number in (0, 120]' },
+  ),
+  z.number().gt(0).lte(120),
+]);
+
+export const encodeSettingsSchema = z
+  .object({
+    fps: encodeFpsSchema.optional(),
+    audio: z
+      .object({
+        enabled: z.boolean().optional(),
+        codec: z.enum(['aac', 'pcm_s16le', 'pcm_s24le']).optional(),
+        bitrate: z
+          .string()
+          .regex(/^\d+k$/)
+          .refine((value) => Number.parseInt(value, 10) >= 32 && Number.parseInt(value, 10) <= 512, {
+            message: 'Bitrate is 32k to 512k',
+          })
+          .optional(),
+        sampleRate: z.union([z.literal(44100), z.literal(48000)]).optional(),
+        channels: z.number().int().min(1).max(8).optional(),
+      })
+      .strict()
+      .optional(),
+    video: z
+      .object({
+        crf: z.number().int().min(10).max(40).optional(),
+        pixFmt: z
+          .enum(['yuv420p', 'yuv422p', 'yuv444p', 'yuva444p12le', 'yuv422p10le', 'yuv444p10le'])
+          .optional(),
+        proresProfile: z.enum(['4444', '4444xq', 'hq', 'standard', 'lt', 'proxy']).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type EncodeSettings = z.infer<typeof encodeSettingsSchema>;
+
+/** The template-level block the forge stores: a default plus overrides keyed by COMP NAME. */
+export const encodeBlockSchema = z
+  .object({
+    default: encodeSettingsSchema.optional(),
+    outputs: z.record(z.string().min(1), encodeSettingsSchema).optional(),
+  })
+  .strict();
+export type EncodeBlock = z.infer<typeof encodeBlockSchema>;
+
+/**
+ * The same block keyed by PUBLIC output id — what a caller reads and sends. Comp names stay
+ * server-side beside the physical gate fields; the backend re-keys at the boundary.
+ */
+export const apiRenderEncodeOverrideSchema = encodeBlockSchema;
+export type ApiRenderEncodeOverride = EncodeBlock;
+
+/** Every settable leaf, as a dotted path. The one list the merge, the UI and a clear agree on. */
+export const ENCODE_SETTING_KEYS = [
+  'fps',
+  'audio.enabled',
+  'audio.codec',
+  'audio.bitrate',
+  'audio.sampleRate',
+  'audio.channels',
+  'video.crf',
+  'video.pixFmt',
+  'video.proresProfile',
+] as const;
+export type EncodeSettingKey = (typeof ENCODE_SETTING_KEYS)[number];
+export type FlatEncodeSettings = Partial<Record<EncodeSettingKey, string | number | boolean>>;
+
+export function flattenEncodeSettings(settings: EncodeSettings | null | undefined): FlatEncodeSettings {
+  const flat: FlatEncodeSettings = {};
+  for (const key of ENCODE_SETTING_KEYS) {
+    const [group, leaf] = key.split('.') as [string, string | undefined];
+    const node = (settings as Record<string, unknown> | null | undefined)?.[group];
+    const value = leaf === undefined ? node : (node as Record<string, unknown> | undefined)?.[leaf];
+    if (value !== undefined) flat[key] = value as string | number | boolean;
+  }
+  return flat;
+}
+
+/** `undefined` when nothing is set, so an empty result is omitted rather than sent as `{}`. */
+export function unflattenEncodeSettings(flat: FlatEncodeSettings): EncodeSettings | undefined {
+  const settings: Record<string, unknown> = {};
+  for (const key of ENCODE_SETTING_KEYS) {
+    if (flat[key] === undefined) continue;
+    const [group, leaf] = key.split('.') as [string, string | undefined];
+    if (leaf === undefined) settings[group] = flat[key];
+    else settings[group] = { ...(settings[group] as object | undefined), [leaf]: flat[key] };
+  }
+  return Object.keys(settings).length ? (settings as EncodeSettings) : undefined;
+}
+
+/** Later layers win per leaf — `audio` and `video` merge key by key, never wholesale. */
+export const mergeEncodeSettings = (
+  ...layers: Array<EncodeSettings | null | undefined>
+): EncodeSettings | undefined =>
+  unflattenEncodeSettings(Object.assign({}, ...layers.map(flattenEncodeSettings)));
+
+/** Drops empty scopes so "nothing set" has exactly one spelling: `undefined`. */
+export function compactEncodeBlock(block: EncodeBlock | undefined): EncodeBlock | undefined {
+  if (!block) return undefined;
+  const byDefault = mergeEncodeSettings(block.default);
+  const outputs = Object.fromEntries(
+    Object.entries(block.outputs ?? {}).flatMap(([id, settings]) => {
+      const merged = mergeEncodeSettings(settings);
+      return merged ? [[id, merged]] : [];
+    }),
+  );
+  const compact: EncodeBlock = {
+    ...(byDefault ? { default: byDefault } : {}),
+    ...(Object.keys(outputs).length ? { outputs } : {}),
+  };
+  return Object.keys(compact).length ? compact : undefined;
+}
+
+/** `MP4 Video (RGB)` → `mp4`. Only video containers take settings; stills are null. */
+export function encodeContainerOf(mediaType: string | null | undefined): 'mp4' | 'mov' | null {
+  const container = mediaType?.trim().split(/\s+/)[0]?.toLowerCase();
+  return container === 'mp4' || container === 'mov' ? container : null;
+}
+
 export const apiRenderTemplateContractSchema = z
   .object({
     template: apiRenderTemplateSummarySchema,
@@ -221,6 +360,34 @@ export const apiRenderTemplateContractSchema = z
      * what a caller filled in, so it is reported rather than reconciled here.
      */
     divergence: z.array(z.string()).default([]),
+    outputs: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            label: z.string().min(1),
+            ratio: z.string().nullable(),
+            /** The encoder container, e.g. `MP4 Video (RGB)`. Absent on an older forge. */
+            mediaType: z.string().nullable().optional(),
+            /** The comp's own rate — what "Match comp" resolves to. */
+            frameRate: z.number().positive().nullable().optional(),
+            /** Effective settings for this output (defaults ⊕ stored). Null for stills. */
+            encode: encodeSettingsSchema.nullable().optional(),
+          })
+          .strict(),
+      )
+      .default([]),
+    /**
+     * The template's stored output settings, keyed by public output id, and the fleet defaults
+     * per container. Absent when the forge is too old to publish them.
+     */
+    encode: z
+      .object({
+        stored: apiRenderEncodeOverrideSchema.nullable(),
+        defaults: z.object({ mp4: encodeSettingsSchema, mov: encodeSettingsSchema }).strict(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type ApiRenderTemplateContract = z.infer<typeof apiRenderTemplateContractSchema>;
@@ -373,6 +540,15 @@ export const apiRenderPreflightRequestSchema = z
     // to name a live Meta campaign and ad set — and made preflight validate them
     // against the Graph API — just to produce a file.
     delivery: apiRenderDeliveryTargetSchema.optional(),
+    label: z.string().trim().min(1).max(200).optional(),
+    renderSetId: z.string().uuid().optional(),
+    renderSetRowId: z.string().uuid().optional(),
+    expectedRenderSetRevision: z.number().int().nonnegative().optional(),
+    rootRowId: z.string().uuid().optional(),
+    parentRowId: z.string().uuid().nullable().optional(),
+    outputIds: z.array(z.string().min(1)).min(1).optional(),
+    /** Per-render output settings, keyed by public output id. Pinned into the signed trigger. */
+    encode: apiRenderEncodeOverrideSchema.optional(),
   })
   .strict()
   .refine(oneVariableSource, oneVariableSourceMessage);
@@ -425,6 +601,13 @@ export const apiRenderBatchRecordSchema = z
     label: z.string().trim().min(1).max(200).optional(),
     variables: apiRenderVariableMapSchema.optional(),
     inputSetId: z.string().uuid().optional(),
+    renderSetId: z.string().uuid().optional(),
+    renderSetRowId: z.string().uuid().optional(),
+    expectedRenderSetRevision: z.number().int().nonnegative().optional(),
+    rootRowId: z.string().uuid().optional(),
+    parentRowId: z.string().uuid().nullable().optional(),
+    outputIds: z.array(z.string().min(1)).min(1).optional(),
+    encode: apiRenderEncodeOverrideSchema.optional(),
   })
   .strict()
   .refine(oneVariableSource, oneVariableSourceMessage);
@@ -497,6 +680,24 @@ export const apiRenderJobSchema = z
     error: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
+    label: z.string().nullable().default(null),
+    renderRequestId: z.string().uuid().nullable().default(null),
+    renderSetId: z.string().uuid().nullable().default(null),
+    renderSetRowId: z.string().uuid().nullable().default(null),
+    rootRowId: z.string().uuid().nullable().default(null),
+    parentRowId: z.string().uuid().nullable().default(null),
+    renderSetName: z.string().nullable().default(null),
+    labelPath: z.array(z.string()).default([]),
+    renderSetRevision: z.number().int().nonnegative().nullable().default(null),
+    templateSource: z
+      .object({
+        assetId: z.string().uuid(),
+        versionId: z.string().uuid(),
+        sha256: z.string().regex(/^[a-f0-9]{64}$/i),
+      })
+      .strict()
+      .nullable()
+      .default(null),
 
     /** Which environment this job was prepared against — the binding frozen into its token. */
     environment: z.string().nullable().default(null),
@@ -570,9 +771,48 @@ export const apiRenderPreflightResponseSchema = z
      * they agree in the ordinary case, and when they do not the server's is the one that ran.
      */
     fit: apiRenderFitReportSchema.nullable().default(null),
+    guardrails: z
+      .array(
+        z
+          .object({
+            code: z.enum([
+              'BRAND_COLOR_OUTSIDE_PALETTE',
+              'BRAND_PALETTE_UNKNOWN',
+              'TEMPLATE_FONT_MISSING',
+              'FONT_INVENTORY_UNKNOWN',
+            ]),
+            severity: z.enum(['block', 'unknown']),
+            message: z.string().min(1),
+            variableKey: z.string().min(1).optional(),
+          })
+          .strict(),
+      )
+      .default([]),
   })
   .strict();
 export type ApiRenderPreflightResponse = z.infer<typeof apiRenderPreflightResponseSchema>;
+
+export const apiRenderReadinessFindingSchema = z
+  .object({
+    code: z.string().min(1),
+    severity: z.enum(['block', 'warn', 'unknown']),
+    message: z.string().min(1),
+    variableKey: z.string().min(1).optional(),
+    rowIndexes: z.array(z.number().int().nonnegative()).min(1),
+  })
+  .strict();
+
+export const apiRenderBatchReadinessSchema = z
+  .object({
+    state: z.enum(['INCOMPLETE', 'BLOCKED', 'READY']),
+    totalRows: z.number().int().nonnegative(),
+    readyRows: z.number().int().nonnegative(),
+    blockedRows: z.number().int().nonnegative(),
+    unknownRows: z.number().int().nonnegative(),
+    findings: z.array(apiRenderReadinessFindingSchema),
+  })
+  .strict();
+export type ApiRenderBatchReadiness = z.infer<typeof apiRenderBatchReadinessSchema>;
 
 export const apiRenderBatchPreflightResponseSchema = z
   .object({
@@ -583,6 +823,14 @@ export const apiRenderBatchPreflightResponseSchema = z
     template: apiRenderTemplateSummarySchema,
     target: resolvedRenderTargetSchema.nullable(),
     records: z.array(z.object({ label: z.string(), inputKeys: z.array(z.string()) }).strict()),
+    readiness: apiRenderBatchReadinessSchema.default({
+      state: 'READY',
+      totalRows: 0,
+      readyRows: 0,
+      blockedRows: 0,
+      unknownRows: 0,
+      findings: [],
+    }),
     effects: z.literal('none'),
   })
   .strict();
