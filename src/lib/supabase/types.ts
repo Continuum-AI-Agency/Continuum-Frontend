@@ -15400,6 +15400,10 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "assets"
             referencedColumns: ["id"]
+          reconcile_after: string
+          reconcile_completed_at: string | null
+          reconcile_lease_expires_at: string | null
+          reconcile_lease_token: string | null
           },
           {
             foreignKeyName: "asset_campaigns_version_id_fkey"
@@ -15424,6 +15428,10 @@ export type Database = {
           linked_at: string
           platform: string | null
           platform_post_id: string | null
+          reconcile_after?: string
+          reconcile_completed_at?: string | null
+          reconcile_lease_expires_at?: string | null
+          reconcile_lease_token?: string | null
           producer_id: string | null
           producer_kind: string | null
           surface: string
@@ -15448,6 +15456,10 @@ export type Database = {
           version_number?: number | null
         }
         Update: {
+          reconcile_after?: string
+          reconcile_completed_at?: string | null
+          reconcile_lease_expires_at?: string | null
+          reconcile_lease_token?: string | null
           ad_id?: string | null
           asset_id?: string
           asset_version_id?: string | null
@@ -18193,6 +18205,13 @@ export type Database = {
         Returns: {
           brand_id: string
           created_at: string
+      claim_next_api_render_job: {
+        Args: { p_lease_seconds?: number; p_lease_token: string }
+        Returns: {
+          brand_id: string
+          job_id: string
+        }[]
+      }
           created_by: string | null
           document: Json
           fingerprint: string
@@ -25246,6 +25265,7 @@ export type Database = {
           p_meta_receipt?: Json
           p_ok: boolean
         }
+          last_scaled_at: string
         Returns: undefined
       }
       optimizer_create_portfolio: {
@@ -25255,6 +25275,10 @@ export type Database = {
       optimizer_delete_bench_portfolio: {
         Args: { p_portfolio_id: string }
         Returns: boolean
+          scale_cadence_days: number
+          scale_growth_pct: number
+          scale_max_daily: number
+          target_metric: string
       }
       optimizer_delete_recommendation_insight: {
         Args: { p_brand_id: string; p_insight_key: string }
@@ -25509,6 +25533,10 @@ export type Database = {
           cpa_target: number
           creative_analysis: string
           daily_total: number
+      optimizer_get_spend_by_objective: {
+        Args: { p_brand_id: string; p_days?: number }
+        Returns: Json
+      }
           id: string
           level: string
           lookback_window: string
@@ -25613,6 +25641,7 @@ export type Database = {
           p_requested_by: string
           p_target: Json
         }
+          last_scaled_at: string
         Returns: boolean
       }
       optimizer_set_autopilot_paused: {
@@ -25622,6 +25651,10 @@ export type Database = {
       optimizer_set_recommendation_status: {
         Args: { p_rec_id: string; p_route?: string; p_status: string }
         Returns: undefined
+          scale_cadence_days: number
+          scale_growth_pct: number
+          scale_max_daily: number
+          target_metric: string
       }
       optimizer_set_recommendation_statuses: {
         Args: { p_rec_ids: string[]; p_status: string }
@@ -25636,6 +25669,10 @@ export type Database = {
         Returns: undefined
       }
       optimizer_unenroll_adset: {
+      optimizer_mark_scaled: {
+        Args: { p_cycle_ts: string; p_portfolio_id: string }
+        Returns: undefined
+      }
         Args: { p_adset_id: string; p_portfolio_id: string }
         Returns: undefined
       }
