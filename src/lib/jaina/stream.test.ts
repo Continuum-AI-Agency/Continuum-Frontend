@@ -16,6 +16,35 @@ function asStructuredReport(state: JainaStreamState): FrontendCheckpointReport {
   return report as FrontendCheckpointReport;
 }
 
+describe('paid.creative_render stream frames', () => {
+  const data = {
+    render_job_id: '11111111-1111-4111-8111-111111111111',
+    brand_id: '22222222-2222-4222-8222-222222222222',
+    draft_id: 'draft-1',
+    clip_count: 3,
+    state: 'awaiting_client_render' as const,
+  };
+
+  it('parses and reduces the canonical render handle idempotently', () => {
+    const event = parseJainaStreamEvent(JSON.stringify({ type: 'paid.creative_render', data }));
+    expect(event).not.toBeNull();
+
+    let state = reduceJainaStreamEvent(createInitialJainaStreamState(), event!);
+    state = reduceJainaStreamEvent(state, event!);
+
+    expect(state.paidCreativeRenders).toEqual([data]);
+    expect(hasRenderableStreamContent(state)).toBe(true);
+  });
+
+  it('rejects a render handle that is not brand-scoped', () => {
+    expect(
+      parseJainaStreamEvent(
+        JSON.stringify({ type: 'paid.creative_render', data: { ...data, brand_id: 'brand-1' } }),
+      ),
+    ).toBeNull();
+  });
+});
+
 describe('reduceJainaStreamEvent heartbeat', () => {
   it('parses a response.heartbeat frame without warning', () => {
     const event = parseJainaStreamEvent(

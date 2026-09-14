@@ -19,6 +19,7 @@ import {
   metricItemSchema as contractMetricItemSchema,
   narrativeBlockSchema as contractNarrativeBlockSchema,
   tableColumnSchema as contractTableColumnSchema,
+  jainaPaidCreativeRenderPayloadSchema,
   jainaScaffoldActionSchema,
   jainaToolActionSchema,
   jainaToolApprovalRequiredPayloadSchema,
@@ -1159,6 +1160,7 @@ export type JainaStreamEvent =
   | z.infer<typeof paidScaffoldProposedSchema>
   | z.infer<typeof paidScaffoldProgressSchema>
   | z.infer<typeof paidScaffoldReceiptSchema>
+  | z.infer<typeof paidCreativeRenderSchema>
   | z.infer<typeof streamErrorSchema>;
 
 /**
@@ -1193,6 +1195,10 @@ export const paidScaffoldProgressSchema = streamEventSchema(
 export const paidScaffoldReceiptSchema = streamEventSchema(
   'paid.scaffold_receipt',
   paidScaffoldReceiptPayloadSchema,
+);
+export const paidCreativeRenderSchema = streamEventSchema(
+  'paid.creative_render',
+  jainaPaidCreativeRenderPayloadSchema,
 );
 
 export const jainaStreamEventSchema = z.union([
@@ -1234,6 +1240,7 @@ export const jainaStreamEventSchema = z.union([
   paidScaffoldProposedSchema,
   paidScaffoldProgressSchema,
   paidScaffoldReceiptSchema,
+  paidCreativeRenderSchema,
   streamErrorSchema,
 ]);
 

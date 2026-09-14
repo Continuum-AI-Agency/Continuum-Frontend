@@ -2,6 +2,7 @@ import {
   type AgentInitiator,
   agentInitiatorSchema,
   agentSessionProvenanceSchema,
+  jainaPaidCreativeRenderPayloadSchema,
 } from '@continuum/contracts';
 import { z } from 'zod';
 import { agentMentionMetadataSchema } from '@/lib/agent-references';
@@ -28,6 +29,8 @@ export const jainaConversationSessionSchema = z.object({
 });
 export type JainaConversationSession = z.infer<typeof jainaConversationSessionSchema>;
 
+const conversationMessageMetadataSchema = agentMentionMetadataSchema.passthrough();
+
 export const jainaConversationMessageSchema = z.object({
   id: z.number().int().nonnegative(),
   sessionId: z.string().min(1),
@@ -44,6 +47,7 @@ export const jainaConversationMessageSchema = z.object({
   toolCalls: z.array(z.unknown()).optional(),
   toolResults: z.array(z.unknown()).optional(),
   artifacts: z.record(z.string(), z.unknown()).optional(),
+  paidCreativeRenders: z.array(jainaPaidCreativeRenderPayloadSchema).optional(),
   pendingClarification: z
     .object({
       id: z.string().optional(),
@@ -51,7 +55,7 @@ export const jainaConversationMessageSchema = z.object({
     })
     .optional(),
   objectives: z.array(z.unknown()).optional(),
-  metadata: agentMentionMetadataSchema.optional(),
+  metadata: conversationMessageMetadataSchema.optional(),
   createdAt: z.string(),
 });
 export type JainaConversationMessage = z.infer<typeof jainaConversationMessageSchema>;
@@ -152,7 +156,7 @@ export const backendConversationMessageSchema = z.object({
     })
     .optional(),
   objectives: z.array(z.unknown()).optional(),
-  metadata: agentMentionMetadataSchema.nullable().optional(),
+  metadata: conversationMessageMetadataSchema.nullable().optional(),
   created_at: z.string(),
 });
 export type BackendConversationMessage = z.infer<typeof backendConversationMessageSchema>;
@@ -313,6 +317,12 @@ export function mapConversationMessageRow(
   row: BackendConversationMessage,
 ): JainaConversationMessage {
   const report = deriveReportFromConversationMetadata(row);
+  const paidCreativeRenders = Array.isArray(row.metadata?.paid_creative_renders)
+    ? row.metadata.paid_creative_renders.flatMap((value) => {
+        const parsed = jainaPaidCreativeRenderPayloadSchema.safeParse(value);
+        return parsed.success ? [parsed.data] : [];
+      })
+    : [];
 
   return {
     id: row.id,
@@ -348,6 +358,7 @@ export function mapConversationMessageRow(
             >,
           }
         : {}),
+    ...(paidCreativeRenders.length > 0 ? { paidCreativeRenders } : {}),
     ...(row.pending_clarification !== undefined
       ? { pendingClarification: row.pending_clarification }
       : {}),

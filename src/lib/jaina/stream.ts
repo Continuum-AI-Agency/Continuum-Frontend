@@ -1,5 +1,6 @@
 import type {
   AgentDelegatedFrameData,
+  JainaPaidCreativeRenderPayload,
   JainaToolApprovalRequiredPayload,
   JainaToolApprovalResolvedPayload,
   JainaToolOutputDeniedPayload,
@@ -8,6 +9,7 @@ import type {
 } from '@continuum/contracts';
 import {
   agentDelegatedFrameDataSchema,
+  jainaPaidCreativeRenderPayloadSchema,
   jainaToolApprovalRequiredPayloadSchema,
   jainaToolApprovalResolvedPayloadSchema,
   jainaToolOutputDeniedPayloadSchema,
@@ -189,6 +191,7 @@ export type JainaStreamState = {
   activeWorkers: Record<string, ActiveWorkerInfo>;
   stateDeltas: StateDeltaEventData[];
   artifacts: ArtifactDeltaEventData;
+  paidCreativeRenders: JainaPaidCreativeRenderPayload[];
   canvasActions: CampaignCanvasActionsEnvelope[];
   reportSourceEventId?: string;
   lastEventType?: string;
@@ -266,6 +269,7 @@ export function createInitialJainaStreamState(): JainaStreamState {
     activeWorkers: {},
     stateDeltas: [],
     artifacts: {},
+    paidCreativeRenders: [],
     canvasActions: [],
     checkpointSummarySource: null,
     reportSourceEventId: undefined,
@@ -3300,6 +3304,21 @@ export function reduceJainaStreamEvent(
         },
       };
     }
+    case 'paid.creative_render': {
+      const parsed = jainaPaidCreativeRenderPayloadSchema.safeParse(
+        (event as { data?: unknown }).data ?? {},
+      );
+      if (!parsed.success) return nextBase;
+      return {
+        ...nextBase,
+        paidCreativeRenders: [
+          ...state.paidCreativeRenders.filter(
+            (render) => render.render_job_id !== parsed.data.render_job_id,
+          ),
+          parsed.data,
+        ],
+      };
+    }
     case 'response.plan.requested': {
       const parsed = parsePlanRequestedPayload((event as { data?: unknown }).data ?? {});
       if (!parsed) {
@@ -4063,6 +4082,7 @@ export function hasRenderableStreamContent(
     | 'plan'
     | 'scaffold'
     | 'pendingToolApprovals'
+    | 'paidCreativeRenders'
   >,
 ): boolean {
   return Boolean(
@@ -4075,6 +4095,7 @@ export function hasRenderableStreamContent(
       // turn. Without these two the stream is finalized as 'error' and the gate the
       // user is meant to answer renders as a failure.
       state.scaffold ||
-      state.pendingToolApprovals.length > 0,
+      state.pendingToolApprovals.length > 0 ||
+      state.paidCreativeRenders.length > 0,
   );
 }

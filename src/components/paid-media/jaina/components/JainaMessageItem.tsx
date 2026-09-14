@@ -31,6 +31,7 @@ import { JainaReportV2 } from './JainaReportV2';
 import { JainaToolApprovalCard, type ToolApprovalDecision } from './JainaToolApprovalCard';
 import { MessageActionBar } from './MessageActionBar';
 import { ObjectivesQueue } from './ObjectivesQueue';
+import { PaidCreativeRenderStatus } from './PaidCreativeRenderStatus';
 import { type PlanFeedbackPayload, PlanSection } from './PlanSection';
 import { ThinkingWindow } from './ThinkingWindow';
 import { WorkerInsightsPanel } from './WorkerInsightsPanel';
@@ -209,6 +210,9 @@ function JainaMessageItemImpl({
     !hasStructuredChild;
 
   const artifacts = isStreaming ? state.artifacts : message.artifacts;
+  const paidCreativeRenders = isStreaming
+    ? state.paidCreativeRenders
+    : (message.paidCreativeRenders ?? []);
   const toolCreatives = React.useMemo(() => {
     if (!toolResults) return [];
     return toolResults.flatMap(extractCreativesFromToolResult);
@@ -382,6 +386,10 @@ function JainaMessageItemImpl({
             ) : (
               <CreativesSection creatives={allCreatives} />
             )}
+
+            {paidCreativeRenders.map((render) => (
+              <PaidCreativeRenderStatus key={render.render_job_id} render={render} />
+            ))}
 
             {spawnWorkerResults.length > 0 ? (
               <WorkerInsightsPanel results={spawnWorkerResults} />

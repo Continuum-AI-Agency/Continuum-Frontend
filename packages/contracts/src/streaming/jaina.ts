@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { databaseUuidSchema } from '../media/database-uuid';
 
 /**
  * Jaina stream frame definitions — cross-side type contract.
@@ -187,6 +188,7 @@ export type JainaToolType = 'tool.call' | 'tool.result' | 'tool.batch';
 
 export type JainaArtifactType =
   | 'artifact.delta'
+  | 'paid.creative_render'
   | 'state.delta'
   | 'thought'
   | 'adk.event'
@@ -211,6 +213,20 @@ export type JainaStreamFrame = JainaStreamEvent<JainaStreamFrameType, Record<str
 // Continuum-Frontend/src/lib/jaina/schemas.ts. Keep these in sync until
 // the full Zod migration moves the schemas themselves here.
 // ---------------------------------------------------------------------------
+
+/** data shape for type: "paid.creative_render". */
+export const jainaPaidCreativeRenderPayloadSchema = z
+  .object({
+    render_job_id: databaseUuidSchema,
+    brand_id: databaseUuidSchema,
+    draft_id: z.string().min(1).max(200),
+    clip_count: z.number().int().min(1).max(50),
+    state: z.literal('awaiting_client_render'),
+  })
+  .strict();
+export type JainaPaidCreativeRenderPayload = z.infer<
+  typeof jainaPaidCreativeRenderPayloadSchema
+>;
 
 /**
  * The AI-SDK tool call this frame was emitted underneath, when it was emitted from

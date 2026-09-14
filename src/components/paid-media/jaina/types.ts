@@ -1,5 +1,6 @@
 import type {
   AgentDelegatedFrameData,
+  JainaPaidCreativeRenderPayload,
   JainaToolApprovalRequiredPayload,
   JainaToolApprovalResolvedPayload,
 } from '@continuum/contracts';
@@ -51,6 +52,7 @@ export type JainaChatMessage = {
   reportAssemblyHtml?: string;
   plan?: JainaPlan;
   artifacts?: ArtifactDeltaEventData;
+  paidCreativeRenders?: JainaPaidCreativeRenderPayload[];
   pendingClarification?: {
     id?: string;
     question: string;

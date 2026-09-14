@@ -899,6 +899,9 @@ function mapConversationMessageToChatMessage(
     ...(message.artifacts && typeof message.artifacts === 'object'
       ? { artifacts: message.artifacts as JainaChatMessage['artifacts'] }
       : {}),
+    ...(message.paidCreativeRenders?.length
+      ? { paidCreativeRenders: message.paidCreativeRenders }
+      : {}),
     ...(message.pendingClarification &&
     typeof message.pendingClarification === 'object' &&
     typeof message.pendingClarification.question === 'string'
@@ -999,6 +1002,7 @@ export function mergePersistedMessagesWithLocal(
           (lastPendingAssistant.toolCalls?.length ?? 0) > 0 ||
           (lastPendingAssistant.toolResults?.length ?? 0) > 0 ||
           (lastPendingAssistant.objectives?.length ?? 0) > 0 ||
+          (lastPendingAssistant.paidCreativeRenders?.length ?? 0) > 0 ||
           // A scaffold turn is rich state in its own right. It always carries toolCalls
           // today, so this is belt-and-braces rather than a live bug — but the whole
           // point of this predicate is that dropping the local copy loses whatever the
@@ -1075,6 +1079,7 @@ export function mergePersistedMessagesWithLocal(
       (candidate.toolCalls?.length ?? 0) > 0 ||
       (candidate.toolResults?.length ?? 0) > 0 ||
       (candidate.objectives?.length ?? 0) > 0 ||
+      (candidate.paidCreativeRenders?.length ?? 0) > 0 ||
       hasGateState(candidate);
     if (candidateHasRichState || !isFallbackCheckpointMessage(candidate.content)) {
       localAssistant = candidate;
@@ -1120,6 +1125,9 @@ export function mergePersistedMessagesWithLocal(
   // The persisted row is never authoritative about a gate: the backend does not store
   // one, so `persistedAssistant` can only ever be missing it.
   const shouldPreserveLocalGate = hasGateState(localAssistant) && !hasGateState(persistedAssistant);
+  const shouldPreserveLocalRenders =
+    (localAssistant.paidCreativeRenders?.length ?? 0) > 0 &&
+    (persistedAssistant.paidCreativeRenders?.length ?? 0) === 0;
   const mergedObjectives = mergeMessageObjectives(
     persistedAssistant.objectives,
     localAssistant.objectives,
@@ -1133,7 +1141,8 @@ export function mergePersistedMessagesWithLocal(
     !localHasRicherReportV2 &&
     !persistedPlanOnly &&
     !shouldPreserveLocalTrace &&
-    !shouldPreserveLocalGate
+    !shouldPreserveLocalGate &&
+    !shouldPreserveLocalRenders
   ) {
     if (hasObjectiveUpgrade) {
       const mergedMessages = [...persistedMessages];
@@ -1161,6 +1170,8 @@ export function mergePersistedMessagesWithLocal(
     reportAssembly: localAssistant.reportAssembly ?? persistedAssistant.reportAssembly,
     reportAssemblyHtml: localAssistant.reportAssemblyHtml ?? persistedAssistant.reportAssemblyHtml,
     artifacts: localAssistant.artifacts ?? persistedAssistant.artifacts,
+    paidCreativeRenders:
+      localAssistant.paidCreativeRenders ?? persistedAssistant.paidCreativeRenders,
     pendingClarification:
       localAssistant.pendingClarification ?? persistedAssistant.pendingClarification,
     objectives: mergedObjectives,
@@ -1996,6 +2007,7 @@ export function JainaChatSurface({
       reasoning: projectedState.progress,
       toolCalls: projectedState.toolCalls,
       toolResults: projectedState.toolResults,
+      paidCreativeRenders: projectedState.paidCreativeRenders,
       pendingClarification: projectedState.pendingClarification ?? undefined,
       // The scaffold and its gate. Omitting these was what made a reattach lose the
       // scaffold card: the reducer folds the frames into projectedState correctly, and
@@ -2078,7 +2090,8 @@ export function JainaChatSurface({
         state.plan ||
         state.report ||
         state.reportV2 ||
-        state.pendingClarification)
+        state.pendingClarification ||
+        state.paidCreativeRenders.length > 0)
     ) {
       const streamingContent = pickRenderableContent({
         sessionTitle: currentSessionTitle,
@@ -2099,6 +2112,7 @@ export function JainaChatSurface({
         report: state.report ?? undefined,
         reportV2: state.reportV2 ?? undefined,
         reportAssembly: state.reportAssembly ?? undefined,
+        paidCreativeRenders: state.paidCreativeRenders,
       });
     }
 
@@ -2147,6 +2161,7 @@ export function JainaChatSurface({
         toolCalls: state.toolCalls,
         toolResults: state.toolResults,
         artifacts: state.artifacts,
+        paidCreativeRenders: state.paidCreativeRenders,
         pendingClarification: state.pendingClarification ?? undefined,
         objectives: state.objectives,
         delegations: state.delegations,
@@ -2205,6 +2220,7 @@ export function JainaChatSurface({
         toolCalls: state.toolCalls,
         toolResults: state.toolResults,
         artifacts: state.artifacts,
+        paidCreativeRenders: state.paidCreativeRenders,
         pendingClarification: state.pendingClarification ?? undefined,
         objectives: state.objectives,
         delegations: state.delegations,
@@ -2231,6 +2247,7 @@ export function JainaChatSurface({
     sessionId,
     show,
     state.artifacts,
+    state.paidCreativeRenders,
     state.checkpointSummarySource,
     state.error,
     state.finalContentKind,

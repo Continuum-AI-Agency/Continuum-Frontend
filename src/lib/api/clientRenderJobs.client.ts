@@ -41,6 +41,19 @@ export function listClientRenderJobs(
   });
 }
 
+export function getClientRenderJob(
+  jobId: string,
+  brandId: string,
+  signal?: AbortSignal,
+): Promise<MutationResponse> {
+  return http.request({
+    path: `${base(jobId)}?${new URLSearchParams({ brandId })}`,
+    schema: clientRenderMutationResponseSchema,
+    cache: 'no-store',
+    ...(signal ? { signal } : {}),
+  });
+}
+
 export function createClientRenderJob(input: {
   brandId: string;
   sourceId: string;

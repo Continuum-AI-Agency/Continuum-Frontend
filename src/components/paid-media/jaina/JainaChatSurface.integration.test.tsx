@@ -508,6 +508,42 @@ describe('JainaChatSurface integration', () => {
     expect(assistant?.pendingToolApprovals?.[0]?.approvalId).toBe('appr_aud_1');
   });
 
+  it('keeps the live paid render handle until the persisted assistant restores it', () => {
+    const paidCreativeRenders = [
+      {
+        render_job_id: '11111111-1111-4111-8111-111111111111',
+        brand_id: '22222222-2222-4222-8222-222222222222',
+        draft_id: 'draft-1',
+        clip_count: 3,
+        state: 'awaiting_client_render' as const,
+      },
+    ];
+    const persisted = {
+      id: 'persisted-2',
+      role: 'assistant' as const,
+      content: 'Your reel is queued.',
+      createdAt: '2026-09-14T05:00:00.000Z',
+      status: 'done' as const,
+    };
+    const local = {
+      id: 'persisted-local',
+      role: 'assistant' as const,
+      content: 'Your reel is queued.',
+      createdAt: '2026-09-14T05:00:00.000Z',
+      status: 'done' as const,
+      paidCreativeRenders,
+    };
+
+    const liveMerged = mergePersistedMessagesWithLocal([persisted], [local]);
+    expect(liveMerged[0]?.paidCreativeRenders).toEqual(paidCreativeRenders);
+
+    const reloaded = mergePersistedMessagesWithLocal(
+      [{ ...persisted, paidCreativeRenders }],
+      [local],
+    );
+    expect(reloaded[0]?.paidCreativeRenders).toEqual(paidCreativeRenders);
+  });
+
   /**
    * The gate's routing fork. Both decisions ride the SAME chat POST; they differ only
    * in which typed field carries them, and getting that wrong is silent — the backend

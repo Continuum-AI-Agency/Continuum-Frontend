@@ -170,6 +170,41 @@ describe('conversation row mapping', () => {
     expect(Array.isArray(mapped.reasoning)).toBe(true);
   });
 
+  it('preserves unknown metadata and restores paid render handles with their artifacts', () => {
+    const render = {
+      render_job_id: '11111111-1111-4111-8111-111111111111',
+      brand_id: '22222222-2222-4222-8222-222222222222',
+      draft_id: 'draft-1',
+      clip_count: 3,
+      state: 'awaiting_client_render' as const,
+    };
+    const parsed = backendConversationMessagesResponseSchema.parse({
+      session_id: 'session-1',
+      messages: [
+        {
+          id: 13,
+          session_id: 'session-1',
+          role: 'assistant',
+          content: 'Your reel is queued.',
+          metadata: {
+            artifacts: { creatives: [{ id: 'clip-1', url: 'https://cdn.test/clip.png' }] },
+            paid_creative_renders: [render, { ...render, brand_id: 'not-a-uuid' }],
+            future_key: { retained: true },
+          },
+          created_at: '2026-09-14T05:00:00.000Z',
+        },
+      ],
+    });
+
+    const mapped = mapConversationMessageRow(parsed.messages[0]);
+
+    expect(mapped.artifacts).toEqual({
+      creatives: [{ id: 'clip-1', url: 'https://cdn.test/clip.png' }],
+    });
+    expect(mapped.paidCreativeRenders).toEqual([render]);
+    expect(mapped.metadata?.future_key).toEqual({ retained: true });
+  });
+
   it('derives a renderable report from persisted report assembly on resume', () => {
     const mapped = mapConversationMessageRow({
       id: 11,
