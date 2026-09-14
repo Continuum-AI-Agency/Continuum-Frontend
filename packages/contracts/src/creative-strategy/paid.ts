@@ -18,7 +18,10 @@
 
 import { z } from 'zod';
 import type { AdsetAudience } from '../paid/adNaming';
-import { paidCreativeAudienceEvidenceSchema } from '../paid-creative/angle-evidence';
+import {
+  paidCreativeAudienceEvidenceSchema,
+  paidCurrencyCodeSchema,
+} from '../paid-creative/angle-evidence';
 import { firstPartyCreativeAnalysisSchema } from './analysis';
 import { GLOBAL_ANGLE_DEFINITIONS, type GlobalAngleId, globalAngleIdSchema } from './angles';
 import { creativeAssetTypeSchema, creativeFunnelStageSchema } from './taxonomy';
@@ -184,32 +187,56 @@ export type AdsetCreativeWinRateRow = z.infer<typeof adsetCreativeWinRateRowSche
 // One cell of win-rate-by-category: within a cohort (brand × KPI × funnel
 // stage × window), the share of eligible ads carrying this label value that
 // beat the cohort's spend-weighted median efficiency.
-export const creativeWinRateRowSchema = z.object({
-  dimension: creativeWinRateDimensionSchema,
-  value: z.string(),
-  funnelStage: paidFunnelStageSchema,
-  window: paidMetricWindowSchema.default('d30'),
-  eligibleAds: z.number().int().nonnegative(),
-  winners: z.number().int().nonnegative(),
-  winRate: z.number().min(0).max(1),
-  spendWeightedWinRate: z.number().min(0).max(1).nullable().default(null),
-  /** Absolute category spend in the ad account's currency for this row's window. */
-  spend: z.number().nonnegative().nullable().default(null),
-  // This category's share of the cohort's spend (0-1) — the confounding lens.
-  spendShare: z.number().min(0).max(1).nullable().default(null),
-  audience: paidCreativeAudienceEvidenceSchema.default({
-    label: null,
-    coverage: 'unknown',
-    source: null,
-    coveredAds: 0,
-    eligibleAds: 0,
-    coveredSpend: 0,
-    spendCoverage: null,
-    segments: [],
-  }),
-  medianCpa: z.number().nullable().default(null),
-  flags: z.array(creativeWinRateFlagSchema).default([]),
-});
+export const creativeWinRateRowSchema = z
+  .object({
+    dimension: creativeWinRateDimensionSchema,
+    value: z.string(),
+    funnelStage: paidFunnelStageSchema,
+    window: paidMetricWindowSchema.default('d30'),
+    /** Provider account grain. Null only for legacy persisted reports. */
+    adAccountId: z.string().min(1).nullable().default(null),
+    /** ISO-4217 account currency. Null means monetary rollups must fail closed. */
+    currency: paidCurrencyCodeSchema.nullable().default(null),
+    eligibleAds: z.number().int().nonnegative(),
+    winners: z.number().int().nonnegative(),
+    winRate: z.number().min(0).max(1).nullable(),
+    spendWeightedWinRate: z.number().min(0).max(1).nullable().default(null),
+    /** Compatibility alias for eligibleSpend. */
+    spend: z.number().nonnegative().nullable().default(null),
+    /** Spend from ads meeting the win-rate evidence thresholds. */
+    eligibleSpend: z.number().nonnegative().nullable().default(null),
+    /** Spend from every labeled ad before win-rate evidence thresholds. */
+    deliveredSpend: z.number().nonnegative().nullable().default(null),
+    // This category's share of the eligible cohort's spend (0-1).
+    spendShare: z.number().min(0).max(1).nullable().default(null),
+    audience: paidCreativeAudienceEvidenceSchema.default({
+      label: null,
+      coverage: 'unknown',
+      source: null,
+      temporalBasis: 'unknown',
+      coveredAds: 0,
+      eligibleAds: 0,
+      coveredSpend: 0,
+      spendCoverage: null,
+      segments: [],
+    }),
+    medianCpa: z.number().nullable().default(null),
+    flags: z.array(creativeWinRateFlagSchema).default([]),
+  })
+  .superRefine((row, ctx) => {
+    if (row.spend !== null && row.eligibleSpend !== null && row.spend !== row.eligibleSpend) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['eligibleSpend'],
+        message: 'eligibleSpend must equal the spend compatibility alias',
+      });
+    }
+  })
+  .transform((row) => ({
+    ...row,
+    spend: row.spend ?? row.eligibleSpend,
+    eligibleSpend: row.eligibleSpend ?? row.spend,
+  }));
 export type CreativeWinRateRow = z.infer<typeof creativeWinRateRowSchema>;
 
 // An Apriori association rule corroborating (or undermining) a win-rate row:

@@ -92,14 +92,19 @@ describe('creativeWinRateRowSchema', () => {
       dimension: 'angle',
       value: 'family_lunch',
       funnelStage: 'tof',
+      adAccountId: 'act_123',
+      currency: 'cop',
       eligibleAds: 5,
       winners: 3,
       winRate: 0.6,
       spend: 12_500,
+      eligibleSpend: 12_500,
+      deliveredSpend: 15_000,
       spendShare: 0.5,
       audience: {
         coverage: 'known',
         source: 'paid_media.adset_targeting_snapshots',
+        temporalBasis: 'as_of_performance_day',
         coveredAds: 5,
         coveredSpend: 12_500,
         spendCoverage: 1,
@@ -112,6 +117,7 @@ describe('creativeWinRateRowSchema', () => {
             eligibleAds: 5,
             spend: 12_500,
             spendShare: 1,
+            targetingBasis: 'as_of_performance_day',
             ageMin: 25,
             ageMax: 54,
             genders: [2],
@@ -128,9 +134,64 @@ describe('creativeWinRateRowSchema', () => {
     });
 
     expect(row.spend).toBe(12_500);
+    expect(row.eligibleSpend).toBe(12_500);
+    expect(row.deliveredSpend).toBe(15_000);
+    expect(row.adAccountId).toBe('act_123');
+    expect(row.currency).toBe('COP');
     expect(row.audience.coverage).toBe('known');
+    expect(row.audience.temporalBasis).toBe('as_of_performance_day');
     expect(row.audience.segments[0]?.ageMin).toBe(25);
+    expect(row.audience.segments[0]?.targetingBasis).toBe('as_of_performance_day');
     expect(row.audience.segments[0]?.spend).toBe(12_500);
+  });
+
+  it('keeps legacy spend as the eligible-spend alias and accepts zero-eligible spend rows', () => {
+    const legacy = creativeWinRateRowSchema.parse({
+      dimension: 'angle',
+      value: 'legacy',
+      funnelStage: 'tof',
+      eligibleAds: 2,
+      winners: 1,
+      winRate: 0.5,
+      spend: 100,
+    });
+    expect(legacy.eligibleSpend).toBe(100);
+    expect(legacy.deliveredSpend).toBeNull();
+    expect(legacy.adAccountId).toBeNull();
+    expect(legacy.currency).toBeNull();
+    expect(legacy.audience.temporalBasis).toBe('unknown');
+
+    const deliveredOnly = creativeWinRateRowSchema.parse({
+      dimension: 'angle',
+      value: 'below_threshold',
+      funnelStage: 'tof',
+      adAccountId: 'act_123',
+      currency: null,
+      eligibleAds: 0,
+      winners: 0,
+      winRate: null,
+      spend: 0,
+      eligibleSpend: 0,
+      deliveredSpend: 49,
+    });
+    expect(deliveredOnly.deliveredSpend).toBe(49);
+    expect(deliveredOnly.winRate).toBeNull();
+  });
+
+  it('rejects an eligible-spend value that disagrees with the spend compatibility alias', () => {
+    expect(
+      creativeWinRateRowSchema.safeParse({
+        dimension: 'angle',
+        value: 'mismatch',
+        funnelStage: 'tof',
+        eligibleAds: 1,
+        winners: 1,
+        winRate: 1,
+        spend: 100,
+        eligibleSpend: 99,
+        deliveredSpend: 100,
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects a win rate above 1', () => {
