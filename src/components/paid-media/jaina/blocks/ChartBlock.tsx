@@ -16,6 +16,7 @@ import {
   Radar,
   RadarChart,
   XAxis,
+  type XAxisTickContentProps,
   YAxis,
 } from 'recharts';
 import {
@@ -24,6 +25,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
+import { formatValue } from '@/lib/jaina/formatValue';
 import type { ChartBlockV2 } from '@/lib/jaina/schemas';
 import { EvidenceTooltip } from './EvidenceTooltip';
 
@@ -43,6 +45,47 @@ function formatDatapointMeta(meta: Record<string, unknown>, categoryKey: string)
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
+function formatChartValue(value: string | number, block: ChartBlockV2): string {
+  if (block.value_format === 'currency' && !block.currency_code) {
+    return `${formatValue(value, 'number')} (currency unknown)`;
+  }
+  return formatValue(
+    value,
+    block.value_format,
+    block.currency_code ? { currency: block.currency_code } : undefined,
+  );
+}
+
+function wrapTickLabel(value: string): string[] {
+  return value.split(/\s+/).reduce<string[]>((lines, word) => {
+    const previous = lines.at(-1);
+    if (!previous || `${previous} ${word}`.length > 18) lines.push(word);
+    else lines[lines.length - 1] = `${previous} ${word}`;
+    return lines;
+  }, []);
+}
+
+function WrappedXAxisTick({ x, y, payload, fill, className }: XAxisTickContentProps) {
+  const value = String(payload.value ?? '');
+  return (
+    <text
+      x={x}
+      y={y}
+      dy={12}
+      textAnchor="middle"
+      fill={fill}
+      className={className}
+      aria-label={value}
+    >
+      {wrapTickLabel(value).map((line, index) => (
+        <tspan key={`${index}-${line}`} x={x} dy={index === 0 ? 0 : '1.1em'}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
+}
+
 export function ChartBlock({ block }: ChartBlockProps) {
   // Index the per-point metadata by its category value so the tooltip can look
   // it up from the hovered row. Empty when the chart is not dataset-backed.
@@ -58,9 +101,24 @@ export function ChartBlock({ block }: ChartBlockProps) {
     return map;
   }, [block.data_meta, block.category_key]);
 
+  const tooltipFormatter = (value: unknown, name: unknown) => {
+    const formatted =
+      typeof value === 'string' || typeof value === 'number'
+        ? formatChartValue(value, block)
+        : String(value ?? '—');
+    const label = block.chart_config[String(name)]?.label ?? String(name);
+    return (
+      <div className="flex min-w-44 flex-1 items-center justify-between gap-4">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-mono font-medium tabular-nums text-foreground">{formatted}</span>
+      </div>
+    );
+  };
+
   const tooltipContent =
     metaByCategory.size > 0 ? (
       <ChartTooltipContent
+        formatter={tooltipFormatter}
         labelFormatter={(value, payload) => {
           const categoryValue = payload?.[0]?.payload?.[block.category_key];
           const meta =
@@ -77,7 +135,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
         }}
       />
     ) : (
-      <ChartTooltipContent />
+      <ChartTooltipContent formatter={tooltipFormatter} />
     );
 
   const chartConfig: ChartConfig = Object.fromEntries(
@@ -88,12 +146,51 @@ export function ChartBlock({ block }: ChartBlockProps) {
   );
 
   const configKeys = Object.keys(block.chart_config);
+  const isCartesian = ['line', 'bar', 'stacked_bar', 'area'].includes(block.chart_type);
+  const hasLongCategories = block.data.some(
+    (point) => String(point[block.category_key] ?? '').length > 18,
+  );
+  const minChartWidth =
+    isCartesian && hasLongCategories ? Math.max(640, block.data.length * 128) : undefined;
+  const accessibleData = block.data
+    .map((point) => {
+      const category = point[block.category_key];
+      const values = configKeys.flatMap((key) => {
+        const value = point[key];
+        if (typeof value !== 'string' && typeof value !== 'number') return [];
+        return `${block.chart_config[key]?.label ?? key} ${formatChartValue(value, block)}`;
+      });
+      return `${String(category ?? 'Unknown category')}: ${values.join(', ')}`;
+    })
+    .join('; ');
 
   const sharedCartesian = (
     <>
       <CartesianGrid vertical={false} />
-      <XAxis dataKey={block.category_key} />
-      <YAxis />
+      <XAxis
+        dataKey={block.category_key}
+        interval={0}
+        height={112}
+        tick={WrappedXAxisTick}
+        label={
+          block.x_axis_label
+            ? { value: block.x_axis_label, position: 'insideBottom', offset: -4 }
+            : undefined
+        }
+      />
+      <YAxis
+        width={104}
+        tickFormatter={(value: string | number) => formatChartValue(value, block)}
+        label={
+          block.y_axis_label
+            ? {
+                value: block.y_axis_label,
+                angle: -90,
+                position: 'insideLeft',
+              }
+            : undefined
+        }
+      />
       <ChartTooltip content={tooltipContent} />
     </>
   );
@@ -186,9 +283,19 @@ export function ChartBlock({ block }: ChartBlockProps) {
       {block.description ? (
         <p className="mb-2 text-xs leading-5 text-muted-foreground">{block.description}</p>
       ) : null}
-      <ChartContainer config={chartConfig} className="h-[280px] w-full">
-        {chart}
-      </ChartContainer>
+      <div className="overflow-x-auto">
+        <ChartContainer
+          config={chartConfig}
+          className="h-[380px] w-full"
+          style={minChartWidth ? { minWidth: minChartWidth } : undefined}
+          role="img"
+          aria-label={[block.title, block.x_axis_label, block.y_axis_label, accessibleData]
+            .filter(Boolean)
+            .join('. ')}
+        >
+          {chart}
+        </ChartContainer>
+      </div>
       {block.annotation ? (
         <p className="mt-1.5 text-xs italic text-muted-foreground/70">{block.annotation}</p>
       ) : null}
