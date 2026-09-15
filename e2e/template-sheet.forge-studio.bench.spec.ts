@@ -1,7 +1,12 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { type TemplateSource, templateSourceSchema } from '@continuum/contracts';
+import {
+  type TemplateSource,
+  type TemplateSourceSummary,
+  templateSourceSchema,
+  templateSourceSummarySchema,
+} from '@continuum/contracts';
 import {
   type Browser,
   type BrowserContext,
@@ -153,6 +158,37 @@ function printEnvelope(): void {
 
 // --- fixtures ------------------------------------------------------------------------------------
 
+/** The template list serves card-sized parse geometry only, exactly as the Backend's list route does. */
+function asSummary(source: TemplateSource): TemplateSourceSummary {
+  const { parse } = source;
+  return templateSourceSummarySchema.parse({
+    ...source,
+    parse: parse
+      ? {
+          parser: parse.parser,
+          sourceFamily: parse.sourceFamily,
+          filename: parse.filename,
+          comps: parse.comps.map(({ name, width, height, durationSec, isDelivery }) => ({
+            name,
+            width,
+            height,
+            durationSec,
+            isDelivery,
+          })),
+          ratios: parse.ratios,
+          slots: parse.slots.map(({ key, kind, comps, box, placement, instances }) => ({
+            key,
+            kind,
+            comps,
+            box,
+            placement,
+            instances,
+          })),
+        }
+      : null,
+  });
+}
+
 /** The promo with three formats, so the sheet has a wide, a square and a tall frame to name. */
 function threeFormatPromo(): TemplateSource {
   const slots = [
@@ -240,7 +276,7 @@ async function overrideSheetRoutes(context: BrowserContext): Promise<void> {
     (url) => url.pathname === '/api/ai-studio/templates',
     (route) =>
       route.request().method() === 'GET'
-        ? json(route, { items: [threeFormatPromo()] })
+        ? json(route, { items: [asSummary(threeFormatPromo())] })
         : route.fallback(),
   );
   await context.route(
