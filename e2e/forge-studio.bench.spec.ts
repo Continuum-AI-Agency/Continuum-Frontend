@@ -898,7 +898,9 @@ test.describe('Forge Studio — fixtures', () => {
     const delivered = page.getByRole('row').filter({ hasText: meta.ad.name });
     await expect(delivered).toContainText(`#${slack.channelName}`);
     await expect(delivered).toContainText('posted');
-    await expect(delivered).toContainText(`Meta › ${meta.campaign.name} › ${meta.adset.name} ›`);
+    await expect(delivered).toContainText(
+      `Meta › ${meta.adAccountName} › ${meta.campaign.name} › ${meta.adset.name} ›`,
+    );
     await expect(delivered).toContainText('awaiting approval');
     await shoot(page, 'd15-ledger');
 

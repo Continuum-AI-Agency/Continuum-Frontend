@@ -4,7 +4,7 @@ import type { ApiRenderJob } from '@continuum/contracts';
 import { Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-// Where one render went: Library · Slack #channel · Meta campaign › ad set › ad, each with its own
+// Where one render went: Library · Slack #channel · Meta account › campaign › ad set › ad, each with its own
 // state. The Library is always first because every render lands there; Slack and Meta appear only
 // when the job asked for them. Meta never reads as "published" until a receipt says so — before
 // that it is held for approval, because nothing writes to Meta until a person approves.
@@ -46,11 +46,12 @@ export function approvalState(job: ApiRenderJob): { text: string; tone: Tone } |
   }
 }
 
-/** The delivery words a search should find: channel, campaign, ad set, ad. */
+/** The delivery words a search should find: channel, ad account, campaign, ad set, ad. */
 export function deliverySearchText(job: ApiRenderJob): string {
   const target = job.deliveryTarget;
   return [
     job.slackDelivery?.channelName,
+    target?.adAccountName ?? target?.adAccountId,
     target?.campaignName,
     target?.adsetName,
     target?.action === 'replace' ? (target.adName ?? target.adId) : null,
@@ -89,10 +90,11 @@ export function DeliveryChain({ job }: { job: ApiRenderJob }) {
           <span className="text-muted-foreground">·</span>
           <span
             className="inline-flex min-w-0 items-center gap-1"
-            title={`Meta ${target.adAccountId}`}
+            title={`Meta ad account ${target.adAccountId}`}
           >
             <span className="truncate text-muted-foreground">
-              Meta › {target.campaignName ?? target.campaignId} ›{' '}
+              Meta › {target.adAccountName ?? target.adAccountId} ›{' '}
+              {target.campaignName ?? target.campaignId} ›{' '}
               {target.adsetName ?? target.adsetId}
               {target.action === 'replace' ? ' ›' : ''}
             </span>

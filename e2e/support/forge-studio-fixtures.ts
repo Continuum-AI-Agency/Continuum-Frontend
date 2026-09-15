@@ -445,6 +445,7 @@ function seededJobs(): ApiRenderJob[] {
       deliveryTarget: {
         action: 'replace',
         adAccountId: meta.adAccountId,
+        adAccountName: meta.adAccountName,
         campaignId: meta.campaign.id,
         campaignName: meta.campaign.name,
         adsetId: meta.adset.id,

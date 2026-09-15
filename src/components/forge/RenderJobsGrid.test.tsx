@@ -2,9 +2,11 @@
  * Renders — the brand's ledger — against a mocked render API.
  *
  * What this guards: the list (recreated from RenderGrids.test.tsx), text search over name,
- * template display name, set, ad and channel; clickable sort headers; collapsible groups by
- * template display name; each job's delivery chain in every state it can be in; the workspace
- * column hidden by default; and a row expanding into its detail with the step timeline.
+ * template display name, set, ad account, ad and channel; clickable sort headers; collapsible
+ * groups by template display name (ratio twins merge, names per workspace, collapse survives a
+ * detail round trip); each job's delivery chain in every state it can be in; a refresh that only
+ * changes an approval; the workspace column hidden by default; and a row expanding into its
+ * detail with the step timeline.
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
@@ -83,7 +85,7 @@ const MADRID: ApiRenderJob = {
     permalink: 'https://slack.com/archives/C1/p1',
     postedAt: ago(2.8),
   },
-  deliveryTarget: REPLACE,
+  deliveryTarget: { ...REPLACE, adAccountName: 'StarCraft Ads' },
   approval: { status: 'pending' },
 };
 
@@ -117,17 +119,40 @@ const PROMO: ApiRenderJob = {
   approval: { status: 'rejected', decidedAt: ago(0.5) },
 };
 
-const TEMPLATE = { key: '133', name: 'forge_bench_starcraft', displayName: 'StarCraft Promo' };
+const TEMPLATE = {
+  key: '133',
+  name: 'forge_bench_starcraft',
+  environment: 'Continuum_app',
+  displayName: 'StarCraft Promo',
+};
+
+const DEFAULT_BINDING = '55555555-5555-4555-8555-555555555551';
+const CLIENT_BINDING = '55555555-5555-4555-8555-555555555552';
+const environment = (bindingId: string, workspace: string, isDefault: boolean) => ({
+  bindingId,
+  workspace,
+  environmentKey: 'prod',
+  clientKey: 'forge',
+  isDefault,
+  status: { state: 'ready', workspace },
+});
 
 let jobsFixture: ApiRenderJob[] = [];
 let templatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
+let clientTemplatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
+let environmentsFixture = [environment(DEFAULT_BINDING, 'Continuum_app', true)];
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
     listJobs: async () => ({ items: jobsFixture, nextCursor: null }),
     getJob: async (_brandId: string, id: string) => jobsFixture.find((job) => job.id === id),
     listRenderSets: async () => ({ items: [], nextCursor: null }),
-    listTemplates: async () => ({ items: templatesFixture, nextCursor: null }),
+    listEnvironments: async () => ({ items: environmentsFixture }),
+    // The default environment is asked for without a bindingId, as the server expects.
+    listTemplates: async (_brandId: string, bindingId?: string | null) => ({
+      items: bindingId === CLIENT_BINDING ? clientTemplatesFixture : bindingId ? [] : templatesFixture,
+      nextCursor: null,
+    }),
   },
 }));
 mock.module('@/lib/supabase/client', () => ({
@@ -159,6 +184,8 @@ async function renderLedger(jobs: ApiRenderJob[], templates: Partial<ApiRenderTe
 
 afterEach(() => {
   cleanup();
+  clientTemplatesFixture = [];
+  environmentsFixture = [environment(DEFAULT_BINDING, 'Continuum_app', true)];
 });
 
 describe('RenderJobsGrid', () => {
@@ -222,6 +249,7 @@ describe('RenderJobsGrid', () => {
     expectMatch('summer', ['Promo B']);
     expectMatch('unassigned', ['Promo B']);
     expectMatch('hero story', ['Madrid']);
+    expectMatch('starcraft ads', ['Madrid']);
     expectMatch('client-review', ['Roma']);
     expect(screen.getByText(/1 of 3 loaded renders match/)).toBeTruthy();
 
@@ -238,7 +266,8 @@ describe('RenderJobsGrid', () => {
     expect(madrid.getByText('#renders')).toBeTruthy();
     expect(madrid.getByText('posted')).toBeTruthy();
     expect(madrid.getByText('Hero story')).toBeTruthy();
-    expect(madrid.getByText(/Launch Q3 › Iberia 18–34 ›/)).toBeTruthy();
+    // D15: Meta account › campaign › ad set › ad — the account by name once preflight resolved it.
+    expect(madrid.getByText('Meta › StarCraft Ads › Launch Q3 › Iberia 18–34 ›')).toBeTruthy();
     expect(madrid.getByText('awaiting approval')).toBeTruthy();
 
     const roma = within(rowOf('Roma'));
@@ -250,6 +279,8 @@ describe('RenderJobsGrid', () => {
     expect(roma.queryByText(/Meta ›/)).toBeNull();
 
     const promo = within(rowOf('Promo B'));
+    // A target stored before names were resolved still names its account, by id.
+    expect(promo.getByText('Meta › act_1 › Launch Q3 › Iberia 18–34 ›')).toBeTruthy();
     expect(promo.getByText('Carousel square')).toBeTruthy();
     expect(promo.getByText('rejected')).toBeTruthy();
   }, 30_000);
@@ -288,5 +319,65 @@ describe('RenderJobsGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: /All renders/ }));
     await waitFor(() => expect(screen.getByRole('table')).toBeTruthy());
     expect(rowOrder()).toEqual(['Promo B', 'Roma', 'Madrid']);
+  }, 30_000);
+
+  test('a refresh that only changes the approval updates the badge', async () => {
+    // Deciding an approval writes render_approvals, not ad_render_jobs.updated_at: the re-read job
+    // ties on updatedAt with the one on screen, and the re-read must win the tie.
+    await renderLedger([MADRID], [TEMPLATE]);
+    const rowOf = () => within(screen.getByText('Madrid').closest('tr') as HTMLElement);
+    expect(rowOf().getByText('awaiting approval')).toBeTruthy();
+
+    jobsFixture = [{ ...MADRID, approval: { status: 'approved', decidedAt: ago(0.1) } }];
+    fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+    await waitFor(() => expect(rowOf().getByText('approved')).toBeTruthy());
+    expect(rowOf().queryByText('awaiting approval')).toBeNull();
+  }, 30_000);
+
+  test('a collapsed group stays collapsed after opening a job and coming back', async () => {
+    await renderLedger([MADRID, ROMA, PROMO], [TEMPLATE]);
+    fireEvent.click(screen.getByRole('button', { name: /StarCraft Promo/ }));
+    expect(rowOrder()).toEqual(['Promo B']);
+
+    fireEvent.click(screen.getByText('Promo B'));
+    expect(await screen.findByRole('heading', { name: 'Promo B' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /All renders/ }));
+    await waitFor(() => expect(screen.getByRole('table')).toBeTruthy());
+
+    expect(
+      screen.getByRole('button', { name: /StarCraft Promo/ }).getAttribute('aria-expanded'),
+    ).toBe('false');
+    expect(rowOrder()).toEqual(['Promo B']);
+  }, 30_000);
+
+  test('groups by display name: ratio twins merge, and each workspace names its own keys', async () => {
+    // 134 is 133's 9:16 twin under the same name. The client workspace also has a key 133, but it
+    // is a different template there — the default workspace's name must not leak onto it.
+    const TWIN = { ...TEMPLATE, key: '134', name: 'forge_bench_starcraft_916' };
+    environmentsFixture = [
+      environment(DEFAULT_BINDING, 'Continuum_app', true),
+      environment(CLIENT_BINDING, 'Client_ws', false),
+    ];
+    clientTemplatesFixture = [
+      { key: '133', name: 'winter_promo', environment: 'Client_ws', displayName: 'Winter Promo' },
+    ];
+    const romaTwin = { ...ROMA, templateKey: '134', templateName: TWIN.name };
+    const promoClient = {
+      ...PROMO,
+      templateKey: '133',
+      templateName: 'winter_promo_build',
+      environment: 'Client_ws',
+    };
+    await renderLedger([MADRID, romaTwin, promoClient], [TEMPLATE, TWIN]);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Winter Promo/ })).toBeTruthy());
+    const starcraft = screen.getAllByRole('button', { name: /StarCraft Promo/ });
+    expect(starcraft).toHaveLength(1);
+    expect(starcraft[0]!.textContent).toContain('1 finished · 1 failed');
+    expect(starcraft[0]!.textContent).toMatch(/2$/);
+    expect(screen.getByRole('button', { name: /Winter Promo/ }).textContent).toMatch(/1$/);
+
+    fireEvent.click(starcraft[0]!);
+    expect(rowOrder()).toEqual(['Promo B']);
   }, 30_000);
 });

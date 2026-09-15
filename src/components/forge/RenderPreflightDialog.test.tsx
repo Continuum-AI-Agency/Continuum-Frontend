@@ -171,14 +171,18 @@ const RECORDS: ApiRenderBatchRecord[] = [
 /** Holds rows the way RenderRequestsGrid does, so a delivery picked in the dialog comes back in. */
 function Harness({
   bindingId,
+  initialRows = ROWS,
+  records = RECORDS,
   onFired,
   onClose,
 }: {
   bindingId: string | null;
+  initialRows?: RenderPreflightRow[];
+  records?: ApiRenderBatchRecord[];
   onFired: (ids: string[]) => void;
   onClose: () => void;
 }) {
-  const [rows, setRows] = useState(ROWS);
+  const [rows, setRows] = useState(initialRows);
   return (
     <RenderPreflightDialog
       open
@@ -188,7 +192,7 @@ function Harness({
       contractHash="hash"
       contract={CONTRACT}
       rows={rows}
-      records={RECORDS}
+      records={records}
       onDeliveryChange={(rowId, delivery) =>
         setRows((current) =>
           current.map((row) =>
@@ -202,12 +206,38 @@ function Harness({
   );
 }
 
-function renderDialog(bindingId: string | null = BINDING) {
+function renderDialog(
+  bindingId: string | null = BINDING,
+  data: { rows?: RenderPreflightRow[]; records?: ApiRenderBatchRecord[] } = {},
+) {
   const onFired = mock((_ids: string[]) => undefined);
   const onClose = mock(() => undefined);
-  render(<Harness bindingId={bindingId} onFired={onFired} onClose={onClose} />);
+  render(
+    <Harness
+      bindingId={bindingId}
+      initialRows={data.rows}
+      records={data.records}
+      onFired={onFired}
+      onClose={onClose}
+    />,
+  );
   return { onFired, onClose };
 }
+
+/** The Review line for one row: its name, formats and render count, as read. */
+const reviewLine = (name: string) =>
+  screen.getByText(name).closest('div')?.textContent?.replace(name, '').trim();
+
+const HERO_STORY = {
+  action: 'replace' as const,
+  adAccountId: 'act_1',
+  campaignId: 'c1',
+  campaignName: 'Summer launch',
+  adsetId: 's1',
+  adsetName: 'Spain 18–34',
+  adId: '1201',
+  adName: 'Hero story',
+};
 
 const next = async () => {
   const button = await screen.findByRole<HTMLButtonElement>('button', { name: 'Next' });
@@ -229,6 +259,14 @@ afterEach(() => {
   ])
     fn.mockClear();
   listDestinationsMock.mockImplementation(async () => destinations());
+  listSlackChannelsMock.mockImplementation(async () => ({
+    workspaceName: 'Continuum',
+    channels: [
+      { id: 'C1', name: 'renders', isPrivate: false, isMember: true },
+      { id: 'C2', name: 'client-review', isPrivate: false, isMember: true },
+    ],
+  }));
+  createDestinationMock.mockImplementation(async () => CLIENT);
 });
 
 describe('RenderPreflightDialog · Review', () => {
@@ -255,6 +293,36 @@ describe('RenderPreflightDialog · Review', () => {
       records: RECORDS,
     });
     expect(createBatchMock).not.toHaveBeenCalled();
+  }, 30_000);
+
+  test('a row with no formats picked renders every format, and its record names none', async () => {
+    const records: ApiRenderBatchRecord[] = [
+      RECORDS[0]!,
+      { label: 'Spain', renderSetId: SET, renderSetRowId: 'spain', variables: { h: 'Hola' } },
+    ];
+    const { onFired } = renderDialog(null, {
+      rows: [ROWS[0]!, { ...ROWS[1]!, outputIds: [] }],
+      records,
+    });
+    expect(await screen.findByText('StarCraft Promo · 4 renders')).toBeTruthy();
+    expect(reviewLine('Root / Spain')).toBe('All formats2 renders');
+    expect(reviewLine('Root')).toBe('Square, Story2 renders');
+
+    await next();
+    await next();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm 4 renders' }));
+    await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
+    const fired = batchPreflightMock.mock.calls[1]?.[0] as { records: ApiRenderBatchRecord[] };
+    expect(fired.records[1]).toEqual(records[1]!);
+    expect('outputIds' in fired.records[1]!).toBe(false);
+  }, 30_000);
+
+  test('a replacing row counts one render on its own line, the same as the header', async () => {
+    // A spreadsheet import can hand a row its ad before the dialog opens.
+    renderDialog(BINDING, { rows: [{ ...ROWS[0]!, delivery: HERO_STORY }, ROWS[1]!] });
+    expect(await screen.findByText('StarCraft Promo · 2 renders')).toBeTruthy();
+    expect(reviewLine('Root')).toBe('One format1 render');
+    expect(reviewLine('Root / Spain')).toBe('Story1 render');
   }, 30_000);
 
   test('a guardrail refusal says why and does not let the batch move on', async () => {
@@ -359,6 +427,64 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     expect(await screen.findByRole('link', { name: 'Reinstall Slack in Settings' })).toBeTruthy();
   }, 30_000);
 
+  test('without a Slack connection the brand’s channels still post; only adding one needs it', async () => {
+    // Posting uses the destination's own installation, never the person's.
+    listDestinationsMock.mockImplementation(async () =>
+      destinations({ state: 'not_connected', workspaceName: null, destinations: [OPS] }),
+    );
+    const { onFired } = renderDialog();
+    await next();
+    const channel = await screen.findByLabelText<HTMLSelectElement>('Slack channel');
+    expect(screen.getByRole('link', { name: 'Connect Slack in Settings' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Add a channel/ })).toBeNull();
+    fireEvent.change(channel, { target: { value: OPS.id } });
+
+    await next();
+    expect(screen.getByText('3 renders · Library · #renders')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 renders' }));
+    await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
+    expect(batchPreflightMock.mock.calls[1]?.[0]).toMatchObject({
+      slack: { destinationId: OPS.id },
+    });
+  }, 30_000);
+
+  test('Slack failures while adding a channel read as the picker’s own words, never a code', async () => {
+    listSlackChannelsMock.mockImplementationOnce(async () => {
+      throw new ApiError('slack_not_installed', 409, undefined, { error: 'slack_not_installed' });
+    });
+    renderDialog();
+    await next();
+    fireEvent.click(await screen.findByRole('button', { name: /Add a channel/ }));
+    expect(
+      await screen.findByText(/The Continuum app is no longer installed in your Slack workspace/),
+    ).toBeTruthy();
+    expect(document.body.textContent).not.toContain('slack_not_installed');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    createDestinationMock.mockImplementationOnce(async () => {
+      throw new ApiError('slack_channel_not_found', 404, undefined, {
+        error: 'slack_channel_not_found',
+      });
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Add a channel/ }));
+    fireEvent.change(await screen.findByLabelText('Channel to add'), { target: { value: 'C2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add channel' }));
+    expect(await screen.findByText('That channel is gone — pick another.')).toBeTruthy();
+    expect(document.body.textContent).not.toContain('slack_channel_not_found');
+  }, 30_000);
+
+  test('a 503 that is not chat_destinations_unavailable is a failure, not "not available yet"', async () => {
+    listDestinationsMock.mockImplementation(async () => {
+      throw new ApiError('render_api_not_configured', 503, undefined, {
+        error: 'render_api_not_configured',
+      });
+    });
+    renderDialog();
+    await next();
+    expect(await screen.findByText(/Couldn’t load Slack channels/)).toBeTruthy();
+    expect(screen.queryByText(/Slack delivery isn’t available yet/)).toBeNull();
+  }, 30_000);
+
   test('a 503 from destinations is a calm "not available yet", and the batch still renders', async () => {
     listDestinationsMock.mockImplementation(async () => {
       throw new ApiError('chat_destinations_unavailable', 503);
@@ -436,12 +562,18 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     const { onFired } = renderDialog();
     await next();
     await next();
+    // The routes answer `{ error: code, detail }`; toApiError puts the code in the message.
     batchPreflightMock.mockImplementationOnce(async () => {
-      throw new Error('render_contract_hash_mismatch');
+      throw new ApiError('render_delivery_ad_changed', 409, undefined, {
+        error: 'render_delivery_ad_changed',
+        detail: 'render_delivery_ad_changed',
+      });
     });
     fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 renders' }));
     expect(await screen.findByRole('alert')).toBeTruthy();
-    expect(screen.getByRole('alert').textContent).toContain('render_contract_hash_mismatch');
+    expect(screen.getByRole('alert').textContent).toBe(
+      'That ad’s creative changed after it was picked. Pick the ad again.',
+    );
     expect(createBatchMock).not.toHaveBeenCalled();
     expect(onFired).not.toHaveBeenCalled();
     expect(

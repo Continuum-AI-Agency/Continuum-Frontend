@@ -94,7 +94,7 @@ type Destinations =
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 function describeFailure(error: unknown): { message: string; details: string[] } {
-  const message = describeRenderDiscoveryFailure(error instanceof Error ? error.message : '');
+  const message = describeRenderDiscoveryFailure(error);
   const guardrails = error instanceof ApiError ? error.payload?.guardrails : undefined;
   const details = Array.isArray(guardrails)
     ? guardrails.flatMap((item) =>
@@ -142,12 +142,10 @@ export function RenderPreflightDialog({
     }
     return row.outputIds;
   };
-  const renderCount = rows.reduce(
-    (total, row) =>
-      total +
-      (row.delivery?.action === 'replace' ? 1 : row.outputIds.length || outputs.length || 1),
-    0,
-  );
+  // A replace swaps one creative, so it renders one format whatever the row picked.
+  const rowRenderCount = (row: RenderPreflightRow) =>
+    row.delivery?.action === 'replace' ? 1 : row.outputIds.length || outputs.length || 1;
+  const renderCount = rows.reduce((total, row) => total + rowRenderCount(row), 0);
 
   // Review reads the records exactly as the grid built them — no delivery, every format.
   const runReview = useCallback(async () => {
@@ -321,7 +319,6 @@ export function RenderPreflightDialog({
                         finding.rowIndexes.includes(index),
                       )
                     : [];
-                const formats = row.outputIds.length || outputs.length || 1;
                 return (
                   <li key={row.rowId} className="space-y-0.5 px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -332,12 +329,14 @@ export function RenderPreflightDialog({
                         {row.labelPath.length > 1 ? row.labelPath.join(' / ') : row.label}
                       </span>
                       <span className="text-muted-foreground">
-                        {row.outputIds.length
-                          ? row.outputIds.map(formatLabel).join(', ')
-                          : 'All formats'}
+                        {row.delivery?.action === 'replace'
+                          ? rowOutputIds(row).map(formatLabel).join(', ') || 'One format'
+                          : row.outputIds.length
+                            ? row.outputIds.map(formatLabel).join(', ')
+                            : 'All formats'}
                       </span>
                       <span className="tabular-nums text-muted-foreground">
-                        {plural(formats, 'render')}
+                        {plural(rowRenderCount(row), 'render')}
                       </span>
                     </div>
                     {findings.map((finding) => (

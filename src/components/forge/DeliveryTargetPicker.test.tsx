@@ -203,6 +203,15 @@ describe('replace rules', () => {
       metaDeliveryProblems(rows, OUTPUTS, { root: 'square' }, { ...CONNECTED, connected: false }),
     ).toEqual(['Clear the ad targets — this brand has no ad account connected.']);
   });
+
+  test('ad targets wait for the ad account check; rows without one never do', () => {
+    const replace = replaceTargetFor('act_1', AD_ONE) as ApiRenderDeliveryTarget;
+    const rows = [{ ...ROWS[0]!, delivery: replace }, ROWS[1]!];
+    expect(metaDeliveryProblems(rows, OUTPUTS, { root: 'square' }, 'loading')).toEqual([
+      'Checking for an ad account…',
+    ]);
+    expect(metaDeliveryProblems([ROWS[0]!, ROWS[1]!], OUTPUTS, {}, 'loading')).toEqual([]);
+  });
 });
 
 describe('DeliveryTargetPicker', () => {

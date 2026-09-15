@@ -62,3 +62,20 @@ test('pagination preserves order, deduplicates and never replaces fresher progre
   const older = job({ id: 'b' });
   expect(__test__.mergePage([current], [stale, older])).toEqual([current, older]);
 });
+
+test('a re-read list wins an updatedAt tie, leads in its own order, and keeps older pages', () => {
+  // An approval decision changes the job without bumping updated_at: same stamp, new approval.
+  const at = '2026-09-14T12:00:00Z';
+  const pending = job({ id: 'a', updatedAt: at, approval: { status: 'pending' } });
+  const approved = job({ id: 'a', updatedAt: at, approval: { status: 'approved' } });
+  const olderPage = job({ id: 'z', updatedAt: '2026-09-01T00:00:00Z' });
+  const brandNew = job({ id: 'n', updatedAt: '2026-09-14T12:05:00Z' });
+  const polledLater = job({ id: 'p', status: 'finished', updatedAt: '2026-09-14T12:10:00Z' });
+  const listedEarlier = job({ id: 'p', status: 'rendering', updatedAt: '2026-09-14T12:01:00Z' });
+
+  expect(
+    __test__.mergePage([pending, polledLater, olderPage], [brandNew, approved, listedEarlier], {
+      incomingFirst: true,
+    }),
+  ).toEqual([brandNew, approved, polledLater, olderPage]);
+});

@@ -23,7 +23,18 @@ const isInFlight = (job: ApiRenderJob) =>
   job.status === 'rendering' ||
   (job.status === 'finished' && job.fit?.escalate === true && job.judge === null);
 
-function mergePage(current: ApiRenderJob[], incoming: ApiRenderJob[]): ApiRenderJob[] {
+/**
+ * Two reads of the same list as one. `incoming` is the later read, so it wins a tie on
+ * `updatedAt` — an approval decision changes a job without bumping `ad_render_jobs.updated_at`,
+ * and a stale copy must not outlive it. A strictly fresher copy already held (a poll that landed
+ * after the list was read) is kept. A re-read list leads in its own order, so a new job lands on
+ * top; an older page or a poll fills in behind what is held.
+ */
+function mergePage(
+  current: ApiRenderJob[],
+  incoming: ApiRenderJob[],
+  { incomingFirst = false }: { incomingFirst?: boolean } = {},
+): ApiRenderJob[] {
   const byId = new Map(current.map((job) => [job.id, job]));
   for (const job of incoming) {
     const previous = byId.get(job.id);
@@ -31,7 +42,12 @@ function mergePage(current: ApiRenderJob[], incoming: ApiRenderJob[]): ApiRender
       byId.set(job.id, job);
     }
   }
-  return [...byId.values()];
+  if (!incomingFirst) return [...byId.values()];
+  const leading = new Set(incoming.map((job) => job.id));
+  return [
+    ...[...leading].map((id) => byId.get(id)!),
+    ...[...byId.values()].filter((job) => !leading.has(job.id)),
+  ];
 }
 
 /**
@@ -117,7 +133,7 @@ export function useApiRenderJobs(args: {
           job !== null && (!args.renderSetId || job.renderSetId === args.renderSetId),
       ),
     ];
-    setJobs((current) => mergePage(fresh, current));
+    setJobs((current) => mergePage(current, fresh, { incomingFirst: true }));
     if (!paged.current) setNextCursor(response.nextCursor);
   }, [brandId, trackedKey, args.limit, args.renderSetId, scope]);
 

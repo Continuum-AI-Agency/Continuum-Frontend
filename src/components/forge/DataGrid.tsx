@@ -53,8 +53,8 @@ import { cn } from '@/lib/utils';
 
 // The one grid both Forge tables draw through: dense rows, a sticky typed header, a checkbox
 // gutter. It is a rendering of a react-table instance — the caller owns columns, sorting,
-// visibility and selection. The one thing it keeps is which groups are collapsed, because no
-// caller has ever needed to know.
+// visibility and selection. It keeps which groups are collapsed unless the caller holds that
+// itself — Renders does, because opening a job unmounts the grid.
 //
 // Deliberately in components/forge, not components/ui: two callers is not a design system.
 
@@ -161,6 +161,8 @@ export function DataGrid<T>({
   groupHeader,
   groupBy,
   columnVisibility,
+  collapsedGroups,
+  onCollapsedGroupsChange,
   RowComponent = DefaultRow,
   className,
 }: {
@@ -174,20 +176,23 @@ export function DataGrid<T>({
   groupBy?: (row: T) => { key: string; label: ReactNode };
   /** Show a "Columns" menu toggling every column that can hide. */
   columnVisibility?: boolean;
+  /** Collapsed group keys, when the caller keeps them; otherwise the grid does. */
+  collapsedGroups?: ReadonlySet<string>;
+  onCollapsedGroupsChange?: (next: ReadonlySet<string>) => void;
   /** Draws each body row — pass one that wraps `tr` to make rows sortable by drag. */
   RowComponent?: ComponentType<DataGridRowProps<T>>;
   className?: string;
 }) {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const [ownCollapsed, setOwnCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const collapsed = collapsedGroups ?? ownCollapsed;
   const rows = table.getRowModel().rows;
   const width = table.getVisibleLeafColumns().length;
   const groups = groupBy ? groupRows(rows, groupBy) : [{ key: '', label: null, rows }];
-  const toggleGroup = (key: string) =>
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (!next.delete(key)) next.add(key);
-      return next;
-    });
+  const toggleGroup = (key: string) => {
+    const next = new Set(collapsed);
+    if (!next.delete(key)) next.add(key);
+    (onCollapsedGroupsChange ?? setOwnCollapsed)(next);
+  };
 
   const grid = (
     <div className={cn('overflow-auto rounded-lg border bg-card', className)} onPaste={onPaste}>

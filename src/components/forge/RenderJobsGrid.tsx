@@ -94,6 +94,8 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
   });
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
+  // Held here, not in the grid: opening a job unmounts the grid, and Back must not re-expand.
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(() => new Set());
   const [loaded, setLoaded] = useState(false);
 
   // Mount, every time the tab comes back, the window regains focus, and on a slow timer.
@@ -103,19 +105,32 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
       .listRenderSets(brandId)
       .then((response) => setSets(response.items))
       .catch(() => undefined);
-    // ponytail: names come from the default environment's templates; a job from another
-    // environment falls back to its prettified build name.
+    // Names from every workspace the brand renders into: a template key is only unique within
+    // its workspace. A job from before `environment` was recorded reads the default's names.
     void apiRendersApi
-      .listTemplates(brandId)
+      .listEnvironments(brandId)
       .then((response) =>
-        setTemplateNames(
-          new Map(
-            response.items.flatMap((template) =>
-              template.displayName ? [[template.key, template.displayName] as const] : [],
-            ),
+        Promise.all(
+          response.items.map((environment) =>
+            apiRendersApi
+              .listTemplates(brandId, environment.isDefault ? null : environment.bindingId)
+              .then((templates) =>
+                templates.items.flatMap((template) =>
+                  template.displayName
+                    ? [
+                        [`${template.environment}:${template.key}`, template.displayName] as const,
+                        ...(environment.isDefault
+                          ? [[`:${template.key}`, template.displayName] as const]
+                          : []),
+                      ]
+                    : [],
+                ),
+              )
+              .catch(() => []),
           ),
         ),
       )
+      .then((names) => setTemplateNames(new Map(names.flat())))
       .catch(() => undefined);
     const load = () => {
       if (!active || document.visibilityState !== 'visible') return;
@@ -164,7 +179,8 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
   }, [brandId, refreshJobs]);
 
   const templateOf = (job: ApiRenderJob) =>
-    templateNames.get(job.templateKey) ?? templateDisplayName(job.templateName);
+    templateNames.get(`${job.environment ?? ''}:${job.templateKey}`) ??
+    templateDisplayName(job.templateName);
   const setOf = (job: ApiRenderJob) =>
     job.renderSetName ?? sets.find((set) => set.id === job.renderSetId)?.name ?? 'Unassigned';
   const nameOf = (job: ApiRenderJob) => job.label ?? job.labelPath.at(-1) ?? templateOf(job);
@@ -342,17 +358,21 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
     getSortedRowModel: getSortedRowModel(),
   });
 
+  // Grouped by what a person calls the template, so ratio twins and a template shared across
+  // workspaces under one name read as one group.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: templateOf reads only templateNames.
   const groupSummary = useMemo(() => {
     const summary = new Map<string, { finished: number; inFlight: number; failed: number }>();
     for (const job of visible) {
-      const counts = summary.get(job.templateKey) ?? { finished: 0, inFlight: 0, failed: 0 };
+      const name = templateOf(job);
+      const counts = summary.get(name) ?? { finished: 0, inFlight: 0, failed: 0 };
       if (job.status === 'finished') counts.finished += 1;
       else if (job.status === 'failed') counts.failed += 1;
       else counts.inFlight += 1;
-      summary.set(job.templateKey, counts);
+      summary.set(name, counts);
     }
     return summary;
-  }, [visible]);
+  }, [visible, templateNames]);
 
   const selected = jobs.filter((job) => rowSelection[job.id]);
   const downloadable = selected.flatMap((job) => job.outputs);
@@ -450,13 +470,16 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
             ? `${visible.length} of ${jobs.length} loaded render${jobs.length === 1 ? '' : 's'} match • ${finished} finished • ${inFlight} in flight`
             : `${jobs.length} render${jobs.length === 1 ? '' : 's'} • ${finished} finished • ${inFlight} in flight`
         }
+        collapsedGroups={collapsedGroups}
+        onCollapsedGroupsChange={setCollapsedGroups}
         groupBy={(job) => {
-          const counts = groupSummary.get(job.templateKey);
+          const name = templateOf(job);
+          const counts = groupSummary.get(name);
           return {
-            key: job.templateKey,
+            key: name,
             label: (
               <>
-                {templateOf(job)}
+                {name}
                 {counts ? (
                   <span className="font-normal text-muted-foreground">
                     {[

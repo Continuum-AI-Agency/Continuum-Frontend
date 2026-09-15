@@ -9,7 +9,6 @@ import { Loader2, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ApiError } from '@/lib/api/errors';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
 // Where a finished render is posted in Slack, if anywhere. The destinations are the brand's own
@@ -32,18 +31,28 @@ const ROLE_LABEL: Record<ApiRenderDeliveryDestination['role'], string> = {
   dm: 'DM',
 };
 
+const NOT_CONNECTED_COPY = 'Connect your Slack account to add a channel for finished renders.';
+const NOT_INSTALLED_COPY =
+  'The Continuum app is no longer installed in your Slack workspace. Reinstall it from Settings to add a channel.';
+
 /** The backend answers 503 `chat_destinations_unavailable` until Slack delivery is wired. */
 export function isSlackDeliveryUnavailable(error: unknown): boolean {
-  if (error instanceof ApiError && error.status === 503) return true;
   return error instanceof Error && error.message.includes('chat_destinations_unavailable');
 }
 
-const describeSlackFailure = (error: unknown) =>
-  isSlackDeliveryUnavailable(error)
-    ? 'Slack delivery isn’t available yet.'
-    : error instanceof Error && error.message
-      ? error.message
-      : 'Slack did not answer. Try again.';
+// The server's codes in the words the picker's own states use; an unmapped failure keeps its text.
+const SLACK_FAILURE_COPY: Record<string, string> = {
+  chat_destinations_unavailable: 'Slack delivery isn’t available yet.',
+  slack_not_connected: NOT_CONNECTED_COPY,
+  slack_not_installed: NOT_INSTALLED_COPY,
+  slack_channel_not_found: 'That channel is gone — pick another.',
+};
+
+function describeSlackFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  const code = Object.keys(SLACK_FAILURE_COPY).find((key) => message.includes(key));
+  return code ? SLACK_FAILURE_COPY[code]! : message || 'Slack did not answer. Try again.';
+}
 
 export function SlackDestinationPicker({
   brandId,
@@ -76,34 +85,6 @@ export function SlackDestinationPicker({
       </p>
     );
   }
-  if (slack.state === 'not_connected') {
-    return (
-      <p className="text-xs text-muted-foreground">
-        Connect your Slack account to post finished renders to a channel.{' '}
-        <Link
-          href={CONNECTIONS_HREF}
-          className="font-medium text-primary underline-offset-4 hover:underline"
-        >
-          Connect Slack in Settings
-        </Link>
-      </p>
-    );
-  }
-  if (slack.state === 'not_installed') {
-    return (
-      <p className="text-xs text-muted-foreground">
-        The Continuum app is no longer installed in your Slack workspace. Reinstall it from
-        Settings, then reopen this step.{' '}
-        <Link
-          href={CONNECTIONS_HREF}
-          className="font-medium text-primary underline-offset-4 hover:underline"
-        >
-          Reinstall Slack in Settings
-        </Link>
-      </p>
-    );
-  }
-
   const destinations = [
     ...slack.destinations,
     ...added.filter((extra) => !slack.destinations.some((known) => known.id === extra.id)),
@@ -141,7 +122,21 @@ export function SlackDestinationPicker({
           A client channel gets a post only after the render passes its check.
         </p>
       ) : null}
-      {adding ? (
+      {slack.state !== 'ready' ? (
+        // Posting uses the destination's own installation, so the brand's channels above stay
+        // pickable; only adding one needs the person's own Slack.
+        <p className="text-xs text-muted-foreground">
+          {slack.state === 'not_connected' ? NOT_CONNECTED_COPY : NOT_INSTALLED_COPY}{' '}
+          <Link
+            href={CONNECTIONS_HREF}
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {slack.state === 'not_connected'
+              ? 'Connect Slack in Settings'
+              : 'Reinstall Slack in Settings'}
+          </Link>
+        </p>
+      ) : adding ? (
         <AddChannel
           brandId={brandId}
           onCancel={() => setAdding(false)}

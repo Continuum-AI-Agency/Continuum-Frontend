@@ -70,7 +70,8 @@ export function metaDeliveryProblems(
 ): string[] {
   const targeted = rows.filter((row) => row.delivery);
   if (!targeted.length) return [];
-  if (meta !== 'loading' && meta !== 'unknown' && !meta.connected) {
+  if (meta === 'loading') return ['Checking for an ad account…'];
+  if (meta !== 'unknown' && !meta.connected) {
     return ['Clear the ad targets — this brand has no ad account connected.'];
   }
   const problems: string[] = [];
