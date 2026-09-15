@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { ApprovalDestinationsField } from '@/components/forge/ApprovalDestinationsField';
 import {
   APPROVAL_COPY,
   DeliveryTargetPicker,
@@ -163,6 +164,8 @@ export function RenderReviewTray({
   const [slackDestination, setSlackDestination] = useState<ApiRenderDeliveryDestination | null>(
     null,
   );
+  const [approvalDestinationIds, setApprovalDestinationIds] = useState<string[]>([]);
+  const [approvalWarning, setApprovalWarning] = useState<string | null>(null);
   const [formatByRow, setFormatByRow] = useState<Record<string, string>>({});
   const [firing, setFiring] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -192,6 +195,7 @@ export function RenderReviewTray({
         templateKey,
         contractHash,
         records: records.map(({ delivery: _delivery, ...record }) => record),
+        ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
       });
       setReview({ state: 'ready', readiness: response.readiness });
     } catch (error) {
@@ -202,7 +206,7 @@ export function RenderReviewTray({
           : { state: 'failed', message },
       );
     }
-  }, [brandId, bindingId, templateKey, contractHash, records]);
+  }, [brandId, bindingId, templateKey, contractHash, records, approvalDestinationIds]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: one review per snapshot; Retry and Re-check re-run it.
   useEffect(() => {
@@ -246,6 +250,12 @@ export function RenderReviewTray({
   const deliverProblems = metaDeliveryProblems(rows, outputs, formatByRow, meta);
   const replacements = rows.filter((row) => row.delivery?.action === 'replace');
   const newAds = rows.filter((row) => row.delivery?.action === 'create');
+  // Preflight refuses a Meta target with no room to ask in; say so here instead of on Confirm.
+  const approvalProblem =
+    (replacements.length || newAds.length) && !approvalDestinationIds.length
+      ? 'Choose an approval room — a Meta ad waits there until someone approves it.'
+      : null;
+  const deliverBlockers = approvalProblem ? [...deliverProblems, approvalProblem] : deliverProblems;
 
   const summary = [
     plural(fileCount, 'file'),
@@ -263,8 +273,10 @@ export function RenderReviewTray({
       setStep('review');
       return;
     }
+    if (approvalProblem) return;
     setFiring(true);
     setProblem(null);
+    setApprovalWarning(null);
     try {
       const preflight = await apiRendersApi.batchPreflight({
         brandId,
@@ -279,7 +291,9 @@ export function RenderReviewTray({
             : { ...record, delivery: row.delivery };
         }),
         ...(slackDestination ? { slack: { destinationId: slackDestination.id } } : {}),
+        ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
       });
+      setApprovalWarning(preflight.approval?.warning ?? null);
       const batch = await apiRendersApi.createBatch({
         confirmationToken: preflight.confirmationToken,
       });
@@ -306,7 +320,7 @@ export function RenderReviewTray({
     !stale &&
     (step === 'review'
       ? review.state === 'ready' && review.readiness.state !== 'BLOCKED'
-      : step === 'deliver' && !deliverProblems.length);
+      : step === 'deliver' && !deliverBlockers.length);
 
   return (
     <section
@@ -364,7 +378,12 @@ export function RenderReviewTray({
             </Button>
           ) : null}
           {step === 'confirm' ? (
-            <Button type="button" size="xs" disabled={firing || stale} onClick={confirm}>
+            <Button
+              type="button"
+              size="xs"
+              disabled={firing || stale || approvalProblem !== null}
+              onClick={confirm}
+            >
               {firing ? (
                 <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
               ) : (
@@ -397,12 +416,23 @@ export function RenderReviewTray({
       </header>
 
       {step === 'running' ? (
-        <RunningStep
-          brandId={brandId}
-          fired={fired}
-          onShowRow={onShowRow}
-          onOpenLedger={onOpenLedger}
-        />
+        <>
+          {approvalWarning ? (
+            <p
+              role="status"
+              className="flex items-center gap-2 border-b border-dashed border-warning/60 bg-warning/10 px-[var(--card-pad)] py-1"
+            >
+              <AlertTriangle className="size-3.5 shrink-0 text-warning" aria-hidden />
+              {approvalWarning}
+            </p>
+          ) : null}
+          <RunningStep
+            brandId={brandId}
+            fired={fired}
+            onShowRow={onShowRow}
+            onOpenLedger={onOpenLedger}
+          />
+        </>
       ) : (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -528,7 +558,7 @@ export function RenderReviewTray({
               </>
             ) : step === 'deliver' ? (
               // One section per destination; a new destination is one more section here.
-              <div className="grid gap-x-6 gap-y-3 p-[var(--card-pad)] lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.6fr)]">
+              <div className="grid gap-x-6 gap-y-3 p-[var(--card-pad)] lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1.2fr)]">
                 <DeliverSection title="Library">
                   <p className="flex items-center gap-1.5 text-muted-foreground">
                     <Check className="size-3.5 text-success" aria-hidden /> Every render is saved to
@@ -556,6 +586,13 @@ export function RenderReviewTray({
                     }
                   />
                 </DeliverSection>
+                <DeliverSection title="Approval">
+                  <ApprovalDestinationsField
+                    brandId={brandId}
+                    value={approvalDestinationIds}
+                    onChange={setApprovalDestinationIds}
+                  />
+                </DeliverSection>
               </div>
             ) : (
               <div className="flex flex-col gap-2 p-[var(--card-pad)]">
@@ -575,6 +612,11 @@ export function RenderReviewTray({
                       ))}
                     </ul>
                     <p className="text-muted-foreground">{APPROVAL_COPY}</p>
+                    {approvalProblem ? (
+                      <p role="status" className="text-warning">
+                        {approvalProblem}
+                      </p>
+                    ) : null}
                   </>
                 ) : null}
                 {problem ? (
@@ -606,9 +648,11 @@ export function RenderReviewTray({
                 <span className="text-destructive">Can’t render as they are</span>
               )
             ) : step === 'deliver' ? (
-              deliverProblems.length ? (
-                <p role="status" className="text-warning">
-                  {deliverProblems.join(' ')}
+              deliverBlockers.length ? (
+                <p role="status" className="flex flex-wrap gap-x-1 text-warning">
+                  {deliverBlockers.map((blocker) => (
+                    <span key={blocker}>{blocker}</span>
+                  ))}
                 </p>
               ) : (
                 <span>{summary}</span>

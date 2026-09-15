@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import {
   API_RENDER_MEDIA_LIST_MAX,
+  apiRenderApprovalSummarySchema,
   apiRenderBatchPreflightRequestSchema,
+  apiRenderBatchPreflightResponseSchema,
   apiRenderCreateDeliveryDestinationRequestSchema,
   apiRenderDeliveryDestinationsResponseSchema,
   apiRenderDeliveryTargetSchema,
@@ -640,5 +642,72 @@ describe('delivery target account name', () => {
     expect(apiRenderDeliveryTargetSchema.parse({ ...base, adAccountName: 'StarCraft Ads' })).toMatchObject({ adAccountName: 'StarCraft Ads' });
     expect(apiRenderDeliveryTargetSchema.parse({ ...base, action: 'replace', adId: 'a', adAccountName: 'StarCraft Ads' })).toMatchObject({ adAccountName: 'StarCraft Ads' });
     expect(apiRenderDeliveryTargetSchema.parse(base)).not.toHaveProperty('adAccountName');
+  });
+});
+
+describe('approval destinations and the package summary', () => {
+  const DESTINATION = '00000000-0000-4000-8000-0000000000d1';
+  const PACKAGE = '00000000-0000-4000-8000-0000000000a1';
+  const summary = {
+    packageId: PACKAGE,
+    destinations: [{ id: DESTINATION, platform: 'whatsapp', name: 'Vivo approvals', activeApprovers: 0 }],
+    warning: 'Nobody can approve yet.',
+  };
+
+  it('both preflight requests take approval destinations, and refuse a non-uuid', () => {
+    expect(
+      apiRenderBatchPreflightRequestSchema.parse(
+        batch({ delivery: createTarget, records: [record()], approvalDestinationIds: [DESTINATION] }),
+      ).approvalDestinationIds,
+    ).toEqual([DESTINATION]);
+    expect(
+      apiRenderBatchPreflightRequestSchema.safeParse(
+        batch({ records: [record()], approvalDestinationIds: ['#renders'] }),
+      ).success,
+    ).toBe(false);
+    expect(
+      apiRenderPreflightRequestSchema.parse({
+        brandId: BRAND,
+        templateKey: '133',
+        contractHash: 'hash',
+        variables: {},
+        approvalDestinationIds: [DESTINATION],
+      }).approvalDestinationIds,
+    ).toEqual([DESTINATION]);
+  });
+
+  it('a summary names each destination with its active approvers; an older server reads as none', () => {
+    expect(apiRenderApprovalSummarySchema.parse(summary)).toEqual(summary);
+    expect(
+      apiRenderApprovalSummarySchema.safeParse({
+        ...summary,
+        destinations: [{ ...summary.destinations[0], platform: 'teams' }],
+      }).success,
+    ).toBe(false);
+    const response = {
+      batchId: PACKAGE,
+      confirmationToken: 't',
+      confirmationHash: 'a'.repeat(64),
+      expiresAt: '2026-09-15T00:00:00.000Z',
+      template: {
+        key: '133',
+        name: 'Hero',
+        environment: 'Parsed_app',
+        contractVersion: '1',
+        contractHash: 'hash',
+        contractSource: 'template_forge',
+        outputKinds: ['image'],
+        variableCount: 0,
+        previewUrl: null,
+        updatedAt: null,
+      },
+      target: null,
+      records: [],
+      effects: 'none',
+    };
+    expect(apiRenderBatchPreflightResponseSchema.parse(response).approval).toBeNull();
+    expect(apiRenderBatchPreflightResponseSchema.parse({ ...response, approval: summary }).approval).toEqual(
+      summary,
+    );
   });
 });

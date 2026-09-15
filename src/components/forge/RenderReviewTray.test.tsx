@@ -5,7 +5,9 @@
  * offers the Library (always), the brand's Slack destinations (with add-a-channel, and the
  * not-connected / not-installed / unavailable states) and Meta; Confirm fires ONE batch preflight
  * carrying `slack` and each row's delivery — a replacing row narrowed to its one format — then the
- * confirmed token, and Running follows the fired jobs. A refusal keeps the tray on Confirm with
+ * confirmed token, and Running follows the fired jobs. A Meta target needs an approval room before
+ * Next, the fired batch carries the rooms, and the preflight's approver warning shows in Running.
+ * A refusal keeps the tray on Confirm with
  * the reason and nothing fired. It is a docked region, never a dialog: a change to the rows after
  * review sends it back to Review, and it confirms nothing until they are re-checked.
  */
@@ -137,6 +139,31 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     createDeliveryDestination: createDestinationMock,
     listJobs: async () => ({ items: JOBS, nextCursor: null }),
     getJob: async (_brandId: string, id: string) => JOBS.find((job) => job.id === id),
+  },
+}));
+const ROOM = {
+  id: '77777777-7777-4777-8777-777777777771',
+  platform: 'slack' as const,
+  role: 'client',
+  name: 'client-review',
+  activeApprovers: 0,
+  requestedApprovers: 0,
+};
+mock.module('@/lib/library/renderApprovals', () => ({
+  fetchRenderApprovals: async () => [],
+  decideRenderApproval: async () => {
+    throw new Error('not in this test');
+  },
+  fetchApprovalDestinations: async () => [ROOM],
+  fetchDestinationApprovers: async () => [],
+  addDestinationApprover: async () => {
+    throw new Error('not in this test');
+  },
+  activateDestinationApprover: async () => {
+    throw new Error('not in this test');
+  },
+  revokeDestinationApprover: async () => {
+    throw new Error('not in this test');
   },
 }));
 mock.module('@/StudioCanvas/nodes/publish/publishingApi', () => ({
@@ -606,7 +633,7 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
   }, 30_000);
 
-  test('Meta replace: one format for the row, per-record delivery and Slack in the fired batch', async () => {
+  test('Meta replace: one format, an approval room, per-record delivery and Slack in the fired batch', async () => {
     listDestinationsMock.mockImplementation(async () =>
       destinations({}, { connected: true, adAccountId: 'act_1', adAccountName: 'StarCraft Ads' }),
     );
@@ -626,6 +653,17 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     fireEvent.change(format, { target: { value: 'story' } });
     expect(screen.getByText('StarCraft Promo · 2 files')).toBeTruthy();
 
+    // Preflight refuses a Meta target with nowhere to ask, so Next waits for a room too.
+    expect(
+      screen.getByText(
+        'Choose an approval room — a Meta ad waits there until someone approves it.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next' }).disabled).toBe(true);
+    const room = await screen.findByRole('checkbox', { name: /#client-review/ });
+    expect(screen.getByText('no approvers yet')).toBeTruthy();
+    fireEvent.click(room);
+
     await next();
     expect(
       screen.getByText('2 files · Library · #renders · 1 ad replacement held for approval'),
@@ -633,8 +671,19 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     expect(screen.getByText('replaces Hero story · 9:16')).toBeTruthy();
     expect(screen.getByText(/Nothing changes in Ads Manager until someone approves/)).toBeTruthy();
 
+    const warning = 'No active approver yet in client-review.';
+    batchPreflightMock.mockImplementationOnce(async () => ({
+      confirmationToken: 'batch-token',
+      readiness: READY,
+      approval: {
+        packageId: '99999999-9999-4999-8999-999999999991',
+        destinations: [{ id: ROOM.id, platform: 'slack', name: ROOM.name, activeApprovers: 0 }],
+        warning,
+      },
+    }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm 2 files' }));
     await waitFor(() => expect(onFired).toHaveBeenCalledWith(JOB_IDS));
+    expect(await screen.findByText(warning)).toBeTruthy();
     expect(batchPreflightMock.mock.calls[1]?.[0]).toEqual({
       brandId: BRAND,
       bindingId: BINDING,
@@ -660,6 +709,7 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
         RECORDS[1],
       ],
       slack: { destinationId: OPS.id },
+      approvalDestinationIds: [ROOM.id],
     });
   }, 30_000);
 

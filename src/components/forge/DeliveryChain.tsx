@@ -48,8 +48,9 @@ export function approvalState(job: ApiRenderJob): { text: string; tone: Tone } |
       return { text: 'awaiting approval', tone: 'warning' };
     case 'previewed':
       return { text: 'previewed', tone: 'warning' };
+    // Decided; the plugin's outcome has not landed on the row yet.
     case 'approved':
-      return { text: 'approved', tone: 'success' };
+      return { text: 'approved · publishing…', tone: 'success' };
     case 'published':
       return { text: 'published', tone: 'success' };
     case 'rejected':

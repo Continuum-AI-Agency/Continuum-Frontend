@@ -1,8 +1,8 @@
 'use client';
 
-import type { RenderApproval } from '@continuum/contracts';
+import type { RenderApproval, RenderApprovalDecidedVia } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Loader2, ShieldCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Loader2, Package, ShieldCheck, XCircle } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,10 @@ import { cn } from '@/lib/utils';
 //
 // Rejected batches STAY listed. A batch that vanished when someone said no would
 // leave the person who made it with no way to see why.
+//
+// A Forge confirm opens one package, and its variations are listed under it with the package's
+// expiry. A decision answers at once with `approved` — "publishing" — and the plugin's outcome
+// lands on the row later, so the list re-reads every few seconds while any row is still there.
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Waiting on you',
@@ -34,11 +38,78 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_TONE: Record<string, string> = {
   pending: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  approved: 'bg-sky-500/10 text-sky-600 border-sky-500/20',
   published: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
   previewed: 'bg-sky-500/10 text-sky-600 border-sky-500/20',
   rejected: 'bg-muted text-muted-foreground',
   failed: 'bg-destructive/10 text-destructive border-destructive/20',
+  expired: 'bg-muted text-muted-foreground',
 };
+
+const VIA_LABEL: Record<RenderApprovalDecidedVia, string> = {
+  forge: 'Forge',
+  slack: 'Slack',
+  whatsapp: 'WhatsApp',
+  system: 'Continuum',
+};
+
+// The reconciler's reason codes in words; an unmapped reason is shown as written.
+const REASON_COPY: Record<string, string> = {
+  expired: 'Nobody decided before the package expired.',
+  publish_interrupted_check_meta:
+    'Publishing was interrupted. Check Ads Manager before sending it again.',
+};
+
+/** Re-read quickly while a decision is still being relayed; otherwise the usual slow poll. */
+export const APPROVAL_RELAY_POLL_MS = 3_000;
+export const approvalPollInterval = (approvals: RenderApproval[] | undefined) =>
+  approvals?.some((approval) => approval.status === 'approved') ? APPROVAL_RELAY_POLL_MS : 30_000;
+
+const when = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
+function decidedLine(approval: RenderApproval): string | null {
+  if (!approval.decidedAt) return null;
+  const who = approval.decidedByDisplayName ?? approval.decidedByName;
+  const via = approval.decidedVia ? VIA_LABEL[approval.decidedVia] : null;
+  return [
+    'Decided',
+    who ? `by ${who}` : null,
+    via ? `via ${via}` : null,
+    `· ${when(approval.decidedAt)}`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function reasonText(approval: RenderApproval): string | null {
+  if (approval.status === 'pending') return null;
+  const reason = approval.decisionReason ?? (approval.status === 'expired' ? 'expired' : null);
+  return reason ? (REASON_COPY[reason] ?? reason) : null;
+}
+
+type Entry = RenderApproval | { packageId: string; approvals: RenderApproval[] };
+
+/** Packaged batches under one entry in first-seen order; a batch with no package stands alone. */
+export function groupByPackage(approvals: RenderApproval[]): Entry[] {
+  const entries: Entry[] = [];
+  const packages = new Map<string, RenderApproval[]>();
+  for (const approval of approvals) {
+    if (!approval.packageId) {
+      entries.push(approval);
+      continue;
+    }
+    const group = packages.get(approval.packageId);
+    if (group) {
+      group.push(approval);
+      continue;
+    }
+    const created = [approval];
+    packages.set(approval.packageId, created);
+    entries.push({ packageId: approval.packageId, approvals: created });
+  }
+  return entries;
+}
 
 const isVideo = (url: string) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
 
@@ -101,13 +172,14 @@ function ApprovalCard({
           <p className="line-clamp-3 text-sm text-foreground/90">{first.adCopy}</p>
         ) : null}
 
-        {approval.status !== 'pending' && approval.decisionReason ? (
-          <p className="text-xs text-muted-foreground">{approval.decisionReason}</p>
+        {reasonText(approval) ? (
+          <p className="text-xs text-muted-foreground">{reasonText(approval)}</p>
         ) : null}
-        {approval.decidedAt ? (
-          <p className="text-xs text-muted-foreground">
-            Decided {new Date(approval.decidedAt).toLocaleString()}
-          </p>
+        {decidedLine(approval) ? (
+          <p className="text-xs text-muted-foreground">{decidedLine(approval)}</p>
+        ) : null}
+        {pending && approval.expiresAt && !approval.packageId ? (
+          <p className="text-xs text-muted-foreground">Expires {when(approval.expiresAt)}</p>
         ) : null}
 
         {pending ? (
@@ -136,6 +208,51 @@ function ApprovalCard({
   );
 }
 
+function ApprovalPackage({
+  approvals,
+  busyId,
+  onDecide,
+}: {
+  approvals: RenderApproval[];
+  busyId: string | null;
+  onDecide: (id: string, decision: 'approve' | 'reject') => void;
+}) {
+  const waiting = approvals.filter((approval) => approval.status === 'pending').length;
+  const expiresAt = approvals.find((approval) => approval.expiresAt)?.expiresAt ?? null;
+  const expired = expiresAt !== null && Date.parse(expiresAt) <= Date.now();
+  const variations = `${approvals.length} variation${approvals.length === 1 ? '' : 's'}`;
+  return (
+    <section
+      aria-label={`Approval package, ${variations}`}
+      className="space-y-2 rounded-lg border border-dashed p-2"
+    >
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs">
+        <span className="inline-flex items-center gap-1.5 font-medium">
+          <Package className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+          Package · {variations}
+        </span>
+        <span className="text-muted-foreground">
+          {waiting ? `${waiting} waiting` : 'All decided'}
+        </span>
+        {expiresAt ? (
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            <Clock className="h-3 w-3" aria-hidden />
+            {expired ? 'Expired' : 'Expires'} {when(expiresAt)}
+          </span>
+        ) : null}
+      </header>
+      {approvals.map((approval) => (
+        <ApprovalCard
+          key={approval.id}
+          approval={approval}
+          busy={busyId === approval.id}
+          onDecide={onDecide}
+        />
+      ))}
+    </section>
+  );
+}
+
 export function PendingApprovals({ brandId }: { brandId: string }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -144,7 +261,7 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
     queryKey: approvalKey,
     queryFn: () => fetchRenderApprovals(brandId),
     staleTime: FORGE_STALE_MS.active,
-    refetchInterval: 30_000,
+    refetchInterval: (query) => approvalPollInterval(query.state.data),
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
@@ -167,18 +284,21 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
         // and a toast saying "Published" over it would be a lie someone acts on.
         const status = result.approval.status;
         toast.success(
-          status === 'published'
-            ? 'Published as a paused ad.'
-            : status === 'previewed'
-              ? 'Approved — Meta writes are switched off for this workspace, so nothing was published.'
-              : status === 'rejected'
-                ? 'Rejected. Nothing was published.'
-                : `Recorded, but publishing did not complete: ${result.deliveryReason ?? 'see the render log'}`,
+          status === 'approved'
+            ? 'Approved. Publishing now — the outcome appears here in a moment.'
+            : status === 'published'
+              ? 'Published as a paused ad.'
+              : status === 'previewed'
+                ? 'Approved — Meta writes are switched off for this workspace, so nothing was published.'
+                : status === 'rejected'
+                  ? 'Rejected. Nothing was published.'
+                  : `Recorded, but publishing did not complete: ${result.deliveryReason ?? 'see the render log'}`,
         );
-        await queryClient.invalidateQueries({ queryKey: approvalKey, exact: true });
+        void queryClient.invalidateQueries({ queryKey: approvalKey, exact: true });
       } catch (error) {
+        // The server's refusal, as written: it says why this person cannot decide this batch.
         toast.error(error instanceof Error ? error.message : 'That decision did not go through.');
-        await queryClient.invalidateQueries({ queryKey: approvalKey, exact: true });
+        void queryClient.invalidateQueries({ queryKey: approvalKey, exact: true });
       } finally {
         setBusyId(null);
       }
@@ -202,14 +322,23 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
         </p>
       </div>
       <div className="space-y-2">
-        {approvals.map((approval) => (
-          <ApprovalCard
-            key={approval.id}
-            approval={approval}
-            busy={busyId === approval.id}
-            onDecide={onDecide}
-          />
-        ))}
+        {groupByPackage(approvals).map((entry) =>
+          'approvals' in entry ? (
+            <ApprovalPackage
+              key={entry.packageId}
+              approvals={entry.approvals}
+              busyId={busyId}
+              onDecide={onDecide}
+            />
+          ) : (
+            <ApprovalCard
+              key={entry.id}
+              approval={entry}
+              busy={busyId === entry.id}
+              onDecide={onDecide}
+            />
+          ),
+        )}
       </div>
     </section>
   );

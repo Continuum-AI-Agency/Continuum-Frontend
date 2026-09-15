@@ -597,6 +597,14 @@ const oneVariableSourceMessage = {
  */
 const bindingIdField = z.string().uuid().optional();
 
+/**
+ * The chat destinations (Slack rooms, WhatsApp groups) a Meta-bound render is shown in for
+ * approval. Required, in effect, whenever a Meta target is set: preflight refuses a target with
+ * none. Signed into the confirmation with the package id, so a room swapped after review is a
+ * different request.
+ */
+const approvalDestinationIdsField = z.array(z.string().uuid()).max(20).optional();
+
 export const apiRenderPreflightRequestSchema = z
   .object({
     brandId: z.string().uuid(),
@@ -619,6 +627,7 @@ export const apiRenderPreflightRequestSchema = z
     outputIds: z.array(z.string().min(1)).min(1).optional(),
     /** Per-render output settings, keyed by public output id. Pinned into the signed trigger. */
     encode: apiRenderEncodeOverrideSchema.optional(),
+    approvalDestinationIds: approvalDestinationIdsField,
   })
   .strict()
   .refine(oneVariableSource, oneVariableSourceMessage)
@@ -702,6 +711,7 @@ export const apiRenderBatchPreflightRequestSchema = z
      * confirmation token covers it: a destination swapped after review is a different request.
      */
     slack: z.object({ destinationId: z.string().uuid() }).strict().optional(),
+    approvalDestinationIds: approvalDestinationIdsField,
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -879,6 +889,29 @@ export const resolvedRenderTargetSchema = z
   })
   .strict();
 
+/**
+ * The approval package a confirm will open, echoed at preflight. `warning` is not a refusal: a
+ * destination with no active approver yet can still receive the package, and someone there
+ * requests access from its header — but nobody can approve until they are activated.
+ */
+export const apiRenderApprovalSummarySchema = z
+  .object({
+    packageId: z.string().uuid(),
+    destinations: z.array(
+      z
+        .object({
+          id: z.string().uuid(),
+          platform: z.enum(['slack', 'whatsapp']),
+          name: z.string(),
+          activeApprovers: z.number().int().nonnegative(),
+        })
+        .strict(),
+    ),
+    warning: z.string().nullable(),
+  })
+  .strict();
+export type ApiRenderApprovalSummary = z.infer<typeof apiRenderApprovalSummarySchema>;
+
 export const apiRenderPreflightResponseSchema = z
   .object({
     confirmationToken: z.string().min(1),
@@ -918,6 +951,8 @@ export const apiRenderPreflightResponseSchema = z
           .strict(),
       )
       .default([]),
+    /** Null when nothing in this render goes to Meta, so nothing parks for approval. */
+    approval: apiRenderApprovalSummarySchema.nullable().default(null),
   })
   .strict();
 export type ApiRenderPreflightResponse = z.infer<typeof apiRenderPreflightResponseSchema>;
@@ -962,6 +997,8 @@ export const apiRenderBatchPreflightResponseSchema = z
       findings: [],
     }),
     effects: z.literal('none'),
+    /** One package for the whole batch. Null when no record goes to Meta. */
+    approval: apiRenderApprovalSummarySchema.nullable().default(null),
   })
   .strict();
 export type ApiRenderBatchPreflightResponse = z.infer<typeof apiRenderBatchPreflightResponseSchema>;

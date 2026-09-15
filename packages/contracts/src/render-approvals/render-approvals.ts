@@ -70,6 +70,10 @@ export const renderApprovalRequestSchema = z
   .strict();
 export type RenderApprovalRequest = z.infer<typeof renderApprovalRequestSchema>;
 
+/** Where a decision was made. `system` is the reconciler expiring a batch nobody decided. */
+export const renderApprovalDecidedViaSchema = z.enum(['forge', 'slack', 'whatsapp', 'system']);
+export type RenderApprovalDecidedVia = z.infer<typeof renderApprovalDecidedViaSchema>;
+
 /** One pending batch, as the Forge page and the Slack card read it. */
 export const renderApprovalSchema = z
   .object({
@@ -97,6 +101,15 @@ export const renderApprovalSchema = z
     deliveryReceipts: z.array(z.record(z.string(), z.unknown())).default([]),
     createdAt: z.string(),
     updatedAt: z.string(),
+    // The Forge package this batch belongs to. Null for a batch parked outside Forge, which
+    // keeps the brand-access rule instead of the destination approver list.
+    packageId: z.string().uuid().nullable().default(null),
+    // Inherited from the package. A pending batch past it is expired and rejected.
+    expiresAt: z.string().nullable().default(null),
+    // The name every surface shows. A WhatsApp approver has no Continuum user behind it, so
+    // `decidedByName` alone cannot say who decided.
+    decidedByDisplayName: z.string().nullable().default(null),
+    decidedVia: renderApprovalDecidedViaSchema.nullable().default(null),
   })
   .strict();
 export type RenderApproval = z.infer<typeof renderApprovalSchema>;
@@ -141,4 +154,165 @@ export const parseRenderApprovalActionValue = (
   const [approvalId, fingerprint] = (value ?? '').split('|');
   if (!approvalId || !fingerprint) return null;
   return { approvalId, fingerprint };
+};
+
+/**
+ * One Forge confirm of variations bound for Meta. Every render job the confirm created points at
+ * it, every batch the plugin parks for those jobs inherits it, and it is shown to each of its
+ * destinations as one header with a message per variation.
+ */
+export const renderApprovalPackageSchema = z
+  .object({
+    id: z.string().uuid(),
+    brandId: z.string().uuid(),
+    createdBy: z.string().uuid().nullable(),
+    destinationIds: z.array(z.string().uuid()),
+    jobCount: z.number().int().positive(),
+    label: z.string().nullable(),
+    expiresAt: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .strict();
+export type RenderApprovalPackage = z.infer<typeof renderApprovalPackageSchema>;
+
+export const RENDER_APPROVER_PLATFORMS = ['slack', 'whatsapp'] as const;
+export const destinationApproverPlatformSchema = z.enum(RENDER_APPROVER_PLATFORMS);
+export type DestinationApproverPlatform = z.infer<typeof destinationApproverPlatformSchema>;
+
+/**
+ * `requested` counts for nothing: it is an unknown person who pressed a button or reacted, kept
+ * so a brand admin can activate them. `revoked` is kept too, so a removed approver cannot
+ * silently re-request.
+ */
+export const destinationApproverStatusSchema = z.enum(['requested', 'active', 'revoked']);
+export type DestinationApproverStatus = z.infer<typeof destinationApproverStatusSchema>;
+
+export const destinationApproverSchema = z
+  .object({
+    id: z.string().uuid(),
+    brandId: z.string().uuid(),
+    destinationId: z.string().uuid(),
+    userId: z.string().uuid().nullable(),
+    platform: destinationApproverPlatformSchema,
+    platformUserId: z.string().nullable(),
+    // WhatsApp reports one person as a LID or a phone jid depending on their client.
+    altPlatformUserId: z.string().nullable(),
+    displayName: z.string().nullable(),
+    status: destinationApproverStatusSchema,
+    addedBy: z.string().uuid().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .strict();
+export type DestinationApprover = z.infer<typeof destinationApproverSchema>;
+
+export const destinationApproverListResponseSchema = z
+  .object({ approvers: z.array(destinationApproverSchema) })
+  .strict();
+export type DestinationApproverListResponse = z.infer<typeof destinationApproverListResponseSchema>;
+
+/** A brand admin adds an ACTIVE approver: a brand member by user id, or a platform id. */
+export const addDestinationApproverRequestSchema = z
+  .object({
+    userId: z.string().uuid().optional(),
+    platformUserId: z.string().trim().min(1).max(200).optional(),
+    altPlatformUserId: z.string().trim().min(1).max(200).nullable().optional(),
+    displayName: z.string().trim().min(1).max(200).nullable().optional(),
+  })
+  .strict()
+  .refine((value) => Boolean(value.userId) !== Boolean(value.platformUserId), {
+    message: 'Name the approver by exactly one of userId or platformUserId',
+  });
+export type AddDestinationApproverRequest = z.infer<typeof addDestinationApproverRequestSchema>;
+
+/** Activate and revoke take no body; the approver id in the path is the whole request. */
+export const destinationApproverTransitionRequestSchema = z.object({}).strict();
+export type DestinationApproverTransitionRequest = z.infer<
+  typeof destinationApproverTransitionRequestSchema
+>;
+
+export const destinationApproverResponseSchema = z
+  .object({ approver: destinationApproverSchema })
+  .strict();
+export type DestinationApproverResponse = z.infer<typeof destinationApproverResponseSchema>;
+
+/**
+ * A room Forge can open an approval package in: the brand's active Slack and WhatsApp channel
+ * destinations, with how many people can decide there today. Zero active approvers is shown, not
+ * hidden — the room still receives the package, and its header is where the first approver asks.
+ */
+export const renderApprovalDestinationSchema = z
+  .object({
+    id: z.string().uuid(),
+    platform: destinationApproverPlatformSchema,
+    role: z.string(),
+    name: z.string(),
+    activeApprovers: z.number().int().nonnegative(),
+    requestedApprovers: z.number().int().nonnegative(),
+  })
+  .strict();
+export type RenderApprovalDestination = z.infer<typeof renderApprovalDestinationSchema>;
+
+export const renderApprovalDestinationListResponseSchema = z
+  .object({ destinations: z.array(renderApprovalDestinationSchema) })
+  .strict();
+export type RenderApprovalDestinationListResponse = z.infer<
+  typeof renderApprovalDestinationListResponseSchema
+>;
+
+/**
+ * SEAM B: what the WhatsApp approvals bot forwards for every reaction on a message it did not
+ * send for a legacy batch.
+ *
+ * Deliberately NOT strict. The bot never retries a 4xx, so a field it adds later would turn
+ * every reaction into a silently lost decision; unknown keys are stripped instead.
+ */
+export const whatsappReactionSchema = z.object({
+  platform: z.literal('whatsapp'),
+  channel_id: z.string().min(1),
+  message_id: z.string().min(1),
+  reactor_id: z.string().min(1),
+  reactor_alt_id: z.string().min(1).nullable().default(null),
+  reactor_name: z.string().nullable().default(null),
+  emoji: z.string(),
+  reacted_at: z.string(),
+});
+export type WhatsappReaction = z.infer<typeof whatsappReactionSchema>;
+
+export const whatsappReactionOutcomeSchema = z.enum([
+  'approved',
+  'rejected',
+  'ignored',
+  'requested',
+  'refused',
+  'already_decided',
+  'unknown_message',
+]);
+export type WhatsappReactionOutcome = z.infer<typeof whatsappReactionOutcomeSchema>;
+
+export const whatsappReactionResponseSchema = z
+  .object({ ok: z.literal(true), outcome: whatsappReactionOutcomeSchema })
+  .strict();
+export type WhatsappReactionResponse = z.infer<typeof whatsappReactionResponseSchema>;
+
+/** 👍… approves and 👎… rejects, skin tones included; any other reaction is not a decision. */
+export const classifyApprovalReaction = (emoji: string): 'approve' | 'reject' | null =>
+  emoji.startsWith('👍') ? 'approve' : emoji.startsWith('👎') ? 'reject' : null;
+
+/**
+ * The value on a package's bulk and request-access buttons. The job count is a fence, like the
+ * batch fingerprint: a package whose count moved since the header was posted refuses a bulk
+ * decision rather than deciding a set the clicker never saw.
+ */
+export const buildRenderPackageActionValue = (packageId: string, jobCount: number): string =>
+  `${packageId}|${jobCount}`;
+
+export const parseRenderPackageActionValue = (
+  value: string | null,
+): { packageId: string; jobCount: number } | null => {
+  const [packageId, count] = (value ?? '').split('|');
+  const jobCount = Number(count);
+  if (!packageId || !Number.isInteger(jobCount) || jobCount <= 0) return null;
+  return { packageId, jobCount };
 };

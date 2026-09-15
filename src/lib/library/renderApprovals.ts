@@ -1,6 +1,15 @@
 'use client';
 
-import type { RenderApproval, RenderApprovalDecisionResponse } from '@continuum/contracts';
+import {
+  type AddDestinationApproverRequest,
+  type DestinationApprover,
+  destinationApproverListResponseSchema,
+  destinationApproverResponseSchema,
+  type RenderApproval,
+  type RenderApprovalDecisionResponse,
+  type RenderApprovalDestination,
+  renderApprovalDestinationListResponseSchema,
+} from '@continuum/contracts';
 import { getApiUrl } from '@/lib/api/config';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -57,3 +66,60 @@ export async function decideRenderApproval(
   );
   return unwrap<RenderApprovalDecisionResponse>(response, 'Decision');
 }
+
+/** The brand's Slack and WhatsApp rooms a Meta-bound render can be approved in. */
+export async function fetchApprovalDestinations(
+  brandId: string,
+): Promise<RenderApprovalDestination[]> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/renders/approval-destinations?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return renderApprovalDestinationListResponseSchema.parse(
+    await unwrap<unknown>(response, 'Approval rooms'),
+  ).destinations;
+}
+
+const approversPath = (destinationId: string) =>
+  `/api/ai-studio/renders/destinations/${encodeURIComponent(destinationId)}/approvers`;
+
+export async function fetchDestinationApprovers(
+  destinationId: string,
+): Promise<DestinationApprover[]> {
+  const response = await authorizedFetch(approversPath(destinationId));
+  return destinationApproverListResponseSchema.parse(await unwrap<unknown>(response, 'Approvers'))
+    .approvers;
+}
+
+/** Adds an ACTIVE approver: a brand member by `userId`, or a platform id. */
+export async function addDestinationApprover(
+  destinationId: string,
+  body: AddDestinationApproverRequest,
+): Promise<DestinationApprover> {
+  const response = await authorizedFetch(approversPath(destinationId), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return destinationApproverResponseSchema.parse(
+    await unwrap<unknown>(response, 'Adding the approver'),
+  ).approver;
+}
+
+async function transitionApprover(
+  destinationId: string,
+  approverId: string,
+  action: 'activate' | 'revoke',
+): Promise<DestinationApprover> {
+  const response = await authorizedFetch(
+    `${approversPath(destinationId)}/${encodeURIComponent(approverId)}/${action}`,
+    { method: 'POST', body: '{}' },
+  );
+  return destinationApproverResponseSchema.parse(
+    await unwrap<unknown>(response, action === 'activate' ? 'Activating' : 'Revoking'),
+  ).approver;
+}
+
+export const activateDestinationApprover = (destinationId: string, approverId: string) =>
+  transitionApprover(destinationId, approverId, 'activate');
+
+export const revokeDestinationApprover = (destinationId: string, approverId: string) =>
+  transitionApprover(destinationId, approverId, 'revoke');
