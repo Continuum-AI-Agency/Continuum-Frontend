@@ -3,8 +3,9 @@
  *
  * What this guards is the wiring, not the pixels: a template is discovered and its contract
  * seeds a row from the designer's samples; the row's dry-run lands and the status reads Ready;
- * typing never loses focus; rows fork, save and render through dialogs. The pure row logic has
- * its own test, and the Render ledger (RenderJobsGrid) has its own file.
+ * typing never loses focus; rows gain variations and rows below without touching the selection;
+ * sets save through dialogs and render through the review tray docked under the grid. The pure
+ * row logic has its own test, the tray its own, and the Render ledger (RenderJobsGrid) its own.
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
@@ -40,6 +41,17 @@ const READY_RESPONSE = {
   fit: null,
 };
 
+const batchPreflightMock = mock(async (_input: { records: unknown[] }) => ({
+  confirmationToken: 'batch-token',
+  readiness: {
+    state: 'READY',
+    totalRows: 1,
+    readyRows: 1,
+    blockedRows: 0,
+    unknownRows: 0,
+    findings: [],
+  },
+}));
 const preflightMock = mock(
   async (_input: { variables: Record<string, unknown> }): Promise<unknown> => READY_RESPONSE,
 );
@@ -180,17 +192,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     updateRenderSet: updateRenderSetMock,
     deleteRenderSet: deleteRenderSetMock,
     getRenderSet: async (_brandId: string, id: string) => SAVED_SETS.find((set) => set.id === id),
-    batchPreflight: async () => ({
-      confirmationToken: 'batch-token',
-      readiness: {
-        state: 'READY',
-        totalRows: 1,
-        readyRows: 1,
-        blockedRows: 0,
-        unknownRows: 0,
-        findings: [],
-      },
-    }),
+    batchPreflight: batchPreflightMock,
     listDeliveryDestinations: async () => ({
       slack: { state: 'not_connected', workspaceName: null, destinations: [] },
       meta: { connected: false, adAccountId: null, adAccountName: null },
@@ -275,6 +277,7 @@ afterEach(() => {
   updateRenderSetMock.mockClear();
   deleteRenderSetMock.mockClear();
   createInputSetMock.mockClear();
+  batchPreflightMock.mockClear();
   extraTemplates = [];
   contractOverrides = {};
 });
@@ -284,6 +287,12 @@ const confirmDialog = async (answer: 'Keep editing' | 'Discard' | 'Cancel' | 'De
   fireEvent.click(within(dialog).getByRole('button', { name: answer }));
   // A length, not toBeNull: a failing element assert inside waitFor pretty-prints the fiber graph.
   await waitFor(() => expect(screen.queryAllByRole('alertdialog')).toHaveLength(0));
+};
+
+const next = async () => {
+  const button = await screen.findByRole<HTMLButtonElement>('button', { name: 'Next' });
+  await waitFor(() => expect(button.disabled).toBe(false));
+  fireEvent.click(button);
 };
 
 const openMenu = async (trigger: string | RegExp, item: string | RegExp) => {
@@ -457,8 +466,12 @@ describe('RenderRequestsGrid', () => {
     expect(screen.queryByRole('button', { name: /Fill with AI/ })).toBeNull();
 
     fireEvent.click(within(toolbar).getByRole('button', { name: 'Add' }));
-    for (const item of [/Blank row/, /Fork selected/, /Duplicate selected/, /From saved inputs/])
+    for (const item of [/Blank row/, /From saved inputs/])
       expect(await screen.findByRole('menuitem', { name: item })).toBeTruthy();
+    // Variations and copies are made from a row or the selection, not the toolbar.
+    expect(screen.queryAllByRole('menuitem', { name: /Fork|Duplicate|variation|Copy/ })).toHaveLength(
+      0,
+    );
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
     cleanup();
 
@@ -473,21 +486,26 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     fireEvent.click(screen.getByRole('button', { name: 'Row actions for Root' }));
-    for (const item of ['Rename', 'Fork', 'Duplicate', 'Save as inputs', 'Delete'])
+    for (const item of ['Rename', 'Add variation', 'Copy', 'Save as inputs', 'Delete'])
       expect(await screen.findByRole('menuitem', { name: item })).toBeTruthy();
   });
 
-  test('forks a selected row with a readable name and distinguishes clear from reset to inheritance', async () => {
+  test('adds a variation of a selected row with a readable name, keeps the selection, and distinguishes clear from reset', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
     expect(screen.getByText('1 selected')).toBeTruthy();
     const selection = screen.getByRole('region', { name: 'Selected rows' });
-    fireEvent.click(within(selection).getByRole('button', { name: 'Fork' }));
+    fireEvent.click(within(selection).getByRole('button', { name: 'Add variation' }));
 
-    expect(await screen.findByDisplayValue('Root · B')).toBeTruthy();
+    const variation = (await screen.findByDisplayValue('Root · B')) as HTMLInputElement;
     expect(screen.getAllByDisplayValue('Hola mundo')).toHaveLength(2);
+    // The parent is still what renders; the new variation is only named next.
+    const [rootBox, variationBox] = screen.getAllByLabelText<HTMLButtonElement>('Select row');
+    expect(rootBox?.getAttribute('aria-checked')).toBe('true');
+    expect(variationBox?.getAttribute('aria-checked')).toBe('false');
     expect(screen.getByText('1 selected')).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(variation));
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear inherited Headline' }));
     expect(screen.getAllByDisplayValue('Hola mundo')).toHaveLength(1);
@@ -495,14 +513,14 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getAllByDisplayValue('Hola mundo')).toHaveLength(2);
 
     // A second fork of the same parent takes the next letter.
-    await openMenu('Row actions for Root', 'Fork');
+    await openMenu('Row actions for Root', 'Add variation');
     expect(await screen.findByDisplayValue('Root · C')).toBeTruthy();
   });
 
   test('"Save as inputs" on a fork saves what it renders with, inherited values included', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
-    await openMenu('Row actions for Root', 'Fork');
+    await openMenu('Row actions for Root', 'Add variation');
     await screen.findByDisplayValue('Root · B');
     fireEvent.change(screen.getAllByLabelText('Price')[1]!, { target: { value: '9.5' } });
     await openMenu('Row actions for Root · B', 'Save as inputs');
@@ -561,23 +579,27 @@ describe('RenderRequestsGrid', () => {
         'To add a field or change the layout, ask a designer to update the template.',
       ),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Render 1/ }));
-    // No set yet: it is named first, then saved, then handed to the pre-flight dialog.
+    fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
+    // No set yet: it is named first, then saved, then reviewed in the tray under the grid.
     const naming = await screen.findByRole('dialog', { name: 'Name this render set' });
     fireEvent.change(within(naming).getByLabelText('Name'), { target: { value: 'Campaign set' } });
     fireEvent.click(within(naming).getByRole('button', { name: 'Save' }));
-    expect(await screen.findByText('Render 1 row')).toBeTruthy();
+    const tray = await screen.findByRole('region', { name: 'Review and render' });
+    await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
+    expect(within(tray).getByText('Render 1 row')).toBeTruthy();
     expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({ name: 'Campaign set' });
+    // The grid is still there to read and edit while the tray reviews it.
+    expect(screen.getByDisplayValue('Hola mundo')).toBeTruthy();
+    await next();
+    await next();
+    fireEvent.click(await within(tray).findByRole('button', { name: 'Confirm 1 file' }));
+    // Queued, the tray follows the job; only the ledger link leaves the Render tab.
+    const fired = await within(tray).findByRole('list', { name: 'Fired renders' });
+    expect(within(fired).getByText('Root / Spain')).toBeTruthy();
     expect(onFired).not.toHaveBeenCalled();
-    const next = async () => {
-      const button = await screen.findByRole<HTMLButtonElement>('button', { name: 'Next' });
-      await waitFor(() => expect(button.disabled).toBe(false));
-      fireEvent.click(button);
-    };
-    await next();
-    await next();
-    fireEvent.click(await screen.findByRole('button', { name: /Confirm 1 render/ }));
-    await waitFor(() => expect(onFired).toHaveBeenCalledWith([JOB.id]));
+    expect(batchPreflightMock).toHaveBeenCalledTimes(2);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Open Render ledger' }));
+    expect(onFired).toHaveBeenCalledWith([JOB.id]);
     await waitFor(() => expect(screen.getByDisplayValue('Root')).toBeTruthy());
   });
 
@@ -606,9 +628,11 @@ describe('RenderRequestsGrid', () => {
           ),
         );
         fireEvent.click(screen.getByRole('button', { name: /Render 1/ }));
-        const dialog = await screen.findByRole('dialog', { name: 'Render 1 row' });
-        fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-        await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
+        const tray = await screen.findByRole('region', { name: 'Review and render' });
+        fireEvent.click(within(tray).getByRole('button', { name: 'Close review' }));
+        await waitFor(() =>
+          expect(screen.queryAllByRole('region', { name: 'Review and render' })).toHaveLength(0),
+        );
       };
 
       // D14: Render, back out, Render again. Nothing was edited, so nothing is written.
@@ -646,7 +670,7 @@ describe('RenderRequestsGrid', () => {
     expect(within(row).getByRole('button', { name: 'Clear Hero' })).toBeTruthy();
 
     // A fork adds the inheritance control; it joins the same line instead of wrapping under it.
-    await openMenu('Row actions for Root', 'Fork');
+    await openMenu('Row actions for Root', 'Add variation');
     await screen.findByDisplayValue('Root · B');
     const forkClear = screen.getByRole('button', { name: 'Clear inherited Hero' });
     const forkChange = screen.getAllByRole('button', { name: 'Change Hero' })[1]!;
@@ -821,7 +845,7 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     fireEvent.change(screen.getByLabelText('Price'), { target: { value: '9.5' } });
-    await openMenu('Row actions for Root', 'Fork');
+    await openMenu('Row actions for Root', 'Add variation');
     await screen.findByDisplayValue('Root · B');
     const forkHeadline = () => screen.getAllByLabelText('Headline')[1] as HTMLInputElement;
     const forkPrice = () => screen.getAllByLabelText('Price')[1] as HTMLInputElement;
@@ -855,7 +879,7 @@ describe('RenderRequestsGrid', () => {
     ).toBeTruthy();
     await confirmDialog('Cancel');
 
-    await openMenu('Row actions for Root', 'Fork');
+    await openMenu('Row actions for Root', 'Add variation');
     await screen.findByDisplayValue('Root · B');
     await openMenu('Row actions for Root', 'Delete');
     expect(
@@ -897,6 +921,143 @@ describe('RenderRequestsGrid', () => {
     type(' vez');
     expect(input.isConnected).toBe(true);
     expect(input.value).toBe('Hola mundo otra vez');
+  });
+
+  test('Add variation and Row below add beside a row, take focus, and never touch the selection', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
+    const rootRow = screen.getByDisplayValue('Root').closest('tr')!;
+
+    fireEvent.click(within(rootRow).getByRole('button', { name: 'Add variation' }));
+    const variation = (await screen.findByDisplayValue('Root · B')) as HTMLInputElement;
+    const variationRow = variation.closest('tr')!;
+    expect(within(variationRow).getByText('inherits · 0 changed')).toBeTruthy();
+    expect(variationRow.querySelectorAll('[data-guide]')).toHaveLength(1);
+    await waitFor(() => expect(document.activeElement).toBe(variation));
+    const checked = (row: HTMLElement) =>
+      within(row).getByLabelText('Select row').getAttribute('aria-checked');
+    expect([checked(rootRow), checked(variationRow)]).toEqual(['true', 'false']);
+
+    // Beside the variation: another variation of the same parent, at the same depth.
+    fireEvent.click(within(variationRow).getByRole('button', { name: 'Row below' }));
+    const sibling = (await screen.findByDisplayValue('Root · C')) as HTMLInputElement;
+    expect(within(sibling.closest('tr')!).getByText('inherits · 0 changed')).toBeTruthy();
+    expect(sibling.closest('tr')!.querySelectorAll('[data-guide]')).toHaveLength(1);
+    await waitFor(() => expect(document.activeElement).toBe(sibling));
+
+    // Beside the root: a new root after its whole subtree.
+    fireEvent.click(within(rootRow).getByRole('button', { name: 'Row below' }));
+    await screen.findByDisplayValue('Render 4');
+    expect(
+      screen.getAllByLabelText<HTMLInputElement>('Row name').map((input) => input.value),
+    ).toEqual(['Root', 'Root · B', 'Root · C', 'Render 4']);
+    expect(screen.getByText('1 selected')).toBeTruthy();
+    expect(checked(rootRow)).toBe('true');
+
+    // What the variation changes is counted as it changes.
+    fireEvent.change(within(variationRow).getByLabelText('Price'), { target: { value: '9.5' } });
+    expect(within(variationRow).getByText('inherits · 1 changed')).toBeTruthy();
+  });
+
+  test('Add variation says why it is unavailable three levels down', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    let label = 'Root';
+    for (const next of ['Root · B', 'Root · B · B', 'Root · B · B · B']) {
+      const row = screen.getByDisplayValue(label).closest('tr')!;
+      fireEvent.click(within(row).getByRole('button', { name: 'Add variation' }));
+      await screen.findByDisplayValue(next);
+      label = next;
+    }
+    const deepest = screen.getByDisplayValue(label).closest('tr')!;
+    expect(deepest.querySelectorAll('[data-guide]')).toHaveLength(3);
+    const blocked = within(deepest).getByRole('button', { name: 'Add variation' });
+    expect(blocked.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(blocked);
+    expect(screen.getAllByLabelText('Row name')).toHaveLength(4);
+  });
+
+  test('Formats show the ratios each row renders, and Render counts every file', async () => {
+    // TEMPLATE publishes no outputs: it renders the ratios its source ships, all together.
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    const together = screen.getByLabelText(
+      'Formats 1:1. This template renders every format together',
+    );
+    const chips = (element: Element) =>
+      [...element.querySelectorAll<HTMLElement>('[data-ratio]')].map((chip) => chip.dataset.ratio);
+    expect(chips(together)).toEqual(['1:1']);
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
+    expect(screen.getByRole('button', { name: 'Render 1 row · 1 file' })).toBeTruthy();
+    cleanup();
+
+    contractOverrides = {
+      template: { ...TEMPLATE, ratios: ['16:9', '1:1', '9:16'] },
+      outputs: [
+        { id: 'wide', label: 'Wide', ratio: '16:9' },
+        { id: 'square', label: 'Square', ratio: '1:1' },
+        { id: 'story', label: 'Story', ratio: '9:16' },
+      ],
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    const own = screen.getByRole('button', { name: 'Formats 16:9, 1:1, 9:16' });
+    expect(chips(own)).toEqual(['16:9', '1:1', '9:16']);
+    expect(own.querySelector('[data-formats]')?.getAttribute('data-formats')).toBe('own');
+
+    await openMenu('Row actions for Root', 'Add variation');
+    await screen.findByDisplayValue('Root · B');
+    const inherited = screen.getByRole('button', {
+      name: 'Formats 16:9, 1:1, 9:16, inherited from Root',
+    });
+    expect(inherited.querySelector('[data-formats]')?.getAttribute('data-formats')).toBe(
+      'inherited',
+    );
+
+    // Narrowing the variation to 1:1 makes the formats its own; the root still renders all three.
+    fireEvent.click(inherited);
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /Wide/ }));
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /Story/ }));
+    const narrowed = await screen.findByRole('button', { name: 'Formats 1:1' });
+    expect(chips(narrowed)).toEqual(['1:1']);
+    expect(narrowed.querySelector('[data-formats]')?.getAttribute('data-formats')).toBe('own');
+    expect(screen.getByRole('button', { name: 'Formats 16:9, 1:1, 9:16' })).toBeTruthy();
+
+    for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
+    expect(screen.getByRole('button', { name: 'Render 2 rows · 4 files' })).toBeTruthy();
+  });
+
+  test('an edit after review sends the tray back to Review; Re-check saves it and reviews again', async () => {
+    const renderable = {
+      ...NEWEST,
+      rows: [{ ...NEWEST.rows[0]!, overrides: { headline: 'Hola mundo' } }],
+    };
+    listRenderSetsMock.mockImplementation(async () => ({ items: [renderable], nextCursor: null }));
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Newest row');
+    await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
+    const tray = await screen.findByRole('region', { name: 'Review and render' });
+    await next();
+    await next();
+    expect(within(tray).getByRole('button', { name: 'Confirm 1 file' })).toBeTruthy();
+
+    fireEvent.change(screen.getByDisplayValue('Newest row'), { target: { value: 'Renamed row' } });
+    expect(await within(tray).findByText('Rows changed since review')).toBeTruthy();
+    expect(within(tray).queryAllByRole('button', { name: /Confirm/ })).toHaveLength(0);
+
+    // The rename re-checks the row; Re-check waits for Ready, saves the edit and reviews again.
+    const recheck = within(tray).getByRole<HTMLButtonElement>('button', { name: 'Re-check' });
+    await waitFor(() => expect(recheck.disabled).toBe(false), { timeout: 3000 });
+    fireEvent.click(recheck);
+    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
+    expect(updateRenderSetMock).toHaveBeenCalledTimes(1);
+    expect(within(tray).queryByText('Rows changed since review')).toBeNull();
+    expect(batchPreflightMock.mock.calls[1]?.[0].records).toMatchObject([
+      { label: 'Renamed row', expectedRenderSetRevision: 2 },
+    ]);
   });
 
   test('the per-row Output settings column exists only when the template publishes settings', async () => {

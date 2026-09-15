@@ -1,18 +1,21 @@
 /**
- * RenderPreflightDialog against a mocked render API and a stubbed paid-targets route.
+ * RenderReviewTray against a mocked render API and a stubbed paid-targets route.
  *
  * Review lists exactly the rows × formats it was handed and the batch readiness per row; Deliver
  * offers the Library (always), the brand's Slack destinations (with add-a-channel, and the
  * not-connected / not-installed / unavailable states) and Meta; Confirm fires ONE batch preflight
  * carrying `slack` and each row's delivery — a replacing row narrowed to its one format — then the
- * confirmed token. A refusal keeps the dialog open with the reason and nothing fired.
+ * confirmed token, and Running follows the fired jobs. A refusal keeps the tray on Confirm with
+ * the reason and nothing fired. It is a docked region, never a dialog: a change to the rows after
+ * review sends it back to Review, and it confirms nothing until they are re-checked.
  */
 
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type {
   ApiRenderBatchReadiness,
   ApiRenderBatchRecord,
   ApiRenderDeliveryDestinationsResponse,
+  ApiRenderJob,
   ApiRenderTemplateContract,
   PaidCanvasTarget,
 } from '@continuum/contracts';
@@ -60,9 +63,36 @@ const batchPreflightMock = mock(async (_input: unknown) => ({
   confirmationToken: 'batch-token',
   readiness: READY,
 }));
+const queuedJob = (id: string, label: string, rowId: string): ApiRenderJob =>
+  ({
+    id,
+    brandId: '22222222-2222-4222-8222-222222222222',
+    templateKey: '133',
+    templateName: 'forge_bench_starcraft',
+    contractHash: 'hash',
+    taskUid: null,
+    status: 'queued',
+    test: true,
+    outputs: [],
+    delivery: [],
+    error: null,
+    createdAt: '2026-09-15T10:00:00.000Z',
+    updatedAt: '2026-09-15T10:00:00.000Z',
+    label,
+    labelPath: label === 'Root' ? ['Root'] : ['Root', label],
+    renderSetRowId: rowId,
+    fit: null,
+    judge: null,
+    deliveryTarget: null,
+  }) as unknown as ApiRenderJob;
+const JOBS = [
+  queuedJob('11111111-1111-4111-8111-111111111111', 'Root', 'root'),
+  queuedJob('11111111-1111-4111-8111-111111111112', 'Spain', 'spain'),
+];
+const JOB_IDS = JOBS.map((job) => job.id);
 const createBatchMock = mock(async (_input: unknown) => ({
   batchId: '99999999-9999-4999-8999-999999999999',
-  jobs: [{ id: 'job-1' }, { id: 'job-2' }],
+  jobs: JOBS,
 }));
 const listDestinationsMock = mock(async (_brandId: string) => destinations());
 const listSlackChannelsMock = mock(async (_brandId: string) => ({
@@ -73,8 +103,6 @@ const listSlackChannelsMock = mock(async (_brandId: string) => ({
   ],
 }));
 const createDestinationMock = mock(async (_input: unknown) => CLIENT);
-const toastSuccess = mock((_message: string) => undefined);
-const toastError = mock((_message: string) => undefined);
 
 const ad = (id: string, level: PaidCanvasTarget['level'], name: string): PaidCanvasTarget => ({
   id,
@@ -107,13 +135,12 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     listDeliveryDestinations: listDestinationsMock,
     listSlackChannels: listSlackChannelsMock,
     createDeliveryDestination: createDestinationMock,
+    listJobs: async () => ({ items: JOBS, nextCursor: null }),
+    getJob: async (_brandId: string, id: string) => JOBS.find((job) => job.id === id),
   },
 }));
 mock.module('@/StudioCanvas/nodes/publish/publishingApi', () => ({
   publishingApi: { searchPaid: searchPaidMock },
-}));
-mock.module('@/components/ui/toast-imperative', () => ({
-  toast: { success: toastSuccess, error: toastError },
 }));
 mock.module('next/link', () => ({
   __esModule: true,
@@ -124,10 +151,20 @@ mock.module('next/link', () => ({
   ),
 }));
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type React from 'react';
 import { useState } from 'react';
-import { RenderPreflightDialog, type RenderPreflightRow } from './RenderPreflightDialog';
+import { registerToastSink } from '@/components/ui/toast-imperative';
+import { type RenderPreflightRow, RenderReviewTray } from './RenderReviewTray';
+
+// A sink per test, not a module mock: `mock.module` outlives this file in a multi-file run and
+// would swallow every other file's toasts.
+const toasts: string[] = [];
+let unregisterToasts = () => {};
+beforeEach(() => {
+  unregisterToasts = registerToastSink(({ title }) => toasts.push(String(title)));
+  toasts.length = 0;
+});
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const BINDING = '44444444-4444-4444-8444-444444444444';
@@ -169,24 +206,25 @@ const RECORDS: ApiRenderBatchRecord[] = [
   },
 ];
 
-/** Holds rows the way RenderRequestsGrid does, so a delivery picked in the dialog comes back in. */
+type Snapshot = { reviewKey: number; stale: boolean };
+
+/** Holds rows the way RenderRequestsGrid does, so a delivery picked in the tray comes back in. */
 function Harness({
   bindingId,
   initialRows = ROWS,
   records = RECORDS,
-  onFired,
-  onClose,
+  snapshot,
+  handlers,
 }: {
   bindingId: string | null;
   initialRows?: RenderPreflightRow[];
   records?: ApiRenderBatchRecord[];
-  onFired: (ids: string[]) => void;
-  onClose: () => void;
+  snapshot: Snapshot;
+  handlers: ReturnType<typeof trayHandlers>;
 }) {
   const [rows, setRows] = useState(initialRows);
   return (
-    <RenderPreflightDialog
-      open
+    <RenderReviewTray
       brandId={BRAND}
       bindingId={bindingId}
       templateKey="133"
@@ -194,6 +232,10 @@ function Harness({
       contract={CONTRACT}
       rows={rows}
       records={records}
+      reviewKey={snapshot.reviewKey}
+      stale={snapshot.stale}
+      recheckBlocked={null}
+      rechecking={false}
       onDeliveryChange={(rowId, delivery) =>
         setRows((current) =>
           current.map((row) =>
@@ -201,36 +243,51 @@ function Harness({
           ),
         )
       }
-      onClose={onClose}
-      onFired={onFired}
+      {...handlers}
     />
   );
 }
 
-function renderDialog(
+const trayHandlers = () => ({
+  onFired: mock((_ids: string[]) => undefined),
+  onClose: mock(() => undefined),
+  onRecheck: mock(() => undefined),
+  onOpenLedger: mock((_ids: string[]) => undefined),
+  onShowRow: mock((_rowId: string) => undefined),
+});
+
+function renderTray(
   bindingId: string | null = BINDING,
   data: { rows?: RenderPreflightRow[]; records?: ApiRenderBatchRecord[] } = {},
 ) {
-  const onFired = mock((_ids: string[]) => undefined);
-  const onClose = mock(() => undefined);
+  const handlers = trayHandlers();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  const ui = (snapshot: Snapshot) => (
     <QueryClientProvider client={client}>
       <Harness
         bindingId={bindingId}
         initialRows={data.rows}
         records={data.records}
-        onFired={onFired}
-        onClose={onClose}
+        snapshot={snapshot}
+        handlers={handlers}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
-  return { onFired, onClose };
+  const { rerender } = render(ui({ reviewKey: 1, stale: false }));
+  return { ...handlers, snapshot: (next: Snapshot) => rerender(ui(next)) };
 }
 
-/** The Review line for one row: its name, formats and render count, as read. */
-const reviewLine = (name: string) =>
-  screen.getByText(name).closest('div')?.textContent?.replace(name, '').trim();
+/** The Review line for one row, as read: the ratios it renders and its file count. */
+const reviewLine = (name: string) => {
+  const line = screen.getByRole('button', { name, exact: true }).closest('li')!;
+  return {
+    ratios: [...line.querySelectorAll<HTMLElement>('[data-ratio]')].map(
+      (chip) => chip.dataset.ratio,
+    ),
+    files: within(line).getByText(/^\d+ files?$/).textContent,
+    formats: line.textContent,
+  };
+};
 
 const HERO_STORY = {
   action: 'replace' as const,
@@ -250,6 +307,7 @@ const next = async () => {
 };
 
 afterEach(() => {
+  unregisterToasts();
   cleanup();
   for (const fn of [
     batchPreflightMock,
@@ -258,8 +316,6 @@ afterEach(() => {
     listSlackChannelsMock,
     createDestinationMock,
     searchPaidMock,
-    toastSuccess,
-    toastError,
   ])
     fn.mockClear();
   listDestinationsMock.mockImplementation(async () => destinations());
@@ -273,13 +329,13 @@ afterEach(() => {
   createDestinationMock.mockImplementation(async () => CLIENT);
 });
 
-describe('RenderPreflightDialog · Review', () => {
+describe('RenderReviewTray · Review', () => {
   test('reviews exactly the rows × formats it was handed, with readiness per row', async () => {
-    renderDialog();
+    renderTray();
     expect(await screen.findByText('Render 2 rows')).toBeTruthy();
-    expect(screen.getByText('StarCraft Promo · 3 renders')).toBeTruthy();
-    expect(screen.getByText('Square, Story')).toBeTruthy();
-    expect(screen.getByText('Root / Spain')).toBeTruthy();
+    expect(screen.getByText('StarCraft Promo · 3 files')).toBeTruthy();
+    expect(reviewLine('Root')).toMatchObject({ ratios: ['1:1', '9:16'], files: '2 files' });
+    expect(reviewLine('Root / Spain')).toMatchObject({ ratios: ['9:16'], files: '1 file' });
     expect(
       await screen.findByText(
         'Check incomplete · 1 row couldn’t be fully checked — they can still render',
@@ -304,17 +360,17 @@ describe('RenderPreflightDialog · Review', () => {
       RECORDS[0]!,
       { label: 'Spain', renderSetId: SET, renderSetRowId: 'spain', variables: { h: 'Hola' } },
     ];
-    const { onFired } = renderDialog(null, {
+    const { onFired } = renderTray(null, {
       rows: [ROWS[0]!, { ...ROWS[1]!, outputIds: [] }],
       records,
     });
-    expect(await screen.findByText('StarCraft Promo · 4 renders')).toBeTruthy();
-    expect(reviewLine('Root / Spain')).toBe('All formats2 renders');
-    expect(reviewLine('Root')).toBe('Square, Story2 renders');
+    expect(await screen.findByText('StarCraft Promo · 4 files')).toBeTruthy();
+    expect(reviewLine('Root / Spain')).toMatchObject({ ratios: ['1:1', '9:16'], files: '2 files' });
+    expect(reviewLine('Root')).toMatchObject({ ratios: ['1:1', '9:16'], files: '2 files' });
 
     await next();
     await next();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 4 renders' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm 4 files' }));
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
     const fired = batchPreflightMock.mock.calls[1]?.[0] as { records: ApiRenderBatchRecord[] };
     expect(fired.records[1]).toEqual(records[1]!);
@@ -322,11 +378,12 @@ describe('RenderPreflightDialog · Review', () => {
   }, 30_000);
 
   test('a replacing row counts one render on its own line, the same as the header', async () => {
-    // A spreadsheet import can hand a row its ad before the dialog opens.
-    renderDialog(BINDING, { rows: [{ ...ROWS[0]!, delivery: HERO_STORY }, ROWS[1]!] });
-    expect(await screen.findByText('StarCraft Promo · 2 renders')).toBeTruthy();
-    expect(reviewLine('Root')).toBe('One format1 render');
-    expect(reviewLine('Root / Spain')).toBe('Story1 render');
+    // A spreadsheet import can hand a row its ad before the tray opens.
+    renderTray(BINDING, { rows: [{ ...ROWS[0]!, delivery: HERO_STORY }, ROWS[1]!] });
+    expect(await screen.findByText('StarCraft Promo · 2 files')).toBeTruthy();
+    expect(reviewLine('Root')).toMatchObject({ ratios: [], files: '1 file' });
+    expect(reviewLine('Root').formats).toContain('One format');
+    expect(reviewLine('Root / Spain')).toMatchObject({ ratios: ['9:16'], files: '1 file' });
   }, 30_000);
 
   test('a guardrail refusal says why and does not let the batch move on', async () => {
@@ -337,28 +394,70 @@ describe('RenderPreflightDialog · Review', () => {
         ],
       });
     });
-    renderDialog();
+    renderTray();
     expect(await screen.findByText('Use a permitted brand color.')).toBeTruthy();
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next' }).disabled).toBe(true);
   }, 30_000);
 
-  test('Cancel closes without firing anything', async () => {
-    const { onClose } = renderDialog();
-    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+  test('closing — the button or Esc — fires nothing', async () => {
+    const { onClose } = renderTray();
+    fireEvent.click(await screen.findByRole('button', { name: 'Close review' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Next' }), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(2);
     expect(createBatchMock).not.toHaveBeenCalled();
+  }, 30_000);
+
+  test('docks as a region beside the grid — no dialog — and a row name shows that row', async () => {
+    const { onShowRow } = renderTray();
+    const tray = await screen.findByRole('region', { name: 'Review and render' });
+    expect(screen.queryAllByRole('dialog')).toHaveLength(0);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Root / Spain' }));
+    expect(onShowRow).toHaveBeenCalledWith('spain');
+  }, 30_000);
+
+  test('a change after review goes back to Review, and nothing confirms until a re-check', async () => {
+    const { snapshot, onRecheck, onFired } = renderTray();
+    await next();
+    await next();
+    expect(screen.getByRole('button', { name: 'Confirm 3 files' })).toBeTruthy();
+
+    // A row was edited in the grid while the tray sat on Confirm.
+    snapshot({ reviewKey: 1, stale: true });
+    const current = () =>
+      within(screen.getByRole('list', { name: 'Pre-flight steps' })).getByRole('listitem', {
+        current: 'step',
+      }).textContent;
+    await waitFor(() => expect(current()).toBe('Review'));
+    expect(screen.getByText('Rows changed since review')).toBeTruthy();
+    expect(screen.queryAllByRole('button', { name: /Confirm/ })).toHaveLength(0);
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next' }).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-check' }));
+    expect(onRecheck).toHaveBeenCalledTimes(1);
+    expect(batchPreflightMock).toHaveBeenCalledTimes(1);
+
+    // The grid re-saved and handed over a fresh snapshot: it is reviewed again, then confirms.
+    snapshot({ reviewKey: 2, stale: false });
+    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('Rows changed since review')).toBeNull();
+    await next();
+    await next();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
+    await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
+    expect(createBatchMock).toHaveBeenCalledTimes(1);
   }, 30_000);
 });
 
-describe('RenderPreflightDialog · Deliver + Confirm', () => {
+describe('RenderReviewTray · Deliver + Confirm', () => {
   test('Library only: fires the confirmed token and omits bindingId on the default environment', async () => {
-    const { onFired } = renderDialog(null);
+    const { onFired } = renderTray(null);
     await next();
     expect(screen.getByText(/Every render is saved to this brand’s Library/)).toBeTruthy();
     await next();
-    expect(screen.getByText('3 renders · Library')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 renders' }));
-    await waitFor(() => expect(onFired).toHaveBeenCalledWith(['job-1', 'job-2']));
+    expect(screen.getByText('3 files · Library')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
+    await waitFor(() => expect(onFired).toHaveBeenCalledWith(JOB_IDS));
 
     const fired = batchPreflightMock.mock.calls[1]?.[0];
     expect(fired).toEqual({
@@ -368,11 +467,11 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
       records: RECORDS,
     });
     expect(createBatchMock.mock.calls[0]?.[0]).toEqual({ confirmationToken: 'batch-token' });
-    expect(toastSuccess).toHaveBeenCalledWith('2 renders queued');
+    expect(toasts).toContain('2 renders queued');
   }, 30_000);
 
   test('Slack ready: add a client channel, and the fired batch posts there', async () => {
-    const { onFired } = renderDialog();
+    const { onFired } = renderTray();
     await next();
     const channel = await screen.findByLabelText<HTMLSelectElement>('Slack channel');
     expect([...channel.options].map((option) => option.text)).toEqual([
@@ -403,8 +502,8 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     ).toBeTruthy();
 
     await next();
-    expect(screen.getByText('3 renders · Library · #client-review')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 renders' }));
+    expect(screen.getByText('3 files · Library · #client-review')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
     expect(batchPreflightMock.mock.calls[1]?.[0]).toMatchObject({
       slack: { destinationId: CLIENT.id },
@@ -416,7 +515,7 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     listDestinationsMock.mockImplementation(async () =>
       destinations({ state: 'not_connected', destinations: [] }),
     );
-    renderDialog();
+    renderTray();
     await next();
     const link = await screen.findByRole('link', { name: 'Connect Slack in Settings' });
     expect(link.getAttribute('href')).toBe('/settings?section=connections');
@@ -426,7 +525,7 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     listDestinationsMock.mockImplementation(async () =>
       destinations({ state: 'not_installed', destinations: [] }),
     );
-    renderDialog();
+    renderTray();
     await next();
     expect(await screen.findByRole('link', { name: 'Reinstall Slack in Settings' })).toBeTruthy();
   }, 30_000);
@@ -436,7 +535,7 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     listDestinationsMock.mockImplementation(async () =>
       destinations({ state: 'not_connected', workspaceName: null, destinations: [OPS] }),
     );
-    const { onFired } = renderDialog();
+    const { onFired } = renderTray();
     await next();
     const channel = await screen.findByLabelText<HTMLSelectElement>('Slack channel');
     expect(screen.getByRole('link', { name: 'Connect Slack in Settings' })).toBeTruthy();
@@ -444,8 +543,8 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     fireEvent.change(channel, { target: { value: OPS.id } });
 
     await next();
-    expect(screen.getByText('3 renders · Library · #renders')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 renders' }));
+    expect(screen.getByText('3 files · Library · #renders')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
     expect(batchPreflightMock.mock.calls[1]?.[0]).toMatchObject({
       slack: { destinationId: OPS.id },
@@ -456,7 +555,7 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     listSlackChannelsMock.mockImplementationOnce(async () => {
       throw new ApiError('slack_not_installed', 409, undefined, { error: 'slack_not_installed' });
     });
-    renderDialog();
+    renderTray();
     await next();
     fireEvent.click(await screen.findByRole('button', { name: /Add a channel/ }));
     expect(
@@ -483,7 +582,7 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
         error: 'render_api_not_configured',
       });
     });
-    renderDialog();
+    renderTray();
     await next();
     expect(await screen.findByText(/Couldn’t load Slack channels/)).toBeTruthy();
     expect(screen.queryByText(/Slack delivery isn’t available yet/)).toBeNull();
@@ -495,7 +594,7 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     listDestinationsMock.mockImplementation(async () => {
       throw new ApiError('chat_destinations_unavailable', 503);
     });
-    const { onFired } = renderDialog();
+    const { onFired } = renderTray();
     await next();
     expect(
       await screen.findByText(
@@ -503,7 +602,7 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
       ),
     ).toBeTruthy();
     await next();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 renders' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
   }, 30_000);
 
@@ -511,7 +610,7 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     listDestinationsMock.mockImplementation(async () =>
       destinations({}, { connected: true, adAccountId: 'act_1', adAccountName: 'StarCraft Ads' }),
     );
-    const { onFired } = renderDialog();
+    const { onFired } = renderTray();
     await next();
     fireEvent.change(await screen.findByLabelText('Slack channel'), { target: { value: OPS.id } });
 
@@ -525,17 +624,17 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     expect(screen.getByText('Choose one format for each ad replacement.')).toBeTruthy();
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next' }).disabled).toBe(true);
     fireEvent.change(format, { target: { value: 'story' } });
-    expect(screen.getByText('StarCraft Promo · 2 renders')).toBeTruthy();
+    expect(screen.getByText('StarCraft Promo · 2 files')).toBeTruthy();
 
     await next();
     expect(
-      screen.getByText('2 renders · Library · #renders · 1 ad replacement held for approval'),
+      screen.getByText('2 files · Library · #renders · 1 ad replacement held for approval'),
     ).toBeTruthy();
-    expect(screen.getByText('replaces Hero story · Story')).toBeTruthy();
+    expect(screen.getByText('replaces Hero story · 9:16')).toBeTruthy();
     expect(screen.getByText(/Nothing changes in Ads Manager until someone approves/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 2 renders' }));
-    await waitFor(() => expect(onFired).toHaveBeenCalledWith(['job-1', 'job-2']));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm 2 files' }));
+    await waitFor(() => expect(onFired).toHaveBeenCalledWith(JOB_IDS));
     expect(batchPreflightMock.mock.calls[1]?.[0]).toEqual({
       brandId: BRAND,
       bindingId: BINDING,
@@ -564,8 +663,8 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     });
   }, 30_000);
 
-  test('a refused confirm keeps the dialog open, says why, and fires nothing', async () => {
-    const { onFired } = renderDialog();
+  test('a refused confirm stays on Confirm, says why, and fires nothing', async () => {
+    const { onFired } = renderTray();
     await next();
     await next();
     // The routes answer `{ error: code, detail }`; toApiError puts the code in the message.
@@ -575,7 +674,7 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
         detail: 'render_delivery_ad_changed',
       });
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 renders' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toBe(
       'That ad’s creative changed after it was picked. Pick the ad again.',
@@ -583,7 +682,34 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     expect(createBatchMock).not.toHaveBeenCalled();
     expect(onFired).not.toHaveBeenCalled();
     expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: 'Confirm 3 renders' }).disabled,
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Confirm 3 files' }).disabled,
     ).toBe(false);
+  }, 30_000);
+
+  test('Running follows the fired jobs in the tray and hands the ledger their ids', async () => {
+    const { onOpenLedger, onShowRow, snapshot } = renderTray();
+    await next();
+    await next();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
+    const fired = await screen.findByRole('list', { name: 'Fired renders' });
+    expect(screen.getByText('2 renders queued')).toBeTruthy();
+    const lines = within(fired).getAllByRole('listitem');
+    expect(lines.map((line) => within(line).getAllByRole('button')[0]!.textContent)).toEqual([
+      'Root',
+      'Root / Spain',
+    ]);
+    // Queued: one of the seven steps is done, the rest still ahead.
+    expect(within(lines[0]!).getByRole('img', { name: '1 of 7 steps done' })).toBeTruthy();
+    fireEvent.click(within(lines[1]!).getByRole('button', { name: 'Root / Spain' }));
+    expect(onShowRow).toHaveBeenCalledWith('spain');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Render ledger' }));
+    expect(onOpenLedger).toHaveBeenCalledWith(JOB_IDS);
+
+    // Rendering the next selection starts a new review in the same tray.
+    snapshot({ reviewKey: 2, stale: false });
+    expect(await screen.findByText('Render 2 rows')).toBeTruthy();
+    expect(screen.queryByRole('list', { name: 'Fired renders' })).toBeNull();
+    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(3));
   }, 30_000);
 });

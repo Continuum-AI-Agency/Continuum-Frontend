@@ -118,6 +118,33 @@ export type RequestRow = {
 
 export const newRowId = (): string => crypto.randomUUID();
 
+type FormatSource = {
+  template: Pick<ApiRenderTemplateContract['template'], 'ratios'>;
+  outputs: Array<Pick<ApiRenderTemplateContract['outputs'][number], 'id' | 'label' | 'ratio'>>;
+};
+
+/**
+ * The ratio of each file a row renders: its effective picks, else every published output. A
+ * template that publishes no outputs (133's forge answers `outputs: []`) renders every ratio its
+ * source ships, together — the server's rule, said before it is asked.
+ */
+export function renderedRatios(contract: FormatSource, outputIds: string[]): string[] {
+  if (contract.outputs.length === 0) return contract.template.ratios;
+  const picked = outputIds.length
+    ? contract.outputs.filter((output) => outputIds.includes(output.id))
+    : contract.outputs;
+  return picked.map((output) => output.ratio ?? output.label);
+}
+
+/** A replace swaps one creative, so it renders one file whatever the row picked. */
+export const rowFileCount = (
+  contract: FormatSource,
+  row: { outputIds: string[]; delivery?: { action: string } },
+): number =>
+  row.delivery?.action === 'replace'
+    ? 1
+    : Math.max(1, renderedRatios(contract, row.outputIds).length);
+
 const isEditableScalar = (variable: ApiRenderVariable) =>
   !variable.reserved && variable.kind !== 'image' && variable.kind !== 'video';
 
@@ -693,6 +720,15 @@ export function forkLabel(rows: RequestRow[], parentId: string): string {
 
 export const duplicateLabel = (label: string): string => `${label.trim() || 'Untitled'} copy`;
 
+/**
+ * How far a variation has moved from what it inherits: every value it sets or blanks, plus one
+ * for its own formats and one for its own output settings.
+ */
+export const ownChangeCount = (row: RequestRow): number =>
+  new Set([...Object.keys(row.values), ...row.clearedKeys]).size +
+  (row.outputIds.length ? 1 : 0) +
+  (compactEncodeBlock(row.encode) || row.clearedEncodeKeys ? 1 : 0);
+
 export type RowDrop = { rowId: string; position: 'before' | 'after' | 'inside' };
 export type RowMove = { ok: true; rows: RequestRow[] } | { ok: false; reason: 'depth' | 'cycle' };
 
@@ -758,6 +794,27 @@ export function moveRow(
   return { ok: true, rows: [...rest.slice(0, index), ...block, ...rest.slice(index)] };
 }
 
+/**
+ * A new row straight after `rowId` and everything under it, under the same parent. Beside a root
+ * it is seeded like a blank row — the designer's values, every format; beside a variation it
+ * inherits everything from the parent they share.
+ */
+export function addSibling(
+  rows: RequestRow[],
+  rowId: string,
+  variables: ApiRenderVariable[],
+  allOutputIds: string[],
+): { rows: RequestRow[]; added: RequestRow } {
+  const parentId = rows.find((row) => row.id === rowId)?.parentId ?? null;
+  const added =
+    parentId === null
+      ? { ...seedRow(variables, `Render ${rows.length + 1}`), outputIds: [...allOutputIds] }
+      : seedRow([], forkLabel(rows, parentId), parentId);
+  // Same parent, same depth: the move cannot be refused.
+  const moved = moveRow([...rows, added], added.id, { rowId, position: 'after' }, allOutputIds);
+  return { rows: moved.ok ? moved.rows : [...rows, added], added };
+}
+
 // --- render sets ----------------------------------------------------------------------------
 
 /** Rows as a render set stores them. A root with no formats is every format, said explicitly. */
@@ -777,6 +834,27 @@ export function toRenderSetRows(rows: RequestRow[], allOutputIds: string[]): For
     };
   });
 }
+
+/**
+ * What a review is a review OF: every row as the set stores it (a parent's edit changes what its
+ * forks render), which rows render, and the set revision their records point at. Where a row
+ * delivers is chosen during the review, and a check landing or a thumbnail loading is nothing
+ * the server signs, so none of those make a review stale.
+ */
+export const reviewSignature = (
+  rows: RequestRow[],
+  selectedIds: string[],
+  revision: number | null,
+  allOutputIds: string[],
+): string =>
+  JSON.stringify([
+    toRenderSetRows(
+      rows.map(({ delivery: _delivery, ...row }) => row),
+      allOutputIds,
+    ),
+    selectedIds,
+    revision,
+  ]);
 
 export function fromRenderSetRows(rows: ForgeRenderSetRow[]): RequestRow[] {
   return rows.map((row) => ({

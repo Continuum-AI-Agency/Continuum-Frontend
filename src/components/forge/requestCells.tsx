@@ -18,13 +18,15 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
-  GitFork,
+  CornerDownRight,
   GripVertical,
   ImageIcon,
   Library,
   Loader2,
+  type LucideIcon,
   MoreHorizontal,
   Pencil,
+  Plus,
   RotateCcw,
   Trash2,
   Video,
@@ -34,11 +36,13 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { BrandColorField } from '@/components/forge/BrandColorField';
 import type { DataGridRowProps } from '@/components/forge/DataGrid';
 import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
+import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import {
   effectiveMedia,
   effectiveOutputIds,
   effectiveValues,
   MAX_BATCH_ROWS,
+  ownChangeCount,
   type RequestRow,
   type RequestRowMedia,
   type RowDrop,
@@ -52,6 +56,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -66,6 +71,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { pickedPins } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
 
@@ -86,7 +92,10 @@ export type RequestRowActions = {
   resetValue: (id: string, key: string) => void;
   pickMedia: (id: string, variable: ApiRenderVariable, assets: MediaAsset[]) => void;
   clearMedia: (id: string, key: string) => void;
+  /** Child rows that inherit until changed. Focuses the first; the selection stays as it is. */
   fork: (ids: string[]) => void;
+  /** A row straight after this one's subtree, under the same parent. */
+  addRowBelow: (id: string) => void;
   duplicate: (ids: string[]) => void;
   /** Asks first — a row takes its descendants with it. */
   remove: (ids: string[]) => void;
@@ -511,10 +520,10 @@ function RowMenu({
           disabled={full || rowDepth(rows, row.id) >= FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH}
           onClick={() => actions.fork([row.id])}
         >
-          <GitFork aria-hidden /> Fork
+          <CornerDownRight aria-hidden /> Add variation
         </DropdownMenuItem>
         <DropdownMenuItem disabled={full} onClick={() => actions.duplicate([row.id])}>
-          <Copy aria-hidden /> Duplicate
+          <Copy aria-hidden /> Copy
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => actions.saveAsInputs(row.id)}>
           <BookmarkPlus aria-hidden /> Save as inputs
@@ -536,14 +545,68 @@ function deliveryNote(row: RequestRow): string | null {
   return `New ad in ${delivery.adsetName ?? delivery.adsetId}`;
 }
 
+/**
+ * A row's quick add, shown while the row is hovered or holds focus. Disabled with the reason
+ * rather than hidden, so the limit is something a person can read.
+ */
+function RowAddButton({
+  label,
+  hint,
+  disabledReason,
+  icon: Icon,
+  onAdd,
+}: {
+  label: string;
+  hint: string;
+  disabledReason: string | null;
+  icon: LucideIcon;
+  onAdd: () => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            aria-label={label}
+            disabled={disabledReason !== null}
+            focusableWhenDisabled
+            className="invisible group-focus-within/row:visible group-hover/row:visible"
+            // The row's own click previews that row; this one previews the row it adds.
+            onClick={(event) => {
+              event.stopPropagation();
+              onAdd();
+            }}
+          >
+            <Icon aria-hidden />
+          </Button>
+        }
+      />
+      <TooltipContent side="bottom">{disabledReason ?? hint}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unknown>) {
   const { rows, actions } = gridMeta(table);
   const row = tableRow.original;
   const labelInput = useRef<HTMLInputElement>(null);
   const breadcrumb = rowBreadcrumb(rows, row.id).slice(0, -1).join(' / ');
   const note = deliveryNote(row);
+  const full = rows.length >= MAX_BATCH_ROWS ? `A render set holds at most ${MAX_BATCH_ROWS} rows` : null;
   return (
-    <div className="flex min-w-52 items-center gap-1">
+    <div className="flex min-w-72 items-center gap-1">
+      {/* One guide per level, reaching through the cell's padding so a branch reads as a line. */}
+      {Array.from({ length: tableRow.depth }, (_, level) => (
+        <span
+          key={level}
+          aria-hidden
+          data-guide
+          className="-my-1 ml-1.5 w-1.5 shrink-0 self-stretch border-l border-border"
+        />
+      ))}
       {tableRow.getCanExpand() ? (
         <button
           type="button"
@@ -560,11 +623,16 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
       ) : (
         <span className="size-4" />
       )}
-      <div className="min-w-0 flex-1" style={{ paddingLeft: tableRow.depth * 8 }}>
+      <div className="min-w-0 flex-1">
         {breadcrumb ? (
-          <p className="truncate text-3xs text-muted-foreground" title={breadcrumb}>
-            {breadcrumb}
-          </p>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="truncate text-3xs text-muted-foreground" title={breadcrumb}>
+              {breadcrumb}
+            </p>
+            <span className="shrink-0 rounded-sm bg-muted px-1 font-mono text-3xs tabular-nums text-muted-foreground">
+              inherits · {ownChangeCount(row)} changed
+            </span>
+          </div>
         ) : null}
         <Input
           ref={labelInput}
@@ -582,47 +650,154 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
           </p>
         ) : null}
       </div>
+      <RowAddButton
+        label="Add variation"
+        hint="Add variation — inherits every value until you change it"
+        icon={CornerDownRight}
+        disabledReason={
+          full ??
+          (tableRow.depth >= FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH
+            ? `Variations go at most ${FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH} levels deep`
+            : null)
+        }
+        onAdd={() => actions.fork([row.id])}
+      />
+      <RowAddButton
+        label="Row below"
+        hint={row.parentId ? 'Add another variation of the same parent' : 'Add a row below'}
+        icon={Plus}
+        disabledReason={full}
+        onAdd={() => actions.addRowBelow(row.id)}
+      />
       <RowMenu row={row} rows={rows} actions={actions} labelInput={labelInput} />
     </div>
   );
 }
 
+const VISIBLE_RATIOS = 3;
+
+/**
+ * Which ratios a row renders, as their shapes: up to three, then `+N`. An inherited set is drawn
+ * muted with dashed shapes — the row renders it, but changing it happens on an ancestor.
+ */
+export function RatioChips({ ratios, inherited }: { ratios: string[]; inherited?: boolean }) {
+  return (
+    <span
+      data-formats={inherited ? 'inherited' : 'own'}
+      className={cn(
+        'flex items-center gap-1.5 font-mono text-2xs tabular-nums',
+        inherited ? 'text-muted-foreground' : 'text-foreground',
+      )}
+    >
+      {ratios.slice(0, VISIBLE_RATIOS).map((ratio, index) => (
+        <span key={`${ratio}:${index}`} data-ratio={ratio} className="flex items-center gap-1">
+          <RatioGlyph ratio={ratio} className={inherited ? 'border-dashed' : undefined} />
+          {ratio}
+        </span>
+      ))}
+      {ratios.length > VISIBLE_RATIOS ? <span>+{ratios.length - VISIBLE_RATIOS}</span> : null}
+    </span>
+  );
+}
+
+/** The nearest ancestor that picks formats — else the root, whose "none" is every format. */
+function formatsSource(rows: RequestRow[], row: RequestRow): RequestRow | undefined {
+  const byId = new Map(rows.map((item) => [item.id, item]));
+  let source = row.parentId ? byId.get(row.parentId) : undefined;
+  while (source?.parentId && source.outputIds.length === 0) source = byId.get(source.parentId);
+  return source;
+}
+
 export function FormatsCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
   const { contract, rows, actions } = gridMeta(table);
   const outputs = contract.outputs;
-  const inherited = effectiveOutputIds(rows, row.id);
-  const selectedIds = inherited.length ? inherited : outputs.map((output) => output.id);
+  if (outputs.length === 0) {
+    const { ratios } = contract.template;
+    const together = 'This template renders every format together';
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            // biome-ignore lint/a11y/useSemanticElements: a labelled run of chips, not a form fieldset.
+            <span
+              role="group"
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: read-only formats, focusable so the keyboard reaches why they cannot be picked.
+              tabIndex={0}
+              aria-label={`Formats ${ratios.join(', ')}. ${together}`}
+              className="flex h-6 w-max items-center rounded-md px-1.5 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-hidden"
+            >
+              <RatioChips ratios={ratios} />
+            </span>
+          }
+        />
+        <TooltipContent side="bottom">{together}</TooltipContent>
+      </Tooltip>
+    );
+  }
+  const effective = effectiveOutputIds(rows, row.id);
+  const selectedIds = effective.length ? effective : outputs.map((output) => output.id);
+  const ratios = outputs
+    .filter((output) => selectedIds.includes(output.id))
+    .map((output) => output.ratio ?? output.label);
+  const inheritedFrom =
+    row.parentId && row.outputIds.length === 0
+      ? formatsSource(rows, row)?.label.trim() || 'Untitled'
+      : null;
   return (
     <div className="flex items-center gap-1">
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button type="button" size="xs" variant="outline">
-              {selectedIds.length === outputs.length
-                ? 'All formats'
-                : `${selectedIds.length} format${selectedIds.length === 1 ? '' : 's'}`}
-            </Button>
-          }
-        />
-        <DropdownMenuContent>
-          {outputs.map((output) => (
-            <DropdownMenuCheckboxItem
-              key={output.id}
-              checked={selectedIds.includes(output.id)}
-              disabled={selectedIds.length === 1 && selectedIds.includes(output.id)}
-              onCheckedChange={(checked) =>
-                actions.updateRow(row.id, (current) => ({
-                  ...current,
-                  outputIds: checked
-                    ? [...selectedIds, output.id]
-                    : selectedIds.filter((id) => id !== output.id),
-                }))
-              }
-            >
-              {output.label}
-              {output.ratio ? ` · ${output.ratio}` : ''}
-            </DropdownMenuCheckboxItem>
-          ))}
+        {/* Always mounted, only disabled: a trigger that changed shape on the first tick would
+            remount under the open menu. */}
+        <Tooltip disabled={inheritedFrom === null}>
+          <TooltipTrigger
+            render={
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="ghost"
+                    aria-label={`Formats ${ratios.join(', ')}${inheritedFrom ? `, inherited from ${inheritedFrom}` : ''}`}
+                  >
+                    <RatioChips ratios={ratios} inherited={inheritedFrom !== null} />
+                    <ChevronDown
+                      data-icon="inline-end"
+                      className="text-muted-foreground"
+                      aria-hidden
+                    />
+                  </Button>
+                }
+              />
+            }
+          />
+          <TooltipContent side="bottom">Inherited from {inheritedFrom}</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent className="w-48">
+          <DropdownMenuGroup>
+            {outputs.map((output) => (
+              <DropdownMenuCheckboxItem
+                key={output.id}
+                checked={selectedIds.includes(output.id)}
+                disabled={selectedIds.length === 1 && selectedIds.includes(output.id)}
+                onCheckedChange={(checked) =>
+                  actions.updateRow(row.id, (current) => ({
+                    ...current,
+                    outputIds: checked
+                      ? [...selectedIds, output.id]
+                      : selectedIds.filter((id) => id !== output.id),
+                  }))
+                }
+              >
+                <RatioGlyph ratio={output.ratio} />
+                {output.label}
+                {output.ratio ? (
+                  <span className="ml-auto font-mono text-2xs tabular-nums text-muted-foreground">
+                    {output.ratio}
+                  </span>
+                ) : null}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
       {row.parentId && row.outputIds.length ? (
@@ -694,8 +869,14 @@ export function SortableRequestRow({ row, className, ...props }: DataGridRowProp
     <SortableHandleContext.Provider value={{ attributes, listeners, setActivatorNodeRef }}>
       <TableRow
         ref={setNodeRef}
+        data-row-id={row.id}
         data-drop={position ?? undefined}
-        className={cn(className, isDragging && 'opacity-40', position && DROP_HINT_CLASS[position])}
+        className={cn(
+          'group/row',
+          className,
+          isDragging && 'opacity-40',
+          position && DROP_HINT_CLASS[position],
+        )}
         {...props}
       />
     </SortableHandleContext.Provider>

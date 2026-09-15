@@ -9,17 +9,16 @@ import {
 import {
   ChevronDown,
   ClipboardPaste,
-  Copy,
   Download,
   FolderOpen,
-  GitFork,
   Loader2,
   Play,
   Plus,
   Save,
   Upload,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
+import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -35,11 +34,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 // The Render tab's toolbar: five controls, left to right in the order a person uses them —
 // which template, which set, add rows, import rows, save and render. Everything else a row can
-// do lives on the row (its menu) or on the selection (the bar under this).
+// do lives on the row (its hover buttons and menu) or on the selection (the bar under this).
 
 export const templateLabel = (template: ApiRenderTemplateSummary): string =>
   template.displayName ?? templateDisplayName(template.name);
@@ -64,11 +64,7 @@ export function RenderToolbar({
   setMenu,
   inputSets,
   canAddRows,
-  canFork,
-  canDuplicate,
   onAddRow,
-  onForkSelected,
-  onDuplicateSelected,
   onAddFromInputs,
   onUpload,
   onDownloadTemplate,
@@ -76,6 +72,7 @@ export function RenderToolbar({
   canSave,
   onSave,
   selectedCount,
+  files,
   readyToFire,
   fireHint,
   busy,
@@ -92,11 +89,7 @@ export function RenderToolbar({
   setMenu: ReactNode;
   inputSets: ApiRenderInputSet[];
   canAddRows: boolean;
-  canFork: boolean;
-  canDuplicate: boolean;
   onAddRow: () => void;
-  onForkSelected: () => void;
-  onDuplicateSelected: () => void;
   onAddFromInputs: (set: ApiRenderInputSet) => void;
   onUpload: () => void;
   onDownloadTemplate: () => void;
@@ -104,6 +97,8 @@ export function RenderToolbar({
   canSave: boolean;
   onSave: () => void;
   selectedCount: number;
+  /** Every file the selection renders, and how many of them come out in each ratio. */
+  files: { total: number; byRatio: Array<[ratio: string, count: number]>; replacements: number };
   readyToFire: boolean;
   fireHint: string | null;
   busy: 'saving' | 'firing' | null;
@@ -191,12 +186,6 @@ export function RenderToolbar({
                 <DropdownMenuItem disabled={!canAddRows} onClick={onAddRow}>
                   <Plus aria-hidden /> Blank row
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canFork} onClick={onForkSelected}>
-                  <GitFork aria-hidden /> Fork selected
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canDuplicate} onClick={onDuplicateSelected}>
-                  <Copy aria-hidden /> Duplicate selected
-                </DropdownMenuItem>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger disabled={inputSets.length === 0 || !canAddRows}>
                     <FolderOpen aria-hidden /> From saved inputs
@@ -270,24 +259,80 @@ export function RenderToolbar({
                 </>
               ) : null}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="gap-1.5"
+            <RenderButton
+              selectedCount={selectedCount}
+              files={files}
               disabled={!readyToFire || busy !== null}
-              title={fireHint ?? undefined}
-              onClick={onRender}
-            >
-              {busy === 'firing' ? (
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
-              ) : (
-                <Play className="size-3.5" aria-hidden />
-              )}
-              Render {selectedCount || ''}
-            </Button>
+              fireHint={fireHint}
+              firing={busy === 'firing'}
+              onRender={onRender}
+            />
           </Control>
         </>
       ) : null}
     </div>
+  );
+}
+
+const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+/**
+ * `Render 4 rows · 12 files`, with the files per ratio on hover. A disabled button takes no
+ * pointer, so while it waits it says why in its title instead.
+ */
+function RenderButton({
+  selectedCount,
+  files,
+  disabled,
+  fireHint,
+  firing,
+  onRender,
+}: {
+  selectedCount: number;
+  files: { total: number; byRatio: Array<[ratio: string, count: number]>; replacements: number };
+  disabled: boolean;
+  fireHint: string | null;
+  firing: boolean;
+  onRender: () => void;
+}) {
+  const button = (
+    <Button
+      type="button"
+      size="sm"
+      className="gap-1.5"
+      disabled={disabled}
+      title={disabled ? (fireHint ?? undefined) : undefined}
+      onClick={onRender}
+    >
+      {firing ? (
+        <Loader2 className="size-3.5 animate-spin" aria-hidden />
+      ) : (
+        <Play className="size-3.5" aria-hidden />
+      )}
+      {selectedCount
+        ? `Render ${plural(selectedCount, 'row')} · ${plural(files.total, 'file')}`
+        : 'Render'}
+    </Button>
+  );
+  if (!selectedCount) return button;
+  return (
+    <Tooltip>
+      <TooltipTrigger render={button} />
+      <TooltipContent side="bottom" className="font-mono text-2xs tabular-nums">
+        {files.byRatio.map(([ratio, count], index) => (
+          <Fragment key={ratio}>
+            {index > 0 ? <span aria-hidden>·</span> : null}
+            <RatioGlyph ratio={ratio} />
+            {ratio} ×{count}
+          </Fragment>
+        ))}
+        {files.replacements ? (
+          <span>
+            {files.byRatio.length ? '· ' : ''}
+            {plural(files.replacements, 'ad replacement')}, one file each
+          </span>
+        ) : null}
+      </TooltipContent>
+    </Tooltip>
   );
 }

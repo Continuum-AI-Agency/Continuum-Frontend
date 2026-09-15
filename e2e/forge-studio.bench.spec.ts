@@ -479,14 +479,16 @@ const svgSlotText = (page: Page, slot: string) =>
     .evaluate((node) => (node.textContent ?? '').replace(/\s+/g, ''));
 
 async function openPreflight(page: Page, rowCount: number): Promise<Locator> {
-  const render = page.getByRole('button', { name: `Render ${rowCount}`, exact: true });
+  const render = page.getByRole('button', {
+    name: new RegExp(`^Render ${rowCount} rows? · \\d+ files?$`),
+  });
   await expect(render).toBeEnabled();
   await render.click();
-  const dialog = page.getByRole('dialog', {
-    name: `Render ${rowCount} row${rowCount === 1 ? '' : 's'}`,
-  });
-  await expect(dialog).toBeVisible();
-  return dialog;
+  // The review is a tray docked under the grid, never a modal over it.
+  const tray = page.getByRole('region', { name: 'Review and render' });
+  await expect(tray).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  return tray;
 }
 
 async function uploadCsv(page: Page, fileName: string, csv: string, rowCount: number) {
@@ -797,10 +799,9 @@ test.describe('Forge Studio — fixtures', () => {
     await dragRowInside(page, ROWS.solo, ROWS.root);
     const solo = gridRow(page, ROWS.solo);
     await expect(solo.locator(`p[title="${ROWS.root}"]`)).toBeVisible();
-    const indent = await solo
-      .getByRole('textbox', { name: 'Row name', exact: true })
-      .evaluate((input) => (input.parentElement as HTMLElement).style.paddingLeft);
-    expect(indent, 'a depth-1 fork is indented one step').toBe('8px');
+    expect(await solo.locator('[data-guide]').count(), 'a depth-1 fork draws one guide line').toBe(
+      1,
+    );
 
     // Root now carries a subtree one level deep; inside Launch · B · B (depth 2) it would reach 4.
     await dragRowInside(page, ROWS.root, ROWS.launchGrandFork);
@@ -879,12 +880,12 @@ test.describe('Forge Studio — fixtures', () => {
 
     // Review: exactly the selected rows × their formats.
     const review = await openPreflight(page, 2);
-    await expect(review.getByText(`${promo.title} · 4 renders`)).toBeVisible();
+    await expect(review.getByText(`${promo.title} · 4 files`)).toBeVisible();
     await expect(review.getByText('Ready · 2 of 2 rows checked')).toBeVisible();
     for (const label of [ROWS.root, ROWS.launch]) {
       const item = review.getByRole('listitem').filter({ hasText: new RegExp(`^${label}`) });
-      await expect(item).toContainText('Square, Story');
-      await expect(item).toContainText('2 renders');
+      await expect(item.locator('[data-ratio]')).toHaveCount(2);
+      await expect(item).toContainText('2 files');
     }
     await review.getByRole('button', { name: 'Next', exact: true }).click();
     await expect(review.getByText('No ad account connected')).toBeVisible();
@@ -915,12 +916,12 @@ test.describe('Forge Studio — fixtures', () => {
     await expect(dialog.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
     await dialog.getByLabel(`Format for ${ROWS.launch}`).selectOption('square');
     // The replacing row now renders one file: 2 (Root) + 1 (Launch).
-    await expect(dialog.getByText(`${promo.title} · 3 renders`)).toBeVisible();
+    await expect(dialog.getByText(`${promo.title} · 3 files`)).toBeVisible();
     await dialog.getByRole('button', { name: 'Next', exact: true }).click();
     await expect(dialog).toContainText(`#${slack.channelName}`);
     await expect(dialog).toContainText('1 ad replacement held for approval');
     await shoot(page, 'd14-confirm');
-    await dialog.getByRole('button', { name: 'Confirm 3 renders', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Confirm 3 files', exact: true }).click();
     await expect.poll(() => fixtures.calls('POST', /\/renders\/batches$/).length).toBe(1);
 
     const confirmed = fixtures.calls('POST', /\/renders\/batch-preflight$/).at(-1)

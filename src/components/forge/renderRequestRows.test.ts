@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { ApiRenderVariable } from '@continuum/contracts';
 import {
+  addSibling,
   autoMapHeaders,
   buildTemplateCsv,
   canImportRows,
@@ -14,12 +15,16 @@ import {
   fromRenderSetRows,
   IMPORT_SKIP,
   moveRow,
+  ownChangeCount,
   parseDelimited,
   pinnedAssetIds,
   type RequestRow,
   recordsFromTable,
+  reviewSignature,
   rowBreadcrumb,
+  renderedRatios,
   rowDepth,
+  rowFileCount,
   rowsFromMappedImport,
   seedRow,
   toCsv,
@@ -536,5 +541,126 @@ describe('effectiveEncode', () => {
     offer.encode = undefined;
     expect(effectiveEncode(rows, offer.id)).toEqual(effectiveEncode(rows, market.id));
     expect(effectiveEncode([seedRow([], 'Bare')], 'missing')).toBeUndefined();
+  });
+});
+
+describe('what a variation changes', () => {
+  test('a fork counts the values it sets or blanks, and its own formats once', () => {
+    const root = seedRow([headline, price], 'Root');
+    const fork = seedRow([], 'Root · B', root.id);
+    expect(ownChangeCount(fork)).toBe(0);
+
+    fork.values = { headline: 'Hola', price: 5 };
+    fork.clearedKeys = ['on_sale'];
+    expect(ownChangeCount(fork)).toBe(3);
+
+    fork.outputIds = ['square', 'story'];
+    expect(ownChangeCount(fork)).toBe(4);
+
+    // Its own output settings are one change, however many leaves they touch.
+    fork.encode = { default: { fps: 25, audio: { channels: 1 } } };
+    expect(ownChangeCount(fork)).toBe(5);
+  });
+});
+
+describe('a row below', () => {
+  const tree = () => {
+    const a = { ...seedRow([], 'A'), outputIds: ['sq', 'story'] };
+    const a1 = seedRow([], 'A1', a.id);
+    const a2 = seedRow([], 'A2', a1.id);
+    const b = seedRow([], 'B');
+    return { a, a1, a2, b, rows: [a, a1, a2, b] };
+  };
+
+  test('beside a root: a new root after its whole subtree, seeded like a blank row', () => {
+    const { a, rows } = tree();
+    const { rows: next, added } = addSibling(rows, a.id, [headline, price], ['sq', 'story']);
+    expect(next.map((row) => row.label)).toEqual(['A', 'A1', 'A2', 'Render 5', 'B']);
+    expect(added).toMatchObject({
+      parentId: null,
+      values: { headline: 'Hola', price: 9.99 },
+      outputIds: ['sq', 'story'],
+    });
+  });
+
+  test('beside a variation: the same parent, after its own subtree, inheriting everything', () => {
+    const { a, a1, rows } = tree();
+    const { rows: next, added } = addSibling(rows, a1.id, [headline, price], ['sq', 'story']);
+    expect(next.map((row) => row.label)).toEqual(['A', 'A1', 'A2', 'A · B', 'B']);
+    expect(added).toMatchObject({ parentId: a.id, values: {}, clearedKeys: [], outputIds: [] });
+    // The rows it was added to are untouched.
+    expect(rows.map((row) => row.label)).toEqual(['A', 'A1', 'A2', 'B']);
+  });
+});
+
+describe('when a review goes stale', () => {
+  const reviewed = () => {
+    const root = { ...seedRow([headline], 'Root'), outputIds: ['sq'] };
+    const fork = seedRow([], 'Root · B', root.id);
+    const solo = seedRow([headline], 'Solo');
+    return { root, fork, solo, rows: [root, fork, solo] };
+  };
+  const signature = (rows: RequestRow[], selected: string[], revision: number | null = 3) =>
+    reviewSignature(rows, selected, revision, ['sq', 'story']);
+
+  test('picking a delivery, a check landing or a thumbnail loading leaves it current', () => {
+    const { fork, rows } = reviewed();
+    const before = signature(rows, [fork.id]);
+    const after = rows.map((row) =>
+      row.id === fork.id
+        ? {
+            ...row,
+            delivery: {
+              action: 'create' as const,
+              adAccountId: 'act_1',
+              campaignId: 'c1',
+              adsetId: 's1',
+            },
+            check: { state: 'ready' as const, fit: null, test: true },
+            media: { hero: { thumbnailUrl: 'https://cdn.test/hero.png' } },
+          }
+        : row,
+    );
+    expect(signature(after, [fork.id])).toBe(before);
+  });
+
+  test('any edit to any row, another selection or another set revision makes it stale', () => {
+    const { root, fork, solo, rows } = reviewed();
+    const before = signature(rows, [fork.id]);
+    const edit = (patch: Partial<RequestRow>, id = root.id) =>
+      rows.map((row) => (row.id === id ? { ...row, ...patch } : row));
+
+    // The parent's edit changes what the selected fork renders.
+    expect(signature(edit({ values: { headline: 'Adiós' } }), [fork.id])).not.toBe(before);
+    expect(signature(edit({ label: 'Renamed' }, fork.id), [fork.id])).not.toBe(before);
+    expect(signature(edit({ parentId: solo.id }, fork.id), [fork.id])).not.toBe(before);
+    expect(signature(rows, [fork.id, solo.id])).not.toBe(before);
+    expect(signature(rows, [fork.id], 4)).not.toBe(before);
+  });
+});
+
+describe('how many files a row renders', () => {
+  const output = (id: string, ratio: string | null) => ({ id, label: id, ratio });
+  const threeOutputs = {
+    template: { ratios: ['16:9', '1:1', '9:16'] },
+    outputs: [output('wide', '16:9'), output('square', '1:1'), output('story', '9:16')],
+  };
+  // Template 133 publishes no outputs: its formats live only in the parse's ratios.
+  const zeroOutputs = { template: { ratios: ['16:9', '1:1', '9:16'] }, outputs: [] };
+
+  test('its picked formats, else every published one, else every ratio the template ships', () => {
+    expect(renderedRatios(threeOutputs, [])).toEqual(['16:9', '1:1', '9:16']);
+    expect(renderedRatios(threeOutputs, ['story', 'square'])).toEqual(['1:1', '9:16']);
+    expect(renderedRatios(zeroOutputs, [])).toEqual(['16:9', '1:1', '9:16']);
+    expect(rowFileCount(threeOutputs, { outputIds: ['square'] })).toBe(1);
+    expect(rowFileCount(zeroOutputs, { outputIds: [] })).toBe(3);
+    // A template that names no formats at all still renders one file.
+    expect(rowFileCount({ template: { ratios: [] }, outputs: [] }, { outputIds: [] })).toBe(1);
+  });
+
+  test('an ad replacement swaps one creative, so it renders one file whatever it picked', () => {
+    expect(
+      rowFileCount(threeOutputs, { outputIds: [], delivery: { action: 'replace', adId: '1201' } }),
+    ).toBe(1);
   });
 });
