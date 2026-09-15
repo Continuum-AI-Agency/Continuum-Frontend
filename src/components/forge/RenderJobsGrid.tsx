@@ -14,15 +14,17 @@ import {
 import { Download, Loader2, RefreshCw, Search, Video } from 'lucide-react';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
+import { type CheckTick, checkSummary, TickBar } from '@/components/forge/CheckTable';
 import { DataGrid, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import { DeliveryChain, deliverySearchText } from '@/components/forge/DeliveryChain';
+import { fileForFormat, type PreviewFormat } from '@/components/forge/FormatPreview';
 import {
+  formatsNamedByJob,
   jobTransitionName,
   RenderJobDetail,
-  squareness,
   ViewTransition,
-  verdictOf,
 } from '@/components/forge/RenderJobDetail';
+import { type JobCheck, renderJobChecks } from '@/components/forge/renderJobChecks';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +71,29 @@ const STATUS_TONE: Record<ApiRenderJob['status'], 'muted' | 'warning' | 'success
 
 const isInFlight = (job: ApiRenderJob) => job.status !== 'finished' && job.status !== 'failed';
 
+const CHECK_TICK: Record<JobCheck['state'], CheckTick> = {
+  pass: 'pass',
+  warn: 'warn',
+  fail: 'fail',
+  running: 'todo',
+  todo: 'todo',
+  skipped: 'todo',
+};
+
+/** Every check as a tick, and the one word a row has room for. */
+function ChecksCell({ job }: { job: ApiRenderJob }) {
+  const checks = renderJobChecks(job, {});
+  const summary = checkSummary(checks);
+  return (
+    <span className="flex items-center gap-2" title={summary}>
+      <TickBar ticks={checks.map((check) => CHECK_TICK[check.state])} />
+      <span className="whitespace-nowrap text-muted-foreground">
+        {summary === 'All checks passed' ? 'Passed' : summary.split(' · ')[0]}
+      </span>
+    </span>
+  );
+}
+
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -76,7 +101,19 @@ const prefersReducedMotion = () =>
 const withTransition = (update: () => void) =>
   prefersReducedMotion() ? update() : startTransition(update);
 
-export function RenderJobsGrid({ brandId, active = true }: { brandId: string; active?: boolean }) {
+export function RenderJobsGrid({
+  brandId,
+  active = true,
+  templateKey,
+  formats,
+}: {
+  brandId: string;
+  active?: boolean;
+  /** One template's renders, grouped by set — the ledger embedded in template detail. */
+  templateKey?: string;
+  /** That template's formats, so each thumbnail and detail shows the right file per format. */
+  formats?: PreviewFormat[];
+}) {
   const queryClient = useQueryClient();
   const [sets, setSets] = useState<ForgeRenderSet[]>([]);
   const [renderSetId, setRenderSetId] = useState<string>('all');
@@ -86,13 +123,16 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
     trackedIds: [],
     limit: PAGE_SIZE,
     pollIntervalMs: pushed ? false : DISCONNECTED_REFRESH_MS,
+    templateKey,
     ...(renderSetId === 'all' ? {} : { renderSetId }),
   });
   const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  // Which workspace a job ran in is an internal fact — off by default, one click away.
+  // Which workspace a job ran in is an internal fact — off by default, one click away. One
+  // template's ledger is already grouped by set, so its Set column would only repeat the group.
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
     environment: false,
+    ...(templateKey ? { set: false } : {}),
   });
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -105,8 +145,8 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
     if (!active) return;
     void queryClient
       .fetchQuery({
-        queryKey: forgeQueryKeys.renderSetList(brandId),
-        queryFn: () => apiRendersApi.listRenderSets(brandId),
+        queryKey: forgeQueryKeys.renderSetList(brandId, templateKey),
+        queryFn: () => apiRendersApi.listRenderSets(brandId, templateKey),
         staleTime: FORGE_STALE_MS.lists,
       })
       .then((response) => setSets(response.items))
@@ -126,7 +166,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
       window.removeEventListener('focus', load);
       clearInterval(timer);
     };
-  }, [active, brandId, pushed, queryClient, refreshJobs]);
+  }, [active, brandId, pushed, queryClient, refreshJobs, templateKey]);
 
   // Realtime: a row change is a signal to re-read, never a row to merge — the API read is what
   // re-signs output URLs and runs the judge.
@@ -139,6 +179,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
     // Updates re-read their jobs once per burst; only an insert changes the page's order.
     const onRow = (event: 'INSERT' | 'UPDATE', row: Record<string, unknown>) => {
       if (row.brand_id !== brandId) return;
+      if (templateKey && row.template_key !== templateKey) return;
       inserted ||= event === 'INSERT';
       if (typeof row.id === 'string') changed.add(row.id);
       if (debounce) clearTimeout(debounce);
@@ -178,14 +219,16 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
       if (debounce) clearTimeout(debounce);
       unsubscribe?.();
     };
-  }, [brandId, queryClient, refreshJobs, refreshOne]);
+  }, [brandId, queryClient, refreshJobs, refreshOne, templateKey]);
 
   const templateOf = (job: ApiRenderJob) => templateDisplayName(job.templateName);
   const setOf = (job: ApiRenderJob) =>
-    job.renderSetName ?? sets.find((set) => set.id === job.renderSetId)?.name ?? 'Unassigned';
+    job.renderSetName ??
+    sets.find((set) => set.id === job.renderSetId)?.name ??
+    (templateKey ? 'No set' : 'Unassigned');
   const nameOf = (job: ApiRenderJob) => job.label ?? job.labelPath.at(-1) ?? templateOf(job);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets and formats.
   const columns = useMemo<ColumnDef<ApiRenderJob>[]>(
     () => [
       { ...selectColumn<ApiRenderJob>(), enableHiding: false },
@@ -198,16 +241,12 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
         enableHiding: false,
         header: '',
         cell: ({ row: { original: job } }) => {
-          // The Library copy when there is one: the fleet's own URL serves the bytes as
-          // application/octet-stream and only exists while the bucket keeps them. The
-          // squarest frame of the set reads best in a square thumbnail.
-          const first = [...job.outputs]
-            .sort(
-              (a, b) =>
-                Number(Boolean(b.assetId)) - Number(Boolean(a.assetId)) ||
-                squareness(a) - squareness(b),
-            )
-            .at(0);
+          // The first format's file, found by its name: the fleet lists files in a different
+          // order per job. No file for that format is an empty tile, never whichever came first.
+          const jobFormats = formats ?? formatsNamedByJob(job);
+          const first = jobFormats[0]
+            ? fileForFormat(job.outputs, jobFormats, jobFormats[0].id)
+            : null;
           return (
             <ViewTransition name={jobTransitionName(job.id)}>
               {first?.kind === 'image' ? (
@@ -218,7 +257,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
                   height={36}
                   loading="lazy"
                   decoding="async"
-                  className="size-9 rounded-sm object-cover"
+                  className="size-9 rounded-sm object-contain"
                 />
               ) : first ? (
                 <div className="flex size-9 items-center justify-center rounded-sm bg-muted">
@@ -288,16 +327,9 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
       },
       {
         id: 'verdict',
-        header: 'Check',
+        header: 'Checks',
         enableSorting: false,
-        cell: ({ row: { original: job } }) => {
-          const verdict = verdictOf(job);
-          return (
-            <Badge variant={verdict.tone} title={verdict.title}>
-              {verdict.text}
-            </Badge>
-          );
-        },
+        cell: ({ row: { original: job } }) => <ChecksCell job={job} />,
       },
       {
         id: 'outputs',
@@ -334,7 +366,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
           ) : null,
       },
     ],
-    [sets],
+    [sets, formats],
   );
 
   const needle = search.trim().toLowerCase();
@@ -372,12 +404,13 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
   });
 
   // Grouped by what a person calls the template, so ratio twins and a template shared across
-  // workspaces under one name read as one group.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: templateOf is pure.
+  // workspaces under one name read as one group. One template's own ledger groups by set instead.
+  const groupOf = (job: ApiRenderJob) => (templateKey ? setOf(job) : templateOf(job));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: groupOf reads only sets.
   const groupSummary = useMemo(() => {
     const summary = new Map<string, { finished: number; inFlight: number; failed: number }>();
     for (const job of visible) {
-      const name = templateOf(job);
+      const name = groupOf(job);
       const counts = summary.get(name) ?? { finished: 0, inFlight: 0, failed: 0 };
       if (job.status === 'finished') counts.finished += 1;
       else if (job.status === 'failed') counts.failed += 1;
@@ -385,7 +418,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
       summary.set(name, counts);
     }
     return summary;
-  }, [visible]);
+  }, [visible, sets, templateKey]);
 
   const selected = jobs.filter((job) => rowSelection[job.id]);
   const downloadable = selected.flatMap((job) => job.outputs);
@@ -399,6 +432,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
         job={open}
         templateName={templateOf(open)}
         setName={setOf(open)}
+        formats={formats}
         onBack={() => withTransition(() => setOpenId(null))}
         onRefresh={() => void refreshOne(open.id).catch(() => undefined)}
       />
@@ -406,10 +440,12 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-muted-foreground">
-          Renders for this brand, from here and from the canvas.
+          {templateKey
+            ? 'Every render of this template, newest first.'
+            : 'Renders for this brand, from here and from the canvas.'}
           {pushed ? '' : ' Live updates unavailable — refreshing on a timer.'}
         </p>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
@@ -427,25 +463,27 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
               className="h-7 w-60 pl-7 text-xs"
             />
           </div>
-          <Select value={renderSetId} onValueChange={setRenderSetId}>
-            <SelectTrigger className="h-7 w-44 text-xs" aria-label="Filter by render set">
-              <SelectValue>
-                {renderSetId === 'all'
-                  ? 'All render sets'
-                  : (sets.find((set) => set.id === renderSetId)?.name ?? 'Render set')}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="all">All render sets</SelectItem>
-                {sets.map((set) => (
-                  <SelectItem key={set.id} value={set.id}>
-                    {set.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          {templateKey ? null : (
+            <Select value={renderSetId} onValueChange={setRenderSetId}>
+              <SelectTrigger className="h-7 w-44 text-xs" aria-label="Filter by render set">
+                <SelectValue>
+                  {renderSetId === 'all'
+                    ? 'All render sets'
+                    : (sets.find((set) => set.id === renderSetId)?.name ?? 'Render set')}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="all">All render sets</SelectItem>
+                  {sets.map((set) => (
+                    <SelectItem key={set.id} value={set.id}>
+                      {set.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          )}
           <Button
             type="button"
             size="sm"
@@ -486,7 +524,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
         collapsedGroups={collapsedGroups}
         onCollapsedGroupsChange={setCollapsedGroups}
         groupBy={(job) => {
-          const name = templateOf(job);
+          const name = groupOf(job);
           const counts = groupSummary.get(name);
           return {
             key: name,
@@ -514,7 +552,9 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
             ? 'Loading…'
             : needle && jobs.length
               ? `No loaded renders match “${search.trim()}”.${hasMore ? ' Load older renders to search further.' : ''}`
-              : 'No renders yet. Set some up on the Render tab.'
+              : templateKey
+                ? 'No renders of this template yet.'
+                : 'No renders yet. Set some up on the Render tab.'
         }
       />
       {hasMore ? (

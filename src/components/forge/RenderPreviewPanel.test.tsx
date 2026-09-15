@@ -1,8 +1,8 @@
 /**
- * RenderPreviewPanel against a mocked jobs API: a row's effective values are drawn into the
- * selected format's slot boxes, overflow is flagged and clears live, the format select swaps the
- * layout. Selecting a row performs no history read; "Last render" asks once for that row and
- * re-reads only when realtime says one of its jobs finished.
+ * RenderPreviewPanel against a mocked jobs API: a row's effective values are drawn into the picked
+ * format's slot boxes, overflow is flagged and clears live, the format chips swap the layout, and
+ * the row's last render shows THAT format's file — found by name, never by position — read once per
+ * row and re-read when realtime says one of that row's jobs finished.
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
@@ -17,9 +17,16 @@ const listJobsMock = mock(async (..._args: unknown[]) => ({
   items: [] as ApiRenderJob[],
   nextCursor: null,
 }));
+let setRevision = 3;
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { listJobs: listJobsMock },
+  apiRendersApi: {
+    listJobs: listJobsMock,
+    listRenderSets: async () => ({
+      items: [{ id: '33333333-3333-4333-8333-333333333333', revision: setRevision }],
+      nextCursor: null,
+    }),
+  },
 }));
 
 let subscription: PostgresChangesSubscription | null = null;
@@ -30,7 +37,16 @@ mock.module('@/lib/supabase/realtime', () => ({
   },
 }));
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderInDom,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { RenderPreviewPanel } from './RenderPreviewPanel';
 import type { RequestRow } from './renderRequestRows';
 
@@ -127,21 +143,56 @@ const rowWith = (headline: string): RequestRow[] => [
   },
 ];
 
-const job = (rowId: string, url: string, createdAt: string) =>
+const file = (fileName: string, url = `https://cdn.test/${fileName}`) => ({
+  id: `hash-${fileName}`,
+  kind: 'image',
+  fileName,
+  mimeType: 'image/png',
+  url,
+  width: null,
+  height: null,
+  assetId: null,
+  versionId: null,
+});
+
+const job = (
+  rowId: string,
+  outputs: ReturnType<typeof file>[],
+  extra: Partial<ApiRenderJob> = {},
+) =>
   ({
     id: crypto.randomUUID(),
     status: 'finished',
     renderSetRowId: rowId,
-    outputs: [{ id: 'square', kind: 'image', url, width: 1080, height: 1080 }],
-    createdAt,
+    renderSetRevision: 3,
+    outputs,
+    createdAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+    updatedAt: new Date().toISOString(),
+    finishedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+    ...extra,
   }) as unknown as ApiRenderJob;
+
+/** Renders inside a fresh query cache, as the grid mounts it; rerender keeps the same cache. */
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrap = (next: ReactElement) => (
+    <QueryClientProvider client={client}>{next}</QueryClientProvider>
+  );
+  const view = renderInDom(wrap(ui));
+  return { ...view, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
+}
 
 const slot = (container: HTMLElement, key: string) =>
   container.querySelector(`[data-slot="${key}"]`);
+const frame = (container: HTMLElement) =>
+  container.querySelector('[data-slot="format-preview-frame"]') as HTMLElement;
+const badge = (container: HTMLElement) =>
+  container.querySelector('[data-slot="format-preview-badge"]')?.textContent;
 
 afterEach(() => {
   cleanup();
   subscription = null;
+  setRevision = 3;
   listJobsMock.mockReset();
   listJobsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
 });
@@ -183,7 +234,7 @@ describe('RenderPreviewPanel', () => {
     expect(slot(container, 'bg')?.textContent).toContain('#ff3366');
   });
 
-  test('switching the format draws that output layout', () => {
+  test('a format chip draws that output’s layout in a frame of its shape', () => {
     const { container } = render(
       <RenderPreviewPanel
         brandId={BRAND}
@@ -194,39 +245,53 @@ describe('RenderPreviewPanel', () => {
       />,
     );
     expect(slot(container, 'sticker')).toBeNull();
-    expect(screen.getByRole('option', { name: 'Story · 9:16' })).toBeTruthy();
+    expect(frame(container).style.aspectRatio).toBe('1080 / 1080');
+    expect(badge(container)).toBe('Estimate · wireframe');
 
-    fireEvent.change(screen.getByLabelText('Preview format'), { target: { value: 'story' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Story' }));
 
     expect(slot(container, 'sticker')).not.toBeNull();
     expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 1080 1920');
+    expect(frame(container).style.aspectRatio).toBe('1080 / 1920');
   });
 
-  test('Last render shows only a finished job for this row', async () => {
+  test('the row’s last render shows the picked format’s file, whatever order the job listed them', async () => {
+    // Template 133: no contract outputs, formats from the ratios, files in the fleet's order.
+    const contract = {
+      ...CONTRACT,
+      template: { ...CONTRACT.template, ratios: ['16:9', '1:1', '9:16'] },
+      outputs: [],
+    } as unknown as ApiRenderTemplateContract;
     listJobsMock.mockImplementation(async () => ({
       items: [
-        job(OTHER_ROW, 'https://cdn.test/other.png', '2026-09-14T12:00:00Z'),
-        job(ROW, 'https://cdn.test/old.png', '2026-09-13T10:00:00Z'),
-        job(ROW, 'https://cdn.test/mine.png', '2026-09-14T10:00:00Z'),
+        job(ROW, [
+          file('Producto_individual_con_descuento_9_16_ooqxxwb.jpg'),
+          file('Producto_individual_con_descuento_1_1_1mjxxwb.jpg'),
+          file('Producto_individual_con_descuento_16_9_9w5xxwa.jpg'),
+        ]),
       ],
       nextCursor: null,
     }));
-    render(
+    const { container } = render(
       <RenderPreviewPanel
         brandId={BRAND}
-        contract={CONTRACT}
+        contract={contract}
         rows={rowWith('Hola')}
         rowId={ROW}
         renderSetId={SET}
       />,
     );
 
-    expect(listJobsMock).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('tab', { name: 'Last render' }));
-
+    // The first format in contract order, never the first file.
     expect((await screen.findByAltText('Last render')).getAttribute('src')).toBe(
-      'https://cdn.test/mine.png',
+      'https://cdn.test/Producto_individual_con_descuento_16_9_9w5xxwa.jpg',
     );
+    fireEvent.click(screen.getByRole('button', { name: '1:1' }));
+    expect(screen.getByAltText('Last render').getAttribute('src')).toBe(
+      'https://cdn.test/Producto_individual_con_descuento_1_1_1mjxxwb.jpg',
+    );
+    expect(frame(container).style.aspectRatio).toBe('1 / 1');
+    await waitFor(() => expect(badge(container)).toBe('Rendered · 2h ago'));
     expect(listJobsMock).toHaveBeenCalledTimes(1);
     expect(listJobsMock).toHaveBeenCalledWith(BRAND, 1, {
       renderSetId: SET,
@@ -235,12 +300,38 @@ describe('RenderPreviewPanel', () => {
     });
   });
 
-  test('a job for another row gives an honest empty Last render view', async () => {
+  test('a format no file answers shows the estimate, never another format’s file', async () => {
     listJobsMock.mockImplementation(async () => ({
-      items: [job(OTHER_ROW, 'https://cdn.test/other.png', '2026-09-14T12:00:00Z')],
+      items: [job(ROW, [file('Story_ooqxxwb.png')])],
       nextCursor: null,
     }));
-    render(
+    const { container } = render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={CONTRACT}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={SET}
+      />,
+    );
+    await waitFor(() => expect(listJobsMock).toHaveBeenCalled());
+    await act(async () => {});
+
+    expect(screen.queryByAltText('Last render')).toBeNull();
+    expect(badge(container)).toBe('Estimate · wireframe');
+    fireEvent.click(screen.getByRole('button', { name: 'Story' }));
+    expect(screen.getByAltText('Last render').getAttribute('src')).toBe(
+      'https://cdn.test/Story_ooqxxwb.png',
+    );
+  });
+
+  test('a render of an older set revision says it predates the latest edits', async () => {
+    setRevision = 4;
+    listJobsMock.mockImplementation(async () => ({
+      items: [job(ROW, [file('Square_1mjxxwb.png')], { renderSetRevision: 3 })],
+      nextCursor: null,
+    }));
+    const { container } = render(
       <RenderPreviewPanel
         brandId={BRAND}
         contract={CONTRACT}
@@ -250,13 +341,22 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    expect(listJobsMock).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('tab', { name: 'Last render' }));
-    await waitFor(() => expect(listJobsMock).toHaveBeenCalledTimes(1));
-    await act(async () => {});
+    await waitFor(() => expect(badge(container)).toBe('Rendered · before latest edits'));
+    fireEvent.click(screen.getByRole('button', { name: 'Estimate' }));
+    expect(badge(container)).toBe('Estimate · wireframe');
+  });
 
-    expect(screen.getByText('No finished render for this row yet.')).toBeTruthy();
-    expect(screen.queryByAltText('Last render')).toBeNull();
+  test('the picked format stays picked when another row is selected', async () => {
+    const OTHER: RequestRow = { ...(rowWith('Adiós')[0] as RequestRow), id: OTHER_ROW };
+    const rows = [...rowWith('Hola'), OTHER];
+    const props = { brandId: BRAND, contract: CONTRACT, rows, renderSetId: SET };
+    const { container, rerender } = render(<RenderPreviewPanel {...props} rowId={ROW} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Story' }));
+
+    rerender(<RenderPreviewPanel {...props} rowId={OTHER_ROW} />);
+
+    expect(screen.getByRole('button', { name: 'Story' }).getAttribute('aria-pressed')).toBe('true');
+    expect(frame(container).style.aspectRatio).toBe('1080 / 1920');
   });
 
   test('a fork previews what it inherits, minus what it cleared', () => {
@@ -309,16 +409,17 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    expect(screen.getByText('No measured layout for this format.')).toBeTruthy();
+    expect(screen.getByText('No measured layout for this format')).toBeTruthy();
     expect(container.querySelector('svg')).toBeNull();
+    expect(frame(container).style.aspectRatio).toBe('9 / 16');
 
-    fireEvent.change(screen.getByLabelText('Preview format'), { target: { value: 'square' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Square' }));
 
     expect(screen.getByRole('img', { name: 'Square preview' })).toBeTruthy();
-    expect(screen.queryByText('No measured layout for this format.')).toBeNull();
+    expect(screen.queryByText('No measured layout for this format')).toBeNull();
   });
 
-  test('a job of this row finishing re-reads Last render', async () => {
+  test('a job of this row finishing re-reads the last render', async () => {
     render(
       <RenderPreviewPanel
         brandId={BRAND}
@@ -328,28 +429,16 @@ describe('RenderPreviewPanel', () => {
         renderSetId={SET}
       />,
     );
-    expect(listJobsMock).not.toHaveBeenCalled();
-    expect(subscription).toBeNull();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Last render' }));
     await waitFor(() => expect(listJobsMock).toHaveBeenCalledTimes(1));
-    await act(async () => {});
-    expect(screen.getByText('No finished render for this row yet.')).toBeTruthy();
 
     listJobsMock.mockImplementation(async () => ({
-      items: [job(ROW, 'https://cdn.test/fresh.png', '2026-09-14T13:00:00Z')],
+      items: [job(ROW, [file('Square_fresh.png', 'https://cdn.test/fresh.png')])],
       nextCursor: null,
     }));
-    const binding = subscription?.bindings.find((entry) => entry.event === 'UPDATE');
-    expect(binding?.filter).toBe(`brand_id=eq.${BRAND}`);
     act(() => {
-      binding?.onRow(
-        { brand_id: BRAND, render_set_id: SET, render_set_row_id: ROW, status: 'finished' },
-        { eventType: 'UPDATE', old: {} },
-      );
+      subscription?.bindings[1]?.onRow({ render_set_row_id: ROW, status: 'finished' }, {} as never);
     });
 
-    await waitFor(() => expect(listJobsMock).toHaveBeenCalledTimes(2));
     expect((await screen.findByAltText('Last render')).getAttribute('src')).toBe(
       'https://cdn.test/fresh.png',
     );

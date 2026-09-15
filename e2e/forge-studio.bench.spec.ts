@@ -973,23 +973,16 @@ test.describe('Forge Studio — fixtures', () => {
 
     await delivered.getByText(jobs.deliveredLabel, { exact: true }).click();
     await expect(page.getByRole('heading', { level: 2, name: jobs.deliveredLabel })).toBeVisible();
-    const steps = page.getByRole('list', { name: 'Steps' }).getByRole('listitem');
-    const expected: Array<[string, string]> = [
-      ['Queued', 'done'],
-      ['Rendering', 'done'],
-      ['Checks', 'skipped'],
-      ['Library', 'done'],
-      ['Slack', 'done'],
-      ['Meta approval', 'active'],
-      ['Published', 'pending'],
-    ];
-    await expect(steps).toHaveCount(expected.length);
-    for (const [index, [label, state]] of expected.entries()) {
-      await expect(steps.nth(index)).toContainText(label);
-      await expect(steps.nth(index)).toHaveAttribute('data-state', state);
+    // Job detail explains its checks: each row names what it checks, Delivery carries the chain.
+    const checks = page.getByRole('list', { name: 'Checks' }).getByRole('listitem');
+    const expected = ['Inputs', 'Placement', 'Brand', 'Render', 'Judge', 'Delivery'];
+    await expect(checks).toHaveCount(expected.length);
+    for (const [index, name] of expected.entries()) {
+      await expect(checks.nth(index)).toContainText(name, { ignoreCase: true });
     }
-    await expect(steps.nth(4)).toContainText(`#${slack.channelName}`);
-    await expect(steps.nth(5)).toContainText('awaiting approval');
+    const delivery = checks.nth(expected.indexOf('Delivery'));
+    await expect(delivery).toContainText(`posted to #${slack.channelName}`);
+    await expect(delivery).toContainText('awaiting approval');
     await shoot(page, 'd15-detail');
   });
 });

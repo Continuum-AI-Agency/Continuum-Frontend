@@ -74,6 +74,8 @@ export function useApiRenderJobs(args: {
   /** How many recent rows the list read returns. The node wants a handful; a grid wants the cap. */
   limit?: number;
   renderSetId?: string;
+  /** One template's renders, filtered by the server; realtime rows of other templates are ignored. */
+  templateKey?: string;
   /** A connected push consumer disables per-job polling; other consumers retain recovery. */
   pollIntervalMs?: number | false;
 }) {
@@ -81,13 +83,14 @@ export function useApiRenderJobs(args: {
   const limit = args.limit ?? 8;
   const queryClient = useQueryClient();
   const listKey = useMemo(
-    () => forgeQueryKeys.renderJobList(brandId ?? 'none', limit, args.renderSetId),
-    [args.renderSetId, brandId, limit],
+    () =>
+      forgeQueryKeys.renderJobList(brandId ?? 'none', limit, args.renderSetId, args.templateKey),
+    [args.renderSetId, args.templateKey, brandId, limit],
   );
   const [jobs, setJobs] = useState<ApiRenderJob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const scope = `${brandId ?? ''}:${args.renderSetId ?? ''}`;
+  const scope = `${brandId ?? ''}:${args.renderSetId ?? ''}:${args.templateKey ?? ''}`;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const paging = useRef(false);
@@ -132,10 +135,17 @@ export function useApiRenderJobs(args: {
     [brandId, queryClient],
   );
 
+  const inScope = useCallback(
+    (job: ApiRenderJob) =>
+      job.brandId === brandId &&
+      (!args.renderSetId || job.renderSetId === args.renderSetId) &&
+      (!args.templateKey || job.templateKey === args.templateKey),
+    [brandId, args.renderSetId, args.templateKey],
+  );
+
   const mergeJob = useCallback(
     (fresh: ApiRenderJob) => {
-      if (fresh.brandId !== brandId || (args.renderSetId && fresh.renderSetId !== args.renderSetId))
-        return;
+      if (!inScope(fresh)) return;
       rememberJob(fresh);
       setJobs((current) => {
         const index = current.findIndex((item) => item.id === fresh.id);
@@ -145,7 +155,7 @@ export function useApiRenderJobs(args: {
         return next;
       });
     },
-    [brandId, args.renderSetId, rememberJob],
+    [inScope, rememberJob],
   );
 
   const fetchJob = useCallback(
@@ -169,6 +179,7 @@ export function useApiRenderJobs(args: {
         queryFn: () =>
           apiRendersApi.listJobs(brandId, limit, {
             renderSetId: args.renderSetId,
+            templateKey: args.templateKey,
           }),
         staleTime: options?.preferCache ? FORGE_STALE_MS.active : 0,
       });
@@ -179,10 +190,7 @@ export function useApiRenderJobs(args: {
       if (scopeRef.current !== scope || sequence.current !== requestSequence) return;
       const fresh = [
         ...response.items,
-        ...recovered.filter(
-          (job): job is ApiRenderJob =>
-            job !== null && (!args.renderSetId || job.renderSetId === args.renderSetId),
-        ),
+        ...recovered.filter((job): job is ApiRenderJob => job !== null && inScope(job)),
       ];
       for (const job of fresh) rememberJob(job);
       setJobs((current) => mergePage(current, fresh, { incomingFirst: true }));
@@ -191,12 +199,14 @@ export function useApiRenderJobs(args: {
     [
       brandId,
       fetchJob,
+      inScope,
       limit,
       listKey,
       queryClient,
       rememberJob,
       trackedKey,
       args.renderSetId,
+      args.templateKey,
       scope,
     ],
   );
@@ -206,11 +216,18 @@ export function useApiRenderJobs(args: {
     paging.current = true;
     try {
       const response = await queryClient.fetchQuery({
-        queryKey: forgeQueryKeys.renderJobPage(brandId, limit, args.renderSetId, nextCursor),
+        queryKey: forgeQueryKeys.renderJobPage(
+          brandId,
+          limit,
+          args.renderSetId,
+          nextCursor,
+          args.templateKey,
+        ),
         queryFn: () =>
           apiRendersApi.listJobs(brandId, limit, {
             cursor: nextCursor,
             renderSetId: args.renderSetId,
+            templateKey: args.templateKey,
           }),
         staleTime: FORGE_STALE_MS.active,
       });
@@ -222,7 +239,16 @@ export function useApiRenderJobs(args: {
     } finally {
       if (scopeRef.current === scope) paging.current = false;
     }
-  }, [brandId, nextCursor, limit, args.renderSetId, queryClient, rememberJob, scope]);
+  }, [
+    brandId,
+    nextCursor,
+    limit,
+    args.renderSetId,
+    args.templateKey,
+    queryClient,
+    rememberJob,
+    scope,
+  ]);
 
   const refreshOne = useCallback(
     async (jobId: string) => {

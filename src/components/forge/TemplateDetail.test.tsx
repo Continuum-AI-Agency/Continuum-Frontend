@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import type { TemplateSource } from '@continuum/contracts';
+import type { ApiRenderJob, ApiRenderOutput, TemplateSource } from '@continuum/contracts';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const ASSET = '55555555-5555-4555-8555-555555555555';
@@ -79,7 +79,52 @@ let fontReadiness = {
   missing: 0,
   parseState: 'parsed' as const,
 };
-let jobs: Array<Record<string, unknown>> = [];
+let jobs: ApiRenderJob[] = [];
+
+const job = (overrides: Partial<ApiRenderJob>): ApiRenderJob => ({
+  id: crypto.randomUUID(),
+  brandId: BRAND,
+  templateKey: '133',
+  templateName: 'StarCraft Promo',
+  contractHash: 'hash',
+  taskUid: 'T1',
+  status: 'finished',
+  test: true,
+  outputs: [],
+  delivery: [],
+  error: null,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  label: null,
+  renderRequestId: null,
+  renderSetId: null,
+  renderSetRowId: null,
+  rootRowId: null,
+  parentRowId: null,
+  renderSetName: null,
+  labelPath: [],
+  renderSetRevision: null,
+  templateSource: null,
+  environment: null,
+  fit: null,
+  judge: null,
+  deliveryTarget: null,
+  slackDelivery: null,
+  approval: null,
+  ...overrides,
+});
+
+const file = (fileName: string): ApiRenderOutput => ({
+  id: `hash-${fileName}`,
+  kind: 'image',
+  fileName,
+  mimeType: 'image/jpeg',
+  url: `https://cdn.test/${fileName}`,
+  width: null,
+  height: null,
+  assetId: null,
+  versionId: null,
+});
 const advanceTemplateForgeRun = mock(
   async (_brandId: string, _assetId: string, _action: string) => undefined,
 );
@@ -173,6 +218,10 @@ mock.module('@/lib/library/versions', () => ({
 }));
 mock.module('@/components/forge/OutputSettingsPanel', () => ({
   OutputSettingsPanel: () => <h3>Output settings</h3>,
+}));
+// The Renders section subscribes to job changes; the sheet's tests need no live channel.
+mock.module('@/lib/supabase/realtime', () => ({
+  subscribeToPostgresChanges: () => () => undefined,
 }));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
@@ -367,17 +416,8 @@ describe('TemplateDetail', () => {
 
   test('facts read formats, unassigned variables, sets and the last render from cached reads', async () => {
     jobs = [
-      {
-        templateKey: '133',
-        status: 'failed',
-        updatedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
-      },
-      {
-        templateKey: '133',
-        status: 'finished',
-        updatedAt: new Date().toISOString(),
-        finishedAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString(),
-      },
+      job({ status: 'failed', updatedAt: new Date(Date.now() - 60 * 60_000).toISOString() }),
+      job({ finishedAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString() }),
     ];
     renderDetail();
     await waitFor(() => expect(fact('Last render')).toBe('2h ago'));
@@ -385,6 +425,40 @@ describe('TemplateDetail', () => {
     expect(fact('Formats')).toBe('1:19:16');
     await waitFor(() => expect(fact('Variables')).toBe('1 · 1 unassigned'));
     await waitFor(() => expect(fact('Sets')).toBe('2'));
+  });
+
+  test('the preview shows the picked format’s own file, whatever order the job listed them in', async () => {
+    jobs = [
+      job({
+        label: 'Spain',
+        renderSetName: 'Launch week',
+        finishedAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString(),
+        // The fleet's order, not the template's: the story file first.
+        outputs: [file('Story_9x16_ooqxxwb.jpg'), file('Main_1x1_1mjxxwb.jpg')],
+      }),
+    ];
+    renderDetail();
+    const preview = await screen.findByRole('group', { name: 'Template preview' });
+    const frame = () => preview.querySelector('[data-slot="format-preview-frame"]') as HTMLElement;
+
+    const square = await within(preview).findByRole('img', { name: 'StarCraft Promo · 1:1' });
+    expect(square.getAttribute('src')).toBe('https://cdn.test/Main_1x1_1mjxxwb.jpg');
+    expect(frame().style.aspectRatio).toBe('1080 / 1080');
+    expect(within(preview).getByText('Rendered · 2h ago')).toBeTruthy();
+
+    fireEvent.click(within(preview).getByRole('button', { name: 'Story 9x16' }));
+    expect(
+      within(preview).getByRole('img', { name: 'StarCraft Promo · 9:16' }).getAttribute('src'),
+    ).toBe('https://cdn.test/Story_9x16_ooqxxwb.jpg');
+    expect(frame().style.aspectRatio).toBe('1080 / 1920');
+
+    fireEvent.click(within(preview).getByRole('button', { name: 'Estimate' }));
+    expect(within(preview).getByRole('img', { name: '9:16 layout' })).toBeTruthy();
+    expect(within(preview).getByText('Estimate · wireframe')).toBeTruthy();
+
+    // Its renders, grouped by the set that asked for them.
+    expect(await screen.findByRole('button', { name: /Launch week/ })).toBeTruthy();
+    expect(screen.getByText('Spain')).toBeTruthy();
   });
 
   test('switching tabs keeps an unsaved variable edit', async () => {

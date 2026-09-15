@@ -1,18 +1,40 @@
 'use client';
 
 import type { ApiRenderJob, ApiRenderOutput } from '@continuum/contracts';
-import { ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowLeft,
+  CalendarClock,
+  CircleDot,
+  ExternalLink,
+  Layers,
+  RectangleHorizontal,
+  RefreshCw,
+  Timer,
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
-import { approvalState, DeliveryChain, deliveryReasonText } from '@/components/forge/DeliveryChain';
-import { Badge } from '@/components/ui/badge';
+import { type CheckRow, CheckTable } from '@/components/forge/CheckTable';
+import { DeliveryChain } from '@/components/forge/DeliveryChain';
+import { FactList } from '@/components/forge/FactList';
+import {
+  FormatPreview,
+  fileForFormat,
+  type PreviewFormat,
+  previewFormats,
+} from '@/components/forge/FormatPreview';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
+import { formatDuration, renderJobChecks } from './renderJobChecks';
 
-// One render, expanded from its row in Renders: what it looks like per format, its facts, and
-// every step from the queue to Meta — each with a state and, where the data has one, a time.
-// The row's thumbnail and this preview share a ViewTransition name, so opening morphs one into
-// the other; the caller skips the transition under prefers-reduced-motion.
+export { jobSteps, verdictOf } from './renderJobChecks';
+
+// One render, expanded from its row: its files per format, its facts, and the checks it went
+// through — each saying what it looks at and what it found. The row's thumbnail and this preview
+// share a ViewTransition name, so opening morphs one into the other; the caller skips the
+// transition under prefers-reduced-motion.
 
 // ViewTransition ships in the React canary Next bundles; stable @types/react lacks it — the same
 // cast as OrganicWorkspaceTabs.tsx.
@@ -28,197 +50,149 @@ export const ViewTransition =
 
 export const jobTransitionName = (jobId: string) => `forge-job-${jobId}`;
 
-type Tone = 'muted' | 'warning' | 'success' | 'destructive';
-
-/** `unknown` is never a pass: the judge could not run, and the badge says so. */
-export function verdictOf(job: ApiRenderJob): { text: string; tone: Tone; title?: string } {
-  if (job.judge) {
-    return job.judge.state === 'pass'
-      ? { text: 'Judged · pass', tone: 'success' }
-      : job.judge.state === 'fail'
-        ? { text: 'Judged · fail', tone: 'destructive' }
-        : {
-            text: 'Judge unknown',
-            tone: 'warning',
-            title: 'The judge could not run on this frame',
-          };
-  }
-  if (!job.fit) return { text: '—', tone: 'muted' };
-  if (!job.fit.escalate) return { text: 'Fits', tone: 'success', title: job.fit.why };
-  return job.status === 'finished'
-    ? { text: 'Judging…', tone: 'warning', title: job.fit.why }
-    : { text: 'Needs judge', tone: 'warning', title: job.fit.why };
-}
-
-/** How far from square an output is — 0 for a square, growing either way. Unknown sizes sort last. */
-export const squareness = (output: Pick<ApiRenderOutput, 'width' | 'height' | 'fileName'>) => {
-  if (output.width && output.height) return Math.abs(Math.log(output.width / output.height));
-  const ratio = /(\d+)[_x](\d+)/.exec(output.fileName);
-  return ratio ? Math.abs(Math.log(Number(ratio[1]) / Number(ratio[2]))) : Number.POSITIVE_INFINITY;
-};
-
-const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
-
-/** `1080×1920` → `9:16`; falls back to the size in the file name, then the kind. */
-export function ratioLabel(output: ApiRenderOutput): string {
-  const size =
-    output.width && output.height
-      ? [output.width, output.height]
-      : (/(\d+)[_x](\d+)/.exec(output.fileName)?.slice(1).map(Number) ?? null);
-  if (!size?.[0] || !size[1]) return output.kind;
-  const divisor = gcd(size[0], size[1]);
-  return `${size[0] / divisor}:${size[1] / divisor}`;
-}
-
-type StepState = 'done' | 'active' | 'error' | 'pending' | 'skipped';
-type Step = { label: string; state: StepState; detail?: string; at?: string | null };
-
-const inFlight = (job: ApiRenderJob) => job.status !== 'finished' && job.status !== 'failed';
-
-/** Queued → Rendering → Checks → Library → Slack → Meta approval → Published. */
-export function jobSteps(job: ApiRenderJob): Step[] {
-  const finished = job.status === 'finished';
-  const failed = job.status === 'failed';
-  const verdict = verdictOf(job);
-  const saved = job.outputs.filter((output) => output.assetId).length;
-  const slack = job.slackDelivery;
-  const approval = approvalState(job);
-  const receipt = job.delivery[0];
-
-  const checks: Step = job.judge
-    ? {
-        label: 'Checks',
-        state:
-          job.judge.state === 'pass' ? 'done' : job.judge.state === 'fail' ? 'error' : 'skipped',
-        detail: verdict.title ?? verdict.text,
-      }
-    : job.fit && !job.fit.escalate
-      ? { label: 'Checks', state: 'done', detail: 'Fits' }
-      : job.fit
-        ? { label: 'Checks', state: finished ? 'active' : 'pending', detail: verdict.text }
-        : {
-            label: 'Checks',
-            state: finished || failed ? 'skipped' : 'pending',
-            detail: 'No placement check',
-          };
-
-  return [
-    { label: 'Queued', state: 'done', at: job.createdAt },
-    {
-      label: 'Rendering',
-      state: finished
-        ? 'done'
-        : failed
-          ? 'error'
-          : job.status === 'rendering'
-            ? 'active'
-            : 'pending',
-      ...(failed && job.error ? { detail: job.error } : {}),
-      ...(finished || failed ? { at: job.updatedAt } : {}),
-    },
-    checks,
-    saved
-      ? { label: 'Library', state: 'done', detail: `${saved} file${saved === 1 ? '' : 's'} saved` }
-      : { label: 'Library', state: finished ? 'active' : failed ? 'skipped' : 'pending' },
-    !slack
-      ? { label: 'Slack', state: 'skipped', detail: 'No channel chosen' }
-      : {
-          label: 'Slack',
-          state:
-            slack.status === 'posted'
-              ? 'done'
-              : slack.status === 'error'
-                ? 'error'
-                : slack.status === 'skipped'
-                  ? 'skipped'
-                  : finished
-                    ? 'active'
-                    : 'pending',
-          detail: slack.reason
-            ? `#${slack.channelName} · ${slack.reason}`
-            : `#${slack.channelName}`,
-          at: slack.postedAt,
-        },
-    !approval
-      ? { label: 'Meta approval', state: 'skipped', detail: 'Library only' }
-      : {
-          label: 'Meta approval',
-          state:
-            approval.tone === 'destructive'
-              ? 'error'
-              : approval.tone === 'success'
-                ? 'done'
-                : job.approval
-                  ? 'active'
-                  : 'pending',
-          detail: approval.text,
-          at: job.approval?.decidedAt,
-        },
-    !job.deliveryTarget
-      ? { label: 'Published', state: 'skipped', detail: 'Library only' }
-      : receipt?.status === 'published' || job.approval?.status === 'published'
-        ? { label: 'Published', state: 'done', at: receipt?.publishedAt }
-        : receipt?.status === 'error'
-          ? {
-              label: 'Published',
-              state: 'error',
-              detail: deliveryReasonText(receipt.reason) ?? undefined,
-            }
-          : receipt?.status === 'dropped' || job.approval?.status === 'rejected'
-            ? {
-                label: 'Published',
-                state: 'skipped',
-                detail: deliveryReasonText(receipt?.reason) ?? 'Not approved',
-              }
-            : receipt?.reason === 'delivery_bridge_unconfigured'
-              ? {
-                  label: 'Published',
-                  state: 'skipped',
-                  detail: deliveryReasonText(receipt.reason) ?? undefined,
-                }
-              : { label: 'Published', state: 'pending' },
+/**
+ * The formats a job names by itself, with no read: the ratios its judge frames resolved, else the
+ * comp its placement was measured in. What a ledger row's thumbnail picks its file with.
+ */
+// ponytail: a ledger row has no contract in hand; a per-job output-format snapshot retires this.
+export function formatsNamedByJob(job: ApiRenderJob): PreviewFormat[] {
+  const judged = [
+    ...new Set((job.judge?.frames ?? []).flatMap((frame) => (frame.ratio ? [frame.ratio] : []))),
   ];
+  if (judged.length) return previewFormats({ ratios: judged });
+  const comp = job.fit?.comp;
+  return comp
+    ? [
+        {
+          id: comp.name,
+          label: comp.name,
+          ratio: null,
+          comp,
+          width: comp.width,
+          height: comp.height,
+        },
+      ]
+    : [];
 }
 
-const STEP_DOT: Record<StepState, string> = {
-  done: 'bg-emerald-500',
-  active: 'bg-amber-500 animate-pulse motion-reduce:animate-none',
-  error: 'bg-destructive',
-  pending: 'border border-border bg-background',
-  skipped: 'bg-muted-foreground/30',
-};
-
-function duration(job: ApiRenderJob): string {
-  if (inFlight(job)) return '—';
-  const seconds = Math.max(
-    0,
-    Math.round((Date.parse(job.updatedAt) - Date.parse(job.createdAt)) / 1000),
+/**
+ * The formats this job's template renders, and which of its files each one is: the contract's
+ * outputs, else the template's parse (when the gallery already holds it), else its ratio labels,
+ * else the ratios the judge named. A file no format answers is shown under no format.
+ */
+function useJobFormats(job: ApiRenderJob, given: PreviewFormat[] | undefined) {
+  const queryClient = useQueryClient();
+  const { brandId, templateKey } = job;
+  const { data: environments } = useQuery({
+    queryKey: forgeQueryKeys.environments(brandId),
+    queryFn: () => apiRendersApi.listEnvironments(brandId),
+    staleTime: FORGE_STALE_MS.lists,
+    retry: false,
+  });
+  const environment =
+    environments?.items.find((item) => item.workspace === job.environment) ??
+    environments?.items.find((item) => item.isDefault);
+  const bindingId = environment && !environment.isDefault ? environment.bindingId : null;
+  const { data: contract } = useQuery({
+    queryKey: forgeQueryKeys.contract(brandId, bindingId, templateKey),
+    queryFn: () => apiRendersApi.getContract(brandId, templateKey, bindingId),
+    enabled: environments !== undefined,
+    staleTime: FORGE_STALE_MS.contract,
+    retry: false,
+  });
+  const parse = queryClient
+    .getQueryData<
+      Array<{ templateKey: string | null; parse: Parameters<typeof previewFormats>[0]['parse'] }>
+    >(forgeQueryKeys.templateSources(brandId))
+    ?.find((source) => source.templateKey === templateKey)?.parse;
+  const fromTemplate = previewFormats({
+    outputs: contract?.outputs,
+    parse,
+    ratios: contract?.template.ratios,
+  });
+  const formats = given ?? (fromTemplate.length ? fromTemplate : formatsNamedByJob(job));
+  const labelByKey = Object.fromEntries(
+    (contract?.variables ?? []).map((variable) => [variable.key, variable.label]),
   );
-  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  return { formats, labelByKey };
 }
+
+function OutputFile({ output, alt }: { output: ApiRenderOutput; alt: string }) {
+  return output.kind === 'video' ? (
+    // biome-ignore lint/a11y/useMediaCaption: renders carry no caption track.
+    <video
+      key={output.id}
+      src={output.url}
+      controls
+      playsInline
+      className="size-full object-contain"
+    />
+  ) : (
+    // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
+    <img src={output.url} alt={alt} className="size-full object-contain" />
+  );
+}
+
+const checkRows = (job: ApiRenderJob, labelByKey: Record<string, string>): CheckRow[] =>
+  renderJobChecks(job, labelByKey).map(({ lines, ...check }) => ({
+    ...check,
+    detail:
+      check.name === 'Delivery' ? (
+        <DeliveryChain job={job} wrap />
+      ) : lines.length ? (
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+          {lines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      ) : undefined,
+  }));
 
 export function RenderJobDetail({
   job,
   templateName,
   setName,
+  formats: givenFormats,
   onBack,
   onRefresh,
 }: {
   job: ApiRenderJob;
   templateName: string;
   setName: string;
+  /** The template's formats when the caller already knows them (template detail does). */
+  formats?: PreviewFormat[];
   onBack: () => void;
   onRefresh: () => void;
 }) {
-  const outputs = [...job.outputs].sort((a, b) => squareness(a) - squareness(b));
-  const [outputId, setOutputId] = useState<string | null>(null);
-  const output = outputs.find((item) => item.id === outputId) ?? outputs[0] ?? null;
-  const verdict = verdictOf(job);
+  const { formats: templateFormats, labelByKey } = useJobFormats(job, givenFormats);
+  // ponytail: with no contract, parse or judged ratio to name them, each file is its own format
+  // drawn from its stored size (square when the fleet stored none). Goes once contracts always load.
+  const formats: PreviewFormat[] = templateFormats.length
+    ? templateFormats
+    : job.outputs.map((output) => ({
+        id: output.id,
+        label: output.fileName,
+        ratio: null,
+        width: output.width,
+        height: output.height,
+      }));
+  const fileFor = (formatId: string) =>
+    templateFormats.length
+      ? fileForFormat(job.outputs, formats, formatId)
+      : (job.outputs.find((output) => output.id === formatId) ?? null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const value =
+    formats.find((format) => format.id === picked)?.id ??
+    formats.find((format) => fileFor(format.id))?.id ??
+    formats[0]?.id ??
+    '';
   const name = job.label ?? job.labelPath.at(-1) ?? templateName;
+  const current = fileFor(value);
+  const rendered = formats.filter((format) => fileFor(format.id));
 
   return (
-    <div className="space-y-4 rounded-lg border bg-card p-4">
-      <div className="flex flex-wrap items-start gap-2">
+    <div className="flex flex-col divide-y divide-border">
+      <div className="flex flex-wrap items-start gap-2 p-[var(--card-pad)]">
         <Button type="button" size="sm" variant="ghost" className="gap-1.5" onClick={onBack}>
           <ArrowLeft className="size-3.5" aria-hidden /> All renders
         </Button>
@@ -234,53 +208,51 @@ export function RenderJobDetail({
         </Button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(16rem,2fr)]">
-        <div className="space-y-2">
+      <div className="grid divide-y divide-border lg:grid-cols-[minmax(0,3fr)_minmax(16rem,2fr)] lg:divide-x lg:divide-y-0">
+        <div className="flex min-w-0 flex-col gap-2 p-[var(--card-pad)]">
           <ViewTransition name={jobTransitionName(job.id)}>
-            <div className="flex min-h-48 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
-              {output?.kind === 'video' ? (
-                // biome-ignore lint/a11y/useMediaCaption: renders carry no caption track.
-                <video
-                  key={output.id}
-                  src={output.url}
-                  controls
-                  playsInline
-                  className="max-h-[60vh] w-full object-contain"
-                />
-              ) : output ? (
-                <img
-                  src={output.url}
-                  alt={`${name} · ${ratioLabel(output)}`}
-                  className="max-h-[60vh] w-full object-contain"
-                />
-              ) : (
-                <p className="p-6 text-xs text-muted-foreground">
-                  {job.status === 'failed' ? 'This render failed.' : 'No file yet.'}
-                </p>
-              )}
-            </div>
+            {formats.length ? (
+              <FormatPreview
+                label="Render preview"
+                formats={formats}
+                value={value}
+                onValueChange={setPicked}
+                wellClassName="h-[min(60vh,40rem)]"
+                frame={(format) => {
+                  const output = fileFor(format.id);
+                  return output
+                    ? {
+                        mode: 'rendered',
+                        at: job.finishedAt ?? job.updatedAt,
+                        node: (
+                          <OutputFile
+                            output={output}
+                            alt={`${name} · ${format.ratio ?? format.label}`}
+                          />
+                        ),
+                        caption: output.fileName,
+                      }
+                    : {
+                        mode: 'none',
+                        message:
+                          job.status === 'failed'
+                            ? 'This render failed.'
+                            : job.status === 'finished'
+                              ? 'No file for this format'
+                              : 'No file yet.',
+                      };
+                }}
+              />
+            ) : (
+              <p className="m-0 text-xs text-muted-foreground">
+                {job.status === 'failed' ? 'This render failed.' : 'No file yet.'}
+              </p>
+            )}
           </ViewTransition>
-          {outputs.length > 1 ? (
-            <fieldset className="flex flex-wrap gap-1">
-              <legend className="sr-only">Format</legend>
-              {outputs.map((item) => (
-                <Button
-                  key={item.id}
-                  type="button"
-                  size="xs"
-                  variant={item.id === output?.id ? 'default' : 'outline'}
-                  aria-pressed={item.id === output?.id}
-                  onClick={() => setOutputId(item.id)}
-                >
-                  {ratioLabel(item)}
-                </Button>
-              ))}
-            </fieldset>
-          ) : null}
           <div className="flex flex-wrap gap-3 text-xs">
-            {output ? (
+            {current ? (
               <a
-                href={output.url}
+                href={current.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-primary hover:underline"
@@ -299,58 +271,49 @@ export function RenderJobDetail({
               </a>
             ) : null}
           </div>
-          {job.error ? <p className="text-xs text-destructive">{job.error}</p> : null}
         </div>
 
-        <div className="space-y-4">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
-            <dt className="text-muted-foreground">Status</dt>
-            <dd>{job.status}</dd>
-            <dt className="text-muted-foreground">Requested</dt>
-            <dd title={job.createdAt}>{formatRelativeTime(job.createdAt)}</dd>
-            <dt className="text-muted-foreground">Duration</dt>
-            <dd className="tabular-nums">{duration(job)}</dd>
-            <dt className="text-muted-foreground">Set</dt>
-            <dd>{setName}</dd>
-            <dt className="text-muted-foreground">Formats</dt>
-            <dd>{outputs.length ? outputs.map(ratioLabel).join(', ') : '—'}</dd>
-            <dt className="text-muted-foreground">Check</dt>
-            <dd>
-              <Badge variant={verdict.tone} title={verdict.title}>
-                {verdict.text}
-              </Badge>
-            </dd>
-            <dt className="text-muted-foreground">Delivery</dt>
-            <dd>
-              <DeliveryChain job={job} wrap />
-            </dd>
-          </dl>
-
-          <ol aria-label="Steps" className="space-y-2 text-xs">
-            {jobSteps(job).map((step) => (
-              <li key={step.label} data-state={step.state} className="flex gap-2">
-                <span className={cn('mt-1 size-2 shrink-0 rounded-full', STEP_DOT[step.state])} />
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-baseline gap-x-2">
-                    <span
-                      className={step.state === 'skipped' ? 'text-muted-foreground' : 'font-medium'}
-                    >
-                      {step.label}
-                    </span>
-                    <span className="text-2xs text-muted-foreground">{step.state}</span>
-                    {step.at ? (
-                      <span className="text-2xs text-muted-foreground" title={step.at}>
-                        {formatRelativeTime(step.at)}
+        <div className="flex min-w-0 flex-col divide-y divide-border">
+          <FactList
+            className="p-[var(--card-pad)]"
+            facts={[
+              { icon: CircleDot, label: 'Status', value: job.status },
+              {
+                icon: CalendarClock,
+                label: 'Requested',
+                value: <span title={job.createdAt}>{formatRelativeTime(job.createdAt)}</span>,
+              },
+              {
+                icon: Timer,
+                label: 'Duration',
+                numeric: true,
+                value: job.finishedAt
+                  ? formatDuration(Date.parse(job.finishedAt) - Date.parse(job.createdAt))
+                  : '—',
+              },
+              { icon: Layers, label: 'Set', value: setName },
+              {
+                icon: RectangleHorizontal,
+                label: 'Formats',
+                value: rendered.length ? (
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {rendered.map((format) => (
+                      <span
+                        key={format.id}
+                        className="inline-flex items-center gap-1 font-mono tabular-nums"
+                      >
+                        <RatioGlyph ratio={format.ratio} className="text-muted-foreground" />
+                        {format.ratio ?? format.label}
                       </span>
-                    ) : null}
-                  </p>
-                  {step.detail ? (
-                    <p className="break-words text-muted-foreground">{step.detail}</p>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ol>
+                    ))}
+                  </span>
+                ) : (
+                  '—'
+                ),
+              },
+            ]}
+          />
+          <CheckTable rows={checkRows(job, labelByKey)} />
         </div>
       </div>
     </div>

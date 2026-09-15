@@ -361,24 +361,28 @@ describe('RenderJobsGrid', () => {
     expect(within(rowOf('Bridge unset')).getByText('delivery not set up')).toBeTruthy();
     expect(within(rowOf('Bridge unset')).queryByText('held for approval')).toBeNull();
     fireEvent.click(screen.getByText('Workspace gone'));
+    // The Delivery check says why in its own words.
     expect(
-      await screen.findByText('The workspace this render was made in no longer exists.'),
+      await screen.findByText(/The workspace this render was made in no longer exists\./),
     ).toBeTruthy();
     expect(document.body.textContent).not.toContain('binding_unresolved');
   }, 30_000);
 
-  test('a row expands into its detail with preview, properties and the step timeline', async () => {
+  test('a row expands into its detail with its file, properties and the checks it went through', async () => {
     await renderLedger([MADRID, ROMA, PROMO], [TEMPLATE]);
     fireEvent.click(screen.getByText('Madrid'));
 
     expect(await screen.findByRole('heading', { name: 'Madrid' })).toBeTruthy();
     expect(screen.getByText('Root · StarCraft Promo')).toBeTruthy();
-    // D15: the detail has room — the chain wraps across lines and every name stays whole.
-    const chain = screen.getByText('Meta › StarCraft Ads › Launch Q3 › Iberia 18–34 ›');
-    expect(chain.className).toBe('text-muted-foreground');
-    expect(screen.getByText('Hero story').className).toBe('');
-    expect(chain.parentElement?.className).toContain('flex-wrap whitespace-normal');
-    expect(screen.getByRole('img', { name: 'Madrid · 9:16' })).toBeTruthy();
+    // No contract to name its formats: the file is shown as its own format, at its stored size.
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(
+      within(preview).getByRole('img', { name: 'Madrid · madrid_1080x1920.png' }),
+    ).toBeTruthy();
+    expect(
+      (preview.querySelector('[data-slot="format-preview-frame"]') as HTMLElement).style
+        .aspectRatio,
+    ).toBe('1080 / 1920');
     expect(screen.getByRole('link', { name: /Open file/ }).getAttribute('href')).toBe(
       'https://cdn.example.com/madrid.png',
     );
@@ -386,22 +390,24 @@ describe('RenderJobsGrid', () => {
       'https://slack.com/archives/C1/p1',
     );
 
-    const steps = within(screen.getByRole('list', { name: 'Steps' })).getAllByRole('listitem');
-    expect(
-      steps.map((step) => [
-        step.querySelector('.font-medium, .text-muted-foreground')?.textContent,
-        step.dataset.state,
-      ]),
-    ).toEqual([
-      ['Queued', 'done'],
-      ['Rendering', 'done'],
-      ['Checks', 'skipped'],
-      ['Library', 'done'],
-      ['Slack', 'done'],
-      ['Meta approval', 'active'],
-      ['Published', 'pending'],
+    const checks = within(screen.getByRole('list', { name: 'Checks' })).getAllByRole('listitem');
+    expect(checks.map((row) => row.querySelector('.font-mono')?.textContent)).toEqual([
+      'Inputs',
+      'Placement',
+      'Brand',
+      'Render',
+      'Judge',
+      'Delivery',
     ]);
-    expect(within(steps[5]!).getByText('awaiting approval')).toBeTruthy();
+    const delivery = checks[5]!;
+    expect(delivery.textContent).toContain(
+      'Saved to Library · posted to #renders · awaiting approval',
+    );
+    fireEvent.click(within(delivery).getByRole('button', { name: 'Delivery details' }));
+    // D15: the detail has room — the chain wraps across lines and every name stays whole.
+    const chain = await screen.findByText('Meta › StarCraft Ads › Launch Q3 › Iberia 18–34 ›');
+    expect(chain.className).toBe('text-muted-foreground');
+    expect(chain.parentElement?.className).toContain('flex-wrap whitespace-normal');
 
     fireEvent.click(screen.getByRole('button', { name: /All renders/ }));
     await waitFor(() => expect(screen.getByRole('table')).toBeTruthy());
@@ -417,7 +423,7 @@ describe('RenderJobsGrid', () => {
 
     jobsFixture = [{ ...MADRID, approval: { status: 'approved', decidedAt: ago(0.1) } }];
     fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
-    await waitFor(() => expect(rowOf().getByText('approved')).toBeTruthy());
+    await waitFor(() => expect(rowOf().getByText('approved · publishing…')).toBeTruthy());
     expect(rowOf().queryByText('awaiting approval')).toBeNull();
   }, 30_000);
 
@@ -490,5 +496,76 @@ describe('RenderJobsGrid', () => {
 
     fireEvent.click(starcraft[0]!);
     expect(rowOrder()).toEqual(['Promo B']);
+  }, 30_000);
+
+  test('one template’s ledger: filtered by the server, grouped by set, its thumbnail the first format’s file', async () => {
+    const file = (fileName: string) => ({
+      id: `hash-${fileName}`,
+      kind: 'image' as const,
+      fileName,
+      mimeType: 'image/jpeg',
+      url: `https://cdn.test/${fileName}`,
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
+    });
+    const launch: ApiRenderJob = {
+      ...BASE,
+      id: '11111111-1111-4111-8111-111111111121',
+      label: 'Launch',
+      labelPath: ['Launch'],
+      renderSetName: 'Launch week',
+      // The fleet's order, not the template's.
+      outputs: [
+        file('Producto_individual_con_descuento_9_16_ooqxxwb.jpg'),
+        file('Producto_individual_con_descuento_1_1_1mjxxwb.jpg'),
+        file('Producto_individual_con_descuento_16_9_9w5xxwa.jpg'),
+      ],
+    };
+    const loose: ApiRenderJob = {
+      ...BASE,
+      id: '11111111-1111-4111-8111-111111111122',
+      label: 'From the canvas',
+      labelPath: ['From the canvas'],
+      renderSetName: null,
+    };
+    jobsFixture = [launch, loose];
+    const formats = [
+      { id: '1:1', label: '1:1', ratio: '1:1', width: null, height: null },
+      { id: '16:9', label: '16:9', ratio: '16:9', width: null, height: null },
+    ];
+    const view = render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid brandId={BRAND} templateKey="133" formats={formats} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('Launch');
+
+    expect(listJobs.mock.calls.at(-1)).toEqual([
+      BRAND,
+      50,
+      { renderSetId: undefined, templateKey: '133' },
+    ]);
+    expect(listTemplates).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Launch week/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /No set/ })).toBeTruthy();
+    expect(screen.queryByLabelText('Filter by render set')).toBeNull();
+    const thumbnail = (screen.getByText('Launch').closest('tr') as HTMLElement).querySelector(
+      'img',
+    );
+    expect(thumbnail?.getAttribute('src')).toBe(
+      'https://cdn.test/Producto_individual_con_descuento_1_1_1mjxxwb.jpg',
+    );
+
+    // Another template's row changing is not this ledger's business.
+    const calls = listJobs.mock.calls.length;
+    const insert = realtime?.bindings.find((binding) => binding.event === 'INSERT');
+    act(() => insert?.onRow({ id: 'other', brand_id: BRAND, template_key: '200' }));
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(listJobs.mock.calls.length).toBe(calls);
+    view.unmount();
   }, 30_000);
 });

@@ -7,9 +7,16 @@ import type {
   ApiRenderTemplateLayout,
   ApiRenderVariable,
 } from '@continuum/contracts';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type JSX, useEffect, useState } from 'react';
+import {
+  FormatPreview,
+  fileForFormat,
+  type PreviewFormat,
+  previewFormats,
+} from '@/components/forge/FormatPreview';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
-import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
   effectiveMedia,
@@ -284,59 +291,42 @@ function drawSlot(
   };
 }
 
-function LayoutDrawing({
-  layout,
-  variables,
-  values,
-  media,
-}: {
-  layout: ApiRenderTemplateLayout;
-  variables: ApiRenderVariable[];
-  values: Record<string, ApiRenderInputValue>;
-  media: Record<string, RequestRowMedia>;
-}) {
+/** One row drawn into a layout's slot boxes, and the boxes its text overflows. */
+function drawLayout(
+  layout: ApiRenderTemplateLayout,
+  variables: ApiRenderVariable[],
+  values: Record<string, ApiRenderInputValue>,
+  media: Record<string, RequestRowMedia>,
+): { node: JSX.Element; overflows: string[] } {
   const { comp } = layout;
   const unit = Math.max(comp.width, comp.height) / 100;
   const byKey = new Map(variables.map((variable) => [variable.key, variable]));
   const slots = layout.boxes.map((box) =>
     drawSlot(box, byKey.get(box.key), values[box.key], media[box.key], unit),
   );
-  const overflows = slots.flatMap((slot) => (slot.overflow ? [slot.overflow] : []));
-
-  return (
-    <figure className="m-0 flex flex-col gap-1">
-      <div className="rounded-md border border-border/60 bg-muted/30 p-1">
-        {/* One viewBox unit is one comp pixel, so every box is the parse's own measurement. */}
-        <svg
-          viewBox={`0 0 ${comp.width} ${comp.height}`}
-          className="block h-auto w-full"
-          role="img"
-          aria-label={`${comp.name} preview`}
-        >
-          <title>{`${comp.name} — ${comp.width}×${comp.height}`}</title>
-          <rect
-            x={0}
-            y={0}
-            width={comp.width}
-            height={comp.height}
-            className="fill-background stroke-foreground"
-            strokeWidth={unit * 0.4}
-          />
-          {slots.map((slot) => slot.node)}
-        </svg>
-      </div>
-      {overflows.length > 0 && (
-        <ul className="m-0 list-none p-0 text-destructive">
-          {overflows.map((message) => (
-            <li key={message}>{message}</li>
-          ))}
-        </ul>
-      )}
-      <figcaption className="text-2xs text-muted-foreground">
-        {comp.name} · {comp.width}×{comp.height} · type size and wrapping are estimates
-      </figcaption>
-    </figure>
-  );
+  return {
+    node: (
+      // One viewBox unit is one comp pixel, so every box is the parse's own measurement.
+      <svg
+        viewBox={`0 0 ${comp.width} ${comp.height}`}
+        className="block size-full"
+        role="img"
+        aria-label={`${comp.name} preview`}
+      >
+        <title>{`${comp.name} — ${comp.width}×${comp.height}`}</title>
+        <rect
+          x={0}
+          y={0}
+          width={comp.width}
+          height={comp.height}
+          className="fill-background stroke-foreground"
+          strokeWidth={unit * 0.4}
+        />
+        {slots.map((slot) => slot.node)}
+      </svg>
+    ),
+    overflows: slots.flatMap((slot) => (slot.overflow ? [slot.overflow] : [])),
+  };
 }
 
 const latestFinishedFor = (jobs: ApiRenderJob[], rowId: string): ApiRenderJob | null =>
@@ -378,37 +368,31 @@ export function RenderPreviewPanel({
   rowId: string | null;
   renderSetId: string | null;
 }): JSX.Element {
-  const [pickedOutputId, setPickedOutputId] = useState<string | null>(null);
-  const [view, setView] = useState<'preview' | 'last'>('preview');
-  // Keyed by what was asked, so a response for the previous row can never show on this one.
-  const [lastRender, setLastRender] = useState<{ key: string; job: ApiRenderJob | null } | null>(
-    null,
-  );
-  const [lastRequestKey, setLastRequestKey] = useState<string | null>(null);
-  // Bumped when one of this row's jobs finishes, so Last render follows a render that lands.
-  const [revision, setRevision] = useState(0);
-  const fetchKey = rowId && renderSetId ? `${renderSetId}:${rowId}` : null;
-  const wantsLast = view === 'last' && fetchKey !== null && lastRequestKey === fetchKey;
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: revision is only a re-read signal.
-  useEffect(() => {
-    if (!wantsLast || !rowId || !renderSetId) return;
-    let current = true;
-    const key = `${renderSetId}:${rowId}`;
-    findLastRender(brandId, renderSetId, rowId)
-      .then((job) => {
-        if (current) setLastRender({ key, job });
-      })
-      // A missing Last render is not worth interrupting anyone over.
-      .catch(() => undefined);
-    return () => {
-      current = false;
-    };
-  }, [brandId, rowId, renderSetId, revision, wantsLast]);
+  const queryClient = useQueryClient();
+  const templateKey = contract.template.key;
+  // The format picked per template, so moving between rows keeps looking at the same format.
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  const lastKey =
+    rowId && renderSetId ? forgeQueryKeys.renderJobRowLatest(brandId, renderSetId, rowId) : null;
+  // One row-scoped read per row, cached: the newest finished render of the row on screen.
+  const { data: lastJob } = useQuery({
+    queryKey: lastKey ?? [...forgeQueryKeys.renderJobs(brandId), 'row-latest', null],
+    queryFn: () => findLastRender(brandId, renderSetId as string, rowId as string),
+    enabled: lastKey !== null,
+    staleTime: FORGE_STALE_MS.active,
+  });
+  // The set's revision as the grid last read it — a render of an older revision predates the edits.
+  const { data: setRevision } = useQuery({
+    queryKey: forgeQueryKeys.renderSetList(brandId, templateKey),
+    queryFn: () => apiRendersApi.listRenderSets(brandId, templateKey),
+    enabled: renderSetId !== null,
+    staleTime: FORGE_STALE_MS.lists,
+    select: (response) => response.items.find((set) => set.id === renderSetId)?.revision ?? null,
+  });
 
   // A realtime job is a signal to re-read, never data to merge: only the list read re-signs URLs.
   useEffect(() => {
-    if (!wantsLast || !rowId || !renderSetId) return;
+    if (!lastKey || !rowId) return;
     return subscribeToPostgresChanges({
       label: 'render-preview-last',
       bindings: (['INSERT', 'UPDATE'] as const).map((event) => ({
@@ -418,12 +402,13 @@ export function RenderPreviewPanel({
         filter: `brand_id=eq.${brandId}`,
         onRow: (job: Record<string, unknown>) => {
           if (job.render_set_row_id === rowId && job.status === 'finished') {
-            setRevision((value) => value + 1);
+            void queryClient.invalidateQueries({ queryKey: lastKey });
           }
         },
       })),
     });
-  }, [brandId, rowId, renderSetId, wantsLast]);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: lastKey is derived from brandId, renderSetId and rowId.
+  }, [brandId, queryClient, renderSetId, rowId]);
 
   const row = rowId ? rows.find((candidate) => candidate.id === rowId) : undefined;
   if (!rowId || !row) {
@@ -437,102 +422,65 @@ export function RenderPreviewPanel({
   const values = effectiveValues(rows, rowId);
   const media = effectiveMedia(rows, rowId);
   const scopedIds = effectiveOutputIds(rows, rowId);
-  const outputs = contract.outputs.filter(
-    (output) => scopedIds.length === 0 || scopedIds.includes(output.id),
-  );
-  // Derived, not synced: a format that falls out of scope simply stops being the one drawn.
-  const selected = outputs.find((output) => output.id === pickedOutputId) ?? outputs[0] ?? null;
-  // The template-level layout is ONE comp; under an output of another ratio its boxes sit in the
+  const formats = previewFormats({ outputs: contract.outputs, ratios: contract.template.ratios });
+  // A row scoped to some outputs previews only those; ratio-only formats have no ids to scope by.
+  const rowFormats = contract.outputs.length
+    ? formats.filter((format) => scopedIds.length === 0 || scopedIds.includes(format.id))
+    : formats;
+  const format = rowFormats.find((entry) => entry.id === picked[templateKey]) ?? rowFormats[0];
+  const outputOf = (entry: PreviewFormat) =>
+    contract.outputs.find((output) => output.id === entry.id);
+
+  // The template-level layout is ONE comp; under a format of another ratio its boxes sit in the
   // wrong coordinate space and report overflow that does not exist.
-  const layout = selected
-    ? (selected.layout ??
-      (contract.layout && sameAspect(selected.ratio, contract.layout.comp)
-        ? contract.layout
-        : null))
-    : contract.layout;
-  const job = lastRender && lastRender.key === fetchKey ? lastRender.job : null;
-  const showingLast = wantsLast;
-  const loadingLast = wantsLast && (!lastRender || lastRender.key !== fetchKey);
-  const lastOutput = job
-    ? (job.outputs.find((output) => output.id === selected?.id) ?? job.outputs[0])
-    : undefined;
+  const drawingOf = (entry: PreviewFormat) => {
+    const layout =
+      outputOf(entry)?.layout ??
+      (contract.layout && sameAspect(entry.ratio, contract.layout.comp) ? contract.layout : null);
+    return layout ? drawLayout(layout, contract.variables, values, media) : null;
+  };
 
   return (
-    <div className="flex h-full flex-col gap-2 overflow-auto p-2 text-xs">
+    <div className="flex h-full min-h-0 flex-col gap-2 p-2 text-xs">
       <div className="truncate font-medium">{row.label.trim() || 'Untitled'}</div>
-      {outputs.length > 0 && (
-        <select
-          aria-label="Preview format"
-          className="h-7 rounded-md border border-border bg-background px-1"
-          value={selected?.id}
-          onChange={(event) => setPickedOutputId(event.target.value)}
-        >
-          {outputs.map((output) => (
-            <option key={output.id} value={output.id}>
-              {output.ratio ? `${output.label} · ${output.ratio}` : output.label}
-            </option>
-          ))}
-        </select>
-      )}
-      {fetchKey && (
-        <div role="tablist" aria-label="Preview source" className="flex gap-1">
-          {(
-            [
-              ['preview', 'Preview'],
-              ['last', 'Last render'],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={showingLast === (value === 'last')}
-              className={cn(
-                'rounded-md px-2 py-1',
-                showingLast === (value === 'last')
-                  ? 'bg-muted text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-              onClick={() => {
-                setView(value);
-                if (value === 'last') setLastRequestKey(fetchKey);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-      {showingLast && job && lastOutput ? (
-        <figure className="m-0 flex flex-col gap-1">
-          {lastOutput.kind === 'video' ? (
-            <video controls src={lastOutput.url} className="w-full rounded-md">
-              <track kind="captions" />
-            </video>
-          ) : (
-            <img alt="Last render" src={lastOutput.url} className="w-full rounded-md" />
-          )}
-          <figcaption className="text-2xs text-muted-foreground">
-            Rendered {new Date(job.createdAt).toLocaleString()}
-          </figcaption>
-        </figure>
-      ) : loadingLast ? (
-        <p className="m-0 text-muted-foreground">Loading last render…</p>
-      ) : showingLast ? (
-        <p className="m-0 text-muted-foreground">No finished render for this row yet.</p>
-      ) : layout ? (
-        <LayoutDrawing
-          layout={layout}
-          variables={contract.variables}
-          values={values}
-          media={media}
+      {format ? (
+        <FormatPreview
+          label="Row preview"
+          className="min-h-0 flex-1"
+          wellClassName="min-h-0 flex-1"
+          formats={rowFormats}
+          value={format.id}
+          onValueChange={(next) => setPicked((current) => ({ ...current, [templateKey]: next }))}
+          warning={(entry) => drawingOf(entry)?.overflows.join(' · ') || null}
+          frame={(entry) => {
+            const drawing = drawingOf(entry);
+            const file = lastJob ? fileForFormat(lastJob.outputs, formats, entry.id) : null;
+            if (lastJob && file) {
+              return {
+                mode: 'rendered',
+                at: lastJob.finishedAt ?? lastJob.updatedAt,
+                stale:
+                  setRevision != null &&
+                  lastJob.renderSetRevision != null &&
+                  lastJob.renderSetRevision !== setRevision,
+                node:
+                  file.kind === 'video' ? (
+                    <video controls src={file.url} className="size-full object-contain">
+                      <track kind="captions" />
+                    </video>
+                  ) : (
+                    // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
+                    <img alt="Last render" src={file.url} className="size-full object-contain" />
+                  ),
+                estimate: drawing?.node,
+                caption: file.fileName,
+              };
+            }
+            return drawing ? { mode: 'estimate', node: drawing.node } : { mode: 'none' };
+          }}
         />
       ) : (
-        <p className="m-0 text-muted-foreground">
-          {selected
-            ? 'No measured layout for this format.'
-            : 'This template has no measured layout to draw.'}
-        </p>
+        <p className="m-0 text-muted-foreground">This template has no measured layout to draw.</p>
       )}
     </div>
   );

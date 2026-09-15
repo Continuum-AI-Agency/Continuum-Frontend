@@ -4,13 +4,23 @@
  * and a bare box only where it cannot be some other comp's rectangle. Nothing unmeasured is drawn.
  */
 
-import { describe, expect, mock, test } from 'bun:test';
-import type { TemplateParse } from '@continuum/contracts';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
+import type { ApiRenderJob, TemplateParse } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 
-mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({ apiRendersApi: {} }));
+let jobs: ApiRenderJob[] = [];
+mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
+  apiRendersApi: { listJobs: async () => ({ items: jobs, nextCursor: null }) },
+}));
 
-const { TemplateWireframe, wireframeFrames } = await import('./TemplateWireframe');
+const { TemplateWireframe, useLatestRenderFrame, wireframeFrames } = await import(
+  './TemplateWireframe'
+);
+const { previewFormats } = await import('./FormatPreview');
+
+afterEach(cleanup);
 
 const slot = (key: string, extra: Record<string, unknown>) =>
   ({
@@ -90,4 +100,50 @@ test('a gallery wireframe renders its compact parse without requesting render hi
   );
 
   expect(screen.getByRole('img', { name: '1:1 layout' })).toBeTruthy();
+});
+
+test('the latest frame is the picked format’s file, never whichever file the fleet listed first', async () => {
+  const file = (fileName: string) => ({
+    id: fileName,
+    kind: 'image' as const,
+    fileName,
+    mimeType: 'image/jpeg',
+    url: `https://cdn.test/${fileName}`,
+    width: null,
+    height: null,
+    assetId: null,
+    versionId: null,
+  });
+  jobs = [
+    {
+      templateKey: '47',
+      status: 'finished',
+      outputs: [
+        file('Producto_individual_con_descuento_9_16_ooqxxwb.jpg'),
+        file('Producto_individual_con_descuento_1_1_1mjxxwb.jpg'),
+        file('Producto_individual_con_descuento_16_9_9w5xxwa.jpg'),
+      ],
+    } as ApiRenderJob,
+  ];
+  const formats = previewFormats({ ratios: ['16:9', '1:1', '9:16'] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  const first = renderHook(() => useLatestRenderFrame('brand', '47', formats), { wrapper });
+  await waitFor(() =>
+    expect(first.result.current?.fileName).toBe(
+      'Producto_individual_con_descuento_16_9_9w5xxwa.jpg',
+    ),
+  );
+  const square = renderHook(() => useLatestRenderFrame('brand', '47', formats, '1:1'), { wrapper });
+  await waitFor(() =>
+    expect(square.result.current?.fileName).toBe(
+      'Producto_individual_con_descuento_1_1_1mjxxwb.jpg',
+    ),
+  );
+  const none = renderHook(() => useLatestRenderFrame('brand', '47'), { wrapper });
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  expect(none.result.current).toBeNull();
 });

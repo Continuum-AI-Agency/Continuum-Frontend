@@ -1,16 +1,16 @@
 'use client';
 
-import type { ApiRenderOutput, TemplatePreview } from '@continuum/contracts';
+import type { TemplatePreview } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutTemplate } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import React, { type ComponentType, type ReactNode } from 'react';
+import { fileForFormat, type PreviewFormat } from '@/components/forge/FormatPreview';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
 // A template's picture before anyone has rendered it: the frame at one ratio, with every variable's
-// box where the designer put it, coloured by what goes in it. Once a render has finished, its
-// output replaces the drawing — a real frame beats a diagram of one.
+// box where the designer put it, coloured by what goes in it.
 
 type Box = [number, number, number, number];
 
@@ -81,9 +81,17 @@ const KIND_STYLE: Record<string, string> = {
   color: 'fill-amber-500/20 stroke-amber-500/70',
 };
 
-/** The newest finished render of this template, if one has an output a card can show. */
-// ponytail: one cached jobs read per card; a "latest frame per template" read when a gallery passes ~50 cards.
-export function useLatestRenderFrame(brandId: string, templateKey: string | null) {
+/**
+ * The newest finished render of this template that has a file for one format — `formatId`, else the
+ * first of `formats`. Found by file name: the fleet lists a job's files in a different order every
+ * time, so the first file is an arbitrary ratio. No formats, no frame.
+ */
+export function useLatestRenderFrame(
+  brandId: string,
+  templateKey: string | null,
+  formats: readonly PreviewFormat[] = [],
+  formatId: string | undefined = formats[0]?.id,
+) {
   const { data } = useQuery({
     queryKey: ['forge-template-frame', brandId, templateKey],
     queryFn: () => apiRendersApi.listJobs(brandId, 10, { templateKey: templateKey ?? '' }),
@@ -91,10 +99,15 @@ export function useLatestRenderFrame(brandId: string, templateKey: string | null
     staleTime: 60_000,
     // Filtered again here: a server that has not learned the `templateKey` filter answers with the
     // brand's latest jobs, and another template's frame on this card would be a lie.
-    select: (response) =>
-      response.items
-        .filter((job) => job.templateKey === templateKey && job.status === 'finished')
-        .flatMap((job) => job.outputs)[0] ?? null,
+    select: (response) => {
+      if (!formatId) return null;
+      for (const job of response.items) {
+        if (job.templateKey !== templateKey || job.status !== 'finished') continue;
+        const file = fileForFormat(job.outputs, formats, formatId);
+        if (file) return file;
+      }
+      return null;
+    },
   });
   return data ?? null;
 }
@@ -102,16 +115,14 @@ export function useLatestRenderFrame(brandId: string, templateKey: string | null
 export function TemplateWireframe({
   parse,
   ratio,
-  rendered,
   className,
 }: {
   brandId: string;
   templateKey: string | null;
   /** The gallery's compact parse is enough: cards never read render history. */
   parse: TemplatePreview | null;
-  /** Draw this ratio's wireframe. Omitted: the latest render when there is one, else the first ratio. */
+  /** Draw this ratio's wireframe. Omitted: the first ratio. */
   ratio?: string;
-  rendered?: ApiRenderOutput | null;
   className?: string;
 }) {
   const frames = wireframeFrames(parse);
@@ -119,21 +130,7 @@ export function TemplateWireframe({
 
   return (
     <div className={cn('flex items-center justify-center overflow-hidden bg-muted/40', className)}>
-      {rendered && ratio === undefined ? (
-        rendered.kind === 'video' ? (
-          // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
-          <video
-            src={`${rendered.url}#t=0.1`}
-            className="h-full w-full object-contain"
-            muted
-            playsInline
-            preload="metadata"
-          />
-        ) : (
-          // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-          <img src={rendered.url} alt="Latest render" className="h-full w-full object-contain" />
-        )
-      ) : frame ? (
+      {frame ? (
         <svg
           viewBox={`0 0 ${frame.width} ${frame.height}`}
           className="h-full w-full"

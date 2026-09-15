@@ -33,12 +33,14 @@ import { AiVariationsDialog } from '@/components/forge/AiVariationsDialog';
 import { type CheckRow, CheckTable, type CheckTick, TickBar } from '@/components/forge/CheckTable';
 import { FactList } from '@/components/forge/FactList';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
+import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
 import { LineagePanel } from '@/components/forge/LineagePanel';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
+import { TemplateRenders } from '@/components/forge/TemplateRenders';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -70,7 +72,6 @@ import {
   type TemplateVariable,
 } from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
-import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
   InlineRename,
@@ -78,7 +79,12 @@ import {
   TemplateStatusPill,
   templateStatus,
 } from './TemplateCard';
-import { TemplateMorph, TemplateWireframe, useLatestRenderFrame } from './TemplateWireframe';
+import {
+  TemplateMorph,
+  TemplateWireframe,
+  useLatestRenderFrame,
+  wireframeFrames,
+} from './TemplateWireframe';
 import { templateChecks } from './templateChecks';
 
 // One template, opened, read like a deployment: its picture beside the facts, then the checks it
@@ -192,9 +198,14 @@ export function TemplateDetail({
   );
   const name = sourceDisplayName(source);
   const { run, pushed, refresh: refreshRun } = useForgeRun(brandId, assetId);
-  const rendered = useLatestRenderFrame(brandId, templateKey);
-  // Which picture the preview draws: a ratio's wireframe, or `undefined` for the latest render.
-  const [view, setView] = useState<string | undefined>(undefined);
+  // The formats the file delivers — its parse's comps, else its ratio labels — and the one on screen.
+  const formats = useMemo(
+    () => previewFormats({ parse: source.parse, ratios: source.ratios }),
+    [source.parse, source.ratios],
+  );
+  const [formatId, setFormatId] = useState<string | undefined>(undefined);
+  const format = formats.find((entry) => entry.id === formatId) ?? formats[0];
+  const rendered = useLatestRenderFrame(brandId, templateKey, formats, format?.id);
   const [variables, setVariables] = useState<TemplateVariable[]>([]);
   const [savedDefaults, setSavedDefaults] = useState<Record<string, unknown>>({});
   const [parseState, setParseState] = useState<string>(source.parseState);
@@ -397,8 +408,6 @@ export function TemplateDetail({
     templateKey,
   });
   const ratios = source.ratios;
-  const views = [...(rendered ? [undefined] : []), ...ratios];
-  const activeView = view ?? (rendered ? undefined : ratios[0]);
   const variableCount = variables.length || source.slotCount || 0;
   const unassigned = variables.filter((variable) => variable.role === null).length;
 
@@ -428,6 +437,10 @@ export function TemplateDetail({
 
   const jobs = recentJobs ?? [];
   const lastFinished = jobs.find((job) => job.status === 'finished');
+  const renderedJob = rendered
+    ? jobs.find((job) => job.outputs.some((output) => output.url === rendered.url))
+    : undefined;
+  const drawnRatios = new Set(wireframeFrames(source.parse).map((frame) => frame.ratio));
 
   const ladder = ladderFor(run?.state);
   const ladderButton = (action: ForgeLadderAction | undefined) => {
@@ -660,40 +673,63 @@ export function TemplateDetail({
       {/* The picture on the left; the facts and then the checks on the right, the way a deployment
           reads. Stacked below lg. */}
       <div className="grid divide-y divide-border lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:divide-x lg:divide-y-0">
-        {/* The preview slot. Wave 2 replaces this block with FormatPreview; kept working as-is. */}
+        {/* The preview: one format at a time at its true shape, the newest render's file for it
+            when there is one, else the drawing of its measured boxes — and the badge says which. */}
         <div className="flex min-w-0 flex-col gap-2 p-[var(--card-pad)]">
           <TemplateMorph id={assetId}>
-            <div className="aspect-video overflow-hidden rounded-xl border">
-              <TemplateWireframe
-                brandId={brandId}
-                templateKey={templateKey}
-                parse={source.parse}
-                ratio={activeView}
-                rendered={rendered}
-                className="h-full w-full p-6"
+            {format ? (
+              <FormatPreview
+                label="Template preview"
+                formats={formats}
+                value={format.id}
+                onValueChange={setFormatId}
+                wellClassName="h-[min(60vh,40rem)]"
+                frame={(picked) => {
+                  const estimate =
+                    picked.ratio && drawnRatios.has(picked.ratio) ? (
+                      <TemplateWireframe
+                        brandId={brandId}
+                        templateKey={templateKey}
+                        parse={source.parse}
+                        ratio={picked.ratio}
+                        className="size-full bg-background"
+                      />
+                    ) : undefined;
+                  if (rendered && renderedJob) {
+                    return {
+                      mode: 'rendered',
+                      at: renderedJob.finishedAt ?? renderedJob.updatedAt,
+                      node:
+                        rendered.kind === 'video' ? (
+                          // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
+                          <video
+                            src={`${rendered.url}#t=0.1`}
+                            className="size-full object-contain"
+                            muted
+                            playsInline
+                            preload="metadata"
+                          />
+                        ) : (
+                          // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
+                          <img
+                            src={rendered.url}
+                            alt={`${name} · ${picked.ratio ?? picked.label}`}
+                            className="size-full object-contain"
+                          />
+                        ),
+                      estimate,
+                      caption: rendered.fileName,
+                    };
+                  }
+                  return estimate ? { mode: 'estimate', node: estimate } : { mode: 'none' };
+                }}
               />
-            </div>
+            ) : (
+              <div className="flex h-[min(60vh,40rem)] items-center justify-center bg-muted/40 text-xs text-muted-foreground">
+                No formats read from this file yet
+              </div>
+            )}
           </TemplateMorph>
-          {views.length > 1 ? (
-            <fieldset className="flex flex-wrap gap-1" aria-label="Preview">
-              {views.map((entry) => (
-                <button
-                  key={entry ?? 'render'}
-                  type="button"
-                  aria-pressed={activeView === entry}
-                  onClick={() => setView(entry)}
-                  className={cn(
-                    'rounded-full border px-2.5 py-0.5 text-xs transition-colors',
-                    activeView === entry
-                      ? 'border-primary bg-primary/10'
-                      : 'text-muted-foreground hover:bg-muted/60',
-                  )}
-                >
-                  {entry ?? 'Last render'}
-                </button>
-              ))}
-            </fieldset>
-          ) : null}
         </div>
 
         <div className="flex min-w-0 flex-col divide-y divide-border">
@@ -759,7 +795,9 @@ export function TemplateDetail({
         </div>
       </div>
 
-      {/* RENDERS — wave 2 mounts <TemplateRenders brandId={brandId} templateKey={templateKey} /> here. */}
+      {templateKey ? (
+        <TemplateRenders brandId={brandId} templateKey={templateKey} formats={formats} />
+      ) : null}
 
       {/* Every panel stays mounted while hidden: switching tabs must never drop an unsaved edit. */}
       <Tabs defaultValue="variables" className="gap-0">

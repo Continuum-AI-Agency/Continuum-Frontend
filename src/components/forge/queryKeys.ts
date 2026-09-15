@@ -30,22 +30,32 @@ export const forgeQueryKeys = {
   run: (brandId: string, assetId: string) => ['forge', brandId, 'runs', assetId] as const,
   renderJobs: (brandId: string) => ['forge', brandId, 'render-jobs'] as const,
   renderJobLists: (brandId: string) => ['forge', brandId, 'render-jobs', 'list'] as const,
-  renderJobList: (brandId: string, limit: number, renderSetId?: string) =>
-    ['forge', brandId, 'render-jobs', 'list', { limit, renderSetId: renderSetId ?? null }] as const,
+  renderJobList: (brandId: string, limit: number, renderSetId?: string, templateKey?: string) =>
+    [
+      'forge',
+      brandId,
+      'render-jobs',
+      'list',
+      { limit, renderSetId: renderSetId ?? null, templateKey: templateKey ?? null },
+    ] as const,
   renderJobPages: (brandId: string) => ['forge', brandId, 'render-jobs', 'page'] as const,
   renderJobPage: (
     brandId: string,
     limit: number,
     renderSetId: string | undefined,
     cursor: string,
+    templateKey?: string,
   ) =>
     [
       'forge',
       brandId,
       'render-jobs',
       'page',
-      { limit, renderSetId: renderSetId ?? null, cursor },
+      { limit, renderSetId: renderSetId ?? null, templateKey: templateKey ?? null, cursor },
     ] as const,
+  /** The newest finished job of one grid row — what the Render tab preview shows as rendered. */
+  renderJobRowLatest: (brandId: string, renderSetId: string, rowId: string) =>
+    ['forge', brandId, 'render-jobs', 'row-latest', { renderSetId, rowId }] as const,
   renderJob: (brandId: string, jobId: string) =>
     ['forge', brandId, 'render-jobs', 'job', jobId] as const,
   approvals: (brandId: string) => ['forge', brandId, 'approvals'] as const,
