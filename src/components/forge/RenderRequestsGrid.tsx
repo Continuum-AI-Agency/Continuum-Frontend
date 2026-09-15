@@ -27,6 +27,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   type ColumnDef,
   type ExpandedState,
@@ -38,6 +39,7 @@ import {
 import { BookmarkPlus, Copy, GitFork, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DataGrid, KIND_ICONS, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import {
   RenderPreflightDialog,
   type RenderPreflightRow,
@@ -252,8 +254,8 @@ function deleteMessage({ requested, all }: { requested: Set<string>; all: Set<st
   if (all.size > requested.size)
     return `${all.size} rows will be deleted, including every fork under them.`;
   return all.size > 1
-    ? `${all.size} rows will be deleted. Saved renders stay in Renders.`
-    : 'This removes the row from the set. Saved renders stay in Renders.';
+    ? `${all.size} rows will be deleted. Saved renders stay in Render ledger.`
+    : 'This removes the row from the set. Saved renders stay in Render ledger.';
 }
 
 /** "Open this in Render": which template, and optionally which saved render set, to land on. */
@@ -289,6 +291,7 @@ export function RenderRequestsGrid({
   /** The grid has taken `intent`; the shell drops it so a remount never replays it. */
   onIntentConsumed?: () => void;
 }) {
+  const queryClient = useQueryClient();
   const [environments, setEnvironments] = useState<ApiRenderEnvironment[]>([]);
   const [bindingId, setBindingId] = useState<string | null>(null);
   // Templates wait for environment discovery to SETTLE, not to succeed: with no binding named
@@ -332,8 +335,12 @@ export function RenderRequestsGrid({
   // --- discovery ---------------------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
-    apiRendersApi
-      .listEnvironments(brandId)
+    queryClient
+      .fetchQuery({
+        queryKey: forgeQueryKeys.environments(brandId),
+        queryFn: () => apiRendersApi.listEnvironments(brandId),
+        staleTime: FORGE_STALE_MS.lists,
+      })
       .then((response) => {
         if (cancelled) return;
         setEnvironments(response.items);
@@ -354,10 +361,11 @@ export function RenderRequestsGrid({
     return () => {
       cancelled = true;
     };
-  }, [brandId]);
+  }, [brandId, queryClient]);
 
   const multiEnv = environments.length > 1;
-  // Bumped each time the tab comes back into view; re-lists templates without touching rows.
+  // Bumped each time the tab comes back into view; checks the cached template list without
+  // touching rows, and re-lists only when that cache is stale or a template mutation invalidated it.
   const [templatesEpoch, setTemplatesEpoch] = useState(0);
   const wasActive = useRef(active);
   useEffect(() => {
@@ -369,8 +377,12 @@ export function RenderRequestsGrid({
     if (!envsSettled) return;
     let cancelled = false;
     setBusy('loading');
-    apiRendersApi
-      .listTemplates(brandId, multiEnv ? bindingId : null)
+    queryClient
+      .fetchQuery({
+        queryKey: forgeQueryKeys.templateList(brandId, multiEnv ? bindingId : null),
+        queryFn: () => apiRendersApi.listTemplates(brandId, multiEnv ? bindingId : null),
+        staleTime: FORGE_STALE_MS.lists,
+      })
       .then((response) => {
         if (cancelled) return;
         setTemplates(response.items);
@@ -393,7 +405,7 @@ export function RenderRequestsGrid({
     return () => {
       cancelled = true;
     };
-  }, [brandId, bindingId, envsSettled, multiEnv, templatesEpoch]);
+  }, [brandId, bindingId, envsSettled, multiEnv, queryClient, templatesEpoch]);
 
   // A loaded set or draft carries Library pins but not their thumbnails or pixel sizes — those
   // are browser-side facts. Look each asset up once so cells, fit checks and the preview have
@@ -412,7 +424,17 @@ export function RenderRequestsGrid({
       const ids = [...new Set(wanted.map((item) => item.assetId))];
       const assets = new Map(
         await Promise.all(
-          ids.map(async (id) => [id, await fetchLibraryAsset(brandId, id)] as const),
+          ids.map(
+            async (id) =>
+              [
+                id,
+                await queryClient.fetchQuery({
+                  queryKey: forgeQueryKeys.mediaAsset(brandId, id),
+                  queryFn: () => fetchLibraryAsset(brandId, id),
+                  staleTime: FORGE_STALE_MS.lists,
+                }),
+              ] as const,
+          ),
         ),
       );
       setRows((current) =>
@@ -425,7 +447,7 @@ export function RenderRequestsGrid({
         }),
       );
     },
-    [brandId],
+    [brandId, queryClient],
   );
 
   const showRows = useCallback(
@@ -452,9 +474,25 @@ export function RenderRequestsGrid({
     }
     let cancelled = false;
     Promise.all([
-      apiRendersApi.getContract(brandId, templateKey, contractBindingId),
-      apiRendersApi.listInputSets(brandId, templateKey).catch(() => ({ items: [] })),
-      apiRendersApi.listRenderSets(brandId, templateKey).catch(() => ({ items: [] })),
+      queryClient.fetchQuery({
+        queryKey: forgeQueryKeys.contract(brandId, contractBindingId, templateKey),
+        queryFn: () => apiRendersApi.getContract(brandId, templateKey, contractBindingId),
+        staleTime: FORGE_STALE_MS.contract,
+      }),
+      queryClient
+        .fetchQuery({
+          queryKey: forgeQueryKeys.inputSets(brandId, templateKey),
+          queryFn: () => apiRendersApi.listInputSets(brandId, templateKey),
+          staleTime: FORGE_STALE_MS.lists,
+        })
+        .catch(() => ({ items: [] })),
+      queryClient
+        .fetchQuery({
+          queryKey: forgeQueryKeys.renderSetList(brandId, templateKey),
+          queryFn: () => apiRendersApi.listRenderSets(brandId, templateKey),
+          staleTime: FORGE_STALE_MS.lists,
+        })
+        .catch(() => ({ items: [] })),
     ])
       .then(([next, sets, savedSets]) => {
         if (cancelled) return;
@@ -484,7 +522,7 @@ export function RenderRequestsGrid({
     return () => {
       cancelled = true;
     };
-  }, [brandId, selection, templateKey, contractBindingId, showRows]);
+  }, [brandId, selection, templateKey, contractBindingId, queryClient, showRows]);
 
   // --- row edits ---------------------------------------------------------------------------
   const updateRow = useCallback((id: string, patch: (row: RequestRow) => RequestRow) => {
@@ -797,6 +835,10 @@ export function RenderRequestsGrid({
             variables: toVariableMap({ values: effectiveValues(latestRows.current, id) }),
           });
           setInputSets((current) => [created, ...current]);
+          void queryClient.invalidateQueries({
+            queryKey: forgeQueryKeys.inputSets(brandId, contract.template.key),
+            exact: true,
+          });
           toast.success(`Saved “${name}”`);
           setNameRequest(null);
         } catch (error) {
@@ -883,6 +925,7 @@ export function RenderRequestsGrid({
         rows: toRenderSetRows(rowsToSave, allOutputIdsOf(contract)),
       });
       adoptSet(created, rowsToSave);
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
       if (announce) toast.success(`Saved “${created.name}”`);
       return created;
     } catch (error) {
@@ -920,6 +963,7 @@ export function RenderRequestsGrid({
         rows: toRenderSetRows(submitted, allOutputIdsOf(contract)),
       });
       adoptSet(saved, submitted);
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
       if (announce) toast.success(`Saved “${saved.name}”`);
       return saved;
     } catch (error) {
@@ -959,6 +1003,7 @@ export function RenderRequestsGrid({
           // Only the name moved: unsaved row edits stay on screen and stay unsaved.
           setActiveSet(renamed);
           setRenderSets((current) => current.map((set) => (set.id === renamed.id ? renamed : set)));
+          void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
         } catch (error) {
           await reportSetError(error, activeSet);
         }
@@ -967,6 +1012,7 @@ export function RenderRequestsGrid({
         if (!activeSet) return;
         try {
           await apiRendersApi.deleteRenderSet(brandId, activeSet.id);
+          void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
         } catch (error) {
           toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
           return;

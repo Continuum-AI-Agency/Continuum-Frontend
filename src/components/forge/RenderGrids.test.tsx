@@ -4,7 +4,7 @@
  * What this guards is the wiring, not the pixels: a template is discovered and its contract
  * seeds a row from the designer's samples; the row's dry-run lands and the status reads Ready;
  * typing never loses focus; rows fork, save and render through dialogs. The pure row logic has
- * its own test, and the Renders ledger (RenderJobsGrid) has its own file.
+ * its own test, and the Render ledger (RenderJobsGrid) has its own file.
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
@@ -237,11 +237,32 @@ mock.module('@/components/organic/primitives/MediaSelectPopover', () => ({
   },
 }));
 
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  render as testingRender,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import type React from 'react';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
+import { forgeQueryKeys } from './queryKeys';
 import { RenderRequestsGrid } from './RenderRequestsGrid';
+
+const render = (
+  ui: React.ReactNode,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) => {
+  return testingRender(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+};
 
 afterEach(() => {
   cleanup();
@@ -355,13 +376,15 @@ describe('RenderRequestsGrid', () => {
   });
 
   test('a rename made on Templates reaches the kept-mounted picker when the Render tab returns', async () => {
-    const { rerender } = render(<RenderRequestsGrid brandId={BRAND} active />);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { rerender } = render(<RenderRequestsGrid brandId={BRAND} active />, client);
     const picker = () => screen.getByRole('button', { name: 'Template' });
     await waitFor(() => expect(picker().textContent).toContain('StarCraft Promo'));
     try {
       // Renamed elsewhere while the tab was hidden; the grid stayed mounted and kept its rows.
       rerender(<RenderRequestsGrid brandId={BRAND} active={false} />);
       renamedTo = 'Protoss Promo';
+      await client.invalidateQueries({ queryKey: forgeQueryKeys.templates(BRAND) });
       rerender(<RenderRequestsGrid brandId={BRAND} active />);
       await waitFor(() => expect(picker().textContent).toContain('Protoss Promo'));
       expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Hola mundo');
@@ -827,7 +850,7 @@ describe('RenderRequestsGrid', () => {
     fireEvent.click(within(selection).getByRole('button', { name: 'Delete' }));
     expect(
       within(await screen.findByRole('alertdialog')).getByText(
-        '2 rows will be deleted. Saved renders stay in Renders.',
+        '2 rows will be deleted. Saved renders stay in Render ledger.',
       ),
     ).toBeTruthy();
     await confirmDialog('Cancel');

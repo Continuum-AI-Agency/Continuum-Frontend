@@ -9,6 +9,7 @@ import {
   type ApiRenderTemplateContract,
   templateDisplayName,
 } from '@continuum/contracts';
+import { useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, Play } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -18,6 +19,7 @@ import {
   metaDeliveryProblems,
   replaceOutputId,
 } from '@/components/forge/DeliveryTargetPicker';
+import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import {
   describeSlackFailure,
   isSlackDeliveryUnavailable,
@@ -120,6 +122,7 @@ export function RenderPreflightDialog({
   onClose,
   onFired,
 }: RenderPreflightDialogProps) {
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('review');
   const [review, setReview] = useState<Review>({ state: 'loading' });
   const [destinations, setDestinations] = useState<Destinations>('loading');
@@ -239,6 +242,12 @@ export function RenderPreflightDialog({
       const batch = await apiRendersApi.createBatch({
         confirmationToken: preflight.confirmationToken,
       });
+      for (const job of batch.jobs)
+        queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) }),
+        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.approvals(brandId) }),
+      ]);
       toast.success(`${plural(batch.jobs.length, 'render')} queued`);
       onFired(batch.jobs.map((job) => job.id));
     } catch (error) {

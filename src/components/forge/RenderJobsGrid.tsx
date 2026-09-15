@@ -1,6 +1,7 @@
 'use client';
 
 import { type ApiRenderJob, type ForgeRenderSet, templateDisplayName } from '@continuum/contracts';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -36,6 +37,7 @@ import {
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJobs';
+import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
 
 // Every render this brand has asked for, wherever it was asked from — the grid, the canvas node,
 // a bench — because they all write `media.ad_render_jobs`. The canvas keeps its own cards per
@@ -75,6 +77,7 @@ const withTransition = (update: () => void) =>
   prefersReducedMotion() ? update() : startTransition(update);
 
 export function RenderJobsGrid({ brandId, active = true }: { brandId: string; active?: boolean }) {
+  const queryClient = useQueryClient();
   const [sets, setSets] = useState<ForgeRenderSet[]>([]);
   const [templateNames, setTemplateNames] = useState<ReadonlyMap<string, string>>(new Map());
   const [renderSetId, setRenderSetId] = useState<string>('all');
@@ -101,19 +104,38 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
   // Mount, every time the tab comes back, the window regains focus, and on a slow timer.
   useEffect(() => {
     if (!active) return;
-    void apiRendersApi
-      .listRenderSets(brandId)
+    void queryClient
+      .fetchQuery({
+        queryKey: forgeQueryKeys.renderSetList(brandId),
+        queryFn: () => apiRendersApi.listRenderSets(brandId),
+        staleTime: FORGE_STALE_MS.lists,
+      })
       .then((response) => setSets(response.items))
       .catch(() => undefined);
     // Names from every workspace the brand renders into: a template key is only unique within
     // its workspace. A job from before `environment` was recorded reads the default's names.
-    void apiRendersApi
-      .listEnvironments(brandId)
+    void queryClient
+      .fetchQuery({
+        queryKey: forgeQueryKeys.environments(brandId),
+        queryFn: () => apiRendersApi.listEnvironments(brandId),
+        staleTime: FORGE_STALE_MS.lists,
+      })
       .then((response) =>
         Promise.all(
           response.items.map((environment) =>
-            apiRendersApi
-              .listTemplates(brandId, environment.isDefault ? null : environment.bindingId)
+            queryClient
+              .fetchQuery({
+                queryKey: forgeQueryKeys.templateList(
+                  brandId,
+                  environment.isDefault ? null : environment.bindingId,
+                ),
+                queryFn: () =>
+                  apiRendersApi.listTemplates(
+                    brandId,
+                    environment.isDefault ? null : environment.bindingId,
+                  ),
+                staleTime: FORGE_STALE_MS.lists,
+              })
               .then((templates) =>
                 templates.items.flatMap((template) =>
                   template.displayName
@@ -138,25 +160,44 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
         .catch(() => undefined)
         .finally(() => setLoaded(true));
     };
-    load();
+    void refreshJobs({ preferCache: true })
+      .catch(() => undefined)
+      .finally(() => setLoaded(true));
     window.addEventListener('focus', load);
     const timer = setInterval(load, pushed ? CONNECTED_REFRESH_MS : DISCONNECTED_REFRESH_MS);
     return () => {
       window.removeEventListener('focus', load);
       clearInterval(timer);
     };
-  }, [active, brandId, pushed, refreshJobs]);
+  }, [active, brandId, pushed, queryClient, refreshJobs]);
 
-  // Realtime: a row change is a signal to re-read, never a row to merge — the relay is what
-  // re-signs output URLs and runs the judge, and only the list read goes through it.
+  // Realtime: a row change is a signal to re-read, never a row to merge — the API read is what
+  // re-signs output URLs and runs the judge.
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | null = null;
     let debounce: ReturnType<typeof setTimeout> | null = null;
-    const onRow = (row: Record<string, unknown>) => {
+    let inserted = false;
+    const changed = new Set<string>();
+    // Updates re-read their jobs once per burst; only an insert changes the page's order.
+    const onRow = (event: 'INSERT' | 'UPDATE', row: Record<string, unknown>) => {
       if (row.brand_id !== brandId) return;
+      inserted ||= event === 'INSERT';
+      if (typeof row.id === 'string') changed.add(row.id);
       if (debounce) clearTimeout(debounce);
-      debounce = setTimeout(() => void refreshJobs().catch(() => undefined), 400);
+      debounce = setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.approvals(brandId) });
+        if (inserted || changed.size === 0) {
+          void queryClient
+            .invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) })
+            .then(() => refreshJobs())
+            .catch(() => undefined);
+        } else {
+          void Promise.all([...changed].map((id) => refreshOne(id))).catch(() => undefined);
+        }
+        inserted = false;
+        changed.clear();
+      }, 400);
     };
     if (!cancelled)
       unsubscribe = subscribeToPostgresChanges({
@@ -166,9 +207,13 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
           schema: 'media',
           table: 'ad_render_jobs',
           filter: `brand_id=eq.${brandId}`,
-          onRow,
+          onRow: (row) => onRow(event, row),
         })),
-        onSubscribed: () => refreshJobs().catch(() => undefined),
+        onSubscribed: () =>
+          queryClient
+            .invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) })
+            .then(() => refreshJobs())
+            .catch(() => undefined),
         onStatus: (status) => setPushed(status === 'SUBSCRIBED'),
       });
     return () => {
@@ -176,7 +221,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
       if (debounce) clearTimeout(debounce);
       unsubscribe?.();
     };
-  }, [brandId, refreshJobs]);
+  }, [brandId, queryClient, refreshJobs, refreshOne]);
 
   const templateOf = (job: ApiRenderJob) =>
     templateNames.get(`${job.environment ?? ''}:${job.templateKey}`) ??

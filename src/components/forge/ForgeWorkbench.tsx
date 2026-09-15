@@ -1,8 +1,14 @@
 'use client';
 
-import { type TemplateSource, templateDisplayName } from '@continuum/contracts';
-import { useCallback, useEffect, useState } from 'react';
+import {
+  type TemplateSource,
+  templateDisplayName,
+  type WorkspaceTemplate,
+} from '@continuum/contracts';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PendingApprovals } from '@/components/forge/PendingApprovals';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { type SharedTemplate, sharedTemplateId } from '@/components/forge/TemplateCard';
 import { TemplateDetail } from '@/components/forge/TemplateDetail';
@@ -35,13 +41,12 @@ import {
  * with the grant as a button. A brand with several workspaces reads each, and adoption names the one
  * a template came from.
  */
-async function loadWorkspaceTemplates(
-  brandId: string,
-  ownAssetIds: Set<string>,
-): Promise<{ shared: SharedTemplate[]; buildNames: Map<string, string> }> {
+type DiscoveredWorkspaceTemplate = WorkspaceTemplate & { workspaceId?: string };
+
+async function loadWorkspaceTemplates(brandId: string): Promise<DiscoveredWorkspaceTemplate[]> {
   const workspaces = await fetchRenderWorkspaces(brandId).catch(() => []);
   const reads = workspaces.length > 1 ? workspaces.map((workspace) => workspace.id) : [undefined];
-  const items = (
+  return (
     await Promise.all(
       reads.map((workspaceId) =>
         discoverWorkspaceTemplates(brandId, workspaceId)
@@ -52,6 +57,12 @@ async function loadWorkspaceTemplates(
       ),
     )
   ).flat();
+}
+
+function splitWorkspaceTemplates(
+  items: DiscoveredWorkspaceTemplate[],
+  ownAssetIds: Set<string>,
+): { shared: SharedTemplate[]; buildNames: Map<string, string> } {
   const buildNames = new Map<string, string>();
   const shared: SharedTemplate[] = [];
   for (const item of items) {
@@ -82,48 +93,97 @@ export function ForgeWorkbench({
   /** Jump to the Render tab with a template (and optionally a render set) loaded. */
   onOpenRender?: (intent: ForgeRenderIntent) => void;
 }) {
-  const [sources, setSources] = useState<TemplateSource[]>([]);
-  const [shared, setShared] = useState<SharedTemplate[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [adopting, setAdopting] = useState<string | null>(null);
-  const { uploads, uploadFiles, pauseUpload, resumeUpload, cancelUpload } = useMediaUpload(brandId);
-
-  const loadSources = useCallback(async () => {
-    try {
-      const next = await fetchTemplateSources(brandId);
-      setSources(next);
-      const { shared: others, buildNames } = await loadWorkspaceTemplates(
-        brandId,
-        new Set(next.map((source) => source.assetId)),
-      );
-      setShared(others);
-      // A title wins; the build name stands in only where nobody has typed one.
-      setSources((current) =>
-        current.map((source) =>
-          source.displayName || !buildNames.has(source.assetId)
-            ? source
-            : { ...source, displayName: buildNames.get(source.assetId) ?? null },
-        ),
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not list your templates');
-    }
-  }, [brandId]);
+  const queryClient = useQueryClient();
+  const sourceKey = useMemo(() => forgeQueryKeys.templateSources(brandId), [brandId]);
+  const sourceQuery = useQuery({
+    queryKey: sourceKey,
+    queryFn: () => fetchTemplateSources(brandId),
+    staleTime: FORGE_STALE_MS.lists,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  });
+  const workspaceQuery = useQuery({
+    queryKey: forgeQueryKeys.workspaceTemplates(brandId),
+    queryFn: () => loadWorkspaceTemplates(brandId),
+    staleTime: FORGE_STALE_MS.lists,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  });
+  const rawSources = sourceQuery.data ?? [];
+  const { shared, buildNames } = useMemo(
+    () =>
+      splitWorkspaceTemplates(
+        workspaceQuery.data ?? [],
+        new Set(rawSources.map((source) => source.assetId)),
+      ),
+    [rawSources, workspaceQuery.data],
+  );
+  // A title wins; the build name stands in only where nobody has typed one.
+  const sources = useMemo(
+    () =>
+      rawSources.map((source) =>
+        source.displayName || !buildNames.has(source.assetId)
+          ? source
+          : { ...source, displayName: buildNames.get(source.assetId) ?? null },
+      ),
+    [buildNames, rawSources],
+  );
 
   useEffect(() => {
-    void loadSources();
-  }, [loadSources]);
+    if (sourceQuery.error)
+      toast.error(
+        sourceQuery.error instanceof Error
+          ? sourceQuery.error.message
+          : 'Could not list your templates',
+      );
+  }, [sourceQuery.error]);
 
-  // A parse lands seconds after the upload registers, and the row that appears is `pending` until
-  // it does. Re-reading when an upload finishes is what turns a just-dropped file into a card
-  // with its ratios and slot count on it, without a manual refresh.
-  const uploadsDone = uploads.length > 0 && uploads.every((upload) => upload.status === 'done');
+  const refreshSources = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: sourceKey, exact: true }),
+    [queryClient, sourceKey],
+  );
+  const refreshTemplate = useCallback(
+    () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: sourceKey, exact: true }),
+        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.workspaceTemplates(brandId) }),
+        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templates(brandId) }),
+        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.contracts(brandId) }),
+      ]).then(() => undefined),
+    [brandId, queryClient, sourceKey],
+  );
+
+  const uploaded = useCallback(() => void refreshSources(), [refreshSources]);
+
+  const { uploads, uploadFiles, pauseUpload, resumeUpload, cancelUpload } = useMediaUpload(
+    brandId,
+    {
+      onUploaded: uploaded,
+    },
+  );
+
+  // Registration creates the pending card; parsing fills that same card a few seconds later.
+  // Stop after two minutes so a broken parser does not poll forever—the pending state stays honest.
+  const pendingKey = sources
+    .filter((source) => source.parseState === 'pending')
+    .map((source) => source.assetId)
+    .sort()
+    .join('|');
   useEffect(() => {
-    if (uploadsDone) void loadSources();
-  }, [uploadsDone, loadSources]);
+    if (!pendingKey) return;
+    let polls = 0;
+    const timer = window.setInterval(() => {
+      polls += 1;
+      if (polls >= 40) window.clearInterval(timer);
+      void sourceQuery.refetch();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [pendingKey, sourceQuery.refetch]);
 
   const setDisplayName = (assetId: string, displayName: string | null) =>
-    setSources((current) =>
+    queryClient.setQueryData<TemplateSource[]>(sourceKey, (current = []) =>
       current.map((source) => (source.assetId === assetId ? { ...source, displayName } : source)),
     );
 
@@ -134,6 +194,10 @@ export function ForgeWorkbench({
     try {
       const saved = await renameTemplateSource(brandId, assetId, title);
       setDisplayName(assetId, saved.displayName ?? title);
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.workspaceTemplates(brandId) }),
+        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templates(brandId) }),
+      ]);
     } catch (error) {
       setDisplayName(assetId, previous);
       toast.error(error instanceof Error ? error.message : 'Could not rename the template');
@@ -150,7 +214,10 @@ export function ForgeWorkbench({
         enabled: !template.granted,
         ...(template.workspaceId ? { workspaceId: template.workspaceId } : {}),
       });
-      await loadSources();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.workspaceTemplates(brandId) }),
+        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templates(brandId) }),
+      ]);
       toast.success(
         template.granted
           ? `${name} removed from ${brandName ?? 'this brand'}`
@@ -192,7 +259,7 @@ export function ForgeWorkbench({
           onBack={() => open(null)}
           onRename={(title) => void rename(current.assetId, title)}
           onOpenRender={onOpenRender}
-          onChanged={loadSources}
+          onChanged={refreshTemplate}
         />
       ) : (
         <TemplateGallery

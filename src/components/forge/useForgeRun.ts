@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { fetchTemplateRun, type TemplateRunRow } from '@/lib/library/templateSources';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
@@ -12,32 +14,23 @@ import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
  * so a progress tick ships a counter rather than a few hundred KB of comps.
  */
 export function useForgeRun(brandId: string, assetId: string | null) {
-  const [run, setRun] = useState<TemplateRunRow | null>(null);
   const [pushed, setPushed] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const scope = `${brandId}:${assetId ?? ''}`;
-  const scopeRef = useRef(scope);
-  scopeRef.current = scope;
-  const readSequence = useRef(0);
-
+  const queryClient = useQueryClient();
+  const runKey = useMemo(() => forgeQueryKeys.run(brandId, assetId ?? 'none'), [assetId, brandId]);
+  const runQuery = useQuery({
+    queryKey: runKey,
+    queryFn: () => fetchTemplateRun(brandId, assetId!),
+    enabled: Boolean(assetId),
+    staleTime: FORGE_STALE_MS.active,
+    refetchInterval: assetId ? (pushed ? 120_000 : 30_000) : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    retry: false,
+  });
   const refresh = useCallback(async () => {
-    if (!assetId) {
-      setRun(null);
-      return;
-    }
-    const sequence = ++readSequence.current;
-    setLoading(true);
-    try {
-      const next = await fetchTemplateRun(brandId, assetId);
-      // A late response for a template the user has already navigated away from must not
-      // overwrite the one they are now looking at.
-      if (scopeRef.current === scope && sequence === readSequence.current) setRun(next);
-    } catch {
-      // A run that cannot be read is not a run that failed. Leave whatever is on screen.
-    } finally {
-      if (scopeRef.current === scope && sequence === readSequence.current) setLoading(false);
-    }
-  }, [brandId, assetId, scope]);
+    if (assetId) await runQuery.refetch();
+  }, [assetId, runQuery.refetch]);
 
   useEffect(() => {
     if (!assetId) return;
@@ -58,11 +51,11 @@ export function useForgeRun(brandId: string, assetId: string | null) {
           if (row.asset_id !== assetId || row.brand_id !== brandId || pending) return;
           pending = setTimeout(() => {
             pending = undefined;
-            void refresh();
+            void queryClient.invalidateQueries({ queryKey: runKey, exact: true });
           }, 150);
         },
       })),
-      onSubscribed: refresh,
+      onSubscribed: () => void queryClient.invalidateQueries({ queryKey: runKey, exact: true }),
       onStatus: (status) => setPushed(status === 'SUBSCRIBED'),
     });
 
@@ -71,30 +64,12 @@ export function useForgeRun(brandId: string, assetId: string | null) {
       setPushed(false);
       unsubscribe();
     };
-  }, [assetId, brandId, refresh]);
+  }, [assetId, brandId, queryClient, runKey]);
 
-  // Unconditional, not just in `onSubscribed`. A browser whose channel never joins — a blocked
-  // WebSocket, a publication missing in some environment — would otherwise show an empty run
-  // forever and read as "nothing is happening" rather than "we cannot see".
-  useEffect(() => {
-    setRun(null);
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    if (!assetId) return;
-    const recover = () => {
-      if (document.visibilityState === 'visible') void refresh();
-    };
-    window.addEventListener('focus', recover);
-    // Realtime is not a durable queue. A slow backfill covers missed events, with a
-    // shorter fallback when the socket cannot connect. Neither drives server-side work.
-    const timer = setInterval(recover, pushed ? 120_000 : 30_000);
-    return () => {
-      window.removeEventListener('focus', recover);
-      clearInterval(timer);
-    };
-  }, [assetId, pushed, refresh]);
-
-  return { run, pushed, loading, refresh };
+  return {
+    run: assetId ? ((runQuery.data ?? null) as TemplateRunRow | null) : null,
+    pushed,
+    loading: runQuery.isFetching,
+    refresh,
+  };
 }

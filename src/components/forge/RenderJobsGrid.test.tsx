@@ -9,8 +9,9 @@
  * detail with the step timeline.
  */
 
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { ApiRenderJob, ApiRenderTemplateSummary } from '@continuum/contracts';
+import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
 const HOUR = 3_600_000;
 const ago = (hours: number) => new Date(Date.now() - hours * HOUR).toISOString();
@@ -141,11 +142,16 @@ let jobsFixture: ApiRenderJob[] = [];
 let templatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let clientTemplatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let environmentsFixture = [environment(DEFAULT_BINDING, 'Continuum_app', true)];
+let realtime: PostgresChangesSubscription | undefined;
+const listJobs = mock(async () => ({ items: jobsFixture, nextCursor: null }));
+const getJob = mock(async (_brandId: string, id: string) =>
+  jobsFixture.find((job) => job.id === id),
+);
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
-    listJobs: async () => ({ items: jobsFixture, nextCursor: null }),
-    getJob: async (_brandId: string, id: string) => jobsFixture.find((job) => job.id === id),
+    listJobs,
+    getJob,
     listRenderSets: async () => ({ items: [], nextCursor: null }),
     listEnvironments: async () => ({ items: environmentsFixture }),
     // The default environment is asked for without a bindingId, as the server expects.
@@ -160,10 +166,14 @@ mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({ realtime: { setAuth: async () => undefined } }),
 }));
 mock.module('@/lib/supabase/realtime', () => ({
-  subscribeToPostgresChanges: () => () => undefined,
+  subscribeToPostgresChanges: (options: PostgresChangesSubscription) => {
+    realtime = options;
+    return () => undefined;
+  },
 }));
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { RenderJobsGrid } from './RenderJobsGrid';
 
 const BRAND = BASE.brandId;
@@ -176,12 +186,27 @@ const rowOrder = () => {
     .sort((a, b) => text.indexOf(a) - text.indexOf(b));
 };
 
-async function renderLedger(jobs: ApiRenderJob[], templates: Partial<ApiRenderTemplateSummary>[]) {
+async function renderLedger(
+  jobs: ApiRenderJob[],
+  templates: Partial<ApiRenderTemplateSummary>[],
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   jobsFixture = jobs;
   templatesFixture = templates;
-  render(<RenderJobsGrid brandId={BRAND} />);
+  const view = render(
+    <QueryClientProvider client={client}>
+      <RenderJobsGrid brandId={BRAND} />
+    </QueryClientProvider>,
+  );
   await screen.findByText(jobs[0]?.label ?? 'Spain');
+  return view;
 }
+
+beforeEach(() => {
+  realtime = undefined;
+  listJobs.mockClear();
+  getJob.mockClear();
+});
 
 afterEach(() => {
   cleanup();
@@ -195,7 +220,12 @@ describe('RenderJobsGrid', () => {
     // its prettified display name, and the row reads its own label.
     jobsFixture = [BASE];
     templatesFixture = [];
-    render(<RenderJobsGrid brandId={BRAND} />);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <RenderJobsGrid brandId={BRAND} />
+      </QueryClientProvider>,
+    );
     expect(await screen.findByText('Forge bench starcraft')).toBeTruthy();
     expect(screen.queryByText('forge_bench_starcraft')).toBeNull();
     expect(screen.getByText('Spain')).toBeTruthy();
@@ -385,6 +415,30 @@ describe('RenderJobsGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
     await waitFor(() => expect(rowOf().getByText('approved')).toBeTruthy());
     expect(rowOf().queryByText('awaiting approval')).toBeNull();
+  }, 30_000);
+
+  test('a realtime update refreshes one job while an insert refreshes the ordered page', async () => {
+    await renderLedger([MADRID], [TEMPLATE]);
+    const initialLists = listJobs.mock.calls.length;
+    const update = realtime?.bindings.find((binding) => binding.event === 'UPDATE');
+    const insert = realtime?.bindings.find((binding) => binding.event === 'INSERT');
+
+    jobsFixture = [{ ...MADRID, status: 'rendering' }];
+    act(() => update?.onRow({ id: MADRID.id, brand_id: BRAND }));
+    await waitFor(() => expect(getJob).toHaveBeenCalledWith(BRAND, MADRID.id));
+    expect(listJobs).toHaveBeenCalledTimes(initialLists);
+
+    act(() => insert?.onRow({ id: ROMA.id, brand_id: BRAND }));
+    await waitFor(() => expect(listJobs.mock.calls.length).toBe(initialLists + 1));
+  }, 30_000);
+
+  test('reuses a fresh ledger page after the tab remounts', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const first = await renderLedger([MADRID], [TEMPLATE], client);
+    first.unmount();
+
+    await renderLedger([MADRID], [TEMPLATE], client);
+    expect(listJobs).toHaveBeenCalledTimes(1);
   }, 30_000);
 
   test('a collapsed group stays collapsed after opening a job and coming back', async () => {

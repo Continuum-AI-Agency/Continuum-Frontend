@@ -6,7 +6,11 @@ import { useCallback, useRef, useState } from 'react';
 import { uploadCompanionPreview } from '@/lib/library/assetPreview';
 import { partitionSidecarUploads } from '@/lib/library/sidecarUploads';
 import { uploadBrandFont } from '@/lib/library/templateSources';
-import { type UploadResumeState, uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
+import {
+  type UploadMediaAssetResult,
+  type UploadResumeState,
+  uploadMediaAsset,
+} from '@/lib/library/uploadMediaAsset';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 const MAX_CONCURRENCY = 3;
@@ -44,7 +48,12 @@ export function isAcceptedUploadFile(file: File): boolean {
 // single-file upload route; analysis + library insertion happen server-side and
 // surface back through the realtime subscription, so this hook only tracks
 // transient per-file progress.
-export function useMediaUpload(brandId: string) {
+export function useMediaUpload(
+  brandId: string,
+  options: {
+    onUploaded?: (result: { file: File; uploaded: UploadMediaAssetResult }) => void;
+  } = {},
+) {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const counter = useRef(0);
   const jobs = useRef(new Map<string, UploadJob>());
@@ -87,6 +96,7 @@ export function useMediaUpload(brandId: string) {
         if (job.cancelled) return;
         patch(id, { status: 'done', progress: 100 });
         jobs.current.delete(id);
+        options.onUploaded?.({ file, uploaded });
         // Drop the chip a moment after success so the strip self-clears.
         setTimeout(() => setUploads((prev) => prev.filter((u) => u.id !== id)), 2500);
         return uploaded;
@@ -101,7 +111,7 @@ export function useMediaUpload(brandId: string) {
         job.controller = null;
       }
     },
-    [brandId, patch],
+    [brandId, options.onUploaded, patch],
   );
 
   const uploadFiles = useCallback(

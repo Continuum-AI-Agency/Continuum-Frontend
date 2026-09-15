@@ -1,8 +1,10 @@
 'use client';
 
 import type { RenderApproval } from '@continuum/contracts';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Loader2, ShieldCheck, XCircle } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
@@ -135,31 +137,32 @@ function ApprovalCard({
 }
 
 export function PendingApprovals({ brandId }: { brandId: string }) {
-  const [approvals, setApprovals] = useState<RenderApproval[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setApprovals(await fetchRenderApprovals(brandId));
-    } catch (error) {
-      // A failed list is not worth a toast on every page load; the section just
-      // stays empty, and the Slack card is the other way in.
-      console.warn('[Forge] could not load pending approvals', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [brandId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const queryClient = useQueryClient();
+  const approvalKey = forgeQueryKeys.approvals(brandId);
+  const approvalQuery = useQuery({
+    queryKey: approvalKey,
+    queryFn: () => fetchRenderApprovals(brandId),
+    staleTime: FORGE_STALE_MS.active,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    retry: false,
+  });
+  const approvals = approvalQuery.data ?? [];
 
   const onDecide = useCallback(
     async (approvalId: string, decision: 'approve' | 'reject') => {
       setBusyId(approvalId);
       try {
         const result = await decideRenderApproval(approvalId, decision);
+        queryClient.setQueryData<RenderApproval[]>(approvalKey, (current = []) =>
+          current.map((approval) =>
+            approval.id === result.approval.id ? result.approval : approval,
+          ),
+        );
+        void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
         // Report what actually happened. 'previewed' is approved-but-not-published,
         // and a toast saying "Published" over it would be a lie someone acts on.
         const status = result.approval.status;
@@ -172,18 +175,18 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
                 ? 'Rejected. Nothing was published.'
                 : `Recorded, but publishing did not complete: ${result.deliveryReason ?? 'see the render log'}`,
         );
-        await load();
+        await queryClient.invalidateQueries({ queryKey: approvalKey, exact: true });
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'That decision did not go through.');
-        await load();
+        await queryClient.invalidateQueries({ queryKey: approvalKey, exact: true });
       } finally {
         setBusyId(null);
       }
     },
-    [load],
+    [approvalKey, brandId, queryClient],
   );
 
-  if (loading || approvals.length === 0) return null;
+  if (approvalQuery.isPending || approvals.length === 0) return null;
 
   const waiting = approvals.filter((a) => a.status === 'pending').length;
 

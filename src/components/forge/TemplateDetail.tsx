@@ -7,12 +7,14 @@ import {
   templateNameProblem,
   UNTITLED_TEMPLATE_NAME,
 } from '@continuum/contracts';
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Loader2, Play, RefreshCw, Rocket, Send, TestTube2 } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { AiVariationsDialog } from '@/components/forge/AiVariationsDialog';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { LineagePanel } from '@/components/forge/LineagePanel';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { useForgeRun } from '@/components/forge/useForgeRun';
@@ -148,6 +150,11 @@ export function TemplateDetail({
   onChanged: () => Promise<void>;
 }) {
   const { assetId, templateKey } = source;
+  const queryClient = useQueryClient();
+  const variablesKey = useMemo(
+    () => forgeQueryKeys.templateVariables(brandId, assetId, source.versionId),
+    [assetId, brandId, source.versionId],
+  );
   const name = sourceDisplayName(source);
   const { run, pushed, refresh: refreshRun } = useForgeRun(brandId, assetId);
   const rendered = useLatestRenderFrame(brandId, templateKey);
@@ -169,7 +176,11 @@ export function TemplateDetail({
 
   const loadVariables = useCallback(async () => {
     try {
-      const result = await fetchTemplateVariables(brandId, assetId);
+      const result = await queryClient.fetchQuery({
+        queryKey: variablesKey,
+        queryFn: () => fetchTemplateVariables(brandId, assetId),
+        staleTime: FORGE_STALE_MS.lists,
+      });
       setVariables(result.variables);
       setParseState(result.parseState);
       // Saved defaults live on the edits, not on the variables — without this they never reappear.
@@ -179,7 +190,7 @@ export function TemplateDetail({
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not read the variables');
     }
-  }, [brandId, assetId]);
+  }, [assetId, brandId, queryClient, variablesKey]);
 
   useEffect(() => {
     void loadVariables();
@@ -187,7 +198,12 @@ export function TemplateDetail({
 
   useEffect(() => {
     let cancelled = false;
-    fetchRenderWorkspaces(brandId)
+    queryClient
+      .fetchQuery({
+        queryKey: forgeQueryKeys.workspaces(brandId),
+        queryFn: () => fetchRenderWorkspaces(brandId),
+        staleTime: FORGE_STALE_MS.lists,
+      })
       .then((items) => {
         if (cancelled) return;
         setWorkspaces(items);
@@ -199,12 +215,13 @@ export function TemplateDetail({
     return () => {
       cancelled = true;
     };
-  }, [brandId]);
+  }, [brandId, queryClient]);
 
   const onSave = async (edits: TemplateSlotEdit[]) => {
     setSaving(true);
     try {
       await saveTemplateVariables(brandId, assetId, edits);
+      await queryClient.invalidateQueries({ queryKey: variablesKey, exact: true });
       await loadVariables();
       toast.success('Saved');
       return true;

@@ -34,16 +34,21 @@ const SOURCE: TemplateSource = {
 
 const toastError = mock((_message: string) => undefined);
 let discovered: unknown[] = [];
+let fetchedSources: TemplateSource[] = [SOURCE];
+let uploadFinished: (() => void) | undefined;
+const fetchTemplateSources = mock(async () => fetchedSources);
+const fetchRenderWorkspaces = mock(async () => []);
+const discoverWorkspaceTemplates = mock(async () => ({ items: discovered }));
 const renameTemplateSource = mock(async (_brandId: string, _assetId: string, title: string) => ({
   ...SOURCE,
   displayName: title,
 }));
 
 mock.module('@/lib/library/templateSources', () => ({
-  fetchTemplateSources: async () => [SOURCE],
+  fetchTemplateSources,
   renameTemplateSource,
-  fetchRenderWorkspaces: async () => [],
-  discoverWorkspaceTemplates: async () => ({ items: discovered }),
+  fetchRenderWorkspaces,
+  discoverWorkspaceTemplates,
   setTemplateAdoption: async () => ({ granted: true }),
   fetchTemplateVariables: async () => ({ variables: [], edits: [], parseState: 'parsed' }),
   saveTemplateVariables: async () => undefined,
@@ -61,7 +66,15 @@ mock.module('@/components/forge/LineagePanel', () => ({ LineagePanel: () => null
 mock.module('@/components/forge/SourceRebindPanel', () => ({ SourceRebindPanel: () => null }));
 mock.module('@/components/forge/OutputSettingsPanel', () => ({ OutputSettingsPanel: () => null }));
 mock.module('@/components/library/useMediaUpload', () => ({
-  useMediaUpload: () => ({ uploads: [], uploadFiles: async () => undefined }),
+  useMediaUpload: (
+    _brandId: string,
+    options?: {
+      onUploaded?: () => void;
+    },
+  ) => {
+    uploadFinished = options?.onUploaded;
+    return { uploads: [], uploadFiles: async () => undefined };
+  },
 }));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: { listJobs: async () => ({ items: [], nextCursor: null }) },
@@ -76,6 +89,11 @@ import { ForgeWorkbench } from './ForgeWorkbench';
 
 beforeEach(() => {
   discovered = [];
+  fetchedSources = [SOURCE];
+  uploadFinished = undefined;
+  fetchTemplateSources.mockClear();
+  fetchRenderWorkspaces.mockClear();
+  discoverWorkspaceTemplates.mockClear();
   renameTemplateSource.mockClear();
   toastError.mockClear();
 });
@@ -96,9 +114,10 @@ function workspaceTemplate(overrides: Record<string, unknown>) {
   };
 }
 
-function renderWorkbench() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+function renderWorkbench(
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
+  return render(
     <QueryClientProvider client={client}>
       <ForgeWorkbench brandId={BRAND} brandName="StarCraft" />
     </QueryClientProvider>,
@@ -113,6 +132,47 @@ function rename(from: string, to: string) {
 }
 
 describe('ForgeWorkbench', () => {
+  test('a completed upload appears immediately and keeps showing unpacking progress', async () => {
+    fetchedSources = [];
+    renderWorkbench();
+    await waitFor(() => expect(fetchTemplateSources).toHaveBeenCalledTimes(1));
+
+    let poll: TimerHandler | undefined;
+    const interval = spyOn(window, 'setInterval').mockImplementation((handler) => {
+      poll = handler;
+      return 1;
+    });
+    try {
+      fetchedSources = [{ ...SOURCE, parseState: 'pending' }];
+      uploadFinished?.();
+
+      expect(await screen.findByText('Unpacking')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
+
+      fetchedSources = [SOURCE];
+      if (typeof poll === 'function') poll();
+      expect(await screen.findByText('Parsed')).toBeTruthy();
+      expect(fetchRenderWorkspaces).toHaveBeenCalledTimes(1);
+      expect(discoverWorkspaceTemplates).toHaveBeenCalledTimes(1);
+    } finally {
+      interval.mockRestore();
+    }
+  });
+
+  test('reuses fresh template and workspace data after a remount', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const first = renderWorkbench(client);
+    await screen.findByRole('button', { name: 'Open Untitled template' });
+    first.unmount();
+
+    renderWorkbench(client);
+    await screen.findByRole('button', { name: 'Open Untitled template' });
+
+    expect(fetchTemplateSources).toHaveBeenCalledTimes(1);
+    expect(fetchRenderWorkspaces).toHaveBeenCalledTimes(1);
+    expect(discoverWorkspaceTemplates).toHaveBeenCalledTimes(1);
+  });
+
   test('rename shows at once, and the old name comes back when the server refuses', async () => {
     let refuse: (error: Error) => void = () => undefined;
     renameTemplateSource.mockImplementationOnce(
@@ -125,7 +185,7 @@ describe('ForgeWorkbench', () => {
     await screen.findByRole('button', { name: 'Open Untitled template' });
 
     rename('Untitled template', 'StarCraft Promo');
-    expect(screen.getByRole('button', { name: 'Open StarCraft Promo' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Open StarCraft Promo' })).toBeTruthy();
     expect(renameTemplateSource).toHaveBeenCalledWith(BRAND, ASSET, 'StarCraft Promo');
 
     refuse(new Error('Only members can rename'));

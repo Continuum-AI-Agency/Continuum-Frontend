@@ -1,7 +1,9 @@
 'use client';
 
-import type { ApiRenderJob } from '@continuum/contracts';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ApiRenderJob, ApiRenderJobListResponse } from '@continuum/contracts';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { apiRendersApi } from './apiRendersApi';
 
 /**
@@ -76,6 +78,12 @@ export function useApiRenderJobs(args: {
   pollIntervalMs?: number | false;
 }) {
   const { brandId } = args;
+  const limit = args.limit ?? 8;
+  const queryClient = useQueryClient();
+  const listKey = useMemo(
+    () => forgeQueryKeys.renderJobList(brandId ?? 'none', limit, args.renderSetId),
+    [args.renderSetId, brandId, limit],
+  );
   const [jobs, setJobs] = useState<ApiRenderJob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -87,21 +95,48 @@ export function useApiRenderJobs(args: {
   const sequence = useRef(0);
 
   useEffect(() => {
-    setJobs([]);
+    const cached = brandId
+      ? queryClient.getQueryData<ApiRenderJobListResponse>(listKey)
+      : undefined;
+    setJobs(cached?.items ?? []);
     setError(null);
-    setNextCursor(null);
+    setNextCursor(cached?.nextCursor ?? null);
     paged.current = false;
     paging.current = false;
-  }, [scope]);
+  }, [brandId, listKey, queryClient, scope]);
 
   // The tracked list is persisted node data and changes identity on every save; keying
   // effects off the array itself would refetch on each keystroke elsewhere in the node.
   const trackedKey = args.trackedIds.join(',');
 
+  const rememberJob = useCallback(
+    (fresh: ApiRenderJob) => {
+      if (!brandId) return;
+      queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, fresh.id), fresh);
+      const replace = (current: ApiRenderJobListResponse | undefined) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((job) => (job.id === fresh.id ? fresh : job)),
+            }
+          : current;
+      queryClient.setQueriesData<ApiRenderJobListResponse>(
+        { queryKey: forgeQueryKeys.renderJobLists(brandId) },
+        replace,
+      );
+      queryClient.setQueriesData<ApiRenderJobListResponse>(
+        { queryKey: forgeQueryKeys.renderJobPages(brandId) },
+        replace,
+      );
+    },
+    [brandId, queryClient],
+  );
+
   const mergeJob = useCallback(
     (fresh: ApiRenderJob) => {
       if (fresh.brandId !== brandId || (args.renderSetId && fresh.renderSetId !== args.renderSetId))
         return;
+      rememberJob(fresh);
       setJobs((current) => {
         const index = current.findIndex((item) => item.id === fresh.id);
         if (index === -1) return [fresh, ...current];
@@ -110,57 +145,92 @@ export function useApiRenderJobs(args: {
         return next;
       });
     },
-    [brandId, args.renderSetId],
+    [brandId, args.renderSetId, rememberJob],
   );
 
-  const refreshJobs = useCallback(async () => {
-    if (!brandId) return;
-    const requestSequence = ++sequence.current;
-    const response = await apiRendersApi.listJobs(brandId, args.limit ?? 8, {
-      renderSetId: args.renderSetId,
-    });
-    const listed = new Set(response.items.map((item) => item.id));
-    const missing = trackedKey ? trackedKey.split(',').filter((id) => id && !listed.has(id)) : [];
-    // A tracked id the list did not return is fetched directly rather than dropped.
-    const recovered = await Promise.all(
-      missing.map((id) => apiRendersApi.getJob(brandId, id).catch(() => null)),
-    );
-    if (scopeRef.current !== scope || sequence.current !== requestSequence) return;
-    const fresh = [
-      ...response.items,
-      ...recovered.filter(
-        (job): job is ApiRenderJob =>
-          job !== null && (!args.renderSetId || job.renderSetId === args.renderSetId),
-      ),
-    ];
-    setJobs((current) => mergePage(current, fresh, { incomingFirst: true }));
-    if (!paged.current) setNextCursor(response.nextCursor);
-  }, [brandId, trackedKey, args.limit, args.renderSetId, scope]);
+  const fetchJob = useCallback(
+    (jobId: string) => {
+      if (!brandId) return Promise.resolve(null);
+      return queryClient.fetchQuery({
+        queryKey: forgeQueryKeys.renderJob(brandId, jobId),
+        queryFn: () => apiRendersApi.getJob(brandId, jobId),
+        staleTime: 0,
+      });
+    },
+    [brandId, queryClient],
+  );
+
+  const refreshJobs = useCallback(
+    async (options?: { preferCache?: boolean }) => {
+      if (!brandId) return;
+      const requestSequence = ++sequence.current;
+      const response = await queryClient.fetchQuery({
+        queryKey: listKey,
+        queryFn: () =>
+          apiRendersApi.listJobs(brandId, limit, {
+            renderSetId: args.renderSetId,
+          }),
+        staleTime: options?.preferCache ? FORGE_STALE_MS.active : 0,
+      });
+      const listed = new Set(response.items.map((item) => item.id));
+      const missing = trackedKey ? trackedKey.split(',').filter((id) => id && !listed.has(id)) : [];
+      // A tracked id the list did not return is fetched directly rather than dropped.
+      const recovered = await Promise.all(missing.map((id) => fetchJob(id).catch(() => null)));
+      if (scopeRef.current !== scope || sequence.current !== requestSequence) return;
+      const fresh = [
+        ...response.items,
+        ...recovered.filter(
+          (job): job is ApiRenderJob =>
+            job !== null && (!args.renderSetId || job.renderSetId === args.renderSetId),
+        ),
+      ];
+      for (const job of fresh) rememberJob(job);
+      setJobs((current) => mergePage(current, fresh, { incomingFirst: true }));
+      if (!paged.current) setNextCursor(response.nextCursor);
+    },
+    [
+      brandId,
+      fetchJob,
+      limit,
+      listKey,
+      queryClient,
+      rememberJob,
+      trackedKey,
+      args.renderSetId,
+      scope,
+    ],
+  );
 
   const loadMore = useCallback(async () => {
     if (!brandId || !nextCursor || paging.current) return;
     paging.current = true;
     try {
-      const response = await apiRendersApi.listJobs(brandId, args.limit ?? 8, {
-        cursor: nextCursor,
-        renderSetId: args.renderSetId,
+      const response = await queryClient.fetchQuery({
+        queryKey: forgeQueryKeys.renderJobPage(brandId, limit, args.renderSetId, nextCursor),
+        queryFn: () =>
+          apiRendersApi.listJobs(brandId, limit, {
+            cursor: nextCursor,
+            renderSetId: args.renderSetId,
+          }),
+        staleTime: FORGE_STALE_MS.active,
       });
       if (scopeRef.current !== scope) return;
+      for (const job of response.items) rememberJob(job);
       setJobs((current) => mergePage(current, response.items));
       setNextCursor(response.nextCursor);
       paged.current = true;
     } finally {
       if (scopeRef.current === scope) paging.current = false;
     }
-  }, [brandId, nextCursor, args.limit, args.renderSetId, scope]);
+  }, [brandId, nextCursor, limit, args.renderSetId, queryClient, rememberJob, scope]);
 
   const refreshOne = useCallback(
     async (jobId: string) => {
       if (!brandId) return;
-      const fresh = await apiRendersApi.getJob(brandId, jobId);
-      if (scopeRef.current === scope) mergeJob(fresh);
+      const fresh = await fetchJob(jobId);
+      if (fresh && scopeRef.current === scope) mergeJob(fresh);
     },
-    [brandId, mergeJob, scope],
+    [brandId, fetchJob, mergeJob, scope],
   );
 
   const jobsRef = useRef<ApiRenderJob[]>(jobs);
@@ -185,9 +255,11 @@ export function useApiRenderJobs(args: {
       );
       offset = (offset + active.length) % all.length;
       pending = true;
-      void Promise.all(active.map((job) => apiRendersApi.getJob(brandId, job.id)))
+      void Promise.all(active.map((job) => fetchJob(job.id)))
         .then((fresh) => {
-          if (scopeRef.current === scope) setJobs((current) => mergePage(current, fresh));
+          const found = fresh.filter((job): job is ApiRenderJob => job !== null);
+          for (const job of found) rememberJob(job);
+          if (scopeRef.current === scope) setJobs((current) => mergePage(current, found));
         })
         .catch(() => {
           // A dropped poll is not a render failure; the next tick retries.
@@ -197,7 +269,7 @@ export function useApiRenderJobs(args: {
         });
     }, args.pollIntervalMs ?? 30_000);
     return () => clearInterval(timer);
-  }, [brandId, inFlight, scope, args.pollIntervalMs]);
+  }, [brandId, fetchJob, inFlight, rememberJob, scope, args.pollIntervalMs]);
 
   return {
     jobs,

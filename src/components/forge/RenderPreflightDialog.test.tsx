@@ -16,6 +16,7 @@ import type {
   ApiRenderTemplateContract,
   PaidCanvasTarget,
 } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@/lib/api/errors';
 
 const READY: ApiRenderBatchReadiness = {
@@ -212,14 +213,17 @@ function renderDialog(
 ) {
   const onFired = mock((_ids: string[]) => undefined);
   const onClose = mock(() => undefined);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <Harness
-      bindingId={bindingId}
-      initialRows={data.rows}
-      records={data.records}
-      onFired={onFired}
-      onClose={onClose}
-    />,
+    <QueryClientProvider client={client}>
+      <Harness
+        bindingId={bindingId}
+        initialRows={data.rows}
+        records={data.records}
+        onFired={onFired}
+        onClose={onClose}
+      />
+    </QueryClientProvider>,
   );
   return { onFired, onClose };
 }

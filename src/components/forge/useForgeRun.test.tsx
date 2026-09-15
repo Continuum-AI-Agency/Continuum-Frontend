@@ -1,5 +1,7 @@
-import { afterEach, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
 let subscription: PostgresChangesSubscription;
@@ -14,6 +16,15 @@ mock.module('@/lib/supabase/realtime', () => ({
 
 const { useForgeRun } = await import('./useForgeRun');
 afterEach(cleanup);
+beforeEach(() => {
+  fetchRun.mockReset();
+  fetchRun.mockImplementation(async () => null);
+});
+
+const withClient = (client: QueryClient) =>
+  function QueryWrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  };
 
 test('late reads and notifications cannot replace another brand or current source run', async () => {
   let release!: (value: unknown) => void;
@@ -24,8 +35,10 @@ test('late reads and notifications cannot replace another brand or current sourc
       }),
   );
   fetchRun.mockImplementation(async () => ({ run_id: 'current', state: 'rendering' }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const hook = renderHook(({ brand }) => useForgeRun(brand, 'asset'), {
     initialProps: { brand: 'first' },
+    wrapper: withClient(client),
   });
   hook.rerender({ brand: 'second' });
   await waitFor(() => expect(hook.result.current.run?.run_id).toBe('current'));
@@ -47,4 +60,18 @@ test('late reads and notifications cannot replace another brand or current sourc
   );
   await waitFor(() => expect(fetchRun.mock.calls.length).toBe(before + 1));
   expect(hook.result.current.run?.run_id).toBe('current');
+});
+
+test('reuses a fresh run after its detail view remounts', async () => {
+  fetchRun.mockImplementation(async () => ({ run_id: 'current', state: 'rendering' }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = withClient(client);
+  const first = renderHook(() => useForgeRun('brand', 'asset'), { wrapper });
+  await waitFor(() => expect(first.result.current.run?.run_id).toBe('current'));
+  first.unmount();
+
+  const second = renderHook(() => useForgeRun('brand', 'asset'), { wrapper });
+  await waitFor(() => expect(second.result.current.run?.run_id).toBe('current'));
+
+  expect(fetchRun).toHaveBeenCalledTimes(1);
 });
