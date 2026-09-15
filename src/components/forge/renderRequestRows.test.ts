@@ -1,17 +1,31 @@
 import { describe, expect, test } from 'bun:test';
 import type { ApiRenderVariable } from '@continuum/contracts';
 import {
+  autoMapHeaders,
+  buildTemplateCsv,
   canImportRows,
   descendantsOf,
+  duplicateLabel,
   duplicateMappedVariable,
   effectiveEncode,
   effectiveOutputIds,
   effectiveValues,
+  forkLabel,
+  fromRenderSetRows,
+  IMPORT_SKIP,
+  moveRow,
   parseClipboardRows,
+  parseDelimited,
+  pinnedAssetIds,
+  type RequestRow,
+  recordsFromTable,
   rowBreadcrumb,
   rowDepth,
   rowsFromMappedImport,
   seedRow,
+  toCsv,
+  toPreflightDelivery,
+  toRenderSetRows,
   toVariableMap,
   validateRow,
 } from './renderRequestRows';
@@ -97,19 +111,13 @@ describe('parseClipboardRows', () => {
 });
 
 describe('reviewed spreadsheet import', () => {
-  test('coerces mapped scalar columns and rejects whole imports above the set cap', () => {
-    const rows = rowsFromMappedImport(
-      [
-        {
-          Name: 'Autumn offer',
-          Headline: 'Hello',
-          Price: '12.50',
-          Hero: 'https://example.test/a.jpg',
-        },
-      ],
-      { Headline: 'headline', Price: 'price', Hero: 'hero' },
+  test('coerces mapped columns and rejects whole imports above the set cap', () => {
+    const { rows, errors } = rowsFromMappedImport(
+      [{ Name: 'Autumn offer', Headline: 'Hello', Price: '12.50' }],
+      { Name: '@name', Headline: 'headline', Price: 'price' },
       all,
     );
+    expect(errors).toEqual([]);
     expect(rows[0]?.label).toBe('Autumn offer');
     expect(rows[0]?.values).toEqual({ headline: 'Hello', price: 12.5 });
     expect(canImportRows(49, 1)).toBe(true);
@@ -122,6 +130,246 @@ describe('reviewed spreadsheet import', () => {
         all,
       ),
     ).toThrow('render_import_duplicate_mapping');
+  });
+
+  test('Parent makes forks after every row exists, Formats take labels or ratios, ad ids replace', () => {
+    const outputs = [
+      { id: 'wide', label: 'Landscape', ratio: '16:9' },
+      { id: 'story', label: 'Story', ratio: '9:16' },
+    ];
+    const assetId = '11111111-1111-4111-8111-111111111111';
+    const source = [
+      { Name: 'Spain', Parent: 'Campaign', Formats: '9:16', Hero: assetId, 'Ad id': '' },
+      { Name: 'Campaign', Parent: '', Formats: 'Landscape, 9:16', Hero: '', 'Ad id': '' },
+      { Name: 'Sale', Parent: 'spain', Formats: '', Hero: '', 'Ad id': ' 238500 ' },
+    ];
+    const mappings = autoMapHeaders(Object.keys(source[0]!), all);
+    expect(mappings).toEqual({
+      Name: '@name',
+      Parent: '@parent',
+      Formats: '@formats',
+      Hero: 'hero',
+      'Ad id': '@replaceAdId',
+    });
+    const { rows, errors } = rowsFromMappedImport(source, mappings, all, outputs);
+    expect(errors).toEqual([]);
+    const [spain, campaign, sale] = rows as [RequestRow, RequestRow, RequestRow];
+    expect(spain.parentId).toBe(campaign.id);
+    expect(sale.parentId).toBe(spain.id);
+    expect(campaign.outputIds).toEqual(['wide', 'story']);
+    expect(spain.outputIds).toEqual(['story']);
+    expect(spain.values.hero).toEqual({ assetId });
+    expect(sale.delivery).toEqual({ action: 'replace', adId: '238500' });
+    expect(pinnedAssetIds(rows)).toEqual([assetId]);
+  });
+
+  test('every cell that cannot be used is named by row and column', () => {
+    const { errors } = rowsFromMappedImport(
+      [
+        {
+          Name: 'A',
+          Parent: 'Nobody',
+          Price: 'cheap',
+          Size: 'XL',
+          Hero: 'photo.jpg',
+          Formats: '4:5',
+        },
+        { Name: 'B', Parent: 'B', Price: '', Size: '', Hero: '', Formats: '' },
+      ],
+      {
+        Name: '@name',
+        Parent: '@parent',
+        Price: 'price',
+        Size: 'size',
+        Hero: 'hero',
+        Formats: '@formats',
+      },
+      all,
+      [{ id: 'sq', label: 'Square', ratio: '1:1' }],
+    );
+    expect(errors).toEqual([
+      { row: 0, column: 'Price', message: 'Not a number' },
+      { row: 0, column: 'Size', message: 'Not one of: S, M' },
+      { row: 0, column: 'Hero', message: 'Not a Library asset id' },
+      { row: 0, column: 'Formats', message: 'Unknown format: 4:5' },
+      { row: 0, column: 'Parent', message: 'No row is named Nobody' },
+      { row: 1, column: 'Parent', message: 'A row cannot be its own parent' },
+    ]);
+  });
+
+  test('a fork chain past the depth cap is an error on the row that breaks it', () => {
+    const names = ['L0', 'L1', 'L2', 'L3', 'L4'];
+    const { errors } = rowsFromMappedImport(
+      names.map((name, index) => ({ Name: name, Parent: index ? names[index - 1]! : '' })),
+      { Name: '@name', Parent: '@parent' },
+      all,
+    );
+    expect(errors).toEqual([
+      { row: 4, column: 'Parent', message: 'Forks go at most 3 levels deep' },
+    ]);
+  });
+});
+
+describe('CSV', () => {
+  test('parses quotes, escaped quotes, CRLF and newlines inside quotes', () => {
+    expect(
+      parseDelimited('\uFEFFName,Headline\r\n"Sale, big","Say ""hi""\nthere"\r\n\r\n'),
+    ).toEqual([
+      ['Name', 'Headline'],
+      ['Sale, big', 'Say "hi"\nthere'],
+    ]);
+    expect(parseDelimited('a\tb\n1,5\t2')).toEqual([
+      ['a', 'b'],
+      ['1,5', '2'],
+    ]);
+  });
+
+  test('a pasted quoted cell keeps its comma', () => {
+    const { rows } = parseClipboardRows('label,headline\n"A, B","Hola, mundo"', all);
+    expect(rows[0]?.label).toBe('A, B');
+    expect(rows[0]?.values).toEqual({ headline: 'Hola, mundo' });
+  });
+
+  test('the template spreadsheet round-trips into the rows it describes', () => {
+    const clash = variable({ key: 'name_text', label: 'Name', sample: 'Ana, "la" jefa' });
+    const contract = {
+      variables: [...all, clash],
+      outputs: [
+        { id: 'sq', label: 'Square', ratio: '1:1' },
+        { id: 'story', label: 'Story', ratio: '9:16' },
+      ],
+    };
+    const csv = buildTemplateCsv(contract);
+    const table = parseDelimited(csv);
+    expect(table[0]).toEqual([
+      'Name',
+      'Parent',
+      'Formats',
+      'Headline',
+      'Price',
+      'On sale',
+      'Size',
+      'Hero',
+      'Name (name_text)',
+      'Replace ad ID',
+    ]);
+    expect(toCsv(table)).toBe(csv);
+    const { headers, rows: records } = recordsFromTable(table);
+    const mappings = autoMapHeaders(headers, contract.variables);
+    expect(Object.values(mappings)).not.toContain(IMPORT_SKIP);
+    const { rows, errors } = rowsFromMappedImport(
+      records,
+      mappings,
+      contract.variables,
+      contract.outputs,
+    );
+    expect(errors).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.label).toBe('Root');
+    expect(rows[0]?.outputIds).toEqual(['sq', 'story']);
+    expect(rows[0]?.values).toEqual({
+      headline: 'Hola',
+      price: 9.99,
+      on_sale: true,
+      name_text: 'Ana, "la" jefa',
+    });
+  });
+});
+
+describe('names, order and parentage', () => {
+  test('forks are named after their parent with the next free letter; duplicates say copy', () => {
+    const root = seedRow([], 'Summer');
+    const b = seedRow([], forkLabel([root], root.id), root.id);
+    expect(b.label).toBe('Summer · B');
+    const c = seedRow([], forkLabel([root, b], root.id), root.id);
+    expect(c.label).toBe('Summer · C');
+    b.label = 'Renamed';
+    expect(forkLabel([root, b, c], root.id)).toBe('Summer · B');
+    expect(duplicateLabel('Summer')).toBe('Summer copy');
+  });
+
+  const tree = () => {
+    const a = seedRow([], 'A');
+    const a1 = seedRow([], 'A1', a.id);
+    const a2 = seedRow([], 'A2', a1.id);
+    const b = seedRow([], 'B');
+    const c = seedRow([], 'C');
+    const c1 = seedRow([], 'C1', c.id);
+    const c2 = seedRow([], 'C2', c1.id);
+    const c3 = seedRow([], 'C3', c2.id);
+    return { a, a1, a2, b, c, c1, c2, c3, rows: [a, a1, a2, b, c, c1, c2, c3] };
+  };
+  const labels = (rows: RequestRow[]) => rows.map((row) => row.label);
+
+  test('reorders siblings, carrying the subtree', () => {
+    const { a, b, c, rows } = tree();
+    const moved = moveRow(rows, c.id, { rowId: a.id, position: 'before' });
+    if (!moved.ok) throw new Error(moved.reason);
+    expect(labels(moved.rows)).toEqual(['C', 'C1', 'C2', 'C3', 'A', 'A1', 'A2', 'B']);
+    expect(moved.rows.find((row) => row.id === c.id)?.parentId).toBeNull();
+    const after = moveRow(rows, a.id, { rowId: b.id, position: 'after' });
+    if (!after.ok) throw new Error(after.reason);
+    expect(labels(after.rows)).toEqual(['B', 'A', 'A1', 'A2', 'C', 'C1', 'C2', 'C3']);
+  });
+
+  test('drops inside a row as its last child and re-checks the moved rows', () => {
+    const { a, b, rows } = tree();
+    rows[3]!.check = { state: 'ready', fit: null, test: true };
+    const moved = moveRow(rows, b.id, { rowId: a.id, position: 'inside' });
+    if (!moved.ok) throw new Error(moved.reason);
+    expect(labels(moved.rows)).toEqual(['A', 'A1', 'A2', 'B', 'C', 'C1', 'C2', 'C3']);
+    const movedB = moved.rows.find((row) => row.id === b.id)!;
+    expect(movedB.parentId).toBe(a.id);
+    expect(movedB.check.state).toBe('idle');
+    expect(rowDepth(moved.rows, b.id)).toBe(1);
+  });
+
+  test('refuses a drop under its own descendant as a cycle', () => {
+    const { a, a2, rows } = tree();
+    expect(moveRow(rows, a.id, { rowId: a2.id, position: 'inside' })).toEqual({
+      ok: false,
+      reason: 'cycle',
+    });
+    expect(moveRow(rows, a.id, { rowId: a2.id, position: 'after' })).toEqual({
+      ok: false,
+      reason: 'cycle',
+    });
+    expect(moveRow(rows, a.id, { rowId: a.id, position: 'inside' })).toEqual({ ok: true, rows });
+  });
+
+  test('refuses a drop that would end any row deeper than three levels', () => {
+    const { a1, c, c3, b, rows } = tree();
+    // C3 is already at depth 3; nothing may go inside it.
+    expect(moveRow(rows, b.id, { rowId: c3.id, position: 'inside' })).toEqual({
+      ok: false,
+      reason: 'depth',
+    });
+    // A1 carries a child, so under C (depth 1 → 2, child → 3) fits; under C3's parent it does not.
+    expect(moveRow(rows, a1.id, { rowId: c.id, position: 'inside' }).ok).toBe(true);
+    expect(moveRow(rows, a1.id, { rowId: c3.id, position: 'before' })).toEqual({
+      ok: false,
+      reason: 'depth',
+    });
+  });
+
+  test('order and parentage survive a render-set save and load', () => {
+    const { a, b, rows } = tree();
+    const moved = moveRow(rows, b.id, { rowId: a.id, position: 'inside' });
+    if (!moved.ok) throw new Error(moved.reason);
+    moved.rows[0]!.delivery = { action: 'replace', adId: 'pending' };
+    const saved = toRenderSetRows(moved.rows, ['sq']);
+    expect(saved[0]?.outputIds).toEqual(['sq']);
+    expect(saved[0]).not.toHaveProperty('delivery');
+    expect(toPreflightDelivery(moved.rows[0]!.delivery)).toEqual({
+      action: 'replace',
+      adId: 'pending',
+      adAccountId: '',
+      campaignId: '',
+      adsetId: '',
+    });
+    const loaded = fromRenderSetRows(saved);
+    expect(labels(loaded)).toEqual(labels(moved.rows));
+    expect(loaded.map((row) => row.parentId)).toEqual(moved.rows.map((row) => row.parentId));
   });
 });
 
@@ -182,7 +430,10 @@ describe('effectiveEncode', () => {
       outputs: { story: { audio: { channels: 1 } } },
     });
     // The parent is untouched by the child's clear.
-    expect(effectiveEncode(rows, market.id)?.default).toEqual({ fps: 25, audio: { sampleRate: 48000 } });
+    expect(effectiveEncode(rows, market.id)?.default).toEqual({
+      fps: 25,
+      audio: { sampleRate: 48000 },
+    });
 
     // Reset: removing both the clear and the override inherits the parent again.
     offer.clearedEncodeKeys = undefined;

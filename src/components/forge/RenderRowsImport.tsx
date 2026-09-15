@@ -1,11 +1,13 @@
 'use client';
 
-import type {
-  ApiRenderVariable,
-  ForgeRenderDriveSnapshot,
-  ForgeRenderImportPreview,
+import {
+  type ApiRenderInputValue,
+  type ApiRenderTemplateContract,
+  type ForgeRenderImportPreview,
+  type MediaAsset,
+  mediaAssetSchema,
 } from '@continuum/contracts';
-import { FileSpreadsheet, FolderSearch, Loader2, Upload } from 'lucide-react';
+import { FileSpreadsheet, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,10 +17,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -29,83 +29,203 @@ import {
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
 import { uploadBrandDocument } from '@/lib/documents/uploadBrandDocument';
+import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
+  autoMapHeaders,
+  buildTemplateCsv,
   canImportRows,
   duplicateMappedVariable,
+  IMPORT_FIELDS,
+  IMPORT_SKIP,
+  type ImportCellError,
   MAX_BATCH_ROWS,
+  parseDelimited,
+  pinnedAssetIds,
   type RequestRow,
+  recordsFromTable,
   rowsFromMappedImport,
+  variableColumnHeader,
 } from './renderRequestRows';
 
-const SKIP = '__skip__';
+type ImportContract = Pick<ApiRenderTemplateContract, 'variables' | 'outputs'>;
+
+const PREVIEW_ROWS = 10;
 const wait = () => new Promise((resolve) => setTimeout(resolve, 1_000));
+const cellKey = (row: number, column: string) => `${row}:${column}`;
+
+/** GET /api/library/assets by id; null when the brand has no such asset (or the request fails). */
+export async function fetchLibraryAsset(
+  brandId: string,
+  assetId: string,
+): Promise<MediaAsset | null> {
+  try {
+    const query = new URLSearchParams({ brandId, assetId, limit: '1' });
+    const response = await fetch(`/api/library/assets?${query}`);
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { items?: unknown[] };
+    const item = payload.items?.[0];
+    return item === undefined ? null : mediaAssetSchema.parse(item);
+  } catch {
+    return null;
+  }
+}
+
+/** Builds the template CSV (buildTemplateCsv) and saves it client-side via Blob + a temporary <a download>. */
+export function downloadTemplateCsv(contract: ImportContract, fileName: string): void {
+  const url = URL.createObjectURL(
+    new Blob([buildTemplateCsv(contract)], { type: 'text/csv;charset=utf-8' }),
+  );
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+const isCsv = (file: File) => file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
+
+const pinsOf = (value: ApiRenderInputValue): string[] =>
+  (Array.isArray(value) ? value : [value]).flatMap((item) =>
+    typeof item === 'object' && item !== null && 'assetId' in item ? [item.assetId] : [],
+  );
 
 export function RenderRowsImport({
   brandId,
-  variables,
+  contract,
   existingRows,
+  open,
+  onOpenChange,
   onImport,
 }: {
   brandId: string;
-  variables: ApiRenderVariable[];
+  contract: ImportContract;
   existingRows: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onImport: (rows: RequestRow[]) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const scopeRef = useRef(0);
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<ForgeRenderImportPreview | null>(null);
   const [mappings, setMappings] = useState<Record<string, string>>({});
-  const [folderId, setFolderId] = useState('');
-  const [snapshot, setSnapshot] = useState<ForgeRenderDriveSnapshot | null>(null);
-  const scalarVariables = useMemo(
-    () => variables.filter((variable) => variable.kind !== 'image' && variable.kind !== 'video'),
-    [variables],
-  );
+  // Keyed by brand + id so remapping a column never refetches, and a brand switch never reuses.
+  const [assets, setAssets] = useState<Record<string, MediaAsset | null>>({});
+  const { variables, outputs } = contract;
   const variableScope = variables.map((variable) => `${variable.key}:${variable.kind}`).join('|');
 
+  const targets = useMemo(
+    () => [
+      ...IMPORT_FIELDS.map((field) => ({ value: field.target as string, label: field.header })),
+      ...variables
+        .filter((variable) => !variable.reserved)
+        .map((variable) => ({
+          value: variable.key,
+          label: variableColumnHeader(variable, variables),
+        })),
+    ],
+    [variables],
+  );
+  const labelOf = (target: string) =>
+    targets.find((option) => option.value === target)?.label ?? 'Do not import';
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new brand or variable set invalidates the sheet.
   useEffect(() => {
     scopeRef.current += 1;
     setPreview(null);
     setMappings({});
-    setSnapshot(null);
     setBusy(false);
     return () => {
       scopeRef.current += 1;
     };
   }, [brandId, variableScope]);
 
+  const review = useMemo(() => {
+    if (!preview) return null;
+    const duplicate = duplicateMappedVariable(mappings, IMPORT_SKIP);
+    if (duplicate) return { duplicate, rows: [], errors: [] };
+    return { duplicate: null, ...rowsFromMappedImport(preview.rows, mappings, variables, outputs) };
+  }, [preview, mappings, variables, outputs]);
+
+  const pending = useMemo(
+    () =>
+      review ? pinnedAssetIds(review.rows).filter((id) => !(`${brandId}:${id}` in assets)) : [],
+    [review, assets, brandId],
+  );
+
+  // Once per id: a remap while a lookup is in flight must not start a second one. No scope guard —
+  // the key already names the brand, so a late answer is still true for that key.
+  const requested = useRef(new Set<string>());
+  useEffect(() => {
+    for (const id of pending) {
+      const key = `${brandId}:${id}`;
+      if (requested.current.has(key)) continue;
+      requested.current.add(key);
+      void fetchLibraryAsset(brandId, id).then((asset) =>
+        setAssets((current) => ({ ...current, [key]: asset })),
+      );
+    }
+  }, [pending, brandId]);
+
+  const checked = useMemo(() => {
+    if (!review) return null;
+    const columnOf = new Map(Object.entries(mappings).map(([header, target]) => [target, header]));
+    const errors: ImportCellError[] = [...review.errors];
+    const rows = review.rows.map((row, index) => {
+      const media: RequestRow['media'] = {};
+      for (const [key, value] of Object.entries(row.values)) {
+        const pins = pinsOf(value);
+        if (pins.length === 0) continue;
+        const lookups = pins.map((id) => assets[`${brandId}:${id}`]);
+        if (lookups.includes(null)) {
+          errors.push({
+            row: index,
+            column: columnOf.get(key) ?? key,
+            message: 'No Library asset with this id',
+          });
+        }
+        const first = lookups[0];
+        if (!first) continue;
+        media[key] = {
+          ...(first.width && first.height ? { w: first.width, h: first.height } : {}),
+          thumbnailUrl: first.thumbnailUrl ?? first.signedUrl ?? null,
+        };
+      }
+      return Object.keys(media).length ? { ...row, media: { ...row.media, ...media } } : row;
+    });
+    return { rows, errors };
+  }, [review, mappings, assets, brandId]);
+
   const loadFile = async (file: File) => {
     const scope = scopeRef.current;
     setBusy(true);
     try {
-      const uploaded = await uploadBrandDocument({ brandId, file });
-      if (scope !== scopeRef.current) return;
       let next: ForgeRenderImportPreview | null = null;
-      for (let attempt = 0; attempt < 30 && !next; attempt += 1) {
-        try {
-          next = await apiRendersApi.previewImport({ brandId, documentId: uploaded.documentId });
-        } catch (error) {
-          if (!(error instanceof Error) || !error.message.includes('render_import_extracting')) {
-            throw error;
+      if (isCsv(file)) {
+        // Quoted cells parse the same here as in a paste; a CSV never needs the server.
+        const { headers, rows } = recordsFromTable(parseDelimited(await file.text()));
+        if (headers.length === 0) throw new Error('This CSV has no header row.');
+        next = { sourceName: file.name, sheetName: null, headers, rows, rowCount: rows.length };
+      } else {
+        const uploaded = await uploadBrandDocument({ brandId, file });
+        if (scope !== scopeRef.current) return;
+        for (let attempt = 0; attempt < 30 && !next; attempt += 1) {
+          try {
+            next = await apiRendersApi.previewImport({ brandId, documentId: uploaded.documentId });
+          } catch (error) {
+            if (!(error instanceof Error) || !error.message.includes('render_import_extracting')) {
+              throw error;
+            }
+            await wait();
           }
-          await wait();
         }
+        if (!next) throw new Error('The spreadsheet is still extracting. Try again shortly.');
       }
-      if (!next) throw new Error('The spreadsheet is still extracting. Try again shortly.');
       if (scope !== scopeRef.current) return;
-      const byName = new Map<string, string>();
-      for (const variable of scalarVariables) {
-        byName.set(variable.key.toLowerCase(), variable.key);
-        byName.set(variable.label.toLowerCase(), variable.key);
-      }
-      setMappings(
-        Object.fromEntries(
-          next.headers.map((header) => [header, byName.get(header.toLowerCase()) ?? SKIP]),
-        ),
-      );
+      setMappings(autoMapHeaders(next.headers, variables));
       setPreview(next);
     } catch (error) {
       if (scope !== scopeRef.current) return;
@@ -115,57 +235,27 @@ export function RenderRowsImport({
     }
   };
 
-  const importRows = () => {
-    if (!preview) return;
-    const duplicate = duplicateMappedVariable(mappings, SKIP);
-    if (duplicate) {
-      const label =
-        scalarVariables.find((variable) => variable.key === duplicate)?.label ?? duplicate;
-      toast.error(`${label} is mapped more than once. Choose one source column.`);
-      return;
-    }
-    if (!canImportRows(existingRows, preview.rowCount)) {
-      toast.error(
-        `Import rejected: ${existingRows} existing + ${preview.rowCount} imported exceeds ${MAX_BATCH_ROWS}.`,
-      );
-      return;
-    }
-    const rows = rowsFromMappedImport(preview.rows, mappings, scalarVariables);
-    onImport(rows);
-    setOpen(false);
-    toast.success(`${rows.length} row${rows.length === 1 ? '' : 's'} imported for review`);
-  };
+  const overCap = preview !== null && !canImportRows(existingRows, preview.rowCount);
+  const checking = pending.length > 0;
+  const errors = checked?.errors ?? [];
+  const errorByCell = new Map(
+    errors.map((error) => [cellKey(error.row, error.column), error.message]),
+  );
+  const mappedHeaders = preview?.headers.filter((header) => mappings[header] !== IMPORT_SKIP) ?? [];
+  const canImport =
+    checked !== null && !busy && !checking && !overCap && !review?.duplicate && errors.length === 0;
 
-  const inspectDrive = async () => {
-    if (!folderId.trim()) return;
-    const scope = scopeRef.current;
-    setBusy(true);
-    try {
-      const next = await apiRendersApi.snapshotDriveFolder({ brandId, folderId: folderId.trim() });
-      if (scope === scopeRef.current) setSnapshot(next);
-    } catch (error) {
-      if (scope !== scopeRef.current) return;
-      const message = error instanceof Error ? error.message : '';
-      toast.error(
-        message.includes('drive_scope_required')
-          ? 'Reconnect Google Workspace with Drive read access to snapshot this folder.'
-          : 'Could not read this Drive folder.',
-      );
-    } finally {
-      if (scope === scopeRef.current) setBusy(false);
-    }
+  const importRows = () => {
+    if (!checked || !canImport) return;
+    onImport(checked.rows);
+    onOpenChange(false);
+    const n = checked.rows.length;
+    toast.success(`${n} row${n === 1 ? '' : 's'} imported for review`);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button type="button" size="sm" variant="outline">
-            <Upload data-icon="inline-start" /> Import
-          </Button>
-        }
-      />
-      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-2xl">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Import render rows</DialogTitle>
           <DialogDescription>
@@ -184,6 +274,8 @@ export function RenderRowsImport({
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) void loadFile(file);
+                // Choosing the same file again after fixing it must still fire a change.
+                event.target.value = '';
               }}
             />
             <Button
@@ -200,8 +292,8 @@ export function RenderRowsImport({
               Choose CSV or XLSX
             </Button>
             <FieldDescription>
-              XLSX uses the existing Library document extraction path. Original headers and cell
-              text are preserved.
+              Name, Parent, Formats, Replace ad ID and variable columns map by key or label. Media
+              columns take Library asset ids.
             </FieldDescription>
           </Field>
 
@@ -214,23 +306,20 @@ export function RenderRowsImport({
                 <Field key={header} orientation="horizontal">
                   <FieldLabel className="min-w-32">{header}</FieldLabel>
                   <Select
-                    value={mappings[header] ?? SKIP}
+                    value={mappings[header] ?? IMPORT_SKIP}
                     onValueChange={(value) =>
                       setMappings((current) => ({ ...current, [header]: value }))
                     }
                   >
                     <SelectTrigger aria-label={`Map ${header}`}>
-                      <SelectValue>
-                        {scalarVariables.find((variable) => variable.key === mappings[header])
-                          ?.label ?? 'Do not import'}
-                      </SelectValue>
+                      <SelectValue>{labelOf(mappings[header] ?? IMPORT_SKIP)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectItem value={SKIP}>Do not import</SelectItem>
-                        {scalarVariables.map((variable) => (
-                          <SelectItem key={variable.key} value={variable.key}>
-                            {variable.label}
+                        <SelectItem value={IMPORT_SKIP}>Do not import</SelectItem>
+                        {targets.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
                           </SelectItem>
                         ))}
                       </SelectGroup>
@@ -238,48 +327,102 @@ export function RenderRowsImport({
                   </Select>
                 </Field>
               ))}
-              <p className="text-2xs text-muted-foreground">
-                Media URL columns require a separate confirmed Library ingest and are not mapped as
-                text values.
-              </p>
-            </div>
-          ) : null}
 
-          <Field>
-            <FieldLabel htmlFor="forge-drive-folder">Drive folder ID</FieldLabel>
-            <div className="flex gap-2">
-              <Input
-                id="forge-drive-folder"
-                value={folderId}
-                onChange={(event) => setFolderId(event.target.value)}
-                placeholder="Folder ID"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy || !folderId.trim()}
-                onClick={inspectDrive}
-              >
-                <FolderSearch data-icon="inline-start" /> Snapshot
-              </Button>
-            </div>
-            <FieldDescription>
-              This is a one-time review snapshot, never a continuous sync.
-            </FieldDescription>
-          </Field>
-          {snapshot ? (
-            <div className="max-h-40 overflow-y-auto rounded-md border p-2 text-xs">
-              {snapshot.files.map((file) => (
-                <p key={file.id}>{file.name}</p>
-              ))}
+              {overCap ? (
+                <p role="alert" className="text-xs text-destructive">
+                  This sheet has {preview.rowCount} rows. A render set holds at most{' '}
+                  {MAX_BATCH_ROWS}
+                  {existingRows > 0 ? ` (${existingRows} already here)` : ''}.
+                </p>
+              ) : null}
+              {review?.duplicate ? (
+                <p role="alert" className="text-xs text-destructive">
+                  {labelOf(review.duplicate)} is mapped more than once. Choose one source column.
+                </p>
+              ) : null}
+              {checking ? (
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Loader2 className="size-3 animate-spin" /> Checking Library ids…
+                </p>
+              ) : null}
+
+              {mappedHeaders.length > 0 && checked && checked.rows.length > 0 ? (
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="px-2 py-1 text-left font-medium">#</th>
+                        {mappedHeaders.map((header) => (
+                          <th key={header} className="px-2 py-1 text-left font-medium">
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.rows.slice(0, PREVIEW_ROWS).map((source, index) => (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: sheet rows have no id; order is the identity.
+                        <tr key={index} className="border-b last:border-0">
+                          <td className="px-2 py-1 text-muted-foreground">{index + 1}</td>
+                          {mappedHeaders.map((header) => {
+                            const message = errorByCell.get(cellKey(index, header));
+                            const thumbnail =
+                              checked.rows[index]?.media[mappings[header] ?? '']?.thumbnailUrl;
+                            return (
+                              <td
+                                key={header}
+                                title={message}
+                                className={cn(
+                                  'max-w-40 truncate px-2 py-1',
+                                  message && 'text-destructive ring-1 ring-destructive ring-inset',
+                                )}
+                              >
+                                <span className="flex items-center gap-1">
+                                  {thumbnail ? (
+                                    // biome-ignore lint/performance/noImgElement: a signed Library thumbnail, not a static asset.
+                                    <img
+                                      src={thumbnail}
+                                      alt=""
+                                      className="size-5 rounded object-cover"
+                                    />
+                                  ) : null}
+                                  <span className="truncate">{source[header]}</span>
+                                </span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {errors.length > 0 ? (
+                <ul
+                  role="alert"
+                  className="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs text-destructive"
+                >
+                  {errors.map((error) => (
+                    <li key={`${cellKey(error.row, error.column)}:${error.message}`}>
+                      Row {error.row + 1} · {error.column}: {error.message}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           ) : null}
         </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+        <DialogFooter className="items-center">
+          {errors.length > 0 ? (
+            <p className="mr-auto text-2xs text-muted-foreground">
+              Fix these cells in the sheet, or map the column to Do not import.
+            </p>
+          ) : null}
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" disabled={!preview || busy} onClick={importRows}>
+          <Button type="button" disabled={!canImport} onClick={importRows}>
             Import reviewed rows
           </Button>
         </DialogFooter>

@@ -259,7 +259,14 @@ describe('DeliveryTargetPicker', () => {
   }, 30_000);
 
   test('a spreadsheet ad id resolves to its names on its own', async () => {
-    const bare = { action: 'replace', adId: '1201' } as ApiRenderDeliveryTarget;
+    // The exact shape RenderRequestsGrid sends for a spreadsheet "Replace ad ID" cell.
+    const bare: ApiRenderDeliveryTarget = {
+      action: 'replace',
+      adId: '1201',
+      adAccountId: '',
+      campaignId: '',
+      adsetId: '',
+    };
     render(<Harness meta={CONNECTED} rows={[{ ...ROWS[1]!, delivery: bare }]} />);
     expect(metaDeliveryProblems(latest.rows, OUTPUTS, {}, CONNECTED)).toEqual(['Resolve 1 ad ID.']);
     await waitFor(() =>
@@ -270,7 +277,13 @@ describe('DeliveryTargetPicker', () => {
   }, 30_000);
 
   test('an unknown spreadsheet ad id stays unresolved with an inline error', async () => {
-    const bare = { action: 'replace', adId: '4040' } as ApiRenderDeliveryTarget;
+    const bare: ApiRenderDeliveryTarget = {
+      action: 'replace',
+      adId: '4040',
+      adAccountId: '',
+      campaignId: '',
+      adsetId: '',
+    };
     render(<Harness meta={CONNECTED} rows={[{ ...ROWS[1]!, delivery: bare }]} />);
     expect(
       await screen.findByText('Ad 4040 isn’t a paused or active ad in this account.'),
