@@ -14,7 +14,6 @@ import {
   fromRenderSetRows,
   IMPORT_SKIP,
   moveRow,
-  parseClipboardRows,
   parseDelimited,
   pinnedAssetIds,
   type RequestRow,
@@ -86,27 +85,6 @@ describe('validateRow', () => {
   test('required media needs a pin; reserved slots are never the caller’s problem', () => {
     expect(validateRow([hero, logo], {})).toEqual({ hero: 'Pick something from the Library' });
     expect(validateRow([hero], { hero: { assetId: 'a' } })).toEqual({});
-  });
-});
-
-describe('parseClipboardRows', () => {
-  test('matches headers by label or key, types cells, reports the rest', () => {
-    const text =
-      'Label\tHeadline\tprice\tOn sale\tSize\tMystery\nA\tHi\t12.5\tyes\tM\tx\nB\t\tnope\tno\tXL\ty';
-    const { rows, unmatched } = parseClipboardRows(text, all);
-    expect(unmatched).toEqual(['Mystery']);
-    expect(rows).toHaveLength(2);
-    expect(rows[0]?.label).toBe('A');
-    expect(rows[0]?.values).toEqual({ headline: 'Hi', price: 12.5, on_sale: true, size: 'M' });
-    // A blank, an unparsable number and an unknown option are all "nothing", not garbage.
-    expect(rows[1]?.values).toEqual({ on_sale: false });
-  });
-  test('comma-separated works when the header has no tab', () => {
-    const { rows } = parseClipboardRows('headline,price\nHey,3', all);
-    expect(rows[0]?.values).toEqual({ headline: 'Hey', price: 3 });
-  });
-  test('a header alone is no rows', () => {
-    expect(parseClipboardRows('headline', all).rows).toEqual([]);
   });
 });
 
@@ -224,10 +202,22 @@ describe('CSV', () => {
     ]);
   });
 
-  test('a pasted quoted cell keeps its comma', () => {
-    const { rows } = parseClipboardRows('label,headline\n"A, B","Hola, mundo"', all);
-    expect(rows[0]?.label).toBe('A, B');
-    expect(rows[0]?.values).toEqual({ headline: 'Hola, mundo' });
+  test('pasted text maps like a sheet: by key or label, tabs or commas, quoted commas kept', () => {
+    const review = (text: string) => {
+      const { headers, rows } = recordsFromTable(parseDelimited(text));
+      return rowsFromMappedImport(rows, autoMapHeaders(headers, all), all);
+    };
+    const tabbed = review('Label\tHeadline\tprice\tOn sale\tSize\tMystery\nA\tHi\t12.5\tyes\tM\tx');
+    expect(tabbed.errors).toEqual([]);
+    expect(tabbed.rows[0]?.label).toBe('A');
+    expect(tabbed.rows[0]?.values).toEqual({ headline: 'Hi', price: 12.5, on_sale: true, size: 'M' });
+    const quoted = review('label,headline\n"A, B","Hola, mundo"');
+    expect(quoted.rows[0]?.label).toBe('A, B');
+    expect(quoted.rows[0]?.values).toEqual({ headline: 'Hola, mundo' });
+    // What cannot be used is named, never dropped silently.
+    expect(review('Name,price\nB,nope').errors).toEqual([
+      { row: 0, column: 'price', message: 'Not a number' },
+    ]);
   });
 
   test('the template spreadsheet round-trips into the rows it describes', () => {
@@ -274,6 +264,85 @@ describe('CSV', () => {
       name_text: 'Ana, "la" jefa',
     });
   });
+
+  /** Download → parse → auto-map → import, the path a person takes with the template. */
+  const roundTrip = (contract: {
+    variables: ApiRenderVariable[];
+    outputs: Array<{ id: string; label: string; ratio: string | null }>;
+  }) => {
+    const table = parseDelimited(buildTemplateCsv(contract));
+    const { headers, rows: records } = recordsFromTable(table);
+    const mappings = autoMapHeaders(headers, contract.variables);
+    return {
+      headers,
+      mappings,
+      ...rowsFromMappedImport(records, mappings, contract.variables, contract.outputs),
+    };
+  };
+
+  test('a variable keyed like a field never takes over that field’s column', () => {
+    const brand = variable({ key: 'name', label: 'Brand name', sample: 'Acme' });
+    const formats = variable({ key: 'formats', label: 'Copy formats', sample: 'long' });
+    const { headers, mappings, rows, errors } = roundTrip({
+      variables: [brand, formats],
+      outputs: [{ id: 'sq', label: 'Square', ratio: '1:1' }],
+    });
+    expect(headers).toEqual(['Name', 'Parent', 'Formats', 'Brand name', 'Copy formats', 'Replace ad ID']);
+    expect(mappings).toMatchObject({ Name: '@name', Formats: '@formats', 'Brand name': 'name' });
+    expect(errors).toEqual([]);
+    expect(rows[0]?.label).toBe('Root');
+    expect(rows[0]?.outputIds).toEqual(['sq']);
+    expect(rows[0]?.values).toEqual({ name: 'Acme', formats: 'long' });
+  });
+
+  test('a key that is another variable’s label is a clash, so neither column is swapped', () => {
+    const title = variable({ key: 'title', label: 'Headline', sample: 'Big sale' });
+    const headlineKey = variable({ key: 'headline', label: 'Title', sample: 'Subtitle' });
+    const { headers, rows, errors } = roundTrip({ variables: [title, headlineKey], outputs: [] });
+    expect(headers).toEqual([
+      'Name',
+      'Parent',
+      'Formats',
+      'Headline (title)',
+      'Title (headline)',
+      'Replace ad ID',
+    ]);
+    expect(errors).toEqual([]);
+    expect(rows[0]?.values).toEqual({ title: 'Big sale', headline: 'Subtitle' });
+    // A hand-made sheet naming the bare key still reaches the variable with that key.
+    expect(autoMapHeaders(['headline', 'title'], [title, headlineKey])).toEqual({
+      headline: 'headline',
+      title: 'title',
+    });
+  });
+
+  test('a label padded with spaces still maps its own column', () => {
+    const padded = variable({ key: 'cta', label: ' Call to action ', sample: 'Buy' });
+    const { headers, rows, errors } = roundTrip({ variables: [padded], outputs: [] });
+    expect(headers).toContain('Call to action');
+    expect(errors).toEqual([]);
+    expect(rows[0]?.values).toEqual({ cta: 'Buy' });
+    expect(autoMapHeaders([' Call to action '], [padded])).toEqual({ ' Call to action ': 'cta' });
+  });
+
+  test('the Formats and variable samples are only what imports back cleanly', () => {
+    const { rows, errors } = roundTrip({
+      variables: [
+        variable({ key: 'price', label: 'Price', kind: 'number', sample: '9,99 €' }),
+        variable({ key: 'tint', label: 'Tint', kind: 'color', sample: '#abc' }),
+        variable({ key: 'size', label: 'Size', kind: 'enum', options: ['S', 'M'], sample: 'XL' }),
+        variable({ key: 'copy', label: 'Copy', sample: 'Hola' }),
+      ],
+      outputs: [
+        { id: 'feed', label: 'Feed, square', ratio: '1:1' },
+        { id: 'story_a', label: 'Story', ratio: '9:16' },
+        { id: 'story_b', label: 'Story', ratio: '9:16' },
+      ],
+    });
+    expect(errors).toEqual([]);
+    expect(rows[0]?.outputIds).toEqual(['feed', 'story_a', 'story_b']);
+    expect(rows[0]?.values).toEqual({ copy: 'Hola' });
+  });
 });
 
 describe('names, order and parentage', () => {
@@ -303,11 +372,11 @@ describe('names, order and parentage', () => {
 
   test('reorders siblings, carrying the subtree', () => {
     const { a, b, c, rows } = tree();
-    const moved = moveRow(rows, c.id, { rowId: a.id, position: 'before' });
+    const moved = moveRow(rows, c.id, { rowId: a.id, position: 'before' }, []);
     if (!moved.ok) throw new Error(moved.reason);
     expect(labels(moved.rows)).toEqual(['C', 'C1', 'C2', 'C3', 'A', 'A1', 'A2', 'B']);
     expect(moved.rows.find((row) => row.id === c.id)?.parentId).toBeNull();
-    const after = moveRow(rows, a.id, { rowId: b.id, position: 'after' });
+    const after = moveRow(rows, a.id, { rowId: b.id, position: 'after' }, []);
     if (!after.ok) throw new Error(after.reason);
     expect(labels(after.rows)).toEqual(['B', 'A', 'A1', 'A2', 'C', 'C1', 'C2', 'C3']);
   });
@@ -315,7 +384,7 @@ describe('names, order and parentage', () => {
   test('drops inside a row as its last child and re-checks the moved rows', () => {
     const { a, b, rows } = tree();
     rows[3]!.check = { state: 'ready', fit: null, test: true };
-    const moved = moveRow(rows, b.id, { rowId: a.id, position: 'inside' });
+    const moved = moveRow(rows, b.id, { rowId: a.id, position: 'inside' }, []);
     if (!moved.ok) throw new Error(moved.reason);
     expect(labels(moved.rows)).toEqual(['A', 'A1', 'A2', 'B', 'C', 'C1', 'C2', 'C3']);
     const movedB = moved.rows.find((row) => row.id === b.id)!;
@@ -326,35 +395,62 @@ describe('names, order and parentage', () => {
 
   test('refuses a drop under its own descendant as a cycle', () => {
     const { a, a2, rows } = tree();
-    expect(moveRow(rows, a.id, { rowId: a2.id, position: 'inside' })).toEqual({
+    expect(moveRow(rows, a.id, { rowId: a2.id, position: 'inside' }, [])).toEqual({
       ok: false,
       reason: 'cycle',
     });
-    expect(moveRow(rows, a.id, { rowId: a2.id, position: 'after' })).toEqual({
+    expect(moveRow(rows, a.id, { rowId: a2.id, position: 'after' }, [])).toEqual({
       ok: false,
       reason: 'cycle',
     });
-    expect(moveRow(rows, a.id, { rowId: a.id, position: 'inside' })).toEqual({ ok: true, rows });
+    expect(moveRow(rows, a.id, { rowId: a.id, position: 'inside' }, [])).toEqual({ ok: true, rows });
   });
 
   test('refuses a drop that would end any row deeper than three levels', () => {
     const { a1, c, c3, b, rows } = tree();
     // C3 is already at depth 3; nothing may go inside it.
-    expect(moveRow(rows, b.id, { rowId: c3.id, position: 'inside' })).toEqual({
+    expect(moveRow(rows, b.id, { rowId: c3.id, position: 'inside' }, [])).toEqual({
       ok: false,
       reason: 'depth',
     });
     // A1 carries a child, so under C (depth 1 → 2, child → 3) fits; under C3's parent it does not.
-    expect(moveRow(rows, a1.id, { rowId: c.id, position: 'inside' }).ok).toBe(true);
-    expect(moveRow(rows, a1.id, { rowId: c3.id, position: 'before' })).toEqual({
+    expect(moveRow(rows, a1.id, { rowId: c.id, position: 'inside' }, []).ok).toBe(true);
+    expect(moveRow(rows, a1.id, { rowId: c3.id, position: 'before' }, [])).toEqual({
       ok: false,
       reason: 'depth',
     });
   });
 
+  test('formats follow the move: an every-format root inherits as a fork, an inheriting fork keeps its formats as a root', () => {
+    const outputIds = ['sq', 'story'];
+    const parent = { ...seedRow([], 'Parent'), outputIds: ['story'] };
+    const everyFormat = { ...seedRow([], 'Every'), outputIds: ['story', 'sq'] };
+    const picked = { ...seedRow([], 'Picked'), outputIds: ['sq'] };
+    const fork = seedRow([], 'Fork', parent.id);
+    const rows = [parent, everyFormat, picked, fork];
+    const outputsOf = (moved: ReturnType<typeof moveRow>, id: string) => {
+      if (!moved.ok) throw new Error(moved.reason);
+      return {
+        own: moved.rows.find((row) => row.id === id)?.outputIds,
+        effective: effectiveOutputIds(moved.rows, id),
+      };
+    };
+
+    expect(
+      outputsOf(moveRow(rows, everyFormat.id, { rowId: parent.id, position: 'inside' }, outputIds), everyFormat.id),
+    ).toEqual({ own: [], effective: ['story'] });
+    // A deliberate subset is the row's own choice, and survives becoming a fork.
+    expect(
+      outputsOf(moveRow(rows, picked.id, { rowId: parent.id, position: 'inside' }, outputIds), picked.id),
+    ).toEqual({ own: ['sq'], effective: ['sq'] });
+    expect(
+      outputsOf(moveRow(rows, fork.id, { rowId: parent.id, position: 'after' }, outputIds), fork.id),
+    ).toEqual({ own: ['story'], effective: ['story'] });
+  });
+
   test('order and parentage survive a render-set save and load', () => {
     const { a, b, rows } = tree();
-    const moved = moveRow(rows, b.id, { rowId: a.id, position: 'inside' });
+    const moved = moveRow(rows, b.id, { rowId: a.id, position: 'inside' }, []);
     if (!moved.ok) throw new Error(moved.reason);
     moved.rows[0]!.delivery = { action: 'replace', adId: 'pending' };
     const saved = toRenderSetRows(moved.rows, ['sq']);

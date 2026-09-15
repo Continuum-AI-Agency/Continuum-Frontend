@@ -1,7 +1,8 @@
 /**
  * RenderPreviewPanel against a mocked jobs API: a row's effective values are drawn into the
  * selected format's slot boxes, overflow is flagged and clears live, the format select swaps the
- * layout, and "Last render" appears only for a finished job that belongs to this row.
+ * layout, and "Last render" appears only for a finished job that belongs to this row — found past
+ * the first page, and re-read when realtime says one of this row's jobs finished.
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
@@ -10,6 +11,7 @@ import type {
   ApiRenderTemplateContract,
   ApiRenderTemplateLayout,
 } from '@continuum/contracts';
+import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
 const listJobsMock = mock(async (..._args: unknown[]) => ({
   items: [] as ApiRenderJob[],
@@ -18,6 +20,14 @@ const listJobsMock = mock(async (..._args: unknown[]) => ({
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: { listJobs: listJobsMock },
+}));
+
+let subscription: PostgresChangesSubscription | null = null;
+mock.module('@/lib/supabase/realtime', () => ({
+  subscribeToPostgresChanges: (options: PostgresChangesSubscription) => {
+    subscription = options;
+    return () => undefined;
+  },
 }));
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -131,6 +141,7 @@ const slot = (container: HTMLElement, key: string) =>
 
 afterEach(() => {
   cleanup();
+  subscription = null;
   listJobsMock.mockReset();
   listJobsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
 });
@@ -238,6 +249,128 @@ describe('RenderPreviewPanel', () => {
 
     expect(screen.queryByRole('tab', { name: 'Last render' })).toBeNull();
     expect(screen.getByRole('img', { name: 'Square preview' })).toBeTruthy();
+  });
+
+  test('a fork previews what it inherits, minus what it cleared', () => {
+    const [root] = rowWith('Hola');
+    const FORK = '88888888-8888-4888-8888-888888888888';
+    const rows: RequestRow[] = [
+      root as RequestRow,
+      {
+        ...(root as RequestRow),
+        id: FORK,
+        parentId: ROW,
+        values: {},
+        clearedKeys: ['bg'],
+        media: {},
+      },
+    ];
+    const { container } = render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={CONTRACT}
+        rows={rows}
+        rowId={FORK}
+        renderSetId={null}
+      />,
+    );
+
+    expect(slot(container, 'headline')?.textContent).toContain('Hola');
+    expect(slot(container, 'hero')?.querySelector('image')?.getAttribute('href')).toBe(HERO_URL);
+    // The cleared colour is a gap again: dashed outline and its name, no fill.
+    expect(slot(container, 'bg')?.querySelector('rect[stroke-dasharray]')).not.toBeNull();
+    expect(slot(container, 'bg')?.querySelector('text')?.textContent).toBe('Background');
+    expect(slot(container, 'bg')?.querySelector('[fill="#ff3366"]')).toBeNull();
+  });
+
+  test('an output without its own layout never borrows another ratio', () => {
+    const contract = {
+      ...CONTRACT,
+      outputs: [
+        { id: 'story', label: 'Story', ratio: '9:16', layout: null },
+        { id: 'square', label: 'Square', ratio: '1:1', layout: null },
+      ],
+    } as unknown as ApiRenderTemplateContract;
+    const { container } = render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={contract}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+
+    expect(screen.getByText('No measured layout for this format.')).toBeTruthy();
+    expect(container.querySelector('svg')).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Preview format'), { target: { value: 'square' } });
+
+    expect(screen.getByRole('img', { name: 'Square preview' })).toBeTruthy();
+    expect(screen.queryByText('No measured layout for this format.')).toBeNull();
+  });
+
+  test('Last render pages past other rows to find this row', async () => {
+    listJobsMock.mockImplementation(async (...args: unknown[]) =>
+      (args[2] as { cursor?: string }).cursor === 'page-2'
+        ? {
+            items: [job(ROW, 'https://cdn.test/mine.png', '2026-09-13T10:00:00Z')],
+            nextCursor: null,
+          }
+        : {
+            items: [job(OTHER_ROW, 'https://cdn.test/other.png', '2026-09-14T12:00:00Z')],
+            nextCursor: 'page-2',
+          },
+    );
+    render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={CONTRACT}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={SET}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Last render' }));
+
+    expect(screen.getByAltText('Last render').getAttribute('src')).toBe(
+      'https://cdn.test/mine.png',
+    );
+    expect(listJobsMock).toHaveBeenCalledWith(BRAND, 50, { renderSetId: SET, cursor: 'page-2' });
+  });
+
+  test('a job of this row finishing re-reads Last render', async () => {
+    render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={CONTRACT}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={SET}
+      />,
+    );
+    await waitFor(() => expect(listJobsMock).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(screen.queryByRole('tab', { name: 'Last render' })).toBeNull();
+
+    listJobsMock.mockImplementation(async () => ({
+      items: [job(ROW, 'https://cdn.test/fresh.png', '2026-09-14T13:00:00Z')],
+      nextCursor: null,
+    }));
+    const binding = subscription?.bindings.find((entry) => entry.event === 'UPDATE');
+    expect(binding?.filter).toBe(`brand_id=eq.${BRAND}`);
+    act(() => {
+      binding?.onRow(
+        { brand_id: BRAND, render_set_id: SET, render_set_row_id: ROW, status: 'finished' },
+        { eventType: 'UPDATE', old: {} },
+      );
+    });
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Last render' }));
+    expect(screen.getByAltText('Last render').getAttribute('src')).toBe(
+      'https://cdn.test/fresh.png',
+    );
   });
 
   test('no selected row shows the hint', () => {

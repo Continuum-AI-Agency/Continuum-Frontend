@@ -344,49 +344,6 @@ export function toVariableMap(
   );
 }
 
-/**
- * Rows pasted from a spreadsheet: a header line naming variables by label or key, then one
- * line per render. Tab-separated when the header has a tab, comma otherwise, quoted cells per
- * RFC 4180. A `label` column names the render. Media columns are ignored — a pasted id is not
- * verified, the import dialog's is — and headers nobody recognises are returned so the toast
- * can say which.
- */
-export function parseClipboardRows(
-  text: string,
-  variables: ApiRenderVariable[],
-): { rows: RequestRow[]; unmatched: string[] } {
-  const table = parseDelimited(text);
-  if (table.length < 2) return { rows: [], unmatched: [] };
-  const headers = table[0]!.map((header) => header.trim());
-  const byName = new Map<string, ApiRenderVariable>();
-  for (const variable of variables) {
-    if (!isEditableScalar(variable)) continue;
-    byName.set(variable.key.toLowerCase(), variable);
-    byName.set(variable.label.toLowerCase(), variable);
-  }
-  const columns = headers.map((header) => {
-    const lower = header.toLowerCase();
-    if (lower === 'label' || lower === 'name') return 'label' as const;
-    return byName.get(lower) ?? null;
-  });
-  const unmatched = headers.filter((_, index) => columns[index] === null);
-  const rows = table.slice(1).map((cells) => {
-    const row = seedRow([]);
-    columns.forEach((column, index) => {
-      const cell = cells[index] ?? '';
-      if (column === null) return;
-      if (column === 'label') {
-        row.label = cell.trim();
-        return;
-      }
-      const value = coerce(column, cell);
-      if (value !== undefined) row.values[column.key] = value;
-    });
-    return row;
-  });
-  return { rows, unmatched };
-}
-
 // --- spreadsheets ------------------------------------------------------------------------------
 
 /**
@@ -472,18 +429,43 @@ export const IMPORT_SKIP = '__skip__';
 const importableVariables = (variables: ApiRenderVariable[]) =>
   variables.filter((variable) => !variable.reserved);
 
-/** A variable's spreadsheet header: its label, or `Label (key)` where the label is not unique. */
+/**
+ * A variable's spreadsheet header: its label, or `Label (key)` where the bare label would also
+ * name something else — a field, another variable's label, or another variable's key.
+ */
 export function variableColumnHeader(
   variable: ApiRenderVariable,
   variables: ApiRenderVariable[],
 ): string {
-  const label = variable.label.trim().toLowerCase();
+  const label = variable.label.trim();
+  const lower = label.toLowerCase();
   const clashes =
-    IMPORT_FIELDS.some((field) => (field.aliases as readonly string[]).includes(label)) ||
+    IMPORT_FIELDS.some((field) => (field.aliases as readonly string[]).includes(lower)) ||
     importableVariables(variables).some(
-      (other) => other.key !== variable.key && other.label.trim().toLowerCase() === label,
+      (other) =>
+        other.key !== variable.key &&
+        (other.label.trim().toLowerCase() === lower || other.key.toLowerCase() === lower),
     );
-  return clashes ? `${variable.label} (${variable.key})` : variable.label;
+  return clashes ? `${label} (${variable.key})` : label;
+}
+
+/** The sample only when importing it would succeed: a download that cannot re-import is a trap. */
+const importableSample = (variable: ApiRenderVariable): string =>
+  isMediaVariable(variable) || variable.sample === null || importCell(variable, variable.sample).error
+    ? ''
+    : variable.sample;
+
+/**
+ * Formats written so they read back as exactly these outputs: a label where it names its own
+ * output and no other, the id where the label holds a separator or is shared.
+ */
+function formatsSample(outputs: ApiRenderTemplateContract['outputs']): string {
+  const namesOnly = (output: (typeof outputs)[number]) =>
+    !importFormats(output.label, [output]).error &&
+    outputs.every((other) => other === output || importFormats(output.label, [other]).error);
+  const cell = outputs.map((output) => (namesOnly(output) ? output.label : output.id)).join(', ');
+  const { ids, error } = importFormats(cell, outputs);
+  return !error && ids.length === outputs.length ? cell : '';
 }
 
 /** The downloadable spreadsheet for one template: its columns and the designer's own values. */
@@ -493,36 +475,36 @@ export function buildTemplateCsv(
   const variables = importableVariables(contract.variables);
   return toCsv([
     [
-      'Name',
-      'Parent',
-      'Formats',
+      ...IMPORT_FIELDS.slice(0, 3).map((field) => field.header),
       ...variables.map((variable) => variableColumnHeader(variable, variables)),
-      'Replace ad ID',
+      IMPORT_FIELDS[3].header,
     ],
-    [
-      'Root',
-      '',
-      contract.outputs.map((output) => output.label).join(', '),
-      ...variables.map((variable) => (isMediaVariable(variable) ? '' : (variable.sample ?? ''))),
-      '',
-    ],
+    ['Root', '', formatsSample(contract.outputs), ...variables.map(importableSample), ''],
   ]);
 }
 
-/** Header → target, by key or label, case-insensitive. Anything unrecognised is skipped. */
+/**
+ * Header → target, case-insensitive. The headers `buildTemplateCsv` writes are registered first
+ * and nothing registered later replaces an entry, so a variable keyed `name`, or one whose key is
+ * another's label, can never take over a column of the template it was downloaded from. Then
+ * `Label (key)`, bare keys, and the fields' aliases. Anything unrecognised is skipped.
+ */
 export function autoMapHeaders(
   headers: string[],
   variables: ApiRenderVariable[],
 ): Record<string, string> {
   const importable = importableVariables(variables);
   const byName = new Map<string, string>();
-  for (const field of IMPORT_FIELDS)
-    for (const alias of field.aliases) byName.set(alias, field.target);
-  for (const variable of importable) {
-    byName.set(variable.key.toLowerCase(), variable.key);
-    byName.set(variableColumnHeader(variable, importable).toLowerCase(), variable.key);
-    byName.set(`${variable.label} (${variable.key})`.toLowerCase(), variable.key);
-  }
+  const register = (name: string, target: string) => {
+    const lower = name.trim().toLowerCase();
+    if (!byName.has(lower)) byName.set(lower, target);
+  };
+  for (const field of IMPORT_FIELDS) register(field.header, field.target);
+  for (const variable of importable)
+    register(variableColumnHeader(variable, importable), variable.key);
+  for (const variable of importable) register(`${variable.label.trim()} (${variable.key})`, variable.key);
+  for (const variable of importable) register(variable.key, variable.key);
+  for (const field of IMPORT_FIELDS) for (const alias of field.aliases) register(alias, field.target);
   const used = new Set<string>();
   return Object.fromEntries(
     headers.map((header) => {
@@ -701,8 +683,17 @@ export type RowMove = { ok: true; rows: RequestRow[] } | { ok: false; reason: 'd
  * inside it as its last child. Array order is sibling order, so the result is what a render set
  * saves. Refused rather than clamped: a drop under its own descendant is a loop, and a subtree
  * that would end deeper than the fork cap is not moved at all.
+ *
+ * Formats follow what the row meant, not the field: a root saying "every format" is the default
+ * a root has to spell out, so as a fork it inherits; a fork that inherited keeps, as a root, the
+ * formats it was rendering rather than silently widening to all of them.
  */
-export function moveRow(rows: RequestRow[], dragId: string, drop: RowDrop): RowMove {
+export function moveRow(
+  rows: RequestRow[],
+  dragId: string,
+  drop: RowDrop,
+  allOutputIds: string[],
+): RowMove {
   const dragged = rows.find((row) => row.id === dragId);
   const target = rows.find((row) => row.id === drop.rowId);
   if (!dragged || !target || dragged === target) return { ok: true, rows };
@@ -716,12 +707,29 @@ export function moveRow(rows: RequestRow[], dragId: string, drop: RowDrop): RowM
   if (depth + height > FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH) return { ok: false, reason: 'depth' };
 
   const reparented = parentId !== dragged.parentId;
+  const outputIdsAfterMove = (): string[] => {
+    const { outputIds } = dragged;
+    if (dragged.parentId === null && parentId !== null) {
+      const everyFormat =
+        allOutputIds.length > 0 &&
+        outputIds.length === allOutputIds.length &&
+        allOutputIds.every((id) => outputIds.includes(id));
+      return everyFormat ? [] : outputIds;
+    }
+    if (dragged.parentId !== null && parentId === null && outputIds.length === 0)
+      return effectiveOutputIds(rows, dragId);
+    return outputIds;
+  };
   const block = rows
     .filter((row) => subtree.has(row.id))
     .map((row) =>
       !reparented
         ? row
-        : { ...row, ...(row.id === dragId ? { parentId } : {}), check: { state: 'idle' } as const },
+        : {
+            ...row,
+            ...(row.id === dragId ? { parentId, outputIds: outputIdsAfterMove() } : {}),
+            check: { state: 'idle' } as const,
+          },
     );
   const rest = rows.filter((row) => !subtree.has(row.id));
   let index = rest.indexOf(target);

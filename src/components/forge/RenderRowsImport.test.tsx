@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { ApiRenderVariable } from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { ToastProvider } from '@/components/ui/ToastProvider';
+import { ApiError } from '@/lib/api/errors';
 import type { RequestRow } from './renderRequestRows';
 
 let finishUpload!: (value: { documentId: string }) => void;
@@ -23,7 +25,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: { previewImport },
 }));
 
-const { RenderRowsImport } = await import('./RenderRowsImport');
+const { RenderRowsImport, downloadTemplateCsv } = await import('./RenderRowsImport');
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -31,6 +33,7 @@ afterEach(() => {
   globalThis.fetch = realFetch;
   upload.mockClear();
   previewImport.mockClear();
+  mock.restore();
 });
 
 const variable = (over: Partial<ApiRenderVariable>): ApiRenderVariable => ({
@@ -63,32 +66,35 @@ const contract = {
 
 const KNOWN = '11111111-1111-4111-8111-111111111111';
 const UNKNOWN = '22222222-2222-4222-8222-222222222222';
+const VIDEO = '33333333-3333-4333-8333-333333333333';
 
-/** The Library lookup route, answering only for KNOWN. */
+const heroImage = {
+  id: KNOWN,
+  brandId: 'brand-a',
+  kind: 'image',
+  bucket: 'media',
+  storagePath: 'brand-a/hero.jpg',
+  fileName: 'hero.jpg',
+  mimeType: 'image/jpeg',
+  width: 1080,
+  height: 1350,
+  source: 'upload',
+  status: 'ready',
+  createdAt: '2026-09-01T00:00:00Z',
+  updatedAt: '2026-09-01T00:00:00Z',
+  thumbnailUrl: 'https://cdn.test/hero-thumb.jpg',
+};
+
+/** The Library lookup route, answering only for KNOWN (an image) and VIDEO. */
 function stubLibrary() {
   const fetchMock = mock(async (input: RequestInfo | URL) => {
     const assetId = new URL(String(input), 'http://localhost').searchParams.get('assetId');
     const items =
       assetId === KNOWN
-        ? [
-            {
-              id: KNOWN,
-              brandId: 'brand-a',
-              kind: 'image',
-              bucket: 'media',
-              storagePath: 'brand-a/hero.jpg',
-              fileName: 'hero.jpg',
-              mimeType: 'image/jpeg',
-              width: 1080,
-              height: 1350,
-              source: 'upload',
-              status: 'ready',
-              createdAt: '2026-09-01T00:00:00Z',
-              updatedAt: '2026-09-01T00:00:00Z',
-              thumbnailUrl: 'https://cdn.test/hero-thumb.jpg',
-            },
-          ]
-        : [];
+        ? [heroImage]
+        : assetId === VIDEO
+          ? [{ ...heroImage, id: VIDEO, kind: 'video', mimeType: 'video/mp4' }]
+          : [];
     return new Response(JSON.stringify({ items }), { status: 200 });
   });
   globalThis.fetch = fetchMock as unknown as typeof fetch;
@@ -186,6 +192,83 @@ describe('RenderRowsImport', () => {
     expect(importButton().hasAttribute('disabled')).toBe(true);
     // One lookup per id, not per render.
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('refuses an asset of the wrong kind for its column', async () => {
+    stubLibrary();
+    renderImport();
+    chooseFile(csv(`Name,Hero\nA,${VIDEO}\n`));
+    await waitFor(() =>
+      expect(
+        screen.getByText('Row 1 · Hero: This Library asset is a video, not an image'),
+      ).toBeTruthy(),
+    );
+    expect(importButton().hasAttribute('disabled')).toBe(true);
+  });
+
+  test('a failed Library lookup blocks Import as unchecked, never loops, and retries on the next load', async () => {
+    const fetchMock = stubLibrary();
+    fetchMock.mockImplementationOnce(async () => new Response('', { status: 500 }));
+    renderImport();
+    const sheet = `Name,Hero\nA,${KNOWN}\n`;
+    chooseFile(csv(sheet));
+    await waitFor(() =>
+      expect(screen.getByText('Row 1 · Hero: Could not check this id')).toBeTruthy(),
+    );
+    expect(screen.queryByText('Row 1 · Hero: No Library asset with this id')).toBeNull();
+    expect(importButton().hasAttribute('disabled')).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    chooseFile(csv(sheet));
+    await waitFor(() => expect(importButton().hasAttribute('disabled')).toBe(false));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('says how many rows an XLSX has when the server refuses it past the cap', async () => {
+    render(<ToastProvider>{null}</ToastProvider>);
+    renderImport();
+    previewImport.mockImplementationOnce(async () => {
+      throw new ApiError('render_import_too_many_rows', 422, undefined, {
+        error: 'render_import_too_many_rows',
+        rowCount: 72,
+      });
+    });
+    chooseFile(new File(['x'], 'rows.xlsx'));
+    finishUpload({ documentId: 'doc-1' });
+    await waitFor(() =>
+      expect(
+        screen.getByText('This sheet has 72 rows. A render set holds at most 50.'),
+      ).toBeTruthy(),
+    );
+
+    previewImport.mockImplementationOnce(async () => {
+      throw new ApiError('render_import_duplicate_headers', 422, undefined, {
+        error: 'render_import_duplicate_headers',
+      });
+    });
+    chooseFile(new File(['x'], 'rows.xlsx'));
+    finishUpload({ documentId: 'doc-2' });
+    await waitFor(() =>
+      expect(
+        screen.getByText('Two columns share a header. Rename one and upload again.'),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText('render_import_duplicate_headers')).toBeNull();
+  });
+
+  test('saves the template CSV with a UTF-8 BOM and does not revoke it during the click', async () => {
+    const blobs: Blob[] = [];
+    spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      blobs.push(blob as Blob);
+      return 'blob:template';
+    });
+    const revoke = spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    downloadTemplateCsv(contract, 'template.csv');
+    expect(revoke).toHaveBeenCalledTimes(0);
+    // Bytes, not text(): decoding may strip the very BOM under test.
+    const bytes = new Uint8Array(await (blobs[0] as Blob).arrayBuffer());
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
   });
 
   test('refuses a sheet past the render-set cap and names the counts', async () => {

@@ -17,8 +17,8 @@ const PANEL = 'min-h-0 overflow-y-auto overscroll-contain pt-2';
 
 export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?: string }) {
   const [tab, setTab] = useState<ForgeTab>('templates');
-  // The last "open this in Render" from anywhere on the page. Kept, not consumed: the Render
-  // panel unmounts when hidden, and remounting should land on what was last asked for.
+  // The last "open this in Render" from anywhere on the page, until the grid takes it. Dropped
+  // once taken: an intent kept around would replace whatever the person moved on to.
   const [renderIntent, setRenderIntent] = useState<ForgeRenderIntent | undefined>(undefined);
   const openRender = (intent: ForgeRenderIntent) => {
     setRenderIntent(intent);
@@ -40,11 +40,13 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
           onOpenRender={openRender}
         />
       </TabsContent>
-      <TabsContent value="render" className={PANEL}>
+      {/* Kept mounted: unsaved rows live in the grid, and a tab round trip must not reload them. */}
+      <TabsContent value="render" keepMounted className={PANEL}>
         <RenderRequestsGrid
           key={brandId}
           brandId={brandId}
           intent={renderIntent}
+          onIntentConsumed={() => setRenderIntent(undefined)}
           onFired={() => setTab('renders')}
         />
       </TabsContent>

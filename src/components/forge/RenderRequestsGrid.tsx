@@ -63,7 +63,7 @@ import {
   moveRow,
   nestRows,
   newRowId,
-  parseClipboardRows,
+  parseDelimited,
   type RequestRow,
   type RowDrop,
   rootRowId,
@@ -224,6 +224,15 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
   ];
 }
 
+/** Forks are named only when the delete takes rows nobody picked. */
+function deleteMessage({ requested, all }: { requested: Set<string>; all: Set<string> }): string {
+  if (all.size > requested.size)
+    return `${all.size} rows will be deleted, including every fork under them.`;
+  return all.size > 1
+    ? `${all.size} rows will be deleted. Saved renders stay in Renders.`
+    : 'This removes the row from the set. Saved renders stay in Renders.';
+}
+
 /** "Open this in Render": which template, and optionally which saved render set, to land on. */
 export type ForgeRenderIntent = { templateKey: string; renderSetId?: string };
 
@@ -240,12 +249,15 @@ export function RenderRequestsGrid({
   brandId,
   onFired,
   intent,
+  onIntentConsumed,
 }: {
   brandId: string;
   /** Called with the new job ids once a batch is queued — the tab shell switches to the renders view. */
   onFired?: (jobIds: string[]) => void;
   /** Each new intent selects its template and loads its render set, over the newest-set default. */
   intent?: ForgeRenderIntent;
+  /** The grid has taken `intent`; the shell drops it so a remount never replays it. */
+  onIntentConsumed?: () => void;
 }) {
   const [environments, setEnvironments] = useState<ApiRenderEnvironment[]>([]);
   const [bindingId, setBindingId] = useState<string | null>(null);
@@ -254,7 +266,10 @@ export function RenderRequestsGrid({
   // not hide the templates behind it.
   const [envsSettled, setEnvsSettled] = useState(false);
   const [templates, setTemplates] = useState<ApiRenderTemplateSummary[]>([]);
-  const [templateKey, setTemplateKey] = useState<string>('');
+  // Which template, and optionally which saved set, the rows come from. A new object is a new
+  // load, so an intent for another set of the same template still reloads.
+  const [selection, setSelection] = useState<ForgeRenderIntent>({ templateKey: '' });
+  const { templateKey } = selection;
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [renderSets, setRenderSets] = useState<ForgeRenderSet[]>([]);
@@ -267,8 +282,13 @@ export function RenderRequestsGrid({
   const [previewRowId, setPreviewRowId] = useState<string | null>(null);
   const [busy, setBusy] = useState<'loading' | 'saving' | 'firing' | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const [deleteIds, setDeleteIds] = useState<Set<string> | null>(null);
+  const [deleteRequest, setDeleteRequest] = useState<{
+    requested: Set<string>;
+    all: Set<string>;
+  } | null>(null);
+  const [pendingDiscard, setPendingDiscard] = useState<(() => void) | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [pasted, setPasted] = useState<{ text: string } | null>(null);
   const [nameRequest, setNameRequest] = useState<NameRequest | null>(null);
   const [dropHint, setDropHint] = useState<RowDrop | null>(null);
   const [preflight, setPreflight] = useState<{
@@ -318,7 +338,11 @@ export function RenderRequestsGrid({
         setTemplates(response.items);
         setProblem(null);
         // One template is not a decision.
-        if (response.items.length === 1) setTemplateKey(response.items[0]?.key ?? '');
+        const only = response.items.length === 1 ? (response.items[0]?.key ?? '') : null;
+        if (only !== null)
+          setSelection((current) =>
+            current.templateKey === only ? current : { templateKey: only },
+          );
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -332,10 +356,6 @@ export function RenderRequestsGrid({
       cancelled = true;
     };
   }, [brandId, bindingId, envsSettled, multiEnv]);
-
-  useEffect(() => {
-    if (intent) setTemplateKey(intent.templateKey);
-  }, [intent]);
 
   // A loaded set or draft carries Library pins but not their thumbnails or pixel sizes — those
   // are browser-side facts. Look each asset up once so cells, fit checks and the preview have
@@ -389,6 +409,9 @@ export function RenderRequestsGrid({
     [rehydrateMedia],
   );
 
+  // Only a binding the request actually names reloads the contract: a single environment settling
+  // its id must not replace rows someone has started editing.
+  const contractBindingId = multiEnv ? bindingId : null;
   useEffect(() => {
     if (!templateKey) {
       setContract(null);
@@ -397,7 +420,7 @@ export function RenderRequestsGrid({
     }
     let cancelled = false;
     Promise.all([
-      apiRendersApi.getContract(brandId, templateKey, multiEnv ? bindingId : null),
+      apiRendersApi.getContract(brandId, templateKey, contractBindingId),
       apiRendersApi.listInputSets(brandId, templateKey).catch(() => ({ items: [] })),
       apiRendersApi.listRenderSets(brandId, templateKey).catch(() => ({ items: [] })),
     ])
@@ -407,9 +430,10 @@ export function RenderRequestsGrid({
         setInputSets(sets.items);
         setRenderSets(savedSets.items);
         const draft = readDrafts(draftStorageKey(brandId, templateKey));
-        const wantedSetId = intent?.templateKey === templateKey ? intent.renderSetId : undefined;
         const saved =
-          savedSets.items.find((set) => set.id === wantedSetId) ?? savedSets.items[0] ?? null;
+          savedSets.items.find((set) => set.id === selection.renderSetId) ??
+          savedSets.items[0] ??
+          null;
         setActiveSet(saved);
         setDraftOffer(saved ? draft : null);
         if (saved) {
@@ -428,13 +452,7 @@ export function RenderRequestsGrid({
     return () => {
       cancelled = true;
     };
-  }, [brandId, templateKey, bindingId, multiEnv, intent, showRows]);
-
-  // --- drafts ------------------------------------------------------------------------------
-  useEffect(() => {
-    if (!contract) return;
-    writeDrafts(draftStorageKey(brandId, contract.template.key), rows);
-  }, [brandId, contract, rows]);
+  }, [brandId, selection, templateKey, contractBindingId, showRows]);
 
   // --- row edits ---------------------------------------------------------------------------
   const updateRow = useCallback((id: string, patch: (row: RequestRow) => RequestRow) => {
@@ -455,9 +473,15 @@ export function RenderRequestsGrid({
       updateRow(id, (row) => {
         const values = { ...row.values };
         const clearedKeys = row.clearedKeys.filter((item) => item !== key);
-        if (value === undefined) delete values[key];
-        else values[key] = value;
-        return { ...row, values, clearedKeys };
+        if (value !== undefined) {
+          values[key] = value;
+          return { ...row, values, clearedKeys };
+        }
+        delete values[key];
+        // Emptying a fork's cell blanks it. Dropping only the override would put the parent's
+        // value straight back under the cursor, and the next keystroke would append to it.
+        // Going back to inherited is the reset button's job.
+        return { ...row, values, clearedKeys: row.parentId ? [...clearedKeys, key] : clearedKeys };
       }),
     [updateRow],
   );
@@ -723,14 +747,14 @@ export function RenderRequestsGrid({
     );
 
   const deleteRows = () => {
-    const gone = deleteIds;
+    const gone = deleteRequest?.all;
     if (!gone) return;
     setRows((current) => current.filter((row) => !gone.has(row.id)));
     setRowSelection((current) =>
       Object.fromEntries(Object.entries(current).filter(([id]) => !gone.has(id))),
     );
     setPreviewRowId((current) => (current && gone.has(current) ? null : current));
-    setDeleteIds(null);
+    setDeleteRequest(null);
   };
 
   const saveAsInputs = (id: string) => {
@@ -770,12 +794,40 @@ export function RenderRequestsGrid({
     clearMedia,
     fork,
     duplicate,
-    remove: (ids) => setDeleteIds(descendantsOf(latestRows.current, ids)),
+    remove: (ids) =>
+      setDeleteRequest({ requested: new Set(ids), all: descendantsOf(latestRows.current, ids) }),
     saveAsInputs,
   };
 
   // --- render sets ------------------------------------------------------------------------
   const dirty = contract !== null && signatureOf(rows, contract) !== savedSignature;
+
+  /** Everything that replaces the rows on screen comes through here, and asks first when dirty. */
+  const confirmDiscard = (action: () => void) =>
+    dirty ? setPendingDiscard(() => action) : action();
+
+  // An intent is an event, taken once and handed back. Like every other way of replacing the rows
+  // it asks before losing unsaved edits; one for what is already open changes nothing.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new intent is an event; the rest is read as it arrives.
+  useEffect(() => {
+    if (!intent) return;
+    onIntentConsumed?.();
+    const alreadyOpen =
+      intent.templateKey === templateKey &&
+      (!intent.renderSetId || intent.renderSetId === activeSet?.id);
+    if (!alreadyOpen) confirmDiscard(() => setSelection({ ...intent }));
+  }, [intent]);
+
+  // --- drafts ------------------------------------------------------------------------------
+  // The browser copy exists to recover edits nobody saved, so only unsaved edits are written.
+  // Rows that match their set are not a draft: writing them would overwrite the draft still on
+  // offer, and one reload later the edits it held are gone.
+  useEffect(() => {
+    if (!contract) return;
+    const key = draftStorageKey(brandId, contract.template.key);
+    if (dirty) writeDrafts(key, rows);
+    else if (!draftOffer) writeDrafts(key, []);
+  }, [brandId, contract, rows, dirty, draftOffer]);
 
   const reportSetError = async (error: unknown, set: ForgeRenderSet | null) => {
     const message = error instanceof Error ? error.message : '';
@@ -862,7 +914,7 @@ export function RenderRequestsGrid({
     <RenderSetMenu
       sets={renderSets}
       activeSet={activeSet}
-      dirty={dirty}
+      confirmDiscard={confirmDiscard}
       canCreate={Boolean(bindingId)}
       draftAvailable={draftOffer !== null}
       onSwitch={loadRenderSet}
@@ -985,7 +1037,12 @@ export function RenderRequestsGrid({
     setDropHint(null);
     const drop = dropFor(event);
     if (!drop) return;
-    const moved = moveRow(latestRows.current, String(event.active.id), drop);
+    const moved = moveRow(
+      latestRows.current,
+      String(event.active.id),
+      drop,
+      allOutputIdsOf(contract),
+    );
     if (!moved.ok) {
       toast.error(
         moved.reason === 'cycle'
@@ -1001,22 +1058,18 @@ export function RenderRequestsGrid({
   };
 
   // --- paste, import, fire ----------------------------------------------------------------
+  // Rows pasted onto the grid are a sheet like any uploaded one, so they open the same review:
+  // one mapper, one set of cell errors, one row cap — not a second, weaker parse.
   const onPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
     // A paste INTO a cell is that cell's; only a paste onto the grid body is rows.
     if ((event.target as HTMLElement).closest('input, textarea, [contenteditable]')) return;
     if (!contract) return;
     const text = event.clipboardData.getData('text');
-    const { rows: pasted, unmatched } = parseClipboardRows(text, contract.variables);
-    if (pasted.length === 0) return;
+    // A header line and at least one row, or it is not rows.
+    if (parseDelimited(text).length < 2) return;
     event.preventDefault();
-    if (!appendRows(pasted)) return;
-    toast.success(
-      `${pasted.length} row${pasted.length === 1 ? '' : 's'} pasted${
-        unmatched.length
-          ? ` — ignored column${unmatched.length === 1 ? '' : 's'}: ${unmatched.join(', ')}`
-          : ''
-      }`,
-    );
+    setPasted({ text });
+    setImportOpen(true);
   };
 
   // Saves the set, then hands the exact selection to the pre-flight dialog, which fires it.
@@ -1064,10 +1117,12 @@ export function RenderRequestsGrid({
         templates={templates}
         templateKey={templateKey}
         templatesLoading={busy === 'loading'}
-        onTemplateChange={setTemplateKey}
+        onTemplateChange={(key) =>
+          key !== templateKey && confirmDiscard(() => setSelection({ templateKey: key }))
+        }
         environments={environments}
         bindingId={bindingId}
-        onBindingChange={setBindingId}
+        onBindingChange={(id) => id !== bindingId && confirmDiscard(() => setBindingId(id))}
         setMenu={setMenu}
         inputSets={inputSets}
         canAddRows={rows.length < MAX_BATCH_ROWS}
@@ -1245,7 +1300,12 @@ export function RenderRequestsGrid({
             contract={contract}
             existingRows={rows.length}
             open={importOpen}
-            onOpenChange={setImportOpen}
+            pasted={pasted}
+            onOpenChange={(open) => {
+              setImportOpen(open);
+              // Spent once reviewed: a remounted dialog must not replay an old paste.
+              if (!open) setPasted(null);
+            }}
             onImport={(imported) =>
               appendRows(
                 imported.map((row) =>
@@ -1313,14 +1373,43 @@ export function RenderRequestsGrid({
           setNameRequest(null);
         }}
       />
-      <AlertDialog open={deleteIds !== null} onOpenChange={(open) => !open && setDeleteIds(null)}>
+      <AlertDialog
+        open={pendingDiscard !== null}
+        onOpenChange={(open) => !open && setPendingDiscard(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved edits?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {activeSet
+                ? `Changes to “${activeSet.name}” since it was last saved will be lost.`
+                : 'These rows were never saved to a render set.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                const action = pendingDiscard;
+                setPendingDiscard(null);
+                action?.();
+              }}
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={deleteRequest !== null}
+        onOpenChange={(open) => !open && setDeleteRequest(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete rows?</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteIds && deleteIds.size > 1
-                ? `${deleteIds.size} rows will be deleted, including every fork under them.`
-                : 'This removes the row from the set. Saved renders stay in Renders.'}
+              {deleteRequest ? deleteMessage(deleteRequest) : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

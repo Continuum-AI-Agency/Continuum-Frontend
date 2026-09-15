@@ -50,6 +50,11 @@ const createRenderSetMock = mock(async (input: Record<string, unknown>) => ({
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 }));
+const updateRenderSetMock = mock(async (id: string, input: Record<string, unknown>) => {
+  const current = SAVED_SETS.find((set) => set.id === id)!;
+  return { ...current, name: input.name ?? current.name, revision: current.revision + 1 };
+});
+const deleteRenderSetMock = mock(async (_brandId: string, _setId: string) => undefined);
 const createInputSetMock = mock(async (input: Record<string, unknown>) => ({
   ...input,
   id: '66666666-6666-4666-8666-666666666666',
@@ -87,6 +92,39 @@ const VARIABLES = [
   variable({ key: 'hero', label: 'Hero', kind: 'image', role: 'product_image' }),
 ];
 
+const BRAND = '22222222-2222-4222-8222-222222222222';
+
+const savedSet = (id: string, name: string, label: string) => ({
+  id,
+  brandId: BRAND,
+  bindingId: '44444444-4444-4444-8444-444444444444',
+  name,
+  templateKey: '133',
+  contractHash: 'hash',
+  revision: 1,
+  rows: [
+    {
+      id: `${id.slice(0, -1)}9`,
+      parentId: null,
+      label,
+      overrides: {},
+      clearedKeys: [],
+      outputIds: [],
+    },
+  ],
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+const NEWEST = savedSet('55555555-5555-4555-8555-555555555551', 'Newest', 'Newest row');
+const OLDER = savedSet('55555555-5555-4555-8555-555555555552', 'Older', 'Older row');
+const SAVED_SETS = [NEWEST, OLDER];
+const withSavedSets = () =>
+  listRenderSetsMock.mockImplementation(async () => ({ items: SAVED_SETS, nextCursor: null }));
+
+/** Per-test additions to the one template list and contract the API mock answers with. */
+let extraTemplates: Array<typeof TEMPLATE> = [];
+let contractOverrides: Record<string, unknown> = {};
+
 const JOB = {
   id: '11111111-1111-4111-8111-111111111111',
   brandId: '22222222-2222-4222-8222-222222222222',
@@ -119,19 +157,23 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
         },
       ],
     }),
-    listTemplates: async () => ({ items: [TEMPLATE], nextCursor: null }),
-    getContract: async () => ({
-      template: TEMPLATE,
+    listTemplates: async () => ({ items: [TEMPLATE, ...extraTemplates], nextCursor: null }),
+    getContract: async (_brandId: string, templateKey: string) => ({
+      template: [TEMPLATE, ...extraTemplates].find((item) => item.key === templateKey) ?? TEMPLATE,
       variables: VARIABLES,
       outputs: [],
       fonts: [],
       layout: null,
       divergence: [],
+      ...contractOverrides,
     }),
     listInputSets: async () => ({ items: [], nextCursor: null }),
     createInputSet: createInputSetMock,
     listRenderSets: listRenderSetsMock,
     createRenderSet: createRenderSetMock,
+    updateRenderSet: updateRenderSetMock,
+    deleteRenderSet: deleteRenderSetMock,
+    getRenderSet: async (_brandId: string, id: string) => SAVED_SETS.find((set) => set.id === id),
     batchPreflight: async () => ({
       confirmationToken: 'batch-token',
       readiness: {
@@ -169,17 +211,27 @@ import type React from 'react';
 import { ApiError } from '@/lib/api/errors';
 import { RenderRequestsGrid } from './RenderRequestsGrid';
 
-const BRAND = '22222222-2222-4222-8222-222222222222';
-
 afterEach(() => {
   cleanup();
   localStorage.clear();
   preflightMock.mockReset();
   preflightMock.mockImplementation(async () => READY_RESPONSE);
-  listRenderSetsMock.mockClear();
+  listRenderSetsMock.mockReset();
+  listRenderSetsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
   createRenderSetMock.mockClear();
+  updateRenderSetMock.mockClear();
+  deleteRenderSetMock.mockClear();
   createInputSetMock.mockClear();
+  extraTemplates = [];
+  contractOverrides = {};
 });
+
+const confirmDialog = async (answer: 'Keep editing' | 'Discard' | 'Cancel' | 'Delete') => {
+  const dialog = await screen.findByRole('alertdialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: answer }));
+  // A length, not toBeNull: a failing element assert inside waitFor pretty-prints the fiber graph.
+  await waitFor(() => expect(screen.queryAllByRole('alertdialog')).toHaveLength(0));
+};
 
 const openMenu = async (trigger: string | RegExp, item: string | RegExp) => {
   fireEvent.click(screen.getByRole('button', { name: trigger }));
@@ -211,22 +263,40 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ }).disabled).toBe(true);
   });
 
-  test('refuses a whole paste above the fifty-row cap', async () => {
+  test('a paste onto the grid is reviewed like a sheet: its fields, its errors, its row cap', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
-    const paste = (count: number) =>
-      fireEvent.paste(screen.getByRole('table'), {
-        clipboardData: {
-          getData: () =>
-            ['headline', ...Array.from({ length: count }, (_, index) => `Row ${index}`)].join('\n'),
-        },
-      });
-    paste(50);
+    const paste = async (text: string) => {
+      fireEvent.paste(screen.getByRole('table'), { clipboardData: { getData: () => text } });
+      return screen.findByRole('dialog', { name: 'Import render rows' });
+    };
+    const importButton = (dialog: HTMLElement) =>
+      within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Import reviewed rows' });
+
+    const rows = (count: number) =>
+      ['headline', ...Array.from({ length: count }, (_, index) => `Row ${index}`)].join('\n');
+    let dialog = await paste(rows(50));
+    expect(within(dialog).getByRole('alert').textContent).toBe(
+      'This sheet has 50 rows. A render set holds at most 50 (1 already here).',
+    );
+    expect(importButton(dialog).disabled).toBe(true);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
     expect(screen.getAllByLabelText('Select row')).toHaveLength(1);
-    paste(49);
-    expect(screen.getAllByLabelText('Select row')).toHaveLength(50);
-    paste(1);
-    expect(screen.getAllByLabelText('Select row')).toHaveLength(50);
+
+    // Parent and Formats are columns a paste understands too, and a bad cell is named.
+    dialog = await paste('Name\tParent\tHeadline\tPrice\nSpain\t\tHola\tcheap\nSale\tSpain\tRebajas\t\n');
+    expect(within(dialog).getByText('Row 1 · Price: Not a number')).toBeTruthy();
+    expect(importButton(dialog).disabled).toBe(true);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
+
+    dialog = await paste('Name\tParent\tHeadline\tPrice\nSpain\t\tHola\t9.5\nSale\tSpain\tRebajas\t\n');
+    await waitFor(() => expect(importButton(dialog).disabled).toBe(false));
+    fireEvent.click(importButton(dialog));
+    await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(3));
+    const sale = screen.getByDisplayValue('Sale');
+    expect(within(sale.closest('td')!).getByText('Spain')).toBeTruthy();
   });
 
   test('discovers the one template, seeds a row from the samples, and dry-runs it to Ready', async () => {
@@ -433,42 +503,244 @@ describe('RenderRequestsGrid', () => {
   });
 
   test('an intent loads its render set over the newest one', async () => {
-    const savedSet = (id: string, name: string, label: string) => ({
-      id,
-      brandId: BRAND,
-      bindingId: '44444444-4444-4444-8444-444444444444',
-      name,
-      templateKey: '133',
-      contractHash: 'hash',
-      revision: 1,
-      rows: [
-        {
-          id: `${id.slice(0, -1)}9`,
-          parentId: null,
-          label,
-          overrides: {},
-          clearedKeys: [],
-          outputIds: [],
-        },
-      ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-    const newest = savedSet('55555555-5555-4555-8555-555555555551', 'Newest', 'Newest row');
-    const older = savedSet('55555555-5555-4555-8555-555555555552', 'Older', 'Older row');
-    listRenderSetsMock.mockImplementation(async () => ({
-      items: [newest, older],
-      nextCursor: null,
-    }));
-
+    withSavedSets();
     const { rerender } = render(<RenderRequestsGrid brandId={BRAND} />);
     expect(await screen.findByDisplayValue('Newest row')).toBeTruthy();
 
     rerender(
-      <RenderRequestsGrid brandId={BRAND} intent={{ templateKey: '133', renderSetId: older.id }} />,
+      <RenderRequestsGrid brandId={BRAND} intent={{ templateKey: '133', renderSetId: OLDER.id }} />,
     );
     expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
     expect(screen.queryByDisplayValue('Newest row')).toBeNull();
-    listRenderSetsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
+  });
+
+  test('a new intent asks before replacing unsaved edits, and is handed back either way', async () => {
+    withSavedSets();
+    const onIntentConsumed = mock(() => undefined);
+    const grid = (intent?: { templateKey: string; renderSetId?: string }) => (
+      <RenderRequestsGrid brandId={BRAND} intent={intent} onIntentConsumed={onIntentConsumed} />
+    );
+    const { rerender } = render(grid());
+    fireEvent.change(await screen.findByDisplayValue('Newest row'), {
+      target: { value: 'Edited row' },
+    });
+
+    rerender(grid({ templateKey: '133', renderSetId: OLDER.id }));
+    expect(
+      within(await screen.findByRole('alertdialog')).getByText('Discard unsaved edits?'),
+    ).toBeTruthy();
+    expect(onIntentConsumed).toHaveBeenCalledTimes(1);
+    await confirmDialog('Keep editing');
+    expect(screen.getByDisplayValue('Edited row')).toBeTruthy();
+
+    rerender(grid({ templateKey: '133', renderSetId: OLDER.id }));
+    await confirmDialog('Discard');
+    expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
+    expect(onIntentConsumed).toHaveBeenCalledTimes(2);
+  });
+
+  test('choosing another template asks before replacing unsaved edits', async () => {
+    extraTemplates = [{ ...TEMPLATE, key: '134', displayName: 'Summer Promo' }];
+    // A radio item keeps its menu open, so the trigger is only pressed when the menu is closed.
+    const pickTemplate = async (name: RegExp) => {
+      if (!screen.queryByRole('menu'))
+        fireEvent.click(screen.getByRole('button', { name: 'Template' }));
+      fireEvent.click(await screen.findByRole('menuitemradio', { name }));
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByText('Choose a template');
+    await pickTemplate(/StarCraft Promo/);
+    fireEvent.change(await screen.findByDisplayValue('Hola mundo'), {
+      target: { value: 'Edited' },
+    });
+
+    await pickTemplate(/Summer Promo/);
+    await confirmDialog('Keep editing');
+    expect(screen.getByDisplayValue('Edited')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Template' }).textContent).toContain(
+      'StarCraft Promo',
+    );
+
+    await pickTemplate(/Summer Promo/);
+    await confirmDialog('Discard');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Template' }).textContent).toContain(
+        'Summer Promo',
+      ),
+    );
+    expect(await screen.findByDisplayValue('Hola mundo')).toBeTruthy();
+  });
+
+  test('loading a saved set leaves the unsaved browser draft on offer, not overwritten', async () => {
+    withSavedSets();
+    const key = `forge:render-drafts:${BRAND}:133`;
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        rows: [
+          {
+            id: '77777777-7777-4777-8777-777777777777',
+            parentId: null,
+            label: 'Draft row',
+            values: { headline: 'From the draft' },
+            clearedKeys: [],
+            outputIds: [],
+            media: {},
+            check: { state: 'idle' },
+          },
+        ],
+      }),
+    );
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Newest row');
+    await act(async () => {});
+    expect(localStorage.getItem(key)).toContain('Draft row');
+
+    await openMenu('Render set', /Import browser draft/);
+    expect(await screen.findByDisplayValue('From the draft')).toBeTruthy();
+  });
+
+  test('switching to another saved set while dirty: Keep editing stays, Discard loads it', async () => {
+    withSavedSets();
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    fireEvent.change(await screen.findByDisplayValue('Newest row'), {
+      target: { value: 'Edited row' },
+    });
+
+    await openMenu('Render set', 'Older');
+    await confirmDialog('Keep editing');
+    expect(screen.getByDisplayValue('Edited row')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Render set' }).textContent).toContain('Newest');
+
+    await openMenu('Render set', 'Older');
+    await confirmDialog('Discard');
+    expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Render set' }).textContent).toContain('Older');
+  });
+
+  test('renames the set without touching unsaved rows, then deletes it and lands on the next', async () => {
+    withSavedSets();
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    fireEvent.change(await screen.findByDisplayValue('Newest row'), {
+      target: { value: 'Edited row' },
+    });
+
+    await openMenu('Render set', /Rename/);
+    const dialog = await screen.findByRole('dialog', { name: 'Rename render set' });
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Summer' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rename' }));
+    await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1));
+    expect(updateRenderSetMock.mock.calls[0]).toEqual([
+      NEWEST.id,
+      { brandId: BRAND, expectedRevision: 1, name: 'Summer' },
+    ]);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Render set' }).textContent).toContain('Summer'),
+    );
+    expect(screen.getByDisplayValue('Edited row')).toBeTruthy();
+    expect(screen.getByText('(unsaved edits)')).toBeTruthy();
+
+    await openMenu('Render set', /Delete/);
+    const confirm = await screen.findByRole('alertdialog');
+    expect(within(confirm).getByText('Delete “Summer”?')).toBeTruthy();
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(deleteRenderSetMock).toHaveBeenCalledWith(BRAND, NEWEST.id));
+    expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Render set' }).textContent).toContain('Older');
+  });
+
+  test('emptying a fork’s cell blanks it instead of bringing the parent’s value back', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    fireEvent.change(screen.getByLabelText('Price'), { target: { value: '9.5' } });
+    await openMenu('Row actions for Root', 'Fork');
+    await screen.findByDisplayValue('Root · B');
+    const forkHeadline = () => screen.getAllByLabelText('Headline')[1] as HTMLInputElement;
+    const forkPrice = () => screen.getAllByLabelText('Price')[1] as HTMLInputElement;
+    expect(forkHeadline().value).toBe('Hola mundo');
+
+    fireEvent.change(forkHeadline(), { target: { value: '' } });
+    expect(forkHeadline().value).toBe('');
+    fireEvent.change(forkHeadline(), { target: { value: 'M' } });
+    expect(forkHeadline().value).toBe('M');
+
+    fireEvent.change(forkPrice(), { target: { value: '7' } });
+    fireEvent.change(forkPrice(), { target: { value: '' } });
+    expect(forkPrice().value).toBe('');
+    // Back to inherited is still one click, and only that button does it.
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Price to inherited' }));
+    expect(forkPrice().value).toBe('9.5');
+  });
+
+  test('the delete confirm names forks only when it takes rows nobody picked', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    await openMenu('Add', 'Blank row');
+    await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(2));
+    for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
+    const selection = screen.getByRole('region', { name: 'Selected rows' });
+    fireEvent.click(within(selection).getByRole('button', { name: 'Delete' }));
+    expect(
+      within(await screen.findByRole('alertdialog')).getByText(
+        '2 rows will be deleted. Saved renders stay in Renders.',
+      ),
+    ).toBeTruthy();
+    await confirmDialog('Cancel');
+
+    await openMenu('Row actions for Root', 'Fork');
+    await screen.findByDisplayValue('Root · B');
+    await openMenu('Row actions for Root', 'Delete');
+    expect(
+      within(await screen.findByRole('alertdialog')).getByText(
+        '2 rows will be deleted, including every fork under them.',
+      ),
+    ).toBeTruthy();
+    await confirmDialog('Delete');
+    expect(screen.getAllByLabelText('Row name')).toHaveLength(1);
+  });
+
+  test('the focused row’s own dry-run landing mid-word keeps focus and the typed text', async () => {
+    const inFlight: Array<{ headline: unknown; resolve: (value: unknown) => void }> = [];
+    preflightMock.mockImplementation(
+      (input) =>
+        new Promise((resolve) => inFlight.push({ headline: input.variables.headline, resolve })),
+    );
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const input = (await screen.findByDisplayValue('Hola mundo')) as HTMLInputElement;
+    input.focus();
+    let typed = input.value;
+    const type = (text: string) => {
+      for (const char of text) {
+        typed += char;
+        fireEvent.change(input, { target: { value: typed } });
+        expect(document.activeElement).toBe(input);
+      }
+    };
+    type(' otra');
+    // A pause long enough for this row's own debounce to fire for exactly what is on screen.
+    await waitFor(() => expect(inFlight.some((call) => call.headline === typed)).toBe(true), {
+      timeout: 3000,
+    });
+    await act(async () => {
+      for (const call of inFlight.splice(0)) call.resolve(READY_RESPONSE);
+    });
+    expect(within(input.closest('tr')!).getByText('Ready')).toBeTruthy();
+    expect(document.activeElement).toBe(input);
+    type(' vez');
+    expect(input.isConnected).toBe(true);
+    expect(input.value).toBe('Hola mundo otra vez');
+  });
+
+  test('the per-row Output settings column exists only when the template publishes settings', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    expect(screen.getAllByRole('columnheader').length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole('columnheader', { name: /Output settings/ })).toHaveLength(0);
+    cleanup();
+
+    contractOverrides = { encode: { stored: null, defaults: { mp4: {}, mov: {} } } };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    expect(screen.getByRole('columnheader', { name: /Output settings/ })).toBeTruthy();
   });
 });

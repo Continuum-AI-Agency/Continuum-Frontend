@@ -82,4 +82,22 @@ describe('BrandColorField', () => {
     const free = screen.getByRole('button', { name: 'Background colour' });
     expect(free.textContent).toContain('#123456');
   });
+
+  test('a hash-less imported value still rings its swatch and paints the free field', async () => {
+    renderField('FF6600');
+    const orange = await screen.findByRole('button', { name: 'Background: --brand-orange' });
+    expect(orange.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Background colour' }).textContent).toContain(
+      '#ff6600',
+    );
+  });
+
+  test('a value that is not hex rings nothing and reaches the free field as typed', async () => {
+    renderField('orange');
+    await screen.findByRole('button', { name: 'Background: --ink' });
+    expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Background colour' }).textContent).toContain(
+      'orange',
+    );
+  });
 });

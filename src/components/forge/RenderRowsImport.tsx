@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
+import { ApiError } from '@/lib/api/errors';
 import { uploadBrandDocument } from '@/lib/documents/uploadBrandDocument';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
@@ -54,27 +55,32 @@ const PREVIEW_ROWS = 10;
 const wait = () => new Promise((resolve) => setTimeout(resolve, 1_000));
 const cellKey = (row: number, column: string) => `${row}:${column}`;
 
-/** GET /api/library/assets by id; null when the brand has no such asset (or the request fails). */
+/** GET /api/library/assets by id; null when the brand has no such asset, throws when the lookup fails. */
+export async function lookupLibraryAsset(
+  brandId: string,
+  assetId: string,
+): Promise<MediaAsset | null> {
+  const query = new URLSearchParams({ brandId, assetId, limit: '1' });
+  const response = await fetch(`/api/library/assets?${query}`);
+  if (!response.ok) throw new Error(`library_lookup_${response.status}`);
+  const payload = (await response.json()) as { items?: unknown[] };
+  const item = payload.items?.[0];
+  return item === undefined ? null : mediaAssetSchema.parse(item);
+}
+
+/** lookupLibraryAsset with a failed request read as missing. */
 export async function fetchLibraryAsset(
   brandId: string,
   assetId: string,
 ): Promise<MediaAsset | null> {
-  try {
-    const query = new URLSearchParams({ brandId, assetId, limit: '1' });
-    const response = await fetch(`/api/library/assets?${query}`);
-    if (!response.ok) return null;
-    const payload = (await response.json()) as { items?: unknown[] };
-    const item = payload.items?.[0];
-    return item === undefined ? null : mediaAssetSchema.parse(item);
-  } catch {
-    return null;
-  }
+  return lookupLibraryAsset(brandId, assetId).catch(() => null);
 }
 
 /** Builds the template CSV (buildTemplateCsv) and saves it client-side via Blob + a temporary <a download>. */
 export function downloadTemplateCsv(contract: ImportContract, fileName: string): void {
+  // The BOM is what makes Excel read the file as UTF-8 instead of mangling accented samples.
   const url = URL.createObjectURL(
-    new Blob([buildTemplateCsv(contract)], { type: 'text/csv;charset=utf-8' }),
+    new Blob(['\uFEFF', buildTemplateCsv(contract)], { type: 'text/csv;charset=utf-8' }),
   );
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -82,8 +88,36 @@ export function downloadTemplateCsv(contract: ImportContract, fileName: string):
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
+  // Revoking in the same tick can cancel the download before the browser has read the Blob.
+  setTimeout(() => URL.revokeObjectURL(url), 40_000);
 }
+
+const IMPORT_ERROR_COPY: Record<string, string> = {
+  render_import_too_many_rows: `This sheet has too many rows. A render set holds at most ${MAX_BATCH_ROWS}.`,
+  render_import_duplicate_headers: 'Two columns share a header. Rename one and upload again.',
+  render_import_no_rows: 'This spreadsheet has no rows to import.',
+  render_import_too_large: 'This spreadsheet is too large to import.',
+  render_import_not_found: 'The uploaded spreadsheet was not found. Upload it again.',
+  render_import_failed: 'Could not read this spreadsheet.',
+};
+
+/** The server refuses with a bare code; the person needs the sentence (and the row count). */
+function importErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return 'Could not read this spreadsheet.';
+  const rowCount = error instanceof ApiError ? error.payload?.rowCount : undefined;
+  if (error.message === 'render_import_too_many_rows' && typeof rowCount === 'number') {
+    return `This sheet has ${rowCount} rows. A render set holds at most ${MAX_BATCH_ROWS}.`;
+  }
+  return IMPORT_ERROR_COPY[error.message] ?? error.message;
+}
+
+const article = (word: string) => (/^[aeiou]/.test(word) ? 'an' : 'a');
+
+/** Delimited text — a CSV file or rows pasted onto the grid — as the preview the review reads. */
+const previewOfText = (text: string, sourceName: string): ForgeRenderImportPreview => {
+  const { headers, rows } = recordsFromTable(parseDelimited(text));
+  return { sourceName, sheetName: null, headers, rows, rowCount: rows.length };
+};
 
 const isCsv = (file: File) => file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
 
@@ -99,10 +133,13 @@ export function RenderRowsImport({
   open,
   onOpenChange,
   onImport,
+  pasted,
 }: {
   brandId: string;
   contract: ImportContract;
   existingRows: number;
+  /** Rows pasted onto the grid, reviewed exactly as an uploaded sheet is. A new object is a new paste. */
+  pasted?: { text: string } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImport: (rows: RequestRow[]) => void;
@@ -113,7 +150,7 @@ export function RenderRowsImport({
   const [preview, setPreview] = useState<ForgeRenderImportPreview | null>(null);
   const [mappings, setMappings] = useState<Record<string, string>>({});
   // Keyed by brand + id so remapping a column never refetches, and a brand switch never reuses.
-  const [assets, setAssets] = useState<Record<string, MediaAsset | null>>({});
+  const [assets, setAssets] = useState<Record<string, MediaAsset | null | 'failed'>>({});
   const { variables, outputs } = contract;
   const variableScope = variables.map((variable) => `${variable.key}:${variable.kind}`).join('|');
 
@@ -164,15 +201,26 @@ export function RenderRowsImport({
       const key = `${brandId}:${id}`;
       if (requested.current.has(key)) continue;
       requested.current.add(key);
-      void fetchLibraryAsset(brandId, id).then((asset) =>
-        setAssets((current) => ({ ...current, [key]: asset })),
+      void lookupLibraryAsset(brandId, id).then(
+        (asset) => setAssets((current) => ({ ...current, [key]: asset })),
+        () => {
+          // Retryable, never from this effect: the next sheet load or remap asks again.
+          requested.current.delete(key);
+          setAssets((current) => ({ ...current, [key]: 'failed' }));
+        },
       );
     }
   }, [pending, brandId]);
 
+  const retryFailedLookups = () =>
+    setAssets((current) =>
+      Object.fromEntries(Object.entries(current).filter(([, asset]) => asset !== 'failed')),
+    );
+
   const checked = useMemo(() => {
     if (!review) return null;
     const columnOf = new Map(Object.entries(mappings).map(([header, target]) => [target, header]));
+    const kindOf = new Map(variables.map((variable) => [variable.key, variable.kind]));
     const errors: ImportCellError[] = [...review.errors];
     const rows = review.rows.map((row, index) => {
       const media: RequestRow['media'] = {};
@@ -180,15 +228,21 @@ export function RenderRowsImport({
         const pins = pinsOf(value);
         if (pins.length === 0) continue;
         const lookups = pins.map((id) => assets[`${brandId}:${id}`]);
-        if (lookups.includes(null)) {
-          errors.push({
-            row: index,
-            column: columnOf.get(key) ?? key,
-            message: 'No Library asset with this id',
-          });
-        }
+        const kind = kindOf.get(key);
+        const mismatch = lookups.find(
+          (asset): asset is MediaAsset =>
+            typeof asset === 'object' && asset !== null && asset.kind !== kind,
+        );
+        const message = lookups.includes('failed')
+          ? 'Could not check this id'
+          : lookups.includes(null)
+            ? 'No Library asset with this id'
+            : mismatch && kind
+              ? `This Library asset is ${article(mismatch.kind)} ${mismatch.kind}, not ${article(kind)} ${kind}`
+              : null;
+        if (message) errors.push({ row: index, column: columnOf.get(key) ?? key, message });
         const first = lookups[0];
-        if (!first) continue;
+        if (!first || first === 'failed') continue;
         media[key] = {
           ...(first.width && first.height ? { w: first.width, h: first.height } : {}),
           thumbnailUrl: first.thumbnailUrl ?? first.signedUrl ?? null,
@@ -197,7 +251,22 @@ export function RenderRowsImport({
       return Object.keys(media).length ? { ...row, media: { ...row.media, ...media } } : row;
     });
     return { rows, errors };
-  }, [review, mappings, assets, brandId]);
+  }, [review, mappings, variables, assets, brandId]);
+
+  const showPreview = (next: ForgeRenderImportPreview) => {
+    retryFailedLookups();
+    setMappings(autoMapHeaders(next.headers, variables));
+    setPreview(next);
+  };
+
+  // A paste replaces whatever sheet is under review, including an upload still on its way.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new paste is an event.
+  useEffect(() => {
+    if (!pasted) return;
+    scopeRef.current += 1;
+    setBusy(false);
+    showPreview(previewOfText(pasted.text, 'Clipboard'));
+  }, [pasted]);
 
   const loadFile = async (file: File) => {
     const scope = scopeRef.current;
@@ -206,9 +275,8 @@ export function RenderRowsImport({
       let next: ForgeRenderImportPreview | null = null;
       if (isCsv(file)) {
         // Quoted cells parse the same here as in a paste; a CSV never needs the server.
-        const { headers, rows } = recordsFromTable(parseDelimited(await file.text()));
-        if (headers.length === 0) throw new Error('This CSV has no header row.');
-        next = { sourceName: file.name, sheetName: null, headers, rows, rowCount: rows.length };
+        next = previewOfText(await file.text(), file.name);
+        if (next.headers.length === 0) throw new Error('This CSV has no header row.');
       } else {
         const uploaded = await uploadBrandDocument({ brandId, file });
         if (scope !== scopeRef.current) return;
@@ -225,11 +293,10 @@ export function RenderRowsImport({
         if (!next) throw new Error('The spreadsheet is still extracting. Try again shortly.');
       }
       if (scope !== scopeRef.current) return;
-      setMappings(autoMapHeaders(next.headers, variables));
-      setPreview(next);
+      showPreview(next);
     } catch (error) {
       if (scope !== scopeRef.current) return;
-      toast.error(error instanceof Error ? error.message : 'Could not read this spreadsheet.');
+      toast.error(importErrorMessage(error));
     } finally {
       if (scope === scopeRef.current) setBusy(false);
     }
@@ -307,9 +374,10 @@ export function RenderRowsImport({
                   <FieldLabel className="min-w-32">{header}</FieldLabel>
                   <Select
                     value={mappings[header] ?? IMPORT_SKIP}
-                    onValueChange={(value) =>
-                      setMappings((current) => ({ ...current, [header]: value }))
-                    }
+                    onValueChange={(value) => {
+                      retryFailedLookups();
+                      setMappings((current) => ({ ...current, [header]: value }));
+                    }}
                   >
                     <SelectTrigger aria-label={`Map ${header}`}>
                       <SelectValue>{labelOf(mappings[header] ?? IMPORT_SKIP)}</SelectValue>

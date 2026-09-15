@@ -34,7 +34,8 @@ import {
 import { Input } from '@/components/ui/input';
 
 // The render set you are editing, and every way to change which one that is. Anything that
-// replaces the rows on screen asks first when they hold edits nobody saved.
+// replaces the rows on screen goes through the grid's `confirmDiscard`, the one place that asks
+// first when they hold edits nobody saved — the template picker and "open in Render" use it too.
 
 /** One text field in a dialog — what `window.prompt` was, without the browser chrome. */
 export function NameDialog({
@@ -107,12 +108,10 @@ export function NameDialog({
   );
 }
 
-type Pending = { kind: 'switch'; set: ForgeRenderSet } | { kind: 'new' } | { kind: 'draft' };
-
 export function RenderSetMenu({
   sets,
   activeSet,
-  dirty,
+  confirmDiscard,
   canCreate,
   draftAvailable,
   onSwitch,
@@ -123,8 +122,8 @@ export function RenderSetMenu({
 }: {
   sets: ForgeRenderSet[];
   activeSet: ForgeRenderSet | null;
-  /** The rows on screen differ from what was last loaded or saved. */
-  dirty: boolean;
+  /** Runs `action` now, or after the person agrees to lose the unsaved edits on screen. */
+  confirmDiscard: (action: () => void) => void;
   canCreate: boolean;
   /** An unsaved browser draft exists that is not on screen. */
   draftAvailable: boolean;
@@ -135,15 +134,7 @@ export function RenderSetMenu({
   onImportDraft: () => void;
 }) {
   const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | null>(null);
-  const [confirming, setConfirming] = useState<Pending | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const run = (action: Pending) => {
-    if (action.kind === 'switch') onSwitch(action.set);
-    else if (action.kind === 'new') setDialog('new');
-    else onImportDraft();
-  };
-  const guard = (action: Pending) => (dirty ? setConfirming(action) : run(action));
 
   return (
     <>
@@ -170,7 +161,7 @@ export function RenderSetMenu({
                 <DropdownMenuItem
                   key={set.id}
                   onClick={() =>
-                    set.id === activeSet?.id ? undefined : guard({ kind: 'switch', set })
+                    set.id === activeSet?.id ? undefined : confirmDiscard(() => onSwitch(set))
                   }
                 >
                   <Check className={set.id === activeSet?.id ? '' : 'invisible'} aria-hidden />
@@ -180,7 +171,7 @@ export function RenderSetMenu({
             </DropdownMenuGroup>
           ) : null}
           {sets.length ? <DropdownMenuSeparator /> : null}
-          <DropdownMenuItem disabled={!canCreate} onClick={() => guard({ kind: 'new' })}>
+          <DropdownMenuItem disabled={!canCreate} onClick={() => confirmDiscard(() => setDialog('new'))}>
             <FilePlus2 aria-hidden /> New set…
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!activeSet} onClick={() => setDialog('rename')}>
@@ -196,7 +187,7 @@ export function RenderSetMenu({
           {draftAvailable ? (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => guard({ kind: 'draft' })}>
+              <DropdownMenuItem onClick={() => confirmDiscard(onImportDraft)}>
                 <History aria-hidden /> Import browser draft
               </DropdownMenuItem>
             </>
@@ -254,31 +245,6 @@ export function RenderSetMenu({
               }}
             >
               Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Discard unsaved edits?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {activeSet
-                ? `Changes to “${activeSet.name}” since it was last saved will be lost.`
-                : 'These rows were never saved to a render set.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep editing</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => {
-                const action = confirming;
-                setConfirming(null);
-                if (action) run(action);
-              }}
-            >
-              Discard
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

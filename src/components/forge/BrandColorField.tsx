@@ -15,9 +15,13 @@ import { cn } from '@/lib/utils';
 // itself: that also registers the brand's display face on `document.fonts`, which a grid of
 // colour cells has no use for.
 
-/** `#abc` / `#aabbccdd` → `#aabbcc`: the render contract types a colour as six hex digits. */
-function toSixDigitHex(value: string): string {
-  const hex = value.trim().slice(1).toLowerCase();
+/**
+ * `#abc` / `aabbccdd` → `#aabbcc`: the render contract types a colour as six hex digits. The `#`
+ * is optional because imported rows arrive without one. Null for anything that is not hex.
+ */
+function toSixDigitHex(value: string): string | null {
+  const hex = value.trim().replace(/^#/, '').toLowerCase();
+  if (!isLiteralHex(`#${hex}`)) return null;
   const wide = hex.length > 4 ? hex.slice(0, 6) : [...hex.slice(0, 3)].map((c) => c + c).join('');
   return `#${wide}`;
 }
@@ -30,7 +34,7 @@ function paletteSwatches(tokens: readonly DesignToken[]): { name: string; hex: s
       return [];
     }
     const hex = toSixDigitHex(value);
-    if (seen.has(hex)) return [];
+    if (!hex || seen.has(hex)) return [];
     seen.add(hex);
     return [{ name: token.name, hex }];
   });
@@ -81,7 +85,7 @@ export function BrandColorField({
           ))}
         </div>
       ) : null}
-      <ColorField label={label} value={value} onChange={onChange} disabled={disabled} />
+      <ColorField label={label} value={selected ?? value} onChange={onChange} disabled={disabled} />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import type {
   ApiRenderVariable,
 } from '@continuum/contracts';
 import { type JSX, useEffect, useState } from 'react';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
@@ -345,6 +346,35 @@ const latestFinishedFor = (jobs: ApiRenderJob[], rowId: string): ApiRenderJob | 
     )
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null;
 
+// ponytail: pages the whole set client-side, capped at 10×50 jobs; a row whose last render is
+// older than that shows none. A server-side renderSetRowId filter on listJobs retires the loop.
+const LAST_RENDER_PAGES = 10;
+
+async function findLastRender(
+  brandId: string,
+  renderSetId: string,
+  rowId: string,
+): Promise<ApiRenderJob | null> {
+  let cursor: string | undefined;
+  for (let page = 0; page < LAST_RENDER_PAGES; page++) {
+    // Newest first, so the first page holding one of this row's renders holds its latest.
+    const { items, nextCursor } = await apiRendersApi.listJobs(brandId, 50, {
+      renderSetId,
+      ...(cursor ? { cursor } : {}),
+    });
+    const found = latestFinishedFor(items, rowId);
+    if (found || !nextCursor) return found;
+    cursor = nextCursor;
+  }
+  return null;
+}
+
+/** `9:16` against a 1080×1920 comp. A null or unreadable ratio proves nothing, so it never matches. */
+function sameAspect(ratio: string | null, comp: ApiRenderTemplateLayout['comp']): boolean {
+  const [w = 0, h = 0] = (ratio ?? '').split(':').map(Number);
+  return w > 0 && h > 0 && Math.abs((w * comp.height) / (h * comp.width) - 1) < 0.01;
+}
+
 export function RenderPreviewPanel({
   brandId,
   contract,
@@ -364,22 +394,43 @@ export function RenderPreviewPanel({
   const [lastRender, setLastRender] = useState<{ key: string; job: ApiRenderJob | null } | null>(
     null,
   );
+  // Bumped when one of this row's jobs finishes, so Last render follows a render that lands.
+  const [revision, setRevision] = useState(0);
   const fetchKey = rowId && renderSetId ? `${renderSetId}:${rowId}` : null;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: revision is only a re-read signal.
   useEffect(() => {
     if (!rowId || !renderSetId) return;
     let current = true;
     const key = `${renderSetId}:${rowId}`;
-    apiRendersApi
-      .listJobs(brandId, 50, { renderSetId })
-      .then(({ items }) => {
-        if (current) setLastRender({ key, job: latestFinishedFor(items, rowId) });
+    findLastRender(brandId, renderSetId, rowId)
+      .then((job) => {
+        if (current) setLastRender({ key, job });
       })
       // A missing Last render is not worth interrupting anyone over.
       .catch(() => undefined);
     return () => {
       current = false;
     };
+  }, [brandId, rowId, renderSetId, revision]);
+
+  // A realtime job is a signal to re-read, never data to merge: only the list read re-signs URLs.
+  useEffect(() => {
+    if (!rowId || !renderSetId) return;
+    return subscribeToPostgresChanges({
+      label: 'render-preview-last',
+      bindings: (['INSERT', 'UPDATE'] as const).map((event) => ({
+        event,
+        schema: 'media',
+        table: 'ad_render_jobs',
+        filter: `brand_id=eq.${brandId}`,
+        onRow: (job: Record<string, unknown>) => {
+          if (job.render_set_row_id === rowId && job.status === 'finished') {
+            setRevision((value) => value + 1);
+          }
+        },
+      })),
+    });
   }, [brandId, rowId, renderSetId]);
 
   const row = rowId ? rows.find((candidate) => candidate.id === rowId) : undefined;
@@ -399,7 +450,14 @@ export function RenderPreviewPanel({
   );
   // Derived, not synced: a format that falls out of scope simply stops being the one drawn.
   const selected = outputs.find((output) => output.id === pickedOutputId) ?? outputs[0] ?? null;
-  const layout = selected?.layout ?? contract.layout;
+  // The template-level layout is ONE comp; under an output of another ratio its boxes sit in the
+  // wrong coordinate space and report overflow that does not exist.
+  const layout = selected
+    ? (selected.layout ??
+      (contract.layout && sameAspect(selected.ratio, contract.layout.comp)
+        ? contract.layout
+        : null))
+    : contract.layout;
   const job = lastRender && lastRender.key === fetchKey ? lastRender.job : null;
   const showingLast = view === 'last' && job !== null;
   const lastOutput = job
@@ -470,7 +528,11 @@ export function RenderPreviewPanel({
           media={media}
         />
       ) : (
-        <p className="m-0 text-muted-foreground">This template has no measured layout to draw.</p>
+        <p className="m-0 text-muted-foreground">
+          {selected
+            ? 'No measured layout for this format.'
+            : 'This template has no measured layout to draw.'}
+        </p>
       )}
     </div>
   );
