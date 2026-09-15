@@ -81,7 +81,8 @@ export default defineConfig({
   webServer: {
     command: 'bun run dev',
     env: {
-      NEXT_DIST_DIR: '.next/forge-studio-e2e',
+      // Parallel agents pass their own dist dir with their own port, so two dev servers never share one.
+      NEXT_DIST_DIR: process.env.FORGE_STUDIO_DIST_DIR ?? '.next/forge-studio-e2e',
       NEXT_TSCONFIG_PATH: 'tsconfig.e2e.json',
       PORT,
       NEXT_PUBLIC_API_URL: backendURL,
