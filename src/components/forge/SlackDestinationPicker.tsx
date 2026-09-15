@@ -1,29 +1,30 @@
 'use client';
 
-import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 import type {
   ApiRenderDeliveryDestination,
   ApiRenderDeliveryDestinationsResponse,
   ApiRenderSlackChannel,
+  ApiRenderSlackChannelListResponse,
 } from '@continuum/contracts';
 import { Loader2, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { SLACK_SETTINGS_PATH } from '@/lib/api/slackWorkspaces.client';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
+import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 
 // Where a finished render is posted in Slack, if anywhere. The destinations are the brand's own
-// `chat_destinations` rows; the channel list for adding one is the requesting user's OWN Slack
-// workspace, so a brand user never sees another tenant's channels. Connecting Slack lives in
-// Settings → Connections — this links there rather than embedding the install flow.
+// `chat_destinations` rows; the channel list for adding one comes only from the Slack workspaces
+// connected to this brand, so a brand user never sees another tenant's channels. A brand can
+// have several workspaces, so every channel carries its workspace name. Connecting a workspace
+// lives in Settings → Integrations — this links there rather than embedding the install flow.
 
 export type SlackPickerState =
   | 'loading'
   | 'unavailable'
   | { error: string }
   | ApiRenderDeliveryDestinationsResponse['slack'];
-
-const CONNECTIONS_HREF = '/settings?section=connections';
 
 const ROLE_LABEL: Record<ApiRenderDeliveryDestination['role'], string> = {
   ops: 'Ops',
@@ -32,9 +33,9 @@ const ROLE_LABEL: Record<ApiRenderDeliveryDestination['role'], string> = {
   dm: 'DM',
 };
 
-const NOT_CONNECTED_COPY = 'Connect your Slack account to add a channel for finished renders.';
+const NOT_CONNECTED_COPY = 'No Slack workspace is connected to this brand yet.';
 const NOT_INSTALLED_COPY =
-  'The Continuum app is no longer installed in your Slack workspace. Reinstall it from Settings to add a channel.';
+  'The Continuum app is no longer installed in this brand’s Slack workspace. Reinstall it to add a channel.';
 
 /** The backend answers 503 `chat_destinations_unavailable` until Slack delivery is wired. */
 export function isSlackDeliveryUnavailable(error: unknown): boolean {
@@ -47,6 +48,7 @@ const SLACK_FAILURE_COPY: Record<string, string> = {
   slack_not_connected: NOT_CONNECTED_COPY,
   slack_not_installed: NOT_INSTALLED_COPY,
   slack_channel_not_found: 'That channel is gone — pick another.',
+  forbidden_brand_role: 'Only brand owners, admins and operators can add a Slack channel.',
 };
 
 /** A Slack or render-service failure in words; render_* codes use the discovery copy. */
@@ -96,9 +98,7 @@ export function SlackDestinationPicker({
     <div className="space-y-2">
       {destinations.length ? (
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">
-            Post each finished render to{slack.workspaceName ? ` (${slack.workspaceName})` : ''}
-          </span>
+          <span className="text-muted-foreground">Post each finished render to</span>
           <select
             aria-label="Slack channel"
             value={value?.id ?? ''}
@@ -110,7 +110,10 @@ export function SlackDestinationPicker({
             <option value="">Don’t post to Slack</option>
             {destinations.map((destination) => (
               <option key={destination.id} value={destination.id}>
-                #{destination.channelName} · {ROLE_LABEL[destination.role]}
+                {withWorkspace(
+                  `#${destination.channelName} · ${ROLE_LABEL[destination.role]}`,
+                  destination.workspaceName ?? slack.workspaceName,
+                )}
               </option>
             ))}
           </select>
@@ -127,16 +130,16 @@ export function SlackDestinationPicker({
       ) : null}
       {slack.state !== 'ready' ? (
         // Posting uses the destination's own installation, so the brand's channels above stay
-        // pickable; only adding one needs the person's own Slack.
+        // pickable; only adding one needs a connected, installed workspace.
         <p className="text-xs text-muted-foreground">
           {slack.state === 'not_connected' ? NOT_CONNECTED_COPY : NOT_INSTALLED_COPY}{' '}
           <Link
-            href={CONNECTIONS_HREF}
+            href={SLACK_SETTINGS_PATH}
             className="font-medium text-primary underline-offset-4 hover:underline"
           >
             {slack.state === 'not_connected'
-              ? 'Connect Slack in Settings'
-              : 'Reinstall Slack in Settings'}
+              ? 'Connect Slack to this brand in Settings'
+              : 'Reinstall Slack for this brand in Settings'}
           </Link>
         </p>
       ) : adding ? (
@@ -164,6 +167,19 @@ export function SlackDestinationPicker({
   );
 }
 
+const withWorkspace = (label: string, workspaceName: string | null | undefined) =>
+  workspaceName ? `${label} · ${workspaceName}` : label;
+
+// A channel list spanning workspaces is grouped by workspace; one unnamed workspace stays flat.
+function groupByWorkspace(response: ApiRenderSlackChannelListResponse) {
+  const groups = new Map<string, ApiRenderSlackChannel[]>();
+  for (const channel of response.channels) {
+    const workspace = channel.workspaceName ?? response.workspaceName ?? '';
+    groups.set(workspace, [...(groups.get(workspace) ?? []), channel]);
+  }
+  return [...groups];
+}
+
 function AddChannel({
   brandId,
   onAdded,
@@ -173,7 +189,7 @@ function AddChannel({
   onAdded: (destination: ApiRenderDeliveryDestination) => void;
   onCancel: () => void;
 }) {
-  const [channels, setChannels] = useState<ApiRenderSlackChannel[] | null>(null);
+  const [channels, setChannels] = useState<ApiRenderSlackChannelListResponse | null>(null);
   const [channelId, setChannelId] = useState('');
   const [role, setRole] = useState<'ops' | 'client'>('ops');
   const [problem, setProblem] = useState<string | null>(null);
@@ -184,11 +200,11 @@ function AddChannel({
     apiRendersApi
       .listSlackChannels(brandId)
       .then((response) => {
-        if (!cancelled) setChannels(response.channels);
+        if (!cancelled) setChannels(response);
       })
       .catch((error) => {
         if (cancelled) return;
-        setChannels([]);
+        setChannels({ workspaceName: null, channels: [] });
         setProblem(describeSlackFailure(error));
       });
     return () => {
@@ -212,9 +228,10 @@ function AddChannel({
     <div className="space-y-2 rounded-md border bg-muted/20 p-2 text-xs">
       {channels === null ? (
         <p className="flex items-center gap-1.5 text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" aria-hidden /> Loading your Slack channels…
+          <Loader2 className="size-3 animate-spin" aria-hidden /> Loading this brand’s Slack
+          channels…
         </p>
-      ) : channels.length ? (
+      ) : channels.channels.length ? (
         <>
           <label className="flex flex-col gap-1">
             <span className="text-muted-foreground">Channel</span>
@@ -225,15 +242,25 @@ function AddChannel({
               className="h-8 rounded-md border border-input bg-background px-2 text-sm"
             >
               <option value="">Choose a channel</option>
-              {channels.map((channel) => (
-                <option key={channel.id} value={channel.id}>
-                  {channel.isPrivate ? '🔒 ' : '#'}
-                  {channel.name}
-                  {channel.isPrivate && !channel.isMember
-                    ? ' — invite the Continuum app first'
-                    : ''}
-                </option>
-              ))}
+              {groupByWorkspace(channels).map(([workspace, group]) => {
+                const options = group.map((channel) => (
+                  // A Slack Connect channel keeps its id in every workspace it is shared into.
+                  <option key={`${workspace}:${channel.id}`} value={channel.id}>
+                    {channel.isPrivate ? '🔒 ' : '#'}
+                    {channel.name}
+                    {channel.isPrivate && !channel.isMember
+                      ? ' — invite the Continuum app first'
+                      : ''}
+                  </option>
+                ));
+                return workspace ? (
+                  <optgroup key={workspace} label={workspace}>
+                    {options}
+                  </optgroup>
+                ) : (
+                  options
+                );
+              })}
             </select>
           </label>
           <label className="flex flex-col gap-1">
@@ -250,7 +277,7 @@ function AddChannel({
           </label>
         </>
       ) : problem ? null : (
-        <p className="text-muted-foreground">No channels found in your Slack workspace.</p>
+        <p className="text-muted-foreground">No channels found in this brand’s Slack workspaces.</p>
       )}
       {problem ? <p className="text-muted-foreground">{problem}</p> : null}
       <div className="flex justify-end gap-1.5">

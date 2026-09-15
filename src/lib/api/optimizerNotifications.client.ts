@@ -1,6 +1,4 @@
 import {
-  type ListSlackChannelsResponse,
-  listSlackChannelsResponseSchema,
   type OptimizerNotificationSettings,
   optimizerNotificationSettingsSchema,
   type SaveOptimizerNotificationRequest,
@@ -35,12 +33,4 @@ export function saveOptimizerNotificationSettings(
 
 export async function disableOptimizerNotifications(brandId: string): Promise<void> {
   await http.request({ path: settingsPath(brandId), method: 'DELETE' });
-}
-
-export function listSlackChannels(signal?: AbortSignal): Promise<ListSlackChannelsResponse> {
-  return http.request({
-    path: '/api/chat/slack/channels',
-    schema: listSlackChannelsResponseSchema,
-    signal,
-  });
 }

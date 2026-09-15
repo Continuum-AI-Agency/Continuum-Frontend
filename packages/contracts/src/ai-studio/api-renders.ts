@@ -1017,6 +1017,9 @@ export const apiRenderDeliveryDestinationSchema = z
     role: z.enum(['client', 'ops', 'alerts', 'dm']),
     channelId: z.string().min(1),
     channelName: z.string(),
+    // Optional only because the schema is strict and the Frontend deploys first; the
+    // Backend always sends it — a brand can bind several workspaces.
+    workspaceName: z.string().nullable().optional(),
   })
   .strict();
 export type ApiRenderDeliveryDestination = z.infer<typeof apiRenderDeliveryDestinationSchema>;
@@ -1049,6 +1052,7 @@ export const apiRenderSlackChannelSchema = z
     name: z.string(),
     isPrivate: z.boolean(),
     isMember: z.boolean(),
+    workspaceName: z.string().nullable().optional(),
   })
   .strict();
 export type ApiRenderSlackChannel = z.infer<typeof apiRenderSlackChannelSchema>;

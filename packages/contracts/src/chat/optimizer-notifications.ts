@@ -24,11 +24,6 @@ export const slackChannelSchema = z
   .strict();
 export type SlackChannel = z.infer<typeof slackChannelSchema>;
 
-export const listSlackChannelsResponseSchema = z
-  .object({ channels: z.array(slackChannelSchema) })
-  .strict();
-export type ListSlackChannelsResponse = z.infer<typeof listSlackChannelsResponseSchema>;
-
 export const optimizerNotificationSettingsSchema = z
   .object({
     // No subscription row at all. Every other field is meaningless while this is false.

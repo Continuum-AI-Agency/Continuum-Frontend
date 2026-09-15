@@ -22,6 +22,7 @@ import { BrandIntegrationsSwitcher } from '@/components/settings/brand/BrandInte
 import { BrandIntelligenceWorkspace } from '@/components/settings/brand/BrandIntelligenceWorkspace';
 import { BrandInvitesSection } from '@/components/settings/brand/BrandInvitesSection';
 import { BrandPulseSection } from '@/components/settings/brand/BrandPulseSection';
+import { BrandSlackWorkspacesSection } from '@/components/settings/brand/BrandSlackWorkspacesSection';
 import { DesignSystemSection } from '@/components/settings/brand/DesignSystemSection';
 import { PromptsSettingsSection } from '@/components/settings/brand/PromptsSettingsSection';
 import { SkillsSettingsSection } from '@/components/settings/brand/SkillsSettingsSection';
@@ -299,6 +300,16 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           description="Connections other members have granted to this brand."
         >
           <BrandGrantsSection brandProfileId={activeBrandId} />
+        </SettingsSection>
+        <SettingsSection
+          title="Slack workspaces"
+          description="Where this brand posts finished renders and optimizer updates. Channels only come from these workspaces."
+        >
+          <BrandSlackWorkspacesSection
+            key={activeBrandId}
+            brandId={activeBrandId}
+            canManage={namingRole === 'owner' || namingRole === 'admin'}
+          />
         </SettingsSection>
         <SettingsSection
           title="Ad naming convention"

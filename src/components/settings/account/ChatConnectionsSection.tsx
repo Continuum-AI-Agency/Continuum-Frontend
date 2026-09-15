@@ -22,15 +22,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
   listChatConnections,
   revokeChatConnection,
   setPreferredChatConnection,
-  startSlackInstall,
 } from '@/lib/api/chatConnections.client';
+import { slackInstallStartHref } from '@/lib/api/slackWorkspaces.client';
 import {
   type ChatConnection,
   type ChatPlatform,
@@ -60,25 +60,6 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
   const [state, setState] = useState<LoadState>('loading');
   const [connections, setConnections] = useState<ChatConnection[]>([]);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
-  const [installing, setInstalling] = useState(false);
-
-  // Installing is a full-page hand-off to Slack's consent screen, so the browser leaves
-  // this page; `installing` only has to survive until it does.
-  const beginInstall = useCallback(async () => {
-    setInstalling(true);
-    try {
-      window.location.assign(
-        await startSlackInstall(`${window.location.pathname}${window.location.search}`),
-      );
-    } catch {
-      setInstalling(false);
-      show({
-        title: 'Could not start the Slack install',
-        description: 'Slack is not configured for this environment yet.',
-        variant: 'error',
-      });
-    }
-  }, [show]);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -193,15 +174,12 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
           Add Continuum to your Slack workspace, then message the bot to link your identity. Until
           then, teammate requests stay available in the Goal case file.
         </p>
-        <Button
-          type="button"
-          size="sm"
-          className="mt-4"
-          disabled={installing}
-          onClick={() => void beginInstall()}
+        <a
+          href={slackInstallStartHref(brandId)}
+          className={buttonVariants({ size: 'sm', className: 'mt-4' })}
         >
-          {installing ? 'Opening Slack…' : 'Add to Slack'}
-        </Button>
+          Add to Slack
+        </a>
       </div>
     );
   }

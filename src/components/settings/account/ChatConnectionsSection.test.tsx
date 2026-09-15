@@ -1,26 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 
-const listMock = mock(() =>
-  Promise.resolve({
-    connections: [
-      {
-        id: '00000000-0000-4000-8000-000000000001',
-        userId: '00000000-0000-4000-8000-000000000002',
-        platform: 'slack' as const,
-        workspaceId: 'workspace_1',
-        platformUserId: 'platform_user_1',
-        displayName: 'Alex in Slack',
-        status: 'active' as const,
-        destination: { threadId: 'thread_1' },
-        preferredBrandIds: [],
-        lastVerifiedAt: '2026-07-26T12:00:00.000Z',
-        createdAt: '2026-07-26T12:00:00.000Z',
-        updatedAt: '2026-07-26T12:00:00.000Z',
-      },
-    ],
-  }),
-);
+const ALEX = [
+  {
+    id: '00000000-0000-4000-8000-000000000001',
+    userId: '00000000-0000-4000-8000-000000000002',
+    platform: 'slack' as const,
+    workspaceId: 'workspace_1',
+    platformUserId: 'platform_user_1',
+    displayName: 'Alex in Slack',
+    status: 'active' as const,
+    destination: { threadId: 'thread_1' },
+    preferredBrandIds: [],
+    lastVerifiedAt: '2026-07-26T12:00:00.000Z',
+    createdAt: '2026-07-26T12:00:00.000Z',
+    updatedAt: '2026-07-26T12:00:00.000Z',
+  },
+];
+let connections: unknown[] = ALEX;
+const listMock = mock(() => Promise.resolve({ connections }));
 const preferenceMock = mock(() => Promise.resolve());
 const revokeMock = mock(() => Promise.resolve());
 const showMock = mock(() => {});
@@ -38,6 +36,7 @@ mock.module('@/components/ui/ToastProvider', () => ({
 import { ChatConnectionsSection } from './ChatConnectionsSection';
 
 beforeEach(() => {
+  connections = ALEX;
   listMock.mockClear();
   preferenceMock.mockClear();
   revokeMock.mockClear();
@@ -62,5 +61,18 @@ describe('ChatConnectionsSection', () => {
         '00000000-0000-4000-8000-000000000001',
       );
     });
+  });
+
+  it('with nothing linked, installs Slack through a top-level link that carries this brand', async () => {
+    connections = [];
+    const { findByRole } = render(
+      <ChatConnectionsSection brandId="00000000-0000-4000-8000-000000000010" brandName="Acme" />,
+    );
+
+    const href = new URL(
+      (await findByRole('link', { name: 'Add to Slack' })).getAttribute('href') ?? '',
+    );
+    expect(href.pathname).toBe('/api/chat/slack/install/start');
+    expect(href.searchParams.get('brandId')).toBe('00000000-0000-4000-8000-000000000010');
   });
 });

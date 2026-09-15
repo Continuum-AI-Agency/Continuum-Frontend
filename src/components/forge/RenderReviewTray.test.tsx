@@ -476,7 +476,7 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     const channel = await screen.findByLabelText<HTMLSelectElement>('Slack channel');
     expect([...channel.options].map((option) => option.text)).toEqual([
       'Don’t post to Slack',
-      '#renders · Ops',
+      '#renders · Ops · Continuum',
     ]);
 
     fireEvent.click(screen.getByRole('button', { name: /Add a channel/ }));
@@ -517,8 +517,8 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     );
     renderTray();
     await next();
-    const link = await screen.findByRole('link', { name: 'Connect Slack in Settings' });
-    expect(link.getAttribute('href')).toBe('/settings?section=connections');
+    const link = await screen.findByRole('link', { name: 'Connect Slack to this brand in Settings' });
+    expect(link.getAttribute('href')).toBe('/settings?section=integrations');
     expect(screen.queryByLabelText('Slack channel')).toBeNull();
     cleanup();
 
@@ -527,7 +527,7 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     );
     renderTray();
     await next();
-    expect(await screen.findByRole('link', { name: 'Reinstall Slack in Settings' })).toBeTruthy();
+    expect(await screen.findByRole('link', { name: 'Reinstall Slack for this brand in Settings' })).toBeTruthy();
   }, 30_000);
 
   test('without a Slack connection the brand’s channels still post; only adding one needs it', async () => {
@@ -538,7 +538,7 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     const { onFired } = renderTray();
     await next();
     const channel = await screen.findByLabelText<HTMLSelectElement>('Slack channel');
-    expect(screen.getByRole('link', { name: 'Connect Slack in Settings' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Connect Slack to this brand in Settings' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Add a channel/ })).toBeNull();
     fireEvent.change(channel, { target: { value: OPS.id } });
 
@@ -559,7 +559,7 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     await next();
     fireEvent.click(await screen.findByRole('button', { name: /Add a channel/ }));
     expect(
-      await screen.findByText(/The Continuum app is no longer installed in your Slack workspace/),
+      await screen.findByText(/The Continuum app is no longer installed in this brand’s Slack workspace/),
     ).toBeTruthy();
     expect(document.body.textContent).not.toContain('slack_not_installed');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));

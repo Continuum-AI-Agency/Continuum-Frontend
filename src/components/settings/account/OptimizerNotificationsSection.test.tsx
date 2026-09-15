@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { ApiError } from '@/lib/api/errors';
 
 const OFF = {
   enabled: false,
@@ -23,21 +24,35 @@ const saveMock = mock((_brandId: string, body: { destination: string; channelId?
   }),
 );
 const disableMock = mock(() => Promise.resolve());
-const channelsMock = mock(() =>
-  Promise.resolve({
-    channels: [
-      { id: 'C0PAID', name: 'paid-media', isPrivate: false, isMember: false },
-      { id: 'C0LOCK', name: 'exec', isPrivate: true, isMember: false },
-    ],
-  }),
+let channelsResult: unknown;
+const channelsMock = mock((_brandId: string) =>
+  channelsResult instanceof Error
+    ? Promise.reject(channelsResult)
+    : Promise.resolve(channelsResult),
 );
+const CHANNELS = {
+  workspaceName: null,
+  channels: [
+    {
+      id: 'C0PAID',
+      name: 'paid-media',
+      isPrivate: false,
+      isMember: false,
+      workspaceName: 'Agency',
+    },
+    { id: 'C0LOCK', name: 'exec', isPrivate: true, isMember: false, workspaceName: 'Client Co' },
+  ],
+};
 const showMock = mock(() => {});
 
 mock.module('@/lib/api/optimizerNotifications.client', () => ({
   getOptimizerNotificationSettings: getMock,
   saveOptimizerNotificationSettings: saveMock,
   disableOptimizerNotifications: disableMock,
-  listSlackChannels: channelsMock,
+}));
+
+mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
+  apiRendersApi: { listSlackChannels: channelsMock },
 }));
 
 mock.module('@/components/ui/ToastProvider', () => ({
@@ -57,8 +72,17 @@ const renderSection = () =>
     </QueryClientProvider>,
   );
 
+const CHANNEL_MODE = {
+  enabled: true,
+  destination: 'channel',
+  channelId: null,
+  channelName: null,
+  connectionId: null,
+};
+
 beforeEach(() => {
   settings = OFF;
+  channelsResult = CHANNELS;
   for (const m of [getMock, saveMock, disableMock, channelsMock, showMock]) m.mockClear();
 });
 
@@ -84,18 +108,17 @@ describe('OptimizerNotificationsSection', () => {
     expect(saveMock.mock.calls[0]?.[1]).toEqual({ destination: 'dm' });
   });
 
-  it('saves the channel the user picks, by id', async () => {
-    settings = {
-      enabled: true,
-      destination: 'channel',
-      channelId: null,
-      channelName: null,
-      connectionId: null,
-    };
+  it("saves the channel the user picks, by id, from the brand's own workspaces", async () => {
+    settings = CHANNEL_MODE;
     const { findByRole, findByText } = renderSection();
 
     fireEvent.click(await findByRole('combobox', { name: 'Slack channel' }));
-    fireEvent.click(await findByText('#paid-media'));
+    const paidMedia = await findByText('#paid-media');
+    expect(channelsMock).toHaveBeenCalledWith(BRAND);
+    // Channels from different workspaces are told apart by their workspace name.
+    expect(paidMedia.parentElement?.textContent).toContain('Agency');
+    expect((await findByText('#exec')).parentElement?.textContent).toContain('Client Co');
+    fireEvent.click(paidMedia);
 
     await waitFor(() => expect(saveMock).toHaveBeenCalled());
     expect(saveMock.mock.calls[0]?.[1]).toEqual({
@@ -118,5 +141,16 @@ describe('OptimizerNotificationsSection', () => {
 
     await waitFor(() => expect(disableMock).toHaveBeenCalledWith(BRAND));
     expect(saveMock).not.toHaveBeenCalled();
+  });
+
+  it('points to Slack settings when the brand has no connected workspace', async () => {
+    settings = CHANNEL_MODE;
+    channelsResult = new ApiError('slack_not_connected', 409);
+    const { findByRole, findByText } = renderSection();
+
+    expect(await findByText(/No Slack workspace is connected to this brand/)).toBeTruthy();
+    expect((await findByRole('link', { name: 'Open Slack settings' })).getAttribute('href')).toBe(
+      '/settings?section=integrations',
+    );
   });
 });

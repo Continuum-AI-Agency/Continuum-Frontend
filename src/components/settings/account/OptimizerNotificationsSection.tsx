@@ -1,8 +1,9 @@
 'use client';
 
-import type { OptimizerPingDestination, SlackChannel } from '@continuum/contracts';
+import type { ApiRenderSlackChannel, OptimizerPingDestination } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckIcon, ChevronsUpDownIcon, Lock, TriangleAlert } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,12 +20,14 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/ToastProvider';
+import { ApiError } from '@/lib/api/errors';
 import {
   disableOptimizerNotifications,
   getOptimizerNotificationSettings,
-  listSlackChannels,
   saveOptimizerNotificationSettings,
 } from '@/lib/api/optimizerNotifications.client';
+import { SLACK_SETTINGS_PATH } from '@/lib/api/slackWorkspaces.client';
+import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
 type OptimizerNotificationsSectionProps = {
   brandId: string;
@@ -51,10 +54,11 @@ export function OptimizerNotificationsSection({
   const destination = settings.data?.destination ?? null;
 
   // Only fetched once someone actually picks "a channel" — a workspace listing is a
-  // Slack round trip nobody browsing settings should pay for.
+  // Slack round trip nobody browsing settings should pay for. The channels are the brand's own
+  // connected workspaces, the same list Forge picks delivery channels from.
   const channels = useQuery({
-    queryKey: ['slack-channels'],
-    queryFn: ({ signal }) => listSlackChannels(signal),
+    queryKey: ['slack-channels', brandId],
+    queryFn: () => apiRendersApi.listSlackChannels(brandId),
     enabled: destination === 'channel',
     staleTime: 5 * 60_000,
   });
@@ -67,7 +71,10 @@ export function OptimizerNotificationsSection({
     });
 
   const save = useMutation({
-    mutationFn: (input: { destination: OptimizerPingDestination; channel?: SlackChannel }) =>
+    mutationFn: (input: {
+      destination: OptimizerPingDestination;
+      channel?: ApiRenderSlackChannel;
+    }) =>
       input.destination === 'dm'
         ? saveOptimizerNotificationSettings(brandId, { destination: 'dm' })
         : saveOptimizerNotificationSettings(brandId, {
@@ -115,6 +122,12 @@ export function OptimizerNotificationsSection({
   const unreachableChannel = Boolean(
     selectedChannel && selectedChannel.isPrivate && !selectedChannel.isMember,
   );
+  // 409: no Slack workspace connected to (or still installed for) the brand; 403: not allowed
+  // to list its channels. Either way the fix is in the brand's Slack settings.
+  const slackNotReady =
+    channels.error instanceof ApiError && [403, 409].includes(channels.error.status)
+      ? channels.error
+      : null;
 
   if (settings.isLoading) {
     return (
@@ -227,8 +240,9 @@ export function OptimizerNotificationsSection({
                       <CommandGroup>
                         {(channels.data?.channels ?? []).map((channel) => (
                           <CommandItem
-                            key={channel.id}
-                            value={channel.name}
+                            // A Slack Connect channel keeps its id in every workspace it is shared into.
+                            key={`${channel.workspaceName ?? ''}:${channel.id}`}
+                            value={`${channel.name} ${channel.workspaceName ?? ''}`}
                             onSelect={() => {
                               setChannelPickerOpen(false);
                               save.mutate({ destination: 'channel', channel });
@@ -242,6 +256,11 @@ export function OptimizerNotificationsSection({
                               }
                             />
                             <span className="truncate">#{channel.name}</span>
+                            {channel.workspaceName ? (
+                              <span className="ml-2 truncate text-xs text-muted-foreground">
+                                {channel.workspaceName}
+                              </span>
+                            ) : null}
                             {channel.isPrivate ? (
                               <Lock className="ml-auto size-3 text-muted-foreground" />
                             ) : null}
@@ -253,7 +272,24 @@ export function OptimizerNotificationsSection({
                 </PopoverContent>
               </Popover>
 
-              {unreachableChannel ? (
+              {slackNotReady ? (
+                <p className="flex items-start gap-2 text-xs leading-5 text-warning">
+                  <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+                  <span>
+                    {slackNotReady.message === 'slack_not_installed'
+                      ? 'Continuum is no longer installed in this brand’s Slack workspace.'
+                      : slackNotReady.status === 403
+                        ? 'Only brand owners, admins and operators can pick a Slack channel.'
+                        : 'No Slack workspace is connected to this brand yet.'}{' '}
+                    <Link
+                      href={SLACK_SETTINGS_PATH}
+                      className="font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      Open Slack settings
+                    </Link>
+                  </span>
+                </p>
+              ) : unreachableChannel ? (
                 <p className="flex items-start gap-2 text-xs leading-5 text-warning">
                   <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
                   Continuum is not in #{selectedChannel?.name}. Invite the Continuum app to that
