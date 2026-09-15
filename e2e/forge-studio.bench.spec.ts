@@ -280,8 +280,28 @@ async function openFixtureForge(
   return { page, fixtures };
 }
 
-const openTab = (page: Page, name: 'Templates' | 'Render' | 'Renders') =>
-  page.getByRole('tab', { name, exact: true }).click();
+/**
+ * Switch tabs and wait until the tab really is selected. A click that lands on server-rendered
+ * markup before hydration does nothing (measured: the first fixture call fires ~10 s after the
+ * heading paints in dev), so the click is retried until `aria-selected` flips.
+ */
+const openTab = async (page: Page, name: 'Templates' | 'Render' | 'Renders') => {
+  const tab = page.getByRole('tab', { name, exact: true });
+  await expect(async () => {
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 1_000 });
+  }).toPass({ timeout: 45_000 });
+};
+
+/**
+ * Group header toggles inside the Renders panel only. The Render tab stays mounted while hidden,
+ * and its Template picker is also an aria-expanded button carrying the template's name.
+ */
+const renderGroup = (page: Page, text: string): Locator =>
+  page
+    .getByRole('tabpanel', { name: 'Renders' })
+    .locator('button[aria-expanded]')
+    .filter({ hasText: text });
 
 /** A Render grid row, found by its drag handle — the one control named after the row. */
 const gridRow = (page: Page, label: string): Locator =>
@@ -380,13 +400,23 @@ type FocusProbe = {
 };
 
 /**
+ * Put the caret at the end of a text field. Not `press('End')`: Chromium follows platform
+ * keybindings, and on macOS End scrolls instead of moving the caret, so typing lands mid-value.
+ */
+const caretToEnd = (field: Locator) =>
+  field.evaluate((element) => {
+    const input = element as HTMLInputElement;
+    input.setSelectionRange(input.value.length, input.value.length);
+  });
+
+/**
  * Types into `field` one key at a time (pressSequentially focuses ONCE, then sends keys to
  * whatever holds focus) and checks after every keyup that the element holding focus is still the
  * very node typing started in. A remounted cell loses focus to <body> and shows up here.
  */
 async function typeKeepingFocus(page: Page, field: Locator, text: string): Promise<FocusProbe> {
   await field.click();
-  await page.keyboard.press('End');
+  await caretToEnd(field);
   await field.evaluate((element) => {
     const probe = { element, keyups: 0, lostAt: [] as number[], stop: () => undefined as void };
     const onKeyUp = () => {
@@ -700,15 +730,16 @@ test.describe('Forge Studio — fixtures', () => {
     for (const { kind, field } of cells) {
       // An edit on ANOTHER row arms its debounced preflight (600 ms), answered 300 ms later —
       // squarely inside the ~1.8 s it takes to type 20 characters here.
-      await solo.getByRole('textbox', { name: VARS.headline, exact: true }).click();
-      await page.keyboard.press('End');
+      const soloHeadline = solo.getByRole('textbox', { name: VARS.headline, exact: true });
+      await soloHeadline.click();
+      await caretToEnd(soloHeadline);
       await page.keyboard.type('!');
       const probe = await typeKeepingFocus(page, field, TWENTY_CHARACTERS);
       const landed = fixtures.preflightAnsweredAt.filter(
         (at) => at > probe.startedAt && at < probe.endedAt,
       );
       console.log(
-        `[forge-studio-bench] D7 ${kind}: keyups=${probe.keyups} lost=${probe.lostAt.join(',') || 'none'} preflights mid-typing=${landed.length}`,
+        `[forge-studio-bench] D7 ${kind}: keyups=${probe.keyups} lost=${probe.lostAt.join(',') || 'none'} preflights mid-typing=${landed.length} value=${JSON.stringify(probe.value)}`,
       );
       expect(probe.keyups).toBe(TWENTY_CHARACTERS.length);
       expect(probe.lostAt, `${kind} cell lost focus after these keystrokes`).toEqual([]);
@@ -880,8 +911,8 @@ test.describe('Forge Studio — fixtures', () => {
     const { page } = await openFixtureForge(browser);
     const { promo, shared, slack, meta, jobs } = FORGE_FIXTURE;
     await openTab(page, 'Renders');
-    const promoGroup = page.locator('button[aria-expanded]').filter({ hasText: promo.title });
-    const zergGroup = page.locator('button[aria-expanded]').filter({ hasText: shared.displayName });
+    const promoGroup = renderGroup(page, promo.title);
+    const zergGroup = renderGroup(page, shared.displayName);
     await expect(promoGroup).toHaveText(/2 finished · 1 in flight\s*3$/);
     await expect(zergGroup).toHaveText(/1 finished · 1 failed\s*2$/);
 
@@ -1424,7 +1455,7 @@ test.describe('Forge Studio — LIVE on StarCraft template 133', () => {
     await openTab(page, 'Renders');
     await page.getByRole('button', { name: 'Refresh', exact: true }).click();
     await page.getByRole('searchbox', { name: 'Search renders' }).fill(setName);
-    const group = page.locator('button[aria-expanded]').filter({ hasText: RENAME });
+    const group = renderGroup(page, RENAME);
     await expect(group).toHaveText(new RegExp(`${ids.length}$`), { timeout: 60_000 });
     for (const job of receipts) {
       const row = page.getByRole('row').filter({ hasText: job.label ?? '' });
