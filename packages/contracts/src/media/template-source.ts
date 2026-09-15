@@ -270,6 +270,55 @@ export const templateFontStatusSchema = z
   .strict();
 export type TemplateFontStatus = z.infer<typeof templateFontStatusSchema>;
 
+export const templateFontReadinessSchema = z
+  .object({
+    fonts: z.array(templateFontStatusSchema),
+    missing: z.number().int().nonnegative(),
+    parseState: templateParseStateSchema,
+  })
+  .strict();
+export type TemplateFontReadiness = z.infer<typeof templateFontReadinessSchema>;
+
+/** Browser-safe request for the explicit dry-run-then-install flow. */
+export const templateFontPushRequestSchema = z
+  .object({
+    families: z.array(z.string().trim().min(1)).min(1).optional(),
+    fire: z.boolean().default(false),
+  })
+  .strict();
+export type TemplateFontPushRequest = z.infer<typeof templateFontPushRequestSchema>;
+
+const templateFontPushFileSchema = z
+  .object({ filename: z.string().min(1), bytes: z.number().int().nonnegative() })
+  .strict();
+const templateFontPushOutcomeSchema = z
+  .object({ filename: z.string().min(1), postScriptName: z.string().min(1) })
+  .strict();
+
+/** Public result only. Forge workspace coordinates, URLs, headers and attachment ids stay server-side. */
+export const templateFontPushResponseSchema = z.discriminatedUnion('fired', [
+  z
+    .object({
+      fired: z.literal(false),
+      families: z.array(z.string().min(1)),
+      files: z.array(templateFontPushFileSchema),
+    })
+    .strict(),
+  z
+    .object({
+      fired: z.literal(true),
+      families: z.array(z.string().min(1)),
+      linked: z.array(templateFontPushOutcomeSchema),
+      alreadyLinked: z.array(templateFontPushOutcomeSchema),
+      refused: z.array(
+        z.object({ filename: z.string().min(1), reason: z.string().min(1) }).strict(),
+      ),
+      wrote: z.boolean(),
+    })
+    .strict(),
+]);
+export type TemplateFontPushResponse = z.infer<typeof templateFontPushResponseSchema>;
+
 export const TEMPLATE_SOURCE_FAMILIES_FROM_LIBRARY_FORMAT: Record<string, TemplateSourceFamily> = {
   after_effects: 'after_effects',
   after_effects_package: 'after_effects_package',
@@ -308,11 +357,15 @@ export function templateFontStatuses(
   needed: readonly TemplateFont[],
   held: readonly string[],
 ): TemplateFontStatus[] {
-  const normalize = (value: string) => value.toLowerCase().replace(/[\s_-]+/g, '');
-  const heldSet = new Set(held.map(normalize));
+  const heldSet = new Set(held.map(normalizeTemplateFontFamily));
   return needed.map((font) => ({
     family: font.family,
     layers: font.layers,
-    held: heldSet.has(normalize(font.family)),
+    held: heldSet.has(normalizeTemplateFontFamily(font.family)),
   }));
+}
+
+/** One comparison key for parsed PostScript names, uploaded families and install selection. */
+export function normalizeTemplateFontFamily(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s_-]+/g, '');
 }

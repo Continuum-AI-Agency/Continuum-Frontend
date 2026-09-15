@@ -1,17 +1,13 @@
 'use client';
 
-import type { TemplateSource } from '@continuum/contracts';
+import { normalizeTemplateFontFamily, type TemplateSource } from '@continuum/contracts';
 import { Loader2, Type, Upload } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NO_SPECIMEN_NOTE, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/components/ui/toast-imperative';
-import {
-  type BrandFontSummary,
-  fetchBrandFonts,
-  uploadBrandFont,
-} from '@/lib/library/templateSources';
+import { type BrandFontSummary, fetchBrandFonts } from '@/lib/library/templateSources';
+import { partitionLibraryUploadFiles } from './libraryUploadRouting';
 
 // Typography is a panel, not a browse filter, and that is a licensing decision rather than a
 // layout one. A brand face is licensed to the brand; the font store never mints a URL for one.
@@ -23,23 +19,16 @@ import {
 
 const FONT_ACCEPT = '.ttf,.otf,.woff,.woff2';
 
-/** `HeadingNow-36CompBold.otf` -> `HeadingNow 36CompBold`. A starting point the user edits. */
-function familyFromFileName(fileName: string): string {
-  return fileName
-    .replace(/\.[^.]+$/, '')
-    .replace(/[_-]+/g, ' ')
-    .trim();
-}
-
 export function TypographyPanel({
   brandId,
   templateSources,
+  onReviewFiles,
 }: {
   brandId: string;
   templateSources: TemplateSource[];
+  onReviewFiles: (files: File[]) => void;
 }) {
   const [fonts, setFonts] = useState<BrandFontSummary[] | null>(null);
-  const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(() => {
@@ -50,43 +39,16 @@ export function TypographyPanel({
 
   useEffect(refresh, [refresh]);
 
-  const onFiles = useCallback(
-    async (fileList: FileList | null) => {
-      const files = Array.from(fileList ?? []);
-      if (files.length === 0) return;
-      setUploading(true);
-      let stored = 0;
-      for (const file of files) {
-        try {
-          await uploadBrandFont({ brandId, family: familyFromFileName(file.name), file });
-          stored += 1;
-        } catch (error) {
-          toast.error(
-            `${file.name}: ${error instanceof Error ? error.message : 'could not be stored'}`,
-          );
-        }
-      }
-      setUploading(false);
-      if (stored > 0) {
-        toast.success(`${stored} ${stored === 1 ? 'face' : 'faces'} added to the engine.`);
-        refresh();
-      }
-    },
-    [brandId, refresh],
-  );
-
   // Which templates need each family. The reverse of the per-template font check, and the
   // reason typography belongs beside templates rather than buried in brand settings.
   const neededBy = new Map<string, string[]>();
   for (const source of templateSources) {
     for (const family of source.fonts) {
-      const key = family.toLowerCase().replace(/[\s_-]+/g, '');
+      const key = normalizeTemplateFontFamily(family);
       neededBy.set(key, [...(neededBy.get(key) ?? []), source.assetId]);
     }
   }
-  const heldKeys = new Set(
-    (fonts ?? []).map((font) => font.family.toLowerCase().replace(/[\s_-]+/g, '')),
-  );
+  const heldKeys = new Set((fonts ?? []).map((font) => normalizeTemplateFontFamily(font.family)));
   const missingFamilies = [...neededBy.entries()].filter(([key]) => !heldKeys.has(key));
 
   return (
@@ -96,8 +58,8 @@ export function TypographyPanel({
           <h2 className="text-lg font-semibold">Typography</h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{NO_SPECIMEN_NOTE}</p>
         </div>
-        <Button size="sm" disabled={uploading} onClick={() => inputRef.current?.click()}>
-          {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+        <Button size="sm" onClick={() => inputRef.current?.click()}>
+          <Upload className="size-4" />
           Add fonts
         </Button>
         <input
@@ -107,7 +69,8 @@ export function TypographyPanel({
           accept={FONT_ACCEPT}
           className="hidden"
           onChange={(event) => {
-            void onFiles(event.target.files);
+            const { fonts } = partitionLibraryUploadFiles(Array.from(event.target.files ?? []));
+            if (fonts.length > 0) onReviewFiles(fonts);
             event.target.value = '';
           }}
         />
@@ -137,7 +100,7 @@ export function TypographyPanel({
       ) : (
         <div className="flex flex-col divide-y divide-border/50 rounded-lg border border-border/60">
           {fonts.map((font) => {
-            const key = font.family.toLowerCase().replace(/[\s_-]+/g, '');
+            const key = normalizeTemplateFontFamily(font.family);
             const used = neededBy.get(key)?.length ?? 0;
             return (
               <div
@@ -161,7 +124,7 @@ export function TypographyPanel({
             const family =
               templateSources
                 .flatMap((source) => source.fonts)
-                .find((name) => name.toLowerCase().replace(/[\s_-]+/g, '') === key) ?? key;
+                .find((name) => normalizeTemplateFontFamily(name) === key) ?? key;
             return (
               <div
                 key={`missing-${key}`}

@@ -29,7 +29,7 @@ export const TEMPLATE_STATUS: Record<
     group: 'ready' | 'drafts' | 'attention';
   }
 > = {
-  reading: { label: 'Reading', tone: 'info', group: 'drafts' },
+  reading: { label: 'Unpacking', tone: 'info', group: 'drafts' },
   parsed: { label: 'Parsed', tone: 'info', group: 'drafts' },
   building: { label: 'Building', tone: 'info', group: 'drafts' },
   draft: { label: 'Draft', tone: 'warning', group: 'drafts' },
@@ -75,7 +75,7 @@ export function sourceDisplayName(source: TemplateSource): string {
 export function TemplateStatusPill({ status }: { status: TemplateStatus }) {
   const { label, tone } = TEMPLATE_STATUS[status];
   return (
-    <Pill>
+    <Pill aria-live="polite">
       <PillIndicator variant={tone} pulse={status === 'building' || status === 'reading'} />
       {label}
     </Pill>

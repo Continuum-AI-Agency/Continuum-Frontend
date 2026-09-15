@@ -46,7 +46,7 @@ export function TemplateFontsRow({
           {missing.length} face{missing.length === 1 ? '' : 's'} the brand does not hold. The render
           will not fail — it substitutes, and the frame looks finished.{' '}
           {brandId ? (
-            <Link className="underline underline-offset-2" href="/settings/brand#typography">
+            <Link className="underline underline-offset-2" href="/library?section=typography">
               Upload them
             </Link>
           ) : null}

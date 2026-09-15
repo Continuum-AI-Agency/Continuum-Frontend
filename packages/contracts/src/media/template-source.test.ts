@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  normalizeTemplateFontFamily,
   templateFamilyForLibraryFormat,
+  templateFontPushResponseSchema,
   templateFontStatuses,
   templateParseFontFamilies,
   templateParseRatios,
@@ -120,6 +122,48 @@ describe('templateFontStatuses', () => {
     expect(templateFontStatuses([{ family: 'Impact', layers: 3 }], [])).toEqual([
       { family: 'Impact', layers: 3, held: false },
     ]);
+  });
+
+  it('exports the same family key used by readiness and install selection', () => {
+    expect(normalizeTemplateFontFamily(' Heading_Now-36 CompBold ')).toBe('headingnow36compbold');
+  });
+});
+
+describe('templateFontPushResponseSchema', () => {
+  it('accepts only the safe dry-run plan', () => {
+    expect(
+      templateFontPushResponseSchema.parse({
+        fired: false,
+        families: ['Heading Now'],
+        files: [{ filename: 'Heading-Now.otf', bytes: 1024 }],
+      }),
+    ).toEqual({
+      fired: false,
+      families: ['Heading Now'],
+      files: [{ filename: 'Heading-Now.otf', bytes: 1024 }],
+    });
+    expect(
+      templateFontPushResponseSchema.safeParse({
+        fired: false,
+        families: ['Heading Now'],
+        files: [],
+        request: { headers: { Authorization: 'Bearer secret' } },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('keeps fired results useful without provider identifiers', () => {
+    expect(
+      templateFontPushResponseSchema.safeParse({
+        fired: true,
+        families: ['Heading Now'],
+        linked: [{ filename: 'Heading-Now.otf', postScriptName: 'HeadingNow-Regular' }],
+        alreadyLinked: [],
+        refused: [],
+        wrote: true,
+        workspace: 'private-workspace',
+      }).success,
+    ).toBe(false);
   });
 });
 

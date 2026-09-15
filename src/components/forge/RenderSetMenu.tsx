@@ -171,7 +171,10 @@ export function RenderSetMenu({
             </DropdownMenuGroup>
           ) : null}
           {sets.length ? <DropdownMenuSeparator /> : null}
-          <DropdownMenuItem disabled={!canCreate} onClick={() => confirmDiscard(() => setDialog('new'))}>
+          <DropdownMenuItem
+            disabled={!canCreate}
+            onClick={() => confirmDiscard(() => setDialog('new'))}
+          >
             <FilePlus2 aria-hidden /> New set…
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!activeSet} onClick={() => setDialog('rename')}>
@@ -226,7 +229,7 @@ export function RenderSetMenu({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete “{activeSet?.name}”?</AlertDialogTitle>
             <AlertDialogDescription>
-              The saved rows go. Renders already made from this set stay in Renders.
+              The saved rows go. Renders already made from this set stay in Render ledger.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

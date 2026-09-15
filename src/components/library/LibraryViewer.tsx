@@ -17,7 +17,12 @@ import type {
   MediaSearchResultItem,
   TemplateSource,
 } from '@continuum/contracts';
-import { LIBRARY_ACCEPT_ATTRIBUTE, libraryAspectRatioBin } from '@continuum/contracts';
+import {
+  classifyLibraryFile,
+  LIBRARY_ACCEPT_ATTRIBUTE,
+  libraryAspectRatioBin,
+  templateFamilyForLibraryFormat,
+} from '@continuum/contracts';
 import { Columns3, LayoutGrid, ScanSearch, Upload } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useRouter } from 'next/navigation';
@@ -51,6 +56,7 @@ import { useProjects } from '@/lib/projects';
 import { cn } from '@/lib/utils';
 import { LibraryBoardView } from './board/LibraryBoardView';
 import { AssetDetailModal } from './detail/AssetDetailModal';
+import { FontUploadReviewDialog } from './FontUploadReviewDialog';
 import { useCustomFields } from './fields/useCustomFields';
 import { LibraryBulkToolbar } from './LibraryBulkToolbar';
 import { LibraryElementsGrid } from './LibraryElementsGrid';
@@ -58,6 +64,7 @@ import { LibraryFilterBar } from './LibraryFilterBar';
 import { LibraryRenderQueue } from './LibraryRenderQueue';
 import { LibrarySidebar } from './LibrarySidebar';
 import { LibraryTagManager } from './LibraryTagManager';
+import { partitionLibraryUploadFiles } from './libraryUploadRouting';
 import { McpUploadIntentPanel } from './McpUploadIntentPanel';
 import { MediaGrid } from './MediaGrid';
 import { MediaSearchBar } from './MediaSearchBar';
@@ -69,6 +76,8 @@ import { TypographyPanel } from './TypographyPanel';
 import { UploadStrip } from './UploadStrip';
 import { useMediaLibrary } from './useMediaLibrary';
 import { useMediaUpload } from './useMediaUpload';
+
+const TEMPLATE_ACCEPT_ATTRIBUTE = '.aep,.aepx,.aet,.zip,application/zip';
 
 type Props = {
   brandId: string;
@@ -149,9 +158,6 @@ export function LibraryViewer({
     seed: initialAssets,
     initialNextCursor,
   });
-  const { uploads, uploadFiles, pauseUpload, resumeUpload, retryUpload, cancelUpload } =
-    useMediaUpload(brandId);
-
   const [tagOptions, setTagOptions] = useState<LibraryTagOption[]>([]);
   const [tagRevision, setTagRevision] = useState(0);
   const facetQueryKey = buildLibraryBrowseParams(initialBrowseQuery, {
@@ -189,6 +195,8 @@ export function LibraryViewer({
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(() => new Set());
   const [dragging, setDragging] = useState(false);
+  const [fontReviewFiles, setFontReviewFiles] = useState<File[]>([]);
+  const [fontRevision, setFontRevision] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
 
@@ -517,6 +525,20 @@ export function LibraryViewer({
     [pushFilters, router],
   );
 
+  const onUploaded = useCallback(
+    ({ file }: { file: File }) => {
+      setAssetRevision((revision) => revision + 1);
+      router.refresh();
+      const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+      if (format.accepted && templateFamilyForLibraryFormat(format.family)) {
+        onSelectDestination('templates');
+      }
+    },
+    [onSelectDestination, router],
+  );
+  const { uploads, uploadFiles, pauseUpload, resumeUpload, retryUpload, cancelUpload } =
+    useMediaUpload(brandId, { onUploaded });
+
   const onSelectSavedView = useCallback(
     (savedView: LibrarySavedView) => {
       const params = buildLibraryBrowseParams(
@@ -527,6 +549,15 @@ export function LibraryViewer({
       startFilterTransition(() => router.push(`/library?${params.toString()}`));
     },
     [brandId, router],
+  );
+
+  const routeUploadFiles = useCallback(
+    (fileList: FileList | File[]) => {
+      const { fonts, media } = partitionLibraryUploadFiles(fileList);
+      if (fonts.length > 0) setFontReviewFiles(fonts);
+      if (media.length > 0) void uploadFiles(media);
+    },
+    [uploadFiles],
   );
 
   const handleDragEnter = (e: React.DragEvent) => {
@@ -546,7 +577,7 @@ export function LibraryViewer({
     e.preventDefault();
     dragDepth.current = 0;
     setDragging(false);
-    void uploadFiles(e.dataTransfer.files);
+    routeUploadFiles(e.dataTransfer.files);
   };
 
   return (
@@ -620,65 +651,72 @@ export function LibraryViewer({
                       : (activeCollection?.name ?? browseTitle ?? 'Home')
               }
               action={
-                <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                  <div className="min-w-0 flex-1 sm:w-64">
-                    <MediaSearchBar
-                      brandId={brandId}
-                      source={selectedSource}
-                      kind={selectedKind}
-                      collectionId={selectedCollectionId}
-                      tags={selectedTags}
-                      onResults={setSearchResults}
-                      onClear={() => setSearchResults(null)}
-                    />
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {/* Still disabled, and deliberately. The dialog and the whole importer
+                showTemplates ? undefined : (
+                  <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                    <div className="min-w-0 flex-1 sm:w-64">
+                      <MediaSearchBar
+                        brandId={brandId}
+                        source={selectedSource}
+                        kind={selectedKind}
+                        collectionId={selectedCollectionId}
+                        tags={selectedTags}
+                        onResults={setSearchResults}
+                        onClear={() => setSearchResults(null)}
+                      />
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {/* Still disabled, and deliberately. The dialog and the whole importer
                         are written, but POST /figma/import answers 501 by design until its
                         live bench and product review are accepted
                         (integrations-ts/src/figma.ts). Rendering the dialog over that would
                         trade an honest "not yet" for a button that fails on click. The
                         structural parse behind it is wired and tested, so parity ships the
                         day that route opens. */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled
-                      title="Figma import is work in progress"
-                    >
-                      <FigmaIcon className="size-4" />
-                      <span className="hidden sm:inline">Figma</span>
-                      <span className="rounded bg-muted px-1 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        WIP
-                      </span>
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={showBoundingBoxes ? 'secondary' : 'outline'}
-                      size="sm"
-                      onClick={() => setShowBoundingBoxes((v) => !v)}
-                      title="Toggle detected-object overlays"
-                      className="active:scale-[0.96] [transition-property:scale]"
-                    >
-                      <ScanSearch className="size-4" />
-                      <span className="hidden sm:inline">Objects</span>
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="active:scale-[0.96] [transition-property:scale]"
-                    >
-                      <Upload className="size-4" />
-                      Upload
-                    </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled
+                        title="Figma import is work in progress"
+                      >
+                        <FigmaIcon className="size-4" />
+                        <span className="hidden sm:inline">Figma</span>
+                        <span className="rounded bg-muted px-1 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          WIP
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={showBoundingBoxes ? 'secondary' : 'outline'}
+                        size="sm"
+                        onClick={() => setShowBoundingBoxes((v) => !v)}
+                        title="Toggle detected-object overlays"
+                        className="active:scale-[0.96] [transition-property:scale]"
+                      >
+                        <ScanSearch className="size-4" />
+                        <span className="hidden sm:inline">Objects</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="active:scale-[0.96] [transition-property:scale]"
+                      >
+                        <Upload className="size-4" />
+                        Upload
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )
               }
             />
 
-            <div className="flex items-center justify-between gap-3">
+            <div
+              className={cn(
+                'flex items-center justify-between gap-3',
+                (showTemplates || showTypography || showPipelines || showElements) && 'hidden',
+              )}
+            >
               <LibraryFilterBar
                 source={optimisticSource}
                 kind={optimisticKind}
@@ -815,11 +853,11 @@ export function LibraryViewer({
             <input
               ref={fileInputRef}
               type="file"
-              accept={LIBRARY_ACCEPT_ATTRIBUTE}
+              accept={showTemplates ? TEMPLATE_ACCEPT_ATTRIBUTE : LIBRARY_ACCEPT_ATTRIBUTE}
               multiple
               className="hidden"
               onChange={(e) => {
-                void uploadFiles(e.target.files);
+                if (e.target.files) routeUploadFiles(e.target.files);
                 e.target.value = '';
               }}
             />
@@ -868,7 +906,12 @@ export function LibraryViewer({
               aria-busy={isFiltering}
             >
               {showTypography ? (
-                <TypographyPanel brandId={brandId} templateSources={templateSources} />
+                <TypographyPanel
+                  key={fontRevision}
+                  brandId={brandId}
+                  templateSources={templateSources}
+                  onReviewFiles={setFontReviewFiles}
+                />
               ) : showPipelines ? (
                 <PipelinePanel brandId={brandId} />
               ) : showElements ? (
@@ -880,6 +923,7 @@ export function LibraryViewer({
                   assets={displayedAssets}
                   loading={templatesLoading}
                   onChanged={() => setAssetRevision((revision) => revision + 1)}
+                  onChooseFiles={() => fileInputRef.current?.click()}
                 />
               ) : optimisticLayout === 'board' ? (
                 <>
@@ -977,6 +1021,19 @@ export function LibraryViewer({
               )}
             </div>
 
+            {fontReviewFiles.length > 0 ? (
+              <FontUploadReviewDialog
+                key={fontReviewFiles.map((file) => `${file.name}:${file.size}`).join('|')}
+                brandId={brandId}
+                files={fontReviewFiles}
+                onClose={() => setFontReviewFiles([])}
+                onUploaded={() => {
+                  setFontRevision((revision) => revision + 1);
+                  router.push('/library?section=typography');
+                }}
+              />
+            ) : null}
+
             <AssetDetailModal
               brandId={brandId}
               asset={detailAsset}
@@ -1004,7 +1061,9 @@ export function LibraryViewer({
                 >
                   <div className="flex flex-col items-center gap-2 text-primary">
                     <Upload className="size-7" />
-                    <span className="text-sm font-medium">Drop to upload</span>
+                    <span className="text-sm font-medium">
+                      {showTemplates ? 'Drop to add template' : 'Drop to upload'}
+                    </span>
                   </div>
                 </motion.div>
               )}

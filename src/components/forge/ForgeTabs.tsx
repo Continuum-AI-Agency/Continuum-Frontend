@@ -30,7 +30,7 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
       <TabsList className="shrink-0">
         <TabsTrigger value="templates">Templates</TabsTrigger>
         <TabsTrigger value="render">Render</TabsTrigger>
-        <TabsTrigger value="renders">Renders</TabsTrigger>
+        <TabsTrigger value="renders">Render ledger</TabsTrigger>
       </TabsList>
       <TabsContent value="templates" className={PANEL}>
         <ForgeWorkbench

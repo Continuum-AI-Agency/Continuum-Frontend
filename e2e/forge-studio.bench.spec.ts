@@ -46,7 +46,7 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 //   FIXTURES (default) — every /api/ai-studio/** call is answered in the browser by typed
 //     fixtures parsed through the real @continuum/contracts schemas, and the backend URL is a
 //     dead port, so every assertion provably came from the fixtures. Proves D1 D2 D3 D5 D7 D9
-//     D10 D13 D14 D15 against the landed components. It does NOT exercise the Fastify backend,
+//     D10 D13 D14 D15 D16 against the landed components. It does NOT exercise the Fastify backend,
 //     the render fleet, Slack or Meta — the envelope says so.
 //
 //   LIVE (FORGE_STUDIO_LIVE=1) — no interception, the local backend, prod Supabase, StarCraft
@@ -285,7 +285,7 @@ async function openFixtureForge(
  * markup before hydration does nothing (measured: the first fixture call fires ~10 s after the
  * heading paints in dev), so the click is retried until `aria-selected` flips.
  */
-const openTab = async (page: Page, name: 'Templates' | 'Render' | 'Renders') => {
+const openTab = async (page: Page, name: 'Templates' | 'Render' | 'Render ledger') => {
   const tab = page.getByRole('tab', { name, exact: true });
   await expect(async () => {
     await tab.click();
@@ -294,12 +294,12 @@ const openTab = async (page: Page, name: 'Templates' | 'Render' | 'Renders') => 
 };
 
 /**
- * Group header toggles inside the Renders panel only. The Render tab stays mounted while hidden,
+ * Group header toggles inside the Render ledger panel only. The Render tab stays mounted while hidden,
  * and its Template picker is also an aria-expanded button carrying the template's name.
  */
 const renderGroup = (page: Page, text: string): Locator =>
   page
-    .getByRole('tabpanel', { name: 'Renders' })
+    .getByRole('tabpanel', { name: 'Render ledger' })
     .locator('button[aria-expanded]')
     .filter({ hasText: text });
 
@@ -751,6 +751,43 @@ test.describe('Forge Studio — fixtures', () => {
     await shoot(page, 'd7-typed');
   });
 
+  test('D16 · a Render color cell picks from the stored brand palette', async ({ browser }) => {
+    const { page, fixtures } = await openFixtureForge(browser);
+    await openTab(page, 'Render');
+    const root = gridRow(page, ROWS.root);
+    const palette = root.getByRole('button', {
+      name: `${VARS.accent} brand palette`,
+      exact: true,
+    });
+    await expect(palette).toBeVisible();
+    await palette.click();
+
+    const group = page.getByRole('group', {
+      name: `${VARS.accent} brand colors`,
+      exact: true,
+    });
+    const swatch = group.getByRole('button').first();
+    await expect(swatch).toBeVisible();
+    const title = await swatch.getAttribute('title');
+    const hex = title?.match(/#[0-9a-f]{6}$/)?.[0];
+    expect(hex, `brand swatch title carries a six-digit hex: ${title}`).toBeTruthy();
+    if (!hex) throw new Error(`brand swatch title carries no six-digit hex: ${title}`);
+    await swatch.click();
+
+    await expect(
+      root.getByRole('button', { name: `${VARS.accent} colour`, exact: true }),
+    ).toContainText(hex);
+    await expect
+      .poll(() =>
+        fixtures.calls('POST', /\/renders\/preflight$/).some((call) => {
+          const body = call.body as { variables?: Record<string, unknown> };
+          return body.variables?.accent === hex;
+        }),
+      )
+      .toBe(true);
+    await shoot(page, 'd16-brand-palette');
+  });
+
   test('D9 · dragging a root row onto another makes it a fork; a drop past depth 3 is refused', async ({
     browser,
   }) => {
@@ -905,12 +942,12 @@ test.describe('Forge Studio — fixtures', () => {
     expect(rootRecord?.outputIds).toEqual(['square', 'story']);
   });
 
-  test('D15 · Renders groups by template, sorts, searches, shows the delivery chain and opens the step timeline', async ({
+  test('D15 · Render ledger groups by template, sorts, searches, shows the delivery chain and opens the step timeline', async ({
     browser,
   }) => {
     const { page } = await openFixtureForge(browser);
     const { promo, shared, slack, meta, jobs } = FORGE_FIXTURE;
-    await openTab(page, 'Renders');
+    await openTab(page, 'Render ledger');
     const promoGroup = renderGroup(page, promo.title);
     const zergGroup = renderGroup(page, shared.displayName);
     await expect(promoGroup).toHaveText(/2 finished · 1 in flight\s*3$/);
@@ -1452,7 +1489,7 @@ test.describe('Forge Studio — LIVE on StarCraft template 133', () => {
     ).toEqual(receipts.map((job) => `${job.label}: posted`));
 
     // What a person sees: the renamed template's group, the bench's renders, the Slack receipt.
-    await openTab(page, 'Renders');
+    await openTab(page, 'Render ledger');
     await page.getByRole('button', { name: 'Refresh', exact: true }).click();
     await page.getByRole('searchbox', { name: 'Search renders' }).fill(setName);
     const group = renderGroup(page, RENAME);

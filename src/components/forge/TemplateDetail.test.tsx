@@ -74,6 +74,32 @@ const PUBLISHED_RUN = {
 };
 let workspaces = [CONTINUUM_WORKSPACE];
 let run: typeof PUBLISHED_RUN | null = PUBLISHED_RUN;
+let fontReadiness = {
+  fonts: [{ family: 'HeadingNow-36CompBold', layers: 4, held: true }],
+  missing: 0,
+  parseState: 'parsed' as const,
+};
+const pushTemplateFonts = mock(async (_brandId: string, _assetId: string, fire: boolean) =>
+  fire
+    ? {
+        fired: true as const,
+        families: ['HeadingNow-36CompBold'],
+        linked: [
+          {
+            filename: 'HeadingNow-36CompBold.otf',
+            postScriptName: 'HeadingNow-36CompBold',
+          },
+        ],
+        alreadyLinked: [],
+        refused: [],
+        wrote: true,
+      }
+    : {
+        fired: false as const,
+        families: ['HeadingNow-36CompBold'],
+        files: [{ filename: 'HeadingNow-36CompBold.otf', bytes: 1024 }],
+      },
+);
 
 mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateVariables: async () => ({
@@ -108,6 +134,8 @@ mock.module('@/lib/library/templateSources', () => ({
     parseState: 'parsed',
   }),
   fetchRenderWorkspaces: async () => workspaces,
+  fetchTemplateFonts: async () => fontReadiness,
+  pushTemplateFonts,
   saveTemplateVariables: async () => undefined,
   sendTemplateToForge: async () => SOURCE,
   advanceTemplateForgeRun: async () => undefined,
@@ -137,6 +165,12 @@ afterEach(() => {
   cleanup();
   workspaces = [CONTINUUM_WORKSPACE];
   run = PUBLISHED_RUN;
+  fontReadiness = {
+    fonts: [{ family: 'HeadingNow-36CompBold', layers: 4, held: true }],
+    missing: 0,
+    parseState: 'parsed',
+  };
+  pushTemplateFonts.mockClear();
 });
 
 /** What a person sees: everything except the body of a closed disclosure. */
@@ -149,21 +183,28 @@ function visibleText(): string {
   return clone.textContent ?? '';
 }
 
-function renderDetail(onOpenRender = mock((_intent: unknown) => undefined)) {
+function renderDetail(
+  onOpenRender = mock((_intent: unknown) => undefined),
+  source: TemplateSource = SOURCE,
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  const tree = (nextSource: TemplateSource) => (
     <QueryClientProvider client={client}>
       <TemplateDetail
         brandId={BRAND}
-        source={SOURCE}
+        source={nextSource}
         onBack={() => undefined}
         onRename={() => undefined}
         onOpenRender={onOpenRender}
         onChanged={async () => undefined}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
-  return onOpenRender;
+  const view = render(tree(source));
+  return {
+    onOpenRender,
+    rerenderSource: (nextSource: TemplateSource) => view.rerender(tree(nextSource)),
+  };
 }
 
 describe('TemplateDetail', () => {
@@ -207,8 +248,53 @@ describe('TemplateDetail', () => {
   });
 
   test('Render with this opens Render on the template', async () => {
-    const onOpenRender = renderDetail();
+    const { onOpenRender } = renderDetail();
     fireEvent.click(await screen.findByRole('button', { name: 'Render with this' }));
     expect(onOpenRender).toHaveBeenCalledWith({ templateKey: '133' });
+  });
+
+  test('reports unread font requirements truthfully instead of claiming none', async () => {
+    fontReadiness = { fonts: [], missing: 0, parseState: 'pending' };
+    renderDetail(undefined, { ...SOURCE, parseState: 'pending', parse: null, fonts: [] });
+    expect(await screen.findByText(/fonts are not known/i)).toBeTruthy();
+    expect(screen.queryByText('None detected')).toBeNull();
+  });
+
+  test('refreshes pending font state from readiness without mixing in stale source names', async () => {
+    fontReadiness = { fonts: [], missing: 0, parseState: 'pending' };
+    const pending = { ...SOURCE, parseState: 'pending' as const, parse: null, fonts: [] };
+    const { rerenderSource } = renderDetail(undefined, pending);
+    expect(await screen.findByText(/fonts are not known/i)).toBeTruthy();
+
+    fontReadiness = {
+      fonts: [{ family: 'Fresh Parsed Face', layers: 2, held: false }],
+      missing: 1,
+      parseState: 'parsed',
+    };
+    rerenderSource({
+      ...SOURCE,
+      fonts: [],
+      versionId: '99999999-9999-4999-8999-999999999999',
+      updatedAt: '2026-09-14T12:00:00Z',
+    });
+
+    const label = await screen.findByText('Fonts');
+    expect(label.nextElementSibling?.textContent).toBe('Fresh Parsed Face');
+    expect(screen.queryByText('None detected')).toBeNull();
+  });
+
+  test('reviews a dry plan before installing held faces', async () => {
+    renderDetail();
+    fireEvent.click(await screen.findByRole('button', { name: 'Review font install' }));
+    expect(await screen.findByText(/HeadingNow-36CompBold\.otf/)).toBeTruthy();
+    expect(pushTemplateFonts).toHaveBeenNthCalledWith(1, BRAND, ASSET, false, [
+      'HeadingNow-36CompBold',
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Install fonts' }));
+    expect(await screen.findByText(/installed.*HeadingNow-36CompBold/i)).toBeTruthy();
+    expect(pushTemplateFonts).toHaveBeenNthCalledWith(2, BRAND, ASSET, true, [
+      'HeadingNow-36CompBold',
+    ]);
   });
 });

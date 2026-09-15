@@ -3,7 +3,7 @@
 import type {
   ForgeLineageView,
   RenderWorkspace,
-  TemplateFontStatus,
+  TemplateFontPushResponse,
   TemplateForgeNeed,
   TemplateRebindPreview,
   TemplateSource,
@@ -11,11 +11,16 @@ import type {
 } from '@continuum/contracts';
 import {
   type RenameTemplateSourceRequest,
+  templateFontPushRequestSchema,
+  templateFontPushResponseSchema,
+  templateFontReadinessSchema,
   templateRebindPreviewSchema,
   templateSourceSchema,
 } from '@continuum/contracts';
 import { getApiUrl } from '@/lib/api/config';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+
+export type TemplateFontReadiness = import('@continuum/contracts').TemplateFontReadiness;
 
 // Client for the template-source routes on the Fastify backend. They live there rather than
 // in a Next route handler because they reach Template Forge with a server-only token, and
@@ -59,10 +64,13 @@ export async function renameTemplateSource(
   title: string,
 ): Promise<TemplateSource> {
   const body: RenameTemplateSourceRequest = { brandId, title };
-  const response = await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(assetId)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(body),
-  });
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    },
+  );
   return templateSourceSchema.parse(await unwrap(response, 'Template rename'));
 }
 
@@ -94,20 +102,28 @@ export async function confirmTemplateRebind(input: {
   return templateRebindPreviewSchema.parse(await unwrap(response, 'Source revision update'));
 }
 
-export type TemplateFontReadiness = {
-  fonts: TemplateFontStatus[];
-  missing: number;
-  parseState: string;
-};
-
 export async function fetchTemplateFonts(
   brandId: string,
   assetId: string,
 ): Promise<TemplateFontReadiness> {
   const response = await authorizedFetch(
-    `/api/ai-studio/templates/${assetId}/fonts?brandId=${encodeURIComponent(brandId)}`,
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/fonts?brandId=${encodeURIComponent(brandId)}`,
   );
-  return unwrap<TemplateFontReadiness>(response, 'Template font check');
+  return templateFontReadinessSchema.parse(await unwrap(response, 'Template font check'));
+}
+
+export async function pushTemplateFonts(
+  brandId: string,
+  assetId: string,
+  fire: boolean,
+  families: string[],
+): Promise<TemplateFontPushResponse> {
+  const body = templateFontPushRequestSchema.parse({ families, fire });
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/fonts/push?brandId=${encodeURIComponent(brandId)}`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  return templateFontPushResponseSchema.parse(await unwrap(response, 'Template font install'));
 }
 
 /** The workspaces this brand may build in. More than one is a supported, live shape. */

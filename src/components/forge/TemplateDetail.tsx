@@ -3,6 +3,8 @@
 import {
   type RenderWorkspace,
   renderWorkspaceLabel,
+  type TemplateFontPushResponse,
+  type TemplateFontReadiness,
   type TemplateSource,
   templateNameProblem,
   UNTITLED_TEMPLATE_NAME,
@@ -20,6 +22,16 @@ import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
 import { Pill } from '@/components/kibo-ui/pill';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/toast-imperative';
@@ -27,7 +39,9 @@ import {
   advanceTemplateForgeRun,
   type ForgeLadderAction,
   fetchRenderWorkspaces,
+  fetchTemplateFonts,
   fetchTemplateVariables,
+  pushTemplateFonts,
   saveTemplateVariables,
   sendTemplateToForge,
   type TemplateSlotEdit,
@@ -155,6 +169,10 @@ export function TemplateDetail({
     () => forgeQueryKeys.templateVariables(brandId, assetId, source.versionId),
     [assetId, brandId, source.versionId],
   );
+  const fontsKey = useMemo(
+    () => forgeQueryKeys.templateFonts(brandId, assetId, source.versionId),
+    [assetId, brandId, source.versionId],
+  );
   const name = sourceDisplayName(source);
   const { run, pushed, refresh: refreshRun } = useForgeRun(brandId, assetId);
   const rendered = useLatestRenderFrame(brandId, templateKey);
@@ -173,6 +191,17 @@ export function TemplateDetail({
   // one, so when there is a choice a person makes it, and when there is not there is nothing to ask.
   const [workspaces, setWorkspaces] = useState<RenderWorkspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState('');
+  const [fontReadiness, setFontReadiness] = useState<TemplateFontReadiness | null>(null);
+  const [fontCheckFailed, setFontCheckFailed] = useState(false);
+  const [fontPlan, setFontPlan] = useState<Extract<
+    TemplateFontPushResponse,
+    { fired: false }
+  > | null>(null);
+  const [fontResult, setFontResult] = useState<Extract<
+    TemplateFontPushResponse,
+    { fired: true }
+  > | null>(null);
+  const [fontBusy, setFontBusy] = useState(false);
 
   const loadVariables = useCallback(async () => {
     try {
@@ -195,6 +224,32 @@ export function TemplateDetail({
   useEffect(() => {
     void loadVariables();
   }, [loadVariables]);
+
+  const loadFonts = useCallback(
+    async (isCurrent: () => boolean = () => true) => {
+      setFontReadiness(null);
+      setFontCheckFailed(false);
+      try {
+        const readiness = await queryClient.fetchQuery({
+          queryKey: fontsKey,
+          queryFn: () => fetchTemplateFonts(brandId, assetId),
+          staleTime: FORGE_STALE_MS.lists,
+        });
+        if (isCurrent()) setFontReadiness(readiness);
+      } catch {
+        if (isCurrent()) setFontCheckFailed(true);
+      }
+    },
+    [assetId, brandId, fontsKey, queryClient],
+  );
+
+  useEffect(() => {
+    let current = true;
+    void loadFonts(() => current);
+    return () => {
+      current = false;
+    };
+  }, [loadFonts, source.parseState, source.updatedAt, source.versionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -268,6 +323,37 @@ export function TemplateDetail({
     }
   };
 
+  const heldFamilies =
+    fontReadiness?.fonts.filter((font) => font.held).map((font) => font.family) ?? [];
+
+  const reviewFontInstall = async () => {
+    setFontBusy(true);
+    setFontResult(null);
+    try {
+      const plan = await pushTemplateFonts(brandId, assetId, false, heldFamilies);
+      if (!plan.fired) setFontPlan(plan);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not review the font install');
+    } finally {
+      setFontBusy(false);
+    }
+  };
+
+  const installFonts = async () => {
+    setFontBusy(true);
+    try {
+      const result = await pushTemplateFonts(brandId, assetId, true, heldFamilies);
+      if (result.fired) setFontResult(result);
+      setFontPlan(null);
+      await queryClient.invalidateQueries({ queryKey: fontsKey, exact: true });
+      await loadFonts();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not install the fonts');
+    } finally {
+      setFontBusy(false);
+    }
+  };
+
   const nameProblem = templateNameProblem(templateName);
   const chosenWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
   const status = templateStatus({
@@ -278,6 +364,18 @@ export function TemplateDetail({
   const ratios = source.ratios;
   const views = [...(rendered ? [undefined] : []), ...ratios];
   const activeView = view ?? (rendered ? undefined : ratios[0]);
+  const fontParseState = fontReadiness?.parseState ?? source.parseState;
+  const detectedFamilies = fontReadiness?.fonts.map((font) => font.family) ?? source.fonts;
+  const fontSummary =
+    fontParseState === 'pending'
+      ? 'Fonts are not known until this project is opened.'
+      : fontParseState === 'failed'
+        ? 'Fonts are not known because this project could not be read.'
+        : fontParseState === 'unsupported'
+          ? 'This file type is not read for font requirements.'
+          : detectedFamilies.length
+            ? detectedFamilies.join(', ')
+            : 'None detected';
 
   return (
     <div className="space-y-6">
@@ -391,11 +489,60 @@ export function TemplateDetail({
           <dt className="text-muted-foreground">Variables</dt>
           <dd>{variables.length || source.slotCount || 0}</dd>
           <dt className="text-muted-foreground">Fonts</dt>
-          <dd className="min-w-0 break-words">
-            {source.fonts.length ? source.fonts.join(', ') : 'None detected'}
-          </dd>
+          <dd className="min-w-0 break-words">{fontSummary}</dd>
         </dl>
       </div>
+
+      {fontReadiness?.parseState === 'parsed' && fontReadiness.fonts.length > 0 ? (
+        <Section title="Typefaces">
+          <div className="flex flex-wrap gap-1">
+            {fontReadiness.fonts.map((font) => (
+              <Pill key={font.family} variant={font.held ? 'success' : 'warning'}>
+                {font.family} · {font.held ? 'uploaded' : 'not uploaded'}
+              </Pill>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Uploaded means the brand holds the file privately. Installed means Forge linked it to
+            this promoted template after confirmation.
+          </p>
+          {templateKey && heldFamilies.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-3"
+              disabled={fontBusy}
+              onClick={() => void reviewFontInstall()}
+            >
+              {fontBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+              Review font install
+            </Button>
+          ) : null}
+          {fontResult ? (
+            <div role="status" className="mt-3 space-y-1 text-xs">
+              {fontResult.linked.length > 0 ? (
+                <p className="text-emerald-700 dark:text-emerald-300">
+                  Installed: {fontResult.linked.map((font) => font.postScriptName).join(', ')}
+                </p>
+              ) : null}
+              {fontResult.alreadyLinked.length > 0 ? (
+                <p className="text-muted-foreground">
+                  Already installed:{' '}
+                  {fontResult.alreadyLinked.map((font) => font.postScriptName).join(', ')}
+                </p>
+              ) : null}
+              {fontResult.refused.map((font) => (
+                <p key={font.filename} className="text-destructive">
+                  Refused {font.filename}: {font.reason}
+                </p>
+              ))}
+            </div>
+          ) : null}
+        </Section>
+      ) : fontCheckFailed && source.parseState === 'parsed' ? (
+        <p className="text-xs text-muted-foreground">Could not check the brand’s uploaded fonts.</p>
+      ) : null}
 
       {!run || run.state === 'failed' ? (
         <Section title="Build">
@@ -538,6 +685,31 @@ export function TemplateDetail({
           <dd className="break-all font-mono">{source.parse?.filename ?? '—'}</dd>
         </dl>
       </details>
+
+      <AlertDialog open={fontPlan !== null} onOpenChange={(open) => !open && setFontPlan(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Install fonts on this template?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Forge will privately upload, inspect, and link these files to the promoted template.
+              This changes the typefaces used by future renders.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul className="space-y-1 text-xs">
+            {fontPlan?.files.map((file) => (
+              <li key={file.filename} className="break-all">
+                {file.filename} · {file.bytes.toLocaleString()} bytes
+              </li>
+            ))}
+          </ul>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={fontBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={fontBusy} onClick={() => void installFonts()}>
+              Install fonts
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

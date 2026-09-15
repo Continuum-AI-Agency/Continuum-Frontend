@@ -25,9 +25,11 @@ mock.module('@/components/forge/RenderRequestsGrid', () => ({
   RenderRequestsGrid: ({
     intent,
     onIntentConsumed,
+    onFired,
   }: {
     intent?: ForgeRenderIntent;
     onIntentConsumed?: () => void;
+    onFired?: (jobIds: string[]) => void;
   }) => {
     useEffect(() => {
       gridMounts += 1;
@@ -38,12 +40,15 @@ mock.module('@/components/forge/RenderRequestsGrid', () => ({
         <button type="button" onClick={onIntentConsumed}>
           Take intent
         </button>
+        <button type="button" onClick={() => onFired?.(['job-1'])}>
+          Fire batch
+        </button>
       </>
     );
   },
 }));
 mock.module('@/components/forge/RenderJobsGrid', () => ({
-  RenderJobsGrid: () => <p>Renders</p>,
+  RenderJobsGrid: () => <p>Render ledger</p>,
 }));
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -77,5 +82,15 @@ describe('ForgeTabs', () => {
 
     expect(screen.getByTestId('render-grid')).toBeTruthy();
     expect(gridMounts).toBe(1);
+  }, 30_000);
+
+  test('a fired batch opens the Render ledger', async () => {
+    render(<ForgeTabs brandId="22222222-2222-4222-8222-222222222222" />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Render' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fire batch' }));
+
+    expect(screen.getByRole('tab', { name: 'Render ledger' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
   }, 30_000);
 });

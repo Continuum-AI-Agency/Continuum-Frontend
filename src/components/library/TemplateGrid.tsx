@@ -1,8 +1,17 @@
 'use client';
 
 import { type MediaAsset, type TemplateSource, templateNameProblem } from '@continuum/contracts';
-import { AlertTriangle, Clock3, Layers, Loader2, Send, Type } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertTriangle,
+  Clock3,
+  Layers,
+  Loader2,
+  PackageOpen,
+  Send,
+  Type,
+  Upload,
+} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,7 +38,7 @@ function PARSE_LABEL(state: TemplateSource['parseState']): {
     case 'parsed':
       return { text: 'Read', variant: 'success' };
     case 'pending':
-      return { text: 'Not read yet', variant: 'muted' };
+      return { text: 'Unpacking', variant: 'muted' };
     case 'unsupported':
       return { text: 'Not readable', variant: 'warning' };
     case 'failed':
@@ -158,7 +167,7 @@ function TemplateCard({
         <p className="text-xs text-muted-foreground">
           {source.parseState === 'failed'
             ? (source.parseError ?? 'This file could not be read.')
-            : 'Uploaded. Nothing has opened this file yet, so it has no ratios or slots to show.'}
+            : 'Uploaded and queued for unpacking. Ratios, slots, and fonts appear here when it finishes.'}
         </p>
       )}
 
@@ -194,6 +203,7 @@ export function TemplateGrid({
   assets,
   loading,
   onChanged,
+  onChooseFiles,
   className,
 }: {
   brandId: string;
@@ -201,38 +211,76 @@ export function TemplateGrid({
   assets: MediaAsset[];
   loading?: boolean;
   onChanged: () => void;
+  onChooseFiles: () => void;
   className?: string;
 }) {
   const byId = new Map(assets.map((asset) => [asset.id, asset]));
-  if (loading && sources.length === 0) {
-    return (
-      <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" /> Loading templates…
-      </div>
-    );
-  }
-  if (sources.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-border/60 p-8 text-center">
-        <p className="text-sm font-medium">No templates yet</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Drop an After Effects project (.aep, .aepx or a collected .zip) anywhere on this page. It
-          is stored privately and read on arrival.
-        </p>
-      </div>
-    );
-  }
+  const poll = useRef({ key: '', count: 0 });
+  const pendingKey = sources
+    .filter((source) => source.parseState === 'pending')
+    .map((source) => source.assetId)
+    .sort()
+    .join('|');
+  useEffect(() => {
+    if (!pendingKey) {
+      poll.current = { key: '', count: 0 };
+      return;
+    }
+    if (poll.current.key !== pendingKey) poll.current = { key: pendingKey, count: 0 };
+    if (poll.current.count >= 40) return;
+    poll.current.count += 1;
+    const timer = window.setTimeout(onChanged, 3000);
+    return () => window.clearTimeout(timer);
+  }, [onChanged, pendingKey]);
+
   return (
-    <div className={cn(GRID_CLASS, className)}>
-      {sources.map((source) => (
-        <TemplateCard
-          key={source.assetId}
-          brandId={brandId}
-          source={source}
-          asset={byId.get(source.assetId)}
-          onChanged={onChanged}
-        />
-      ))}
+    <div className="space-y-[var(--app-shell-gap)]">
+      <section className="flex flex-col gap-4 rounded-xl border border-border/60 bg-muted/20 p-4 sm:flex-row sm:items-center">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background">
+          <PackageOpen className="size-5 text-muted-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold">Add an After Effects template</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Drop an .aep, .aepx, .aet, or collected .zip. Continuum keeps the original private,
+            unpacks it, and lists its render controls here.
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Upload <span aria-hidden="true">→</span> unpack and inspect{' '}
+            <span aria-hidden="true">→</span> review slots <span aria-hidden="true">→</span> render
+            variants
+          </p>
+        </div>
+        <Button type="button" onClick={onChooseFiles} className="shrink-0">
+          <Upload className="size-4" />
+          Choose template
+        </Button>
+      </section>
+
+      {loading && sources.length === 0 ? (
+        <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Loading templates…
+        </div>
+      ) : sources.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border/60 p-8 text-center">
+          <p className="text-sm font-medium">No templates yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Choose a project above or drop it anywhere on this page.
+          </p>
+        </div>
+      ) : (
+        <div className={cn(GRID_CLASS, className)}>
+          {sources.map((source) => (
+            <TemplateCard
+              key={source.assetId}
+              brandId={brandId}
+              source={source}
+              asset={byId.get(source.assetId)}
+              onChanged={onChanged}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
