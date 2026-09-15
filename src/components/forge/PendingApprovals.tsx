@@ -84,9 +84,7 @@ function ApprovalCard({
           <Badge variant="outline" className={cn('text-xs', STATUS_TONE[approval.status])}>
             {STATUS_LABEL[approval.status] ?? approval.status}
           </Badge>
-          <span className="text-xs text-muted-foreground">
-            {approval.environmentKey ?? approval.picinst} → {destination}
-          </span>
+          <span className="text-xs text-muted-foreground">Publishes to {destination}</span>
           <span className="text-xs text-muted-foreground">
             {approval.files.length} file{approval.files.length === 1 ? '' : 's'}
           </span>

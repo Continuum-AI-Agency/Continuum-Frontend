@@ -74,9 +74,6 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
           <Icon className={`size-3.5 ${spin ? 'animate-spin' : ''}`} aria-hidden />
           {label}
         </Pill>
-        {run.root_table ? (
-          <span className="font-mono text-xs text-muted-foreground">{run.root_table}</span>
-        ) : null}
       </div>
 
       {/*

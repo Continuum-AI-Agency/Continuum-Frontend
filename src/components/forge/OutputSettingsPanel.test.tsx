@@ -54,6 +54,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('OutputSettingsPanel', () => {
+  test('a contract without output settings renders nothing', async () => {
+    getContract.mockImplementationOnce(async () => ({ ...contract(), encode: undefined }) as never);
+    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    await waitFor(() => expect(getContract).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(container.textContent).toBe('');
+  });
+
   test('an unset field shows what it inherits; a reset clears the stored override', async () => {
     render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
     await waitFor(() => expect(select('Frame rate').value).toBe('25'));

@@ -56,7 +56,7 @@ export function ForgeProjectDrop({
         type="button"
         variant="outline"
         className={cn(
-          'h-auto min-h-28 w-full flex-col items-start gap-2 whitespace-normal border-dashed px-[var(--card-pad)] py-4 text-left',
+          'h-full min-h-40 w-full flex-col items-center justify-center gap-2 whitespace-normal rounded-xl border-dashed px-[var(--card-pad)] py-6 text-center',
           dragDepth > 0 && 'border-primary bg-primary/5',
         )}
         onClick={choose}
@@ -77,11 +77,10 @@ export function ForgeProjectDrop({
       >
         <span className="flex items-center gap-2 text-sm">
           <FileUp aria-hidden />
-          Choose a project
+          New template
         </span>
-        <span className="text-xs font-normal text-muted-foreground">
-          Drop .aep, .aepx, .aet, or .zip files here. They upload to your Library and are analyzed
-          automatically.
+        <span className="max-w-60 text-xs font-normal text-muted-foreground">
+          Drop an After Effects project (.aep, .aepx, .aet or .zip) or click to choose one.
         </span>
       </Button>
     </>

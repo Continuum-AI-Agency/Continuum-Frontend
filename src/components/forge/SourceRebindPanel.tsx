@@ -1,6 +1,11 @@
 'use client';
 
-import type { MediaAssetVersion, TemplateRebindPreview } from '@continuum/contracts';
+import {
+  type MediaAssetVersion,
+  type TemplateRebindPreview,
+  templateDisplayName,
+  UNTITLED_TEMPLATE_NAME,
+} from '@continuum/contracts';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -17,6 +22,15 @@ import {
 import { toast } from '@/components/ui/toast-imperative';
 import { confirmTemplateRebind, previewTemplateRebind } from '@/lib/library/templateSources';
 import { listAssetVersions, uploadNewAssetVersion } from '@/lib/library/versions';
+
+/** "Version 3 · Summer promo" — a Library filename is usually a uuid, which is no name at all. */
+function versionLabel(version: MediaAssetVersion | undefined): string {
+  if (!version) return '';
+  const name = templateDisplayName(version.fileName);
+  return name === UNTITLED_TEMPLATE_NAME
+    ? `Version ${version.versionNumber}`
+    : `Version ${version.versionNumber} · ${name}`;
+}
 
 type SourceRebindProps = {
   brandId: string;
@@ -151,13 +165,13 @@ function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: 
         >
           <SelectTrigger className="w-72" aria-label="Source revision">
             <SelectValue placeholder="Choose an existing version">
-              {versions.find((item) => item.id === versionId)?.fileName}
+              {versionLabel(versions.find((item) => item.id === versionId))}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {versions.map((version) => (
               <SelectItem key={version.id} value={version.id}>
-                Version {version.versionNumber} · {version.fileName}
+                {versionLabel(version)}
                 {version.id === expectedVersionId ? ' (current source)' : ''}
               </SelectItem>
             ))}

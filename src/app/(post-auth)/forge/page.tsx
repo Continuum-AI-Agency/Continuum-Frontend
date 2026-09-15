@@ -10,7 +10,7 @@ export const metadata = {
 };
 
 export default async function ForgePage() {
-  const { activeBrandId, activeBrandTier } = await getActiveBrandContext();
+  const { activeBrandId, activeBrandTier, brandSummaries } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect('/onboarding');
@@ -27,16 +27,19 @@ export default async function ForgePage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
-      <header className="mb-6">
+    // The app content pane's own height, not a column: the gallery and the render grid want every
+    // pixel of width, and each tab scrolls inside it so the tab strip stays put.
+    <div className="flex h-[var(--app-content-h)] min-h-0 w-full max-w-none flex-col overflow-hidden px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
+      <header className="mb-3 shrink-0">
         <h1 className="text-2xl font-semibold tracking-tight">Forge</h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Turn an After Effects project into a template, set up renders against it in a grid, and
-          watch them come back. Everything the designer left adjustable is a variable here — and
-          once a template is published it is selectable from the API render node on the canvas.
+        <p className="mt-1 text-sm text-muted-foreground">
+          Turn After Effects projects into templates, fill them in, and render.
         </p>
       </header>
-      <ForgeTabs brandId={activeBrandId} />
+      <ForgeTabs
+        brandId={activeBrandId}
+        brandName={brandSummaries.find((brand) => brand.id === activeBrandId)?.name}
+      />
     </div>
   );
 }

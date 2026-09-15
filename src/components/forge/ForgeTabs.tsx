@@ -13,7 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type ForgeTab = 'templates' | 'render' | 'renders';
 
-export function ForgeTabs({ brandId }: { brandId: string }) {
+const PANEL = 'min-h-0 overflow-y-auto overscroll-contain pt-2';
+
+export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?: string }) {
   const [tab, setTab] = useState<ForgeTab>('templates');
   // The last "open this in Render" from anywhere on the page. Kept, not consumed: the Render
   // panel unmounts when hidden, and remounting should land on what was last asked for.
@@ -23,16 +25,22 @@ export function ForgeTabs({ brandId }: { brandId: string }) {
     setTab('render');
   };
   return (
-    <Tabs value={tab} onValueChange={(next) => setTab(next as ForgeTab)}>
-      <TabsList className="mb-4">
+    // Bounded by the page: the strip stays put and each panel scrolls on its own.
+    <Tabs value={tab} onValueChange={(next) => setTab(next as ForgeTab)} className="min-h-0 flex-1">
+      <TabsList className="shrink-0">
         <TabsTrigger value="templates">Templates</TabsTrigger>
         <TabsTrigger value="render">Render</TabsTrigger>
         <TabsTrigger value="renders">Renders</TabsTrigger>
       </TabsList>
-      <TabsContent value="templates">
-        <ForgeWorkbench key={brandId} brandId={brandId} onOpenRender={openRender} />
+      <TabsContent value="templates" className={PANEL}>
+        <ForgeWorkbench
+          key={brandId}
+          brandId={brandId}
+          brandName={brandName}
+          onOpenRender={openRender}
+        />
       </TabsContent>
-      <TabsContent value="render">
+      <TabsContent value="render" className={PANEL}>
         <RenderRequestsGrid
           key={brandId}
           brandId={brandId}
@@ -40,7 +48,7 @@ export function ForgeTabs({ brandId }: { brandId: string }) {
           onFired={() => setTab('renders')}
         />
       </TabsContent>
-      <TabsContent value="renders">
+      <TabsContent value="renders" className={PANEL}>
         <RenderJobsGrid key={brandId} brandId={brandId} active={tab === 'renders'} />
       </TabsContent>
     </Tabs>

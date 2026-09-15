@@ -2,9 +2,9 @@
 
 import {
   FORGE_REASONS,
-  forgeLineageHasReason,
   type ForgeLineageNode,
   type ForgeLineageView,
+  forgeLineageHasReason,
 } from '@continuum/contracts';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -44,7 +44,7 @@ function LineageNode({
 }) {
   if (filter && !forgeLineageHasReason(node, filter)) return null;
   const active = selected === node.sha;
-  const label = node.reason ? REASON_LABEL[node.reason] ?? node.reason : node.tool ?? 'commit';
+  const label = node.reason ? (REASON_LABEL[node.reason] ?? node.reason) : (node.tool ?? 'commit');
   return (
     <div>
       <button
@@ -56,9 +56,10 @@ function LineageNode({
         )}
         style={{ paddingLeft: `${8 + depth * 12}px` }}
         aria-current={active ? 'true' : undefined}
+        // The commit id is for whoever needs to find it in the forge, not for reading.
+        title={shortId(node.sha)}
       >
         <span className="font-medium">{label}</span>
-        <span className="font-mono text-muted-foreground">{shortId(node.sha)}</span>
         {typeof node.ops === 'number' ? (
           <span className="text-muted-foreground">{node.ops} ops</span>
         ) : null}
@@ -113,7 +114,9 @@ export function LineagePanel({ brandId, assetId }: { brandId: string; assetId: s
   }
   if (!lineage) {
     return (
-      <div className="rounded-lg border p-4 text-xs text-muted-foreground">Reading the version tree…</div>
+      <div className="rounded-lg border p-4 text-xs text-muted-foreground">
+        Reading the version tree…
+      </div>
     );
   }
   if (!lineage.connected) {
@@ -144,10 +147,9 @@ export function LineagePanel({ brandId, assetId }: { brandId: string; assetId: s
 
   return (
     <div className="rounded-lg border p-4">
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-medium">Lineage</h3>
-        <p className="font-mono text-2xs text-muted-foreground">master {shortId(lineage.currentMaster)}</p>
-      </div>
+      <h3 className="mb-3 text-sm font-medium" title={`master ${shortId(lineage.currentMaster)}`}>
+        History
+      </h3>
       {lineage.pinnedToOlderMaster ? (
         <p className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
           This implementation is pinned to an older master. Follow (replay) is a CLI action.
@@ -195,26 +197,29 @@ export function LineagePanel({ brandId, assetId }: { brandId: string; assetId: s
       {lineage.worktrees.length ? (
         <ul className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
           {lineage.worktrees.map((worktree) => (
-            <li key={worktree.id}>
-              checkout {shortId(worktree.commit)}
+            <li
+              key={worktree.id}
+              title={[shortId(worktree.commit), worktree.path].filter(Boolean).join(' · ')}
+            >
+              checkout
               {worktree.locked ? ' · locked' : ''}
               {worktree.reason ? ` · ${worktree.reason}` : ''}
-              {worktree.path ? ` · ${worktree.path}` : ''}
             </li>
           ))}
         </ul>
       ) : null}
       {selected ? (
         <div className="mt-3 space-y-1 border-t pt-3 text-xs">
-          <p>
-            <span className="text-muted-foreground">commit</span>{' '}
-            <span className="font-mono">{shortId(selected.sha)}</span>
+          <p title={shortId(selected.sha)}>
+            <span className="text-muted-foreground">Change</span>
             {selected.reason ? ` · ${REASON_LABEL[selected.reason] ?? selected.reason}` : ''}
             {selected.facet ? ` · ${selected.facet}` : ''}
           </p>
           {selected.why ? <p className="text-muted-foreground">{selected.why}</p> : null}
           {selected.base && selected.base !== lineage.currentMaster ? (
-            <p className="text-muted-foreground">pinned to master {shortId(selected.base)}</p>
+            <p className="text-muted-foreground" title={shortId(selected.base)}>
+              Pinned to an older master
+            </p>
           ) : null}
         </div>
       ) : null}
