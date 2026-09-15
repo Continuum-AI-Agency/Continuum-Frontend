@@ -221,7 +221,7 @@ describe('ForgeWorkbench', () => {
       renderWorkbench();
       fireEvent.click(await screen.findByRole('button', { name: 'Open Untitled template' }));
 
-      expect(await screen.findByRole('heading', { name: 'Variables' })).toBeTruthy();
+      expect(await screen.findByRole('tab', { name: 'Variables' })).toBeTruthy();
       expect(screen.getByRole('heading', { name: /Untitled template/ })).toBeTruthy();
       expect(screen.queryByLabelText('Search templates')).toBeNull();
 
@@ -240,7 +240,7 @@ describe('ForgeWorkbench', () => {
     try {
       renderWorkbench();
       fireEvent.click(await screen.findByRole('button', { name: 'Open Untitled template' }));
-      expect(await screen.findByRole('heading', { name: 'Variables' })).toBeTruthy();
+      expect(await screen.findByRole('tab', { name: 'Variables' })).toBeTruthy();
 
       fireEvent.click(screen.getByRole('button', { name: 'Templates' }));
       expect(await screen.findByLabelText('Search templates')).toBeTruthy();

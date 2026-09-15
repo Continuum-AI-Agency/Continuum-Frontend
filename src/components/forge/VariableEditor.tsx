@@ -1,5 +1,6 @@
 'use client';
 
+import { Accordion as AccordionPrimitive } from '@base-ui/react/accordion';
 import {
   type ApiRenderVariableKind,
   apiRenderVariableLabel,
@@ -13,9 +14,11 @@ import { BrandColorField } from '@/components/forge/BrandColorField';
 import { KIND_ICONS } from '@/components/forge/DataGrid';
 import { Pill } from '@/components/kibo-ui/pill';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
+import { Accordion, AccordionItem } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import {
   Select,
   SelectContent,
@@ -24,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type { TemplateSlotEdit, TemplateVariable } from '@/lib/library/templateSources';
 import { cn } from '@/lib/utils';
 
@@ -38,8 +42,9 @@ import { cn } from '@/lib/utils';
 // guessed role is worse than no role because it silently binds the wrong field. Everything here
 // is a person answering that.
 //
-// A list and an inspector rather than a table: a table sizes its columns to its longest cell, and
-// an After Effects binding path is always the longest cell — it pushed every control off screen.
+// One compact row per variable that opens in place, rather than a table: a table sizes its columns
+// to its longest cell, and an After Effects binding path is always the longest cell — it pushed
+// every control off screen. Here the path only appears inside the opened row, in small mono.
 
 type Draft = Record<string, TemplateSlotEdit>;
 
@@ -97,7 +102,7 @@ function DefaultValueControl({
             setPicking(false);
           }}
           anchor={
-            <Button type="button" variant="outline" size="sm" className="gap-1.5">
+            <Button type="button" variant="outline" size="xs" className="gap-1.5">
               <ImageIcon className="size-3.5" aria-hidden />
               {pinned?.assetId ? 'Change' : 'Pick from Library'}
             </Button>
@@ -109,7 +114,7 @@ function DefaultValueControl({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="xs"
               className="gap-1"
               onClick={() => onChange(null)}
             >
@@ -149,7 +154,7 @@ function DefaultValueControl({
         value={typeof value === 'string' ? value : NO_ROLE}
         onValueChange={(next) => onChange(next === NO_ROLE ? null : next)}
       >
-        <SelectTrigger aria-label={`${label} default`}>
+        <SelectTrigger size="sm" className="w-full" aria-label={`${label} default`}>
           <SelectValue>{typeof value === 'string' ? value : 'No default'}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -168,6 +173,7 @@ function DefaultValueControl({
     return (
       <Input
         type="number"
+        inputSize="sm"
         aria-label={`${label} default`}
         value={typeof value === 'number' ? String(value) : ''}
         placeholder={variable.sample ?? ''}
@@ -181,6 +187,7 @@ function DefaultValueControl({
 
   return (
     <Input
+      inputSize="sm"
       aria-label={`${label} default`}
       value={typeof value === 'string' ? value : ''}
       placeholder={variable.sample ?? ''}
@@ -226,6 +233,38 @@ function settleDraft(current: Draft, submitted: Draft): Draft {
   return next;
 }
 
+type VariableFilter = 'all' | 'unassigned' | 'media' | 'text';
+
+const FILTERS: Array<{ value: VariableFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'unassigned', label: 'Unassigned' },
+  { value: 'media', label: 'Media' },
+  { value: 'text', label: 'Text' },
+];
+
+/** What a closed row shows for its default: the copy in mono, a swatch, or that a picture is set. */
+function DefaultPreview({ variable, value }: { variable: TemplateVariable; value: unknown }) {
+  if (value === null || value === undefined || value === '') {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  if (variable.kind === 'image' || variable.kind === 'video') {
+    return <span className="truncate text-muted-foreground">Library {variable.kind}</span>;
+  }
+  if (variable.kind === 'color' && typeof value === 'string') {
+    return (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span
+          className="size-3 shrink-0 rounded-sm border border-border"
+          style={{ backgroundColor: value }}
+        />
+        <span className="truncate font-mono">{value}</span>
+      </span>
+    );
+  }
+  if (typeof value === 'boolean') return <span>{value ? 'On' : 'Off'}</span>;
+  return <span className="truncate font-mono">{String(value)}</span>;
+}
+
 export function VariableEditor({
   brandId,
   variables,
@@ -244,7 +283,10 @@ export function VariableEditor({
   onSave: (edits: TemplateSlotEdit[]) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState<Draft>({});
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // `undefined` until someone opens or closes a row: the first variable starts open, and a person
+  // closing every row is an answer that must not snap it back open.
+  const [selectedKey, setSelectedKey] = useState<string | null | undefined>(undefined);
+  const [filter, setFilter] = useState<VariableFilter>('all');
 
   const patch = (key: string, change: Partial<TemplateSlotEdit>) =>
     setDraft((current) => ({
@@ -274,8 +316,8 @@ export function VariableEditor({
 
   if (parseState !== 'parsed') {
     return (
-      <p className="flex items-center gap-2 rounded-md border border-dashed px-3 py-6 text-sm text-muted-foreground">
-        <Info className="size-4" aria-hidden />
+      <p className="flex items-center gap-2 p-[var(--card-pad)] text-xs text-muted-foreground">
+        <Info className="size-3.5" aria-hidden />
         {parseState === 'pending'
           ? 'This project has not been opened yet, so its variables are not known.'
           : parseState === 'failed'
@@ -287,203 +329,274 @@ export function VariableEditor({
 
   if (!variables.length) {
     return (
-      <p className="rounded-md border border-dashed px-3 py-6 text-sm text-muted-foreground">
+      <p className="p-[var(--card-pad)] text-xs text-muted-foreground">
         We read this project and it exposes no bindable slots. Nothing in it can vary per render yet
         — expose a property to Essential Graphics in After Effects and upload it again.
       </p>
     );
   }
 
-  const current = variables.find((variable) => variable.key === selectedKey) ?? variables[0]!;
   const nameOf = (variable: TemplateVariable) =>
     (resolve(draft, variable, 'publicName', null) as string | null) ||
     apiRenderVariableLabel(variable);
-  const currentName = nameOf(current);
-  const role = resolve(draft, current, 'role', current.role) as string | null;
-  const budget = resolve(draft, current, 'charBudget', current.charBudget) as number | null;
-  const textLike = current.kind === 'text' || current.kind === 'enum';
+  const roleOf = (variable: TemplateVariable) =>
+    resolve(draft, variable, 'role', variable.role) as string | null;
+  const shown = variables.filter((variable) => {
+    if (filter === 'unassigned') return roleOf(variable) === null;
+    if (filter === 'media') return variable.kind === 'image' || variable.kind === 'video';
+    if (filter === 'text') return variable.kind === 'text' || variable.kind === 'enum';
+    return true;
+  });
+  const openKey = selectedKey === undefined ? variables[0]!.key : (selectedKey ?? '');
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-4 md:grid-cols-[minmax(11rem,17rem)_minmax(0,1fr)]">
-        <ul className="min-w-0 space-y-0.5" aria-label="Variables">
-          {variables.map((variable) => {
-            const Icon =
-              KIND_ICONS[
-                variable.reserved ? 'reserved' : (variable.kind as ApiRenderVariableKind)
-              ] ?? Type;
-            const variableRole = resolve(draft, variable, 'role', variable.role) as string | null;
-            const required = resolve(draft, variable, 'required', variable.required) === true;
-            const active = variable.key === current.key;
-            return (
-              <li key={variable.key}>
-                <button
-                  type="button"
-                  aria-current={active ? 'true' : undefined}
-                  onClick={() => setSelectedKey(variable.key)}
-                  className={cn(
-                    'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
-                    active ? 'bg-primary/10 text-foreground' : 'hover:bg-muted/60',
-                  )}
-                >
-                  <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                  <span className="min-w-0 flex-1 truncate">{nameOf(variable)}</span>
-                  {variableRole ? (
-                    <Pill
-                      variant={claimed.has(variableRole) ? 'destructive' : 'muted'}
-                      className="max-w-24 truncate"
-                    >
-                      {roleLabel(variableRole)}
-                    </Pill>
-                  ) : null}
-                  {required ? (
-                    <span
-                      className="size-1.5 shrink-0 rounded-full bg-primary"
-                      role="img"
-                      aria-label="required"
-                    />
-                  ) : null}
-                  {draft[variable.key] ? <span className="sr-only">unsaved changes</span> : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-
-        <fieldset
-          key={current.key}
-          className="min-w-0 space-y-4 rounded-lg border p-4"
-          aria-label={`${currentName} settings`}
+    <div className="flex flex-col">
+      <div className="flex items-center gap-3 px-[var(--card-pad)] py-1.5">
+        <ToggleGroup
+          aria-label="Show variables"
+          size="sm"
+          spacing={0}
+          variant="outline"
+          value={filter}
+          onValueChange={(next) => setFilter((next as VariableFilter) || 'all')}
         >
-          <div className="space-y-1.5">
-            <Label htmlFor={`variable-name-${current.key}`}>Name</Label>
-            <Input
-              id={`variable-name-${current.key}`}
-              value={
-                (resolve(draft, current, 'publicName', undefined) as string | null | undefined) ??
-                apiRenderVariableLabel(current)
-              }
-              onChange={(event) => patch(current.key, { publicName: event.target.value })}
-            />
-            {current.description ? (
-              <p className="text-xs text-muted-foreground">{current.description}</p>
-            ) : null}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Means</Label>
-            <Select
-              value={role ?? NO_ROLE}
-              onValueChange={(next) =>
-                patch(current.key, { role: next === NO_ROLE ? null : String(next) })
-              }
-            >
-              <SelectTrigger className="w-full sm:w-72" aria-label={`Meaning for ${currentName}`}>
-                <SelectValue>{role ? roleLabel(role) : 'Unassigned'}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_ROLE}>Unassigned</SelectItem>
-                {rolesForKind(current.kind).map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {roleLabel(option)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {role && claimed.has(role) ? (
-              <p className="text-xs text-destructive">Another variable already means this.</p>
-            ) : null}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Default</Label>
-            <DefaultValueControl
-              variable={current}
-              label={currentName}
-              brandId={brandId}
-              value={resolve(draft, current, 'defaultValue', savedDefaults[current.key] ?? null)}
-              onChange={(next) => patch(current.key, { defaultValue: next })}
-            />
-          </div>
-
-          <div className="flex flex-wrap items-end gap-6">
-            {textLike ? (
-              <div className="space-y-1.5">
-                <Label htmlFor={`variable-budget-${current.key}`}>Max chars</Label>
-                <Input
-                  id={`variable-budget-${current.key}`}
-                  type="number"
-                  min={0}
-                  className="w-28 tabular-nums"
-                  value={budget === null ? '' : String(budget)}
-                  onChange={(event) =>
-                    patch(current.key, {
-                      charBudget: event.target.value === '' ? null : Number(event.target.value),
-                    })
-                  }
-                  // Not a limit After Effects enforces — it is the designer's own composed
-                  // length in the tightest comp, and the only honest budget without a render.
-                  title="The designer's own composed length in the tightest frame"
-                />
-              </div>
-            ) : null}
-            <div className="flex items-center gap-2 pb-2">
-              <Switch
-                id={`variable-required-${current.key}`}
-                checked={resolve(draft, current, 'required', current.required) === true}
-                onCheckedChange={(next) => patch(current.key, { required: next })}
-              />
-              <Label htmlFor={`variable-required-${current.key}`}>Required</Label>
-            </div>
-          </div>
-
-          <details className="text-xs">
-            <summary className="cursor-pointer text-muted-foreground">
-              Where it lives in After Effects
-            </summary>
-            <div className="mt-2 space-y-2">
-              <p className="break-all font-mono text-2xs text-muted-foreground">{current.key}</p>
-              {/* One slot in seven ratios is one slot — say which frames carry it. */}
-              <div className="flex flex-wrap gap-1">
-                {current.comps.length ? (
-                  current.comps.map((comp) => (
-                    <Pill key={comp} variant="muted">
-                      {comp}
-                    </Pill>
-                  ))
-                ) : (
-                  <span className="text-muted-foreground">Composition not detected</span>
-                )}
-              </div>
-            </div>
-          </details>
-        </fieldset>
+          {FILTERS.map(({ value, label }) => (
+            <ToggleGroupItem key={value} value={value} className="text-xs">
+              {label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+          {shown.length} of {variables.length}
+        </span>
       </div>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t bg-background/95 py-2 backdrop-blur">
-        <Button
-          type="button"
-          size="sm"
-          className="gap-2"
-          disabled={!dirtyCount || saving || claimed.size > 0}
-          onClick={() => void save()}
-        >
-          {saving ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-          ) : (
-            <Save className="size-4" aria-hidden />
-          )}
-          Save changes
-        </Button>
-        {claimed.size > 0 ? (
-          <span className="text-xs text-destructive">
-            Two variables claim the same meaning — the fleet refuses that.
-          </span>
-        ) : dirtyCount ? (
-          <span className="text-xs text-muted-foreground">
-            {dirtyCount} variable{dirtyCount === 1 ? '' : 's'} changed
-          </span>
-        ) : null}
+      <Accordion
+        value={openKey}
+        onValueChange={(next) => setSelectedKey(next || null)}
+        render={<ul aria-label="Variables" />}
+        className="border-t border-border"
+      >
+        {shown.map((variable) => {
+          const Icon =
+            KIND_ICONS[variable.reserved ? 'reserved' : (variable.kind as ApiRenderVariableKind)] ??
+            Type;
+          const name = nameOf(variable);
+          const role = roleOf(variable);
+          const clash = role !== null && claimed.has(role);
+          const required = resolve(draft, variable, 'required', variable.required) === true;
+          const budget = resolve(draft, variable, 'charBudget', variable.charBudget) as
+            | number
+            | null;
+          const defaultValue = resolve(
+            draft,
+            variable,
+            'defaultValue',
+            savedDefaults[variable.key] ?? null,
+          );
+          const textLike = variable.kind === 'text' || variable.kind === 'enum';
+          return (
+            <AccordionItem key={variable.key} value={variable.key} render={<li />}>
+              {/* The stock trigger adds chevrons and an underline; this row IS the trigger. */}
+              <AccordionPrimitive.Header className="flex">
+                <AccordionPrimitive.Trigger className="grid h-8 w-full min-w-0 grid-cols-[1rem_minmax(6rem,12rem)_minmax(5rem,8rem)_minmax(0,24rem)_3.5rem_0.75rem] items-center justify-start gap-2 px-[var(--card-pad)] text-left text-xs outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-panel-open:bg-muted/40">
+                  <Icon className="size-3.5 text-muted-foreground" aria-hidden />
+                  <span className="truncate">{name}</span>
+                  <span className="flex min-w-0">
+                    {role ? (
+                      <Pill
+                        variant={clash ? 'destructive' : 'muted'}
+                        className="max-w-full truncate"
+                      >
+                        {roleLabel(role)}
+                      </Pill>
+                    ) : (
+                      <span className="text-muted-foreground">Unassigned</span>
+                    )}
+                  </span>
+                  <DefaultPreview variable={variable} value={defaultValue} />
+                  <span className="text-right font-mono tabular-nums text-muted-foreground">
+                    {textLike && budget !== null ? `${budget} ch` : null}
+                  </span>
+                  <span className="flex justify-end">
+                    {required ? (
+                      <span
+                        className="size-1.5 rounded-full bg-primary"
+                        role="img"
+                        aria-label="required"
+                      />
+                    ) : null}
+                  </span>
+                  {draft[variable.key] ? <span className="sr-only">unsaved changes</span> : null}
+                </AccordionPrimitive.Trigger>
+              </AccordionPrimitive.Header>
+              <AccordionPrimitive.Panel className="@container border-t border-dashed border-border py-3 pr-[var(--card-pad)] pl-[calc(var(--card-pad)+1.5rem)]">
+                <FieldGroup className="grid max-w-3xl gap-x-6 gap-y-3 @xl:grid-cols-2">
+                  <Field className="gap-1.5">
+                    <FieldLabel htmlFor={`variable-name-${variable.key}`} className="text-xs">
+                      Name
+                    </FieldLabel>
+                    <Input
+                      id={`variable-name-${variable.key}`}
+                      inputSize="sm"
+                      value={
+                        (resolve(draft, variable, 'publicName', undefined) as
+                          | string
+                          | null
+                          | undefined) ?? apiRenderVariableLabel(variable)
+                      }
+                      onChange={(event) => patch(variable.key, { publicName: event.target.value })}
+                    />
+                    {variable.description ? (
+                      <FieldDescription className="text-xs">
+                        {variable.description}
+                      </FieldDescription>
+                    ) : null}
+                  </Field>
+
+                  <Field className="gap-1.5" data-invalid={clash || undefined}>
+                    <FieldLabel className="text-xs">Means</FieldLabel>
+                    <Select
+                      value={role ?? NO_ROLE}
+                      onValueChange={(next) =>
+                        patch(variable.key, { role: next === NO_ROLE ? null : String(next) })
+                      }
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        className="w-full"
+                        aria-label={`Meaning for ${name}`}
+                        aria-invalid={clash || undefined}
+                      >
+                        <SelectValue>{role ? roleLabel(role) : 'Unassigned'}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_ROLE}>Unassigned</SelectItem>
+                        {rolesForKind(variable.kind).map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {roleLabel(option)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {clash ? (
+                      <FieldError className="text-xs">
+                        Another variable already means this.
+                      </FieldError>
+                    ) : null}
+                  </Field>
+
+                  <Field className="gap-1.5">
+                    <FieldLabel className="text-xs">Default</FieldLabel>
+                    <DefaultValueControl
+                      variable={variable}
+                      label={name}
+                      brandId={brandId}
+                      value={defaultValue}
+                      onChange={(next) => patch(variable.key, { defaultValue: next })}
+                    />
+                  </Field>
+
+                  <div className="flex items-end gap-6">
+                    {textLike ? (
+                      <Field className="w-28 gap-1.5">
+                        <FieldLabel htmlFor={`variable-budget-${variable.key}`} className="text-xs">
+                          Max chars
+                        </FieldLabel>
+                        <InputGroup className="h-7 rounded-md shadow-none">
+                          <InputGroupInput
+                            id={`variable-budget-${variable.key}`}
+                            type="number"
+                            min={0}
+                            className="tabular-nums"
+                            value={budget === null ? '' : String(budget)}
+                            onChange={(event) =>
+                              patch(variable.key, {
+                                charBudget:
+                                  event.target.value === '' ? null : Number(event.target.value),
+                              })
+                            }
+                            // Not a limit After Effects enforces — it is the designer's own composed
+                            // length in the tightest comp, and the only honest budget without a render.
+                            title="The designer's own composed length in the tightest frame"
+                          />
+                          <InputGroupAddon align="inline-end" className="text-xs">
+                            ch
+                          </InputGroupAddon>
+                        </InputGroup>
+                      </Field>
+                    ) : null}
+                    <Field orientation="horizontal" className="w-auto gap-2 pb-1">
+                      <Switch
+                        id={`variable-required-${variable.key}`}
+                        checked={required}
+                        onCheckedChange={(next) => patch(variable.key, { required: next })}
+                      />
+                      <FieldLabel htmlFor={`variable-required-${variable.key}`} className="text-xs">
+                        Required
+                      </FieldLabel>
+                    </Field>
+                  </div>
+
+                  {/* One slot in seven ratios is one slot — say which frames carry it. */}
+                  <div className="col-span-full flex min-w-0 flex-col gap-0.5 font-mono text-3xs text-muted-foreground">
+                    <span className="font-sans text-2xs">After Effects</span>
+                    <span className="break-all">{variable.key}</span>
+                    <span className="flex flex-wrap gap-x-3">
+                      {variable.comps.length ? (
+                        variable.comps.map((comp) => (
+                          <span key={comp} className="break-all">
+                            {comp}
+                          </span>
+                        ))
+                      ) : (
+                        <span>Composition not detected</span>
+                      )}
+                    </span>
+                  </div>
+                </FieldGroup>
+              </AccordionPrimitive.Panel>
+            </AccordionItem>
+          );
+        })}
+        {shown.length ? null : (
+          <li className="px-[var(--card-pad)] py-2 text-xs text-muted-foreground">
+            No variables match this filter.
+          </li>
+        )}
+      </Accordion>
+
+      <div className="border-t border-border">
+        <div className="flex min-h-9 max-w-[54rem] items-center justify-between gap-3 px-[var(--card-pad)] py-1">
+          <p className="font-mono text-2xs uppercase tracking-wide text-muted-foreground">
+            <span>{dirtyCount ? `${dirtyCount} changed` : 'No changes'}</span>
+            {claimed.size ? (
+              <>
+                <span aria-hidden> · </span>
+                <span
+                  className="text-destructive"
+                  title="Two variables claim the same meaning — the fleet refuses that."
+                >
+                  {`${claimed.size} meaning ${claimed.size === 1 ? 'clash' : 'clashes'}`}
+                </span>
+              </>
+            ) : null}
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            className="gap-1.5"
+            disabled={!dirtyCount || saving || claimed.size > 0}
+            onClick={() => void save()}
+          >
+            {saving ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Save className="size-3.5" aria-hidden />
+            )}
+            Save changes
+          </Button>
+        </div>
       </div>
     </div>
   );

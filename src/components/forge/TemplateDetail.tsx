@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type ApiRenderJob,
   type RenderWorkspace,
   renderWorkspaceLabel,
   type TemplateFontPushResponse,
@@ -9,19 +10,39 @@ import {
   templateNameProblem,
   UNTITLED_TEMPLATE_NAME,
 } from '@continuum/contracts';
-import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Play, RefreshCw, Rocket, Send, TestTube2 } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowLeft,
+  Boxes,
+  CalendarClock,
+  CircleDot,
+  History,
+  Layers,
+  Loader2,
+  Play,
+  RectangleHorizontal,
+  RefreshCw,
+  Rocket,
+  Send,
+  TestTube2,
+  Type,
+  Variable,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AiVariationsDialog } from '@/components/forge/AiVariationsDialog';
+import { type CheckRow, CheckTable, type CheckTick, TickBar } from '@/components/forge/CheckTable';
+import { FactList } from '@/components/forge/FactList';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { LineagePanel } from '@/components/forge/LineagePanel';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
 import { Pill } from '@/components/kibo-ui/pill';
+import { Panel } from '@/components/shared/Panel';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +55,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
 import {
   advanceTemplateForgeRun,
@@ -47,7 +69,9 @@ import {
   type TemplateSlotEdit,
   type TemplateVariable,
 } from '@/lib/library/templateSources';
+import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
+import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
   InlineRename,
   sourceDisplayName,
@@ -55,10 +79,12 @@ import {
   templateStatus,
 } from './TemplateCard';
 import { TemplateMorph, TemplateWireframe, useLatestRenderFrame } from './TemplateWireframe';
+import { templateChecks } from './templateChecks';
 
-// One template, opened: its picture and facts on top, then everything you do to it in the order
-// you do it — build, watch the run, say what the variables mean, tune the outputs, swap the source,
-// read the history, draft variations. Technical identifiers live in the closed "Details" at the end.
+// One template, opened, read like a deployment: its picture beside the facts, then the checks it
+// has been through — each saying what it looks at and what it found, with the step to take on the
+// row that needs it — then everything you edit, one tab each. Technical identifiers live only in
+// the Details tab.
 
 /**
  * Which rungs are reachable from where the run is standing.
@@ -127,25 +153,16 @@ function buildNameSuggestion(source: TemplateSource): string {
   return suggestion === UNTITLED_TEMPLATE_NAME || templateNameProblem(suggestion) ? '' : suggestion;
 }
 
-function Section({
-  title,
-  children,
-  className,
-}: {
-  title: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={cn('rounded-lg border p-4', className)}>
-      <h3 className="mb-3 text-sm font-medium">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—';
+
+const JOB_TICK: Record<ApiRenderJob['status'], CheckTick> = {
+  finished: 'pass',
+  failed: 'fail',
+  submitting: 'todo',
+  queued: 'todo',
+  rendering: 'todo',
+};
 
 export function TemplateDetail({
   brandId,
@@ -354,6 +371,24 @@ export function TemplateDetail({
     }
   };
 
+  // The template's recent renders, read through the SAME cached query the preview's
+  // `useLatestRenderFrame` owns (key, fetcher and freshness identical, only the selection differs),
+  // so the facts never cost a second jobs read. The list is one page, so no total is claimed.
+  const { data: recentJobs } = useQuery({
+    queryKey: ['forge-template-frame', brandId, templateKey],
+    queryFn: () => apiRendersApi.listJobs(brandId, 10, { templateKey: templateKey ?? '' }),
+    enabled: Boolean(templateKey),
+    staleTime: 60_000,
+    select: (response) => response.items.filter((job) => job.templateKey === templateKey),
+  });
+  const { data: setCount } = useQuery({
+    queryKey: forgeQueryKeys.renderSetList(brandId, templateKey ?? undefined),
+    queryFn: () => apiRendersApi.listRenderSets(brandId, templateKey ?? undefined),
+    enabled: Boolean(templateKey),
+    staleTime: FORGE_STALE_MS.lists,
+    select: (response) => response.items.length,
+  });
+
   const nameProblem = templateNameProblem(templateName);
   const chosenWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
   const status = templateStatus({
@@ -364,78 +399,269 @@ export function TemplateDetail({
   const ratios = source.ratios;
   const views = [...(rendered ? [undefined] : []), ...ratios];
   const activeView = view ?? (rendered ? undefined : ratios[0]);
-  const fontParseState = fontReadiness?.parseState ?? source.parseState;
-  const detectedFamilies = fontReadiness?.fonts.map((font) => font.family) ?? source.fonts;
-  const fontSummary =
-    fontParseState === 'pending'
-      ? 'Fonts are not known until this project is opened.'
-      : fontParseState === 'failed'
-        ? 'Fonts are not known because this project could not be read.'
-        : fontParseState === 'unsupported'
-          ? 'This file type is not read for font requirements.'
-          : detectedFamilies.length
-            ? detectedFamilies.join(', ')
-            : 'None detected';
+  const variableCount = variables.length || source.slotCount || 0;
+  const unassigned = variables.filter((variable) => variable.role === null).length;
 
-  return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-2">
-          <Button type="button" variant="ghost" size="sm" className="gap-1.5" onClick={onBack}>
-            <ArrowLeft className="size-4" aria-hidden />
-            Templates
+  // Numbered, never named: the only names a binding has are its app and client keys.
+  const workspaceIndex = run?.application
+    ? workspaces.findIndex((workspace) => workspace.picinst === run.application)
+    : workspaces.findIndex((workspace) => workspace.id === workspaceId);
+  const workspaceFact =
+    workspaceIndex < 0
+      ? '—'
+      : workspaces.length === 1
+        ? 'Default'
+        : `Workspace ${workspaceIndex + 1}${workspaces[workspaceIndex]?.isDefault ? ' (default)' : ''}`;
+
+  const fontParseState = fontReadiness?.parseState ?? source.parseState;
+  const missingFonts = fontReadiness?.fonts.filter((font) => !font.held).length ?? 0;
+  const fontsFact =
+    fontParseState === 'pending'
+      ? 'Not known yet'
+      : fontParseState !== 'parsed'
+        ? 'Not known'
+        : fontCheckFailed
+          ? "Couldn't check"
+          : fontReadiness
+            ? `${fontReadiness.fonts.length}${missingFonts ? ` · ${missingFonts} missing` : ''}`
+            : '…';
+
+  const jobs = recentJobs ?? [];
+  const lastFinished = jobs.find((job) => job.status === 'finished');
+
+  const ladder = ladderFor(run?.state);
+  const ladderButton = (action: ForgeLadderAction | undefined) => {
+    const step = ladder.find((entry) => entry.action === action);
+    if (!step) return undefined;
+    const { Icon } = step;
+    return (
+      <Button
+        type="button"
+        size="xs"
+        variant="outline"
+        className="gap-1"
+        title={step.hint}
+        disabled={busy !== null}
+        onClick={() => void onAdvance(step.action)}
+      >
+        {busy === step.action ? (
+          <Loader2 className="size-3 animate-spin" aria-hidden />
+        ) : (
+          <Icon className="size-3" aria-hidden />
+        )}
+        {step.label}
+      </Button>
+    );
+  };
+
+  const fontsDetail =
+    (fontReadiness?.parseState === 'parsed' && fontReadiness.fonts.length > 0) || fontResult ? (
+      <div className="flex flex-col gap-2">
+        {fontReadiness?.fonts.length ? (
+          <ul className="flex flex-wrap gap-1" aria-label="Typefaces">
+            {fontReadiness.fonts.map((font) => (
+              <li key={font.family}>
+                <Pill variant={font.held ? 'success' : 'warning'}>
+                  {font.family} · {font.held ? 'uploaded' : 'not uploaded'}
+                </Pill>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="text-muted-foreground">
+          Uploaded means the brand holds the file privately. Installed means Forge linked it to this
+          promoted template after confirmation.
+        </p>
+        {templateKey && heldFamilies.length > 0 ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            className="w-fit"
+            disabled={fontBusy}
+            onClick={() => void reviewFontInstall()}
+          >
+            {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+            Review font install
           </Button>
-          <div className="min-w-0">
-            <h2 className="min-w-0 text-lg font-semibold">
-              <InlineRename value={name} onRename={onRename} />
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              {/*
-                A card never says "published" off a forge run alone: the fleet can finish a job
-                against an unpromoted package and hand back a blank frame, which reads as success.
-                Only a template key means renderable.
-              */}
-              {templateKey ? 'Ready to render' : 'Not renderable yet'}
-              {run && !run.done && !pushed ? ' · live updates unavailable' : null}
-            </p>
+        ) : null}
+        {fontResult ? (
+          <div role="status" className="flex flex-col gap-1">
+            {fontResult.linked.length > 0 ? (
+              <p className="text-success">
+                Installed: {fontResult.linked.map((font) => font.postScriptName).join(', ')}
+              </p>
+            ) : null}
+            {fontResult.alreadyLinked.length > 0 ? (
+              <p className="text-muted-foreground">
+                Already installed:{' '}
+                {fontResult.alreadyLinked.map((font) => font.postScriptName).join(', ')}
+              </p>
+            ) : null}
+            {fontResult.refused.map((font) => (
+              <p key={font.filename} className="text-destructive">
+                Refused {font.filename}: {font.reason}
+              </p>
+            ))}
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {ladderFor(run?.state).map(({ action, label, Icon, hint }) => (
+        ) : null}
+      </div>
+    ) : undefined;
+
+  const buildDetail = (
+    <div className="flex flex-col gap-3">
+      {!run || run.state === 'failed' ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={templateName}
+              onChange={(event) => setTemplateName(event.target.value)}
+              placeholder="Name this build"
+              aria-label="Template name"
+              aria-invalid={nameProblem !== null && templateName.length > 0}
+              inputSize="sm"
+              className="w-64"
+              disabled={busy !== null}
+            />
+            {/* Only when there is a choice: one workspace is not a decision. */}
+            {workspaces.length > 1 ? (
+              <select
+                value={workspaceId}
+                onChange={(event) => setWorkspaceId(event.target.value)}
+                aria-label="Render workspace"
+                disabled={busy !== null}
+                className="h-7 rounded-md border border-input bg-background px-2 text-xs"
+              >
+                {/* The server lists the default first and the rest in a stable order. */}
+                {workspaces.map((workspace, index) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {`Workspace ${index + 1}${workspace.isDefault ? ' (default)' : ''}`}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <Button
-              key={action}
               type="button"
               size="sm"
-              variant="outline"
-              className="gap-2"
-              title={hint}
-              disabled={busy !== null}
-              onClick={() => onAdvance(action)}
+              className="gap-1.5"
+              disabled={busy !== null || source.parseState !== 'parsed' || nameProblem !== null}
+              onClick={onSubmit}
             >
-              {busy === action ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden />
+              {busy === 'submit' ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
               ) : (
-                <Icon className="size-4" aria-hidden />
+                <Send className="size-3.5" aria-hidden />
               )}
-              {label}
+              Build the template
             </Button>
-          ))}
+          </div>
+          <p
+            className={
+              templateName.length > 0 && nameProblem ? 'text-destructive' : 'text-muted-foreground'
+            }
+          >
+            {templateName.length > 0 && nameProblem
+              ? nameProblem
+              : 'The build name is fixed once built. The name everyone sees can be changed anytime.'}
+          </p>
+        </div>
+      ) : null}
+      {run ? <ForgeRunProgress run={run} /> : null}
+      {run?.needs?.length ? (
+        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
+          {/*
+            Two different stops wear `needs_input`, and they ask for opposite things. An `asset`
+            need is where EVERY from-scratch build lands — the table is built, the graph is built,
+            and nobody has chosen the pictures yet. It is answered in the Variables tab.
+          */}
+          <ul className="flex flex-col gap-0.5 text-muted-foreground">
+            {run.needs.map((need) => (
+              <li key={need.id}>
+                {need.slot?.label ?? need.id}
+                {need.reason ? ` — ${need.reason}` : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const detailOf: Record<string, CheckRow['detail']> = {
+    fonts: fontsDetail,
+    build: buildDetail,
+  };
+  const checks: CheckRow[] = templateChecks({
+    parseState,
+    parseError: source.parseError ?? null,
+    variableCount,
+    formatCount: ratios.length,
+    fontReadiness,
+    fontCheckFailed,
+    run,
+    forgeState: source.forgeState,
+    templateKey,
+  }).map((check) => ({
+    name: check.name,
+    what: check.what,
+    state: check.state,
+    result: check.result,
+    ticks: check.ticks,
+    chips: check.chips?.map((chip) => (
+      <Pill key={chip.label} variant={chip.tone}>
+        {chip.label}
+      </Pill>
+    )),
+    detail: detailOf[check.id],
+    action: ladderButton(check.action),
+  }));
+
+  return (
+    <div className="flex flex-col divide-y divide-border">
+      <header className="flex flex-wrap items-center justify-between gap-2 px-[var(--card-pad)] py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={onBack}>
+            <ArrowLeft className="size-3.5" aria-hidden />
+            Templates
+          </Button>
+          <h2 className="min-w-0 text-base font-semibold">
+            <InlineRename value={name} onRename={onRename} />
+          </h2>
+          <p className="truncate text-xs text-muted-foreground">
+            {/*
+              A card never says "published" off a forge run alone: the fleet can finish a job
+              against an unpromoted package and hand back a blank frame, which reads as success.
+              Only a template key means renderable.
+            */}
+            {templateKey ? 'Ready to render' : 'Not renderable yet'}
+            {run && !run.done && !pushed ? ' · live updates unavailable' : null}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <AiVariationsDialog
+            brandId={brandId}
+            templateKey={templateKey}
+            onOpenRender={onOpenRender}
+          />
           {templateKey ? (
             <Button
               type="button"
               size="sm"
-              className="gap-2"
+              className="gap-1.5"
               onClick={() => onOpenRender?.({ templateKey })}
             >
-              <Play className="size-4" aria-hidden />
+              <Play className="size-3.5" aria-hidden />
               Render with this
             </Button>
           ) : null}
         </div>
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(16rem,2fr)]">
-        <div className="min-w-0 space-y-2">
+      {/* The picture on the left; the facts and then the checks on the right, the way a deployment
+          reads. Stacked below lg. */}
+      <div className="grid divide-y divide-border lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:divide-x lg:divide-y-0">
+        {/* The preview slot. Wave 2 replaces this block with FormatPreview; kept working as-is. */}
+        <div className="flex min-w-0 flex-col gap-2 p-[var(--card-pad)]">
           <TemplateMorph id={assetId}>
             <div className="aspect-video overflow-hidden rounded-xl border">
               <TemplateWireframe
@@ -469,222 +695,141 @@ export function TemplateDetail({
           ) : null}
         </div>
 
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] content-start gap-x-6 gap-y-3 rounded-xl border p-4 text-sm">
-          <dt className="text-muted-foreground">Status</dt>
-          <dd>
-            <TemplateStatusPill status={status} />
-          </dd>
-          <dt className="text-muted-foreground">Updated</dt>
-          <dd>{formatDate(source.updatedAt ?? source.createdAt)}</dd>
-          <dt className="text-muted-foreground">Formats</dt>
-          <dd className="flex flex-wrap gap-1">
-            {ratios.length
-              ? ratios.map((ratio) => (
-                  <Pill key={ratio} variant="muted">
-                    {ratio}
-                  </Pill>
-                ))
-              : '—'}
-          </dd>
-          <dt className="text-muted-foreground">Variables</dt>
-          <dd>{variables.length || source.slotCount || 0}</dd>
-          <dt className="text-muted-foreground">Fonts</dt>
-          <dd className="min-w-0 break-words">{fontSummary}</dd>
-        </dl>
+        <div className="flex min-w-0 flex-col divide-y divide-border">
+          <FactList
+            className="p-[var(--card-pad)]"
+            facts={[
+              { icon: CircleDot, label: 'Status', value: <TemplateStatusPill status={status} /> },
+              {
+                icon: RectangleHorizontal,
+                label: 'Formats',
+                value: ratios.length ? (
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {ratios.map((ratio) => (
+                      <span
+                        key={ratio}
+                        className="inline-flex items-center gap-1 font-mono tabular-nums"
+                      >
+                        <RatioGlyph ratio={ratio} className="text-muted-foreground" />
+                        {ratio}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  '—'
+                ),
+              },
+              { icon: Boxes, label: 'Workspace', value: workspaceFact },
+              {
+                icon: Variable,
+                label: 'Variables',
+                numeric: true,
+                value: unassigned ? `${variableCount} · ${unassigned} unassigned` : variableCount,
+              },
+              { icon: Type, label: 'Fonts', numeric: true, value: fontsFact, ruleBefore: true },
+              {
+                icon: History,
+                label: 'Last render',
+                value: jobs.length ? (
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono tabular-nums">
+                      {lastFinished
+                        ? formatRelativeTime(lastFinished.finishedAt ?? lastFinished.updatedAt)
+                        : 'None finished'}
+                    </span>
+                    <TickBar ticks={jobs.map((job) => JOB_TICK[job.status]).reverse()} />
+                  </span>
+                ) : (
+                  'Never'
+                ),
+              },
+              { icon: Layers, label: 'Sets', numeric: true, value: setCount ?? '—' },
+              {
+                icon: CalendarClock,
+                label: 'Updated',
+                value: formatDate(source.updatedAt ?? source.createdAt),
+              },
+            ]}
+          />
+
+          <Panel title="Checks" bodyClassName="p-0">
+            <CheckTable rows={checks} />
+          </Panel>
+        </div>
       </div>
 
-      {fontReadiness?.parseState === 'parsed' && fontReadiness.fonts.length > 0 ? (
-        <Section title="Typefaces">
-          <div className="flex flex-wrap gap-1">
-            {fontReadiness.fonts.map((font) => (
-              <Pill key={font.family} variant={font.held ? 'success' : 'warning'}>
-                {font.family} · {font.held ? 'uploaded' : 'not uploaded'}
-              </Pill>
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Uploaded means the brand holds the file privately. Installed means Forge linked it to
-            this promoted template after confirmation.
-          </p>
-          {templateKey && heldFamilies.length > 0 ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="mt-3"
-              disabled={fontBusy}
-              onClick={() => void reviewFontInstall()}
-            >
-              {fontBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              Review font install
-            </Button>
+      {/* RENDERS — wave 2 mounts <TemplateRenders brandId={brandId} templateKey={templateKey} /> here. */}
+
+      {/* Every panel stays mounted while hidden: switching tabs must never drop an unsaved edit. */}
+      <Tabs defaultValue="variables" className="gap-0">
+        <TabsList
+          variant="line"
+          className="h-9 w-full justify-start gap-3 rounded-none border-b border-border px-[var(--card-pad)]"
+        >
+          <TabsTrigger value="variables" className="flex-none px-0 text-xs">
+            Variables
+          </TabsTrigger>
+          {templateKey ? (
+            <TabsTrigger value="output" className="flex-none px-0 text-xs">
+              Output
+            </TabsTrigger>
           ) : null}
-          {fontResult ? (
-            <div role="status" className="mt-3 space-y-1 text-xs">
-              {fontResult.linked.length > 0 ? (
-                <p className="text-emerald-700 dark:text-emerald-300">
-                  Installed: {fontResult.linked.map((font) => font.postScriptName).join(', ')}
-                </p>
-              ) : null}
-              {fontResult.alreadyLinked.length > 0 ? (
-                <p className="text-muted-foreground">
-                  Already installed:{' '}
-                  {fontResult.alreadyLinked.map((font) => font.postScriptName).join(', ')}
-                </p>
-              ) : null}
-              {fontResult.refused.map((font) => (
-                <p key={font.filename} className="text-destructive">
-                  Refused {font.filename}: {font.reason}
-                </p>
-              ))}
-            </div>
-          ) : null}
-        </Section>
-      ) : fontCheckFailed && source.parseState === 'parsed' ? (
-        <p className="text-xs text-muted-foreground">Could not check the brand’s uploaded fonts.</p>
-      ) : null}
-
-      {!run || run.state === 'failed' ? (
-        <Section title="Build">
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={templateName}
-              onChange={(event) => setTemplateName(event.target.value)}
-              placeholder="Name this build"
-              aria-label="Template name"
-              aria-invalid={nameProblem !== null && templateName.length > 0}
-              className="h-8 w-64"
-              disabled={busy !== null}
-            />
-            {/* Only when there is a choice: one workspace is not a decision. */}
-            {workspaces.length > 1 ? (
-              <select
-                value={workspaceId}
-                onChange={(event) => setWorkspaceId(event.target.value)}
-                aria-label="Render workspace"
-                disabled={busy !== null}
-                className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-              >
-                {/* Numbered, not named: the only names a binding has are its app and client
-                    keys. The server lists the default first and the rest in a stable order. */}
-                {workspaces.map((workspace, index) => (
-                  <option key={workspace.id} value={workspace.id}>
-                    {`Workspace ${index + 1}${workspace.isDefault ? ' (default)' : ''}`}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            <Button
-              type="button"
-              size="sm"
-              className="gap-2"
-              disabled={busy !== null || source.parseState !== 'parsed' || nameProblem !== null}
-              onClick={onSubmit}
-            >
-              {busy === 'submit' ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-              ) : (
-                <Send className="size-4" aria-hidden />
-              )}
-              Build the template
-            </Button>
-          </div>
-          <p
-            className={cn(
-              'mt-2 text-xs',
-              templateName.length > 0 && nameProblem ? 'text-destructive' : 'text-muted-foreground',
-            )}
-          >
-            {templateName.length > 0 && nameProblem
-              ? nameProblem
-              : 'The build name is fixed once built. The name everyone sees can be changed anytime.'}
-          </p>
-        </Section>
-      ) : null}
-
-      {run ? (
-        <Section title="Run progress">
-          <ForgeRunProgress run={run} />
-          {run.needs?.length ? (
-            <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
-              {/*
-                Two different stops wear `needs_input`, and they ask for opposite things. An
-                `asset` need is where EVERY from-scratch build lands — the table is built, the
-                graph is built, and nobody has chosen the pictures yet. Calling that "nothing
-                could bind" reads as a broken AEP when the answer is one Library asset in the
-                variable editor below.
-              */}
-              <p className="font-medium">
-                {run.needs.every((need) => need.kind === 'asset')
-                  ? `Pick a picture for ${run.needs.length} media variable${run.needs.length === 1 ? '' : 's'} below, then build again`
-                  : `${run.needs.length} slot${run.needs.length === 1 ? '' : 's'} nothing could bind`}
-              </p>
-              <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                {run.needs.map((need) => (
-                  <li key={need.id}>
-                    {need.slot?.label ?? need.id}
-                    {need.reason ? ` — ${need.reason}` : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </Section>
-      ) : null}
-
-      <Section title="Variables">
-        <VariableEditor
-          brandId={brandId}
-          variables={variables}
-          savedDefaults={savedDefaults}
-          parseState={parseState}
-          saving={saving}
-          onSave={onSave}
-        />
-      </Section>
-
-      {/* Renders nothing until the template's contract carries output settings. */}
-      {templateKey ? <OutputSettingsPanel brandId={brandId} templateKey={templateKey} /> : null}
-
-      <SourceRebindPanel
-        brandId={brandId}
-        assetId={assetId}
-        expectedVersionId={source.versionId}
-        onConfirmed={async () => {
-          await Promise.all([onChanged(), loadVariables()]);
-        }}
-      />
-
-      <LineagePanel brandId={brandId} assetId={assetId} />
-
-      <Section title="Draft variations with AI">
-        <p className="mb-3 text-xs text-muted-foreground">
-          Describe the versions you want. They are saved as a new render set and open in Render.
-        </p>
-        <AiVariationsDialog
-          brandId={brandId}
-          templateKey={templateKey}
-          onOpenRender={onOpenRender}
-        />
-      </Section>
-
-      <details className="rounded-lg border px-4 py-3 text-xs">
-        <summary className="cursor-pointer text-sm font-medium">Details</summary>
-        <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5">
-          <dt className="text-muted-foreground">Template key</dt>
-          <dd className="break-all font-mono">{templateKey ?? '—'}</dd>
-          <dt className="text-muted-foreground">Workspace</dt>
-          <dd className="break-all font-mono">
-            {run?.application ?? (chosenWorkspace ? renderWorkspaceLabel(chosenWorkspace) : '—')}
-          </dd>
-          <dt className="text-muted-foreground">Root table</dt>
-          <dd className="break-all font-mono">{run?.root_table ?? '—'}</dd>
-          <dt className="text-muted-foreground">Asset id</dt>
-          <dd className="break-all font-mono">{assetId}</dd>
-          <dt className="text-muted-foreground">Source file</dt>
-          <dd className="break-all font-mono">{source.parse?.filename ?? '—'}</dd>
-        </dl>
-      </details>
+          <TabsTrigger value="source" className="flex-none px-0 text-xs">
+            Source revision
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex-none px-0 text-xs">
+            History
+          </TabsTrigger>
+          <TabsTrigger value="details" className="flex-none px-0 text-xs">
+            Details
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="variables" keepMounted>
+          <VariableEditor
+            brandId={brandId}
+            variables={variables}
+            savedDefaults={savedDefaults}
+            parseState={parseState}
+            saving={saving}
+            onSave={onSave}
+          />
+        </TabsContent>
+        {templateKey ? (
+          <TabsContent value="output" keepMounted className="p-[var(--card-pad)]">
+            {/* Renders nothing until the template's contract carries output settings. */}
+            <OutputSettingsPanel brandId={brandId} templateKey={templateKey} />
+          </TabsContent>
+        ) : null}
+        <TabsContent value="source" keepMounted className="p-[var(--card-pad)]">
+          <SourceRebindPanel
+            brandId={brandId}
+            assetId={assetId}
+            expectedVersionId={source.versionId}
+            onConfirmed={async () => {
+              await Promise.all([onChanged(), loadVariables()]);
+            }}
+          />
+        </TabsContent>
+        <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
+          <LineagePanel brandId={brandId} assetId={assetId} />
+        </TabsContent>
+        <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">
+            <dt className="text-muted-foreground">Template key</dt>
+            <dd className="break-all font-mono">{templateKey ?? '—'}</dd>
+            <dt className="text-muted-foreground">Workspace</dt>
+            <dd className="break-all font-mono">
+              {run?.application ?? (chosenWorkspace ? renderWorkspaceLabel(chosenWorkspace) : '—')}
+            </dd>
+            <dt className="text-muted-foreground">Root table</dt>
+            <dd className="break-all font-mono">{run?.root_table ?? '—'}</dd>
+            <dt className="text-muted-foreground">Asset id</dt>
+            <dd className="break-all font-mono">{assetId}</dd>
+            <dt className="text-muted-foreground">Source file</dt>
+            <dd className="break-all font-mono">{source.parse?.filename ?? '—'}</dd>
+          </dl>
+        </TabsContent>
+      </Tabs>
 
       <AlertDialog open={fontPlan !== null} onOpenChange={(open) => !open && setFontPlan(null)}>
         <AlertDialogContent>
@@ -695,7 +840,7 @@ export function TemplateDetail({
               This changes the typefaces used by future renders.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <ul className="space-y-1 text-xs">
+          <ul className="flex flex-col gap-1 text-xs">
             {fontPlan?.files.map((file) => (
               <li key={file.filename} className="break-all">
                 {file.filename} · {file.bytes.toLocaleString()} bytes

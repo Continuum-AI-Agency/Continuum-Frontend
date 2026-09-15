@@ -50,7 +50,8 @@ const request = mock(async () => ({ before: {}, after: {}, fired: true }));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: { getContract, listEnvironments, listTemplates },
 }));
-mock.module('@/lib/api/http', () => ({ http: { request } }));
+// `request` too: other modules import the bare function, and Bun shares this mock across a multi-file run.
+mock.module('@/lib/api/http', () => ({ http: { request }, request }));
 
 const { OutputSettingsPanel } = await import('./OutputSettingsPanel');
 

@@ -686,30 +686,28 @@ test.describe('Forge Studio — fixtures', () => {
     await page
       .getByRole('button', { name: `Open ${FORGE_FIXTURE.promo.title}`, exact: true })
       .click();
-    const editor = page
-      .locator('section')
-      .filter({ has: page.getByRole('heading', { name: 'Variables', exact: true }) });
-    await expect(editor.getByRole('list', { name: 'Variables' })).toBeVisible();
-    const inspector = editor.getByRole('group', { name: /settings$/ });
-    await expect(inspector).toBeVisible();
-    // The longest thing in it: the After Effects binding and its comp chips.
-    await inspector.getByText('Where it lives in After Effects').click();
-    const measured = await editor.evaluate((section) => {
-      const inspectorElement = section.querySelector('fieldset');
-      const main = section.closest('main')?.getBoundingClientRect();
+    const editor = page.getByRole('list', { name: 'Variables' });
+    await expect(editor).toBeVisible();
+    // The first row opens by default, and the longest thing in it is inline: the After Effects
+    // binding path and its comp names, in mono.
+    const openRow = editor.getByRole('listitem').first();
+    await expect(openRow.getByText('After Effects', { exact: true })).toBeVisible();
+    const measured = await editor.evaluate((list) => {
+      const row = list.querySelector('li');
+      const main = list.closest('main')?.getBoundingClientRect();
       return {
-        scrollWidth: section.scrollWidth,
-        clientWidth: section.clientWidth,
-        inspectorScrollWidth: inspectorElement?.scrollWidth ?? 0,
-        inspectorClientWidth: inspectorElement?.clientWidth ?? 0,
-        sectionRight: section.getBoundingClientRect().right,
+        scrollWidth: list.scrollWidth,
+        clientWidth: list.clientWidth,
+        rowScrollWidth: row?.scrollWidth ?? 0,
+        rowClientWidth: row?.clientWidth ?? 0,
+        listRight: list.getBoundingClientRect().right,
         mainRight: main?.right ?? Number.POSITIVE_INFINITY,
       };
     });
     console.log(`[forge-studio-bench] D5 ${JSON.stringify(measured)}`);
     expect(measured.scrollWidth).toBeLessThanOrEqual(measured.clientWidth);
-    expect(measured.inspectorScrollWidth).toBeLessThanOrEqual(measured.inspectorClientWidth);
-    expect(measured.sectionRight).toBeLessThanOrEqual(measured.mainRight + 1);
+    expect(measured.rowScrollWidth).toBeLessThanOrEqual(measured.rowClientWidth);
+    expect(measured.listRight).toBeLessThanOrEqual(measured.mainRight + 1);
     await shoot(page, 'd5-variables-1280');
   });
 

@@ -120,37 +120,27 @@ export function LineagePanel({ brandId, assetId }: { brandId: string; assetId: s
 
   if (error) {
     return (
-      <div className="rounded-lg border p-4 text-xs text-muted-foreground">
-        Could not read the version tree. {error}
-      </div>
+      <p className="text-xs text-muted-foreground">Could not read the version tree. {error}</p>
     );
   }
   if (!lineage) {
-    return (
-      <div className="rounded-lg border p-4 text-xs text-muted-foreground">
-        Reading the version tree…
-      </div>
-    );
+    return <p className="text-xs text-muted-foreground">Reading the version tree…</p>;
   }
   if (!lineage.connected) {
     return (
-      <div className="rounded-lg border p-4 text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         Lineage is not connected — Template Forge is not configured for this environment.
-      </div>
+      </p>
     );
   }
   if (!lineage.known) {
     return (
-      <div className="rounded-lg border p-4 text-xs text-muted-foreground">
-        This upload is not in the version tree yet.
-      </div>
+      <p className="text-xs text-muted-foreground">This upload is not in the version tree yet.</p>
     );
   }
   if (!lineage.roots.length) {
     return (
-      <div className="rounded-lg border p-4 text-xs text-muted-foreground">
-        The version tree is empty for this template.
-      </div>
+      <p className="text-xs text-muted-foreground">The version tree is empty for this template.</p>
     );
   }
 
@@ -159,17 +149,14 @@ export function LineagePanel({ brandId, assetId }: { brandId: string; assetId: s
   );
 
   return (
-    <div className="rounded-lg border p-4">
-      <h3 className="mb-3 text-sm font-medium" title={`master ${shortId(lineage.currentMaster)}`}>
-        History
-      </h3>
+    <div className="flex flex-col gap-3" title={`master ${shortId(lineage.currentMaster)}`}>
       {lineage.pinnedToOlderMaster ? (
-        <p className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+        <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
           This implementation is pinned to an older master. Follow (replay) is a CLI action.
         </p>
       ) : null}
       {presentReasons.length > 1 ? (
-        <div className="mb-3 flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1">
           <button
             type="button"
             className={cn(
@@ -195,7 +182,7 @@ export function LineagePanel({ brandId, assetId }: { brandId: string; assetId: s
           ))}
         </div>
       ) : null}
-      <div className="space-y-0.5">
+      <div className="flex flex-col gap-0.5">
         {lineage.roots.map((root) => (
           <LineageNode
             key={root.sha}
@@ -208,7 +195,7 @@ export function LineagePanel({ brandId, assetId }: { brandId: string; assetId: s
         ))}
       </div>
       {lineage.worktrees.length ? (
-        <ul className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
+        <ul className="flex flex-col gap-1 border-t border-border pt-3 text-xs text-muted-foreground">
           {lineage.worktrees.map((worktree) => (
             <li
               key={worktree.id}
@@ -222,7 +209,7 @@ export function LineagePanel({ brandId, assetId }: { brandId: string; assetId: s
         </ul>
       ) : null}
       {selected ? (
-        <div className="mt-3 space-y-1 border-t pt-3 text-xs">
+        <div className="flex flex-col gap-1 border-t border-border pt-3 text-xs">
           <p title={shortId(selected.sha)}>
             <span className="text-muted-foreground">Change</span>
             {selected.reason ? ` · ${REASON_LABEL[selected.reason] ?? selected.reason}` : ''}

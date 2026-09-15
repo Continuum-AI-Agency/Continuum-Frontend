@@ -11,7 +11,11 @@ const preview = mock(async () => ({
 }));
 const confirm = mock(async () => preview());
 
+// The real module's other exports ride along: Bun keeps one module registry for a multi-file run,
+// and a mock carrying only this panel's names fails every other file that imports a different one.
+const templateSources = { ...(await import('@/lib/library/templateSources')) };
 mock.module('@/lib/library/templateSources', () => ({
+  ...templateSources,
   previewTemplateRebind: preview,
   confirmTemplateRebind: confirm,
 }));

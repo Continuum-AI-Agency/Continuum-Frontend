@@ -148,13 +148,12 @@ function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: 
   };
 
   return (
-    <section className="rounded-lg border p-4">
-      <h3 className="text-sm font-medium">Source revision</h3>
-      <p className="mt-1 text-xs text-muted-foreground">
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">
         Compare a Library version before changing what this template parses. Building and publishing
         remain separate.
       </p>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Select
           disabled={busy}
           value={versionId}
@@ -200,7 +199,7 @@ function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: 
         </Label>
       </div>
       {listError ? (
-        <p role="alert" className="mt-2 text-xs text-destructive">
+        <p role="alert" className="text-xs text-destructive">
           {listError}{' '}
           <Button variant="link" onClick={() => setReload((value) => value + 1)}>
             Retry
@@ -208,8 +207,8 @@ function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: 
         </p>
       ) : null}
       {preview ? (
-        <div className="mt-4 space-y-3">
-          <div className="overflow-hidden rounded-md border">
+        <div className="flex flex-col gap-3">
+          <div className="overflow-hidden border-y border-border">
             <table className="w-full text-xs">
               <thead className="bg-muted/50">
                 <tr>
@@ -253,6 +252,6 @@ function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: 
           </Button>
         </div>
       ) : null}
-    </section>
+    </div>
   );
 }

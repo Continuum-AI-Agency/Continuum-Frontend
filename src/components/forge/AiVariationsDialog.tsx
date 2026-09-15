@@ -108,17 +108,18 @@ export function AiVariationsDialog({
       <Button
         type="button"
         variant="outline"
-        className="gap-2"
+        size="sm"
+        className="gap-1.5"
         disabled={!templateKey}
         onClick={() => setOpen(true)}
       >
-        <Sparkles className="size-4" aria-hidden />
+        <Sparkles className="size-3.5" aria-hidden />
         Draft variations with AI
       </Button>
       {templateKey ? null : (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           Available once this template is published.
-        </p>
+        </span>
       )}
       <Dialog open={open} onOpenChange={(next) => (busy ? undefined : setOpen(next))}>
         <DialogContent className="sm:max-w-lg">

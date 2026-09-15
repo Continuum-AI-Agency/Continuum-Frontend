@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, CircleDashed, Loader2, PauseCircle } from 
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Progress } from '@/components/ui/progress';
 import type { TemplateRunRow } from '@/lib/library/templateSources';
+import { labelForState } from './templateChecks';
 
 /**
  * The three flags, shown as three facts.
@@ -33,25 +34,6 @@ function verdict(run: TemplateRunRow): {
   return { tone: 'info', label: labelForState(run.state), Icon: Loader2, spin: true };
 }
 
-const STATE_LABELS: Record<string, string> = {
-  created: 'Queued',
-  analyzing: 'Reading the project',
-  mapping: 'Matching slots to fields',
-  building: 'Building the spec',
-  validating: 'Checking it',
-  draft_ready: 'Draft ready',
-  needs_input: 'Needs your answer',
-  smoking: 'Test render',
-  review_ready: 'Ready to review',
-  promoting: 'Publishing',
-  published: 'Published',
-  failed: 'Failed',
-};
-
-function labelForState(state: string): string {
-  return STATE_LABELS[state] ?? state;
-}
-
 const PHASE_LABELS: Record<string, string> = {
   analyze: 'Read the file',
   derive: 'Work out the columns',
@@ -67,7 +49,7 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
   const pct = run.progress?.pct ?? null;
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <Pill>
           <PillIndicator variant={tone} pulse={spin} />
@@ -143,7 +125,7 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
           <summary className="cursor-pointer text-muted-foreground">
             {run.findings.length} thing{run.findings.length === 1 ? '' : 's'} the run could not do
           </summary>
-          <ul className="mt-2 space-y-1">
+          <ul className="mt-2 flex flex-col gap-1">
             {run.findings.map((finding) => (
               <li key={finding.code} className="text-muted-foreground" title={finding.code}>
                 <span className="text-foreground">

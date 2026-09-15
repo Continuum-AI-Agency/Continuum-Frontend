@@ -1,8 +1,8 @@
 /**
- * A template's detail panel: the default view names things and hides identifiers — the render
- * table, the workspace's app name, the asset uuid and the build's template key live only inside the
- * closed "Details" — "Render with this" opens Render on the template, and saved variable defaults
- * come back from the variables response's edits.
+ * A template's detail sheet: the default view names things and hides identifiers — the render
+ * table, the workspace's app name, the asset uuid and the build's template key live only in the
+ * Details tab — "Render with this" opens Render on the template, saved variable defaults come back
+ * from the variables response's edits, and the checks say what they found where the facts are.
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
@@ -79,6 +79,10 @@ let fontReadiness = {
   missing: 0,
   parseState: 'parsed' as const,
 };
+let jobs: Array<Record<string, unknown>> = [];
+const advanceTemplateForgeRun = mock(
+  async (_brandId: string, _assetId: string, _action: string) => undefined,
+);
 const pushTemplateFonts = mock(async (_brandId: string, _assetId: string, fire: boolean) =>
   fire
     ? {
@@ -138,7 +142,22 @@ mock.module('@/lib/library/templateSources', () => ({
   pushTemplateFonts,
   saveTemplateVariables: async () => undefined,
   sendTemplateToForge: async () => SOURCE,
-  advanceTemplateForgeRun: async () => undefined,
+  advanceTemplateForgeRun,
+  // The History and Source revision panels render for real, from these. Mocking the panels
+  // themselves would replace them for LineagePanel.test too: a multi-file Bun run shares mocks.
+  fetchTemplateLineage: async () => ({
+    connected: false,
+    known: false,
+    master: null,
+    currentMaster: null,
+    pinnedToOlderMaster: false,
+    roots: [],
+    log: [],
+    worktrees: [],
+  }),
+  previewTemplateRebind: async () => null,
+  confirmTemplateRebind: async () => null,
+  fetchTemplateRun: async () => null,
 }));
 mock.module('@/components/forge/useForgeRun', () => ({
   useForgeRun: () => ({
@@ -148,17 +167,22 @@ mock.module('@/components/forge/useForgeRun', () => ({
     refresh: async () => undefined,
   }),
 }));
-mock.module('@/components/forge/LineagePanel', () => ({ LineagePanel: () => null }));
-mock.module('@/components/forge/SourceRebindPanel', () => ({ SourceRebindPanel: () => null }));
+mock.module('@/lib/library/versions', () => ({
+  listAssetVersions: async () => [],
+  uploadNewAssetVersion: async () => ({ versionId: null }),
+}));
 mock.module('@/components/forge/OutputSettingsPanel', () => ({
   OutputSettingsPanel: () => <h3>Output settings</h3>,
 }));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { listJobs: async () => ({ items: [], nextCursor: null }) },
+  apiRendersApi: {
+    listJobs: async () => ({ items: jobs, nextCursor: null }),
+    listRenderSets: async () => ({ items: [{ id: 'set-1' }, { id: 'set-2' }], nextCursor: null }),
+  },
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TemplateDetail } from './TemplateDetail';
 
 afterEach(() => {
@@ -170,18 +194,28 @@ afterEach(() => {
     missing: 0,
     parseState: 'parsed',
   };
+  jobs = [];
   pushTemplateFonts.mockClear();
+  advanceTemplateForgeRun.mockClear();
 });
 
-/** What a person sees: everything except the body of a closed disclosure. */
+/** What a person sees: everything except a hidden (inactive, kept-mounted) tab panel. */
 function visibleText(): string {
   const clone = document.body.cloneNode(true) as HTMLElement;
-  for (const details of clone.querySelectorAll('details')) {
-    if (details.hasAttribute('open')) continue;
-    for (const child of [...details.children]) if (child.tagName !== 'SUMMARY') child.remove();
-  }
+  for (const hidden of clone.querySelectorAll('[hidden]')) hidden.remove();
   return clone.textContent ?? '';
 }
+
+/** A fact's value, read off the fact list by its label. */
+const fact = (label: string) =>
+  [...document.querySelectorAll('dt')].find((dt) => dt.textContent === label)?.nextElementSibling
+    ?.textContent;
+
+/** One CHECKS row's text, found by its mono name. */
+const check = (name: string) =>
+  within(screen.getByRole('list', { name: 'Checks' }))
+    .getAllByRole('listitem')
+    .find((row) => row.querySelector('.font-mono')?.textContent === name)!;
 
 function renderDetail(
   onOpenRender = mock((_intent: unknown) => undefined),
@@ -208,7 +242,7 @@ function renderDetail(
 }
 
 describe('TemplateDetail', () => {
-  test('identifiers stay inside the closed Details; the default view names things', async () => {
+  test('identifiers stay inside the Details tab; the default view names things', async () => {
     renderDetail();
     // The saved default comes from `edits` — it is on screen once the variables have loaded.
     expect(((await screen.findByLabelText('Headline default')) as HTMLInputElement).value).toBe(
@@ -220,10 +254,11 @@ describe('TemplateDetail', () => {
     expect(text).toContain('Ready to render');
     expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/i);
     expect(text).not.toMatch(/Continuum_app|tpl_|root_table|template \d+|\b133\b/i);
-    expect(screen.getByRole('heading', { name: 'Output settings' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Output' }));
+    expect(await screen.findByRole('heading', { name: 'Output settings' })).toBeTruthy();
 
-    const details = screen.getByText('Details').closest('details')!;
-    details.setAttribute('open', '');
+    fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
+    await waitFor(() => expect(visibleText()).toContain(ASSET));
     const opened = visibleText();
     expect(opened).toContain('tpl_starcraft_b17d81_starcraft_promo_root');
     expect(opened).toContain('Continuum_app');
@@ -234,6 +269,8 @@ describe('TemplateDetail', () => {
     workspaces = [CONTINUUM_WORKSPACE, PARSED_WORKSPACE];
     run = null;
     renderDetail();
+    // The build form lives in the BUILD check's detail.
+    fireEvent.click(await screen.findByRole('button', { name: 'Build details' }));
     const picker = (await screen.findByLabelText('Render workspace')) as HTMLSelectElement;
     expect([...picker.options].map((option) => option.textContent)).toEqual([
       'Workspace 1 (default)',
@@ -243,8 +280,8 @@ describe('TemplateDetail', () => {
 
     // The app name is still findable, inside Details, for whichever workspace is chosen.
     fireEvent.change(picker, { target: { value: PARSED_WORKSPACE.id } });
-    screen.getByText('Details').closest('details')!.setAttribute('open', '');
-    expect(visibleText()).toContain('Parsed_app');
+    fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
+    await waitFor(() => expect(visibleText()).toContain('Parsed_app'));
   });
 
   test('Render with this opens Render on the template', async () => {
@@ -256,15 +293,16 @@ describe('TemplateDetail', () => {
   test('reports unread font requirements truthfully instead of claiming none', async () => {
     fontReadiness = { fonts: [], missing: 0, parseState: 'pending' };
     renderDetail(undefined, { ...SOURCE, parseState: 'pending', parse: null, fonts: [] });
-    expect(await screen.findByText(/fonts are not known/i)).toBeTruthy();
-    expect(screen.queryByText('None detected')).toBeNull();
+    await waitFor(() => expect(fact('Fonts')).toBe('Not known yet'));
+    expect(check('Fonts').textContent).toContain('Waits for the file to be read');
+    expect(visibleText()).not.toMatch(/All 0 uploaded|Uses no typefaces/);
   });
 
   test('refreshes pending font state from readiness without mixing in stale source names', async () => {
     fontReadiness = { fonts: [], missing: 0, parseState: 'pending' };
     const pending = { ...SOURCE, parseState: 'pending' as const, parse: null, fonts: [] };
     const { rerenderSource } = renderDetail(undefined, pending);
-    expect(await screen.findByText(/fonts are not known/i)).toBeTruthy();
+    await waitFor(() => expect(fact('Fonts')).toBe('Not known yet'));
 
     fontReadiness = {
       fonts: [{ family: 'Fresh Parsed Face', layers: 2, held: false }],
@@ -278,13 +316,18 @@ describe('TemplateDetail', () => {
       updatedAt: '2026-09-14T12:00:00Z',
     });
 
-    const label = await screen.findByText('Fonts');
-    expect(label.nextElementSibling?.textContent).toBe('Fresh Parsed Face');
-    expect(screen.queryByText('None detected')).toBeNull();
+    await waitFor(() => expect(fact('Fonts')).toBe('1 · 1 missing'));
+    expect(check('Fonts').textContent).toContain('1 of 1 not uploaded: Fresh Parsed Face');
+    expect(visibleText()).not.toContain('HeadingNow');
+
+    // The footer's next step opens the failing row onto each face's state.
+    fireEvent.click(screen.getByRole('button', { name: 'Investigate' }));
+    expect(await screen.findByText('Fresh Parsed Face · not uploaded')).toBeTruthy();
   });
 
   test('reviews a dry plan before installing held faces', async () => {
     renderDetail();
+    fireEvent.click(await screen.findByRole('button', { name: 'Fonts details' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Review font install' }));
     expect(await screen.findByText(/HeadingNow-36CompBold\.otf/)).toBeTruthy();
     expect(pushTemplateFonts).toHaveBeenNthCalledWith(1, BRAND, ASSET, false, [
@@ -296,5 +339,63 @@ describe('TemplateDetail', () => {
     expect(pushTemplateFonts).toHaveBeenNthCalledWith(2, BRAND, ASSET, true, [
       'HeadingNow-36CompBold',
     ]);
+  });
+
+  test('five checks say what they look at; a draft offers its test render on its own row', async () => {
+    run = { ...PUBLISHED_RUN, state: 'draft_ready' };
+    renderDetail(undefined, { ...SOURCE, templateKey: null, forgeState: 'draft_ready' });
+    const rows = within(await screen.findByRole('list', { name: 'Checks' })).getAllByRole(
+      'listitem',
+    );
+    expect(rows.map((row) => row.querySelector('.font-mono')?.textContent)).toEqual([
+      'Parse',
+      'Fonts',
+      'Build',
+      'Test render',
+      'Publish',
+    ]);
+    expect(check('Test render').textContent).toContain(
+      'Renders one watermarked frame to prove each variable reaches its layer.',
+    );
+    expect(screen.getByText('2 to do').getAttribute('role')).toBe('status');
+
+    fireEvent.click(within(check('Test render')).getByRole('button', { name: 'Test render' }));
+    await waitFor(() =>
+      expect(advanceTemplateForgeRun).toHaveBeenCalledWith(BRAND, ASSET, 'smoke'),
+    );
+  });
+
+  test('facts read formats, unassigned variables, sets and the last render from cached reads', async () => {
+    jobs = [
+      {
+        templateKey: '133',
+        status: 'failed',
+        updatedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+      },
+      {
+        templateKey: '133',
+        status: 'finished',
+        updatedAt: new Date().toISOString(),
+        finishedAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString(),
+      },
+    ];
+    renderDetail();
+    await waitFor(() => expect(fact('Last render')).toBe('2h ago'));
+    expect(screen.getByRole('img', { name: '1 of 2 done' })).toBeTruthy();
+    expect(fact('Formats')).toBe('1:19:16');
+    await waitFor(() => expect(fact('Variables')).toBe('1 · 1 unassigned'));
+    await waitFor(() => expect(fact('Sets')).toBe('2'));
+  });
+
+  test('switching tabs keeps an unsaved variable edit', async () => {
+    renderDetail();
+    const field = (await screen.findByLabelText('Headline default')) as HTMLInputElement;
+    fireEvent.change(field, { target: { value: 'Unsaved copy' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Variables' }));
+    expect((screen.getByLabelText('Headline default') as HTMLInputElement).value).toBe(
+      'Unsaved copy',
+    );
+    expect(screen.getByText('1 changed')).toBeTruthy();
   });
 });

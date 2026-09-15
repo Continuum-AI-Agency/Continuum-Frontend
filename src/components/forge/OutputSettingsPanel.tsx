@@ -312,30 +312,29 @@ export function OutputSettingsPanel({
   };
 
   return (
-    <div className="space-y-3 rounded-lg border p-4">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">Output settings</h3>
+        <Tabs value={scope} onValueChange={(next) => setScope(String(next))}>
+          <TabsList>
+            <TabsTrigger value="all">All outputs</TabsTrigger>
+            {outputs.map((item) => (
+              <TabsTrigger key={item.id} value={item.id}>
+                {item.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
         <Button
           type="button"
           size="sm"
           disabled={!dirty || saving}
           onClick={save}
-          className="gap-2"
+          className="gap-1.5"
         >
-          {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+          {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
           Save
         </Button>
       </div>
-      <Tabs value={scope} onValueChange={(next) => setScope(String(next))}>
-        <TabsList>
-          <TabsTrigger value="all">All outputs</TabsTrigger>
-          {outputs.map((item) => (
-            <TabsTrigger key={item.id} value={item.id}>
-              {item.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
       <EncodeSettingsFields
         key={scope}
         settings={settings}
