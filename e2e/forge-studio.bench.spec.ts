@@ -1390,20 +1390,16 @@ test.describe('Forge Studio — LIVE on StarCraft template 133', () => {
 
     // A set of the bench's own, so the Render click's save never rewrites someone's saved set.
     const setName = `Forge Studio bench ${RUN_ID}`;
-    await page.getByRole('button', { name: 'Render set', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'New set…' }).click();
+    await page.getByRole('button', { name: 'New set', exact: true }).click();
     const discard = page.getByRole('alertdialog', { name: 'Discard unsaved edits?' });
     const nameDialog = page.getByRole('dialog', { name: 'New render set' });
     await expect(discard.or(nameDialog)).toBeVisible();
     if (await discard.isVisible()) await discard.getByRole('button', { name: 'Discard' }).click();
     await nameDialog.getByRole('textbox', { name: 'Name', exact: true }).fill(setName);
     await nameDialog.getByRole('button', { name: 'Create', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Render set', exact: true })).toContainText(
-      setName,
-      {
-        timeout: 60_000,
-      },
-    );
+    await expect(
+      page.getByRole('button', { name: `Open ${setName}`, exact: true }),
+    ).toHaveAttribute('aria-current', 'true', { timeout: 60_000 });
 
     const names = await importLiveRows(page, contract, `SC bench ${RUN_ID}`);
     for (const name of names) {

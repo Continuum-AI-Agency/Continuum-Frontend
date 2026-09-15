@@ -37,9 +37,10 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-// The Render tab's toolbar: five controls, left to right in the order a person uses them —
-// which template, which set, add rows, import rows, save and render. Everything else a row can
-// do lives on the row (its hover buttons and menu) or on the selection (the bar under this).
+// The Render tab's toolbar: four controls, left to right in the order a person uses them —
+// which template, add rows, import rows, save and render. Which set the rows belong to is the
+// rail beside the grid (RenderSetRail); everything else a row can do lives on the row (its hover
+// buttons and menu) or on the selection (the bar under this).
 
 export const templateLabel = (template: ApiRenderTemplateSummary): string =>
   template.displayName ?? templateDisplayName(template.name);
@@ -61,7 +62,7 @@ export function RenderToolbar({
   environments,
   bindingId,
   onBindingChange,
-  setMenu,
+  ready,
   inputSets,
   canAddRows,
   onAddRow,
@@ -85,8 +86,8 @@ export function RenderToolbar({
   environments: ApiRenderEnvironment[];
   bindingId: string | null;
   onBindingChange: (bindingId: string) => void;
-  /** Null until a template's contract is loaded; so are the controls after it. */
-  setMenu: ReactNode;
+  /** False until a template's contract is loaded; so are the controls after the picker. */
+  ready: boolean;
   inputSets: ApiRenderInputSet[];
   canAddRows: boolean;
   onAddRow: () => void;
@@ -168,10 +169,8 @@ export function RenderToolbar({
         </DropdownMenu>
       </Control>
 
-      {setMenu ? (
+      {ready ? (
         <>
-          <Control>{setMenu}</Control>
-
           <Control>
             <DropdownMenu>
               <DropdownMenuTrigger

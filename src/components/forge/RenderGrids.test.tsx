@@ -112,6 +112,7 @@ const savedSet = (id: string, name: string, label: string) => ({
   brandId: BRAND,
   bindingId: '44444444-4444-4444-8444-444444444444',
   name,
+  description: null as string | null,
   templateKey: '133',
   contractHash: 'hash',
   revision: 1,
@@ -300,6 +301,14 @@ const openMenu = async (trigger: string | RegExp, item: string | RegExp) => {
   fireEvent.click(await screen.findByRole('menuitem', { name: item }));
 };
 
+/** The set the rows on screen came from, as the sets rail marks it. */
+const openSetName = () =>
+  within(screen.getByRole('list', { name: 'Render sets' }))
+    .getAllByRole('button', { name: /^Open / })
+    .find((button) => button.getAttribute('aria-current') === 'true')
+    ?.getAttribute('aria-label')
+    ?.replace(/^Open /, '');
+
 describe('RenderRequestsGrid', () => {
   test('associates an authoritative guardrail refusal with its row and cell', async () => {
     preflightMock.mockImplementationOnce(async () => {
@@ -469,9 +478,9 @@ describe('RenderRequestsGrid', () => {
     for (const item of [/Blank row/, /From saved inputs/])
       expect(await screen.findByRole('menuitem', { name: item })).toBeTruthy();
     // Variations and copies are made from a row or the selection, not the toolbar.
-    expect(screen.queryAllByRole('menuitem', { name: /Fork|Duplicate|variation|Copy/ })).toHaveLength(
-      0,
-    );
+    expect(
+      screen.queryAllByRole('menuitem', { name: /Fork|Duplicate|variation|Copy/ }),
+    ).toHaveLength(0);
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
     cleanup();
 
@@ -546,7 +555,7 @@ describe('RenderRequestsGrid', () => {
       fireEvent.change(headline, { target: { value: 'Edited' } });
       expect(screen.getByText('(unsaved edits)')).toBeTruthy();
 
-      await openMenu('Render set', /New set/);
+      fireEvent.click(screen.getByRole('button', { name: 'New set' }));
       const confirm = await screen.findByRole('alertdialog');
       expect(within(confirm).getByText('Discard unsaved edits?')).toBeTruthy();
       fireEvent.click(within(confirm).getByRole('button', { name: 'Discard' }));
@@ -556,9 +565,7 @@ describe('RenderRequestsGrid', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
       await waitFor(() => expect(createRenderSetMock).toHaveBeenCalledTimes(1));
       expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({ name: 'Summer' });
-      await waitFor(() =>
-        expect(screen.getByRole('button', { name: 'Render set' }).textContent).toContain('Summer'),
-      );
+      await waitFor(() => expect(openSetName()).toBe('Summer'));
       expect(screen.getByDisplayValue('Hola mundo')).toBeTruthy();
       expect(screen.queryByText('(unsaved edits)')).toBeNull();
     } finally {
@@ -788,7 +795,7 @@ describe('RenderRequestsGrid', () => {
     await act(async () => {});
     expect(localStorage.getItem(key)).toContain('Draft row');
 
-    await openMenu('Render set', /Import browser draft/);
+    fireEvent.click(screen.getByRole('button', { name: 'Import browser draft' }));
     expect(await screen.findByDisplayValue('From the draft')).toBeTruthy();
   });
 
@@ -799,15 +806,16 @@ describe('RenderRequestsGrid', () => {
       target: { value: 'Edited row' },
     });
 
-    await openMenu('Render set', 'Older');
+    // The rail lists every set at once: a switch is one click, never a menu.
+    fireEvent.click(screen.getByRole('button', { name: 'Open Older' }));
     await confirmDialog('Keep editing');
     expect(screen.getByDisplayValue('Edited row')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Render set' }).textContent).toContain('Newest');
+    expect(openSetName()).toBe('Newest');
 
-    await openMenu('Render set', 'Older');
+    fireEvent.click(screen.getByRole('button', { name: 'Open Older' }));
     await confirmDialog('Discard');
     expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Render set' }).textContent).toContain('Older');
+    expect(openSetName()).toBe('Older');
   });
 
   test('renames the set without touching unsaved rows, then deletes it and lands on the next', async () => {
@@ -817,7 +825,7 @@ describe('RenderRequestsGrid', () => {
       target: { value: 'Edited row' },
     });
 
-    await openMenu('Render set', /Rename/);
+    await openMenu('Actions for Newest', /Rename/);
     const dialog = await screen.findByRole('dialog', { name: 'Rename render set' });
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Summer' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Rename' }));
@@ -826,19 +834,117 @@ describe('RenderRequestsGrid', () => {
       NEWEST.id,
       { brandId: BRAND, expectedRevision: 1, name: 'Summer' },
     ]);
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Render set' }).textContent).toContain('Summer'),
-    );
+    await waitFor(() => expect(openSetName()).toBe('Summer'));
     expect(screen.getByDisplayValue('Edited row')).toBeTruthy();
     expect(screen.getByText('(unsaved edits)')).toBeTruthy();
 
-    await openMenu('Render set', /Delete/);
+    await openMenu('Actions for Summer', /Delete/);
     const confirm = await screen.findByRole('alertdialog');
     expect(within(confirm).getByText('Delete “Summer”?')).toBeTruthy();
     fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(deleteRenderSetMock).toHaveBeenCalledWith(BRAND, NEWEST.id));
     expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Render set' }).textContent).toContain('Older');
+    expect(openSetName()).toBe('Older');
+  });
+
+  test('a set that is not open renames inline and deletes without replacing the rows on screen', async () => {
+    withSavedSets();
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    fireEvent.change(await screen.findByDisplayValue('Newest row'), {
+      target: { value: 'Edited row' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Older' }));
+    const field = screen.getByRole('textbox', { name: 'Rename Older' });
+    fireEvent.change(field, { target: { value: 'Autumn' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1));
+    expect(updateRenderSetMock.mock.calls[0]).toEqual([
+      OLDER.id,
+      { brandId: BRAND, expectedRevision: 1, name: 'Autumn' },
+    ]);
+    expect(await screen.findByRole('button', { name: 'Open Autumn' })).toBeTruthy();
+    expect(openSetName()).toBe('Newest');
+
+    await openMenu('Actions for Autumn', /Delete/);
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }),
+    );
+    await waitFor(() => expect(deleteRenderSetMock).toHaveBeenCalledWith(BRAND, OLDER.id));
+    await waitFor(() =>
+      expect(screen.queryAllByRole('button', { name: 'Open Autumn' })).toHaveLength(0),
+    );
+    expect(openSetName()).toBe('Newest');
+    expect(screen.getByDisplayValue('Edited row')).toBeTruthy();
+    expect(screen.getByText('(unsaved edits)')).toBeTruthy();
+  });
+
+  test('a description saves alone at the revision its set was read at; a conflict says so and changes nothing', async () => {
+    withSavedSets();
+    const toasts: string[] = [];
+    const unregister = registerToastSink(({ title }) => {
+      toasts.push(String(title));
+    });
+    // Registering flushes toasts earlier tests raised with no sink mounted; those are not ours.
+    toasts.length = 0;
+    try {
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      fireEvent.change(await screen.findByDisplayValue('Newest row'), {
+        target: { value: 'Edited row' },
+      });
+      const setItem = (name: string) =>
+        within(screen.getByRole('list', { name: 'Render sets' }))
+          .getAllByRole('listitem')
+          .find((item) => within(item).queryByRole('button', { name: `Open ${name}` }))!;
+
+      updateRenderSetMock.mockImplementationOnce(async (_id, input) => ({
+        ...NEWEST,
+        description: input.description as string,
+        revision: 2,
+      }));
+      fireEvent.click(within(setItem('Newest')).getByRole('button', { name: 'Add a description' }));
+      const field = within(setItem('Newest')).getByRole('textbox', {
+        name: 'Description of Newest',
+      });
+      fireEvent.change(field, { target: { value: '  Spain first, then Portugal  ' } });
+      fireEvent.keyDown(field, { key: 'Enter' });
+      await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1));
+      expect(updateRenderSetMock.mock.calls[0]).toEqual([
+        NEWEST.id,
+        { brandId: BRAND, expectedRevision: 1, description: 'Spain first, then Portugal' },
+      ]);
+      expect(
+        await within(setItem('Newest')).findByRole('button', {
+          name: 'Spain first, then Portugal',
+        }),
+      ).toBeTruthy();
+      // Only the description moved: the rows on screen are still the unsaved edit.
+      expect(screen.getByDisplayValue('Edited row')).toBeTruthy();
+      expect(screen.getByText('(unsaved edits)')).toBeTruthy();
+
+      updateRenderSetMock.mockImplementationOnce(async () => {
+        throw new Error('render_set_revision_conflict');
+      });
+      fireEvent.click(within(setItem('Older')).getByRole('button', { name: 'Add a description' }));
+      const older = within(setItem('Older')).getByRole('textbox', { name: 'Description of Older' });
+      fireEvent.change(older, { target: { value: 'Autumn cut' } });
+      fireEvent.keyDown(older, { key: 'Enter' });
+      await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(2));
+      expect(updateRenderSetMock.mock.calls[1]?.[1]).toEqual({
+        brandId: BRAND,
+        expectedRevision: 1,
+        description: 'Autumn cut',
+      });
+      await waitFor(() =>
+        expect(toasts).toContain('This set changed elsewhere. Reload it before saving again.'),
+      );
+      expect(
+        await within(setItem('Older')).findByRole('button', { name: 'Add a description' }),
+      ).toBeTruthy();
+      expect(openSetName()).toBe('Newest');
+    } finally {
+      unregister();
+    }
   });
 
   test('emptying a fork’s cell blanks it instead of bringing the parent’s value back', async () => {

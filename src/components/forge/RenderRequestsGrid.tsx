@@ -48,7 +48,8 @@ import {
   fetchLibraryAsset,
   RenderRowsImport,
 } from '@/components/forge/RenderRowsImport';
-import { NameDialog, RenderSetMenu } from '@/components/forge/RenderSetMenu';
+import { NameDialog } from '@/components/forge/RenderSetMenu';
+import { RenderSetRail, templateJobsKey } from '@/components/forge/RenderSetRail';
 import { RenderToolbar, templateLabel } from '@/components/forge/RenderToolbar';
 import {
   addSibling,
@@ -130,6 +131,8 @@ const PREFLIGHT_DEBOUNCE_MS = 600;
 /** The review tray folded down to its one strip: the readiness line and Review & render. */
 const TRAY_COLLAPSED_SIZE = '2.5rem';
 const TRAY_OPEN_SIZE = '40%';
+/** The sets rail folded to its one button and the open set's name, set on its side. */
+const RAIL_COLLAPSED_SIZE = '2.25rem';
 /** A third of a row per arrow press, so the keyboard reaches before, inside and after a row. */
 const KEYBOARD_DROP_STEP_PX = 12;
 
@@ -337,6 +340,8 @@ export function RenderRequestsGrid({
   // The open review: `key` is the snapshot the tray reviews, `signature` what it was taken of.
   const [review, setReview] = useState<{ key: number; signature: string } | null>(null);
   const trayPanel = usePanelRef();
+  const railPanel = usePanelRef();
+  const [railCollapsed, setRailCollapsed] = useState(false);
   const gridBox = useRef<HTMLDivElement>(null);
   /** A row just added, whose name field takes focus once it is on screen. */
   const focusRowId = useRef<string | null>(null);
@@ -1034,62 +1039,47 @@ export function RenderRequestsGrid({
     showRows(loaded, loaded, contract);
   };
 
-  const setMenu = contract ? (
-    <RenderSetMenu
-      sets={renderSets}
-      activeSet={activeSet}
-      confirmDiscard={confirmDiscard}
-      canCreate={Boolean(bindingId)}
-      draftAvailable={draftOffer !== null}
-      onSwitch={loadRenderSet}
-      onNew={async (name) => {
-        const seeded = seededRows(contract);
-        const created = await createSet(name, seeded);
-        if (created) showRows(seeded, seeded, contract);
-      }}
-      onRename={async (name) => {
-        if (!activeSet) return;
-        try {
-          const renamed = await apiRendersApi.updateRenderSet(activeSet.id, {
-            brandId,
-            expectedRevision: activeSet.revision,
-            name,
-          });
-          // Only the name moved: unsaved row edits stay on screen and stay unsaved.
-          setActiveSet(renamed);
-          setRenderSets((current) => current.map((set) => (set.id === renamed.id ? renamed : set)));
-          void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
-        } catch (error) {
-          await reportSetError(error, activeSet);
-        }
-      }}
-      onDelete={async () => {
-        if (!activeSet) return;
-        try {
-          await apiRendersApi.deleteRenderSet(brandId, activeSet.id);
-          void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
-        } catch (error) {
-          toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
-          return;
-        }
-        const remaining = renderSets.filter((set) => set.id !== activeSet.id);
-        setRenderSets(remaining);
-        toast.success(`Deleted “${activeSet.name}”`);
-        if (remaining[0]) loadRenderSet(remaining[0]);
-        else {
-          setActiveSet(null);
-          const seeded = seededRows(contract);
-          showRows(seeded, seeded, contract);
-        }
-      }}
-      onImportDraft={() => {
-        if (!draftOffer) return;
-        setActiveSet(null);
-        showRows(draftOffer, null, contract);
-        setDraftOffer(null);
-      }}
-    />
-  ) : null;
+  /** A name or description change: unsaved row edits stay on screen and stay unsaved. */
+  const updateSetDetails = async (
+    set: ForgeRenderSet,
+    change: { name: string } | { description: string | null },
+  ) => {
+    // The open set keeps the revision its rows were loaded at, so a conflict here stays a conflict.
+    const current = set.id === activeSet?.id ? activeSet : set;
+    try {
+      const updated = await apiRendersApi.updateRenderSet(set.id, {
+        brandId,
+        expectedRevision: current.revision,
+        ...change,
+      });
+      if (updated.id === activeSet?.id) setActiveSet(updated);
+      setRenderSets((sets) => sets.map((item) => (item.id === updated.id ? updated : item)));
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
+    } catch (error) {
+      await reportSetError(error, current);
+    }
+  };
+
+  const deleteSet = async (set: ForgeRenderSet) => {
+    if (!contract) return;
+    try {
+      await apiRendersApi.deleteRenderSet(brandId, set.id);
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
+    } catch (error) {
+      toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
+      return;
+    }
+    const remaining = renderSets.filter((item) => item.id !== set.id);
+    setRenderSets(remaining);
+    toast.success(`Deleted “${set.name}”`);
+    if (set.id !== activeSet?.id) return;
+    if (remaining[0]) loadRenderSet(remaining[0]);
+    else {
+      setActiveSet(null);
+      const seeded = seededRows(contract);
+      showRows(seeded, seeded, contract);
+    }
+  };
 
   // --- the table --------------------------------------------------------------------------
   const columns = useMemo(() => buildColumns(contract), [contract]);
@@ -1293,7 +1283,7 @@ export function RenderRequestsGrid({
         environments={environments}
         bindingId={bindingId}
         onBindingChange={(id) => id !== bindingId && confirmDiscard(() => setBindingId(id))}
-        setMenu={setMenu}
+        ready={contract !== null}
         inputSets={inputSets}
         canAddRows={rows.length < MAX_BATCH_ROWS}
         onAddRow={() =>
@@ -1400,7 +1390,54 @@ export function RenderRequestsGrid({
           <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
             <ResizablePanel id="rows" minSize="30%" className="min-h-0">
               <ResizablePanelGroup orientation="horizontal" className="items-stretch">
-                <ResizablePanel defaultSize="68%" minSize="40%" className="min-w-0">
+                <ResizablePanel
+                  id="render-sets"
+                  panelRef={railPanel}
+                  collapsible
+                  collapsedSize={RAIL_COLLAPSED_SIZE}
+                  defaultSize="16%"
+                  minSize="12rem"
+                  maxSize="30%"
+                  className="min-w-0"
+                  onResize={() => setRailCollapsed(railPanel.current?.isCollapsed() ?? false)}
+                >
+                  <RenderSetRail
+                    brandId={brandId}
+                    templateKey={contract.template.key}
+                    sets={renderSets}
+                    activeSet={activeSet}
+                    activeRows={rows.length}
+                    confirmDiscard={confirmDiscard}
+                    canCreate={Boolean(bindingId)}
+                    draftAvailable={draftOffer !== null}
+                    collapsed={railCollapsed}
+                    onCollapsedChange={(collapse) =>
+                      collapse ? railPanel.current?.collapse() : railPanel.current?.expand()
+                    }
+                    onSwitch={loadRenderSet}
+                    onNew={async (name) => {
+                      const seeded = seededRows(contract);
+                      const created = await createSet(name, seeded);
+                      if (created) showRows(seeded, seeded, contract);
+                    }}
+                    onRename={(set, name) => updateSetDetails(set, { name })}
+                    onDescribe={(set, description) => updateSetDetails(set, { description })}
+                    onDelete={deleteSet}
+                    onImportDraft={() => {
+                      if (!draftOffer) return;
+                      setActiveSet(null);
+                      showRows(draftOffer, null, contract);
+                      setDraftOffer(null);
+                    }}
+                  />
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel
+                  id="render-grid"
+                  defaultSize="52%"
+                  minSize="40%"
+                  className="min-w-0"
+                >
                   <div ref={gridBox} className="h-full min-h-0">
                     <DndContext
                       sensors={sensors}
@@ -1427,7 +1464,12 @@ export function RenderRequestsGrid({
                   </div>
                 </ResizablePanel>
                 <ResizableHandle withHandle />
-                <ResizablePanel defaultSize="32%" minSize="20%" className="min-w-0">
+                <ResizablePanel
+                  id="render-preview"
+                  defaultSize="32%"
+                  minSize="20%"
+                  className="min-w-0"
+                >
                   <RenderPreviewPanel
                     brandId={brandId}
                     contract={contract}
@@ -1477,7 +1519,14 @@ export function RenderRequestsGrid({
                     )
                   }
                   onClose={() => setReview(null)}
-                  onFired={() => setRowSelection({})}
+                  onFired={() => {
+                    setRowSelection({});
+                    // The rail counts renders from this read; the fired jobs are its newest.
+                    void queryClient.invalidateQueries({
+                      queryKey: templateJobsKey(brandId, contract.template.key),
+                      exact: true,
+                    });
+                  }}
                   onOpenLedger={(jobIds) => onFired?.(jobIds)}
                   onShowRow={showRow}
                 />
