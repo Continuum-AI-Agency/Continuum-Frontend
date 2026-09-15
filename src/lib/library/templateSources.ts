@@ -9,7 +9,11 @@ import type {
   TemplateSource,
   WorkspaceTemplate,
 } from '@continuum/contracts';
-import { templateRebindPreviewSchema } from '@continuum/contracts';
+import {
+  type RenameTemplateSourceRequest,
+  templateRebindPreviewSchema,
+  templateSourceSchema,
+} from '@continuum/contracts';
 import { getApiUrl } from '@/lib/api/config';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -46,6 +50,20 @@ export async function fetchTemplateSources(brandId: string): Promise<TemplateSou
   );
   const body = await unwrap<{ items?: TemplateSource[] }>(response, 'Template list');
   return body.items ?? [];
+}
+
+/** Rename a template: writes its Library asset's title, which becomes `displayName` everywhere. */
+export async function renameTemplateSource(
+  brandId: string,
+  assetId: string,
+  title: string,
+): Promise<TemplateSource> {
+  const body: RenameTemplateSourceRequest = { brandId, title };
+  const response = await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(assetId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  return templateSourceSchema.parse(await unwrap(response, 'Template rename'));
 }
 
 export async function previewTemplateRebind(input: {

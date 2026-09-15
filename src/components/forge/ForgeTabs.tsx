@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ForgeWorkbench } from '@/components/forge/ForgeWorkbench';
 import { RenderJobsGrid } from '@/components/forge/RenderJobsGrid';
-import { RenderRequestsGrid } from '@/components/forge/RenderRequestsGrid';
+import { type ForgeRenderIntent, RenderRequestsGrid } from '@/components/forge/RenderRequestsGrid';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // The three things a person does on Forge, as three tabs: make a template, set up renders
@@ -15,6 +15,13 @@ type ForgeTab = 'templates' | 'render' | 'renders';
 
 export function ForgeTabs({ brandId }: { brandId: string }) {
   const [tab, setTab] = useState<ForgeTab>('templates');
+  // The last "open this in Render" from anywhere on the page. Kept, not consumed: the Render
+  // panel unmounts when hidden, and remounting should land on what was last asked for.
+  const [renderIntent, setRenderIntent] = useState<ForgeRenderIntent | undefined>(undefined);
+  const openRender = (intent: ForgeRenderIntent) => {
+    setRenderIntent(intent);
+    setTab('render');
+  };
   return (
     <Tabs value={tab} onValueChange={(next) => setTab(next as ForgeTab)}>
       <TabsList className="mb-4">
@@ -23,10 +30,15 @@ export function ForgeTabs({ brandId }: { brandId: string }) {
         <TabsTrigger value="renders">Renders</TabsTrigger>
       </TabsList>
       <TabsContent value="templates">
-        <ForgeWorkbench key={brandId} brandId={brandId} />
+        <ForgeWorkbench key={brandId} brandId={brandId} onOpenRender={openRender} />
       </TabsContent>
       <TabsContent value="render">
-        <RenderRequestsGrid key={brandId} brandId={brandId} onFired={() => setTab('renders')} />
+        <RenderRequestsGrid
+          key={brandId}
+          brandId={brandId}
+          intent={renderIntent}
+          onFired={() => setTab('renders')}
+        />
       </TabsContent>
       <TabsContent value="renders">
         <RenderJobsGrid key={brandId} brandId={brandId} active={tab === 'renders'} />

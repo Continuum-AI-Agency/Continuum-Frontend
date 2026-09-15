@@ -37,6 +37,8 @@ export const workspaceTemplateSchema = z
      * a published template and a picker should say so.
      */
     draft: z.boolean(),
+    /** The source asset's title when one is set. Absent from an older server — use `templateDisplayName(name)`. */
+    displayName: z.string().nullish(),
   })
   .strict();
 export type WorkspaceTemplate = z.infer<typeof workspaceTemplateSchema>;

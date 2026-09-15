@@ -238,6 +238,11 @@ export const templateSourceSchema = z
      * frame, which looks exactly like success.
      */
     templateKey: z.string().nullable().default(null),
+    /**
+     * What a person calls this template: `media.assets.title`, which members can write. Null
+     * means nobody named it — render `templateDisplayName(parse.filename)` rather than a uuid.
+     */
+    displayName: z.string().nullable().default(null),
     parseError: z.string().nullable().default(null),
     parsedAt: z.string().nullable().default(null),
     createdAt: z.string(),
@@ -245,6 +250,15 @@ export const templateSourceSchema = z
   })
   .strict();
 export type TemplateSource = z.infer<typeof templateSourceSchema>;
+
+/** `PATCH /api/ai-studio/templates/:assetId` — rename the template's Library asset. */
+export const renameTemplateSourceRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    title: z.string().trim().min(1).max(120),
+  })
+  .strict();
+export type RenameTemplateSourceRequest = z.infer<typeof renameTemplateSourceRequestSchema>;
 
 /** A font the template needs, against what the brand actually holds. */
 export const templateFontStatusSchema = z

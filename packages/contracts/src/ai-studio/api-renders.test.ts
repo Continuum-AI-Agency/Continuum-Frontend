@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'bun:test';
 import {
   API_RENDER_MEDIA_LIST_MAX,
+  apiRenderBatchPreflightRequestSchema,
+  apiRenderCreateDeliveryDestinationRequestSchema,
+  apiRenderDeliveryDestinationsResponseSchema,
+  apiRenderDeliveryTargetSchema,
+  apiRenderJobListQuerySchema,
+  apiRenderJobSchema,
   apiRenderPreflightRequestSchema,
+  apiRenderSlackChannelListResponseSchema,
+  apiRenderTemplateSummarySchema,
   apiRenderPreflightResponseSchema,
   apiRenderTemplateContractSchema,
   apiRenderVariableKeySchema,
@@ -383,6 +391,244 @@ describe('output settings', () => {
         contractHash: 'hash',
         variables: {},
         encode: { outputs: { square: { fps: 500 } } },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const BRAND = '00000000-0000-4000-8000-000000000001';
+const DESTINATION = '00000000-0000-4000-8000-000000000009';
+const createTarget = { adAccountId: 'act_1', campaignId: 'c1', adsetId: 's1' };
+const replaceTarget = {
+  action: 'replace',
+  adAccountId: 'act_1',
+  campaignId: 'c1',
+  campaignName: 'Launch',
+  adsetId: 's1',
+  adsetName: 'Broad',
+  adId: 'ad_1',
+  adName: 'Hero',
+  adStatus: 'ACTIVE',
+  expectedCreativeId: 'cr_1',
+};
+const record = (extra: Record<string, unknown> = {}) => ({ variables: {}, ...extra });
+const batch = (extra: Record<string, unknown>) => ({
+  brandId: BRAND,
+  templateKey: '133',
+  contractHash: 'hash',
+  ...extra,
+});
+
+describe('delivery targets', () => {
+  it('still reads a pre-union create target and fills its defaults', () => {
+    expect(apiRenderDeliveryTargetSchema.parse(createTarget)).toEqual({
+      ...createTarget,
+      action: 'create',
+      adStatus: 'PAUSED',
+    });
+    expect(
+      apiRenderBatchPreflightRequestSchema.parse(batch({ delivery: createTarget, records: [record()] }))
+        .delivery,
+    ).toMatchObject({ action: 'create' });
+  });
+
+  it('reads a replace target with names, and refuses a create that names an ad', () => {
+    expect(apiRenderDeliveryTargetSchema.parse(replaceTarget)).toEqual(replaceTarget);
+    expect(apiRenderDeliveryTargetSchema.safeParse({ ...createTarget, adId: 'ad_1' }).success).toBe(
+      false,
+    );
+    expect(
+      apiRenderDeliveryTargetSchema.safeParse({ ...createTarget, adStatus: 'ACTIVE' }).success,
+    ).toBe(false);
+    expect(apiRenderDeliveryTargetSchema.safeParse({ ...replaceTarget, adId: undefined }).success).toBe(
+      false,
+    );
+  });
+
+  it('lets a record carry its own delivery', () => {
+    const parsed = apiRenderBatchPreflightRequestSchema.parse(
+      batch({
+        delivery: createTarget,
+        records: [record(), record({ delivery: replaceTarget, outputIds: ['square'] })],
+      }),
+    );
+    expect(parsed.records[0]?.delivery).toBeUndefined();
+    expect(parsed.records[1]?.delivery).toMatchObject({ action: 'replace', adId: 'ad_1' });
+  });
+
+  it('a replace, record-level or inherited from the batch, needs exactly one output', () => {
+    const twoOutputs = apiRenderBatchPreflightRequestSchema.safeParse(
+      batch({ records: [record({ delivery: replaceTarget, outputIds: ['square', 'story'] })] }),
+    );
+    expect(twoOutputs.success).toBe(false);
+    expect(twoOutputs.error?.issues[0]?.path).toEqual(['records', 0, 'outputIds']);
+    expect(
+      apiRenderBatchPreflightRequestSchema.safeParse(
+        batch({ records: [record({ delivery: replaceTarget })] }),
+      ).success,
+    ).toBe(false);
+    // the batch-level replace applies to a record with no delivery of its own
+    expect(
+      apiRenderBatchPreflightRequestSchema.safeParse(
+        batch({ delivery: replaceTarget, records: [record({ outputIds: ['square', 'story'] })] }),
+      ).success,
+    ).toBe(false);
+    // ...but a record-level create wins over it
+    expect(
+      apiRenderBatchPreflightRequestSchema.safeParse(
+        batch({
+          delivery: replaceTarget,
+          records: [record({ delivery: createTarget, outputIds: ['square', 'story'] })],
+        }),
+      ).success,
+    ).toBe(true);
+    expect(
+      apiRenderPreflightRequestSchema.safeParse(
+        batch({ variables: {}, delivery: replaceTarget, outputIds: ['a', 'b'] }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it('carries the Slack destination inside the confirmed batch request', () => {
+    expect(
+      apiRenderBatchPreflightRequestSchema.parse(
+        batch({ records: [record()], slack: { destinationId: DESTINATION } }),
+      ).slack,
+    ).toEqual({ destinationId: DESTINATION });
+    expect(
+      apiRenderBatchPreflightRequestSchema.safeParse(
+        batch({ records: [record()], slack: { destinationId: 'not-a-uuid' } }),
+      ).success,
+    ).toBe(false);
+  });
+});
+
+describe('Forge Studio seams', () => {
+  const summary = {
+    key: '133',
+    name: '[DRAFT/agent] forge_bench_starcraft',
+    environment: 'Continuum_app',
+    contractVersion: 'v1',
+    contractHash: 'hash',
+    contractSource: 'template_forge',
+    outputKinds: ['image'],
+    variableCount: 0,
+    previewUrl: null,
+    updatedAt: null,
+  };
+
+  it('template summaries default displayName to null for an older server', () => {
+    expect(apiRenderTemplateSummarySchema.parse(summary).displayName).toBeNull();
+    expect(
+      apiRenderTemplateSummarySchema.parse({ ...summary, displayName: 'StarCraft Promo' }).displayName,
+    ).toBe('StarCraft Promo');
+  });
+
+  it('an output may carry its own layout, in the same shape as the contract layout', () => {
+    const layout = {
+      comp: { name: 'Story', width: 1080, height: 1920 },
+      boxes: [{ key: 'headline', label: 'Headline', box: [0, 0, 100, 50] }],
+    };
+    const parsed = apiRenderTemplateContractSchema.parse({
+      template: summary,
+      variables: [],
+      layout,
+      outputs: [
+        { id: 'story', label: 'Story', ratio: '9:16', layout },
+        { id: 'square', label: 'Square', ratio: '1:1' },
+      ],
+    });
+    expect(parsed.outputs[0]?.layout).toEqual(parsed.layout);
+    expect(parsed.outputs[1]?.layout).toBeUndefined();
+  });
+
+  it('jobs expose delivery target, Slack post and approval, all null on an older server', () => {
+    const job = {
+      id: '00000000-0000-4000-8000-000000000010',
+      brandId: BRAND,
+      templateKey: '133',
+      templateName: 'Hero',
+      contractHash: 'hash',
+      taskUid: null,
+      status: 'finished',
+      outputs: [],
+      delivery: [],
+      error: null,
+      createdAt: '2026-09-14T00:00:00.000Z',
+      updatedAt: '2026-09-14T00:00:00.000Z',
+    };
+    const old = apiRenderJobSchema.parse(job);
+    expect([old.deliveryTarget, old.slackDelivery, old.approval]).toEqual([null, null, null]);
+
+    const current = apiRenderJobSchema.parse({
+      ...job,
+      deliveryTarget: replaceTarget,
+      slackDelivery: {
+        destinationId: DESTINATION,
+        channelName: 'starcraft-ops',
+        status: 'posted',
+        permalink: 'https://example.slack.com/archives/C1/p1',
+        postedAt: '2026-09-14T00:01:00.000Z',
+      },
+      approval: { status: 'awaiting_approval', decidedAt: null },
+    });
+    expect(current.deliveryTarget).toMatchObject({ action: 'replace', adName: 'Hero' });
+    expect(current.slackDelivery?.status).toBe('posted');
+    expect(current.approval?.status).toBe('awaiting_approval');
+    expect(
+      apiRenderJobSchema.safeParse({
+        ...job,
+        slackDelivery: { destinationId: DESTINATION, channelName: 'x', status: 'sent' },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('the jobs list filters by template', () => {
+    expect(apiRenderJobListQuerySchema.parse({ brandId: BRAND, templateKey: '133' })).toEqual({
+      brandId: BRAND,
+      limit: 20,
+      templateKey: '133',
+    });
+    expect(apiRenderJobListQuerySchema.parse({ brandId: BRAND, limit: '5' }).limit).toBe(5);
+  });
+
+  it('delivery destinations: list, Slack channels, and create', () => {
+    const destinations = apiRenderDeliveryDestinationsResponseSchema.parse({
+      slack: {
+        state: 'ready',
+        workspaceName: 'Continuum',
+        destinations: [{ id: DESTINATION, role: 'ops', channelId: 'C1', channelName: 'starcraft-ops' }],
+      },
+      meta: { connected: false, adAccountId: null, adAccountName: null },
+    });
+    expect(destinations.slack.destinations[0]?.role).toBe('ops');
+    expect(
+      apiRenderDeliveryDestinationsResponseSchema.safeParse({
+        ...destinations,
+        slack: { ...destinations.slack, state: 'connected' },
+      }).success,
+    ).toBe(false);
+
+    expect(
+      apiRenderSlackChannelListResponseSchema.parse({
+        workspaceName: null,
+        channels: [{ id: 'C1', name: 'general', isPrivate: false, isMember: true }],
+      }).channels,
+    ).toHaveLength(1);
+
+    expect(
+      apiRenderCreateDeliveryDestinationRequestSchema.safeParse({
+        brandId: BRAND,
+        role: 'ops',
+        channelId: 'C1',
+      }).success,
+    ).toBe(true);
+    // alerts and dm destinations are not created from Forge
+    expect(
+      apiRenderCreateDeliveryDestinationRequestSchema.safeParse({
+        brandId: BRAND,
+        role: 'alerts',
+        channelId: 'C1',
       }).success,
     ).toBe(false);
   });

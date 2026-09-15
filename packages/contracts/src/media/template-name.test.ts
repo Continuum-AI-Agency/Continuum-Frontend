@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   TEMPLATE_KEY_MAX,
+  templateDisplayName,
   templateKeyFor,
   templateKeyFromName,
   renderClientKeyFor,
@@ -89,5 +90,43 @@ describe('renderClientKeyFor', () => {
     const key = renderClientKeyFor('StarCraft: Remastered', 'b17d8151-a9b9-4579-b1d2-7e8f01c2e9dc');
     expect(templateNameBudget(key)).toBeGreaterThanOrEqual(20);
     expect(templateNameProblem('Summer Sale 2026', key)).toBeNull();
+  });
+});
+
+describe('templateDisplayName', () => {
+  it('turns a build key into words', () => {
+    expect(templateDisplayName('forge_bench_starcraft')).toBe('Forge bench starcraft');
+    expect(templateDisplayName('summer-sale')).toBe('Summer sale');
+  });
+
+  it('drops the forge draft marker and any other bracket prefix', () => {
+    expect(templateDisplayName('[DRAFT/agent] StarCraft Promo')).toBe('StarCraft Promo');
+    expect(templateDisplayName('[DRAFT/agent] [v2] hero_card')).toBe('Hero card');
+  });
+
+  it('drops project extensions', () => {
+    expect(templateDisplayName('Vivo47_EasyFit.aep')).toBe('Vivo47 EasyFit');
+    expect(templateDisplayName('promo.AEPX')).toBe('Promo');
+    expect(templateDisplayName('promo.aet')).toBe('Promo');
+    expect(templateDisplayName('package.zip')).toBe('Package');
+  });
+
+  it('drops uuids, whole or truncated, and long hex runs', () => {
+    expect(templateDisplayName('forge-bench-d2f9637b-8fde-492b-aee6-aa37…')).toBe('Forge bench');
+    expect(templateDisplayName('d2f9637b-8fde-492b-aee6-aa3712345678.aep')).toBe(
+      'Untitled template',
+    );
+    expect(templateDisplayName('hero_3f9a0c2b7e41d9aa_final')).toBe('Hero final');
+    // a word spelled only in a–f letters is not an identifier
+    expect(templateDisplayName('facade_deadbeef')).toBe('Facade deadbeef');
+    // a short number that happens to be hex stays
+    expect(templateDisplayName('promo_2026')).toBe('Promo 2026');
+  });
+
+  it('never returns an empty name', () => {
+    expect(templateDisplayName('')).toBe('Untitled template');
+    expect(templateDisplayName(null)).toBe('Untitled template');
+    expect(templateDisplayName(undefined)).toBe('Untitled template');
+    expect(templateDisplayName('[DRAFT/agent]   ')).toBe('Untitled template');
   });
 });

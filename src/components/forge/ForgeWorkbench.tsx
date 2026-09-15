@@ -13,6 +13,7 @@ import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { LineagePanel } from '@/components/forge/LineagePanel';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
 import { PendingApprovals } from '@/components/forge/PendingApprovals';
+import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
@@ -130,7 +131,13 @@ function TemplateRow({
   );
 }
 
-export function ForgeWorkbench({ brandId }: { brandId: string }) {
+export function ForgeWorkbench({
+  brandId,
+}: {
+  brandId: string;
+  /** Jump to the Render tab with a template (and optionally a render set) loaded. */
+  onOpenRender?: (intent: ForgeRenderIntent) => void;
+}) {
   const [sources, setSources] = useState<TemplateSource[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [variables, setVariables] = useState<TemplateVariable[]>([]);

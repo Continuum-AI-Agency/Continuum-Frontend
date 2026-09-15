@@ -1,6 +1,7 @@
 import {
   API_RENDER_BATCH_PREFLIGHT_ROUTE,
   API_RENDER_BATCHES_ROUTE,
+  API_RENDER_DESTINATIONS_ROUTE,
   API_RENDER_DRIVE_SNAPSHOT_ROUTE,
   API_RENDER_ENVIRONMENTS_ROUTE,
   API_RENDER_IMPORT_PREVIEW_ROUTE,
@@ -8,13 +9,17 @@ import {
   API_RENDER_JOBS_ROUTE,
   API_RENDER_PREFLIGHT_ROUTE,
   API_RENDER_SETS_ROUTE,
+  API_RENDER_SLACK_CHANNELS_ROUTE,
   API_RENDER_SUGGEST_ROWS_ROUTE,
   API_RENDER_TEMPLATES_ROUTE,
   type ApiRenderBatch,
   type ApiRenderBatchPreflightRequest,
   type ApiRenderBatchPreflightResponse,
   type ApiRenderCreateInputSetRequest,
+  type ApiRenderCreateDeliveryDestinationRequest,
   type ApiRenderCreateJobRequest,
+  type ApiRenderDeliveryDestination,
+  type ApiRenderDeliveryDestinationsResponse,
   type ApiRenderEnvironmentListResponse,
   type ApiRenderInputSet,
   type ApiRenderInputSetListResponse,
@@ -22,6 +27,7 @@ import {
   type ApiRenderJobListResponse,
   type ApiRenderPreflightRequest,
   type ApiRenderPreflightResponse,
+  type ApiRenderSlackChannelListResponse,
   type ApiRenderSuggestRowsRequest,
   type ApiRenderSuggestRowsResponse,
   type ApiRenderTemplateContract,
@@ -29,12 +35,15 @@ import {
   type ApiRenderUpdateInputSetRequest,
   apiRenderBatchPreflightResponseSchema,
   apiRenderBatchSchema,
+  apiRenderDeliveryDestinationSchema,
+  apiRenderDeliveryDestinationsResponseSchema,
   apiRenderEnvironmentListResponseSchema,
   apiRenderInputSetListResponseSchema,
   apiRenderInputSetSchema,
   apiRenderJobListResponseSchema,
   apiRenderJobSchema,
   apiRenderPreflightResponseSchema,
+  apiRenderSlackChannelListResponseSchema,
   apiRenderSuggestRowsResponseSchema,
   apiRenderTemplateContractSchema,
   apiRenderTemplateListResponseSchema,
@@ -113,13 +122,18 @@ export const apiRendersApi = {
       schema: apiRenderJobSchema,
     });
   },
-  listJobs(brandId: string, limit = 10, options?: { cursor?: string; renderSetId?: string }) {
+  listJobs(
+    brandId: string,
+    limit = 10,
+    options?: { cursor?: string; renderSetId?: string; templateKey?: string },
+  ) {
     return http.request<ApiRenderJobListResponse>({
       path: `${API_RENDER_JOBS_ROUTE}?${query({
         brandId,
         limit,
         ...(options?.cursor ? { cursor: options.cursor } : {}),
         ...(options?.renderSetId ? { renderSetId: options.renderSetId } : {}),
+        ...(options?.templateKey ? { templateKey: options.templateKey } : {}),
       })}`,
       schema: apiRenderJobListResponseSchema,
     });
@@ -220,6 +234,28 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: apiRenderSuggestRowsResponseSchema,
+    });
+  },
+  // Delivery destinations: where a render can go besides the Library. The Slack channel list is
+  // the requesting user's own workspace, so it is safe to show in a brand-scoped picker.
+  listDeliveryDestinations(brandId: string) {
+    return http.request<ApiRenderDeliveryDestinationsResponse>({
+      path: `${API_RENDER_DESTINATIONS_ROUTE}?${query({ brandId })}`,
+      schema: apiRenderDeliveryDestinationsResponseSchema,
+    });
+  },
+  listSlackChannels(brandId: string) {
+    return http.request<ApiRenderSlackChannelListResponse>({
+      path: `${API_RENDER_SLACK_CHANNELS_ROUTE}?${query({ brandId })}`,
+      schema: apiRenderSlackChannelListResponseSchema,
+    });
+  },
+  createDeliveryDestination(input: ApiRenderCreateDeliveryDestinationRequest) {
+    return http.request<ApiRenderDeliveryDestination>({
+      path: API_RENDER_DESTINATIONS_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: apiRenderDeliveryDestinationSchema,
     });
   },
   createBatch(input: ApiRenderCreateJobRequest) {

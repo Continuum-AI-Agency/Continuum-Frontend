@@ -21,6 +21,8 @@ const preflightMock = mock(async () => ({
   fit: null,
 }));
 
+const listRenderSetsMock = mock(async () => ({ items: [] as unknown[], nextCursor: null }));
+
 const TEMPLATE = {
   key: '133',
   name: 'forge_bench_starcraft',
@@ -116,7 +118,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
       divergence: [],
     }),
     listInputSets: async () => ({ items: [], nextCursor: null }),
-    listRenderSets: async () => ({ items: [], nextCursor: null }),
+    listRenderSets: listRenderSetsMock,
     createRenderSet: async (input: Record<string, unknown>) => ({
       ...input,
       id: '33333333-3333-4333-8333-333333333333',
@@ -154,6 +156,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   preflightMock.mockClear();
+  listRenderSetsMock.mockClear();
 });
 
 describe('RenderRequestsGrid', () => {
@@ -235,7 +238,8 @@ describe('RenderRequestsGrid', () => {
   test('keeps the named draft row after submitting its immutable set snapshot', async () => {
     const originalPrompt = window.prompt;
     window.prompt = () => 'Campaign set';
-    render(<RenderRequestsGrid brandId={BRAND} />);
+    const onFired = mock((_jobIds: string[]) => undefined);
+    render(<RenderRequestsGrid brandId={BRAND} onFired={onFired} />);
     await screen.findByDisplayValue('Hola mundo');
     fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
     expect(screen.getByText(/1 selected/)).toBeTruthy();
@@ -245,8 +249,48 @@ describe('RenderRequestsGrid', () => {
       screen.getByText(/New fields, hierarchy, or unexposed layout changes require/),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Render 1/ }));
+    // The set is saved first; the batch only fires from the pre-flight dialog's Confirm.
+    expect(await screen.findByText('Render 1 row')).toBeTruthy();
+    expect(onFired).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Confirm/ }));
+    await waitFor(() => expect(onFired).toHaveBeenCalledWith([JOB.id]));
     await waitFor(() => expect(screen.getByDisplayValue('Root')).toBeTruthy());
     window.prompt = originalPrompt;
+  });
+
+  test('an intent loads its render set over the newest one', async () => {
+    const savedSet = (id: string, name: string, label: string) => ({
+      id,
+      brandId: BRAND,
+      bindingId: '44444444-4444-4444-8444-444444444444',
+      name,
+      templateKey: '133',
+      contractHash: 'hash',
+      revision: 1,
+      rows: [
+        {
+          id: `${id.slice(0, -1)}9`,
+          parentId: null,
+          label,
+          overrides: {},
+          clearedKeys: [],
+          outputIds: [],
+        },
+      ],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    const newest = savedSet('55555555-5555-4555-8555-555555555551', 'Newest', 'Newest row');
+    const older = savedSet('55555555-5555-4555-8555-555555555552', 'Older', 'Older row');
+    listRenderSetsMock.mockImplementation(async () => ({ items: [newest, older], nextCursor: null }));
+
+    const { rerender } = render(<RenderRequestsGrid brandId={BRAND} />);
+    expect(await screen.findByDisplayValue('Newest row')).toBeTruthy();
+
+    rerender(<RenderRequestsGrid brandId={BRAND} intent={{ templateKey: '133', renderSetId: older.id }} />);
+    expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
+    expect(screen.queryByDisplayValue('Newest row')).toBeNull();
+    listRenderSetsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
   });
 });
 

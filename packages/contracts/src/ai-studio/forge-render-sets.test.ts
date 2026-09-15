@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { resolveForgeRenderSetRows } from './forge-render-sets';
+import { forgeRenderSetRowsSchema, resolveForgeRenderSetRows } from './forge-render-sets';
 
 const rootId = '00000000-0000-4000-8000-000000000001';
 const childId = '00000000-0000-4000-8000-000000000002';
@@ -76,7 +76,45 @@ describe('Forge render-set tree', () => {
     ]);
     expect(resolved.map((row) => row.rootRowId)).toEqual([rootId, otherRoot]);
   });
+
+  test('a fork never inherits its parent delivery', () => {
+    const grandchildId = '00000000-0000-4000-8000-000000000004';
+    const replace = {
+      action: 'replace' as const,
+      adAccountId: 'act_1',
+      campaignId: 'c1',
+      adsetId: 's1',
+      adId: 'ad_1',
+    };
+    const create = { adAccountId: 'act_1', campaignId: 'c1', adsetId: 's2' };
+    const resolved = resolveForgeRenderSetRows([
+      { ...row(rootId, null, 'Root'), delivery: replace },
+      row(childId, rootId, 'Fork'),
+      { ...row(grandchildId, childId, 'Fork of fork'), delivery: create },
+    ]);
+    expect(resolved[0]?.delivery).toEqual(replace);
+    expect(resolved[1]).not.toHaveProperty('delivery');
+    // a pre-union create target still parses, and gains its defaults
+    expect(resolved[2]?.delivery).toEqual({ ...create, action: 'create', adStatus: 'PAUSED' });
+  });
+
+  test('row order is array order, round-tripped through the schema and the resolver', () => {
+    const otherRoot = '00000000-0000-4000-8000-000000000003';
+    // a fork saved BEFORE its parent, and a second root between them
+    const rows = [row(childId, rootId, 'Fork'), row(otherRoot, null, 'B'), row(rootId, null, 'A')];
+    const saved = forgeRenderSetRowsSchema.parse(JSON.parse(JSON.stringify(rows)));
+    expect(saved.map((entry) => entry.id)).toEqual([childId, otherRoot, rootId]);
+    expect(resolveForgeRenderSetRows(saved).map((entry) => entry.id)).toEqual([
+      childId,
+      otherRoot,
+      rootId,
+    ]);
+  });
 });
+
+function row(id: string, parentId: string | null, label: string) {
+  return { id, parentId, label, overrides: {}, clearedKeys: [], outputIds: [] };
+}
 
 describe('Forge render-set output settings', () => {
   const row = (over: Record<string, unknown>) => ({

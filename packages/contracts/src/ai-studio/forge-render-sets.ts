@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import {
+  type ApiRenderDeliveryTarget,
+  apiRenderDeliveryTargetSchema,
   apiRenderEncodeOverrideSchema,
   apiRenderVariableKeySchema,
   apiRenderVariableMapSchema,
@@ -74,6 +76,11 @@ export const forgeRenderSetRowSchema = z
     encode: apiRenderEncodeOverrideSchema.optional(),
     /** Inherited settings explicitly blanked back to the template. Reset removes both. */
     clearedEncodeKeys: forgeRenderSetEncodeClearSchema.optional(),
+    /**
+     * Where THIS row's render goes. Never inherited: a fork of a row that replaces ad X must not
+     * silently replace ad X too — two renders racing for one creative slot.
+     */
+    delivery: apiRenderDeliveryTargetSchema.optional(),
   })
   .strict();
 export type ForgeRenderSetRow = z.infer<typeof forgeRenderSetRowSchema>;
@@ -136,6 +143,8 @@ export interface ResolvedForgeRenderSetRow {
   variables: z.infer<typeof apiRenderVariableMapSchema>;
   outputIds: string[];
   encode?: EncodeBlock;
+  /** The row's own delivery only — see `forgeRenderSetRowSchema.delivery`. */
+  delivery?: ApiRenderDeliveryTarget;
 }
 
 export function resolveForgeRenderSetRows(rows: ForgeRenderSetRow[]): ResolvedForgeRenderSetRow[] {
@@ -170,10 +179,13 @@ export function resolveForgeRenderSetRows(rows: ForgeRenderSetRow[]): ResolvedFo
       variables,
       outputIds: row.outputIds.length ? [...row.outputIds] : [...(parent?.outputIds ?? [])],
       encode: inheritEncodeBlock(parent?.encode, row),
+      ...(row.delivery ? { delivery: row.delivery } : {}),
     };
     visiting.delete(row.id);
     memo.set(row.id, result);
     return result;
   };
+  // Array order is row order: a parent listed after its fork still resolves, and the output keeps
+  // the order the rows were saved in.
   return parsed.map(visit);
 }

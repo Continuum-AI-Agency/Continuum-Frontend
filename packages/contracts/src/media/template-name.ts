@@ -103,3 +103,29 @@ export function renderClientKeyFor(brandName: string | null | undefined, brandId
   stem = stem.replace(/_+$/, '');
   return stem ? `${stem}_${uniq}` : `brand_${uniq}`;
 }
+
+// --- What a person SEES ---------------------------------------------------------------------------
+//
+// The key above is what a machine joins on; this is what a card prints when nobody has typed a
+// title. Fleet builds carry `[DRAFT/agent]`, Library filenames carry a uuid and an extension, and
+// bench runs carry both — none of which is a name.
+
+const BRACKET_PREFIX = /^\s*(?:\[[^\]]*\]\s*)+/;
+const PROJECT_EXTENSION = /\.(?:aepx?|aet|zip)$/i;
+// A uuid, whole or cut short, or any long hex run (a checksum, a dashless uuid). It must hold a
+// digit, so an ordinary word made of a–f letters survives.
+const HEX_IDENTIFIER = /(?<![0-9a-z])(?=[a-f]*\d)[0-9a-f]{8,}(?:-[0-9a-f]{1,12})*(?![0-9a-z])/gi;
+
+export const UNTITLED_TEMPLATE_NAME = 'Untitled template';
+
+/** `forge-bench-d2f9637b-8fde-…` → `Forge bench`; empty → `Untitled template`. */
+export function templateDisplayName(input: string | null | undefined): string {
+  const words = String(input ?? '')
+    .trim()
+    .replace(BRACKET_PREFIX, '')
+    .replace(PROJECT_EXTENSION, '')
+    .replace(HEX_IDENTIFIER, ' ')
+    .replace(/[_\-\s…]+/g, ' ')
+    .trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : UNTITLED_TEMPLATE_NAME;
+}

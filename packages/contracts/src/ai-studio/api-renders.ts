@@ -9,6 +9,8 @@ export const API_RENDER_INPUT_SETS_ROUTE = '/api/ai-studio/renders/input-sets';
 export const API_RENDER_BATCH_PREFLIGHT_ROUTE = '/api/ai-studio/renders/batch-preflight';
 export const API_RENDER_BATCHES_ROUTE = '/api/ai-studio/renders/batches';
 export const API_RENDER_ENVIRONMENTS_ROUTE = '/api/ai-studio/renders/environments';
+export const API_RENDER_DESTINATIONS_ROUTE = '/api/ai-studio/renders/destinations';
+export const API_RENDER_SLACK_CHANNELS_ROUTE = '/api/ai-studio/renders/destinations/slack-channels';
 
 /**
  * A caller-facing variable name. Physical `f_<hash>` renderer field names are private
@@ -164,6 +166,11 @@ export const apiRenderTemplateSummarySchema = z
      * would report an unread template as ready.
      */
     fontsMissing: z.number().int().nonnegative().nullable().default(null),
+    /**
+     * What a person calls this template: the Library asset's title, else a prettified build name
+     * (`templateDisplayName`). Null from a server too old to resolve one — fall back to `name`.
+     */
+    displayName: z.string().nullable().default(null),
   })
   .strict();
 export type ApiRenderTemplateSummary = z.infer<typeof apiRenderTemplateSummarySchema>;
@@ -313,6 +320,31 @@ export function encodeContainerOf(mediaType: string | null | undefined): 'mp4' |
   return container === 'mp4' || container === 'mov' ? container : null;
 }
 
+/** A delivery comp and every measured slot box in it — enough to DRAW the layout. */
+export const apiRenderTemplateLayoutSchema = z
+  .object({
+    comp: z
+      .object({
+        name: z.string(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      })
+      .strict(),
+    boxes: z.array(
+      z
+        .object({
+          key: z.string(),
+          label: z.string(),
+          box: pixelBoxSchema,
+          role: apiRenderSlotRoleSchema.nullable().default(null),
+          kind: apiRenderVariableKindSchema.nullable().default(null),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type ApiRenderTemplateLayout = z.infer<typeof apiRenderTemplateLayoutSchema>;
+
 export const apiRenderTemplateContractSchema = z
   .object({
     template: apiRenderTemplateSummarySchema,
@@ -330,30 +362,7 @@ export const apiRenderTemplateContractSchema = z
      * The delivery comp and every measured row in it, so a caller can DRAW the layout and place
      * a picked asset in it before spending a render. Null when the template has no parsed source.
      */
-    layout: z
-      .object({
-        comp: z
-          .object({
-            name: z.string(),
-            width: z.number().int().positive(),
-            height: z.number().int().positive(),
-          })
-          .strict(),
-        boxes: z.array(
-          z
-            .object({
-              key: z.string(),
-              label: z.string(),
-              box: pixelBoxSchema,
-              role: apiRenderSlotRoleSchema.nullable().default(null),
-              kind: apiRenderVariableKindSchema.nullable().default(null),
-            })
-            .strict(),
-        ),
-      })
-      .strict()
-      .nullable()
-      .default(null),
+    layout: apiRenderTemplateLayoutSchema.nullable().default(null),
     /**
      * Where the LIVE template and its stored contract disagree, straight from the forge. A
      * template whose fields moved under its contract is one whose renders quietly stop matching
@@ -373,6 +382,11 @@ export const apiRenderTemplateContractSchema = z
             frameRate: z.number().positive().nullable().optional(),
             /** Effective settings for this output (defaults ⊕ stored). Null for stills. */
             encode: encodeSettingsSchema.nullable().optional(),
+            /**
+             * This output's own comp and boxes. The same slot is a different rectangle in 1:1 than
+             * in 9:16, so a per-format preview needs the layout of the format it draws.
+             */
+            layout: apiRenderTemplateLayoutSchema.nullable().optional(),
           })
           .strict(),
       )
@@ -488,16 +502,57 @@ export const apiRenderInputValueSchema = z.union([
 ]);
 export type ApiRenderInputValue = z.infer<typeof apiRenderInputValueSchema>;
 
-export const apiRenderDeliveryTargetSchema = z
+/** A new ad in an ad set. `action` defaults so a pre-union `{adAccountId, campaignId, adsetId}` still parses. */
+export const apiRenderDeliveryCreateTargetSchema = z
   .object({
     action: z.literal('create').default('create'),
     adAccountId: z.string().min(1),
     campaignId: z.string().min(1),
+    campaignName: z.string().min(1).optional(),
     adsetId: z.string().min(1),
+    adsetName: z.string().min(1).optional(),
     adStatus: z.literal('PAUSED').default('PAUSED'),
   })
   .strict();
+
+/**
+ * Swap the creative on an existing ad. The delivery plugin replaces with exactly ONE file, so a
+ * record carrying this must name exactly one output (`replaceNeedsOneOutput`).
+ * `expectedCreativeId` is the creative the person saw when they picked the ad — a stale pick is
+ * refused rather than overwriting someone else's swap.
+ */
+export const apiRenderDeliveryReplaceTargetSchema = z
+  .object({
+    action: z.literal('replace'),
+    adAccountId: z.string().min(1),
+    campaignId: z.string().min(1),
+    campaignName: z.string().min(1).optional(),
+    adsetId: z.string().min(1),
+    adsetName: z.string().min(1).optional(),
+    adId: z.string().min(1),
+    adName: z.string().min(1).optional(),
+    adStatus: z.enum(['PAUSED', 'ACTIVE']).optional(),
+    expectedCreativeId: z.string().min(1).optional(),
+  })
+  .strict();
+
+// A plain union, not a discriminated one: the create arm's `action` is defaulted, and a
+// discriminated union refuses an input with no discriminator — which is every pre-union payload.
+export const apiRenderDeliveryTargetSchema = z.union([
+  apiRenderDeliveryCreateTargetSchema,
+  apiRenderDeliveryReplaceTargetSchema,
+]);
 export type ApiRenderDeliveryTarget = z.infer<typeof apiRenderDeliveryTargetSchema>;
+
+const REPLACE_NEEDS_ONE_OUTPUT = 'A replace delivery swaps one creative, so it needs exactly one outputId';
+
+/** replace ⇒ exactly one output. Shared by the single and batch preflight requests. */
+function replaceNeedsOneOutput(
+  delivery: ApiRenderDeliveryTarget | undefined,
+  outputIds: string[] | undefined,
+): boolean {
+  return delivery?.action !== 'replace' || outputIds?.length === 1;
+}
 
 export const apiRenderVariableMapSchema = z.record(
   apiRenderVariableKeySchema,
@@ -551,7 +606,11 @@ export const apiRenderPreflightRequestSchema = z
     encode: apiRenderEncodeOverrideSchema.optional(),
   })
   .strict()
-  .refine(oneVariableSource, oneVariableSourceMessage);
+  .refine(oneVariableSource, oneVariableSourceMessage)
+  .refine((value) => replaceNeedsOneOutput(value.delivery, value.outputIds), {
+    message: REPLACE_NEEDS_ONE_OUTPUT,
+    path: ['outputIds'],
+  });
 export type ApiRenderPreflightRequest = z.infer<typeof apiRenderPreflightRequestSchema>;
 
 export const apiRenderInputSetSchema = z
@@ -608,6 +667,8 @@ export const apiRenderBatchRecordSchema = z
     parentRowId: z.string().uuid().nullable().optional(),
     outputIds: z.array(z.string().min(1)).min(1).optional(),
     encode: apiRenderEncodeOverrideSchema.optional(),
+    /** This record's own delivery. Wins over the batch-level `delivery`; never merged with it. */
+    delivery: apiRenderDeliveryTargetSchema.optional(),
   })
   .strict()
   .refine(oneVariableSource, oneVariableSourceMessage);
@@ -621,8 +682,24 @@ export const apiRenderBatchPreflightRequestSchema = z
     contractHash: z.string().min(1),
     delivery: apiRenderDeliveryTargetSchema.optional(),
     records: z.array(apiRenderBatchRecordSchema).min(1).max(50),
+    /**
+     * Post each finished render to this brand Slack destination. Here, not on createBatch, so the
+     * confirmation token covers it: a destination swapped after review is a different request.
+     */
+    slack: z.object({ destinationId: z.string().uuid() }).strict().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    value.records.forEach((record, index) => {
+      if (!replaceNeedsOneOutput(record.delivery ?? value.delivery, record.outputIds)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: REPLACE_NEEDS_ONE_OUTPUT,
+          path: ['records', index, 'outputIds'],
+        });
+      }
+    });
+  });
 export type ApiRenderBatchPreflightRequest = z.infer<typeof apiRenderBatchPreflightRequestSchema>;
 
 export const apiRenderCreateJobRequestSchema = z
@@ -660,6 +737,23 @@ export const apiRenderDeliveryReceiptSchema = z
     publishedAt: z.string().nullable(),
   })
   .strict();
+
+export const apiRenderSlackDeliverySchema = z
+  .object({
+    destinationId: z.string().uuid(),
+    channelName: z.string(),
+    status: z.enum(['pending', 'posted', 'error', 'skipped']),
+    permalink: z.string().url().nullish(),
+    reason: z.string().nullish(),
+    postedAt: z.string().nullish(),
+  })
+  .strict();
+export type ApiRenderSlackDelivery = z.infer<typeof apiRenderSlackDeliverySchema>;
+
+export const apiRenderJobApprovalSchema = z
+  .object({ status: z.string().min(1), decidedAt: z.string().nullish() })
+  .strict();
+export type ApiRenderJobApproval = z.infer<typeof apiRenderJobApprovalSchema>;
 
 export const apiRenderJobSchema = z
   .object({
@@ -714,9 +808,26 @@ export const apiRenderJobSchema = z
      * either the frame has not finished or nothing needed judging — `fit.escalate` says which.
      */
     judge: apiRenderJudgeSchema.nullable().default(null),
+    /** Where this job was asked to deliver, with the names resolved at preflight. Null = Library only. */
+    deliveryTarget: apiRenderDeliveryTargetSchema.nullable().default(null),
+    /** The Slack post for this job. Null when no destination was chosen. */
+    slackDelivery: apiRenderSlackDeliverySchema.nullable().default(null),
+    /** The Meta approval this job's delivery is parked on (`render_approvals`). Null when none. */
+    approval: apiRenderJobApprovalSchema.nullable().default(null),
   })
   .strict();
 export type ApiRenderJob = z.infer<typeof apiRenderJobSchema>;
+
+export const apiRenderJobListQuerySchema = z
+  .object({
+    brandId: z.string().uuid(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    cursor: z.string().min(1).max(500).optional(),
+    renderSetId: z.string().uuid().optional(),
+    templateKey: z.string().min(1).optional(),
+  })
+  .strict();
+export type ApiRenderJobListQuery = z.infer<typeof apiRenderJobListQuerySchema>;
 
 export const apiRenderJobListResponseSchema = z
   .object({
@@ -874,3 +985,72 @@ export const apiRenderSuggestRowsResponseSchema = z
   })
   .strict();
 export type ApiRenderSuggestRowsResponse = z.infer<typeof apiRenderSuggestRowsResponseSchema>;
+
+// --- Delivery destinations ---------------------------------------------------------------------
+//
+// Where a render can go besides the Library. Slack destinations are the brand's own
+// `chat_destinations` rows; the channel list is scoped to the requesting user's OWN Slack
+// workspace, never the global bot token — that would show one tenant another tenant's channels.
+
+export const apiRenderDeliveryDestinationSchema = z
+  .object({
+    id: z.string().uuid(),
+    role: z.enum(['client', 'ops', 'alerts', 'dm']),
+    channelId: z.string().min(1),
+    channelName: z.string(),
+  })
+  .strict();
+export type ApiRenderDeliveryDestination = z.infer<typeof apiRenderDeliveryDestinationSchema>;
+
+export const apiRenderDeliveryDestinationsResponseSchema = z
+  .object({
+    slack: z
+      .object({
+        state: z.enum(['ready', 'not_installed', 'not_connected']),
+        workspaceName: z.string().nullable(),
+        destinations: z.array(apiRenderDeliveryDestinationSchema),
+      })
+      .strict(),
+    meta: z
+      .object({
+        connected: z.boolean(),
+        adAccountId: z.string().nullable(),
+        adAccountName: z.string().nullable(),
+      })
+      .strict(),
+  })
+  .strict();
+export type ApiRenderDeliveryDestinationsResponse = z.infer<
+  typeof apiRenderDeliveryDestinationsResponseSchema
+>;
+
+export const apiRenderSlackChannelSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string(),
+    isPrivate: z.boolean(),
+    isMember: z.boolean(),
+  })
+  .strict();
+export type ApiRenderSlackChannel = z.infer<typeof apiRenderSlackChannelSchema>;
+
+export const apiRenderSlackChannelListResponseSchema = z
+  .object({
+    workspaceName: z.string().nullable(),
+    channels: z.array(apiRenderSlackChannelSchema),
+  })
+  .strict();
+export type ApiRenderSlackChannelListResponse = z.infer<
+  typeof apiRenderSlackChannelListResponseSchema
+>;
+
+export const apiRenderCreateDeliveryDestinationRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    role: z.enum(['ops', 'client']),
+    channelId: z.string().min(1),
+  })
+  .strict();
+export type ApiRenderCreateDeliveryDestinationRequest = z.infer<
+  typeof apiRenderCreateDeliveryDestinationRequestSchema
+>;

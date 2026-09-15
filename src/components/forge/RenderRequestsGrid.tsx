@@ -4,6 +4,7 @@ import {
   API_RENDER_MEDIA_LIST_MAX,
   API_RENDER_SUGGEST_ROWS_MAX,
   apiRenderPreflightResponseSchema,
+  type ApiRenderBatchRecord,
   type ApiRenderEnvironment,
   type ApiRenderFitVerdict,
   type ApiRenderInputSet,
@@ -45,6 +46,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DataGrid, KIND_ICONS, selectColumn } from '@/components/forge/DataGrid';
 import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
+import {
+  RenderPreflightDialog,
+  type RenderPreflightRow,
+} from '@/components/forge/RenderPreflightDialog';
 import { RenderRowsImport } from '@/components/forge/RenderRowsImport';
 import {
   descendantsOf,
@@ -296,13 +301,19 @@ function InheritanceAction({
   );
 }
 
+/** "Open this in Render": which template, and optionally which saved render set, to land on. */
+export type ForgeRenderIntent = { templateKey: string; renderSetId?: string };
+
 export function RenderRequestsGrid({
   brandId,
   onFired,
+  intent,
 }: {
   brandId: string;
   /** Called with the new job ids once a batch is queued — the tab shell switches to the renders view. */
   onFired?: (jobIds: string[]) => void;
+  /** Each new intent selects its template and loads its render set, over the newest-set default. */
+  intent?: ForgeRenderIntent;
 }) {
   const [environments, setEnvironments] = useState<ApiRenderEnvironment[]>([]);
   const [bindingId, setBindingId] = useState<string | null>(null);
@@ -326,6 +337,10 @@ export function RenderRequestsGrid({
   const [briefCount, setBriefCount] = useState(5);
   const [problem, setProblem] = useState<string | null>(null);
   const [deleteIds, setDeleteIds] = useState<Set<string> | null>(null);
+  const [preflight, setPreflight] = useState<{
+    rows: RenderPreflightRow[];
+    records: ApiRenderBatchRecord[];
+  } | null>(null);
 
   // --- discovery ---------------------------------------------------------------------------
   useEffect(() => {
@@ -382,6 +397,10 @@ export function RenderRequestsGrid({
   }, [brandId, bindingId, envsSettled, multiEnv]);
 
   useEffect(() => {
+    if (intent) setTemplateKey(intent.templateKey);
+  }, [intent]);
+
+  useEffect(() => {
     if (!templateKey) {
       setContract(null);
       setRows([]);
@@ -399,7 +418,9 @@ export function RenderRequestsGrid({
         setInputSets(sets.items);
         setRenderSets(savedSets.items);
         const draft = readDrafts(draftStorageKey(brandId, templateKey));
-        const saved = savedSets.items[0] ?? null;
+        const wantedSetId = intent?.templateKey === templateKey ? intent.renderSetId : undefined;
+        const saved =
+          savedSets.items.find((set) => set.id === wantedSetId) ?? savedSets.items[0] ?? null;
         setActiveSet(saved);
         setDraftOffer(saved ? draft : null);
         setRows(
@@ -432,7 +453,7 @@ export function RenderRequestsGrid({
     return () => {
       cancelled = true;
     };
-  }, [brandId, templateKey, bindingId, multiEnv]);
+  }, [brandId, templateKey, bindingId, multiEnv, intent]);
 
   // --- drafts ------------------------------------------------------------------------------
   useEffect(() => {
@@ -1209,17 +1230,20 @@ export function RenderRequestsGrid({
     );
   };
 
+  // Saves the set, then hands the exact selection to the pre-flight dialog, which fires it.
   const fire = async () => {
     if (!contract || !readyToFire) return;
     setBusy('firing');
     try {
       const submittedSet = await saveRenderSet();
       if (!submittedSet) return;
-      const preflight = await apiRendersApi.batchPreflight({
-        brandId,
-        ...(multiEnv && bindingId ? { bindingId } : {}),
-        templateKey: contract.template.key,
-        contractHash: contract.template.contractHash,
+      setPreflight({
+        rows: selected.map((row) => ({
+          rowId: row.id,
+          label: row.label.trim() || 'Untitled',
+          labelPath: rowBreadcrumb(rows, row.id),
+          outputIds: effectiveOutputIds(rows, row.id),
+        })),
         records: selected.map((row) => ({
           label: row.label.trim() || 'Untitled',
           renderSetId: submittedSet.id,
@@ -1234,14 +1258,6 @@ export function RenderRequestsGrid({
           ...(effectiveEncode(rows, row.id) ? { encode: effectiveEncode(rows, row.id) } : {}),
         })),
       });
-      const batch = await apiRendersApi.createBatch({
-        confirmationToken: preflight.confirmationToken,
-      });
-      setRowSelection({});
-      toast.success(`${batch.jobs.length} render${batch.jobs.length === 1 ? '' : 's'} queued`);
-      onFired?.(batch.jobs.map((job) => job.id));
-    } catch (error) {
-      toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
     } finally {
       setBusy(null);
     }
@@ -1572,6 +1588,34 @@ export function RenderRequestsGrid({
           Choose a template to set up renders.
         </div>
       )}
+      {contract && preflight ? (
+        <RenderPreflightDialog
+          open
+          brandId={brandId}
+          bindingId={multiEnv ? bindingId : null}
+          templateKey={contract.template.key}
+          contractHash={contract.template.contractHash}
+          contract={contract}
+          rows={preflight.rows}
+          records={preflight.records}
+          onDeliveryChange={(rowId, delivery) =>
+            setPreflight((current) =>
+              current && {
+                ...current,
+                rows: current.rows.map((row) =>
+                  row.rowId === rowId ? { ...row, delivery: delivery ?? undefined } : row,
+                ),
+              },
+            )
+          }
+          onClose={() => setPreflight(null)}
+          onFired={(jobIds) => {
+            setPreflight(null);
+            setRowSelection({});
+            onFired?.(jobIds);
+          }}
+        />
+      ) : null}
       <AlertDialog open={deleteIds !== null} onOpenChange={(open) => !open && setDeleteIds(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
