@@ -252,6 +252,7 @@ export function TemplateDetail({
   };
 
   const nameProblem = templateNameProblem(templateName);
+  const chosenWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
   const status = templateStatus({
     parseState: source.parseState,
     forgeState: run?.state ?? source.forgeState,
@@ -400,10 +401,11 @@ export function TemplateDetail({
                 disabled={busy !== null}
                 className="h-8 rounded-md border border-input bg-background px-2 text-sm"
               >
-                {workspaces.map((workspace) => (
+                {/* Numbered, not named: the only names a binding has are its app and client
+                    keys. The server lists the default first and the rest in a stable order. */}
+                {workspaces.map((workspace, index) => (
                   <option key={workspace.id} value={workspace.id}>
-                    {renderWorkspaceLabel(workspace)}
-                    {workspace.isDefault ? ' (default)' : ''}
+                    {`Workspace ${index + 1}${workspace.isDefault ? ' (default)' : ''}`}
                   </option>
                 ))}
               </select>
@@ -508,7 +510,9 @@ export function TemplateDetail({
           <dt className="text-muted-foreground">Template key</dt>
           <dd className="break-all font-mono">{templateKey ?? '—'}</dd>
           <dt className="text-muted-foreground">Workspace</dt>
-          <dd className="break-all font-mono">{run?.application ?? '—'}</dd>
+          <dd className="break-all font-mono">
+            {run?.application ?? (chosenWorkspace ? renderWorkspaceLabel(chosenWorkspace) : '—')}
+          </dd>
           <dt className="text-muted-foreground">Root table</dt>
           <dd className="break-all font-mono">{run?.root_table ?? '—'}</dd>
           <dt className="text-muted-foreground">Asset id</dt>

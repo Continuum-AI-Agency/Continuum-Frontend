@@ -4,8 +4,9 @@
  * detail panel and back.
  */
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { TemplateSource } from '@continuum/contracts';
+import React from 'react';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const ASSET = '55555555-5555-4555-8555-555555555555';
@@ -49,6 +50,9 @@ mock.module('@/lib/library/templateSources', () => ({
   sendTemplateToForge: async () => SOURCE,
   advanceTemplateForgeRun: async () => undefined,
 }));
+let reducedMotion = false;
+const motion = await import('motion/react');
+mock.module('motion/react', () => ({ ...motion, useReducedMotion: () => reducedMotion }));
 mock.module('@/components/forge/useForgeRun', () => ({
   useForgeRun: () => ({ run: null, pushed: true, loading: false, refresh: async () => undefined }),
 }));
@@ -75,7 +79,10 @@ beforeEach(() => {
   renameTemplateSource.mockClear();
   toastError.mockClear();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  reducedMotion = false;
+});
 
 function workspaceTemplate(overrides: Record<string, unknown>) {
   return {
@@ -148,15 +155,38 @@ describe('ForgeWorkbench', () => {
     expect(document.body.textContent).not.toMatch(/\[DRAFT|template \d+|Continuum_app/);
   });
 
-  test('a card opens into its detail panel and Templates goes back', async () => {
-    renderWorkbench();
-    fireEvent.click(await screen.findByRole('button', { name: 'Open Untitled template' }));
+  test('a card opens into its detail panel through a transition, and Templates goes back', async () => {
+    const transition = spyOn(React, 'startTransition');
+    try {
+      renderWorkbench();
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Untitled template' }));
 
-    expect(await screen.findByRole('heading', { name: 'Variables' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: /Untitled template/ })).toBeTruthy();
-    expect(screen.queryByLabelText('Search templates')).toBeNull();
+      expect(await screen.findByRole('heading', { name: 'Variables' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /Untitled template/ })).toBeTruthy();
+      expect(screen.queryByLabelText('Search templates')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Templates' }));
-    expect(await screen.findByLabelText('Search templates')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Templates' }));
+      expect(await screen.findByLabelText('Search templates')).toBeTruthy();
+      // The morph needs a transition; the page-wide <ViewTransition> animates only those.
+      expect(transition).toHaveBeenCalledTimes(2);
+    } finally {
+      transition.mockRestore();
+    }
+  });
+
+  test('reduced motion swaps the detail in outside a transition, so nothing cross-fades', async () => {
+    reducedMotion = true;
+    const transition = spyOn(React, 'startTransition');
+    try {
+      renderWorkbench();
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Untitled template' }));
+      expect(await screen.findByRole('heading', { name: 'Variables' })).toBeTruthy();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Templates' }));
+      expect(await screen.findByLabelText('Search templates')).toBeTruthy();
+      expect(transition).not.toHaveBeenCalled();
+    } finally {
+      transition.mockRestore();
+    }
   });
 });

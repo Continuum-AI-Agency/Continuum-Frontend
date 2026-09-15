@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const contract = () => ({
@@ -35,11 +35,20 @@ const contract = () => ({
   },
 });
 
-const getContract = mock(async () => contract());
+const DEFAULT_BINDING = '33333333-3333-4333-8333-333333333333';
+const OTHER_BINDING = '44444444-4444-4444-8444-444444444444';
+
+const getContract = mock(
+  async (_brandId: string, _templateKey: string, _bindingId?: string | null) => contract(),
+);
+const listEnvironments = mock(async () => ({ items: [{ bindingId: DEFAULT_BINDING }] }));
+const listTemplates = mock(async (_brandId: string, _bindingId?: string | null) => ({
+  items: [] as Array<{ key: string }>,
+}));
 const request = mock(async () => ({ before: {}, after: {}, fired: true }));
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { getContract },
+  apiRendersApi: { getContract, listEnvironments, listTemplates },
 }));
 mock.module('@/lib/api/http', () => ({ http: { request } }));
 
@@ -48,8 +57,7 @@ const { OutputSettingsPanel } = await import('./OutputSettingsPanel');
 const select = (label: string) => screen.getByLabelText(label) as HTMLSelectElement;
 
 beforeEach(() => {
-  getContract.mockClear();
-  request.mockClear();
+  for (const fn of [getContract, listEnvironments, listTemplates, request]) fn.mockClear();
 });
 afterEach(cleanup);
 
@@ -60,6 +68,32 @@ describe('OutputSettingsPanel', () => {
     await waitFor(() => expect(getContract).toHaveBeenCalledTimes(1));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(container.textContent).toBe('');
+  });
+
+  test('a contract that cannot be read renders nothing, not the raw error', async () => {
+    getContract.mockImplementationOnce(async () => {
+      throw new Error('template_contract_not_found');
+    });
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+      await waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+      expect(container.textContent).toBe('');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test('a template in a non-default workspace reads its contract from that workspace', async () => {
+    listEnvironments.mockImplementationOnce(async () => ({
+      items: [{ bindingId: DEFAULT_BINDING }, { bindingId: OTHER_BINDING }],
+    }));
+    listTemplates.mockImplementation(async (_brandId, bindingId) => ({
+      items: bindingId === OTHER_BINDING ? [{ key: '133' }] : [],
+    }));
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    await waitFor(() => expect(select('Frame rate').value).toBe('25'));
+    expect(getContract).toHaveBeenCalledWith('brand-1', '133', OTHER_BINDING);
   });
 
   test('an unset field shows what it inherits; a reset clears the stored override', async () => {

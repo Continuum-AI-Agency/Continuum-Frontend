@@ -29,6 +29,14 @@ function shortId(id: string | null | undefined): string {
   return id.startsWith('path:') ? `${id.slice(0, 13)}…` : `${id.slice(0, 10)}…`;
 }
 
+/**
+ * A ref as a badge reads: `<repoKey>/story/base` is `story/base`. The repo key is a tenant-scoped
+ * slug with a brand-id fragment in it, so it stays in the badge's title.
+ */
+function refLabel(ref: string): string {
+  return ref.includes('@') ? ref.slice(ref.indexOf('@')) : ref.slice(ref.indexOf('/') + 1);
+}
+
 function LineageNode({
   node,
   selected,
@@ -64,8 +72,13 @@ function LineageNode({
           <span className="text-muted-foreground">{node.ops} ops</span>
         ) : null}
         {node.refs.slice(0, 2).map((ref) => (
-          <Badge key={ref} variant="secondary" className="px-1 py-0 text-2xs font-normal">
-            {ref.includes('@') ? ref.slice(ref.indexOf('@')) : ref.split('/').slice(-2).join('/')}
+          <Badge
+            key={ref}
+            variant="secondary"
+            className="px-1 py-0 text-2xs font-normal"
+            title={ref}
+          >
+            {refLabel(ref)}
           </Badge>
         ))}
       </button>

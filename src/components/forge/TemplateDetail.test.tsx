@@ -46,6 +46,35 @@ const SOURCE: TemplateSource = {
   updatedAt: '2026-09-12T00:00:00Z',
 };
 
+const CONTINUUM_WORKSPACE = {
+  id: '77777777-7777-4777-8777-777777777777',
+  picinst: 'Continuum_app',
+  environmentKey: 'prod',
+  clientKey: 'starcraft_b17d81',
+  isDefault: true,
+};
+const PARSED_WORKSPACE = {
+  id: '88888888-8888-4888-8888-888888888888',
+  picinst: 'Parsed_app',
+  environmentKey: 'prod',
+  clientKey: 'starcraft_b17d81',
+  isDefault: false,
+};
+const PUBLISHED_RUN = {
+  run_id: 'run-1',
+  state: 'published',
+  done: true,
+  ok: true,
+  progress: null,
+  findings: [],
+  needs: [],
+  error: null,
+  root_table: 'tpl_starcraft_b17d81_starcraft_promo_root',
+  application: 'Continuum_app',
+};
+let workspaces = [CONTINUUM_WORKSPACE];
+let run: typeof PUBLISHED_RUN | null = PUBLISHED_RUN;
+
 mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateVariables: async () => ({
     variables: [
@@ -78,33 +107,14 @@ mock.module('@/lib/library/templateSources', () => ({
     ],
     parseState: 'parsed',
   }),
-  fetchRenderWorkspaces: async () => [
-    {
-      id: '77777777-7777-4777-8777-777777777777',
-      picinst: 'Continuum_app',
-      environmentKey: 'prod',
-      clientKey: 'starcraft_b17d81',
-      isDefault: true,
-    },
-  ],
+  fetchRenderWorkspaces: async () => workspaces,
   saveTemplateVariables: async () => undefined,
   sendTemplateToForge: async () => SOURCE,
   advanceTemplateForgeRun: async () => undefined,
 }));
 mock.module('@/components/forge/useForgeRun', () => ({
   useForgeRun: () => ({
-    run: {
-      run_id: 'run-1',
-      state: 'published',
-      done: true,
-      ok: true,
-      progress: null,
-      findings: [],
-      needs: [],
-      error: null,
-      root_table: 'tpl_starcraft_b17d81_starcraft_promo_root',
-      application: 'Continuum_app',
-    },
+    run,
     pushed: true,
     loading: false,
     refresh: async () => undefined,
@@ -123,7 +133,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TemplateDetail } from './TemplateDetail';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  workspaces = [CONTINUUM_WORKSPACE];
+  run = PUBLISHED_RUN;
+});
 
 /** What a person sees: everything except the body of a closed disclosure. */
 function visibleText(): string {
@@ -173,6 +187,23 @@ describe('TemplateDetail', () => {
     expect(opened).toContain('tpl_starcraft_b17d81_starcraft_promo_root');
     expect(opened).toContain('Continuum_app');
     expect(opened).toContain(ASSET);
+  });
+
+  test('a brand with two workspaces picks between names, not app names', async () => {
+    workspaces = [CONTINUUM_WORKSPACE, PARSED_WORKSPACE];
+    run = null;
+    renderDetail();
+    const picker = (await screen.findByLabelText('Render workspace')) as HTMLSelectElement;
+    expect([...picker.options].map((option) => option.textContent)).toEqual([
+      'Workspace 1 (default)',
+      'Workspace 2',
+    ]);
+    expect(visibleText()).not.toMatch(/Continuum_app|Parsed_app/);
+
+    // The app name is still findable, inside Details, for whichever workspace is chosen.
+    fireEvent.change(picker, { target: { value: PARSED_WORKSPACE.id } });
+    screen.getByText('Details').closest('details')!.setAttribute('open', '');
+    expect(visibleText()).toContain('Parsed_app');
   });
 
   test('Render with this opens Render on the template', async () => {

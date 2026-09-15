@@ -208,6 +208,24 @@ function resolve<K extends keyof TemplateSlotEdit>(
   return edited === undefined ? fallback : edited;
 }
 
+/**
+ * The draft once `submitted` has landed. A sent field is settled unless it changed again while the
+ * save was in flight; a field typed meanwhile stays; a slot with nothing left drops out. Clearing
+ * all or nothing would either lose those edits or re-send what the server already has.
+ */
+function settleDraft(current: Draft, submitted: Draft): Draft {
+  const next: Draft = {};
+  for (const [key, edit] of Object.entries(current)) {
+    const sent: Partial<TemplateSlotEdit> = submitted[key] ?? {};
+    const pending = Object.entries(edit).filter(
+      ([field, value]) =>
+        field !== 'slotKey' && !Object.is(sent[field as keyof TemplateSlotEdit], value),
+    );
+    if (pending.length) next[key] = { ...Object.fromEntries(pending), slotKey: key };
+  }
+  return next;
+}
+
 export function VariableEditor({
   brandId,
   variables,
@@ -251,8 +269,7 @@ export function VariableEditor({
   const save = async () => {
     const submitted = draft;
     if (!(await onSave(Object.values(submitted)))) return;
-    // Only what was sent is settled: an edit typed while the save was in flight stays a draft.
-    setDraft((current) => (current === submitted ? {} : current));
+    setDraft((current) => settleDraft(current, submitted));
   };
 
   if (parseState !== 'parsed') {

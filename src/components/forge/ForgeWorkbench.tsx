@@ -1,12 +1,13 @@
 'use client';
 
 import { type TemplateSource, templateDisplayName } from '@continuum/contracts';
-import { startTransition, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { PendingApprovals } from '@/components/forge/PendingApprovals';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
-import type { SharedTemplate } from '@/components/forge/TemplateCard';
+import { type SharedTemplate, sharedTemplateId } from '@/components/forge/TemplateCard';
 import { TemplateDetail } from '@/components/forge/TemplateDetail';
 import { TemplateGallery } from '@/components/forge/TemplateGallery';
+import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
 import { UploadStrip } from '@/components/library/UploadStrip';
 import { useMediaUpload } from '@/components/library/useMediaUpload';
 import { toast } from '@/components/ui/toast-imperative';
@@ -141,7 +142,7 @@ export function ForgeWorkbench({
 
   const toggleShared = async (template: SharedTemplate) => {
     const name = template.displayName ?? templateDisplayName(template.name);
-    setAdopting(template.templateKey);
+    setAdopting(sharedTemplateId(template));
     try {
       await setTemplateAdoption({
         brandId,
@@ -162,8 +163,8 @@ export function ForgeWorkbench({
     }
   };
 
-  // Inside a transition so the card's preview morphs into the detail's (<ViewTransition>).
-  const open = (assetId: string | null) => startTransition(() => setSelected(assetId));
+  const morph = useTemplateMorphSwap();
+  const open = (assetId: string | null) => morph(() => setSelected(assetId));
 
   const current = sources.find((source) => source.assetId === selected) ?? null;
 

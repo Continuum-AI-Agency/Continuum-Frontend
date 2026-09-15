@@ -128,10 +128,13 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
         </ol>
       ) : null}
 
+      {/* Codes are for looking a failure up, not for reading, so they ride in the title. */}
       {run.error ? (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          <span className="font-mono">{run.error.code}</span>
-          {run.error.message ? ` — ${run.error.message}` : null}
+        <p
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+          title={run.error.code}
+        >
+          {run.error.message ?? 'The run stopped on an error.'}
         </p>
       ) : null}
 
@@ -142,9 +145,11 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
           </summary>
           <ul className="mt-2 space-y-1">
             {run.findings.map((finding) => (
-              <li key={finding.code} className="text-muted-foreground">
-                <span className="font-mono text-foreground">{finding.code}</span>
-                {finding.why ? ` — ${finding.why}` : null}
+              <li key={finding.code} className="text-muted-foreground" title={finding.code}>
+                <span className="text-foreground">
+                  {finding.what ?? finding.why ?? 'Something went wrong'}
+                </span>
+                {finding.what && finding.why ? ` — ${finding.why}` : null}
                 {/*
                   A null resolver is the backlog: nothing can fix this class of problem yet.
                   Saying so is the point — "we can fix this for you" and "nobody can fix this

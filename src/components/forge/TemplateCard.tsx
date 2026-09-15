@@ -229,6 +229,14 @@ export type SharedTemplate = {
   workspaceId?: string;
 };
 
+/**
+ * What tells two shared templates apart. `templateKey` alone does not: it is a NocoBase row id, and
+ * a brand with several workspaces can hold the same id in two of them.
+ */
+export function sharedTemplateId(template: SharedTemplate): string {
+  return `${template.workspaceId ?? 'default'}:${template.templateKey}`;
+}
+
 export function SharedTemplateCard({
   brandId,
   template,

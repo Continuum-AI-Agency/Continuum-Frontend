@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import {
   type SharedTemplate,
   SharedTemplateCard,
+  sharedTemplateId,
   sourceDisplayName,
   TEMPLATE_STATUS,
   TemplateCard,
@@ -75,7 +76,7 @@ export function TemplateGallery({
   brandName?: string;
   sources: TemplateSource[];
   shared: SharedTemplate[];
-  /** The shared template whose adoption is in flight. */
+  /** The `sharedTemplateId` of the shared template whose adoption is in flight. */
   adopting: string | null;
   onOpen: (assetId: string) => void;
   onRename: (assetId: string, title: string) => void;
@@ -100,7 +101,7 @@ export function TemplateGallery({
       })),
       ...shared.map((template) => ({
         kind: 'shared' as const,
-        key: `shared:${template.templateKey}`,
+        key: `shared:${sharedTemplateId(template)}`,
         name: template.displayName ?? templateDisplayName(template.name),
         group: template.draft ? 'drafts' : 'ready',
         updatedAt: template.updatedAt ?? '',
@@ -214,7 +215,7 @@ export function TemplateGallery({
                 brandId={brandId}
                 template={item.shared}
                 brandName={brandName}
-                busy={adopting === item.shared.templateKey}
+                busy={adopting === sharedTemplateId(item.shared)}
                 onToggle={() => onToggleShared(item.shared)}
                 onRender={
                   onOpenRender

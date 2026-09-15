@@ -175,8 +175,18 @@ const ViewTransition = (
 ).ViewTransition;
 
 /**
+ * Runs the state change that swaps a card and its detail panel. In a transition, so the previews
+ * morph. Reduced motion runs it outside one: dropping the named morph alone is not enough, because
+ * the page's own unnamed <ViewTransition> would still cross-fade a transition update.
+ */
+export function useTemplateMorphSwap(): (swap: () => void) => void {
+  const reducedMotion = useReducedMotion();
+  return (swap) => (reducedMotion ? swap() : React.startTransition(swap));
+}
+
+/**
  * The shared element between a template's card and its detail panel. Both sides wrap their preview
- * in this with the same id, and the state change that swaps them runs in `startTransition`.
+ * in this with the same id, and the state change that swaps them goes through `useTemplateMorphSwap`.
  * Reduced motion gets the swap with no morph at all, not a shorter one.
  */
 export function TemplateMorph({ id, children }: { id: string; children: ReactNode }) {

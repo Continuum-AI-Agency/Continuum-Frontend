@@ -6,8 +6,8 @@
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
 import type { ForgeLineageView } from '@continuum/contracts';
+import { cleanup, render, screen } from '@testing-library/react';
 
 const fetchMock = mock(async (): Promise<ForgeLineageView> => disconnected);
 
@@ -37,7 +37,12 @@ afterEach(() => {
 describe('LineagePanel', () => {
   test('unset forge is connected=false, not an invented tree', async () => {
     fetchMock.mockImplementation(async () => disconnected);
-    render(<LineagePanel brandId="00000000-0000-0000-0000-000000000001" assetId="00000000-0000-0000-0000-000000000002" />);
+    render(
+      <LineagePanel
+        brandId="00000000-0000-0000-0000-000000000001"
+        assetId="00000000-0000-0000-0000-000000000002"
+      />,
+    );
     expect(await screen.findByText(/Lineage is not connected/)).toBeTruthy();
     expect(screen.queryByText('master')).toBeNull();
   });
@@ -49,7 +54,12 @@ describe('LineagePanel', () => {
       known: false,
       master: 'a'.repeat(64),
     }));
-    render(<LineagePanel brandId="00000000-0000-0000-0000-000000000001" assetId="00000000-0000-0000-0000-000000000002" />);
+    render(
+      <LineagePanel
+        brandId="00000000-0000-0000-0000-000000000001"
+        assetId="00000000-0000-0000-0000-000000000002"
+      />,
+    );
     expect(await screen.findByText(/not in the version tree yet/)).toBeTruthy();
   });
 
@@ -87,9 +97,46 @@ describe('LineagePanel', () => {
       worktrees: [{ id: 'wt_1', commit: 'b'.repeat(64), locked: true, reason: 'authored' }],
       refs: { 'demo/master': 'c'.repeat(64) },
     }));
-    render(<LineagePanel brandId="00000000-0000-0000-0000-000000000001" assetId="00000000-0000-0000-0000-000000000002" />);
+    render(
+      <LineagePanel
+        brandId="00000000-0000-0000-0000-000000000001"
+        assetId="00000000-0000-0000-0000-000000000002"
+      />,
+    );
     expect(await screen.findByText(/pinned to an older master/)).toBeTruthy();
     expect(screen.getAllByText('geometry').length).toBeGreaterThan(0);
     expect(screen.getByText(/checkout/)).toBeTruthy();
+  });
+
+  test('a ref badge names the branch, never the tenant-scoped repo key', async () => {
+    const repo = 'starcraft_b17d81_summer_sale';
+    fetchMock.mockImplementation(async () => ({
+      ...disconnected,
+      connected: true,
+      known: true,
+      master: 'a'.repeat(64),
+      currentMaster: 'a'.repeat(64),
+      roots: [
+        {
+          sha: 'a'.repeat(64),
+          tool: 'forge ratio',
+          reason: 'geometry',
+          refs: [`${repo}/master`, `${repo}/story/base`],
+          tags: {},
+          children: [],
+        },
+      ],
+    }));
+    const { container } = render(
+      <LineagePanel
+        brandId="00000000-0000-0000-0000-000000000001"
+        assetId="00000000-0000-0000-0000-000000000002"
+      />,
+    );
+    const branch = await screen.findByText('story/base');
+    expect(screen.getByText('master')).toBeTruthy();
+    expect(container.textContent).not.toContain(repo);
+    // Whoever needs the full ref can still hover for it.
+    expect(branch.getAttribute('title')).toBe(`${repo}/story/base`);
   });
 });

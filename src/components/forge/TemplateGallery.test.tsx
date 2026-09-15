@@ -4,7 +4,7 @@
  * decode — an upload's uuid filename, the workspace's app name, "template 133" — reaches the page.
  */
 
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { TemplateSource } from '@continuum/contracts';
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
@@ -13,7 +13,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import type { SharedTemplate } from './TemplateCard';
+import { type SharedTemplate, sharedTemplateId } from './TemplateCard';
 import { TemplateGallery } from './TemplateGallery';
 
 afterEach(cleanup);
@@ -78,7 +78,13 @@ const SHARED: SharedTemplate[] = [
   },
 ];
 
-function renderGallery(onToggleShared = mock((_template: SharedTemplate) => undefined)) {
+function renderGallery(
+  onToggleShared = mock((_template: SharedTemplate) => undefined),
+  {
+    shared = SHARED,
+    adopting = null,
+  }: { shared?: SharedTemplate[]; adopting?: string | null } = {},
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
@@ -86,8 +92,8 @@ function renderGallery(onToggleShared = mock((_template: SharedTemplate) => unde
         brandId={BRAND}
         brandName="StarCraft"
         sources={SOURCES}
-        shared={SHARED}
-        adopting={null}
+        shared={shared}
+        adopting={adopting}
         onOpen={() => undefined}
         onRename={() => undefined}
         onToggleShared={onToggleShared}
@@ -138,6 +144,29 @@ describe('TemplateGallery', () => {
     expect(within(shared).getByText('Draft')).toBeTruthy();
     fireEvent.click(within(shared).getByRole('button', { name: 'Add to StarCraft' }));
     expect(onToggleShared).toHaveBeenCalledWith(SHARED[0]);
+  });
+
+  test('one template id in two workspaces is two cards, and only the one being added spins', () => {
+    const inWorkspace = (workspaceId: string): SharedTemplate => ({
+      templateKey: '88',
+      name: 'Hero offer',
+      draft: false,
+      granted: false,
+      updatedAt: null,
+      workspaceId,
+    });
+    const [first, second] = [inWorkspace('workspace-a'), inWorkspace('workspace-b')];
+    const logged = spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      renderGallery(undefined, { shared: [first, second], adopting: sharedTemplateId(second) });
+      fireEvent.click(screen.getByRole('button', { name: /^Shared with you/ }));
+
+      const buttons = screen.getAllByRole('button', { name: 'Add to StarCraft' });
+      expect(buttons.map((button) => button.hasAttribute('disabled'))).toEqual([false, true]);
+      expect(logged.mock.calls.flat().join(' ')).not.toMatch(/same key/);
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   test('no uuid, app name, draft marker or "template N" is on the page', () => {

@@ -4,6 +4,7 @@ import { API_RENDER_SUGGEST_ROWS_MAX } from '@continuum/contracts';
 import { Loader2, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import { templateBindingFor } from '@/components/forge/templateBinding';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -23,25 +24,6 @@ import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/
 // "Draft variations with AI": a prompt becomes rows, the rows become a saved render set, and the
 // Render tab opens on it. Proposals only — nothing renders until a person fires it from the grid,
 // where every drafted row goes through the same checks as a typed one.
-
-/**
- * The workspace this template lives in, and whether naming it matters. One workspace is not a
- * question — the server answers from the default — so only a brand with several is asked in turn.
- */
-async function bindingFor(
-  brandId: string,
-  templateKey: string,
-): Promise<{ bindingId: string | null; several: boolean }> {
-  const { items } = await apiRendersApi.listEnvironments(brandId);
-  if (items.length <= 1) return { bindingId: items[0]?.bindingId ?? null, several: false };
-  for (const environment of items) {
-    const templates = await apiRendersApi.listTemplates(brandId, environment.bindingId);
-    if (templates.items.some((template) => template.key === templateKey)) {
-      return { bindingId: environment.bindingId, several: true };
-    }
-  }
-  return { bindingId: null, several: true };
-}
 
 export function AiVariationsDialog({
   brandId,
@@ -64,7 +46,7 @@ export function AiVariationsDialog({
     setBusy(true);
     setProblem(null);
     try {
-      const { bindingId, several } = await bindingFor(brandId, templateKey);
+      const { bindingId, several } = await templateBindingFor(brandId, templateKey);
       if (!bindingId) throw new Error('render_workspace_not_bound');
       const contract = await apiRendersApi.getContract(
         brandId,

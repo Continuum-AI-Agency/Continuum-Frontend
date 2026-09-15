@@ -13,6 +13,7 @@ import {
 } from '@continuum/contracts';
 import { Loader2, RotateCcw, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { templateBindingFor } from '@/components/forge/templateBinding';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
@@ -254,16 +255,21 @@ export function OutputSettingsPanel({
   const [draft, setDraft] = useState<EncodeBlock>({});
   const [scope, setScope] = useState('all');
   const [saving, setSaving] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const next = await apiRendersApi.getContract(brandId, templateKey);
+      const { bindingId, several } = await templateBindingFor(brandId, templateKey);
+      const next = await apiRendersApi.getContract(
+        brandId,
+        templateKey,
+        several ? bindingId : null,
+      );
       setContract(next);
       setDraft(next.encode?.stored ?? {});
-      setProblem(null);
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : 'Could not read the template');
+      // Logged, not shown: this panel exists only for a contract that carries output settings,
+      // and a template whose contract cannot be read has none to show.
+      console.warn('[OutputSettingsPanel] could not read the template contract', error);
     }
   }, [brandId, templateKey]);
 
@@ -272,11 +278,7 @@ export function OutputSettingsPanel({
     void load();
   }, [load]);
 
-  if (!contract?.encode) {
-    return problem ? (
-      <p className="text-xs text-muted-foreground">Output settings: {problem}</p>
-    ) : null;
-  }
+  if (!contract?.encode) return null;
   const { defaults, stored } = contract.encode;
   const outputs = contract.outputs;
   const all: Container[] = outputs.length
