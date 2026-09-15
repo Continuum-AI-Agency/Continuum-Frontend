@@ -45,6 +45,7 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
         <RenderRequestsGrid
           key={brandId}
           brandId={brandId}
+          active={tab === 'render'}
           intent={renderIntent}
           onIntentConsumed={() => setRenderIntent(undefined)}
           onFired={() => setTab('renders')}

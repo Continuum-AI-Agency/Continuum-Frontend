@@ -122,6 +122,7 @@ const withSavedSets = () =>
   listRenderSetsMock.mockImplementation(async () => ({ items: SAVED_SETS, nextCursor: null }));
 
 /** Per-test additions to the one template list and contract the API mock answers with. */
+let renamedTo: string | null = null;
 let extraTemplates: Array<typeof TEMPLATE> = [];
 let contractOverrides: Record<string, unknown> = {};
 
@@ -157,7 +158,11 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
         },
       ],
     }),
-    listTemplates: async () => ({ items: [TEMPLATE, ...extraTemplates], nextCursor: null }),
+    listTemplates: async () => ({
+      // Fresh objects per call, like the wire: a rename is only visible to a caller that re-lists.
+      items: [{ ...TEMPLATE, ...(renamedTo ? { displayName: renamedTo } : {}) }, ...extraTemplates],
+      nextCursor: null,
+    }),
     getContract: async (_brandId: string, templateKey: string) => ({
       template: [TEMPLATE, ...extraTemplates].find((item) => item.key === templateKey) ?? TEMPLATE,
       variables: VARIABLES,
@@ -314,6 +319,22 @@ describe('RenderRequestsGrid', () => {
     expect(preflightMock.mock.calls[0]?.[0].variables).toEqual({ headline: 'Hola mundo' });
     // A media cell offers the Library and is not a text input.
     expect(screen.getByLabelText('Choose Hero')).toBeTruthy();
+  });
+
+  test('a rename made on Templates reaches the kept-mounted picker when the Render tab returns', async () => {
+    const { rerender } = render(<RenderRequestsGrid brandId={BRAND} active />);
+    const picker = () => screen.getByRole('button', { name: 'Template' });
+    await waitFor(() => expect(picker().textContent).toContain('StarCraft Promo'));
+    try {
+      // Renamed elsewhere while the tab was hidden; the grid stayed mounted and kept its rows.
+      rerender(<RenderRequestsGrid brandId={BRAND} active={false} />);
+      renamedTo = 'Protoss Promo';
+      rerender(<RenderRequestsGrid brandId={BRAND} active />);
+      await waitFor(() => expect(picker().textContent).toContain('Protoss Promo'));
+      expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Hola mundo');
+    } finally {
+      renamedTo = null;
+    }
   });
 
   test('typing 20 characters keeps focus in text, number and name cells while dry-runs land', async () => {

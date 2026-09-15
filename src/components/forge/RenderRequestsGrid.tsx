@@ -250,8 +250,15 @@ export function RenderRequestsGrid({
   onFired,
   intent,
   onIntentConsumed,
+  active = true,
 }: {
   brandId: string;
+  /**
+   * Whether the Render tab is showing. The grid stays mounted across tabs (unsaved rows live
+   * here), so a rename, publish or adoption made on Templates reaches the picker only by
+   * re-listing templates when the tab comes back.
+   */
+  active?: boolean;
   /** Called with the new job ids once a batch is queued — the tab shell switches to the renders view. */
   onFired?: (jobIds: string[]) => void;
   /** Each new intent selects its template and loads its render set, over the newest-set default. */
@@ -327,6 +334,14 @@ export function RenderRequestsGrid({
   }, [brandId]);
 
   const multiEnv = environments.length > 1;
+  // Bumped each time the tab comes back into view; re-lists templates without touching rows.
+  const [templatesEpoch, setTemplatesEpoch] = useState(0);
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current) setTemplatesEpoch((epoch) => epoch + 1);
+    wasActive.current = active;
+  }, [active]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: templatesEpoch is the re-list trigger.
   useEffect(() => {
     if (!envsSettled) return;
     let cancelled = false;
@@ -355,7 +370,7 @@ export function RenderRequestsGrid({
     return () => {
       cancelled = true;
     };
-  }, [brandId, bindingId, envsSettled, multiEnv]);
+  }, [brandId, bindingId, envsSettled, multiEnv, templatesEpoch]);
 
   // A loaded set or draft carries Library pins but not their thumbnails or pixel sizes — those
   // are browser-side facts. Look each asset up once so cells, fit checks and the preview have
