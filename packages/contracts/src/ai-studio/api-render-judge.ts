@@ -63,17 +63,40 @@ export type JudgeVerdict = z.infer<typeof judgeVerdictSchema>;
  * the one mistake that turns an unchecked frame into a checked one. Everything downstream
  * branches on this word.
  */
+const judgeAnswerShape = {
+  state: z.enum(['pass', 'fail', 'unknown']),
+  verdict: judgeVerdictSchema.nullable().default(null),
+  why: z.string().nullable().default(null),
+  model: z.string().nullable().default(null),
+  level: z.string().nullable().default(null),
+  votes: z.number().int().positive().nullable().default(null),
+};
+
+/** One judged still — a render of three formats is three frames, each with its own verdict. */
+export const apiRenderJudgeFrameSchema = z
+  .object({
+    /** The job output this frame is (`ApiRenderOutput.id`). */
+    outputId: z.string().min(1),
+    fileName: z.string().min(1),
+    /** Null when the file name resolved to no known format. */
+    ratio: z.string().nullable().default(null),
+    ...judgeAnswerShape,
+  })
+  .strict();
+export type ApiRenderJudgeFrame = z.infer<typeof apiRenderJudgeFrameSchema>;
+
 export const apiRenderJudgeSchema = z
   .object({
-    state: z.enum(['pass', 'fail', 'unknown']),
-    verdict: judgeVerdictSchema.nullable().default(null),
-    why: z.string().nullable().default(null),
-    model: z.string().nullable().default(null),
-    level: z.string().nullable().default(null),
-    votes: z.number().int().positive().nullable().default(null),
+    /**
+     * With `frames`, the WORST frame (fail > unknown > pass), and verdict/why/model/level/votes
+     * are that frame's — so a reader of the top level alone never sees a pass one format failed.
+     */
+    ...judgeAnswerShape,
     /** Why this frame was escalated at all — the deterministic check's own words. */
     escalatedBecause: z.string().nullable().default(null),
     judgedAt: z.string().nullable().default(null),
+    /** Every still judged. Absent on a verdict from before every format was judged. */
+    frames: z.array(apiRenderJudgeFrameSchema).optional(),
   })
   .strict();
 export type ApiRenderJudge = z.infer<typeof apiRenderJudgeSchema>;

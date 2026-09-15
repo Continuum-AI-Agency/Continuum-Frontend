@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { forgeRenderSetRowsSchema, resolveForgeRenderSetRows } from './forge-render-sets';
+import {
+  createForgeRenderSetRequestSchema,
+  forgeRenderSetRowsSchema,
+  forgeRenderSetSchema,
+  resolveForgeRenderSetRows,
+  updateForgeRenderSetRequestSchema,
+} from './forge-render-sets';
 
 const rootId = '00000000-0000-4000-8000-000000000001';
 const childId = '00000000-0000-4000-8000-000000000002';
@@ -157,5 +163,63 @@ describe('Forge render-set output settings', () => {
 
   test('rows with no settings resolve to no settings', () => {
     expect(resolveForgeRenderSetRows([row({})])[0]?.encode).toBeUndefined();
+  });
+});
+
+describe('Forge render-set description', () => {
+  const brandId = '00000000-0000-4000-8000-000000000020';
+
+  test('a set from before descriptions reads as null', () => {
+    const set = forgeRenderSetSchema.parse({
+      id: rootId,
+      brandId,
+      bindingId: brandId,
+      name: 'Summer',
+      templateKey: '133',
+      contractHash: 'hash',
+      revision: 0,
+      rows: [{ id: rootId, parentId: null, label: 'Root' }],
+      createdAt: '2026-09-15T00:00:00Z',
+      updatedAt: '2026-09-15T00:00:00Z',
+    });
+    expect(set.description).toBeNull();
+  });
+
+  test('an update may change only the description, and 500 characters is the ceiling', () => {
+    expect(
+      updateForgeRenderSetRequestSchema.safeParse({
+        brandId,
+        expectedRevision: 3,
+        description: 'Prospecting cuts for the September push',
+      }).success,
+    ).toBe(true);
+    expect(
+      updateForgeRenderSetRequestSchema.safeParse({
+        brandId,
+        expectedRevision: 3,
+        description: null,
+      }).success,
+    ).toBe(true);
+    expect(
+      updateForgeRenderSetRequestSchema.safeParse({ brandId, expectedRevision: 3 }).success,
+    ).toBe(false);
+    expect(
+      updateForgeRenderSetRequestSchema.safeParse({
+        brandId,
+        expectedRevision: 3,
+        description: 'x'.repeat(501),
+      }).success,
+    ).toBe(false);
+    expect(
+      createForgeRenderSetRequestSchema.safeParse({
+        brandId,
+        bindingId: brandId,
+        name: 'Summer',
+        templateKey: '133',
+        contractHash: 'hash',
+        description: 'x'.repeat(500),
+        rows: [{ id: rootId, parentId: null, label: 'Root' }],
+      }).success,
+    ).toBe(true);
   });
 });

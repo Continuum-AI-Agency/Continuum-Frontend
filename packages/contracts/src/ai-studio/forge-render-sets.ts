@@ -8,8 +8,8 @@ import {
   compactEncodeBlock,
   ENCODE_SETTING_KEYS,
   type EncodeBlock,
-  type EncodeSettings,
   type EncodeSettingKey,
+  type EncodeSettings,
   flattenEncodeSettings,
   unflattenEncodeSettings,
 } from './api-renders';
@@ -17,6 +17,9 @@ import {
 export const API_RENDER_SETS_ROUTE = '/api/ai-studio/renders/sets';
 export const FORGE_RENDER_SET_MAX_ROWS = 50;
 export const FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH = 3;
+/** Mirrors the `media.render_sets.description` check constraint. */
+export const FORGE_RENDER_SET_MAX_DESCRIPTION = 500;
+const descriptionSchema = z.string().max(FORGE_RENDER_SET_MAX_DESCRIPTION).nullable();
 
 const encodeKeysSchema = z.array(z.enum(ENCODE_SETTING_KEYS));
 export const forgeRenderSetEncodeClearSchema = z
@@ -96,6 +99,8 @@ export const forgeRenderSetSchema = z
     brandId: z.string().uuid(),
     bindingId: z.string().uuid(),
     name: z.string().trim().min(1).max(200),
+    /** What this set is for, in the author's words. Null on a set that never had one. */
+    description: descriptionSchema.default(null),
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
     revision: z.number().int().nonnegative(),
@@ -115,6 +120,7 @@ export const createForgeRenderSetRequestSchema = z
     brandId: z.string().uuid(),
     bindingId: z.string().uuid(),
     name: z.string().trim().min(1).max(200),
+    description: descriptionSchema.optional(),
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
     rows: forgeRenderSetRowsSchema,
@@ -127,12 +133,15 @@ export const updateForgeRenderSetRequestSchema = z
     brandId: z.string().uuid(),
     expectedRevision: z.number().int().nonnegative(),
     name: z.string().trim().min(1).max(200).optional(),
+    description: descriptionSchema.optional(),
     rows: forgeRenderSetRowsSchema.optional(),
   })
   .strict()
-  .refine((value) => value.name !== undefined || value.rows !== undefined, {
-    message: 'Update at least one of name or rows',
-  });
+  .refine(
+    (value) =>
+      value.name !== undefined || value.rows !== undefined || value.description !== undefined,
+    { message: 'Update at least one of name, description or rows' },
+  );
 export type UpdateForgeRenderSetRequest = z.infer<typeof updateForgeRenderSetRequestSchema>;
 
 export interface ResolvedForgeRenderSetRow {

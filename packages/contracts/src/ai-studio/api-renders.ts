@@ -214,9 +214,12 @@ export const encodeSettingsSchema = z
         bitrate: z
           .string()
           .regex(/^\d+k$/)
-          .refine((value) => Number.parseInt(value, 10) >= 32 && Number.parseInt(value, 10) <= 512, {
-            message: 'Bitrate is 32k to 512k',
-          })
+          .refine(
+            (value) => Number.parseInt(value, 10) >= 32 && Number.parseInt(value, 10) <= 512,
+            {
+              message: 'Bitrate is 32k to 512k',
+            },
+          )
           .optional(),
         sampleRate: z.union([z.literal(44100), z.literal(48000)]).optional(),
         channels: z.number().int().min(1).max(8).optional(),
@@ -268,7 +271,9 @@ export const ENCODE_SETTING_KEYS = [
 export type EncodeSettingKey = (typeof ENCODE_SETTING_KEYS)[number];
 export type FlatEncodeSettings = Partial<Record<EncodeSettingKey, string | number | boolean>>;
 
-export function flattenEncodeSettings(settings: EncodeSettings | null | undefined): FlatEncodeSettings {
+export function flattenEncodeSettings(
+  settings: EncodeSettings | null | undefined,
+): FlatEncodeSettings {
   const flat: FlatEncodeSettings = {};
   for (const key of ENCODE_SETTING_KEYS) {
     const [group, leaf] = key.split('.') as [string, string | undefined];
@@ -387,6 +392,11 @@ export const apiRenderTemplateContractSchema = z
              * in 9:16, so a per-format preview needs the layout of the format it draws.
              */
             layout: apiRenderTemplateLayoutSchema.nullable().optional(),
+            /**
+             * The comp this output renders, sized — what a file comes back named for and the frame
+             * a preview draws. Null when neither the forge nor the parse can name it.
+             */
+            comp: apiRenderTemplateLayoutSchema.shape.comp.nullable().optional(),
           })
           .strict(),
       )
@@ -548,7 +558,8 @@ export const apiRenderDeliveryTargetSchema = z.union([
 ]);
 export type ApiRenderDeliveryTarget = z.infer<typeof apiRenderDeliveryTargetSchema>;
 
-const REPLACE_NEEDS_ONE_OUTPUT = 'A replace delivery swaps one creative, so it needs exactly one outputId';
+const REPLACE_NEEDS_ONE_OUTPUT =
+  'A replace delivery swaps one creative, so it needs exactly one outputId';
 
 /** replace ⇒ exactly one output. Shared by the single and batch preflight requests. */
 function replaceNeedsOneOutput(
@@ -778,6 +789,8 @@ export const apiRenderJobSchema = z
     error: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
+    /** When the fleet reported the render finished. `updatedAt` moves on every later write. */
+    finishedAt: z.string().nullable().optional(),
     label: z.string().nullable().default(null),
     renderRequestId: z.string().uuid().nullable().default(null),
     renderSetId: z.string().uuid().nullable().default(null),

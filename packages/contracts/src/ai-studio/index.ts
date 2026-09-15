@@ -36,6 +36,8 @@ export * from './pipeline-manifest';
 export * from './pipeline-publication';
 export * from './pipeline-publication';
 export * from './prompt-enrichment';
+export * from './render-check';
+export * from './render-output-format';
 export * from './shader-stack';
 export * from './slot-roles';
 export * from './timeline-authoring';
