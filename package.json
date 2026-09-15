@@ -39,6 +39,7 @@
     "optimizer:e2e:bench": "playwright test --config playwright.optimizer.config.ts --workers=1",
     "jaina:canvas:e2e:bench": "playwright test --config playwright.jaina-canvas.config.ts --workers=1",
     "jaina:approval:card:e2e:bench": "playwright test --config playwright.jaina-approval-card.config.ts --workers=1",
+    "forge:studio:e2e:bench": "playwright test --config playwright.forge-studio.config.ts --workers=1",
     "optimizer:rebalance:e2e:bench": "playwright test --config playwright.optimizer-rebalance.config.ts --workers=1",
     "command-palette:e2e:bench": "playwright test --config playwright.command-palette.config.ts --workers=1",
     "brands:dedupe:e2e:bench": "playwright test --config playwright.brand-dedupe.config.ts --workers=1",
