@@ -1,7 +1,7 @@
 /**
  * DataGrid's additive props against a real react-table instance: sortable headers are opt-in
- * and keyboard-reachable, groups collapse with counts, columns hide, and a custom row wraps `tr`.
- * The two existing callers pass none of these, which is what the first test pins.
+ * and keyboard-reachable, groups collapse with counts, columns hide, a custom row wraps `tr`,
+ * and sticky columns are opt-in. The first test pins a grid that asks for none of these.
  */
 
 import { afterEach, describe, expect, test } from 'bun:test';
@@ -14,7 +14,7 @@ import {
 } from '@tanstack/react-table';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { type ComponentProps, useState } from 'react';
-import { DataGrid, type DataGridRowProps } from './DataGrid';
+import { DataGrid, type DataGridRowProps, STICKY_LEFT, selectColumn } from './DataGrid';
 
 type Job = { id: string; name: string; template: string };
 
@@ -30,11 +30,14 @@ const COLUMNS: ColumnDef<Job>[] = [
   { accessorKey: 'template', header: 'Template' },
 ];
 
-function Harness(props: Partial<ComponentProps<typeof DataGrid<Job>>>) {
+function Harness({
+  columns = COLUMNS,
+  ...props
+}: Partial<ComponentProps<typeof DataGrid<Job>>> & { columns?: ColumnDef<Job>[] }) {
   const [visibility, setVisibility] = useState<VisibilityState>({});
   const table = useReactTable({
     data: JOBS,
-    columns: COLUMNS,
+    columns,
     getRowId: (job) => job.id,
     state: { columnVisibility: visibility },
     onColumnVisibilityChange: setVisibility,
@@ -106,6 +109,59 @@ describe('DataGrid', () => {
     ]);
     expect(screen.queryByText('Promo')).toBeNull();
   }, 30_000);
+
+  test('opted-in columns stick left past the widths before them; the last one casts an edge once scrolled', () => {
+    // happy-dom lays nothing out, so the header cells report the widths a browser would.
+    const widths: Record<string, number> = { select: 40, name: 180 };
+    const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return widths[this.dataset.columnId ?? ''] ?? 0;
+      },
+    });
+    try {
+      render(
+        <Harness
+          columns={[selectColumn<Job>(), { ...COLUMNS[0]!, meta: STICKY_LEFT }, COLUMNS[1]!]}
+        />,
+      );
+      const [selectHeader, nameHeader, templateHeader] = screen.getAllByRole('columnheader');
+      const [selectCell, nameCell, templateCell] = within(
+        screen.getAllByRole('row')[1]!,
+      ).getAllByRole('cell');
+      for (const [header, cell, left] of [
+        [selectHeader, selectCell, '0px'],
+        [nameHeader, nameCell, '40px'],
+      ] as const) {
+        expect(header?.getAttribute('data-sticky')).toBe('left');
+        expect(header?.style.left).toBe(left);
+        expect(cell?.getAttribute('data-sticky')).toBe('left');
+        expect(cell?.style.left).toBe(left);
+      }
+      // Not opted in: scrolls with the grid.
+      expect(templateHeader?.hasAttribute('data-sticky')).toBe(false);
+      expect(templateCell?.hasAttribute('data-sticky')).toBe(false);
+
+      const edged = () =>
+        screen
+          .getAllByRole('cell')
+          .concat(screen.getAllByRole('columnheader'))
+          .filter((cell) => cell.className.includes('shadow-'))
+          .map((cell) => cell.dataset.columnId);
+      expect(edged()).toEqual([]);
+      const scroller = screen.getByRole('table').closest('.overflow-auto') as HTMLElement;
+      fireEvent.scroll(scroller, { target: { scrollLeft: 120 } });
+      expect(scroller.dataset.scrolled).toBe('true');
+      // Only the last sticky column, in every row and the header.
+      expect(new Set(edged())).toEqual(new Set(['name']));
+      expect(edged()).toHaveLength(4);
+      fireEvent.scroll(scroller, { target: { scrollLeft: 0 } });
+      expect(edged()).toEqual([]);
+    } finally {
+      if (offsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth);
+    }
+  });
 
   test('draws body rows through a custom RowComponent', () => {
     function Sortable({ row, ...props }: DataGridRowProps<Job>) {

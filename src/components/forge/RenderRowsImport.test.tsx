@@ -167,6 +167,7 @@ describe('RenderRowsImport', () => {
       w: 1080,
       h: 1350,
       thumbnailUrl: 'https://cdn.test/hero-thumb.jpg',
+      name: 'hero.jpg',
     });
     expect(root.outputIds).toEqual(['sq']);
     expect(spain.parentId).toBe(root.id);

@@ -13,7 +13,7 @@ import {
 import { Download, Loader2, RefreshCw, Search, Video } from 'lucide-react';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
-import { DataGrid, selectColumn } from '@/components/forge/DataGrid';
+import { DataGrid, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import { DeliveryChain, deliverySearchText } from '@/components/forge/DeliveryChain';
 import {
   jobTransitionName,
@@ -192,6 +192,8 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
       {
         id: 'preview',
         size: 52,
+        // With the checkbox and the name, what says which render a row is — kept in view.
+        meta: STICKY_LEFT,
         enableSorting: false,
         enableHiding: false,
         header: '',
@@ -225,16 +227,19 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
         id: 'label',
         accessorFn: nameOf,
         header: 'Name',
+        meta: STICKY_LEFT,
         enableSorting: true,
         enableHiding: false,
         cell: ({ row: { original: job } }) => {
           const ancestry = job.labelPath.slice(0, -1);
           return (
-            <div className="min-w-40">
+            <div className="max-w-60 min-w-40">
               {ancestry.length ? (
                 <p className="truncate text-3xs text-muted-foreground">{ancestry.join(' / ')}</p>
               ) : null}
-              <span className="font-medium">{nameOf(job)}</span>
+              <p className="truncate font-medium" title={nameOf(job)}>
+                {nameOf(job)}
+              </p>
             </div>
           );
         },

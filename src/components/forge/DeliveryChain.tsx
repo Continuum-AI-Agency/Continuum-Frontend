@@ -3,6 +3,7 @@
 import type { ApiRenderJob } from '@continuum/contracts';
 import { Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 // Where one render went: Library · Slack #channel · Meta account › campaign › ad set › ad, each with its own
 // state. The Library is always first because every render lands there; Slack and Meta appear only
@@ -77,13 +78,26 @@ export function deliverySearchText(job: ApiRenderJob): string {
     .join(' ');
 }
 
-export function DeliveryChain({ job }: { job: ApiRenderJob }) {
+/**
+ * `wrap` is for a view with room: every name in full, across as many lines as it takes. Without it
+ * the chain fits a dense grid row, and a truncated name is in the tooltip.
+ */
+export function DeliveryChain({ job, wrap = false }: { job: ApiRenderJob; wrap?: boolean }) {
   const saved = job.outputs.some((output) => output.assetId);
   const slack = job.slackDelivery;
   const target = job.deliveryTarget;
   const approval = approvalState(job);
+  const path = target
+    ? `Meta › ${target.adAccountName ?? target.adAccountId} › ${target.campaignName ?? target.campaignId} › ${target.adsetName ?? target.adsetId}`
+    : '';
+  const ad = target?.action === 'replace' ? (target.adName ?? target.adId) : 'new paused ad';
   return (
-    <span className="inline-flex max-w-[28rem] flex-wrap items-center gap-x-1.5 gap-y-0.5">
+    <span
+      className={cn(
+        'inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5',
+        !wrap && 'max-w-[28rem]',
+      )}
+    >
       <span
         className={saved ? 'inline-flex items-center gap-0.5' : 'text-muted-foreground'}
         title={saved ? 'Saved to the Library' : 'Not in the Library yet'}
@@ -106,18 +120,21 @@ export function DeliveryChain({ job }: { job: ApiRenderJob }) {
         <>
           <span className="text-muted-foreground">·</span>
           <span
-            className="inline-flex min-w-0 items-center gap-1"
-            title={`Meta ad account ${target.adAccountId}`}
+            className={cn(
+              'inline-flex min-w-0 items-center gap-1',
+              wrap && 'flex-wrap whitespace-normal break-words',
+            )}
+            title={
+              wrap
+                ? `Meta ad account ${target.adAccountId}`
+                : `${path} › ${ad} (ad account ${target.adAccountId})`
+            }
           >
-            <span className="truncate text-muted-foreground">
-              Meta › {target.adAccountName ?? target.adAccountId} ›{' '}
-              {target.campaignName ?? target.campaignId} ›{' '}
-              {target.adsetName ?? target.adsetId}
+            <span className={cn('text-muted-foreground', !wrap && 'truncate')}>
+              {path}
               {target.action === 'replace' ? ' ›' : ''}
             </span>
-            <span className="truncate">
-              {target.action === 'replace' ? (target.adName ?? target.adId) : 'new paused ad'}
-            </span>
+            <span className={cn(!wrap && 'truncate')}>{ad}</span>
             <Badge variant={approval.tone} title={job.delivery[0]?.reason ?? undefined}>
               {approval.text}
             </Badge>

@@ -8,6 +8,7 @@
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { useEffect } from 'react';
 
 const TEMPLATE = {
   key: '133',
@@ -206,13 +207,39 @@ mock.module('@/lib/supabase/client', () => ({
 mock.module('@/lib/supabase/realtime', () => ({
   subscribeToPostgresChanges: () => () => undefined,
 }));
-// The Library picker drags the whole media stack in; the cell only needs its anchor.
+/** What the stand-in Library hands back: a long file name, no title. */
+const HERO_ASSET = {
+  id: '77777777-7777-4777-8777-777777777777',
+  fileName: 'launch-week-hero-final-export-v3.png',
+  title: null,
+  width: 1080,
+  height: 1080,
+  thumbnailUrl: 'https://cdn.test/hero.png',
+  headVersionId: null,
+};
+// The Library picker drags the whole media stack in; the cell only needs its anchor, and opening
+// it picks HERO_ASSET the way a person choosing one would.
 mock.module('@/components/organic/primitives/MediaSelectPopover', () => ({
-  MediaSelectPopover: ({ anchor }: { anchor: React.ReactNode }) => <>{anchor}</>,
+  MediaSelectPopover: ({
+    anchor,
+    open,
+    onAttachAssets,
+  }: {
+    anchor: React.ReactNode;
+    open: boolean;
+    onAttachAssets: (assets: unknown[]) => void;
+  }) => {
+    // biome-ignore lint/correctness/useExhaustiveDependencies: a pick per opening, like the real picker.
+    useEffect(() => {
+      if (open) onAttachAssets([HERO_ASSET]);
+    }, [open]);
+    return <>{anchor}</>;
+  },
 }));
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type React from 'react';
+import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { RenderRequestsGrid } from './RenderRequestsGrid';
 
@@ -260,7 +287,9 @@ describe('RenderRequestsGrid', () => {
     });
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByLabelText('Headline');
-    await waitFor(() => expect(screen.getByText(/BLOCKED · 0 ready · 1 blocked/)).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText('0 of 1 row ready to render · 1 needs fixing')).toBeTruthy(),
+    );
     expect(
       screen.getByLabelText('Headline').closest('[title="Use a permitted brand color."]'),
     ).toBeTruthy();
@@ -290,13 +319,17 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getAllByLabelText('Select row')).toHaveLength(1);
 
     // Parent and Formats are columns a paste understands too, and a bad cell is named.
-    dialog = await paste('Name\tParent\tHeadline\tPrice\nSpain\t\tHola\tcheap\nSale\tSpain\tRebajas\t\n');
+    dialog = await paste(
+      'Name\tParent\tHeadline\tPrice\nSpain\t\tHola\tcheap\nSale\tSpain\tRebajas\t\n',
+    );
     expect(within(dialog).getByText('Row 1 · Price: Not a number')).toBeTruthy();
     expect(importButton(dialog).disabled).toBe(true);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
 
-    dialog = await paste('Name\tParent\tHeadline\tPrice\nSpain\t\tHola\t9.5\nSale\tSpain\tRebajas\t\n');
+    dialog = await paste(
+      'Name\tParent\tHeadline\tPrice\nSpain\t\tHola\t9.5\nSale\tSpain\tRebajas\t\n',
+    );
     await waitFor(() => expect(importButton(dialog).disabled).toBe(false));
     fireEvent.click(importButton(dialog));
     await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(3));
@@ -499,9 +532,11 @@ describe('RenderRequestsGrid', () => {
     fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
     expect(screen.getByText('1 selected')).toBeTruthy();
     await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
-    expect(screen.getByText(/READY · 1 ready · 0 blocked · 0 incomplete/)).toBeTruthy();
+    expect(screen.getByText('The row is ready to render')).toBeTruthy();
     expect(
-      screen.getByText(/New fields, hierarchy, or unexposed layout changes require/),
+      screen.getByText(
+        'To add a field or change the layout, ask a designer to update the template.',
+      ),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Render 1/ }));
     // No set yet: it is named first, then saved, then handed to the pre-flight dialog.
@@ -521,6 +556,95 @@ describe('RenderRequestsGrid', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Confirm 1 render/ }));
     await waitFor(() => expect(onFired).toHaveBeenCalledWith([JOB.id]));
     await waitFor(() => expect(screen.getByDisplayValue('Root')).toBeTruthy());
+  });
+
+  test('Render saves only a set with edits, and silently; Save is what says “Saved”, once', async () => {
+    // The newest set, with the headline a row needs to be Ready.
+    const renderable = {
+      ...NEWEST,
+      rows: [{ ...NEWEST.rows[0]!, overrides: { headline: 'Hola mundo' } }],
+    };
+    listRenderSetsMock.mockImplementation(async () => ({ items: [renderable], nextCursor: null }));
+    const saved: string[] = [];
+    const unregister = registerToastSink(({ title }) => {
+      if (String(title).startsWith('Saved')) saved.push(String(title));
+    });
+    // Registering flushes toasts earlier tests raised with no sink mounted; those are not ours.
+    saved.length = 0;
+    try {
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Newest row');
+      await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
+      fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
+      const openThenCancel = async () => {
+        await waitFor(() =>
+          expect(screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ }).disabled).toBe(
+            false,
+          ),
+        );
+        fireEvent.click(screen.getByRole('button', { name: /Render 1/ }));
+        const dialog = await screen.findByRole('dialog', { name: 'Render 1 row' });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+        await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
+      };
+
+      // D14: Render, back out, Render again. Nothing was edited, so nothing is written.
+      await openThenCancel();
+      await openThenCancel();
+      expect(updateRenderSetMock).not.toHaveBeenCalled();
+
+      fireEvent.change(screen.getByDisplayValue('Newest row'), { target: { value: 'Edited row' } });
+      await openThenCancel();
+      expect(updateRenderSetMock).toHaveBeenCalledTimes(1);
+      expect(saved).toEqual([]);
+
+      fireEvent.change(screen.getByDisplayValue('Edited row'), {
+        target: { value: 'Edited again' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved edits)' }));
+      await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(saved).toEqual(['Saved “Newest”']));
+    } finally {
+      unregister();
+    }
+  });
+
+  test('a picked asset reads by name on one line with its clear control; a fork keeps both', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Hero' }));
+    const change = await screen.findByRole('button', { name: 'Change Hero' });
+    // The name is the label, cut to the anchor's width, and whole in its tooltip.
+    const name = within(change).getByText(HERO_ASSET.fileName);
+    expect(name.className).toContain('truncate');
+    expect(change.getAttribute('title')).toBe(HERO_ASSET.fileName);
+    const row = change.parentElement!;
+    expect(row.className).toContain('flex');
+    expect(within(row).getByRole('button', { name: 'Clear Hero' })).toBeTruthy();
+
+    // A fork adds the inheritance control; it joins the same line instead of wrapping under it.
+    await openMenu('Row actions for Root', 'Fork');
+    await screen.findByDisplayValue('Root · B');
+    const forkClear = screen.getByRole('button', { name: 'Clear inherited Hero' });
+    const forkChange = screen.getAllByRole('button', { name: 'Change Hero' })[1]!;
+    const cell = forkClear.parentElement!;
+    expect(cell.className).toContain('flex');
+    expect(cell.contains(forkChange)).toBe(true);
+  });
+
+  test('the handle, checkbox and name stay in view; variables scroll', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    const stuck = screen
+      .getAllByRole('columnheader')
+      .filter((header) => header.dataset.sticky === 'left')
+      .map((header) => header.dataset.columnId);
+    expect(stuck).toEqual(['drag', 'select', 'label']);
+    const nameCell = screen.getByRole('textbox', { name: 'Row name' }).closest('td');
+    expect(nameCell?.dataset.sticky).toBe('left');
+    expect(screen.getByRole('textbox', { name: 'Headline' }).closest('td')?.dataset.sticky).toBe(
+      undefined,
+    );
   });
 
   test('an intent loads its render set over the newest one', async () => {

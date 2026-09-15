@@ -12,6 +12,7 @@ import {
   type ForgeRenderSetEncodeClear,
   type ForgeRenderSetRow,
   inheritEncodeBlock,
+  type MediaAsset,
   type PinnedRenderAsset,
 } from '@continuum/contracts';
 
@@ -54,7 +55,20 @@ export type RequestRowCheck =
     }
   | { state: 'error'; message: string; guardrails?: ApiRenderPreflightResponse['guardrails'] };
 
-export type RequestRowMedia = { w?: number; h?: number; thumbnailUrl?: string | null };
+export type RequestRowMedia = {
+  w?: number;
+  h?: number;
+  thumbnailUrl?: string | null;
+  /** What the cell calls the picked asset. */
+  name?: string;
+};
+
+/** What the grid keeps about a picked Library asset — none of it goes over the wire. */
+export const rowMediaOf = (asset: MediaAsset): RequestRowMedia => ({
+  ...(asset.width && asset.height ? { w: asset.width, h: asset.height } : {}),
+  thumbnailUrl: asset.thumbnailUrl ?? asset.signedUrl ?? null,
+  name: asset.title || asset.fileName,
+});
 
 /**
  * Where one row's render goes. A spreadsheet names a replace by ad id alone; pre-flight resolves
@@ -451,7 +465,9 @@ export function variableColumnHeader(
 
 /** The sample only when importing it would succeed: a download that cannot re-import is a trap. */
 const importableSample = (variable: ApiRenderVariable): string =>
-  isMediaVariable(variable) || variable.sample === null || importCell(variable, variable.sample).error
+  isMediaVariable(variable) ||
+  variable.sample === null ||
+  importCell(variable, variable.sample).error
     ? ''
     : variable.sample;
 
@@ -502,9 +518,11 @@ export function autoMapHeaders(
   for (const field of IMPORT_FIELDS) register(field.header, field.target);
   for (const variable of importable)
     register(variableColumnHeader(variable, importable), variable.key);
-  for (const variable of importable) register(`${variable.label.trim()} (${variable.key})`, variable.key);
+  for (const variable of importable)
+    register(`${variable.label.trim()} (${variable.key})`, variable.key);
   for (const variable of importable) register(variable.key, variable.key);
-  for (const field of IMPORT_FIELDS) for (const alias of field.aliases) register(alias, field.target);
+  for (const field of IMPORT_FIELDS)
+    for (const alias of field.aliases) register(alias, field.target);
   const used = new Set<string>();
   return Object.fromEntries(
     headers.map((header) => {

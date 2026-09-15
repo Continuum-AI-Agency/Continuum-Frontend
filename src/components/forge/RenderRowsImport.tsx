@@ -45,6 +45,7 @@ import {
   pinnedAssetIds,
   type RequestRow,
   recordsFromTable,
+  rowMediaOf,
   rowsFromMappedImport,
   variableColumnHeader,
 } from './renderRequestRows';
@@ -243,10 +244,7 @@ export function RenderRowsImport({
         if (message) errors.push({ row: index, column: columnOf.get(key) ?? key, message });
         const first = lookups[0];
         if (!first || first === 'failed') continue;
-        media[key] = {
-          ...(first.width && first.height ? { w: first.width, h: first.height } : {}),
-          thumbnailUrl: first.thumbnailUrl ?? first.signedUrl ?? null,
-        };
+        media[key] = rowMediaOf(first);
       }
       return Object.keys(media).length ? { ...row, media: { ...row.media, ...media } } : row;
     });

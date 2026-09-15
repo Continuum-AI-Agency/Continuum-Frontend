@@ -150,7 +150,8 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     listEnvironments: async () => ({ items: environmentsFixture }),
     // The default environment is asked for without a bindingId, as the server expects.
     listTemplates: async (_brandId: string, bindingId?: string | null) => ({
-      items: bindingId === CLIENT_BINDING ? clientTemplatesFixture : bindingId ? [] : templatesFixture,
+      items:
+        bindingId === CLIENT_BINDING ? clientTemplatesFixture : bindingId ? [] : templatesFixture,
       nextCursor: null,
     }),
   },
@@ -267,7 +268,12 @@ describe('RenderJobsGrid', () => {
     expect(madrid.getByText('posted')).toBeTruthy();
     expect(madrid.getByText('Hero story')).toBeTruthy();
     // D15: Meta account › campaign › ad set › ad — the account by name once preflight resolved it.
-    expect(madrid.getByText('Meta › StarCraft Ads › Launch Q3 › Iberia 18–34 ›')).toBeTruthy();
+    const path = madrid.getByText('Meta › StarCraft Ads › Launch Q3 › Iberia 18–34 ›');
+    // A dense row truncates, and the whole chain is in the tooltip.
+    expect(path.className).toContain('truncate');
+    expect(path.parentElement?.getAttribute('title')).toBe(
+      'Meta › StarCraft Ads › Launch Q3 › Iberia 18–34 › Hero story (ad account act_1)',
+    );
     expect(madrid.getByText('awaiting approval')).toBeTruthy();
 
     const roma = within(rowOf('Roma'));
@@ -291,21 +297,39 @@ describe('RenderJobsGrid', () => {
       id: '99999999-9999-4999-8999-999999999991',
       label: 'Bridge unset',
       approval: null,
-      delivery: [{ status: 'pending', adId: null, creativeId: null, reason: 'delivery_bridge_unconfigured', publishedAt: null }],
+      delivery: [
+        {
+          status: 'pending',
+          adId: null,
+          creativeId: null,
+          reason: 'delivery_bridge_unconfigured',
+          publishedAt: null,
+        },
+      ],
     };
     const lost: ApiRenderJob = {
       ...MADRID,
       id: '99999999-9999-4999-8999-999999999992',
       label: 'Workspace gone',
       approval: null,
-      delivery: [{ status: 'error', adId: null, creativeId: null, reason: 'binding_unresolved', publishedAt: null }],
+      delivery: [
+        {
+          status: 'error',
+          adId: null,
+          creativeId: null,
+          reason: 'binding_unresolved',
+          publishedAt: null,
+        },
+      ],
     };
     await renderLedger([unset, lost], [TEMPLATE]);
     const rowOf = (name: string) => screen.getByText(name).closest('tr') as HTMLElement;
     expect(within(rowOf('Bridge unset')).getByText('delivery not set up')).toBeTruthy();
     expect(within(rowOf('Bridge unset')).queryByText('held for approval')).toBeNull();
     fireEvent.click(screen.getByText('Workspace gone'));
-    expect(await screen.findByText('The workspace this render was made in no longer exists.')).toBeTruthy();
+    expect(
+      await screen.findByText('The workspace this render was made in no longer exists.'),
+    ).toBeTruthy();
     expect(document.body.textContent).not.toContain('binding_unresolved');
   }, 30_000);
 
@@ -315,6 +339,11 @@ describe('RenderJobsGrid', () => {
 
     expect(await screen.findByRole('heading', { name: 'Madrid' })).toBeTruthy();
     expect(screen.getByText('Root · StarCraft Promo')).toBeTruthy();
+    // D15: the detail has room — the chain wraps across lines and every name stays whole.
+    const chain = screen.getByText('Meta › StarCraft Ads › Launch Q3 › Iberia 18–34 ›');
+    expect(chain.className).toBe('text-muted-foreground');
+    expect(screen.getByText('Hero story').className).toBe('');
+    expect(chain.parentElement?.className).toContain('flex-wrap whitespace-normal');
     expect(screen.getByRole('img', { name: 'Madrid · 9:16' })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Open file/ }).getAttribute('href')).toBe(
       'https://cdn.example.com/madrid.png',

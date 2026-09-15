@@ -159,11 +159,23 @@ export function jobSteps(job: ApiRenderJob): Step[] {
       : receipt?.status === 'published' || job.approval?.status === 'published'
         ? { label: 'Published', state: 'done', at: receipt?.publishedAt }
         : receipt?.status === 'error'
-          ? { label: 'Published', state: 'error', detail: deliveryReasonText(receipt.reason) ?? undefined }
+          ? {
+              label: 'Published',
+              state: 'error',
+              detail: deliveryReasonText(receipt.reason) ?? undefined,
+            }
           : receipt?.status === 'dropped' || job.approval?.status === 'rejected'
-            ? { label: 'Published', state: 'skipped', detail: deliveryReasonText(receipt?.reason) ?? 'Not approved' }
+            ? {
+                label: 'Published',
+                state: 'skipped',
+                detail: deliveryReasonText(receipt?.reason) ?? 'Not approved',
+              }
             : receipt?.reason === 'delivery_bridge_unconfigured'
-              ? { label: 'Published', state: 'skipped', detail: deliveryReasonText(receipt.reason) ?? undefined }
+              ? {
+                  label: 'Published',
+                  state: 'skipped',
+                  detail: deliveryReasonText(receipt.reason) ?? undefined,
+                }
               : { label: 'Published', state: 'pending' },
   ];
 }
@@ -310,7 +322,7 @@ export function RenderJobDetail({
             </dd>
             <dt className="text-muted-foreground">Delivery</dt>
             <dd>
-              <DeliveryChain job={job} />
+              <DeliveryChain job={job} wrap />
             </dd>
           </dl>
 

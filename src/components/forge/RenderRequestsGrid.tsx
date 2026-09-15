@@ -37,7 +37,7 @@ import {
 } from '@tanstack/react-table';
 import { BookmarkPlus, Copy, GitFork, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DataGrid, KIND_ICONS, selectColumn } from '@/components/forge/DataGrid';
+import { DataGrid, KIND_ICONS, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import {
   RenderPreflightDialog,
   type RenderPreflightRow,
@@ -69,6 +69,7 @@ import {
   rootRowId,
   rowBreadcrumb,
   rowDepth,
+  rowMediaOf,
   seedRow,
   toPreflightDelivery,
   toRenderSetRows,
@@ -210,9 +211,10 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
     };
   });
   return [
-    { id: 'drag', size: 28, header: '', cell: DragHandleCell },
+    // The row's handle, checkbox and name stay in view while the variables scroll past.
+    { id: 'drag', size: 28, header: '', cell: DragHandleCell, meta: STICKY_LEFT },
     selectColumn<RequestRow>(),
-    { id: 'label', size: 240, header: 'Name', cell: LabelCell },
+    { id: 'label', size: 240, header: 'Name', cell: LabelCell, meta: STICKY_LEFT },
     ...(contract.outputs.length
       ? [{ id: 'outputs', size: 150, header: 'Formats', cell: FormatsCell }]
       : []),
@@ -222,6 +224,27 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
     ...perVariable,
     { id: 'status', size: 110, header: 'Status', cell: StatusCell },
   ];
+}
+
+/** "4 of 6 rows ready to render · 1 needs fixing · 1 still checking" — no state word to decode. */
+function readinessSummary(
+  counts: { ready: number; blocked: number; review: number; checking: number },
+  total: number,
+): string {
+  const needs = (count: number, what: string) =>
+    count ? `${count} ${count === 1 ? 'needs' : 'need'} ${what}` : null;
+  return [
+    total === 0
+      ? 'No rows to render'
+      : counts.ready === total
+        ? `${total === 1 ? 'The row is' : `All ${total} rows are`} ready to render`
+        : `${counts.ready} of ${total} ${total === 1 ? 'row' : 'rows'} ready to render`,
+    needs(counts.blocked, 'fixing'),
+    needs(counts.review, 'a review'),
+    counts.checking ? `${counts.checking} still checking` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /** Forks are named only when the delete takes rows nobody picked. */
@@ -397,13 +420,7 @@ export function RenderRequestsGrid({
           const found = wanted.filter((item) => item.rowId === row.id && assets.get(item.assetId));
           if (found.length === 0) return row;
           const media = { ...row.media };
-          for (const item of found) {
-            const asset = assets.get(item.assetId)!;
-            media[item.key] = {
-              ...(asset.width && asset.height ? { w: asset.width, h: asset.height } : {}),
-              thumbnailUrl: asset.thumbnailUrl ?? asset.signedUrl ?? null,
-            };
-          }
+          for (const item of found) media[item.key] = rowMediaOf(assets.get(item.assetId)!);
           return { ...row, media };
         }),
       );
@@ -542,19 +559,13 @@ export function RenderRequestsGrid({
           .slice(0, variable.multiple ? API_RENDER_MEDIA_LIST_MAX : 1)
           .map(pinFromAsset);
         if (pins.length === 0) return row;
-        const first = assets[0];
-        const media = { ...row.media };
-        // No recorded size is not zero: dropping the entry makes the fit read `unknown`, which
-        // is what sends the finished frame to the judge.
-        media[variable.key] = {
-          ...(first?.width && first.height ? { w: first.width, h: first.height } : {}),
-          thumbnailUrl: first?.thumbnailUrl ?? first?.signedUrl ?? null,
-        };
         return {
           ...row,
           values: { ...row.values, [variable.key]: variable.multiple ? pins : pins[0]! },
           clearedKeys: row.clearedKeys.filter((key) => key !== variable.key),
-          media,
+          // No recorded size is not zero: leaving `w`/`h` out makes the fit read `unknown`, which
+          // is what sends the finished frame to the judge.
+          media: { ...row.media, [variable.key]: rowMediaOf(assets[0]!) },
         };
       }),
     [updateRow],
@@ -595,7 +606,8 @@ export function RenderRequestsGrid({
   const readiness = useMemo(() => {
     const findings = new Map<string, { message: string; rows: string[] }>();
     let blocked = 0;
-    let incomplete = 0;
+    let review = 0;
+    let checking = 0;
     let ready = 0;
     for (const row of rows) {
       const errors = clientErrors.get(row.id) ?? {};
@@ -625,17 +637,11 @@ export function RenderRequestsGrid({
         (row.check.state === 'ready' &&
           row.check.fit?.slots.some((slot) => slot.state === 'unknown'))
       )
-        incomplete += 1;
+        review += 1;
       else if (row.check.state === 'ready') ready += 1;
-      else incomplete += 1;
+      else checking += 1;
     }
-    return {
-      state: blocked ? 'BLOCKED' : incomplete ? 'INCOMPLETE' : 'READY',
-      blocked,
-      incomplete,
-      ready,
-      findings: [...findings.entries()],
-    };
+    return { blocked, review, checking, ready, findings: [...findings.entries()] };
   }, [rows, clientErrors]);
 
   useEffect(() => {
@@ -864,6 +870,7 @@ export function RenderRequestsGrid({
   const createSet = async (
     name: string,
     rowsToSave: RequestRow[],
+    { announce = true } = {},
   ): Promise<ForgeRenderSet | null> => {
     if (!contract || !bindingId) return null;
     try {
@@ -876,7 +883,7 @@ export function RenderRequestsGrid({
         rows: toRenderSetRows(rowsToSave, allOutputIdsOf(contract)),
       });
       adoptSet(created, rowsToSave);
-      toast.success(`Saved “${created.name}”`);
+      if (announce) toast.success(`Saved “${created.name}”`);
       return created;
     } catch (error) {
       await reportSetError(error, null);
@@ -884,8 +891,11 @@ export function RenderRequestsGrid({
     }
   };
 
-  /** Saves the rows on screen; a set with no name yet asks for one first. */
-  const saveRenderSet = async (): Promise<ForgeRenderSet | null> => {
+  /**
+   * Saves the rows on screen; a set with no name yet asks for one first. `announce: false` is for
+   * a save that is only a step of something else, which says so itself.
+   */
+  const saveRenderSet = async ({ announce = true } = {}): Promise<ForgeRenderSet | null> => {
     if (!contract || !bindingId || rows.length === 0) return null;
     const submitted = latestRows.current;
     if (!activeSet)
@@ -895,7 +905,7 @@ export function RenderRequestsGrid({
           initialName: 'Untitled set',
           confirmLabel: 'Save',
           onConfirm: async (name) => {
-            const created = await createSet(name, submitted);
+            const created = await createSet(name, submitted, { announce });
             if (!created) return;
             setNameRequest(null);
             resolve(created);
@@ -910,7 +920,7 @@ export function RenderRequestsGrid({
         rows: toRenderSetRows(submitted, allOutputIdsOf(contract)),
       });
       adoptSet(saved, submitted);
-      toast.success(`Saved “${saved.name}”`);
+      if (announce) toast.success(`Saved “${saved.name}”`);
       return saved;
     } catch (error) {
       await reportSetError(error, activeSet);
@@ -1087,12 +1097,15 @@ export function RenderRequestsGrid({
     setImportOpen(true);
   };
 
-  // Saves the set, then hands the exact selection to the pre-flight dialog, which fires it.
+  // Saves the set, then hands the exact selection to the pre-flight dialog, which fires it. The
+  // save is part of Render, so it is silent — and a set with no edits is already saved, so
+  // opening the dialog again neither writes a new revision nor says "Saved" twice.
   const fire = async () => {
     if (!contract || !readyToFire) return;
     setBusy('firing');
     try {
-      const submittedSet = await saveRenderSet();
+      const submittedSet =
+        activeSet && !dirty ? activeSet : await saveRenderSet({ announce: false });
       if (!submittedSet) return;
       const current = latestRows.current;
       const chosen = current.filter((row) => rowSelection[row.id]);
@@ -1280,32 +1293,22 @@ export function RenderRequestsGrid({
             </ResizablePanel>
           </ResizablePanelGroup>
           <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs">
-            <p className="font-medium">
-              {readiness.state} · {readiness.ready} ready · {readiness.blocked} blocked ·{' '}
-              {readiness.incomplete} incomplete
-            </p>
+            <p className="font-medium">{readinessSummary(readiness, rows.length)}</p>
             {readiness.findings.length ? (
               <ul className="mt-1 space-y-0.5 text-muted-foreground">
                 {readiness.findings.map(([key, finding]) => (
                   <li key={key}>
-                    {contract.variables.find((variable) => variable.key === key)?.label ??
-                      'Preflight'}
-                    : {finding.message} — {finding.rows.join(', ')}
+                    {contract.variables.find((variable) => variable.key === key)?.label ?? 'Check'}:{' '}
+                    {finding.message} — {finding.rows.join(', ')}
                   </li>
                 ))}
               </ul>
             ) : null}
             <p className="mt-1 text-muted-foreground">
-              {contract.variables.some((variable) =>
-                ['boolean', 'number', 'enum'].includes(variable.kind),
-              )
-                ? 'Template-authorized toggles, numbers, and options are editable here. '
-                : ''}
-              New fields, hierarchy, or unexposed layout changes require a designer and a new source
-              revision.
+              To add a field or change the layout, ask a designer to update the template.
               {contract.template.contractSource === 'template_forge'
                 ? ''
-                : ' This template carries no roles or budgets, so cells are unlabelled beyond their type.'}
+                : ' This template sets no text limits, so check long text in the preview.'}
               {fireHint && selected.length ? ` ${fireHint}.` : ''}
             </p>
           </div>

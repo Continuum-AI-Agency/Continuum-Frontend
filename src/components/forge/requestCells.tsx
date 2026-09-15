@@ -40,6 +40,7 @@ import {
   effectiveValues,
   MAX_BATCH_ROWS,
   type RequestRow,
+  type RequestRowMedia,
   type RowDrop,
   rowBreadcrumb,
   rowDepth,
@@ -123,7 +124,7 @@ function fitTone(verdict: ApiRenderFitVerdict | null) {
 function MediaPicker({
   variable,
   value,
-  thumbnailUrl,
+  media,
   brandId,
   verdict,
   onPick,
@@ -131,7 +132,7 @@ function MediaPicker({
 }: {
   variable: ApiRenderVariable;
   value: ApiRenderInputValue | undefined;
-  thumbnailUrl: string | null;
+  media: RequestRowMedia | undefined;
   brandId: string;
   verdict: ApiRenderFitVerdict | null;
   onPick: (assets: MediaAsset[]) => void;
@@ -141,6 +142,12 @@ function MediaPicker({
   const pins = pickedPins(value);
   const fit = fitTone(pins.length ? verdict : null);
   const Kind = variable.kind === 'video' ? Video : ImageIcon;
+  const picked = pins.length
+    ? variable.multiple
+      ? `${pins.length} picked`
+      : (media?.name ?? 'Picked')
+    : 'Choose';
+  // One line whatever was picked: a fixed-width anchor that truncates, controls that never wrap.
   return (
     <div className="flex items-center gap-1.5">
       <MediaSelectPopover
@@ -154,21 +161,26 @@ function MediaPicker({
           <button
             type="button"
             aria-label={`${pins.length ? 'Change' : 'Choose'} ${variable.label}`}
-            className="flex h-7 min-w-24 items-center gap-1.5 rounded-md border border-border/70 px-1.5 text-2xs text-muted-foreground hover:bg-muted/50"
+            title={pins.length ? picked : undefined}
+            className="flex h-7 w-32 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-1.5 text-2xs text-muted-foreground hover:bg-muted/50"
             onClick={() => setOpen(true)}
           >
-            {thumbnailUrl ? (
-              <img src={thumbnailUrl} alt="" className="size-5 rounded-sm object-cover" />
+            {media?.thumbnailUrl ? (
+              <img
+                src={media.thumbnailUrl}
+                alt=""
+                className="size-5 shrink-0 rounded-sm object-cover"
+              />
             ) : (
-              <Kind className="size-3" aria-hidden />
+              <Kind className="size-3 shrink-0" aria-hidden />
             )}
-            {pins.length ? (variable.multiple ? `${pins.length} picked` : 'Picked') : 'Choose'}
-            {!pins.length ? <Library className="ml-auto size-3" aria-hidden /> : null}
+            <span className="min-w-0 flex-1 truncate text-left">{picked}</span>
+            {!pins.length ? <Library className="size-3 shrink-0" aria-hidden /> : null}
           </button>
         }
       />
       {fit ? (
-        <Badge variant={fit.variant} title={fit.title} className="px-1 py-0 text-2xs">
+        <Badge variant={fit.variant} title={fit.title} className="shrink-0 px-1 py-0 text-2xs">
           {fit.text}
         </Badge>
       ) : null}
@@ -176,7 +188,7 @@ function MediaPicker({
         <button
           type="button"
           aria-label={`Clear ${variable.label}`}
-          className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+          className="shrink-0 rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
           onClick={onClear}
         >
           <X className="size-3" aria-hidden />
@@ -323,11 +335,14 @@ export function VariableCell({
       neighbours: (contract.layout?.boxes ?? []).filter((box) => box.key !== variable.key),
     });
     return (
-      <div title={error} className={cn(error && 'rounded-md ring-1 ring-destructive')}>
+      <div
+        title={error}
+        className={cn('flex items-center gap-1', error && 'rounded-md ring-1 ring-destructive')}
+      >
         <MediaPicker
           variable={variable}
           value={value}
-          thumbnailUrl={dims?.thumbnailUrl ?? null}
+          media={dims}
           brandId={brandId}
           verdict={verdict}
           onPick={(assets) => actions.pickMedia(row.id, variable, assets)}
@@ -654,10 +669,14 @@ const SortableHandleContext = createContext<SortableHandle | null>(null);
 /** Where the row being dragged would land, drawn by the row it would land on. */
 export const RowDropHintContext = createContext<RowDrop | null>(null);
 
+// Drawn by the cells, not the row: a sticky cell paints over its row, so a line on the `tr` would
+// stop short under the handle, checkbox and name.
 const DROP_HINT_CLASS = {
-  before: 'shadow-[inset_0_2px_0_0_var(--color-primary)]',
-  after: 'shadow-[inset_0_-2px_0_0_var(--color-primary)]',
-  inside: 'bg-primary/10 hover:bg-primary/10',
+  before: '[&>td]:shadow-[inset_0_2px_0_0_var(--color-primary)]',
+  after: '[&>td]:shadow-[inset_0_-2px_0_0_var(--color-primary)]',
+  // Opaque, like every row surface, so the sticky cells that inherit it hide what scrolls under.
+  inside:
+    'bg-[color-mix(in_oklab,var(--color-primary)_10%,var(--color-card))] hover:bg-[color-mix(in_oklab,var(--color-primary)_10%,var(--color-card))]',
 } as const;
 
 /**
