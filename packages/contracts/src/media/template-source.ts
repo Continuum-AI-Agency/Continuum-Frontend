@@ -216,6 +216,38 @@ export const templateParseSchema = z
   .strip();
 export type TemplateParse = z.infer<typeof templateParseSchema>;
 
+/** The geometry a gallery card needs, without the full AEP parse document. */
+export const templatePreviewSchema = z
+  .object({
+    parser: z.string().min(1),
+    sourceFamily: templateSourceFamilySchema,
+    filename: z.string().optional(),
+    comps: z.array(
+      templateCompSchema.pick({
+        name: true,
+        width: true,
+        height: true,
+        durationSec: true,
+        isDelivery: true,
+      }),
+    ),
+    ratios: z.array(
+      templateRatioSchema.pick({ ratio: true, width: true, height: true, comps: true }),
+    ),
+    slots: z.array(
+      templateSlotSchema.pick({
+        key: true,
+        kind: true,
+        comps: true,
+        box: true,
+        placement: true,
+        instances: true,
+      }),
+    ),
+  })
+  .strict();
+export type TemplatePreview = z.infer<typeof templatePreviewSchema>;
+
 /** A `media.template_sources` row on the wire. */
 export const templateSourceSchema = z
   .object({
@@ -250,6 +282,13 @@ export const templateSourceSchema = z
   })
   .strict();
 export type TemplateSource = z.infer<typeof templateSourceSchema>;
+
+/** `GET /api/ai-studio/templates` item: full source facts plus only card-sized parse geometry. */
+export const templateSourceSummarySchema = templateSourceSchema
+  .omit({ parse: true })
+  .extend({ parse: templatePreviewSchema.nullable().default(null) })
+  .strict();
+export type TemplateSourceSummary = z.infer<typeof templateSourceSummarySchema>;
 
 /** `PATCH /api/ai-studio/templates/:assetId` — rename the template's Library asset. */
 export const renameTemplateSourceRequestSchema = z
@@ -367,5 +406,8 @@ export function templateFontStatuses(
 
 /** One comparison key for parsed PostScript names, uploaded families and install selection. */
 export function normalizeTemplateFontFamily(value: string): string {
-  return value.trim().toLowerCase().replace(/[\s_-]+/g, '');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
 }

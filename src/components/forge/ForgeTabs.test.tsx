@@ -62,12 +62,24 @@ afterEach(() => {
 const intentOnGrid = () => JSON.parse(screen.getByTestId('render-grid').textContent ?? 'null');
 
 describe('ForgeTabs', () => {
+  test('shows all three tabs without mounting inactive grids', () => {
+    render(<ForgeTabs brandId="22222222-2222-4222-8222-222222222222" />);
+
+    expect(screen.getByRole('tab', { name: 'Templates' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Render' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Render ledger' })).toBeTruthy();
+    expect(screen.queryByTestId('render-grid')).toBeNull();
+    expect(screen.queryByText('Render ledger', { selector: 'p' })).toBeNull();
+    expect(gridMounts).toBe(0);
+  });
+
   test('openRender switches to the Render tab and hands the grid its intent, once', async () => {
     render(<ForgeTabs brandId="22222222-2222-4222-8222-222222222222" />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open in Render' }));
 
     expect(screen.getByRole('tab', { name: 'Render' }).getAttribute('aria-selected')).toBe('true');
+    await screen.findByTestId('render-grid');
     expect(intentOnGrid()).toEqual({ templateKey: '133', renderSetId: 'set-1' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Take intent' }));
@@ -77,16 +89,18 @@ describe('ForgeTabs', () => {
   test('the Render grid stays mounted across a tab round trip', async () => {
     render(<ForgeTabs brandId="22222222-2222-4222-8222-222222222222" />);
     fireEvent.click(await screen.findByRole('tab', { name: 'Render' }));
+    await screen.findByTestId('render-grid');
     fireEvent.click(screen.getByRole('tab', { name: 'Templates' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Render' }));
 
-    expect(screen.getByTestId('render-grid')).toBeTruthy();
+    expect(await screen.findByTestId('render-grid')).toBeTruthy();
     expect(gridMounts).toBe(1);
   }, 30_000);
 
   test('a fired batch opens the Render ledger', async () => {
     render(<ForgeTabs brandId="22222222-2222-4222-8222-222222222222" />);
     fireEvent.click(await screen.findByRole('tab', { name: 'Render' }));
+    await screen.findByTestId('render-grid');
     fireEvent.click(screen.getByRole('button', { name: 'Fire batch' }));
 
     expect(screen.getByRole('tab', { name: 'Render ledger' }).getAttribute('aria-selected')).toBe(

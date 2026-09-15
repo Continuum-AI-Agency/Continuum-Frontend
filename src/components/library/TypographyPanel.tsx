@@ -1,6 +1,6 @@
 'use client';
 
-import { normalizeTemplateFontFamily, type TemplateSource } from '@continuum/contracts';
+import { normalizeTemplateFontFamily, type TemplateSourceSummary } from '@continuum/contracts';
 import { Loader2, Type, Upload } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NO_SPECIMEN_NOTE, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
@@ -25,7 +25,7 @@ export function TypographyPanel({
   onReviewFiles,
 }: {
   brandId: string;
-  templateSources: TemplateSource[];
+  templateSources: TemplateSourceSummary[];
   onReviewFiles: (files: File[]) => void;
 }) {
   const [fonts, setFonts] = useState<BrandFontSummary[] | null>(null);

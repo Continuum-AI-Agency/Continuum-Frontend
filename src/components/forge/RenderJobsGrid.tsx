@@ -79,7 +79,6 @@ const withTransition = (update: () => void) =>
 export function RenderJobsGrid({ brandId, active = true }: { brandId: string; active?: boolean }) {
   const queryClient = useQueryClient();
   const [sets, setSets] = useState<ForgeRenderSet[]>([]);
-  const [templateNames, setTemplateNames] = useState<ReadonlyMap<string, string>>(new Map());
   const [renderSetId, setRenderSetId] = useState<string>('all');
   const [pushed, setPushed] = useState(false);
   const { jobs, refreshJobs, refreshOne, hasMore, loadMore } = useApiRenderJobs({
@@ -111,48 +110,6 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
         staleTime: FORGE_STALE_MS.lists,
       })
       .then((response) => setSets(response.items))
-      .catch(() => undefined);
-    // Names from every workspace the brand renders into: a template key is only unique within
-    // its workspace. A job from before `environment` was recorded reads the default's names.
-    void queryClient
-      .fetchQuery({
-        queryKey: forgeQueryKeys.environments(brandId),
-        queryFn: () => apiRendersApi.listEnvironments(brandId),
-        staleTime: FORGE_STALE_MS.lists,
-      })
-      .then((response) =>
-        Promise.all(
-          response.items.map((environment) =>
-            queryClient
-              .fetchQuery({
-                queryKey: forgeQueryKeys.templateList(
-                  brandId,
-                  environment.isDefault ? null : environment.bindingId,
-                ),
-                queryFn: () =>
-                  apiRendersApi.listTemplates(
-                    brandId,
-                    environment.isDefault ? null : environment.bindingId,
-                  ),
-                staleTime: FORGE_STALE_MS.lists,
-              })
-              .then((templates) =>
-                templates.items.flatMap((template) =>
-                  template.displayName
-                    ? [
-                        [`${template.environment}:${template.key}`, template.displayName] as const,
-                        ...(environment.isDefault
-                          ? [[`:${template.key}`, template.displayName] as const]
-                          : []),
-                      ]
-                    : [],
-                ),
-              )
-              .catch(() => []),
-          ),
-        ),
-      )
-      .then((names) => setTemplateNames(new Map(names.flat())))
       .catch(() => undefined);
     const load = () => {
       if (!active || document.visibilityState !== 'visible') return;
@@ -223,14 +180,12 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
     };
   }, [brandId, queryClient, refreshJobs, refreshOne]);
 
-  const templateOf = (job: ApiRenderJob) =>
-    templateNames.get(`${job.environment ?? ''}:${job.templateKey}`) ??
-    templateDisplayName(job.templateName);
+  const templateOf = (job: ApiRenderJob) => templateDisplayName(job.templateName);
   const setOf = (job: ApiRenderJob) =>
     job.renderSetName ?? sets.find((set) => set.id === job.renderSetId)?.name ?? 'Unassigned';
   const nameOf = (job: ApiRenderJob) => job.label ?? job.labelPath.at(-1) ?? templateOf(job);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets and templateNames.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets.
   const columns = useMemo<ColumnDef<ApiRenderJob>[]>(
     () => [
       { ...selectColumn<ApiRenderJob>(), enableHiding: false },
@@ -256,7 +211,15 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
           return (
             <ViewTransition name={jobTransitionName(job.id)}>
               {first?.kind === 'image' ? (
-                <img src={first.url} alt="" className="size-9 rounded-sm object-cover" />
+                <img
+                  src={first.url}
+                  alt=""
+                  width={36}
+                  height={36}
+                  loading="lazy"
+                  decoding="async"
+                  className="size-9 rounded-sm object-cover"
+                />
               ) : first ? (
                 <div className="flex size-9 items-center justify-center rounded-sm bg-muted">
                   <Video className="size-4 text-muted-foreground" aria-hidden />
@@ -371,11 +334,11 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
           ) : null,
       },
     ],
-    [sets, templateNames],
+    [sets],
   );
 
   const needle = search.trim().toLowerCase();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets and templateNames.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets.
   const visible = useMemo(
     () =>
       needle
@@ -392,7 +355,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
               .includes(needle),
           )
         : jobs,
-    [jobs, needle, sets, templateNames],
+    [jobs, needle, sets],
   );
 
   const table = useReactTable({
@@ -410,7 +373,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
 
   // Grouped by what a person calls the template, so ratio twins and a template shared across
   // workspaces under one name read as one group.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: templateOf reads only templateNames.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: templateOf is pure.
   const groupSummary = useMemo(() => {
     const summary = new Map<string, { finished: number; inFlight: number; failed: number }>();
     for (const job of visible) {
@@ -422,7 +385,7 @@ export function RenderJobsGrid({ brandId, active = true }: { brandId: string; ac
       summary.set(name, counts);
     }
     return summary;
-  }, [visible, templateNames]);
+  }, [visible]);
 
   const selected = jobs.filter((job) => rowSelection[job.id]);
   const downloadable = selected.flatMap((job) => job.outputs);

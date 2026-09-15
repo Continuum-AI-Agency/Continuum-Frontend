@@ -34,8 +34,10 @@ import {
   renderWorkspaceSchema,
   type TemplateParse,
   type TemplateSource,
+  type TemplateSourceSummary,
   templateDisplayName,
   templateSourceSchema,
+  templateSourceSummarySchema,
   updateForgeRenderSetRequestSchema,
   workspaceTemplateSchema,
 } from '@continuum/contracts';
@@ -298,6 +300,37 @@ function templateSources(state: FixtureState): TemplateSource[] {
   ].map((source) => templateSourceSchema.parse({ brandId: STARCRAFT_BRAND_ID, ...source }));
 }
 
+function templateSourceSummaries(state: FixtureState): TemplateSourceSummary[] {
+  return templateSources(state).map((source) =>
+    templateSourceSummarySchema.parse({
+      ...source,
+      parse: source.parse
+        ? {
+            parser: source.parse.parser,
+            sourceFamily: source.parse.sourceFamily,
+            filename: source.parse.filename,
+            comps: source.parse.comps.map(({ name, width, height, durationSec, isDelivery }) => ({
+              name,
+              width,
+              height,
+              durationSec,
+              isDelivery,
+            })),
+            ratios: source.parse.ratios,
+            slots: source.parse.slots.map(({ key, kind, comps, box, placement, instances }) => ({
+              key,
+              kind,
+              comps,
+              box,
+              placement,
+              instances,
+            })),
+          }
+        : null,
+    }),
+  );
+}
+
 function variablesResponse(): TemplateVariablesResponse {
   return {
     parseState: 'parsed',
@@ -397,7 +430,12 @@ function job(overrides: Partial<ApiRenderJob> & Pick<ApiRenderJob, 'templateKey'
   return apiRenderJobSchema.parse({
     id: randomUUID(),
     brandId: STARCRAFT_BRAND_ID,
-    templateName: overrides.templateKey,
+    templateName:
+      overrides.templateKey === PROMO_TEMPLATE_KEY
+        ? FORGE_FIXTURE.promo.title
+        : overrides.templateKey === ZERG_TEMPLATE_KEY
+          ? FORGE_FIXTURE.shared.displayName
+          : overrides.templateKey,
     contractHash: 'sc-promo-v1-contract-hash',
     taskUid: `task_${randomUUID().slice(0, 8)}`,
     status: 'finished',
@@ -555,7 +593,7 @@ const ROUTES: Array<[method: string, path: RegExp, handler: Handler]> = [
   [
     'GET',
     /^\/api\/ai-studio\/templates$/,
-    ({ fixtures }) => ok({ items: templateSources(fixtures.state) }),
+    ({ fixtures }) => ok({ items: templateSourceSummaries(fixtures.state) }),
   ],
   [
     'GET',

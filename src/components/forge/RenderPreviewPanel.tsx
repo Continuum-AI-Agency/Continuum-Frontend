@@ -346,27 +346,17 @@ const latestFinishedFor = (jobs: ApiRenderJob[], rowId: string): ApiRenderJob | 
     )
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null;
 
-// ponytail: pages the whole set client-side, capped at 10×50 jobs; a row whose last render is
-// older than that shows none. A server-side renderSetRowId filter on listJobs retires the loop.
-const LAST_RENDER_PAGES = 10;
-
 async function findLastRender(
   brandId: string,
   renderSetId: string,
   rowId: string,
 ): Promise<ApiRenderJob | null> {
-  let cursor: string | undefined;
-  for (let page = 0; page < LAST_RENDER_PAGES; page++) {
-    // Newest first, so the first page holding one of this row's renders holds its latest.
-    const { items, nextCursor } = await apiRendersApi.listJobs(brandId, 50, {
-      renderSetId,
-      ...(cursor ? { cursor } : {}),
-    });
-    const found = latestFinishedFor(items, rowId);
-    if (found || !nextCursor) return found;
-    cursor = nextCursor;
-  }
-  return null;
+  const { items } = await apiRendersApi.listJobs(brandId, 1, {
+    renderSetId,
+    renderSetRowId: rowId,
+    status: 'finished',
+  });
+  return latestFinishedFor(items, rowId);
 }
 
 /** `9:16` against a 1080×1920 comp. A null or unreadable ratio proves nothing, so it never matches. */
@@ -394,13 +384,15 @@ export function RenderPreviewPanel({
   const [lastRender, setLastRender] = useState<{ key: string; job: ApiRenderJob | null } | null>(
     null,
   );
+  const [lastRequestKey, setLastRequestKey] = useState<string | null>(null);
   // Bumped when one of this row's jobs finishes, so Last render follows a render that lands.
   const [revision, setRevision] = useState(0);
   const fetchKey = rowId && renderSetId ? `${renderSetId}:${rowId}` : null;
+  const wantsLast = view === 'last' && fetchKey !== null && lastRequestKey === fetchKey;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: revision is only a re-read signal.
   useEffect(() => {
-    if (!rowId || !renderSetId) return;
+    if (!wantsLast || !rowId || !renderSetId) return;
     let current = true;
     const key = `${renderSetId}:${rowId}`;
     findLastRender(brandId, renderSetId, rowId)
@@ -412,11 +404,11 @@ export function RenderPreviewPanel({
     return () => {
       current = false;
     };
-  }, [brandId, rowId, renderSetId, revision]);
+  }, [brandId, rowId, renderSetId, revision, wantsLast]);
 
   // A realtime job is a signal to re-read, never data to merge: only the list read re-signs URLs.
   useEffect(() => {
-    if (!rowId || !renderSetId) return;
+    if (!wantsLast || !rowId || !renderSetId) return;
     return subscribeToPostgresChanges({
       label: 'render-preview-last',
       bindings: (['INSERT', 'UPDATE'] as const).map((event) => ({
@@ -431,7 +423,7 @@ export function RenderPreviewPanel({
         },
       })),
     });
-  }, [brandId, rowId, renderSetId]);
+  }, [brandId, rowId, renderSetId, wantsLast]);
 
   const row = rowId ? rows.find((candidate) => candidate.id === rowId) : undefined;
   if (!rowId || !row) {
@@ -459,7 +451,8 @@ export function RenderPreviewPanel({
         : null))
     : contract.layout;
   const job = lastRender && lastRender.key === fetchKey ? lastRender.job : null;
-  const showingLast = view === 'last' && job !== null;
+  const showingLast = wantsLast;
+  const loadingLast = wantsLast && (!lastRender || lastRender.key !== fetchKey);
   const lastOutput = job
     ? (job.outputs.find((output) => output.id === selected?.id) ?? job.outputs[0])
     : undefined;
@@ -481,7 +474,7 @@ export function RenderPreviewPanel({
           ))}
         </select>
       )}
-      {job && (
+      {fetchKey && (
         <div role="tablist" aria-label="Preview source" className="flex gap-1">
           {(
             [
@@ -500,14 +493,17 @@ export function RenderPreviewPanel({
                   ? 'bg-muted text-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}
-              onClick={() => setView(value)}
+              onClick={() => {
+                setView(value);
+                if (value === 'last') setLastRequestKey(fetchKey);
+              }}
             >
               {label}
             </button>
           ))}
         </div>
       )}
-      {job && showingLast && lastOutput ? (
+      {showingLast && job && lastOutput ? (
         <figure className="m-0 flex flex-col gap-1">
           {lastOutput.kind === 'video' ? (
             <video controls src={lastOutput.url} className="w-full rounded-md">
@@ -520,6 +516,10 @@ export function RenderPreviewPanel({
             Rendered {new Date(job.createdAt).toLocaleString()}
           </figcaption>
         </figure>
+      ) : loadingLast ? (
+        <p className="m-0 text-muted-foreground">Loading last render…</p>
+      ) : showingLast ? (
+        <p className="m-0 text-muted-foreground">No finished render for this row yet.</p>
       ) : layout ? (
         <LayoutDrawing
           layout={layout}

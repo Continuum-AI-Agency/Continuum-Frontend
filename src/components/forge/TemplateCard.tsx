@@ -1,6 +1,6 @@
 'use client';
 
-import { type TemplateSource, templateDisplayName } from '@continuum/contracts';
+import { type TemplateSourceSummary, templateDisplayName } from '@continuum/contracts';
 import { Check, Loader2, Pencil, Play, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
@@ -68,7 +68,7 @@ export function templateStatus(input: {
   }
 }
 
-export function sourceDisplayName(source: TemplateSource): string {
+export function sourceDisplayName(source: TemplateSourceSummary): string {
   return source.displayName ?? templateDisplayName(source.parse?.filename);
 }
 
@@ -171,7 +171,7 @@ export function TemplateCard({
   onRename,
 }: {
   brandId: string;
-  source: TemplateSource;
+  source: TemplateSourceSummary;
   onOpen: () => void;
   onRename: (title: string) => void;
 }) {

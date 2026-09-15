@@ -841,7 +841,9 @@ export const apiRenderJobListQuerySchema = z
     limit: z.coerce.number().int().min(1).max(50).default(20),
     cursor: z.string().min(1).max(500).optional(),
     renderSetId: z.string().uuid().optional(),
+    renderSetRowId: z.string().uuid().optional(),
     templateKey: z.string().min(1).optional(),
+    status: apiRenderJobSchema.shape.status.optional(),
   })
   .strict();
 export type ApiRenderJobListQuery = z.infer<typeof apiRenderJobListQuerySchema>;

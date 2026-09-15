@@ -1,6 +1,10 @@
 'use client';
 
-import { type MediaAsset, type TemplateSource, templateNameProblem } from '@continuum/contracts';
+import {
+  type MediaAsset,
+  type TemplateSourceSummary,
+  templateNameProblem,
+} from '@continuum/contracts';
 import {
   AlertTriangle,
   Clock3,
@@ -30,7 +34,7 @@ import { cn } from '@/lib/utils';
 const GRID_CLASS =
   'grid grid-cols-1 gap-[var(--app-shell-gap)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
 
-function PARSE_LABEL(state: TemplateSource['parseState']): {
+function PARSE_LABEL(state: TemplateSourceSummary['parseState']): {
   text: string;
   variant: 'muted' | 'success' | 'warning' | 'destructive';
 } {
@@ -53,7 +57,7 @@ function TemplateCard({
   onChanged,
 }: {
   brandId: string;
-  source: TemplateSource;
+  source: TemplateSourceSummary;
   asset: MediaAsset | undefined;
   onChanged: () => void;
 }) {
@@ -207,7 +211,7 @@ export function TemplateGrid({
   className,
 }: {
   brandId: string;
-  sources: TemplateSource[];
+  sources: TemplateSourceSummary[];
   assets: MediaAsset[];
   loading?: boolean;
   onChanged: () => void;

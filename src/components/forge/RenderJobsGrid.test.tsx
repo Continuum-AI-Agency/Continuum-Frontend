@@ -20,7 +20,7 @@ const BASE: ApiRenderJob = {
   id: '11111111-1111-4111-8111-111111111111',
   brandId: '22222222-2222-4222-8222-222222222222',
   templateKey: '133',
-  templateName: 'forge_bench_starcraft',
+  templateName: 'StarCraft Promo',
   contractHash: 'hash',
   taskUid: 'T1',
   status: 'finished',
@@ -147,19 +147,19 @@ const listJobs = mock(async () => ({ items: jobsFixture, nextCursor: null }));
 const getJob = mock(async (_brandId: string, id: string) =>
   jobsFixture.find((job) => job.id === id),
 );
+const listEnvironments = mock(async () => ({ items: environmentsFixture }));
+const listTemplates = mock(async (_brandId: string, bindingId?: string | null) => ({
+  items: bindingId === CLIENT_BINDING ? clientTemplatesFixture : bindingId ? [] : templatesFixture,
+  nextCursor: null,
+}));
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
     listJobs,
     getJob,
     listRenderSets: async () => ({ items: [], nextCursor: null }),
-    listEnvironments: async () => ({ items: environmentsFixture }),
-    // The default environment is asked for without a bindingId, as the server expects.
-    listTemplates: async (_brandId: string, bindingId?: string | null) => ({
-      items:
-        bindingId === CLIENT_BINDING ? clientTemplatesFixture : bindingId ? [] : templatesFixture,
-      nextCursor: null,
-    }),
+    listEnvironments,
+    listTemplates,
   },
 }));
 mock.module('@/lib/supabase/client', () => ({
@@ -206,6 +206,8 @@ beforeEach(() => {
   realtime = undefined;
   listJobs.mockClear();
   getJob.mockClear();
+  listEnvironments.mockClear();
+  listTemplates.mockClear();
 });
 
 afterEach(() => {
@@ -226,7 +228,7 @@ describe('RenderJobsGrid', () => {
         <RenderJobsGrid brandId={BRAND} />
       </QueryClientProvider>,
     );
-    expect(await screen.findByText('Forge bench starcraft')).toBeTruthy();
+    expect(await screen.findByText('StarCraft Promo')).toBeTruthy();
     expect(screen.queryByText('forge_bench_starcraft')).toBeNull();
     expect(screen.getByText('Spain')).toBeTruthy();
     expect(screen.getByText('Root')).toBeTruthy();
@@ -236,6 +238,8 @@ describe('RenderJobsGrid', () => {
     // No app names in the default view: the Workspace column starts hidden.
     expect(screen.queryByText('Continuum_app')).toBeNull();
     expect(screen.getByRole('button', { name: /Columns/ })).toBeTruthy();
+    expect(listEnvironments).not.toHaveBeenCalled();
+    expect(listTemplates).not.toHaveBeenCalled();
   }, 30_000);
 
   test('groups by template display name with counts and a status summary, collapsible', async () => {
@@ -468,11 +472,11 @@ describe('RenderJobsGrid', () => {
     clientTemplatesFixture = [
       { key: '133', name: 'winter_promo', environment: 'Client_ws', displayName: 'Winter Promo' },
     ];
-    const romaTwin = { ...ROMA, templateKey: '134', templateName: TWIN.name };
+    const romaTwin = { ...ROMA, templateKey: '134', templateName: 'StarCraft Promo' };
     const promoClient = {
       ...PROMO,
       templateKey: '133',
-      templateName: 'winter_promo_build',
+      templateName: 'Winter Promo',
       environment: 'Client_ws',
     };
     await renderLedger([MADRID, romaTwin, promoClient], [TEMPLATE, TWIN]);

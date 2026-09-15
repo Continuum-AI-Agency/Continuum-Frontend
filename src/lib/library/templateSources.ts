@@ -7,6 +7,7 @@ import type {
   TemplateForgeNeed,
   TemplateRebindPreview,
   TemplateSource,
+  TemplateSourceSummary,
   WorkspaceTemplate,
 } from '@continuum/contracts';
 import {
@@ -16,6 +17,7 @@ import {
   templateFontReadinessSchema,
   templateRebindPreviewSchema,
   templateSourceSchema,
+  templateSourceSummarySchema,
 } from '@continuum/contracts';
 import { getApiUrl } from '@/lib/api/config';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -49,12 +51,12 @@ async function unwrap<T>(response: Response, what: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function fetchTemplateSources(brandId: string): Promise<TemplateSource[]> {
+export async function fetchTemplateSources(brandId: string): Promise<TemplateSourceSummary[]> {
   const response = await authorizedFetch(
     `/api/ai-studio/templates?brandId=${encodeURIComponent(brandId)}`,
   );
-  const body = await unwrap<{ items?: TemplateSource[] }>(response, 'Template list');
-  return body.items ?? [];
+  const body = await unwrap<{ items?: unknown[] }>(response, 'Template list');
+  return (body.items ?? []).map((item) => templateSourceSummarySchema.parse(item));
 }
 
 /** Rename a template: writes its Library asset's title, which becomes `displayName` everywhere. */

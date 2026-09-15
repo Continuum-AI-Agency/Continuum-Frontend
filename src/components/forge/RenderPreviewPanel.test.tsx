@@ -1,8 +1,8 @@
 /**
  * RenderPreviewPanel against a mocked jobs API: a row's effective values are drawn into the
  * selected format's slot boxes, overflow is flagged and clears live, the format select swaps the
- * layout, and "Last render" appears only for a finished job that belongs to this row — found past
- * the first page, and re-read when realtime says one of this row's jobs finished.
+ * layout. Selecting a row performs no history read; "Last render" asks once for that row and
+ * re-reads only when realtime says one of its jobs finished.
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
@@ -221,15 +221,21 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Last render' }));
+    expect(listJobsMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('tab', { name: 'Last render' }));
 
-    expect(screen.getByAltText('Last render').getAttribute('src')).toBe(
+    expect((await screen.findByAltText('Last render')).getAttribute('src')).toBe(
       'https://cdn.test/mine.png',
     );
-    expect(listJobsMock).toHaveBeenCalledWith(BRAND, 50, { renderSetId: SET });
+    expect(listJobsMock).toHaveBeenCalledTimes(1);
+    expect(listJobsMock).toHaveBeenCalledWith(BRAND, 1, {
+      renderSetId: SET,
+      renderSetRowId: ROW,
+      status: 'finished',
+    });
   });
 
-  test('a job for another row gives no Last render tab', async () => {
+  test('a job for another row gives an honest empty Last render view', async () => {
     listJobsMock.mockImplementation(async () => ({
       items: [job(OTHER_ROW, 'https://cdn.test/other.png', '2026-09-14T12:00:00Z')],
       nextCursor: null,
@@ -244,11 +250,13 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    await waitFor(() => expect(listJobsMock).toHaveBeenCalled());
+    expect(listJobsMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('tab', { name: 'Last render' }));
+    await waitFor(() => expect(listJobsMock).toHaveBeenCalledTimes(1));
     await act(async () => {});
 
-    expect(screen.queryByRole('tab', { name: 'Last render' })).toBeNull();
-    expect(screen.getByRole('img', { name: 'Square preview' })).toBeTruthy();
+    expect(screen.getByText('No finished render for this row yet.')).toBeTruthy();
+    expect(screen.queryByAltText('Last render')).toBeNull();
   });
 
   test('a fork previews what it inherits, minus what it cleared', () => {
@@ -310,36 +318,6 @@ describe('RenderPreviewPanel', () => {
     expect(screen.queryByText('No measured layout for this format.')).toBeNull();
   });
 
-  test('Last render pages past other rows to find this row', async () => {
-    listJobsMock.mockImplementation(async (...args: unknown[]) =>
-      (args[2] as { cursor?: string }).cursor === 'page-2'
-        ? {
-            items: [job(ROW, 'https://cdn.test/mine.png', '2026-09-13T10:00:00Z')],
-            nextCursor: null,
-          }
-        : {
-            items: [job(OTHER_ROW, 'https://cdn.test/other.png', '2026-09-14T12:00:00Z')],
-            nextCursor: 'page-2',
-          },
-    );
-    render(
-      <RenderPreviewPanel
-        brandId={BRAND}
-        contract={CONTRACT}
-        rows={rowWith('Hola')}
-        rowId={ROW}
-        renderSetId={SET}
-      />,
-    );
-
-    fireEvent.click(await screen.findByRole('tab', { name: 'Last render' }));
-
-    expect(screen.getByAltText('Last render').getAttribute('src')).toBe(
-      'https://cdn.test/mine.png',
-    );
-    expect(listJobsMock).toHaveBeenCalledWith(BRAND, 50, { renderSetId: SET, cursor: 'page-2' });
-  });
-
   test('a job of this row finishing re-reads Last render', async () => {
     render(
       <RenderPreviewPanel
@@ -350,9 +328,13 @@ describe('RenderPreviewPanel', () => {
         renderSetId={SET}
       />,
     );
+    expect(listJobsMock).not.toHaveBeenCalled();
+    expect(subscription).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Last render' }));
     await waitFor(() => expect(listJobsMock).toHaveBeenCalledTimes(1));
     await act(async () => {});
-    expect(screen.queryByRole('tab', { name: 'Last render' })).toBeNull();
+    expect(screen.getByText('No finished render for this row yet.')).toBeTruthy();
 
     listJobsMock.mockImplementation(async () => ({
       items: [job(ROW, 'https://cdn.test/fresh.png', '2026-09-14T13:00:00Z')],
@@ -367,8 +349,8 @@ describe('RenderPreviewPanel', () => {
       );
     });
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Last render' }));
-    expect(screen.getByAltText('Last render').getAttribute('src')).toBe(
+    await waitFor(() => expect(listJobsMock).toHaveBeenCalledTimes(2));
+    expect((await screen.findByAltText('Last render')).getAttribute('src')).toBe(
       'https://cdn.test/fresh.png',
     );
   });

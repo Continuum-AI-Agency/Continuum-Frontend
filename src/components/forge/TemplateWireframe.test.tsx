@@ -6,10 +6,11 @@
 
 import { describe, expect, mock, test } from 'bun:test';
 import type { TemplateParse } from '@continuum/contracts';
+import { render, screen } from '@testing-library/react';
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({ apiRendersApi: {} }));
 
-const { wireframeFrames } = await import('./TemplateWireframe');
+const { TemplateWireframe, wireframeFrames } = await import('./TemplateWireframe');
 
 const slot = (key: string, extra: Record<string, unknown>) =>
   ({
@@ -77,4 +78,16 @@ describe('wireframeFrames', () => {
     ]);
     expect(wireframeFrames(null)).toEqual([]);
   });
+});
+
+test('a gallery wireframe renders its compact parse without requesting render history', () => {
+  render(
+    <TemplateWireframe
+      brandId="22222222-2222-4222-8222-222222222222"
+      templateKey="47"
+      parse={PARSE}
+    />,
+  );
+
+  expect(screen.getByRole('img', { name: '1:1 layout' })).toBeTruthy();
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import type { TemplateParse } from '@continuum/contracts';
+import type { ApiRenderOutput, TemplatePreview } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutTemplate } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
@@ -41,7 +41,7 @@ function scaleBox(
  * bare `box` is drawn only where it cannot be another comp's rectangle. No box is invented — a
  * slot nobody measured is simply not drawn.
  */
-export function wireframeFrames(parse: TemplateParse | null | undefined): WireframeFrame[] {
+export function wireframeFrames(parse: TemplatePreview | null | undefined): WireframeFrame[] {
   if (!parse) return [];
   const targets = parse.ratios.length
     ? parse.ratios.map((entry) => ({ ...entry, comp: entry.comps[0] }))
@@ -100,20 +100,20 @@ export function useLatestRenderFrame(brandId: string, templateKey: string | null
 }
 
 export function TemplateWireframe({
-  brandId,
-  templateKey,
   parse,
   ratio,
+  rendered,
   className,
 }: {
   brandId: string;
   templateKey: string | null;
-  parse: TemplateParse | null;
+  /** The gallery's compact parse is enough: cards never read render history. */
+  parse: TemplatePreview | null;
   /** Draw this ratio's wireframe. Omitted: the latest render when there is one, else the first ratio. */
   ratio?: string;
+  rendered?: ApiRenderOutput | null;
   className?: string;
 }) {
-  const rendered = useLatestRenderFrame(brandId, templateKey);
   const frames = wireframeFrames(parse);
   const frame = frames.find((entry) => entry.ratio === ratio) ?? frames[0];
 

@@ -125,7 +125,13 @@ export const apiRendersApi = {
   listJobs(
     brandId: string,
     limit = 10,
-    options?: { cursor?: string; renderSetId?: string; templateKey?: string },
+    options?: {
+      cursor?: string;
+      renderSetId?: string;
+      renderSetRowId?: string;
+      templateKey?: string;
+      status?: ApiRenderJob['status'];
+    },
   ) {
     return http.request<ApiRenderJobListResponse>({
       path: `${API_RENDER_JOBS_ROUTE}?${query({
@@ -133,7 +139,9 @@ export const apiRendersApi = {
         limit,
         ...(options?.cursor ? { cursor: options.cursor } : {}),
         ...(options?.renderSetId ? { renderSetId: options.renderSetId } : {}),
+        ...(options?.renderSetRowId ? { renderSetRowId: options.renderSetRowId } : {}),
         ...(options?.templateKey ? { templateKey: options.templateKey } : {}),
+        ...(options?.status ? { status: options.status } : {}),
       })}`,
       schema: apiRenderJobListResponseSchema,
     });

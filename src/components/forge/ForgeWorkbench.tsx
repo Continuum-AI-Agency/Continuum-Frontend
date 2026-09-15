@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  type TemplateSource,
+  type TemplateSourceSummary,
   templateDisplayName,
   type WorkspaceTemplate,
 } from '@continuum/contracts';
@@ -183,7 +183,7 @@ export function ForgeWorkbench({
   }, [pendingKey, sourceQuery.refetch]);
 
   const setDisplayName = (assetId: string, displayName: string | null) =>
-    queryClient.setQueryData<TemplateSource[]>(sourceKey, (current = []) =>
+    queryClient.setQueryData<TemplateSourceSummary[]>(sourceKey, (current = []) =>
       current.map((source) => (source.assetId === assetId ? { ...source, displayName } : source)),
     );
 

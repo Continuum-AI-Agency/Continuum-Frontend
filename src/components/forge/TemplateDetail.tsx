@@ -6,7 +6,7 @@ import {
   renderWorkspaceLabel,
   type TemplateFontPushResponse,
   type TemplateFontReadiness,
-  type TemplateSource,
+  type TemplateSourceSummary,
   templateNameProblem,
   UNTITLED_TEMPLATE_NAME,
 } from '@continuum/contracts';
@@ -148,7 +148,7 @@ function ladderFor(state: string | undefined): Array<{
  * refuses a name that does not fit, so a prefilled name it would refuse is worse than an empty
  * field — the refusal would only arrive at submit.
  */
-function buildNameSuggestion(source: TemplateSource): string {
+function buildNameSuggestion(source: TemplateSourceSummary): string {
   const suggestion = sourceDisplayName(source);
   return suggestion === UNTITLED_TEMPLATE_NAME || templateNameProblem(suggestion) ? '' : suggestion;
 }
@@ -173,7 +173,7 @@ export function TemplateDetail({
   onChanged,
 }: {
   brandId: string;
-  source: TemplateSource;
+  source: TemplateSourceSummary;
   onBack: () => void;
   onRename: (title: string) => void;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
@@ -669,6 +669,7 @@ export function TemplateDetail({
                 templateKey={templateKey}
                 parse={source.parse}
                 ratio={activeView}
+                rendered={rendered}
                 className="h-full w-full p-6"
               />
             </div>

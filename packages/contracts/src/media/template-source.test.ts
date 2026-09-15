@@ -8,6 +8,7 @@ import {
   templateParseRatios,
   templateParseSchema,
   templateSlotSchema,
+  templateSourceSummarySchema,
 } from './template-source';
 
 // A trimmed real parse of ngr-base_promotopexit.AEP, produced by
@@ -87,6 +88,49 @@ describe('templateParseSchema', () => {
       false,
     );
   });
+});
+
+it('template source summaries accept only the geometry needed by a gallery preview', () => {
+  const parse = templateParseSchema.parse(REAL_PARSE);
+  const preview = {
+    parser: parse.parser,
+    sourceFamily: parse.sourceFamily,
+    filename: parse.filename,
+    comps: parse.comps.map(({ name, width, height, isDelivery }) => ({
+      name,
+      width,
+      height,
+      isDelivery,
+    })),
+    ratios: parse.ratios.map(({ ratio, width, height, comps }) => ({
+      ratio,
+      width,
+      height,
+      comps,
+    })),
+    slots: parse.slots.map(({ key, kind, comps, box, placement, instances }) => ({
+      key,
+      kind,
+      comps,
+      box,
+      placement,
+      instances,
+    })),
+  };
+  const summary = templateSourceSummarySchema.parse({
+    assetId: '11111111-1111-4111-8111-111111111111',
+    brandId: '22222222-2222-4222-8222-222222222222',
+    versionId: '33333333-3333-4333-8333-333333333333',
+    family: 'after_effects_package',
+    parseState: 'parsed',
+    parse: preview,
+    createdAt: '2026-09-15T00:00:00Z',
+  });
+
+  expect(summary.parse?.ratios).toEqual(preview.ratios);
+  expect(summary.parse).not.toHaveProperty('fonts');
+  expect(summary.parse).not.toHaveProperty('staticText');
+  expect(summary.parse).not.toHaveProperty('warnings');
 });
 
 describe('denormalized columns', () => {

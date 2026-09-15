@@ -1,6 +1,6 @@
 'use client';
 
-import type { TemplateSource } from '@continuum/contracts';
+import type { TemplateSourceSummary } from '@continuum/contracts';
 import { templateDisplayName } from '@continuum/contracts';
 import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -48,7 +48,7 @@ type Item =
       name: string;
       group: string;
       updatedAt: string;
-      source: TemplateSource;
+      source: TemplateSourceSummary;
     }
   | {
       kind: 'shared';
@@ -74,7 +74,7 @@ export function TemplateGallery({
 }: {
   brandId: string;
   brandName?: string;
-  sources: TemplateSource[];
+  sources: TemplateSourceSummary[];
   shared: SharedTemplate[];
   /** The `sharedTemplateId` of the shared template whose adoption is in flight. */
   adopting: string | null;

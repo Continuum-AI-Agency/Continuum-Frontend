@@ -15,7 +15,7 @@ import type {
   MediaAsset,
   MediaCollection,
   MediaSearchResultItem,
-  TemplateSource,
+  TemplateSourceSummary,
 } from '@continuum/contracts';
 import {
   classifyLibraryFile,
@@ -189,7 +189,7 @@ export function LibraryViewer({
   const [assetRevision, setAssetRevision] = useState(0);
   // Loaded for the Templates and Typography panels. Typography needs them too: "which
   // families do your templates ask for" is the whole reason the two sections sit together.
-  const [templateSources, setTemplateSources] = useState<TemplateSource[]>([]);
+  const [templateSources, setTemplateSources] = useState<TemplateSourceSummary[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<MediaSearchResultItem[] | null>(null);
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
