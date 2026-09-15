@@ -507,6 +507,8 @@ export const apiRenderDeliveryCreateTargetSchema = z
   .object({
     action: z.literal('create').default('create'),
     adAccountId: z.string().min(1),
+    /** The ad account's name, resolved server-side; ids alone never reach a person. */
+    adAccountName: z.string().min(1).optional(),
     campaignId: z.string().min(1),
     campaignName: z.string().min(1).optional(),
     adsetId: z.string().min(1),
@@ -525,6 +527,8 @@ export const apiRenderDeliveryReplaceTargetSchema = z
   .object({
     action: z.literal('replace'),
     adAccountId: z.string().min(1),
+    /** The ad account's name, resolved server-side; ids alone never reach a person. */
+    adAccountName: z.string().min(1).optional(),
     campaignId: z.string().min(1),
     campaignName: z.string().min(1).optional(),
     adsetId: z.string().min(1),

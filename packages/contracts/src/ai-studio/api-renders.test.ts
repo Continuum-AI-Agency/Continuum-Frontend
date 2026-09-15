@@ -633,3 +633,12 @@ describe('Forge Studio seams', () => {
     ).toBe(false);
   });
 });
+
+describe('delivery target account name', () => {
+  it('both arms carry an optional adAccountName', () => {
+    const base = { adAccountId: 'act_1', campaignId: 'c', adsetId: 's' };
+    expect(apiRenderDeliveryTargetSchema.parse({ ...base, adAccountName: 'StarCraft Ads' })).toMatchObject({ adAccountName: 'StarCraft Ads' });
+    expect(apiRenderDeliveryTargetSchema.parse({ ...base, action: 'replace', adId: 'a', adAccountName: 'StarCraft Ads' })).toMatchObject({ adAccountName: 'StarCraft Ads' });
+    expect(apiRenderDeliveryTargetSchema.parse(base)).not.toHaveProperty('adAccountName');
+  });
+});
