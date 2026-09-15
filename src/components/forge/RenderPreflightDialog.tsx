@@ -19,6 +19,7 @@ import {
   replaceOutputId,
 } from '@/components/forge/DeliveryTargetPicker';
 import {
+  describeSlackFailure,
   isSlackDeliveryUnavailable,
   SlackDestinationPicker,
   type SlackPickerState,
@@ -187,7 +188,7 @@ export function RenderPreflightDialog({
         setDestinations(
           isSlackDeliveryUnavailable(error)
             ? 'unavailable'
-            : { error: error instanceof Error ? error.message : 'unknown error' },
+            : { error: describeSlackFailure(error) },
         );
       });
     return () => {

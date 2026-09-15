@@ -18,12 +18,29 @@ const SLACK_TONE: Record<NonNullable<ApiRenderJob['slackDelivery']>['status'], T
   skipped: 'warning',
 };
 
+// A Meta receipt's `reason` codes in words. `delivery_requested` is the normal pending claim and
+// has no sentence of its own; an unmapped code is shown as written rather than hidden.
+const DELIVERY_REASON_COPY: Record<string, string> = {
+  delivery_bridge_unconfigured: 'Ad delivery isn’t set up for this workspace yet.',
+  binding_unresolved: 'The workspace this render was made in no longer exists.',
+};
+
+/** A delivery receipt's reason in words, or null when it needs none. */
+export function deliveryReasonText(reason: string | null | undefined): string | null {
+  if (!reason || reason === 'delivery_requested') return null;
+  return DELIVERY_REASON_COPY[reason] ?? reason;
+}
+
 /** `render_approvals.status` in words, with the tone its badge carries. */
 export function approvalState(job: ApiRenderJob): { text: string; tone: Tone } | null {
   if (!job.deliveryTarget) return null;
   const receipt = job.delivery[0];
   if (receipt?.status === 'published') return { text: 'published', tone: 'success' };
   if (receipt?.status === 'error') return { text: 'delivery failed', tone: 'destructive' };
+  // A claim the bridge never picked up is not waiting on a person: say so, never "held".
+  if (receipt?.status === 'pending' && receipt.reason === 'delivery_bridge_unconfigured') {
+    return { text: 'delivery not set up', tone: 'warning' };
+  }
   const status = job.approval?.status;
   switch (status) {
     case 'pending':

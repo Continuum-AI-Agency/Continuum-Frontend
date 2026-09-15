@@ -483,6 +483,8 @@ describe('RenderPreflightDialog · Deliver + Confirm', () => {
     await next();
     expect(await screen.findByText(/Couldn’t load Slack channels/)).toBeTruthy();
     expect(screen.queryByText(/Slack delivery isn’t available yet/)).toBeNull();
+    // The code is for machines: the person reads the discovery copy, never the raw token.
+    expect(document.body.textContent).not.toContain('render_api_not_configured');
   }, 30_000);
 
   test('a 503 from destinations is a calm "not available yet", and the batch still renders', async () => {

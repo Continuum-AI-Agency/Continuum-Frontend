@@ -4,7 +4,7 @@ import type { ApiRenderJob, ApiRenderOutput } from '@continuum/contracts';
 import { ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
 import React, { useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
-import { approvalState, DeliveryChain } from '@/components/forge/DeliveryChain';
+import { approvalState, DeliveryChain, deliveryReasonText } from '@/components/forge/DeliveryChain';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -159,10 +159,12 @@ export function jobSteps(job: ApiRenderJob): Step[] {
       : receipt?.status === 'published' || job.approval?.status === 'published'
         ? { label: 'Published', state: 'done', at: receipt?.publishedAt }
         : receipt?.status === 'error'
-          ? { label: 'Published', state: 'error', detail: receipt.reason ?? undefined }
+          ? { label: 'Published', state: 'error', detail: deliveryReasonText(receipt.reason) ?? undefined }
           : receipt?.status === 'dropped' || job.approval?.status === 'rejected'
-            ? { label: 'Published', state: 'skipped', detail: receipt?.reason ?? 'Not approved' }
-            : { label: 'Published', state: 'pending' },
+            ? { label: 'Published', state: 'skipped', detail: deliveryReasonText(receipt?.reason) ?? 'Not approved' }
+            : receipt?.reason === 'delivery_bridge_unconfigured'
+              ? { label: 'Published', state: 'skipped', detail: deliveryReasonText(receipt.reason) ?? undefined }
+              : { label: 'Published', state: 'pending' },
   ];
 }
 

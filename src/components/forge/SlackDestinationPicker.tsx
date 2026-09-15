@@ -1,5 +1,6 @@
 'use client';
 
+import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 import type {
   ApiRenderDeliveryDestination,
   ApiRenderDeliveryDestinationsResponse,
@@ -48,10 +49,12 @@ const SLACK_FAILURE_COPY: Record<string, string> = {
   slack_channel_not_found: 'That channel is gone — pick another.',
 };
 
-function describeSlackFailure(error: unknown): string {
+/** A Slack or render-service failure in words; render_* codes use the discovery copy. */
+export function describeSlackFailure(error: unknown): string {
   const message = error instanceof Error ? error.message : '';
   const code = Object.keys(SLACK_FAILURE_COPY).find((key) => message.includes(key));
-  return code ? SLACK_FAILURE_COPY[code]! : message || 'Slack did not answer. Try again.';
+  if (code) return SLACK_FAILURE_COPY[code]!;
+  return message ? describeRenderDiscoveryFailure(error) : 'Slack did not answer. Try again.';
 }
 
 export function SlackDestinationPicker({
@@ -81,7 +84,7 @@ export function SlackDestinationPicker({
   if ('error' in slack) {
     return (
       <p className="text-xs text-muted-foreground">
-        Couldn’t load Slack channels ({slack.error}). Renders still go to the Library.
+        Couldn’t load Slack channels: {slack.error} Renders still go to the Library.
       </p>
     );
   }

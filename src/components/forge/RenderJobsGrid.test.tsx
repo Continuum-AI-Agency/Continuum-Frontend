@@ -285,6 +285,30 @@ describe('RenderJobsGrid', () => {
     expect(promo.getByText('rejected')).toBeTruthy();
   }, 30_000);
 
+  test('delivery reasons read as words: an unset bridge is not "held", a lost workspace is not a code', async () => {
+    const unset: ApiRenderJob = {
+      ...MADRID,
+      id: '99999999-9999-4999-8999-999999999991',
+      label: 'Bridge unset',
+      approval: null,
+      delivery: [{ status: 'pending', adId: null, creativeId: null, reason: 'delivery_bridge_unconfigured', publishedAt: null }],
+    };
+    const lost: ApiRenderJob = {
+      ...MADRID,
+      id: '99999999-9999-4999-8999-999999999992',
+      label: 'Workspace gone',
+      approval: null,
+      delivery: [{ status: 'error', adId: null, creativeId: null, reason: 'binding_unresolved', publishedAt: null }],
+    };
+    await renderLedger([unset, lost], [TEMPLATE]);
+    const rowOf = (name: string) => screen.getByText(name).closest('tr') as HTMLElement;
+    expect(within(rowOf('Bridge unset')).getByText('delivery not set up')).toBeTruthy();
+    expect(within(rowOf('Bridge unset')).queryByText('held for approval')).toBeNull();
+    fireEvent.click(screen.getByText('Workspace gone'));
+    expect(await screen.findByText('The workspace this render was made in no longer exists.')).toBeTruthy();
+    expect(document.body.textContent).not.toContain('binding_unresolved');
+  }, 30_000);
+
   test('a row expands into its detail with preview, properties and the step timeline', async () => {
     await renderLedger([MADRID, ROMA, PROMO], [TEMPLATE]);
     fireEvent.click(screen.getByText('Madrid'));
