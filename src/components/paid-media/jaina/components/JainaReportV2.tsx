@@ -1,13 +1,14 @@
 'use client';
 
 import { BookIcon, EyeIcon, EyeOffIcon, FileDownIcon, Share2Icon, Table2Icon } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { useToast } from '@/components/ui/ToastProvider';
+import { http } from '@/lib/api/http';
 import type { CheckpointReportV2, ExecutionObjective } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { BlockRenderer } from '../blocks/BlockRenderer';
@@ -103,10 +104,18 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
 type JainaReportV2Props = {
   report: CheckpointReportV2;
   isStreaming: boolean;
+  runId?: string;
+  deliverySource?: 'live_render' | 'hydration_replay';
   onSuggestionClick?: (query: string) => void;
 };
 
-export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaReportV2Props) {
+export function JainaReportV2({
+  report,
+  isStreaming,
+  runId,
+  deliverySource,
+  onSuggestionClick,
+}: JainaReportV2Props) {
   const { show } = useToast();
   const reportRef = useRef<HTMLDivElement | null>(null);
   const [hiddenBlockIds, setHiddenBlockIds] = useState<Set<string>>(() => new Set());
@@ -125,6 +134,23 @@ export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaR
   // report meta schema does not carry that flag), so the badge reflects exactly
   // the citations the report can surface.
   const citationCount = useMemo(() => countBlockCitations(report.blocks), [report.blocks]);
+  const acknowledgeDelivery = useCallback(
+    async (kind: 'live_render' | 'hydration_replay' | 'pdf', status: 'success' | 'fallback') => {
+      if (!runId) return;
+      await http
+        .request({
+          path: `/api/agents/jaina/chat/runs/${encodeURIComponent(runId)}/delivery`,
+          method: 'POST',
+          body: { kind, status, report_id: `${runId}:checkpoint_report` },
+        })
+        .catch(() => undefined);
+    },
+    [runId],
+  );
+  useEffect(() => {
+    if (isStreaming || !deliverySource) return;
+    void acknowledgeDelivery(deliverySource, 'success');
+  }, [acknowledgeDelivery, deliverySource, isStreaming]);
   const toggleBlock = useCallback((blockId: string) => {
     setHiddenBlockIds((current) => {
       const next = new Set(current);
@@ -137,7 +163,8 @@ export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaR
   // PDF — the front-end is the single source of rendering truth.
   const handlePdfExport = useCallback(async () => {
     try {
-      await downloadJainaReportV2Pdf({ exportNode: reportRef.current });
+      const mode = await downloadJainaReportV2Pdf({ exportNode: reportRef.current });
+      await acknowledgeDelivery('pdf', mode === 'visual' ? 'success' : 'fallback');
     } catch {
       show({
         title: 'Export failed',
@@ -145,7 +172,7 @@ export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaR
         variant: 'error',
       });
     }
-  }, [show]);
+  }, [acknowledgeDelivery, show]);
 
   const handleSheetsExport = useCallback(async () => {
     setExporting('sheets');

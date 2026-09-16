@@ -194,6 +194,10 @@ mock.module('./components/JainaMessageItem', () => ({
         <span data-testid={`${String(message.role)}-report-kind`}>
           {reportV2 ? 'v2' : report ? 'legacy' : 'none'}
         </span>
+        <span data-testid={`${String(message.role)}-run-id`}>{String(message.runId ?? '')}</span>
+        <span data-testid={`${String(message.role)}-delivery-source`}>
+          {String(message.deliverySource ?? '')}
+        </span>
         {/* Stands in for the two approval cards: the real ones derive their pending
             list from this same `state` and call back with the untouched frame. */}
         {state.pendingToolApprovals.map((approval) => (
@@ -532,16 +536,27 @@ describe('JainaChatSurface integration', () => {
       createdAt: '2026-09-14T05:00:00.000Z',
       status: 'done' as const,
       paidCreativeRenders,
+      runId: 'run_1',
+      deliverySource: 'live_render' as const,
     };
 
     const liveMerged = mergePersistedMessagesWithLocal([persisted], [local]);
     expect(liveMerged[0]?.paidCreativeRenders).toEqual(paidCreativeRenders);
+    expect(liveMerged[0]).toMatchObject({ runId: 'run_1', deliverySource: 'live_render' });
 
     const reloaded = mergePersistedMessagesWithLocal(
-      [{ ...persisted, paidCreativeRenders }],
+      [
+        {
+          ...persisted,
+          paidCreativeRenders,
+          runId: 'run_1',
+          deliverySource: 'hydration_replay' as const,
+        },
+      ],
       [local],
     );
     expect(reloaded[0]?.paidCreativeRenders).toEqual(paidCreativeRenders);
+    expect(reloaded[0]).toMatchObject({ runId: 'run_1', deliverySource: 'hydration_replay' });
   });
 
   /**
@@ -898,6 +913,7 @@ describe('JainaChatSurface integration', () => {
                       },
                     },
                   }),
+                  metadata: { run_id: 'run_history_1' },
                   createdAt: '2026-04-17T16:30:00.000Z',
                 },
               ],
@@ -945,8 +961,12 @@ describe('JainaChatSurface integration', () => {
     await waitFor(() => {
       const reportBlockCount = screen.getAllByTestId('assistant-report-block-count').at(-1);
       const reportKind = screen.getAllByTestId('assistant-report-kind').at(-1);
+      const runId = screen.getAllByTestId('assistant-run-id').at(-1);
+      const deliverySource = screen.getAllByTestId('assistant-delivery-source').at(-1);
       expect(reportBlockCount?.textContent).toBe('1');
       expect(reportKind?.textContent).toBe('v2');
+      expect(runId?.textContent).toBe('run_history_1');
+      expect(deliverySource?.textContent).toBe('hydration_replay');
     });
   });
 });

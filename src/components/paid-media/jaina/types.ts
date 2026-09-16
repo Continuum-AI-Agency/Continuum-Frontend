@@ -36,6 +36,8 @@ export type JainaPlan = {
 
 export type JainaChatMessage = {
   id: string;
+  runId?: string;
+  deliverySource?: 'live_render' | 'hydration_replay';
   role: 'user' | 'assistant';
   content: string;
   createdAt: string;

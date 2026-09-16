@@ -17,18 +17,19 @@
  * subpaths.
  */
 
-import { z } from "zod";
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Shared header (every dataset kind carries these)
 // ---------------------------------------------------------------------------
 
 export const datasetValueFormatSchema = z.enum([
-  "text",
-  "number",
-  "currency",
-  "percent",
-  "multiplier",
+  'text',
+  'number',
+  'currency',
+  'percent',
+  'multiplier',
+  'creative',
 ]);
 export type DatasetValueFormat = z.infer<typeof datasetValueFormatSchema>;
 
@@ -59,6 +60,7 @@ export const datasetSourceSchema = z.object({
   tool: z.string(),
   cache_key: z.string().nullable().default(null),
   fetched_at: z.string().nullable().default(null),
+  cache_source: z.enum(['fresh', 'memory', 'redis', 'db']).nullable().optional(),
   params_summary: z.string().nullable().default(null),
 });
 export type DatasetSource = z.infer<typeof datasetSourceSchema>;
@@ -84,7 +86,7 @@ export const timeSeriesPointSchema = z.object({
 export type TimeSeriesPoint = z.infer<typeof timeSeriesPointSchema>;
 
 export const timeSeriesDatasetSchema = z.object({
-  kind: z.literal("time_series"),
+  kind: z.literal('time_series'),
   ...datasetHeaderShape,
   points: z.array(timeSeriesPointSchema).default([]),
 });
@@ -97,7 +99,7 @@ export type TimeSeriesDataset = z.infer<typeof timeSeriesDatasetSchema>;
 export const datasetTableColumnSchema = z.object({
   key: z.string(),
   label: z.string(),
-  format: datasetValueFormatSchema.default("text"),
+  format: datasetValueFormatSchema.default('text'),
 });
 export type DatasetTableColumn = z.infer<typeof datasetTableColumnSchema>;
 
@@ -108,7 +110,7 @@ export const datasetTableRowSchema = z.object({
 export type DatasetTableRow = z.infer<typeof datasetTableRowSchema>;
 
 export const tableDatasetSchema = z.object({
-  kind: z.literal("table"),
+  kind: z.literal('table'),
   ...datasetHeaderShape,
   columns: z.array(datasetTableColumnSchema).default([]),
   rows: z.array(datasetTableRowSchema).default([]),
@@ -133,12 +135,12 @@ export const datasetScalarMetricSchema = z.object({
   key: z.string(),
   value: z.union([z.number(), z.string(), z.null()]),
   unit: z.string().nullable().default(null),
-  format: datasetValueFormatSchema.default("number"),
+  format: datasetValueFormatSchema.default('number'),
 });
 export type DatasetScalarMetric = z.infer<typeof datasetScalarMetricSchema>;
 
 export const scalarGroupDatasetSchema = z.object({
-  kind: z.literal("scalar_group"),
+  kind: z.literal('scalar_group'),
   ...datasetHeaderShape,
   metrics: z.array(datasetScalarMetricSchema).default([]),
 });
@@ -148,14 +150,14 @@ export type ScalarGroupDataset = z.infer<typeof scalarGroupDatasetSchema>;
 // Discriminated union
 // ---------------------------------------------------------------------------
 
-export const analysisDatasetSchema = z.discriminatedUnion("kind", [
+export const analysisDatasetSchema = z.discriminatedUnion('kind', [
   timeSeriesDatasetSchema,
   tableDatasetSchema,
   scalarGroupDatasetSchema,
 ]);
 export type AnalysisDataset = z.infer<typeof analysisDatasetSchema>;
 
-export const analysisDatasetKindSchema = z.enum(["time_series", "table", "scalar_group"]);
+export const analysisDatasetKindSchema = z.enum(['time_series', 'table', 'scalar_group']);
 export type AnalysisDatasetKind = z.infer<typeof analysisDatasetKindSchema>;
 
 // ---------------------------------------------------------------------------
@@ -194,7 +196,7 @@ export const jainaCreativePreviewRequestSchema = z.object({
   ad_account_id: z.string().min(1),
   creative_id: z.string().nullable().default(null),
   ad_id: z.string().nullable().default(null),
-  ad_format: z.string().default("DESKTOP_FEED_STANDARD"),
+  ad_format: z.string().default('DESKTOP_FEED_STANDARD'),
 });
 export type JainaCreativePreviewRequest = z.infer<typeof jainaCreativePreviewRequestSchema>;
 

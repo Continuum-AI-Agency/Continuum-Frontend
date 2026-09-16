@@ -395,6 +395,7 @@ test.describe('jaina tool approval card', () => {
   let context: BrowserContext;
   let page: Page;
   const streamPosts: StreamPost[] = [];
+  const deliveryPosts: Array<{ kind: string; status: string; report_id: string }> = [];
   const requestLog: { method: string; url: string }[] = [];
 
   test.beforeAll(async ({ browser }, testInfo) => {
@@ -487,6 +488,21 @@ test.describe('jaina tool approval card', () => {
           : body.query === LIVE_PROMPT
             ? liveReportStreamBody()
             : approvalStreamBody(),
+      });
+    });
+
+    await context.route('**/api/agents/jaina/chat/runs/*/delivery', async (route) => {
+      deliveryPosts.push(
+        (route.request().postDataJSON() ?? {}) as {
+          kind: string;
+          status: string;
+          report_id: string;
+        },
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
       });
     });
 
@@ -667,6 +683,22 @@ test.describe('jaina tool approval card', () => {
     expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
     expect(pdf.toString('latin1')).toContain('Creative Alpha');
     grade('live_report.pdf', true, `downloaded ${pdf.byteLength} byte PDF after response.done`);
+    await expect.poll(() => deliveryPosts.length).toBe(2);
+    expect(deliveryPosts[0]).toEqual({
+      kind: 'live_render',
+      status: 'success',
+      report_id: `run_live_${RUN_ID}:checkpoint_report`,
+    });
+    expect(deliveryPosts[1]).toEqual({
+      kind: 'pdf',
+      status: expect.stringMatching(/^(success|fallback)$/),
+      report_id: `run_live_${RUN_ID}:checkpoint_report`,
+    });
+    grade(
+      'live_report.delivery',
+      true,
+      `live render and ${deliveryPosts[1]?.status} PDF acknowledged one run identity`,
+    );
 
     await page.getByText('Creative Alpha', { exact: true }).hover();
     await expect(page.getByRole('img', { name: 'Creative Alpha' })).toBeVisible();
@@ -679,13 +711,14 @@ test.describe('jaina tool approval card', () => {
           entry.url.startsWith(process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4499') &&
           entry.method !== 'GET' &&
           entry.method !== 'OPTIONS' &&
-          !entry.url.includes('/api/agents/jaina/creative-preview'),
+          !entry.url.includes('/api/agents/jaina/creative-preview') &&
+          !entry.url.includes('/delivery'),
       ),
     ).toHaveLength(0);
     grade(
       'live_report.no_provider',
       true,
-      '0 Meta/model/Backend writes; preview was fixture-routed',
+      '0 Meta/model writes; only preview and delivery acknowledgements were fixture-routed',
     );
   });
 });

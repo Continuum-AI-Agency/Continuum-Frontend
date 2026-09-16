@@ -1,14 +1,39 @@
 import { describe, expect, it, mock } from 'bun:test';
 import type { CheckpointReportV2 } from '@/lib/jaina/schemas';
 
-import {
+const captureMock = mock(async () => ({
+  width: 100,
+  height: 200,
+  toDataURL: () => 'data:image/png;base64,fixture',
+}));
+
+class MockPdf {
+  internal = { pageSize: { getWidth: () => 595, getHeight: () => 842 } };
+  addImage() {}
+  addPage() {}
+  setFont() {}
+  setFontSize() {}
+  text() {}
+  splitTextToSize(value: string) {
+    return [value];
+  }
+  output() {
+    return new Blob(['%PDF fixture']);
+  }
+}
+
+mock.module('html2canvas', () => ({ default: captureMock }));
+mock.module('jspdf', () => ({ jsPDF: MockPdf }));
+
+const {
   buildJainaReportHtml,
   buildJainaReportV2SheetsExportRequest,
+  createJainaReportV2PdfArtifact,
   createJainaReportFilename,
   createJainaReportHtmlFilename,
   formatMetricValueForPdf,
   shareJainaReportFile,
-} from './reportExport';
+} = await import('./reportExport');
 
 describe('createJainaReportFilename', () => {
   it('uses the current date segment for the export file name', () => {
@@ -19,6 +44,27 @@ describe('createJainaReportFilename', () => {
   it('creates html file names', () => {
     const fixedDate = new Date('2026-03-09T12:34:56.000Z');
     expect(createJainaReportHtmlFilename(fixedDate)).toBe('jaina-report-2026-03-09.html');
+  });
+});
+
+describe('createJainaReportV2PdfArtifact', () => {
+  it('reports visual capture success', async () => {
+    const node = document.createElement('section');
+    Object.defineProperty(node, 'innerText', { value: 'Evidence row' });
+    const artifact = await createJainaReportV2PdfArtifact({ exportNode: node });
+    expect(artifact.mode).toBe('visual');
+    expect(await artifact.file.text()).toContain('%PDF');
+  });
+
+  it('reports evidence-bearing fallback after capture failure', async () => {
+    captureMock.mockImplementationOnce(async () => {
+      throw new Error('capture timeout');
+    });
+    const node = document.createElement('section');
+    Object.defineProperty(node, 'innerText', { value: 'Evidence row' });
+    const artifact = await createJainaReportV2PdfArtifact({ exportNode: node });
+    expect(artifact.mode).toBe('text_fallback');
+    expect(await artifact.file.text()).toContain('%PDF');
   });
 });
 

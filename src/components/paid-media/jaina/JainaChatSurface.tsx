@@ -621,6 +621,7 @@ function hydrateMessagesWithConversationRuns(
   runs: JainaConversationRun[],
 ): { messages: JainaChatMessage[]; changed: boolean } {
   type HydratedRunPayload = {
+    runId: string | null;
     report: JainaChatMessage['report'] | undefined;
     reportV2: JainaChatMessage['reportV2'] | undefined;
     reportAssembly: JainaChatMessage['reportAssembly'] | undefined;
@@ -653,6 +654,7 @@ function hydrateMessagesWithConversationRuns(
       const objectives = deriveObjectivesFromReport(report);
 
       return {
+        runId: run.runId,
         report,
         reportV2,
         reportAssembly,
@@ -681,6 +683,9 @@ function hydrateMessagesWithConversationRuns(
 
     nextMessages[index] = {
       ...message,
+      ...(payload.runId
+        ? { runId: payload.runId, deliverySource: 'hydration_replay' as const }
+        : {}),
       ...(payload.report && !message.report ? { report: payload.report } : {}),
       ...(payload.reportV2 ? { reportV2: payload.reportV2 } : {}),
       ...(payload.reportAssembly && !message.reportAssembly
@@ -873,6 +878,9 @@ function mapConversationMessageToChatMessage(
 
   return {
     id: `persisted-${message.id}`,
+    ...(typeof message.metadata?.run_id === 'string'
+      ? { runId: message.metadata.run_id, deliverySource: 'hydration_replay' as const }
+      : {}),
     role: message.role,
     content,
     createdAt: message.createdAt,
@@ -1128,6 +1136,7 @@ export function mergePersistedMessagesWithLocal(
   const shouldPreserveLocalRenders =
     (localAssistant.paidCreativeRenders?.length ?? 0) > 0 &&
     (persistedAssistant.paidCreativeRenders?.length ?? 0) === 0;
+  const shouldPreserveLocalRunId = Boolean(localAssistant.runId && !persistedAssistant.runId);
   const mergedObjectives = mergeMessageObjectives(
     persistedAssistant.objectives,
     localAssistant.objectives,
@@ -1142,7 +1151,8 @@ export function mergePersistedMessagesWithLocal(
     !persistedPlanOnly &&
     !shouldPreserveLocalTrace &&
     !shouldPreserveLocalGate &&
-    !shouldPreserveLocalRenders
+    !shouldPreserveLocalRenders &&
+    !shouldPreserveLocalRunId
   ) {
     if (hasObjectiveUpgrade) {
       const mergedMessages = [...persistedMessages];
@@ -1158,6 +1168,8 @@ export function mergePersistedMessagesWithLocal(
   const mergedMessages = [...persistedMessages];
   mergedMessages[persistedAssistantIndex] = {
     ...persistedAssistant,
+    runId: persistedAssistant.runId ?? localAssistant.runId,
+    deliverySource: persistedAssistant.deliverySource ?? localAssistant.deliverySource,
     content: localAssistant.content || persistedAssistant.content,
     plan: localAssistant.plan ?? persistedAssistant.plan,
     finalThought: localAssistant.finalThought ?? persistedAssistant.finalThought,
@@ -1996,6 +2008,8 @@ export function JainaChatSurface({
       progress: projectedState.progress,
     });
     const patch: Partial<JainaChatMessage> = {
+      runId: projectedRunId ?? undefined,
+      deliverySource: 'hydration_replay',
       content: content || 'Thinking through your request…',
       status: 'streaming',
       objectives: projectedState.objectives,
@@ -2148,6 +2162,8 @@ export function JainaChatSurface({
       );
 
       updateMessage(completedResponseId, {
+        runId: state.runId ?? undefined,
+        deliverySource: 'live_render',
         status: 'done',
         content,
         report: state.report ?? undefined,
@@ -2202,6 +2218,8 @@ export function JainaChatSurface({
         finalThought ||
         '';
       updateMessage(failedResponseId, (previousMessage) => ({
+        runId: state.runId ?? previousMessage.runId,
+        deliverySource: 'live_render',
         status: 'error',
         content:
           derivedErrorContent ||
@@ -2262,6 +2280,7 @@ export function JainaChatSurface({
     state.reportV2,
     state.reportAssembly,
     state.reportAssemblyHtml,
+    state.runId,
     state.responseText,
     state.stateDeltas,
     state.status,

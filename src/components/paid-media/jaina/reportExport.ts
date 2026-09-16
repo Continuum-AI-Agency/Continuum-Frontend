@@ -979,30 +979,42 @@ export async function downloadJainaReportV2Pdf({
 }: {
   exportNode: HTMLElement | null;
   backgroundColor?: string;
-}): Promise<void> {
+}): Promise<'visual' | 'text_fallback'> {
   if (!exportNode) {
     throw new Error('No rendered report available to export.');
   }
-  downloadFile(await createJainaReportV2PdfFile({ exportNode, backgroundColor }));
+  const artifact = await createJainaReportV2PdfArtifact({ exportNode, backgroundColor });
+  downloadFile(artifact.file);
+  return artifact.mode;
 }
 
-export async function createJainaReportV2PdfFile({
+export async function createJainaReportV2PdfArtifact({
   exportNode,
   backgroundColor,
 }: {
   exportNode: HTMLElement | null;
   backgroundColor?: string;
-}): Promise<File> {
+}): Promise<{ file: File; mode: 'visual' | 'text_fallback' }> {
   if (!exportNode) throw new Error('No rendered report available to export.');
   const fileName = createJainaReportFilename();
   try {
-    return await captureNodeToPdfFile(exportNode, {
-      backgroundColor: backgroundColor ?? resolveExportBackground(exportNode),
-      fileName,
-    });
+    return {
+      file: await captureNodeToPdfFile(exportNode, {
+        backgroundColor: backgroundColor ?? resolveExportBackground(exportNode),
+        fileName,
+      }),
+      mode: 'visual',
+    };
   } catch {
-    return createTextPdfFile(exportNode, fileName);
+    return { file: await createTextPdfFile(exportNode, fileName), mode: 'text_fallback' };
   }
+}
+
+export async function createJainaReportV2PdfFile(options: {
+  exportNode: HTMLElement | null;
+  backgroundColor?: string;
+}): Promise<File> {
+  return (await createJainaReportV2PdfArtifact(options)).file;
 }
 
 function renderLegacyChartSpecs(report: FrontendCheckpointReport): string {

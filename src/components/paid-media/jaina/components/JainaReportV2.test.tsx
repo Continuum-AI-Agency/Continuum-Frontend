@@ -47,12 +47,17 @@ const exportToSheetsMock = mock(async () => ({
   spreadsheet_id: 'sheet-1',
   url: 'https://docs.google.com/spreadsheets/d/sheet-1',
 }));
+const deliveryRequestMock = mock(async () => ({ ok: true }));
+
+mock.module('@/lib/api/http', () => ({
+  http: { request: deliveryRequestMock },
+}));
 
 mock.module('../reportExport', () => ({
   buildJainaReportV2SheetsExportRequest: buildSheetsRequestMock,
   createJainaReportV2PdfFile: mock(async () => new File(['report'], 'report.pdf')),
   downloadFile: mock(),
-  downloadJainaReportV2Pdf: mock(async () => {}),
+  downloadJainaReportV2Pdf: mock(async () => 'text_fallback'),
   exportJainaReportToSheets: exportToSheetsMock,
   openJainaReportMailDraft: mock(),
   shareJainaReportFile: mock(async () => 'shared'),
@@ -151,5 +156,43 @@ describe('JainaReportV2 module controls', () => {
       { visibleBlocks: CheckpointReportV2['blocks'] },
     ];
     expect(visibleBlocks.map((block) => block.block_id)).toEqual(['risks']);
+  });
+
+  it('acknowledges hydration render and PDF fallback against the same run identity', async () => {
+    deliveryRequestMock.mockClear();
+    render(
+      <JainaReportV2
+        report={report}
+        isStreaming={false}
+        runId="run_42"
+        deliverySource="hydration_replay"
+      />,
+    );
+
+    await waitFor(() => expect(deliveryRequestMock).toHaveBeenCalledTimes(1));
+    expect(deliveryRequestMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        path: '/api/agents/jaina/chat/runs/run_42/delivery',
+        body: {
+          kind: 'hydration_replay',
+          status: 'success',
+          report_id: 'run_42:checkpoint_report',
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export report as PDF' }));
+    await waitFor(() => expect(deliveryRequestMock).toHaveBeenCalledTimes(2));
+    expect(deliveryRequestMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        body: {
+          kind: 'pdf',
+          status: 'fallback',
+          report_id: 'run_42:checkpoint_report',
+        },
+      }),
+    );
   });
 });

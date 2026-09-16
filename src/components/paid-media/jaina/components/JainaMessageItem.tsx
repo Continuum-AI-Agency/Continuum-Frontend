@@ -358,6 +358,8 @@ function JainaMessageItemImpl({
                 <JainaReportV2
                   report={reportV2}
                   isStreaming={isStreaming}
+                  runId={message.runId ?? (isStreaming ? state.runId ?? undefined : undefined)}
+                  deliverySource={message.deliverySource}
                   onSuggestionClick={onSuggestionClick}
                 />
               </motion.div>

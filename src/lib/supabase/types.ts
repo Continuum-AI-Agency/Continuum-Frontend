@@ -14904,6 +14904,7 @@ export type Database = {
           initiator: string
           initiator_agent: string | null
           next_event_seq: number
+          quality_outcome: Json | null
           parent_run_id: string | null
           query: string | null
           request_snapshot: Json | null
@@ -14939,6 +14940,7 @@ export type Database = {
           initiator?: string
           initiator_agent?: string | null
           next_event_seq?: number
+          quality_outcome?: Json | null
           parent_run_id?: string | null
           query?: string | null
           request_snapshot?: Json | null
@@ -14974,6 +14976,7 @@ export type Database = {
           initiator?: string
           initiator_agent?: string | null
           next_event_seq?: number
+          quality_outcome?: Json | null
           parent_run_id?: string | null
           query?: string | null
           request_snapshot?: Json | null
@@ -15342,6 +15345,7 @@ export type Database = {
           initiator: string
           initiator_agent: string | null
           next_event_seq: number
+          quality_outcome: Json | null
           parent_run_id: string | null
           query: string | null
           request_snapshot: Json | null
@@ -15481,6 +15485,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      merge_jaina_run_quality_outcome: {
+        Args: { p_patch: Json; p_run_id: string }
+        Returns: Json
       }
       persist_jaina_objective_graph: {
         Args: { p_objectives: Json; p_run_id: string }
