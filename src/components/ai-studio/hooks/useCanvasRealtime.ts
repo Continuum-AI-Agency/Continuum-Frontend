@@ -150,6 +150,9 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   // True only while another participant is present on the room; solo edits stay
   // local-authoritative. Derived from presence, kept in a ref for stable callbacks.
   const isCollaborativeRef = useRef<boolean>(false);
+  // Node ids that arrived from someone else and were not on this canvas before —
+  // see the arrival block in handleRemoteUpdate for why the canvas needs them.
+  const [arrivedNodeIds, setArrivedNodeIds] = useState<string[]>([]);
 
   const handleRemoteUpdate = useCallback(
     (payload: CanvasUpdatePayload, source: RemoteUpdateSource = 'realtime') => {
@@ -250,6 +253,26 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         timestamp: remoteTimestamp,
         revision: remoteRevision ?? 'legacy',
       });
+
+      // Work that just appeared from someone else — the MCP co-pilot, the canvas
+      // composer, a peer. `mergeGraphs` drops incoming nodes BELOW everything the
+      // canvas already holds, so on a room that is not empty the arrival lands
+      // outside the viewport; with React Flow's `onlyRenderVisibleElements` it is
+      // not even in the DOM. Off-screen looks exactly like never-arrived — the
+      // same report #307 answered for the planner handoff, which could pass a
+      // ?focusNodeId= because it navigates. A live agent write cannot, so the
+      // arrival is reported here and Flow frames it.
+      // An arrival is work that appeared WHILE the user was watching. Before the
+      // initial load resolves there is no "before", and the subscription's catch-up
+      // can beat it (loadInitialState awaits a re-sign round-trip), which would
+      // report the whole room as an arrival and move the viewport on page load.
+      const localNodeIds = new Set(store.nodes.map((node) => node.id));
+      const arrived = hasLoadedInitialDataRef.current
+        ? remoteNodes
+            .map((node) => node.id)
+            .filter((id) => !localNodeIds.has(id) && !lastRemoteNodeIdsRef.current.has(id))
+        : [];
+      if (arrived.length > 0) setArrivedNodeIds(arrived);
 
       isRemoteChangeRef.current = true;
       store.setNodes(mergedNodes);
@@ -947,5 +970,6 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
     isCollaborative,
     isSaving,
     saveCanvasToDatabase,
+    arrivedNodeIds,
   };
 }

@@ -684,6 +684,96 @@ describe('useCanvasRealtime', () => {
     expect(mockSetNodes).toHaveBeenCalled();
   });
 
+  // Co-play: an agent writes onto the canvas the user is watching. The merge was
+  // never the broken half — the node arrived, merged, and still could not be seen,
+  // because an agent build appends BELOW existing work and React Flow's
+  // `onlyRenderVisibleElements` never mounts what is outside the viewport. So the
+  // arrival has to be reported, not just merged, or `studio:workflow:e2e:bench`
+  // waits 25s for a node that is in the store the whole time.
+  it('reports nodes a remote update introduced that this client never had', async () => {
+    mockStore.nodes = [
+      { id: 'human-node', type: 'string', position: { x: 0, y: 0 }, data: { value: 'human work' } },
+    ] as any;
+
+    const { result } = renderHook(() => useCanvasRealtime('brand-1', 'room-1'));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    const dbHandler = dbHandlerFor('UPDATE');
+    mockSetNodes.mockClear();
+
+    await act(async () => {
+      dbHandler({
+        eventType: 'UPDATE',
+        new: {
+          brand_profile_id: 'brand-1',
+          room_id: 'room-1',
+          nodes: [
+            {
+              id: 'human-node',
+              type: 'string',
+              position: { x: 0, y: 0 },
+              data: { value: 'human work' },
+            },
+            // Where mergeGraphs puts agent work: clear of everything above it.
+            {
+              id: 'agent-node',
+              type: 'string',
+              position: { x: 0, y: 820 },
+              data: { value: 'the agent built this' },
+            },
+          ],
+          edges: [],
+          updated_at: '2026-09-16T10:30:00.000Z',
+          revision: 2,
+          editor_session_id: 'agent-session-not-ours',
+        },
+      });
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    const mergedIds = (mockSetNodes.mock.calls.at(-1)?.[0] as any[]).map((n) => n.id).sort();
+    expect(mergedIds).toEqual(['agent-node', 'human-node']);
+    expect(result.current.arrivedNodeIds).toEqual(['agent-node']);
+  });
+
+  it('does not report an arrival for a remote update that only edits known nodes', async () => {
+    mockStore.nodes = [
+      { id: 'human-node', type: 'string', position: { x: 0, y: 0 }, data: { value: 'human work' } },
+    ] as any;
+
+    const { result } = renderHook(() => useCanvasRealtime('brand-1', 'room-1'));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    await act(async () => {
+      dbHandlerFor('UPDATE')({
+        eventType: 'UPDATE',
+        new: {
+          brand_profile_id: 'brand-1',
+          room_id: 'room-1',
+          nodes: [
+            {
+              id: 'human-node',
+              type: 'string',
+              position: { x: 0, y: 0 },
+              data: { value: 'edited by a peer' },
+            },
+          ],
+          edges: [],
+          updated_at: '2026-09-16T10:31:00.000Z',
+          revision: 3,
+          editor_session_id: 'peer-session',
+        },
+      });
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    expect(result.current.arrivedNodeIds).toEqual([]);
+  });
+
   it('re-signs merged media missing its signed url, once per durable pointer', async () => {
     mockSignRequest.mockImplementation(async () => ({
       items: [

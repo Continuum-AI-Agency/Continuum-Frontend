@@ -54,6 +54,7 @@ mock.module('@/components/ai-studio/hooks/useCanvasRealtime', () => ({
       status: 'SUBSCRIBED',
       dbStatus: 'SUBSCRIBED',
       saveCanvasToDatabase: async () => {},
+      arrivedNodeIds: [],
     } as unknown as ReturnType<typeof actualRealtime.useCanvasRealtime>;
   },
 }));

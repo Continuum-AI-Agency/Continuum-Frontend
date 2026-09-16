@@ -173,6 +173,27 @@ function Flow({
     return () => cancelAnimationFrame(handle);
   }, [fitView, targetNodeId, isLoading, nodes, setNodes]);
 
+  // Co-play: the agent works while the user watches. An agent write appends BELOW
+  // everything already on the canvas, so on a room that is not empty it lands off
+  // screen, and `onlyRenderVisibleElements` then keeps it out of the DOM entirely —
+  // indistinguishable from never having arrived, which is #307 again for a producer
+  // that cannot navigate with a ?focusNodeId=. Fit the WHOLE canvas rather than just
+  // the arrival: framing the new nodes alone pushes the user's own work off screen,
+  // the same defect pointed the other way. Only genuinely new ids reach here, so an
+  // update to existing nodes never moves the viewport under the user.
+  // ponytail: React Flow's default minZoom (0.5) caps how far this can pull back, so a
+  // canvas wider than ~2 viewports still leaves nodes outside — narrow the frame to the
+  // arrival plus what is already in view, or lower minZoom, if that becomes the complaint.
+  const { arrivedNodeIds } = realtime;
+  useEffect(() => {
+    if (arrivedNodeIds.length === 0) return;
+    if (!arrivedNodeIds.some((id) => nodes.some((node) => node.id === id))) return;
+    const handle = requestAnimationFrame(() => {
+      fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 350 });
+    });
+    return () => cancelAnimationFrame(handle);
+  }, [arrivedNodeIds, nodes, fitView]);
+
   // When the walkthrough seeds starter nodes, frame them so the tour's node
   // steps always have an on-screen target. Runs once per Flow instance.
   const hasFitTourSeedRef = useRef(false);
