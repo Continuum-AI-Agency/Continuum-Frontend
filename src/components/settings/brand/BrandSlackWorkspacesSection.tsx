@@ -4,6 +4,7 @@ import type { BrandSlackWorkspace } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageSquareText, RefreshCw, TriangleAlert, Unplug } from 'lucide-react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
+import { AddToSlackButton } from '@/components/slack/AddToSlackButton';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -176,11 +177,7 @@ export function BrandSlackWorkspacesSection({
           })}
         </ul>
       )}
-      {canManage ? (
-        <a href={installHref} className={buttonVariants({ size: 'sm' })}>
-          Add to Slack
-        </a>
-      ) : null}
+      {canManage ? <AddToSlackButton href={installHref} /> : null}
     </div>
   );
 }

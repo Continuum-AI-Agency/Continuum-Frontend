@@ -30,6 +30,7 @@ import {
   revokeChatConnection,
   setPreferredChatConnection,
 } from '@/lib/api/chatConnections.client';
+import { AddToSlackButton } from '@/components/slack/AddToSlackButton';
 import { slackInstallStartHref } from '@/lib/api/slackWorkspaces.client';
 import {
   type ChatConnection,
@@ -174,12 +175,7 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
           Add Continuum to your Slack workspace, then message the bot to link your identity. Until
           then, teammate requests stay available in the Goal case file.
         </p>
-        <a
-          href={slackInstallStartHref(brandId)}
-          className={buttonVariants({ size: 'sm', className: 'mt-4' })}
-        >
-          Add to Slack
-        </a>
+        <AddToSlackButton href={slackInstallStartHref(brandId)} className="mx-auto mt-4" />
       </div>
     );
   }

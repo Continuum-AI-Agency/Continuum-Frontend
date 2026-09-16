@@ -67,6 +67,9 @@ export default function RootLayout({
       style={{ colorScheme: 'light' }}
     >
       <head>
+        {/* Slack App Suggestions: when a trycontinuum.ai link is posted in a workspace that does
+            not have Continuum installed, Slack offers the app. Harmless everywhere else. */}
+        <meta name="slack-app-id" content="A0B5DUYF7T4" />
         <NoFlashScript />
       </head>
       <body className="antialiased">
