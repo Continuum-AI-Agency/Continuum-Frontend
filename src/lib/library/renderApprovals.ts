@@ -67,16 +67,23 @@ export async function decideRenderApproval(
   return unwrap<RenderApprovalDecisionResponse>(response, 'Decision');
 }
 
-/** The brand's Slack and WhatsApp rooms a Meta-bound render can be approved in. */
-export async function fetchApprovalDestinations(
-  brandId: string,
-): Promise<RenderApprovalDestination[]> {
+/**
+ * The brand's Slack and WhatsApp rooms a Meta-bound render can be approved in, and where it last
+ * asked — a confirm pre-selects those rather than making someone re-pick the same rooms every time.
+ *
+ * `defaultDestinationIds` is simply absent from a Backend older than the one that sends it, which
+ * is why it is optional here rather than an empty list meaning "nowhere".
+ */
+export async function fetchApprovalDestinations(brandId: string): Promise<{
+  destinations: RenderApprovalDestination[];
+  defaultDestinationIds?: string[];
+}> {
   const response = await authorizedFetch(
     `/api/ai-studio/renders/approval-destinations?brandId=${encodeURIComponent(brandId)}`,
   );
   return renderApprovalDestinationListResponseSchema.parse(
     await unwrap<unknown>(response, 'Approval rooms'),
-  ).destinations;
+  );
 }
 
 const approversPath = (destinationId: string) =>

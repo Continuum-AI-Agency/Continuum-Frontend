@@ -29,7 +29,11 @@ const WHATSAPP_ROOM: RenderApprovalDestination = {
 };
 
 let rooms: RenderApprovalDestination[] = [SLACK_ROOM, WHATSAPP_ROOM];
-const fetchApprovalDestinations = mock(async (_brandId: string) => rooms);
+let defaultDestinationIds: string[] | undefined;
+const fetchApprovalDestinations = mock(async (_brandId: string) => ({
+  destinations: rooms,
+  defaultDestinationIds,
+}));
 const fetchDestinationApprovers = mock(async (_destinationId: string) => []);
 
 mock.module('@/lib/library/renderApprovals', () => ({
@@ -61,6 +65,7 @@ import { ApprovalDestinationsField } from './ApprovalDestinationsField';
 afterEach(() => {
   cleanup();
   rooms = [SLACK_ROOM, WHATSAPP_ROOM];
+  defaultDestinationIds = undefined;
   fetchApprovalDestinations.mockClear();
   fetchDestinationApprovers.mockClear();
 });
@@ -138,4 +143,32 @@ test('Manage approvers opens that room’s approver panel and closes it again', 
   expect(screen.queryAllByRole('group', { name: 'Approvers for Vivo47 approvals' })).toHaveLength(
     0,
   );
+});
+
+test('pre-selects the rooms this brand last asked in', async () => {
+  picked.length = 0;
+  defaultDestinationIds = [WHATSAPP_ROOM.id];
+  renderField();
+  const whatsapp = await screen.findByRole<HTMLInputElement>('checkbox', {
+    name: /Vivo47 approvals/,
+  });
+  await waitFor(() => expect(whatsapp.checked).toBe(true));
+  expect(screen.getByRole<HTMLInputElement>('checkbox', { name: /#client-review/ }).checked).toBe(
+    false,
+  );
+});
+
+test('clearing every room stays cleared — the default does not argue back', async () => {
+  picked.length = 0;
+  defaultDestinationIds = [WHATSAPP_ROOM.id];
+  renderField();
+  const whatsapp = await screen.findByRole<HTMLInputElement>('checkbox', {
+    name: /Vivo47 approvals/,
+  });
+  await waitFor(() => expect(whatsapp.checked).toBe(true));
+
+  fireEvent.click(whatsapp);
+  await waitFor(() => expect(whatsapp.checked).toBe(false));
+  // A re-seed here would silently put the render back into a room the person just took it out of.
+  expect(picked.at(-1)).toEqual([]);
 });

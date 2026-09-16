@@ -77,7 +77,7 @@ const decideRenderApproval = mock(
 mock.module('@/lib/library/renderApprovals', () => ({
   fetchRenderApprovals,
   decideRenderApproval,
-  fetchApprovalDestinations: async () => [],
+  fetchApprovalDestinations: async () => ({ destinations: [] }),
   fetchDestinationApprovers: async () => [],
   addDestinationApprover: async () => {
     throw new Error('not in this test');

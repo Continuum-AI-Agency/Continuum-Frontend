@@ -22,6 +22,7 @@ import { BrandIntegrationsSwitcher } from '@/components/settings/brand/BrandInte
 import { BrandIntelligenceWorkspace } from '@/components/settings/brand/BrandIntelligenceWorkspace';
 import { BrandInvitesSection } from '@/components/settings/brand/BrandInvitesSection';
 import { BrandPulseSection } from '@/components/settings/brand/BrandPulseSection';
+import { BrandSlackRoomsSection } from '@/components/settings/brand/BrandSlackRoomsSection';
 import { BrandSlackWorkspacesSection } from '@/components/settings/brand/BrandSlackWorkspacesSection';
 import { DesignSystemSection } from '@/components/settings/brand/DesignSystemSection';
 import { PromptsSettingsSection } from '@/components/settings/brand/PromptsSettingsSection';
@@ -281,6 +282,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     // ad_naming_schemas write RLS and the paid_naming_schema_set MCP tool.
     const canEditNaming =
       namingRole === 'owner' || namingRole === 'admin' || namingRole === 'operator';
+    // Slack rooms are gated by `assertCanManageRooms` on the Backend — the same three roles, but a
+    // separate policy from naming, so it is derived separately rather than aliased.
+    const canManageSlackRooms =
+      namingRole === 'owner' || namingRole === 'admin' || namingRole === 'operator';
 
     activeSectionSlot = (
       <>
@@ -309,6 +314,18 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             key={activeBrandId}
             brandId={activeBrandId}
             canManage={namingRole === 'owner' || namingRole === 'admin'}
+          />
+        </SettingsSection>
+        <SettingsSection
+          title="Slack rooms"
+          description="The channels in those workspaces this brand actually posts to, and who may approve a creative in each."
+        >
+          {/* Operator-gated, unlike connecting a workspace above — an operator runs the
+              day-to-day delivery without owning the install. */}
+          <BrandSlackRoomsSection
+            key={activeBrandId}
+            brandId={activeBrandId}
+            canManage={canManageSlackRooms}
           />
         </SettingsSection>
         <SettingsSection

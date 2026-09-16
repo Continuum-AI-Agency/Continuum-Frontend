@@ -3,7 +3,7 @@
 import type { RenderApprovalDestination } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Hash, MessageCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   approvalDestinationsKey,
   DestinationApproversPanel,
@@ -47,6 +47,16 @@ export function ApprovalDestinationsField({
     retry: false,
   });
 
+  // Where this brand last asked, pre-selected once. Guarded by a ref rather than by `value.length`
+  // so that clearing every box stays cleared — a re-seed there would argue with the person.
+  const seeded = useRef(false);
+  const defaults = query.data?.defaultDestinationIds;
+  useEffect(() => {
+    if (seeded.current || !defaults?.length || value.length > 0) return;
+    seeded.current = true;
+    onChange(defaults);
+  }, [defaults, value.length, onChange]);
+
   if (query.isPending) {
     return <p className="text-xs text-muted-foreground">Loading approval rooms…</p>;
   }
@@ -57,7 +67,7 @@ export function ApprovalDestinationsField({
       </p>
     );
   }
-  const destinations = query.data;
+  const destinations = query.data.destinations;
   if (!destinations.length) {
     return (
       <p className="text-xs text-muted-foreground">

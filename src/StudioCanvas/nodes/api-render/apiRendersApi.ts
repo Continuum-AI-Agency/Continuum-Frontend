@@ -15,8 +15,8 @@ import {
   type ApiRenderBatch,
   type ApiRenderBatchPreflightRequest,
   type ApiRenderBatchPreflightResponse,
-  type ApiRenderCreateInputSetRequest,
   type ApiRenderCreateDeliveryDestinationRequest,
+  type ApiRenderCreateInputSetRequest,
   type ApiRenderCreateJobRequest,
   type ApiRenderDeliveryDestination,
   type ApiRenderDeliveryDestinationsResponse,
@@ -37,6 +37,7 @@ import {
   apiRenderBatchSchema,
   apiRenderDeliveryDestinationSchema,
   apiRenderDeliveryDestinationsResponseSchema,
+  apiRenderDestinationRoute,
   apiRenderEnvironmentListResponseSchema,
   apiRenderInputSetListResponseSchema,
   apiRenderInputSetSchema,
@@ -264,6 +265,17 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: apiRenderDeliveryDestinationSchema,
+    });
+  },
+  /**
+   * Switches a room off (`active = false`) — nothing is deleted, so the rows already delivered
+   * there keep reading. Refused 409 `chat_destination_has_pending_approvals` when it is the last
+   * active room on a package whose approvals are still pending: retiring it would strand them.
+   */
+  retireDeliveryDestination(destinationId: string) {
+    return http.request<void>({
+      path: apiRenderDestinationRoute(destinationId),
+      method: 'DELETE',
     });
   },
   createBatch(input: ApiRenderCreateJobRequest) {

@@ -154,7 +154,7 @@ mock.module('@/lib/library/renderApprovals', () => ({
   decideRenderApproval: async () => {
     throw new Error('not in this test');
   },
-  fetchApprovalDestinations: async () => [ROOM],
+  fetchApprovalDestinations: async () => ({ destinations: [ROOM] }),
   fetchDestinationApprovers: async () => [],
   addDestinationApprover: async () => {
     throw new Error('not in this test');
