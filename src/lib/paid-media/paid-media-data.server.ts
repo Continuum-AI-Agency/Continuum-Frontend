@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { AssignedAdAccount } from '@/lib/paid-media/accountId';
 import type { CampaignIndexRecord } from '@/lib/paid-media/campaign-indexes';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -56,12 +57,12 @@ export async function fetchTimelineAccounts(brandId: string): Promise<AdAccount[
 }
 
 /**
- * Ad-account ids ASSIGNED to this brand — plugin_mcp.list_brand_ad_accounts, the
+ * Ad accounts ASSIGNED to this brand — plugin_mcp.list_brand_ad_accounts, the
  * exact set the optimizer's brand-access gate admits, run under the caller's own
- * identity. Returns external `act_`-form ids; empty on any failure (never throws,
- * so a lookup outage degrades to "unfiltered", not a blocked page).
+ * identity. Retains platform so Meta-only surfaces cannot select Google accounts.
+ * Empty on failure, so an outage preserves the existing reachable-account fallback.
  */
-export async function fetchAssignedAdAccountIds(brandId: string): Promise<string[]> {
+export async function fetchAssignedAdAccounts(brandId: string): Promise<AssignedAdAccount[]> {
   try {
     const supabase = await createSupabaseServerClient();
     const { data: sessionData } = await supabase.auth.getSession();
@@ -73,8 +74,14 @@ export async function fetchAssignedAdAccountIds(brandId: string): Promise<string
     if (error) return [];
 
     return (Array.isArray(data) ? data : [])
-      .map((row) => (row as { account_id?: unknown }).account_id)
-      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      .map((row) => row as { account_id?: unknown; platform?: unknown })
+      .filter(
+        (row): row is { account_id: string; platform: string } =>
+          typeof row.account_id === 'string' &&
+          row.account_id.length > 0 &&
+          typeof row.platform === 'string',
+      )
+      .map((row) => ({ accountId: row.account_id, platform: row.platform }));
   } catch {
     return [];
   }

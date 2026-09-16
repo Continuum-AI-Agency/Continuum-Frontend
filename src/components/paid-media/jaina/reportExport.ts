@@ -874,12 +874,22 @@ async function captureNodeToPdfFile(
   const html2canvas = (await import('html2canvas')).default;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
-  const canvas = await html2canvas(exportNode, {
+  const capture = html2canvas(exportNode, {
     scale: 2,
     useCORS: true,
     backgroundColor: options.backgroundColor,
     logging: false,
   });
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      exportNode.ownerDocument
+        .querySelectorAll<HTMLIFrameElement>('.html2canvas-container')
+        .forEach((container) => container.remove());
+      reject(new Error('Report capture timed out.'));
+    }, 5_000);
+  });
+  const canvas = await Promise.race([capture, timeout]).finally(() => clearTimeout(timeoutId));
 
   const margin = 24;
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -905,6 +915,34 @@ async function captureNodeToPdfFile(
     renderedHeight += usableHeight;
   }
   return new File([doc.output('blob')], options.fileName, { type: 'application/pdf' });
+}
+
+async function createTextPdfFile(exportNode: HTMLElement, fileName: string): Promise<File> {
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const margin = 40;
+  const lineHeight = 15;
+  const maxY = doc.internal.pageSize.getHeight() - margin;
+  const maxWidth = doc.internal.pageSize.getWidth() - margin * 2;
+  let y = margin;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  for (const paragraph of exportNode.innerText.split(/\n+/).map((line) => line.trim())) {
+    if (!paragraph) continue;
+    const lines = doc.splitTextToSize(paragraph, maxWidth) as string[];
+    for (const line of lines) {
+      if (y + lineHeight > maxY) {
+        doc.addPage();
+        y = margin;
+      }
+      doc.text(line, margin, y);
+      y += lineHeight;
+    }
+    y += 4;
+  }
+
+  return new File([doc.output('blob')], fileName, { type: 'application/pdf' });
 }
 
 export async function downloadJainaReportPdf({
@@ -956,10 +994,15 @@ export async function createJainaReportV2PdfFile({
   backgroundColor?: string;
 }): Promise<File> {
   if (!exportNode) throw new Error('No rendered report available to export.');
-  return captureNodeToPdfFile(exportNode, {
-    backgroundColor: backgroundColor ?? resolveExportBackground(exportNode),
-    fileName: createJainaReportFilename(),
-  });
+  const fileName = createJainaReportFilename();
+  try {
+    return await captureNodeToPdfFile(exportNode, {
+      backgroundColor: backgroundColor ?? resolveExportBackground(exportNode),
+      fileName,
+    });
+  } catch {
+    return createTextPdfFile(exportNode, fileName);
+  }
 }
 
 function renderLegacyChartSpecs(report: FrontendCheckpointReport): string {

@@ -1,15 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { createEnvelopeMint, serializeFrame } from '@continuum/contracts';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { mintSessionForEmail } from './support/auth';
-import { loadProdSupabaseEnv } from './support/prodEnv';
+import { mintSessionWithPassword } from './support/auth';
 
 // ---------------------------------------------------------------------------
 // jaina:approval:card:e2e:bench — the tool-approval card's before → after table.
 //
 // A real Chrome, driving the REAL /scale?tab=jaina chat surface as a REAL
-// authenticated member, with ONE thing faked: the chat-stream route is answered by
+// authenticated local fixture member, with ONE thing faked: the chat-stream route is answered by
 // `page.route` with an NDJSON body this file builds out of the vendored contracts'
 // own `serializeFrame`. No Backend is spawned; `NEXT_PUBLIC_API_URL` points at a dead
 // port, which is what proves the frames came from here.
@@ -22,13 +21,13 @@ import { loadProdSupabaseEnv } from './support/prodEnv';
 //      frame's approval_id and tool_call_id, and posts no user turn into the
 //      transcript (which is what `silentUserMessage: true` is observable as — the
 //      flag itself is Frontend-only and never reaches the wire).
-//   3. NO WRITE — nothing in the run touches graph.facebook.com or any Backend.
+//   3. NO WRITE — nothing in the run touches graph.facebook.com or writes to any Backend.
 //
 // ── MONEY SAFETY ──
 // Every network hop that could reach Meta is either stubbed or unreachable: the chat
 // stream is fulfilled locally, the Backend port is dead, and the only decision this
-// bench makes is DENY. It writes exactly one Supabase row — the bench member's own
-// `user_brand_preferences.active_brand_id` — snapshotted and restored in afterAll.
+// bench makes is DENY. The seeded local brand preference is read as-is; no Supabase
+// row is written, and the config refuses to start against a non-local project.
 //
 // ── UN-EXERCISED HOP ──
 // The Backend never emits this frame here. A REAL `tool.approval_required` carrying a
@@ -37,18 +36,9 @@ import { loadProdSupabaseEnv } from './support/prodEnv';
 
 test.use({ channel: 'chrome' });
 
-const { serviceRoleKey } = loadProdSupabaseEnv();
-
-/**
- * BENCH_ACCOUNTS.easyfitVivo47 — a real client brand, READ-ONLY by contract and never
- * touched over the network here.
- *
- * The chat runs on this brand for one reason, the same one `jaina-canvas.bench.spec.ts`
- * records: `dispatchMessage` refuses to send without an ad account, the bench brand has
- * none, and the ad account is server-rendered — so no stub can supply it.
- */
-const CLIENT_BRAND_ID = '148583e0-5538-462b-8d3a-acd25b80344e';
-const CLIENT_OWNER_EMAIL = 'mercadotecniavivo@gmail.com';
+const CLIENT_BRAND_ID = '00000000-0000-4000-8000-0000000000b2';
+const CLIENT_OWNER_EMAIL = 'local@continuum.test';
+const CLIENT_OWNER_PASSWORD = 'localdev123';
 
 const RUN_ID = randomUUID().slice(0, 8);
 /**
@@ -88,12 +78,190 @@ const APPROVAL = {
   },
 } as const;
 
-const admin: SupabaseClient = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  serviceRoleKey,
-  { auth: { persistSession: false } },
-);
-const brandProfiles = () => admin.schema('brand_profiles');
+const LIVE_PROMPT =
+  'Show live communication angle × individual creative × audience segment performance for the last 30 days.';
+const LIVE_DATASET_ID = 'live-creative-audience:browser-fixture';
+const LIVE_ROW_ID = 'row:browser-fixture-alpha-25-34-female';
+const LIVE_REPORT = {
+  language: 'en',
+  executive_summary:
+    'Product demonstration was strongest for women 25–34; audience coverage is partial, so scale cautiously.',
+  reasoning_trace: '',
+  blocks: [
+    {
+      block_id: 'live_metrics',
+      category: 'metric_grid',
+      scope: 'current_account',
+      title: 'Live delivery and coverage · Aug 17 → Sep 15',
+      priority: 'secondary',
+      dataset_id: `${LIVE_DATASET_ID}:summary`,
+      evidence_refs: ['meta:act_browser:insights:unbroken', 'meta:act_browser:insights:age_gender'],
+      provenance: {
+        source: 'computed',
+        tool: 'get_live_creative_audience_matrix',
+        period: { since: '2026-08-17', until: '2026-09-15', requested_label: 'last_30d' },
+        entity_label: 'Synthetic Meta account',
+        record_count: 2,
+      },
+      metrics: [
+        { label: 'Delivered spend', value: 1500, unit: 'USD', format: 'currency' },
+        { label: 'Audience coverage', value: 93.3, unit: null, format: 'percent' },
+        { label: 'Primary KPI', value: 'purchases', unit: null, format: 'number' },
+      ],
+    },
+    {
+      block_id: 'live_chart',
+      category: 'chart',
+      scope: 'current_account',
+      title: 'Measured spend by delivered audience',
+      priority: 'secondary',
+      dataset_id: `${LIVE_DATASET_ID}:matrix`,
+      evidence_refs: [LIVE_ROW_ID],
+      provenance: {
+        source: 'computed',
+        tool: 'get_live_creative_audience_matrix',
+        period: { since: '2026-08-17', until: '2026-09-15', requested_label: 'last_30d' },
+        entity_label: 'Individual creative × audience cells',
+        record_count: 1,
+      },
+      chart_type: 'bar',
+      data: [{ audience: 'age=25-34|gender=female', spend: 900 }],
+      chart_config: { spend: { label: 'Spend', color: 'hsl(221 83% 53%)' } },
+      category_key: 'audience',
+      value_key: 'spend',
+      x_axis_label: 'Delivered audience segment',
+      y_axis_label: 'Spend (USD)',
+      value_format: 'currency',
+      currency_code: 'USD',
+      annotation: 'Measured delivery only; configured targeting is shown separately.',
+      description: 'Spend by delivered age × gender cell.',
+      data_meta: [{ row_id: LIVE_ROW_ID, evidence_kind: 'measured_delivery' }],
+    },
+    {
+      block_id: 'live_table',
+      category: 'data_table',
+      scope: 'current_account',
+      title: 'Individual creative × audience evidence',
+      priority: 'primary',
+      dataset_id: `${LIVE_DATASET_ID}:matrix`,
+      evidence_refs: [
+        LIVE_ROW_ID,
+        'classifier:act_browser:fingerprint-alpha',
+        'meta:act_browser:insights:age_gender',
+      ],
+      provenance: {
+        source: 'computed',
+        tool: 'get_live_creative_audience_matrix',
+        period: { since: '2026-08-17', until: '2026-09-15', requested_label: 'last_30d' },
+        entity_label: 'Individual creative × audience cells',
+        record_count: 2,
+      },
+      columns: [
+        { key: 'creative', label: 'Creative', format: 'creative' },
+        { key: 'communication_angle', label: 'Communication angle (derived)', format: 'text' },
+        { key: 'angle_confidence', label: 'Derived confidence', format: 'percent' },
+        { key: 'audience_segment', label: 'Audience segment', format: 'text' },
+        { key: 'evidence_kind', label: 'Audience evidence', format: 'text' },
+        { key: 'evidence_status', label: 'Status', format: 'text' },
+        { key: 'spend', label: 'Spend', format: 'currency' },
+        { key: 'currency', label: 'Currency', format: 'text' },
+      ],
+      rows: [
+        {
+          creative: 'Creative Alpha',
+          communication_angle: 'product_demonstration',
+          angle_confidence: 91,
+          audience_segment: 'age=25-34|gender=female',
+          evidence_kind: 'measured_delivery',
+          evidence_status: 'measured',
+          spend: 900,
+          currency: 'USD',
+        },
+        {
+          creative: 'Creative Beta',
+          communication_angle: 'unclassified',
+          angle_confidence: null,
+          audience_segment: 'age=unknown|gender=unknown',
+          evidence_kind: 'measured_delivery',
+          evidence_status: 'suppressed',
+          spend: null,
+          currency: 'USD',
+        },
+      ],
+      notes:
+        'Communication angles are derived classifications. Delivery is measured; targeting is a separate configured fact.',
+      row_meta: [
+        {
+          row_id: LIVE_ROW_ID,
+          evidence_refs: [LIVE_ROW_ID, 'classifier:act_browser:fingerprint-alpha'],
+          currency: 'USD',
+          creative: {
+            brand_id: CLIENT_BRAND_ID,
+            ad_account_id: 'act_browser',
+            ad_id: 'ad_alpha',
+            creative_id: 'creative_alpha',
+          },
+        },
+        {
+          row_id: 'row:browser-fixture-suppressed',
+          evidence_refs: ['meta:privacy:suppressed'],
+          currency: 'USD',
+        },
+      ],
+      render_mode: 'table',
+      card_fields: null,
+    },
+    {
+      block_id: 'live_actions',
+      category: 'insight_list',
+      scope: 'current_account',
+      title: 'Actions and limitations',
+      priority: 'secondary',
+      dataset_id: `${LIVE_DATASET_ID}:recommendations`,
+      evidence_refs: [LIVE_ROW_ID, 'meta:coverage:partial'],
+      provenance: {
+        source: 'computed',
+        tool: 'get_live_creative_audience_matrix',
+        period: { since: '2026-08-17', until: '2026-09-15', requested_label: 'last_30d' },
+        entity_label: 'Evidence-backed recommendations',
+        record_count: 2,
+      },
+      items: [
+        {
+          item_type: 'action',
+          title: 'Scale cautiously',
+          summary: 'Scale Creative Alpha for women 25–34 inside the current measured range.',
+          rationale: 'Its recomputed cost per purchase is below its like-for-like audience cohort.',
+          impact: 'Potentially more purchases without extrapolating to unmeasured audiences.',
+          evidence_refs: [LIVE_ROW_ID],
+        },
+        {
+          item_type: 'insight',
+          title: 'Coverage limitation',
+          summary:
+            'Broken-down spend covers 93.3% of delivered spend; suppressed rows remain unknown.',
+          rationale: 'Meta did not return demographic detail for all delivered spend.',
+          impact: 'Do not treat the missing 6.7% as zero delivery.',
+          severity: 'watch',
+          evidence_refs: ['meta:coverage:partial'],
+        },
+      ],
+      citations: [],
+    },
+  ],
+  follow_up_questions: [],
+  media_map: {},
+  handoff_trace: [],
+  execution_objectives: [],
+  cached_sources: [],
+  _meta: {
+    schema_version: '2',
+    block_count: 4,
+    has_charts: true,
+    has_media: true,
+    primary_scope: 'current_account',
+  },
+};
 
 /* -- the Recorder envelope ------------------------------------------------------
  *
@@ -175,6 +343,37 @@ function denialStreamBody(): string {
   return frames.map((frame) => serializeFrame(frame, mint(seq++))).join('');
 }
 
+function liveReportStreamBody(): string {
+  const mint = createEnvelopeMint();
+  let seq = 0;
+  const frames = [
+    {
+      type: 'response.created',
+      data: {
+        id: `resp_live_${RUN_ID}`,
+        object: 'realtime.response' as const,
+        status: 'in_progress',
+      },
+    },
+    { type: 'response.run.created', data: { run_id: `run_live_${RUN_ID}`, session_id: null } },
+    {
+      type: 'response.checkpoint_report',
+      data: { item_id: `item_live_${RUN_ID}`, part_id: 'part_live', report: LIVE_REPORT },
+    },
+    {
+      type: 'response.done',
+      data: {
+        id: `resp_live_${RUN_ID}`,
+        object: 'realtime.response' as const,
+        status: 'completed',
+        status_details: null,
+        output: [],
+      },
+    },
+  ];
+  return frames.map((frame) => serializeFrame(frame, mint(seq++))).join('');
+}
+
 type StreamPost = Record<string, unknown>;
 
 /**
@@ -190,51 +389,6 @@ type StreamPost = Record<string, unknown>;
  */
 const persistedMessages: Record<string, unknown>[] = [];
 
-let previousBrandId: string | null | undefined;
-let benchUserId: string | null = null;
-
-async function rememberAndSelectBrand(): Promise<void> {
-  const { data: members, error: membersError } = await brandProfiles()
-    .from('permissions')
-    .select('user_id,email')
-    .eq('brand_profile_id', CLIENT_BRAND_ID);
-  if (membersError)
-    throw new Error(`[approval-card-bench] permissions read: ${membersError.message}`);
-  const userId = (members ?? [])
-    .map((row) => row as { user_id: string; email: string | null })
-    .find((row) => row.email?.toLowerCase() === CLIENT_OWNER_EMAIL)?.user_id;
-  if (!userId) throw new Error(`[approval-card-bench] ${CLIENT_OWNER_EMAIL} is not a brand member`);
-  benchUserId = userId;
-
-  const { data: existing } = await brandProfiles()
-    .from('user_brand_preferences')
-    .select('active_brand_id')
-    .eq('user_id', userId)
-    .maybeSingle();
-  previousBrandId =
-    (existing as { active_brand_id?: string | null } | null)?.active_brand_id ?? null;
-
-  const { error } = await brandProfiles()
-    .from('user_brand_preferences')
-    .upsert(
-      { user_id: userId, active_brand_id: CLIENT_BRAND_ID, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id' },
-    );
-  if (error) throw new Error(`[approval-card-bench] brand switch failed: ${error.message}`);
-}
-
-async function restoreBrand(): Promise<void> {
-  if (!benchUserId || previousBrandId === undefined) return;
-  await brandProfiles().from('user_brand_preferences').upsert(
-    {
-      user_id: benchUserId,
-      active_brand_id: previousBrandId,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id' },
-  );
-}
-
 test.describe.configure({ mode: 'serial' });
 
 test.describe('jaina tool approval card', () => {
@@ -245,9 +399,7 @@ test.describe('jaina tool approval card', () => {
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(240_000);
-    await rememberAndSelectBrand();
-
-    const storageState = await mintSessionForEmail(CLIENT_OWNER_EMAIL);
+    const storageState = await mintSessionWithPassword(CLIENT_OWNER_EMAIL, CLIENT_OWNER_PASSWORD);
     context = await browser.newContext({ storageState, viewport: { width: 1440, height: 1000 } });
     context.on('request', (request) => {
       requestLog.push({ method: request.method(), url: request.url() });
@@ -330,7 +482,26 @@ test.describe('jaina tool approval card', () => {
       await route.fulfill({
         status: 200,
         headers: { 'content-type': 'application/x-ndjson' },
-        body: body.tool_action ? denialStreamBody() : approvalStreamBody(),
+        body: body.tool_action
+          ? denialStreamBody()
+          : body.query === LIVE_PROMPT
+            ? liveReportStreamBody()
+            : approvalStreamBody(),
+      });
+    });
+
+    await context.route('**/api/agents/jaina/creative-preview', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          thumbnail_url:
+            'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="48"%3E%3Crect width="64" height="48" fill="%232563eb"/%3E%3C/svg%3E',
+          image_url: null,
+          preview_iframe: null,
+          creative_id: 'creative_alpha',
+          ad_id: 'ad_alpha',
+        }),
       });
     });
 
@@ -339,7 +510,6 @@ test.describe('jaina tool approval card', () => {
 
   test.afterAll(async () => {
     await context?.close();
-    await restoreBrand();
     printBenchEnvelope();
   });
 
@@ -418,6 +588,9 @@ test.describe('jaina tool approval card', () => {
     const backendCalls = requestLog.filter((entry) =>
       entry.url.startsWith(process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4499'),
     );
+    const backendWrites = backendCalls.filter(
+      (entry) => entry.method !== 'GET' && entry.method !== 'OPTIONS',
+    );
     const streamCalls = requestLog.filter(
       (entry) => entry.method === 'POST' && entry.url.includes('/api/agents/jaina/chat/stream'),
     );
@@ -425,11 +598,15 @@ test.describe('jaina tool approval card', () => {
       0,
     );
     expect(
-      backendCalls,
-      `unexpected Backend traffic: ${JSON.stringify(backendCalls)}`,
+      backendWrites,
+      `unexpected Backend write: ${JSON.stringify(backendWrites)}`,
     ).toHaveLength(0);
     expect(streamCalls).toHaveLength(2);
-    grade('no_write', true, '0 graph.facebook.com, 0 Backend, exactly 2 chat-stream POSTs');
+    grade(
+      'no_write',
+      true,
+      `0 graph.facebook.com writes, 0 Backend writes, exactly 2 chat-stream POSTs; ${backendCalls.length} dead-port GETs`,
+    );
 
     const otherWrites = [
       ...new Set(
@@ -450,6 +627,65 @@ test.describe('jaina tool approval card', () => {
       'UN-EXERCISED: a real Backend `tool.approval_required` frame. This bench fulfils the ' +
         'chat-stream route locally and spawns no Fastify — the Backend emit side is covered by ' +
         'jaina:edit:gate:bench.',
+    );
+  });
+
+  test('renders the live creative × angle × audience report with evidence and preview', async () => {
+    await page.goto('/scale?tab=jaina', { waitUntil: 'domcontentloaded' });
+    const composer = page.getByRole('textbox', { name: 'Message Jaina' });
+    await expect(composer).toBeVisible({ timeout: 180_000 });
+    await composer.fill(LIVE_PROMPT);
+    await composer.press('Enter');
+
+    await expect(page.getByText('Individual creative × audience evidence')).toBeVisible();
+    await expect(page.getByText('Measured spend by delivered audience')).toBeVisible();
+    await expect(page.getByText('Live delivery and coverage · Aug 17 → Sep 15')).toBeVisible();
+    await expect(page.getByText('Actions and limitations')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Report modules' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Creative Alpha' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'product_demonstration' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'age=25-34|gender=female' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'measured_delivery' }).first()).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'suppressed' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '$900.00' })).toBeVisible();
+    await expect(page.getByText('Coverage limitation')).toBeVisible();
+    grade('live_report.blocks', true, 'four focused report modules rendered from one checkpoint');
+
+    await page.getByRole('button', { name: 'Data provenance' }).first().hover();
+    await expect(page.getByText('get_live_creative_audience_matrix').first()).toBeVisible();
+    await expect(page.getByText('Evidence references:').first()).toBeVisible();
+    grade('live_report.provenance', true, 'dataset provenance and evidence references are visible');
+
+    const downloadPromise = page.waitForEvent('download', { timeout: 30_000 });
+    await page.getByRole('button', { name: 'Export report as PDF' }).click();
+    const download = await downloadPromise;
+    const downloadPath = await download.path();
+    expect(download.suggestedFilename()).toMatch(/^jaina-report-\d{4}-\d{2}-\d{2}\.pdf$/);
+    expect(downloadPath).not.toBeNull();
+    const pdf = await readFile(downloadPath!);
+    expect(pdf.byteLength).toBeGreaterThan(1_000);
+    expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
+    expect(pdf.toString('latin1')).toContain('Creative Alpha');
+    grade('live_report.pdf', true, `downloaded ${pdf.byteLength} byte PDF after response.done`);
+
+    await page.getByText('Creative Alpha', { exact: true }).hover();
+    await expect(page.getByRole('img', { name: 'Creative Alpha' })).toBeVisible();
+    grade('live_report.creative_preview', true, 'creative identity lazy-resolved a preview image');
+
+    expect(requestLog.filter((entry) => entry.url.includes('graph.facebook.com'))).toHaveLength(0);
+    expect(
+      requestLog.filter(
+        (entry) =>
+          entry.url.startsWith(process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4499') &&
+          entry.method !== 'GET' &&
+          entry.method !== 'OPTIONS' &&
+          !entry.url.includes('/api/agents/jaina/creative-preview'),
+      ),
+    ).toHaveLength(0);
+    grade(
+      'live_report.no_provider',
+      true,
+      '0 Meta/model/Backend writes; preview was fixture-routed',
     );
   });
 });

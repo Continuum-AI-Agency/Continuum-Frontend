@@ -1,7 +1,7 @@
 'use client';
 
 import { datasetCreativeRefSchema } from '@continuum/contracts';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import {
   fetchJainaCreativePreview,
@@ -35,14 +35,11 @@ export function CreativeCell({
 
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewState>({ status: 'idle', url: null });
-  const fetchedRef = useRef(false);
-
   const resolvable = ref !== null && isResolvableCreativeRef(ref);
   const shouldResolve = display === 'card' || open;
 
   useEffect(() => {
-    if (!shouldResolve || !ref || !resolvable || fetchedRef.current) return;
-    fetchedRef.current = true;
+    if (!shouldResolve || !ref || !resolvable) return;
     let active = true;
     setPreview({ status: 'loading', url: null });
     fetchJainaCreativePreview(ref)

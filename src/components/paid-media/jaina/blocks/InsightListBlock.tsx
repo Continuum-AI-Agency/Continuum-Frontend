@@ -5,6 +5,7 @@ import type { ComponentType } from 'react';
 import type { InsightListBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { BlockSourcesFooter, CitationChips } from './citations';
+import { EvidenceTooltip } from './EvidenceTooltip';
 import { MediaText } from './mediaText';
 
 type InsightListBlockProps = { block: InsightListBlockV2; isStreaming: boolean };
@@ -30,7 +31,16 @@ const severityBorderClass: Record<Severity, string> = {
 export default function InsightListBlock({ block }: InsightListBlockProps) {
   return (
     <div>
-      {block.title && <h4 className="mb-2 text-sm font-semibold text-foreground">{block.title}</h4>}
+      {block.title && (
+        <div className="mb-2 flex items-center gap-1.5">
+          <h4 className="text-sm font-semibold text-foreground">{block.title}</h4>
+          <EvidenceTooltip
+            provenance={block.provenance}
+            datasetId={block.dataset_id}
+            evidenceRefs={block.evidence_refs}
+          />
+        </div>
+      )}
       <div className="space-y-2">
         {block.items.map((item, index) => {
           const Icon: IconComponent = itemTypeIcon[item.item_type as ItemType] ?? LightbulbIcon;
@@ -50,6 +60,13 @@ export default function InsightListBlock({ block }: InsightListBlockProps) {
                 <span className="min-w-0 flex-1 text-sm font-medium leading-5 text-foreground">
                   {item.title}
                 </span>
+                {item.evidence_refs?.length ? (
+                  <EvidenceTooltip
+                    provenance={block.provenance}
+                    datasetId={block.dataset_id}
+                    evidenceRefs={item.evidence_refs}
+                  />
+                ) : null}
                 {item.priority && (
                   <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-wide">
                     {item.priority}

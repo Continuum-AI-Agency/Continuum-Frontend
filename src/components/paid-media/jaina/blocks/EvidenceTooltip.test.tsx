@@ -18,6 +18,7 @@ describe('EvidenceTooltip', () => {
           record_count: 5,
         }}
         datasetId="ds_ab12cd34"
+        evidenceRefs={['row:ad-1:18-24:female', 'meta:insights:act-1']}
       />,
     );
     const trigger = screen.getByRole('button', { name: 'Data provenance' });
@@ -27,6 +28,9 @@ describe('EvidenceTooltip', () => {
     expect(description?.textContent).toContain('Data period: 2026-07-01 → 2026-07-12');
     expect(description?.textContent).toContain('Entity: Campaign One');
     expect(description?.textContent).toContain('Records: 5');
+    expect(description?.textContent).toContain('Evidence references: 2');
+    expect(description?.textContent).toContain('row:ad-1:18-24:female');
+    expect(description?.textContent).toContain('derived classifications remain separately identified');
   });
 
   it('falls back to model-authored framing when no provenance or dataset id exists', () => {
