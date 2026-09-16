@@ -170,7 +170,11 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
     <div>
       <div className="mb-2 flex items-center gap-1.5">
         <h4 className="text-sm font-semibold text-foreground">{block.title}</h4>
-        <EvidenceTooltip provenance={block.provenance} datasetId={block.dataset_id} />
+        <EvidenceTooltip
+          provenance={block.provenance}
+          datasetId={block.dataset_id}
+          evidenceRefs={block.evidence_refs}
+        />
       </div>
       {cardFields ? (
         <ul

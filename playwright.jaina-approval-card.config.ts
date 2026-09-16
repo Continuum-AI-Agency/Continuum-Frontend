@@ -1,17 +1,13 @@
+import { loadEnvConfig } from '@next/env';
 import { defineConfig, devices } from '@playwright/test';
-import { loadProdSupabaseEnv } from './e2e/support/prodEnv';
 
 // Dedicated harness for `jaina:approval:card:e2e:bench` — the tool-approval card's
 // before → after table, end to end in a real Chrome.
 //
 // Why its own file, like `playwright.jaina-canvas.config.ts`:
 //
-//  1. It runs against PRODUCTION Supabase. The page is server-rendered: the active
-//     brand and its ad account come out of Supabase in the RSC pass, and the chat
-//     composer refuses to dispatch without an ad account. The local stack is a
-//     schema-only snapshot with neither. `loadProdSupabaseEnv()` overwrites the
-//     Supabase env and FAILS FAST if it does not resolve to prod, BEFORE the
-//     webServer spawns, so `.env.local` cannot pull it back to the local stack.
+//  1. It runs only against the hydrated LOCAL Supabase fixture. The page is
+//     server-rendered and the seeded brand already owns a synthetic Meta account.
 //  2. Its own port, dist dir, tsconfig and one worker, so it never collides with
 //     another agent's dev server.
 //  3. NO BACKEND. `NEXT_PUBLIC_API_URL` is pinned to a port nothing listens on: the
@@ -19,7 +15,12 @@ import { loadProdSupabaseEnv } from './e2e/support/prodEnv';
 //     proves the assertions came from the stub rather than from a Fastify someone
 //     else left running on :4000.
 
-loadProdSupabaseEnv();
+loadEnvConfig(process.cwd(), true, { info: () => {}, error: console.error });
+if (!/127\.0\.0\.1|localhost/.test(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '')) {
+  throw new Error(
+    'jaina:approval:card:e2e:bench requires local Supabase. Run `bun run supabase:env:local`.',
+  );
+}
 
 const PORT = process.env.JAINA_APPROVAL_CARD_E2E_PORT ?? '3121';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${PORT}`;
@@ -56,7 +57,7 @@ export default defineConfig({
       NEXT_TSCONFIG_PATH: 'tsconfig.e2e.json',
       PORT,
       NEXT_PUBLIC_API_URL: backendURL,
-      // Explicit rather than inherited — the prod pinning is the point of this file.
+      // Explicit rather than inherited so the process cannot drift away from localhost.
       NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL as string,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: process.env
         .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY as string,

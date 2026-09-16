@@ -89,6 +89,7 @@ export const isThumbnailDerivedLabelSource = (source: string | null | undefined)
 export type PaidCreativeLabelSource = z.infer<typeof paidCreativeLabelSourceSchema>;
 
 export const paidCreativeLabelsSchema = firstPartyCreativeAnalysisSchema.extend({
+  angleConfidence: z.number().min(0).max(1).nullable().default(null),
   assetType: paidAssetTypeSchema.default('unknown'),
   // AI-labeled funnel stage. Never silently overrides the stage declared by the
   // brand's ad-naming schema — a mismatch is surfaced as a conflict upstream.

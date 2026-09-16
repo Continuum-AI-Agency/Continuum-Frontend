@@ -1,5 +1,6 @@
 'use client';
 
+import { paidCurrencyCodeSchema } from '@continuum/contracts';
 import { MetricStrip, type MetricStripItem } from '@/components/shared/MetricStrip';
 import { formatValue, resolveMetricDisplayFormat } from '@/lib/jaina/formatValue';
 import type { MetricGridBlockV2, MetricItemV2 } from '@/lib/jaina/schemas';
@@ -20,9 +21,17 @@ function toStripItem(metric: MetricItemV2): MetricStripItem {
     format: metric.format,
     unit: metric.unit,
   });
+  const currency = paidCurrencyCodeSchema.safeParse(metric.unit);
   return {
     label: metric.label,
-    value: formatValue(metric.value, displayFormat),
+    value:
+      displayFormat === 'currency' && !currency.success
+        ? `${formatValue(metric.value, 'number')} (currency unknown)`
+        : formatValue(
+            metric.value,
+            displayFormat,
+            currency.success ? { currency: currency.data } : undefined,
+          ),
     deltaPct: resolveDeltaPct(metric),
   };
 }
@@ -32,7 +41,11 @@ export default function MetricGridBlock({ block }: MetricGridBlockProps) {
     <div>
       <div className="mb-2 flex items-center gap-1.5">
         <h4 className="text-sm font-semibold text-foreground">{block.title}</h4>
-        <EvidenceTooltip provenance={block.provenance} datasetId={block.dataset_id} />
+        <EvidenceTooltip
+          provenance={block.provenance}
+          datasetId={block.dataset_id}
+          evidenceRefs={block.evidence_refs}
+        />
       </div>
       <MetricStrip items={block.metrics.map(toStripItem)} />
     </div>

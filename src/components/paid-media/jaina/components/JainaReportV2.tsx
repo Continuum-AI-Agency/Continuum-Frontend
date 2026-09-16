@@ -262,9 +262,7 @@ export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaR
       ) : null}
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
-        <span className="text-xs text-muted-foreground">
-          Export a PDF of this report exactly as shown.
-        </span>
+        <span className="text-xs text-muted-foreground">Export this report as a PDF.</span>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"

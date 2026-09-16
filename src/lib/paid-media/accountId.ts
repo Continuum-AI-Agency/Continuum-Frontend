@@ -13,3 +13,27 @@
 // took every optimizer hook down with it — undefined at import time, far from the cause.
 
 export const bareAccountId = (value: string): string => value.replace(/^act_/, '');
+
+export type AssignedAdAccount = {
+  accountId: string;
+  platform: string;
+};
+
+export function resolveInitialMetaAdAccountId(
+  timelineAccounts: ReadonlyArray<{ id: string }>,
+  assignedAccounts: readonly AssignedAdAccount[],
+): string | null {
+  if (assignedAccounts.length === 0) return timelineAccounts[0]?.id ?? null;
+
+  const assignedMetaAccountIds = assignedAccounts
+    .filter((account) => account.platform === 'meta_ads')
+    .map((account) => account.accountId);
+  if (assignedMetaAccountIds.length === 0) return null;
+
+  const assignedSet = new Set(assignedMetaAccountIds.map(bareAccountId));
+  return (
+    timelineAccounts.find((account) => assignedSet.has(bareAccountId(account.id)))?.id ??
+    assignedMetaAccountIds[0] ??
+    null
+  );
+}

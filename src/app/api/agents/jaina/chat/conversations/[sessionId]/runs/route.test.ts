@@ -79,7 +79,7 @@ describe('Jaina conversation runs hydration route', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(schemaMock).toHaveBeenCalledWith('brand_profiles');
+    expect(schemaMock).toHaveBeenCalledWith('jaina');
     expect(fromMock).toHaveBeenCalledWith('jaina_conversation_runs');
     expect(queryBuilder.eq.mock.calls).toEqual(
       expect.arrayContaining([

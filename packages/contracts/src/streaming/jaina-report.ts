@@ -99,6 +99,7 @@ export const blockBaseSchema = z.object({
   title: z.string().min(1),
   priority: blockPrioritySchema.default('secondary'),
   provenance: blockProvenanceSchema.nullable().default(null),
+  evidence_refs: z.array(z.string().min(1)).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -308,11 +309,13 @@ export const insightListItemSchema = z.object({
   severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
   priority: z.string().default('now'),
   cite_ids: z.array(z.string()).default([]),
+  evidence_refs: z.array(z.string().min(1)).optional(),
 });
 export type InsightListItem = z.infer<typeof insightListItemSchema>;
 
 export const insightListBlockSchema = blockBaseSchema.extend({
   category: z.literal('insight_list'),
+  dataset_id: z.string().nullable().optional(),
   items: z.array(insightListItemSchema).min(1),
   citations: z.array(citationSchema).default([]),
 });

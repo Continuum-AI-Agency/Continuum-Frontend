@@ -27,6 +27,7 @@ type BlockProvenance = {
 type EvidenceTooltipProps = {
   provenance?: BlockProvenance | null;
   datasetId?: string | null;
+  evidenceRefs?: string[] | null;
 };
 
 const formatPeriod = (period: BlockProvenance['period']): string | null => {
@@ -37,7 +38,7 @@ const formatPeriod = (period: BlockProvenance['period']): string | null => {
   return period.requested_label ?? null;
 };
 
-export function EvidenceTooltip({ provenance, datasetId }: EvidenceTooltipProps) {
+export function EvidenceTooltip({ provenance, datasetId, evidenceRefs }: EvidenceTooltipProps) {
   const descriptionId = useId();
   // Older blocks predate structured provenance; a non-null dataset_id still
   // proves server-side materialization.
@@ -46,7 +47,7 @@ export function EvidenceTooltip({ provenance, datasetId }: EvidenceTooltipProps)
 
   const headline = isComputed ? 'Verified data' : 'Model-authored';
   const detail = isComputed
-    ? 'Values filled in server-side, verbatim from data fetched from the ad platform during this analysis — not typed by the AI.'
+    ? 'Values were filled server-side from the registered dataset. Delivery metrics, configured targeting, and derived classifications remain separately identified in its evidence references.'
     : 'This block was written by the AI from the evidence it gathered. Cross-check important figures against the source data.';
 
   const facts: Array<{ label: string; value: string }> = [];
@@ -56,9 +57,18 @@ export function EvidenceTooltip({ provenance, datasetId }: EvidenceTooltipProps)
   if (typeof provenance?.record_count === 'number') {
     facts.push({ label: 'Records', value: String(provenance.record_count) });
   }
+  if (evidenceRefs?.length) {
+    facts.push({ label: 'Evidence references', value: String(evidenceRefs.length) });
+  }
   const id = datasetId ?? null;
+  const visibleEvidenceRefs = evidenceRefs?.slice(0, 5) ?? [];
 
-  const srSummary = [headline, detail, ...facts.map((f) => `${f.label}: ${f.value}`)].join('. ');
+  const srSummary = [
+    headline,
+    detail,
+    ...facts.map((f) => `${f.label}: ${f.value}`),
+    ...visibleEvidenceRefs,
+  ].join('. ');
 
   return (
     <TooltipProvider delay={150}>
@@ -87,6 +97,13 @@ export function EvidenceTooltip({ provenance, datasetId }: EvidenceTooltipProps)
                 </div>
               ))}
             </dl>
+          ) : null}
+          {visibleEvidenceRefs.length > 0 ? (
+            <ul className="mt-1.5 space-y-0.5 font-mono text-2xs text-muted-foreground/70">
+              {visibleEvidenceRefs.map((ref) => (
+                <li key={ref}>{ref}</li>
+              ))}
+            </ul>
           ) : null}
           {id ? <p className="mt-1.5 font-mono text-2xs text-muted-foreground/70">{id}</p> : null}
         </TooltipContent>

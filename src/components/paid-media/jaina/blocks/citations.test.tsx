@@ -46,6 +46,15 @@ const insightBlock: InsightListBlockV2 = {
   scope: 'account',
   title: 'Insights',
   priority: 1,
+  dataset_id: 'ds_live_creative_audience',
+  evidence_refs: ['row:ad-1:18-24:female'],
+  provenance: {
+    source: 'computed',
+    tool: 'get_live_creative_audience_matrix',
+    period: { since: '2026-09-01', until: '2026-09-14', requested_label: null },
+    entity_label: 'Paid creative audience matrix',
+    record_count: 1,
+  },
   items: [
     {
       item_type: 'insight',
@@ -56,6 +65,7 @@ const insightBlock: InsightListBlockV2 = {
       severity: 'positive',
       priority: 'now',
       cite_ids: ['c1'],
+      evidence_refs: ['row:ad-1:18-24:female', 'creative:cr-1'],
     },
   ],
   citations: [citation],
@@ -117,6 +127,19 @@ describe('Jaina block citations', () => {
     const chip = screen.getByLabelText(/analytics_query/);
     expect(chip.textContent).toContain('1');
     expect(screen.getByText(/Used 1 sources/)).toBeDefined();
+  });
+
+  it('exposes block and item evidence references through provenance controls', () => {
+    render(<InsightListBlock block={insightBlock} isStreaming={false} />);
+
+    const controls = screen.getAllByRole('button', { name: 'Data provenance' });
+    expect(controls).toHaveLength(2);
+    const summaries = controls.map(
+      (control) =>
+        document.getElementById(control.getAttribute('aria-describedby') ?? '')?.textContent,
+    );
+    expect(summaries[0]).toContain('row:ad-1:18-24:female');
+    expect(summaries[1]).toContain('creative:cr-1');
   });
 
   it('renders citation chips and a Sources footer for comparison pairs with cite_ids', () => {

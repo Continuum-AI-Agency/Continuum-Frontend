@@ -156,12 +156,14 @@ export function AgentRunsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
-    void fetchActiveRuns(activeBrandId).then((runs) => {
-      if (cancelled) return;
-      for (const run of runs) {
-        if (run.brandId === activeBrandId) upsertRun(run);
-      }
-    });
+    void fetchActiveRuns(activeBrandId)
+      .then((runs) => {
+        if (cancelled) return;
+        for (const run of runs) {
+          if (run.brandId === activeBrandId) upsertRun(run);
+        }
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
