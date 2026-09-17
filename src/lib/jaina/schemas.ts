@@ -1146,6 +1146,7 @@ export type JainaStreamEvent =
   | { type: 'agent.narration'; data: AgentNarrationEventData }
   | { type: 'canvas.context.loaded'; data: Record<string, unknown> }
   | z.infer<typeof responseCheckpointReportSchema>
+  | z.infer<typeof responseBlockDeltaV2TolerantSchema>
   | z.infer<typeof responseBlockDeltaSchema>
   | z.infer<typeof responseReportAssemblySchema>
   | z.infer<typeof responseReportArtifactJobStartedSchema>
